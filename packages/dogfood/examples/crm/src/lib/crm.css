@@ -400,8 +400,9 @@
        look like the widget it is. One attribute outranks the element rules above, and any utility
        an example writes still wins, being a later layer. */
 
-    /* Tabs are a segmented control: one recessed track, the selected tab the raised key in it. */
-    [role=tablist] {
+    /* Tabs, and a radio group of buttons, are a segmented control: one recessed track, the selected
+       one the raised key in it. */
+    :is([role=tablist], [role=radiogroup]) {
         display: inline-flex;
         flex-direction: row;
         gap: var(--spacing-hair);
@@ -410,7 +411,7 @@
         background: color-mix(in srgb, var(--color-ink) 6%, transparent);
     }
 
-    [role=tab] {
+    :is([role=tab], button[role=radio]) {
         padding: .25rem .75rem;
         color: var(--color-muted);
         background: transparent;
@@ -418,14 +419,14 @@
         box-shadow: none;
     }
 
-    [role=tab]:hover:not(:disabled) {
+    :is([role=tab], button[role=radio]):hover:not(:disabled) {
         color: var(--color-ink);
         background: transparent;
         border-color: transparent;
     }
 
-    [role=tab][aria-selected=true],
-    [role=tab][aria-selected=true]:hover:not(:disabled) {
+    :is([role=tab][aria-selected=true], button[role=radio][aria-checked=true]),
+    :is([role=tab][aria-selected=true], button[role=radio][aria-checked=true]):hover:not(:disabled) {
         color: var(--color-ink);
         background: var(--color-raised);
         box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 14%, transparent);

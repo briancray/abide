@@ -203,6 +203,12 @@ export {
     sortableTable,
 } from './sortableTable.ts'
 export { type TabParts, type Tabs, type TabsOptions, tabs } from './tabs.ts'
+export { type Toggle, type ToggleOptions, toggle } from './toggle.ts'
+export {
+    type ToggleGroup,
+    type ToggleGroupOptions,
+    toggleGroup,
+} from './toggleGroup.ts'
 export { type Tree, type TreeNode, type TreeOptions, tree } from './tree.ts'
 // 52.72-52.77 — a time that stays current, as parts on a `<time>` of the app's own.
 export { type TimeAt, type TimeOptions, type TimeParts, time } from './time.ts'

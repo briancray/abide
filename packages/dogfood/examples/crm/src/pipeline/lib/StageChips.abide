@@ -1,0 +1,39 @@
+<script>
+import { format, reactive, toggleGroup } from '@abide/abide'
+
+import { STAGES } from './STAGES.ts'
+
+const DEALS = [
+    { id: 'd1', name: 'Engine renewal', stage: 'proposal', amount: 12_000 },
+    { id: 'd2', name: 'Babbage pilot', stage: 'qualified', amount: 8_500 },
+    { id: 'd3', name: 'Hopper expansion', stage: 'won', amount: 30_000 },
+    { id: 'd4', name: 'Lovelace audit', stage: 'lead', amount: 4_000 },
+]
+
+let stages = reactive<readonly string[]>([])
+const chips = toggleGroup({
+    keys: STAGES,
+    multiple: true,
+    value: stages,
+    label: 'Stages',
+})
+const shown = reactive(() =>
+    stages.length === 0
+        ? DEALS
+        : DEALS.filter((deal) => stages.includes(deal.stage)),
+)
+</script>
+
+<div class="flex flex-col gap-snug">
+    <div class="tabs" {...chips.group}>
+        {#for stage of STAGES by stage}
+            <button {...chips.item(stage)}>{stage}</button>
+        {/for}
+    </div>
+    <ul class="fields">
+        {#for deal of shown by deal.id}
+            <li><span>{deal.stage}</span><strong>{deal.name}</strong>
+                {format.money(deal.amount, { digits: 0 })}</li>
+        {/for}
+    </ul>
+</div>

@@ -1,0 +1,8 @@
+<script>
+import { toggle } from '@abide/abide'
+
+const pin = toggle()
+</script>
+
+<button {...pin.button}>Pin deal</button>
+<p>{pin.pressed() ? 'Pinned to the top' : 'Not pinned'}</p>

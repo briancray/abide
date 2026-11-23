@@ -396,6 +396,22 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/toggle',
+                title: '`toggle`',
+                description:
+                    'Spread a button that stays pressed, or an on/off switch, onto a button of your own.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/toggle-group',
+                title: '`toggleGroup`',
+                description:
+                    'Pick one key from a segmented control, or many from a row of chips, spread onto buttons of your own.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/tree',
                 title: '`tree`',
                 description:

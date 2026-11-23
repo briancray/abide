@@ -1,0 +1,49 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import FilterStages from './lib/FilterStages.abide'
+import filterStages from './lib/FilterStages.abide' with { type: 'text' }
+import PickView from './lib/PickView.abide'
+import pickView from './lib/PickView.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/toggle', '/headless/tabs', '/headless/listbox']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageChips.test.ts',
+            from: [
+                "test('each chip is pressed on its own, and the list keeps the stages pressed'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/PipelineView.test.ts',
+            from: ["test('the arrow keys move the view and focus together'"],
+        },
+        {
+            path: 'packages/abide/tests/toggle.test.ts',
+            from: [
+                "test('a group picking many is a toggle per key",
+                "test('a group picking one is a radio group",
+                "test('in a group picking one, only the key picked",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Pick one view from a segmented control">
+        <p>Spread <code>group</code> on a row and <code>item(key)</code> on a button per key.
+            <code>toggleGroup</code> picks one key by default, as a radio group: the arrow keys
+            move the pick and focus together, and only the key picked is a stop in the tab
+            order.</p>
+        <Example code={pickView}><PickView /></Example>
+    </Section>
+
+    <Section level={3} title="Filter deals by stage with chips">
+        <p>Give <code>multiple: true</code> and <code>value</code> holds every key pressed. Each
+            chip is a <code>toggle</code>, pressed while <code>value</code> holds its key, so each
+            is its own stop in the tab order and reads as a toggle button.</p>
+        <Example code={filterStages}><FilterStages /></Example>
+    </Section>
+</Doc>

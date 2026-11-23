@@ -1,0 +1,14 @@
+<script>
+import { reactive, toggleGroup } from '@abide/abide'
+
+const STAGES = ['lead', 'qualified', 'proposal', 'won']
+let stages = reactive<readonly string[]>([])
+const chips = toggleGroup({ keys: STAGES, multiple: true, value: stages })
+</script>
+
+<div class="tabs" {...chips.group}>
+    {#for stage of STAGES by stage}
+        <button {...chips.item(stage)}>{stage}</button>
+    {/for}
+</div>
+<p>Filtering by: {stages.join(', ') || 'every stage'}</p>

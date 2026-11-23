@@ -566,6 +566,22 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `TabParts` | `{ readonly button: Record<string, unknown>; readonly panel: Record<string, unknown> }` | One tab's button, and the panel kept for it alone. | 51.40, 49.3 |
 | `Tabs` | `{ readonly id: string; readonly list: Record<string, unknown>; tab(key: string): TabParts; readonly panel: Record<string, unknown>; readonly selected: Reactive<string \| undefined> }` | The list's part, a tab's parts, the one panel every tab shows in, and the key of the tab selected. | 32.11, 51.34, 51.40, 51.41, 49.3, 49.8, 49.9 |
 
+## `toggle`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `toggle` | `(options?: ToggleOptions) => Toggle` | WAI-ARIA's toggle button, or its switch, as a part an app spreads onto a button of its own. | 51.108, 51.109, 49.2, 49.4, 49.5, 49.6 |
+| `ToggleOptions` | `{ pressed?: Reactive<boolean>; role?: 'button' \| 'switch' \| (() => 'button' \| 'switch') }` | Whether the button is pressed, and whether it reads as a toggle button or a switch. | 51.109, 49.8, 49.10, 49.11 |
+| `Toggle` | `{ readonly button: Record<string, unknown>; readonly pressed: Reactive<boolean> }` | The button's part, and whether it is pressed. | 32.11, 51.108, 49.3, 49.8, 49.9 |
+
+## `toggleGroup`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `toggleGroup` | `<Multiple extends boolean = false>(options: ToggleGroupOptions<Multiple>) => ToggleGroup<Multiple>` | Toggle buttons over a set of keys as parts an app spreads onto a group and a button per key of its own, picking one as a radio group does or picking many. | 51.110, 51.111, 51.112, 51.113, 51.114, 51.115, 49.2, 49.4, 49.5, 49.6 |
+| `ToggleGroupOptions` | `<Multiple extends boolean = false>{ id?: string; keys: readonly string[] \| (() => readonly string[]); multiple?: Multiple; value?: Reactive<Picked<string, Multiple>>; label?: string \| (() => string) }` | The keys in order, whether it picks many, what it picks, and its accessible name. | 51.110, 51.115, 49.8, 49.10, 49.11 |
+| `ToggleGroup` | `<Multiple extends boolean = false>{ readonly id: string; readonly group: Record<string, unknown>; item(key: string): Record<string, unknown>; readonly value: Reactive<Picked<string, Multiple>> }` | The group's part, a key's button, and what is picked. | 32.11, 51.110, 51.111, 49.3, 49.8, 49.9 |
+
 ## `tree`
 
 | Name | Signature | Meaning | Rules |

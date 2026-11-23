@@ -5555,6 +5555,32 @@ given.
 stretch of it each word typed is found in as 51.66 finds it carrying the `match` part, stretches that
 overlap or touch carrying it as one run.
 
+51.108 `toggle`'s `button` part MUST flip `pressed` on a click.
+
+51.109 `toggle`'s `button` part MUST carry `aria-pressed` naming `pressed`, or, where `role` is
+`switch`, `role="switch"` and `aria-checked` naming it, and MUST carry `data-pressed` while `pressed`
+holds.
+
+51.110 A `toggleGroup` that is `multiple` MUST answer each key's `item` with a `toggle`'s `button`
+part whose `pressed` holds while `value` holds the key, and whose flip adds the key to `value` or
+takes it out.
+
+51.111 A `toggleGroup` that is not `multiple` MUST answer each key's `item` with `role="radio"`, and
+`aria-checked` naming whether `value` is that key, carrying `data-pressed` while it is.
+
+51.112 A click on the `item` of a `toggleGroup` that is not `multiple` MUST set `value` to its key,
+and MUST NOT clear `value` where it is that key already.
+
+51.113 In a `toggleGroup` that is not `multiple`, ArrowRight and ArrowDown MUST set `value` to the
+next key and ArrowLeft and ArrowUp to the one before, going round, and Home and End to the first and
+the last, each moving focus to that key's `item`.
+
+51.114 Of the items of a `toggleGroup` that is not `multiple`, the one of `value`, or the first
+where `value` is no key, MUST be the only one in the page's tab order.
+
+51.115 `toggleGroup`'s `group` part MUST carry `role="radiogroup"`, or `role="group"` where it is
+`multiple`, and `aria-label` naming `label` where one is given.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.

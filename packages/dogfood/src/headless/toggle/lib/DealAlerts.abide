@@ -1,0 +1,9 @@
+<script>
+import { reactive, toggle } from '@abide/abide'
+
+let alerts = reactive(true)
+const alertsSwitch = toggle({ role: 'switch', pressed: alerts })
+</script>
+
+<button {...alertsSwitch.button}>Email me when a deal moves</button>
+<p>Alerts are {alerts ? 'on' : 'off'}.</p>

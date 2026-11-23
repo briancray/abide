@@ -1,0 +1,28 @@
+<script>
+import { reactive, toggleGroup } from '@abide/abide'
+
+import { STAGES } from './STAGES.ts'
+
+let view = reactive<string | undefined>('list')
+const views = toggleGroup({
+    keys: ['list', 'board'],
+    value: view,
+    label: 'Pipeline view',
+})
+</script>
+
+<div class="flex flex-col gap-snug">
+    <div {...views.group}>
+        <button {...views.item('list')}>List</button>
+        <button {...views.item('board')}>Board</button>
+    </div>
+    {#if view === 'board'}
+        <div class="tiles">
+            {#for stage of STAGES by stage}<div>{stage}</div>{/for}
+        </div>
+    {:else}
+        <ol>
+            {#for stage of STAGES by stage}<li>{stage}</li>{/for}
+        </ol>
+    {/if}
+</div>

@@ -1,0 +1,16 @@
+<script>
+import { reactive, toggleGroup } from '@abide/abide'
+
+let view = reactive<string | undefined>('list')
+const views = toggleGroup({
+    keys: ['list', 'board'],
+    value: view,
+    label: 'View',
+})
+</script>
+
+<div {...views.group}>
+    <button {...views.item('list')}>List</button>
+    <button {...views.item('board')}>Board</button>
+</div>
+<p>Showing the {view}.</p>
