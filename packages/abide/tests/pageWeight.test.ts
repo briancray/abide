@@ -63,7 +63,7 @@ import { reactive, userMessage, validateJson } from '@abide/abide'
 let count = reactive(0)
 </script>
 
-<p onclick={() => userMessage("", [new Blob()])}>{String(validateJson({ type: 'number' }, count) === null)}</p>`,
+<p onclick={() => userMessage([new Blob()])}>{String(validateJson({ type: 'number' }, count) === null)}</p>`,
         'stored/index.abide': `<script>
 import { reactive, store } from '@abide/abide'
 

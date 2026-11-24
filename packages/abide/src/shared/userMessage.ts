@@ -37,19 +37,18 @@ type Image = Extract<AssistantContent, { type: 'image' }>
 type Shown = Image['source']['media_type']
 
 /**
- * The user turn of `text` and `files`: each file as its block, in order, and then the words where they
- * hold any. 44.52-44.55.
+ * The user turn of `parts` in order: words as a text block where they hold any, and each file as its
+ * block — so `['Compare', receipt, 'with', invoice]` reads as written. 44.52-44.55.
  *
- * @param text what was written
- * @param files what was attached: an image, a PDF, or a file of text
+ * @param parts what was written and attached: words, and images, PDFs or files of text
  */
 export async function userMessage(
-    text: string,
-    files: readonly Blob[] = [],
+    parts: readonly (string | Blob)[],
 ): Promise<{ role: 'user'; content: AssistantContent[] }> {
     const content: AssistantContent[] = []
-    for (const file of files) content.push(await blockOf(file))
-    if (/\S/.test(text)) content.push({ type: 'text', text })
+    for (const part of parts)
+        if (typeof part !== 'string') content.push(await blockOf(part))
+        else if (/\S/.test(part)) content.push({ type: 'text', text: part })
     return { role: 'user', content }
 }
 

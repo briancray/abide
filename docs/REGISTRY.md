@@ -1481,7 +1481,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `userMessage` | `(text: string, files?: readonly Blob[]) => Promise<{ role: 'user'; content: AssistantContent[] }>` | The person's turn of what they wrote and the files they attached, each file as its block. | 44.52, 44.53, 44.54, 44.55 |
+| `userMessage` | `(parts: readonly (string \| Blob)[]) => Promise<{ role: 'user'; content: AssistantContent[] }>` | The person's turn of what they wrote and the files they attached, as blocks in the order given. | 44.52, 44.53, 44.54, 44.55 |
 
 ## `provider`
 

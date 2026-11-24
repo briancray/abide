@@ -12,8 +12,12 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/userMessage.test.ts',
             from: [
-                "test('a PDF is a document, a file of text a text document, each titled with its name, and the words come last — 44.55'",
+                "test('a PDF is a document, and a file of text a text document, each titled with its name — 44.55'",
             ],
+        },
+        {
+            path: 'packages/abide/tests/userMessage.test.ts',
+            from: ["test('words and files are blocks in the order given — 44.55'"],
         },
         {
             path: 'packages/abide/tests/userMessage.test.ts',
@@ -46,7 +50,7 @@ import Section from '#src/lib/Section.abide'
             })
 
             async function send() {
-                const message = await userMessage(question, files)
+                const message = await userMessage([...files, question])
                 askAssistant({ messages: [message] })
                 files = []
             }
@@ -70,12 +74,29 @@ import Section from '#src/lib/Section.abide'
             async function ask(event: Event) {
                 const [card] = (event.target as HTMLInputElement).files ?? []
                 if (card === undefined) return
-                const message = await userMessage('Add this contact.', [card])
+                const message = await userMessage([card, 'Add this contact.'])
                 askAssistant({ messages: [message] })
             }
             </script>
 
             <input type="file" accept="image/*" onchange={ask}>
+        `} />
+    </Section>
+
+    <Section level={3} title="Ask whether an invoice paid a receipt">
+        <p>Words and files are blocks in the order given, so the question can point at each file
+            where it mentions it.</p>
+        <Code language="ts" caption="browser" code={`
+            import { userMessage } from '@abide/abide'
+            import askAssistant from './askAssistant.handler.ts'
+
+            const message = await userMessage([
+                'Was this receipt',
+                receipt,
+                'paid by this invoice?',
+                invoice,
+            ])
+            askAssistant({ messages: [message] })
         `} />
     </Section>
 
@@ -87,7 +108,7 @@ import Section from '#src/lib/Section.abide'
             import askAssistant from './askAssistant.handler.ts'
 
             try {
-                askAssistant({ messages: [await userMessage(question, files)] })
+                askAssistant({ messages: [await userMessage([...files, question])] })
             } catch (error) {
                 failure = (error as Error).message
             }

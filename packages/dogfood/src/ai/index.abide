@@ -273,7 +273,7 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
                 paste: true,
                 onfiles: (taken) => files.patch((all) => all.push(...taken)),
             })
-            const turn = (question: string) => userMessage(question, files)
+            const turn = (question: string) => userMessage([...files, question])
             </script>
 
             <textarea {...drop.host}></textarea>

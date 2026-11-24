@@ -4612,11 +4612,11 @@ was taken — does not go with it, and MUST NOT draw a GIF.
 44.54 `userMessage` MUST hand on as it is an image it does not draw or cannot, and MUST throw where
 that image is of a type 44.36 does not name.
 
-44.55 `userMessage` MUST make a user turn of one block per file, in order, and then the words where
-they hold more than whitespace: an image or a HEIC or HEIF as an image 44.52 draws, a PDF as a base64
-document, a file of `text/*`, of JSON or named `.csv`, `.json`, `.md` or `.txt` as a text document, a
-document titled with its file's name where it has one — and MUST throw, naming the file, on any
-other.
+44.55 `userMessage` MUST make a user turn of a block per part, in the order given: words where they
+hold more than whitespace as a text block, an image or a HEIC or HEIF as an image 44.52 draws, a PDF
+as a base64 document, a file of `text/*`, of JSON or named `.csv`, `.json`, `.md` or `.txt` as a text
+document, a document titled with its file's name where it has one — and MUST throw, naming the file,
+on any other.
 
 44.56 The `install` of a pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge`
 mints MUST run `abide-bridge install` at the bridge release its command runs.

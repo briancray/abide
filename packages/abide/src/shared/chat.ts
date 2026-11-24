@@ -222,7 +222,7 @@ export function chat(options: ChatOptions): ChatParts {
     async function attach(files: File[]) {
         for (const file of files)
             try {
-                const { content } = await userMessage('', [file])
+                const { content } = await userMessage([file])
                 attached.patch((all) => {
                     for (const piece of content)
                         if (piece.type !== 'text') all.push(piece)

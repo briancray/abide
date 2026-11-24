@@ -47,7 +47,7 @@ type Image = Extract<AssistantContent, { type: 'image' }>
 
 /** `file` as the one block `userMessage` makes of it. */
 async function blockOf(file: Blob): Promise<AssistantContent> {
-    const { content } = await userMessage('', [file])
+    const { content } = await userMessage([file])
     expect(content).toHaveLength(1)
     return content[0] as AssistantContent
 }
@@ -99,7 +99,7 @@ test('an image nothing can draw goes as it is, or throws where a model is not sh
         imageBlock('image/png', btoa('png')),
     )
     await expect(
-        userMessage('', [new Blob(['heic'], { type: 'image/heic' })]),
+        userMessage([new Blob(['heic'], { type: 'image/heic' })]),
     ).rejects.toThrow('RULEBOOK 44.54')
     // Where nothing draws at all — a server — an image of a type a model is shown goes as it is.
     held.createImageBitmap = undefined
@@ -109,8 +109,8 @@ test('an image nothing can draw goes as it is, or throws where a model is not sh
 
 // THE REVERTS: read a PDF as text, and the model is handed its bytes as words — a `text` source
 // where `base64` is due; read a file of text by its type alone, and an untyped `.csv` throws rather
-// than being read; push the words ahead of the files, and the text block is first rather than last.
-test('a PDF is a document, a file of text a text document, each titled with its name, and the words come last — 44.55', async () => {
+// than being read.
+test('a PDF is a document, and a file of text a text document, each titled with its name — 44.55', async () => {
     held.createImageBitmap = undefined
     const statement = new File(['%PDF'], 'statement.pdf', {
         type: 'application/pdf',
@@ -120,7 +120,7 @@ test('a PDF is a document, a file of text a text document, each titled with its 
         type: 'application/json',
     })
     expect(
-        await userMessage('What did I hold?', [statement, trades, notes]),
+        await userMessage([statement, trades, notes, 'What did I hold?']),
     ).toEqual({
         role: 'user',
         content: [
@@ -163,18 +163,35 @@ test('a PDF is a document, a file of text a text document, each titled with its 
     })
 })
 
+// THE REVERT: push every file ahead of the words, and the turn reads `image,image,text,text` where
+// the words and receipts are written `text,image,text,image`.
+test('words and files are blocks in the order given — 44.55', async () => {
+    held.createImageBitmap = undefined
+    const receipt = new Blob(['png'], { type: 'image/png' })
+    const invoice = new Blob(['gif'], { type: 'image/gif' })
+    const { content } = await userMessage([
+        'Compare this receipt',
+        receipt,
+        'with this one',
+        invoice,
+    ])
+    expect(content.map((block) => block.type).join()).toBe(
+        'text,image,text,image',
+    )
+})
+
 // THE REVERT: push the words whatever they hold, and an empty question sends a text block the API
 // refuses — two blocks where one is due.
 test('words of whitespace alone are left out, and a file no model reads throws naming it — 44.55', async () => {
     held.createImageBitmap = undefined
     const shot = new Blob(['png'], { type: 'image/png' })
-    expect((await userMessage('  \n ', [shot])).content).toHaveLength(1)
-    expect(await userMessage('Hello', [])).toEqual({
+    expect((await userMessage(['  \n ', shot])).content).toHaveLength(1)
+    expect(await userMessage(['Hello'])).toEqual({
         role: 'user',
         content: [{ type: 'text', text: 'Hello' }],
     })
     await expect(
-        userMessage('', [
+        userMessage([
             new File(['zip'], 'archive.zip', { type: 'application/zip' }),
         ]),
     ).rejects.toThrow('archive.zip')
