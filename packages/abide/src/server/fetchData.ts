@@ -8,6 +8,8 @@ import { namedLogger } from '#shared/log.ts'
 import { type Backoff, backoffWait } from '#shared/retryWait.ts'
 import { runSchema, type Schema } from '#shared/Schema.ts'
 
+import { isValues } from './answerValue.ts'
+
 /** `fetch`'s own options, and the reading, the deadline, the retries, the cache and the gate beside them. */
 export type FetchOptions<T> = RequestInit & {
     /** 54.17 — the body read as JSON, text or a `Blob` whatever its type says, in place of as `handle` reads it. */
@@ -93,7 +95,7 @@ function answerOf<T>(
     if (held !== undefined && held.expiresAt > now)
         // 54.14 — a stream is its first reader's to drain, so a caller that joined one asks for its own.
         answer = held.answer.then((settled) =>
-            isStream(settled) ? asked(url, options, signal) : settled,
+            isValues(settled) ? asked(url, options, signal) : settled,
         )
     else {
         for (const [stale, each] of HELD)
@@ -104,19 +106,11 @@ function answerOf<T>(
         HELD.set(key, fresh)
         answer.then((settled) => {
             // 54.14 — a failure is not kept, and neither is a stream, which its first reader drains.
-            if (isFailed(settled) || isStream(settled)) HELD.delete(key)
+            if (isFailed(settled) || isValues(settled)) HELD.delete(key)
             else fresh.expiresAt = Date.now() + ttl
         })
     }
     return signal == null ? answer : abortable(answer, signal)
-}
-
-function isStream(value: unknown): boolean {
-    return (
-        typeof value === 'object' &&
-        value !== null &&
-        Symbol.asyncIterator in value
-    )
 }
 
 // The headers are part of the key: two callers with different credentials are two answers. So is the

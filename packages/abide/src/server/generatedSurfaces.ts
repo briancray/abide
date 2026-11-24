@@ -133,8 +133,14 @@ function openApiOf(handlers: Map<string, Mounted>): {
             | undefined
         const inPath = new Set<string>()
         const parameters: unknown[] = []
+        // OpenAPI spells a parameter `{id}` where a route spells it `[id]`, and names no matcher.
+        let path = ''
         for (const segment of parseRoutePattern(each.address, each.matchers)) {
-            if (segment.kind === 'static') continue
+            if (segment.kind === 'static') {
+                path += `/${segment.name}`
+                continue
+            }
+            path += `/{${segment.name}}`
             inPath.add(segment.name)
             const declared = schema?.properties?.[segment.name] ?? {
                 type: 'string',
@@ -180,11 +186,7 @@ function openApiOf(handlers: Map<string, Mounted>): {
                     },
                 },
             }
-        // OpenAPI spells a parameter `{id}` where a route spells it `[id]`, and names no matcher.
-        const path = each.address.replace(
-            /\[+(?:\.\.\.)?([^\]=]+)(?:=[^\]]*)?\]+/g,
-            '{$1}',
-        )
+        if (path === '') path = '/'
         paths[path] ??= {}
         ;(paths[path] as Record<string, unknown>)[each.method.toLowerCase()] =
             operation

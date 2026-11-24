@@ -588,7 +588,7 @@ export function toolBlocksOf(
 }
 
 /** The words of `content`, its images and documents left out. */
-export function textOf(
+function textOf(
     content: readonly (AssistantContent | ToolAnswer['content'][number])[],
 ): string {
     let text = ''

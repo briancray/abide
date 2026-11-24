@@ -184,7 +184,7 @@ export async function serveDev(
         // process holds now rather than what it started with. `advanced` carries an `ArrayBuffer`.
         const child = Bun.spawn(
             [
-                'bun',
+                process.execPath,
                 Bun.fileURLToPath(new URL('./devWorker.ts', import.meta.url)),
             ],
             {
