@@ -62,9 +62,7 @@ for (const [key, value] of Object.entries(process.env))
     if (value !== undefined && key !== 'BUN_TEST_WORKER_ID')
         ENVIRONMENT[key] = value
 
-type Bench = Awaited<
-    ReturnType<typeof import('../src/runner/runBenches.ts').runBenches>
->[number]
+type Bench = import('../src/runner/runBenches.ts').Bench
 
 const run = await inAFreshProcess(
     `import { runBenches } from '${RUNNER}'

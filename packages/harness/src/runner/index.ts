@@ -7,5 +7,5 @@
 // nothing itself.
 
 export { rowsCommand } from './rowsCommand.ts'
-export { runBenches } from './runBenches.ts'
+export { type Bench, runBenches } from './runBenches.ts'
 export { type TestSuite, testRows } from './testRows.ts'

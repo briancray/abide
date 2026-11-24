@@ -4,6 +4,21 @@ import { type Batched, claimOf, ratio } from '../report/index.ts'
 export const milliseconds = (nanoseconds: number) =>
     `${(nanoseconds / 1e6).toFixed(3)} ms`
 
+/** One bench `runBenches` ran: its file, its case, and each arm's time per operation. */
+export type Bench = {
+    file: string
+    name: string
+    case: string
+    n: number
+    floor: number
+    /** Nanoseconds per operation, by arm. */
+    arms: Record<string, number>
+    /** The last arm over the first, as the harness is allowed to say it; '' for one arm. */
+    claim: string
+    /** An arm over its ceiling, and a ceiling naming no arm or no bench. */
+    over: string[]
+}
+
 /**
  * Every bench beside the code, `src/**\/*.bench.ts` under `root`, run in this process one after
  * another: each function a file exports is one bench, and its `CEILINGS` names the most each arm
@@ -15,21 +30,7 @@ export const milliseconds = (nanoseconds: number) =>
 export async function runBenches(
     root: string,
     only?: string,
-): Promise<
-    {
-        file: string
-        name: string
-        case: string
-        n: number
-        floor: number
-        /** Nanoseconds per operation, by arm. */
-        arms: Record<string, number>
-        /** The last arm over the first, as the harness is allowed to say it; '' for one arm. */
-        claim: string
-        /** An arm over its ceiling, and a ceiling naming no arm or no bench. */
-        over: string[]
-    }[]
-> {
+): Promise<Bench[]> {
     const base = root.endsWith('/') ? root : `${root}/`
     const files = [...new Bun.Glob('src/**/*.bench.ts').scanSync(base)].sort()
     const benches = []

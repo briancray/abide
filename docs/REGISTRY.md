@@ -1820,7 +1820,8 @@ rows a runner prints, and an adapter for an abide app.
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `runBenches` | `(root: string, only?: string) => Promise<{ file: string; name: string; case: string; n: number; floor: number; arms: Record<string, number>; claim: string; over: string[] }[]>` | Every bench under `root`'s `src`, run, with each arm's time per operation and the ceilings it went over. | 43.29, 43.30, 43.31, 43.32, 43.34 |
+| `runBenches` | `(root: string, only?: string) => Promise<Bench[]>` | Every bench under `root`'s `src`, run, with each arm's time per operation and the ceilings it went over. | 43.29, 43.30, 43.31, 43.32, 43.34 |
+| `Bench` | `{ file: string; name: string; case: string; n: number; floor: number; arms: Record<string, number>; claim: string; over: string[] }` | One bench `runBenches` ran: its file, its case, and each arm's time per operation. | 43.29, 43.30, 43.31, 43.32 |
 | `CEILINGS` | `Record<string, Record<string, number>>` | A bench file's export naming the most each arm of each of its benches may take, in milliseconds. | 43.29, 43.31, 43.32 |
 
 | Name | Meaning | Rules |
