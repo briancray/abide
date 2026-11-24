@@ -21,7 +21,7 @@ const box = combobox({
 
 <label for="deal-team">On the deal</label>
 <div {...box.root} class="picker flex-row flex-wrap">
-    {#for contact of box.picks ?? [] by contact.id}
+    {#for contact of box.value by contact.id}
         <span {...box.chip(contact).chip} class="rounded-md bg-signal/10 px-2"><span>{contact.name}</span>
             <button {...box.chip(contact).remove}>×</button></span>
     {/for}
