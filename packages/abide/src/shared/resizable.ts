@@ -1,4 +1,4 @@
-// 53.72-53.78 — A PANEL SIZED BY DRAGGING ITS EDGE: WAI-ARIA's window splitter, as parts an app spreads
+// 53.80-53.86 — A PANEL SIZED BY DRAGGING ITS EDGE: WAI-ARIA's window splitter, as parts an app spreads
 // onto a panel and a handle of its own. The bounds are measured once as a drag or a key begins — the
 // panel's parent less what its neighbour keeps — so a pointer moving reads no layout. Each handle
 // answers the arrows of its own axis alone, so one `resizable` per axis spread on one grip sizes a
@@ -59,7 +59,7 @@ export function resizable(options: ResizableOptions = {}): Resizable {
     let at = 0
 
     const panelOf = () => globalThis.document?.getElementById(panelId)
-    // 53.74 — the most it takes: `max`, and where `keep` is given, what its parent holds less that. A
+    // 53.82 — the most it takes: `max`, and where `keep` is given, what its parent holds less that. A
     // parent that grows with the panel — a box sized from its corner — bounds nothing, so the parent
     // is read only where something beside the panel keeps room.
     const measure = (): number => {
@@ -88,7 +88,7 @@ export function resizable(options: ResizableOptions = {}): Resizable {
 
     return {
         id,
-        // 53.72 — the one value written to `style`, the size computed from the drag (49.5).
+        // 53.80 — the one value written to `style`, the size computed from the drag (49.5).
         panel: {
             id: panelId,
             'data-resizable': 'panel',
@@ -99,7 +99,7 @@ export function resizable(options: ResizableOptions = {}): Resizable {
                     : `${across === 'x' ? 'inline-size' : 'block-size'}:${now}px`
             },
         },
-        // 53.78
+        // 53.86
         handle: {
             role: 'separator',
             tabindex: '0',
@@ -124,7 +124,7 @@ export function resizable(options: ResizableOptions = {}): Resizable {
             get 'data-dragging'() {
                 return dragging() ? '' : undefined
             },
-            // 53.73 — captured, so the moves land on the handle wherever the pointer goes.
+            // 53.81 — captured, so the moves land on the handle wherever the pointer goes.
             onpointerdown: (event: PointerEvent) => {
                 if (event.button !== 0) return
                 event.preventDefault()
@@ -143,7 +143,7 @@ export function resizable(options: ResizableOptions = {}): Resizable {
             },
             onpointerup: () => dragging.set(false),
             onpointercancel: () => dragging.set(false),
-            // 53.75, 53.76
+            // 53.83, 53.84
             onkeydown: (event: KeyboardEvent) => {
                 const step = live(options.step) ?? 10
                 let next: number | undefined
@@ -169,7 +169,7 @@ export function resizable(options: ResizableOptions = {}): Resizable {
                 event.preventDefault()
                 if (Number.isFinite(next)) size.set(bound(next))
             },
-            // 53.77
+            // 53.85
             ondblclick: () => {
                 collapsedFrom = undefined
                 size.set(undefined)

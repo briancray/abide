@@ -3,6 +3,10 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import LoopStages from './lib/LoopStages.abide'
+import loopStages from './lib/LoopStages.abide' with { type: 'text' }
+import PlayStages from './lib/PlayStages.abide'
+import playStages from './lib/PlayStages.abide' with { type: 'text' }
 import RestOnStage from './lib/RestOnStage.abide'
 import restOnStage from './lib/RestOnStage.abide' with { type: 'text' }
 import StepStages from './lib/StepStages.abide'
@@ -27,6 +31,38 @@ import stepStages from './lib/StepStages.abide' with { type: 'text' }
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageCarousel.test.ts',
             from: ["test('moving the deal to a stage rests the carousel on it'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/ContractViewer.test.ts',
+            from: [
+                "test('the arrows go from the last page to the first, and back'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/carousel.test.ts',
+            from: ["test('a carousel that loops steps past each end to the other"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageTour.test.ts',
+            from: [
+                "test('the tour arrives playing, and its button pauses and plays it'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/carousel.test.ts',
+            from: [
+                "test('playing steps on its own every autoplay, counted afresh after a step by hand",
+            ],
+        },
+        {
+            path: 'packages/abide/e2e/carousel.spec.ts',
+            from: [
+                "test('an autoplaying carousel steps by itself, and holds still under the pointer",
+            ],
+        },
+        {
+            path: 'packages/abide/e2e/carousel.spec.ts',
+            from: ["test('reduced motion arrives paused, and play starts it"],
         },
         {
             path: 'packages/abide/tests/carousel.test.ts',
@@ -61,5 +97,22 @@ import stepStages from './lib/StepStages.abide' with { type: 'text' }
             the centered stage and is disabled at its end. <code>reset</code> scrolls back to
             the stage the carousel rests on, the first where nothing is selected.</p>
         <Example code={stepStages}><StepStages /></Example>
+    </Section>
+
+    <Section level={3} title="Loop from the last stage back to the first">
+        <p>Pass <code>loop: true</code> and <code>next</code> at the last stage goes to the
+            first, <code>previous</code> at the first to the last, and neither is disabled. A
+            lightbox takes the same option.</p>
+        <Example code={loopStages}><LoopStages /></Example>
+    </Section>
+
+    <Section level={3} title="Play through the stages on their own">
+        <p>Pass <code>autoplay</code>, the milliseconds between steps, and the carousel steps
+            as <code>next</code> does, stopping at the last stage unless it loops. Spread
+            <code>play</code> on a button to pause and play it: a carousel that moves on its own
+            needs one. It holds still while the pointer is over it or focus is inside it,
+            arrives paused for a reader who prefers reduced motion, and tells a screen reader
+            nothing while it turns.</p>
+        <Example code={playStages}><PlayStages /></Example>
     </Section>
 </Doc>

@@ -1,4 +1,4 @@
-// 53.79-53.81 — A PICTURE MADE SMALL ENOUGH TO SEND: no wider or taller than `maxEdge`, and no larger
+// 53.87-53.89 — A PICTURE MADE SMALL ENOUGH TO SEND: no wider or taller than `maxEdge`, and no larger
 // than `maxBytes`, lowering its quality and then its size until it fits. The same call on both sides:
 // `createImageBitmap` and an `OffscreenCanvas` in a browser, `Bun.Image` on a server, each turning the
 // picture the way its EXIF says first.
@@ -33,7 +33,7 @@ export async function shrinkImage(
             : 'image/jpeg')
     const picture = await decoded(file)
     let scale = Math.min(1, maxEdge / Math.max(picture.width, picture.height))
-    // 53.81 — already within every bound and of the type asked for: handed back as it is.
+    // 53.89 — already within every bound and of the type asked for: handed back as it is.
     if (
         scale === 1 &&
         file.type === type &&
@@ -41,7 +41,7 @@ export async function shrinkImage(
     )
         return named(file, file.name, type)
     let quality = options.quality ?? 0.85
-    // 53.80 — the quality lowered first, halving the distance to the floor; then the size.
+    // 53.88 — the quality lowered first, halving the distance to the floor; then the size.
     for (;;) {
         const written = await picture.encode(scale, type, quality)
         if (
@@ -68,7 +68,7 @@ type Decoded = {
     encode(scale: number, type: string, quality: number): Promise<Blob>
 }
 
-// 53.79 — `Bun.Image` wherever Bun runs, a server or a test's emulated page, else a browser's canvas:
+// 53.87 — `Bun.Image` wherever Bun runs, a server or a test's emulated page, else a browser's canvas:
 // an emulated page answers `createImageBitmap` and draws nothing.
 async function decoded(file: Blob): Promise<Decoded> {
     if (globalThis.Bun?.Image === undefined) {

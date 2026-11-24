@@ -1,4 +1,4 @@
-// 53.72-53.78 — `resizable`, its handle driven as a browser would: a pointer pressed, moved and let
+// 53.80-53.86 — `resizable`, its handle driven as a browser would: a pointer pressed, moved and let
 // go, and keys. The emulator lays nothing out, so the parent's width and the panel's own box are
 // answered here.
 
@@ -52,7 +52,7 @@ function standing(options: ResizableOptions = {}) {
 }
 
 // THE REVERT: drop the drag from the handle's `pointermove`, and the panel keeps its size.
-test('dragging the handle sizes the panel, growing toward the edge it stands on — 53.72, 53.73', () => {
+test('dragging the handle sizes the panel, growing toward the edge it stands on — 53.80, 53.81', () => {
     const end = standing()
     expect(end.side.panel.style).toBeUndefined()
     end.drag(100, 160)
@@ -68,7 +68,7 @@ test('dragging the handle sizes the panel, growing toward the edge it stands on 
 
 // THE REVERT: bound the size by `max` alone, and a drag past the parent takes the room its neighbour
 // keeps.
-test('the panel keeps to min, max and what its parent leaves after keep — 53.74', () => {
+test('the panel keeps to min, max and what its parent leaves after keep — 53.82', () => {
     const kept = standing({ min: 120, keep: 300 })
     kept.drag(0, 1000)
     expect(kept.side.size()).toBe(500)
@@ -84,7 +84,7 @@ test('the panel keeps to min, max and what its parent leaves after keep — 53.7
 })
 
 // THE REVERT: answer every arrow, and a corner grip's two handles each move on the other's keys.
-test('the arrows of its own axis step it, Home and End go to its bounds, Enter collapses it — 53.75, 53.76', () => {
+test('the arrows of its own axis step it, Home and End go to its bounds, Enter collapses it — 53.83, 53.84', () => {
     const { side, key } = standing({ step: 20, min: 50, max: 400 })
     key('ArrowRight')
     expect(side.size()).toBe(220)
@@ -105,7 +105,7 @@ test('the arrows of its own axis step it, Home and End go to its bounds, Enter c
 })
 
 // THE REVERT: drop the handle's `dblclick`, and the panel cannot go back to its own size.
-test('a double click gives the panel back its own size, and the handle reads as a splitter — 53.77, 53.78', () => {
+test('a double click gives the panel back its own size, and the handle reads as a splitter — 53.85, 53.86', () => {
     const { side, drag, on } = standing({ label: 'Sidebar', max: 600 })
     drag(0, 40)
     expect([

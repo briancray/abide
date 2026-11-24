@@ -755,9 +755,9 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `carousel` | `<Item>(options: CarouselOptions<Item>) => Carousel<Item>` | A scroll-snap carousel resting on a selection and following the item a scroll centers, as parts an app spreads onto a scroller, its items and a button either side. | 53.61, 53.62, 53.63, 53.64, 53.65, 53.66, 53.67, 53.68, 53.69, 53.70, 32.99, 49.3, 49.7, 49.2, 49.4, 49.5, 49.6, 49.15 |
-| `CarouselOptions` | `<Item>{ id?: string; items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; label?: (item: Item) => string; selected?: Reactive<string \| undefined>; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | The items, how each is told apart and named, the key of the one the carousel rests on, and how a scroll to an item moves. | 53.61, 53.62, 53.68, 49.8, 49.10, 49.11 |
-| `Carousel` | `<Item>{ readonly id: string; readonly host: Record<string, unknown>; item(item: Item): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; get centered(): string \| undefined; readonly selected: Reactive<string \| undefined>; scrollTo(key: string): void; reset(): void }` | The scroller's part, an item's part, the two buttons' parts, the key of the item centered, the key it rests on, and what scrolls to an item and back. | 53.63, 53.67, 53.68, 53.69, 49.3, 49.8, 49.9 |
+| `carousel` | `<Item>(options: CarouselOptions<Item>) => Carousel<Item>` | A scroll-snap carousel resting on a selection and following the item a scroll centers, as parts an app spreads onto a scroller, its items, a button either side and one that plays and pauses. | 53.61, 53.62, 53.63, 53.64, 53.65, 53.66, 53.67, 53.68, 53.69, 53.70, 53.71, 53.72, 53.73, 53.74, 53.76, 53.78, 32.99, 49.3, 49.7, 49.2, 49.4, 49.5, 49.6, 49.15 |
+| `CarouselOptions` | `<Item>{ id?: string; items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; label?: (item: Item) => string; selected?: Reactive<string \| undefined>; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth'); loop?: boolean \| (() => boolean); autoplay?: number \| undefined \| (() => number \| undefined); playing?: Reactive<boolean> }` | The items, how each is told apart and named, the key of the one the carousel rests on, how a scroll to an item moves, whether stepping past an end goes to the other, the milliseconds between steps it takes by itself, and whether it is taking them. | 53.61, 53.62, 53.67, 53.68, 53.71, 53.73, 53.75, 49.8, 49.10, 49.11 |
+| `Carousel` | `<Item>{ readonly id: string; readonly host: Record<string, unknown>; item(item: Item): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; readonly play: Record<string, unknown>; readonly playing: Reactive<boolean>; get centered(): string \| undefined; readonly selected: Reactive<string \| undefined>; scrollTo(key: string): void; reset(): void }` | The scroller's part, an item's part, the two buttons' parts, the play button's part, whether it is playing, the key of the item centered, the key it rests on, and what scrolls to an item and back. | 53.63, 53.67, 53.68, 53.69, 53.75, 53.77, 49.3, 49.8, 49.9 |
 
 ## `sortableTable`
 
@@ -858,18 +858,18 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `resizable` | `(options?: ResizableOptions) => Resizable` | WAI-ARIA's window splitter as parts an app spreads onto a panel and a handle of its own: dragging the handle, or its keys, sizes the panel. | 53.72, 53.73, 53.74, 53.75, 53.76, 53.77, 53.78, 49.2, 49.4, 49.5, 49.6 |
-| `ResizableOptions` | `{ id?: string; axis?: 'x' \| 'y'; edge?: 'start' \| 'end'; size?: Reactive<number \| undefined>; min?: number \| (() => number); max?: number \| (() => number); keep?: number \| (() => number); step?: number \| (() => number); label?: string \| (() => string) }` | The axis it sizes, the edge its handle stands on, its size, the bounds it keeps to, how far a key moves it, and the handle's accessible name. | 53.72, 53.73, 53.74, 53.75, 49.8, 49.10, 49.11 |
-| `Resizable` | `{ readonly id: string; readonly panel: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly size: Reactive<number \| undefined> }` | The base of its ids, the panel's part, the handle's, and the panel's size. | 32.11, 53.72, 53.78, 49.3, 49.8, 49.9 |
+| `resizable` | `(options?: ResizableOptions) => Resizable` | WAI-ARIA's window splitter as parts an app spreads onto a panel and a handle of its own: dragging the handle, or its keys, sizes the panel. | 53.80, 53.81, 53.82, 53.83, 53.84, 53.85, 53.86, 49.2, 49.4, 49.5, 49.6 |
+| `ResizableOptions` | `{ id?: string; axis?: 'x' \| 'y'; edge?: 'start' \| 'end'; size?: Reactive<number \| undefined>; min?: number \| (() => number); max?: number \| (() => number); keep?: number \| (() => number); step?: number \| (() => number); label?: string \| (() => string) }` | The axis it sizes, the edge its handle stands on, its size, the bounds it keeps to, how far a key moves it, and the handle's accessible name. | 53.80, 53.81, 53.82, 53.83, 49.8, 49.10, 49.11 |
+| `Resizable` | `{ readonly id: string; readonly panel: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly size: Reactive<number \| undefined> }` | The base of its ids, the panel's part, the handle's, and the panel's size. | 32.11, 53.80, 53.86, 49.3, 49.8, 49.9 |
 
 ## `panZoom`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `panZoom` | `(options?: PanZoomOptions) => PanZoom` | A surface moved and magnified by its wheel, its pointers and its keys, as parts an app spreads onto a surface and the content inside it. | 53.84, 53.85, 53.86, 53.87, 53.88, 53.89, 53.90, 32.99, 49.2, 49.4, 49.5, 49.6 |
-| `PanZoomOptions` | `{ view?: Reactive<PanZoomView>; min?: number \| (() => number); max?: number \| (() => number); label?: string \| (() => string) }` | Where it stands, the bounds of its magnification, and the surface's accessible name. | 53.87, 49.8, 49.10, 49.11 |
-| `PanZoomView` | `{ readonly x: number; readonly y: number; readonly k: number }` | Where the content stands in the surface: moved by `x` and `y` pixels and magnified by `k`. | 53.84 |
-| `PanZoom` | `{ readonly surface: Record<string, unknown>; readonly content: Record<string, unknown>; readonly view: Reactive<PanZoomView>; zoomBy(factor: number, at?: { x: number; y: number }): void; fit(box: { x: number; y: number; width: number; height: number }, margin?: number): void }` | The surface's part, the content's, where it stands, and what magnifies it and frames a box of it from code. | 32.11, 53.84, 53.87, 53.89, 49.3, 49.8, 49.9 |
+| `panZoom` | `(options?: PanZoomOptions) => PanZoom` | A surface moved and magnified by its wheel, its pointers and its keys, as parts an app spreads onto a surface and the content inside it. | 53.92, 53.93, 53.94, 53.95, 53.96, 53.97, 53.98, 32.99, 49.2, 49.4, 49.5, 49.6 |
+| `PanZoomOptions` | `{ view?: Reactive<PanZoomView>; min?: number \| (() => number); max?: number \| (() => number); label?: string \| (() => string) }` | Where it stands, the bounds of its magnification, and the surface's accessible name. | 53.95, 49.8, 49.10, 49.11 |
+| `PanZoomView` | `{ readonly x: number; readonly y: number; readonly k: number }` | Where the content stands in the surface: moved by `x` and `y` pixels and magnified by `k`. | 53.92 |
+| `PanZoom` | `{ readonly surface: Record<string, unknown>; readonly content: Record<string, unknown>; readonly view: Reactive<PanZoomView>; zoomBy(factor: number, at?: { x: number; y: number }): void; fit(box: { x: number; y: number; width: number; height: number }, margin?: number): void }` | The surface's part, the content's, where it stands, and what magnifies it and frames a box of it from code. | 32.11, 53.92, 53.95, 53.97, 49.3, 49.8, 49.9 |
 
 ## `announce`
 
@@ -895,7 +895,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `copy` | `(options?: { value?: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>); copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => Record<string, unknown>` | The part copying the element clicked, or text, or a record of MIME type to what it holds, to the clipboard on a click of the element it is spread on, or of a button inside it. | 32.99, 53.21, 53.22, 53.23, 53.43, 53.44, 53.54, 53.55, 53.71, 49.3, 49.12 |
+| `copy` | `(options?: { value?: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>); copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => Record<string, unknown>` | The part copying the element clicked, or text, or a record of MIME type to what it holds, to the clipboard on a click of the element it is spread on, or of a button inside it. | 32.99, 53.21, 53.22, 53.23, 53.43, 53.44, 53.54, 53.55, 53.79, 49.3, 49.12 |
 
 ## `hotkeys`
 
@@ -953,14 +953,14 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `shrinkImage` | `(file: Blob & { name?: string }, options?: ShrinkImageOptions) => Promise<File>` | A picture made no larger than an edge and a byte budget, the same call where Bun runs and in a browser. | 53.79, 53.80, 53.81 |
-| `ShrinkImageOptions` | `{ maxEdge?: number; maxBytes?: number; type?: 'image/jpeg' \| 'image/webp' \| 'image/png'; quality?: number }` | The most pixels its longer edge keeps, the most bytes it takes, what it is written as, and the quality it is written at first. | 53.79, 53.80 |
+| `shrinkImage` | `(file: Blob & { name?: string }, options?: ShrinkImageOptions) => Promise<File>` | A picture made no larger than an edge and a byte budget, the same call where Bun runs and in a browser. | 53.87, 53.88, 53.89 |
+| `ShrinkImageOptions` | `{ maxEdge?: number; maxBytes?: number; type?: 'image/jpeg' \| 'image/webp' \| 'image/png'; quality?: number }` | The most pixels its longer edge keeps, the most bytes it takes, what it is written as, and the quality it is written at first. | 53.87, 53.88 |
 
 ## `download`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `download` | `(data: Blob \| string, name: string, type?: string) => void` | Text or bytes made in the page, saved as a file under a name. | 53.82, 53.83 |
+| `download` | `(data: Blob \| string, name: string, type?: string) => void` | Text or bytes made in the page, saved as a file under a name. | 53.90, 53.91 |
 
 ## `sortBy`
 

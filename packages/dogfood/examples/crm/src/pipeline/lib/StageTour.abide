@@ -1,0 +1,21 @@
+<script>
+import { carousel } from '@abide/abide'
+
+import { STAGE_MEANINGS } from './STAGE_MEANINGS.ts'
+import { STAGES } from './STAGES.ts'
+
+// A tour of what each stage means, stepping on its own every five seconds and round again.
+const tour = carousel({ items: STAGES, loop: true, autoplay: 5000 })
+</script>
+
+<div class="row">
+    <button {...tour.play}>{tour.playing() ? 'Pause' : 'Play'}</button>
+    <ul {...tour.host} aria-label="Stage tour"
+        class="flex snap-x snap-mandatory gap-snug overflow-x-auto px-[12.5%]">
+        {#for name of STAGES by name}
+            <li {...tour.item(name)} class="shrink-0 basis-3/4 snap-center p-snug">
+                <strong>{name}</strong> {STAGE_MEANINGS[name]}
+            </li>
+        {/for}
+    </ul>
+</div>

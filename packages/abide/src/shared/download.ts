@@ -1,4 +1,4 @@
-// 53.82, 53.83 — A FILE HANDED TO THE PERSON: text or bytes made in the page saved under a name, as
+// 53.90, 53.91 — A FILE HANDED TO THE PERSON: text or bytes made in the page saved under a name, as
 // a link to it clicked would save it. A server has no one to hand it to.
 
 import { isServer } from './isServer.ts'
@@ -11,7 +11,7 @@ export function download(
 ): void {
     if (isServer())
         throw new Error(
-            'download hands a file to a person, and a server has none to hand it to: answer a Response with a Content-Disposition instead. RULEBOOK 53.83.',
+            'download hands a file to a person, and a server has none to hand it to: answer a Response with a Content-Disposition instead. RULEBOOK 53.91.',
         )
     const blob = typeof data === 'string' ? new Blob([data], { type }) : data
     const address = URL.createObjectURL(blob)

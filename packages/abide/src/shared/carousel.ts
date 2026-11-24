@@ -1,16 +1,21 @@
-// 53.61-53.70 — A SCROLL-SNAP CAROUSEL THAT RESTS ON A SELECTION, as parts an app spreads onto markup of
-// its own: the scroller, an item per entry, and a button either side. The snapping is the app's CSS;
-// the parts scroll to the selection, follow which item a scroll centers, and go back on `reset`. The
-// server writes the item it rests on as centered, since a page arrives resting.
+// 53.61-53.78 — A SCROLL-SNAP CAROUSEL THAT RESTS ON A SELECTION, as parts an app spreads onto markup of
+// its own: the scroller, an item per entry, a button either side, and one that plays and pauses. The
+// snapping is the app's CSS; the parts scroll to the selection, follow which item a scroll centers, go
+// back on `reset`, and step on a timer where `autoplay` is given. The server writes the item it rests on
+// as centered, since a page arrives resting.
 
 import { checkParts } from './checkParts.ts'
 import { handFocus } from './handFocus.ts'
 import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
 import { type Live, live } from './live.ts'
+import { media } from './media.ts'
 import { resized } from './observe/resized.ts'
 import { randomToken } from './randomToken.ts'
 import { memo, type Reactive, reactive, watch } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
+import { reactiveOver } from './reactiveOver.ts'
+import { toggle } from './toggle.ts'
+import { withPart } from './withPart.ts'
 
 /** The items, how each is told apart and named, the one the carousel rests on, and how it scrolls. */
 export type CarouselOptions<Item> = {
@@ -22,6 +27,12 @@ export type CarouselOptions<Item> = {
     selected?: Reactive<string | undefined>
     /** How `scrollTo`, `reset`, `previous` and `next` scroll. `'smooth'` by default; a function is read live. */
     behavior?: Live<'auto' | 'smooth'>
+    /** Whether `next` at the last item goes to the first, and `previous` at the first to the last. `false` by default; a function is read live. */
+    loop?: Live<boolean>
+    /** The milliseconds between steps while it plays; none, and it never steps by itself. A function is read live. */
+    autoplay?: Live<number | undefined>
+    /** Whether it is playing: a `Reactive` to read and set. Held by the parts, and handed back as `playing`, where none is given — starting true where `autoplay` is given. */
+    playing?: Reactive<boolean>
 } & KeyOption<Item> &
     LabelOption<Item>
 
@@ -33,10 +44,14 @@ export type Carousel<Item> = {
     readonly host: Record<string, unknown>
     /** One item's part, carrying `data-centered` and `data-selected` while each holds. */
     item(item: Item): Record<string, unknown>
-    /** The button's part scrolling to the item before the centered one, disabled at the first. */
+    /** The button's part scrolling to the item before the centered one, disabled at the first unless it loops. */
     readonly previous: Record<string, unknown>
-    /** The button's part scrolling to the item after the centered one, disabled at the last. */
+    /** The button's part scrolling to the item after the centered one, disabled at the last unless it loops. */
     readonly next: Record<string, unknown>
+    /** The play button: a `toggle`'s, pressed while it plays. */
+    readonly play: Record<string, unknown>
+    /** Whether it is playing; written, it plays or pauses. */
+    readonly playing: Reactive<boolean>
     /** The key of the item centered in the scroller. */
     get centered(): string | undefined
     /** The key of the item the carousel rests on, read and set. */
@@ -89,6 +104,8 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         return key === undefined ? undefined : elements.get(key)
     })
     let scroller: Element | undefined
+    // Whether the bound scroller has a box: none bound, or one in a closed dialog, never rotates.
+    const shown = reactive(false)
     // The key a scroll the parts made is on its way to: what the scroll passes on the way is not
     // centered, until it arrives or the scrolling ends.
     let heading: string | undefined
@@ -208,6 +225,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         // scrolls nowhere, so it rests again, at once, the moment it gets one.
         const box = element.getBoundingClientRect()
         let boxed = box.width > 0 || box.height > 0
+        shown.set(boxed)
         const unresize = resized(element, (entry) => {
             const showing =
                 entry.contentRect.width > 0 || entry.contentRect.height > 0
@@ -220,6 +238,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
                 }
             }
             boxed = showing
+            shown.set(showing)
         })
         // 53.62 — at once when bound, as `behavior` names after.
         let rested = false
@@ -241,17 +260,47 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
             element.removeEventListener('scrollsnapchanging', snap)
             element.removeEventListener('scrollsnapchange', snap)
             element.removeEventListener('scrollend', ended)
-            if (scroller === element) scroller = undefined
+            if (scroller === element) {
+                scroller = undefined
+                shown.set(false)
+            }
         }
     }
 
-    // 53.67 — the key `step` places from the centered one, where there is one.
+    // 53.67 — the key `step` places from the centered one, where there is one, past an end to the
+    // other where `loop` holds, and never the centered one itself.
     const beside = (step: number): string | undefined => {
         const listed = keys()
         const at = listed.indexOf(centered() as string)
-        return at === -1 ? undefined : listed[at + step]
+        if (at === -1 || listed.length < 2) return undefined
+        const to = at + step
+        if (to >= 0 && to < listed.length) return listed[to]
+        return live(options.loop) === true
+            ? listed[(to + listed.length) % listed.length]
+            : undefined
     }
+
+    // 53.74 — what the pointer is over and what focus is inside, by part.
+    const holders = new Set<string>()
+    const held = reactive(false)
+    const hold = (holder: string, on: boolean): void => {
+        if (on) holders.add(holder)
+        else holders.delete(holder)
+        held.set(holders.size > 0)
+    }
+    const holding = (part: string) => ({
+        onpointerenter: () => hold(`${part} pointer`, true),
+        onpointerleave: () => hold(`${part} pointer`, false),
+        onfocusin: () => hold(`${part} focus`, true),
+        onfocusout: (event: FocusEvent) => {
+            const to = event.relatedTarget as Node | null
+            if (!(event.currentTarget as Element).contains(to))
+                hold(`${part} focus`, false)
+        },
+    })
+
     const stepper = (part: string, step: number) => ({
+        ...holding(part),
         type: 'button',
         'data-carousel': part,
         'aria-controls': base,
@@ -272,13 +321,65 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         },
     })
 
+    // 53.75
+    const playing =
+        options.playing ?? reactive(live(options.autoplay) !== undefined)
+    // 53.76 — the hydrating page reads the server's `false` (23.31), so this fires once it settles too.
+    const reduced = media('(prefers-reduced-motion: reduce)')
+    watch(() => {
+        if (reduced()) playing.set(false)
+    })
+    // 53.73, 53.74
+    const rotating = memo(
+        (): boolean =>
+            playing() &&
+            live(options.autoplay) !== undefined &&
+            shown() &&
+            !held(),
+    )
+    // 53.71, 53.72 — one timer per item centered, so a step by hand or a swipe starts the count again.
+    watch(() => {
+        const every = live(options.autoplay)
+        if (!rotating() || every === undefined) return
+        centered()
+        const timer = setTimeout(() => {
+            const key = beside(1)
+            if (key === undefined) playing.set(false)
+            else scrollTo(key)
+        }, every)
+        return () => clearTimeout(timer)
+    })
+
+    // 53.77 — playing from the end starts over.
+    const pressed = reactiveOver(
+        () => playing(),
+        (on: boolean) => {
+            const first = keys()[0]
+            if (on && beside(1) === undefined && first !== undefined)
+                scrollTo(first)
+            playing.set(on)
+        },
+    )
+    const play = withPart(withPart({}, toggle({ pressed }).button), {
+        'data-carousel': 'play',
+        'aria-controls': base,
+        get 'aria-label'() {
+            return playing() ? 'Pause' : 'Play'
+        },
+    })
+
     return {
         id: base,
         host: {
+            ...holding('host'),
             id: base,
             role: 'region',
             'aria-roledescription': 'carousel',
             'data-carousel': 'host',
+            // 53.78
+            get 'aria-live'() {
+                return rotating() ? 'off' : undefined
+            },
             'bind:element': bindHost,
         },
         item: (item: Item) => {
@@ -307,6 +408,8 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         },
         previous: stepper('previous', -1),
         next: stepper('next', 1),
+        play,
+        playing,
         get centered() {
             return centered()
         },
