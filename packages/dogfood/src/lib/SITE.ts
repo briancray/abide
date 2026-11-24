@@ -169,13 +169,6 @@ const WRITTEN: readonly {
                 where: 'component',
             },
             {
-                route: '/pages/outlet',
-                title: '`outlet`',
-                description:
-                    "Leave a named place in a layout, a toolbar or a side panel, and fill it with the page's own markup from below.",
-                where: 'component',
-            },
-            {
                 route: '/pages/route',
                 title: '`route`',
                 description:
@@ -295,24 +288,10 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
-                route: '/reactive/flush-sync',
-                title: '`flushSync`',
-                description:
-                    'Run every effect a write woke right now, so a test or a layout read sees the updated page.',
-                where: 'anywhere',
-            },
-            {
                 route: '/reactive/stop-signal',
                 title: '`stopSignal`',
                 description:
                     "Read the signal that says stop, so a memo's superseded run or a stopping app's job ends its fetch early.",
-                where: 'anywhere',
-            },
-            {
-                route: '/reactive/structural',
-                title: '`structural`',
-                description:
-                    'Compare values by contents rather than reference, so an equal reload or write wakes nobody.',
                 where: 'anywhere',
             },
             {
@@ -421,6 +400,14 @@ const WRITTEN: readonly {
                 title: '`commandPalette`',
                 description:
                     'Spread a search over commands onto a dialog and a list of your own, opened on one key.',
+                where: 'component',
+                subgroup: 'Overlays',
+            },
+            {
+                route: '/headless/outlet',
+                title: '`outlet`',
+                description:
+                    "Leave a named place in a layout, a toolbar or a side panel, and fill it with the page's own markup from below.",
                 where: 'component',
                 subgroup: 'Overlays',
             },
@@ -790,6 +777,13 @@ const WRITTEN: readonly {
                 title: '`keyLabel`',
                 description:
                     "Write a shortcut binding as the visitor's platform shows it, ⌘ on a Mac and Ctrl elsewhere.",
+                where: 'anywhere',
+            },
+            {
+                route: '/helpers/structural',
+                title: '`structural`',
+                description:
+                    'Compare values by contents rather than reference, so an equal reload or write wakes nobody.',
                 where: 'anywhere',
             },
         ],
@@ -1291,6 +1285,13 @@ const WRITTEN: readonly {
                 description:
                     'Wait in a test until every load and effect a click started has finished, instead of sleeping.',
                 where: 'test',
+            },
+            {
+                route: '/testing/flush-sync',
+                title: '`flushSync`',
+                description:
+                    'Run every effect a write woke right now, so a test or a layout read sees the updated page.',
+                where: 'anywhere',
             },
             {
                 route: '/harness/measure/measure',

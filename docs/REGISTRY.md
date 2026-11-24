@@ -196,13 +196,6 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `<title>{name}</title>` | the `<title>` | `.textContent` | 35.9, 35.10 |
 | `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.9 |
 
-## `outlet`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `outlet.host` | `(name: string) => Record<string, unknown>` | The part for an element a layout owns, holding what `outlet.into` fills under its name. | 35.20, 35.22, 49.3, 49.12 |
-| `outlet.into` | `(name: string) => Record<string, unknown>` | The part moving the element it is spread on into the `outlet.host` of its name. | 35.20, 35.21, 35.23, 35.24, 32.99, 49.3, 49.12 |
-
 ## `route`
 
 | Name | Signature | Meaning | Rules |
@@ -465,23 +458,11 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `invalidate` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Marks the selection stale. | 13.4, 13.6, 13.10, 13.12, 13.15, 13.17 |
 
-## `flushSync`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `flushSync` | `() => void` | Ends the turn: every `Effect` a write woke runs now. | 9.10, 12.11, 12.12 |
-
 ## `stopSignal`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `stopSignal` | `() => AbortSignal` | The signal that says stop: inside a `memo` body its run's own, and elsewhere the one a stopping app aborts. | 7.38, 7.39, 7.45, 7.46 |
-
-## `structural`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator an app declares on `identity`. | 5.4, 5.5, 18.4 |
 
 ## `isReactive`
 
@@ -598,6 +579,13 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `CommandPaletteParts` | `{ readonly id: string; readonly dialog: Record<string, unknown>; readonly input: Record<string, unknown>; readonly listbox: Record<string, unknown>; command(command: Command): CommandParts; readonly empty: Record<string, unknown>; get results(): readonly Command[]; readonly open: Reactive<boolean> }` | The dialog's part, the input's, the list's, a command's parts, the empty status, the commands listed and whether it shows. | 32.11, 51.66, 51.67, 49.3, 49.8, 49.9 |
 | `CommandParts` | `{ readonly option: Record<string, unknown>; readonly label: Record<string, unknown>; readonly key: Record<string, unknown>; readonly runs: readonly LabelRun[] }` | A command's option, the label and the key written in it, and the label in runs. | 51.67, 51.107, 49.3 |
 | `Command` | `{ label: string; keywords?: readonly string[]; key?: string; run: () => void }` | One thing the palette can do: what it is called, the further words typing matches, the key shown beside it and what choosing it does. | 51.66, 51.68, 51.70 |
+
+## `outlet`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `outlet.host` | `(name: string) => Record<string, unknown>` | The part for an element a layout owns, holding what `outlet.into` fills under its name. | 35.20, 35.22, 49.3, 49.12 |
+| `outlet.into` | `(name: string) => Record<string, unknown>` | The part moving the element it is spread on into the `outlet.host` of its name. | 35.20, 35.21, 35.23, 35.24, 32.99, 49.3, 49.12 |
 
 ## `form`
 
@@ -1001,6 +989,12 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `keyLabel` | `(binding: string, options?: { apple?: boolean }) => string` | A `hotkeys` binding written the way the visitor's platform writes its keys. | 53.3, 53.9, 53.11, 53.51, 53.53 |
 | `keyLabel.parts` | `(binding: string, options?: { apple?: boolean }) => string[]` | Each key `keyLabel` writes for a binding, apart, for one key cap apiece. | 53.52, 53.53 |
+
+## `structural`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator an app declares on `identity`. | 5.4, 5.5, 18.4 |
 
 # Handlers
 
@@ -1617,6 +1611,12 @@ rows a runner prints, and an adapter for an abide app.
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `settled` | `(options?: { timeout?: number }) => Promise<void>` | A wait until nothing a test started is still loading or pending. | 38.204, 38.205, 38.206 |
+
+## `flushSync`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `flushSync` | `() => void` | Ends the turn: every `Effect` a write woke runs now. | 9.10, 12.11, 12.12 |
 
 ## `measure` — `@abide/harness/measure`
 
