@@ -3,7 +3,7 @@ import { reactive, toggleGroup } from '@abide/abide'
 
 const STAGES = ['lead', 'qualified', 'proposal', 'won']
 let stages = reactive<readonly string[]>([])
-const chips = toggleGroup({ keys: STAGES, multiple: true, value: stages })
+const chips = toggleGroup({ items: STAGES, multiple: true, value: stages })
 </script>
 
 <div class="tabs" {...chips.group}>

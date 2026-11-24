@@ -77,7 +77,7 @@ function walkMenu(): string[] {
 }
 
 function walkTabs(): string[] {
-    const view = tabs({ keys: ITEMS })
+    const view = tabs({ items: ITEMS })
     for (const key of ITEMS) {
         const tab = document.createElement('button')
         tab.id = view.tab(key).button.id as string

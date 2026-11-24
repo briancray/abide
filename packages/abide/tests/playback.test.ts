@@ -88,8 +88,8 @@ test('the scrubber reads and moves where it is, and the speeds pick its rate —
     input.dispatchEvent(new Event('input'))
     flushSync()
     expect(trip.at()).toBe(9000)
-    press(trip.speed.item('4'))
-    expect([trip.rate(), trip.speed.item('4')['aria-checked']]).toEqual([
+    press(trip.speed.item(4))
+    expect([trip.rate(), trip.speed.item(4)['aria-checked']]).toEqual([
         4,
         'true',
     ])

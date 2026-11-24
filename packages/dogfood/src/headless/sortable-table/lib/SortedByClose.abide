@@ -18,7 +18,6 @@ let sort = reactive<Sort | undefined>({
 const table = sortableTable({
     rows: DEALS,
     columns: COLUMNS,
-    key: (deal) => deal.id,
     sort,
 })
 </script>

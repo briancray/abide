@@ -1,7 +1,7 @@
 <script>
 import { tabs } from '@abide/abide'
 
-const view = tabs({ keys: ['details', 'stage'] })
+const view = tabs({ items: ['details', 'stage'] })
 </script>
 
 <div class="flex [&_[data-selected]]:border-b-2" {...view.list}>

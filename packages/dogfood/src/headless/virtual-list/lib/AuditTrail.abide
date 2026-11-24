@@ -8,7 +8,6 @@ import { AUDIT_TRAIL } from './AUDIT_TRAIL.ts'
 // is comes from its CSS, not from here.
 const trail = virtualList({
     items: AUDIT_TRAIL,
-    key: (entry) => String(entry.id),
     initial: 20,
 })
 </script>

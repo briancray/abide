@@ -114,7 +114,7 @@ function shaped<Parts>(
 
 // THE REVERT: type `Tabs`'s `panel` as `panel(key?: string)` again, and `bun run typecheck` names it.
 test('every part is a member, a function of its item, or an action — 49.9', () => {
-    shaped<Tabs>()
+    shaped<Tabs<string>>()
     shaped<TabParts>()
     shaped<Menu>()
     shaped<Listbox<string>>()
@@ -152,7 +152,7 @@ test('every part is a member, a function of its item, or an action — 49.9', ()
 
 // Every element part each parts function hands back, built with the least each takes.
 function elementParts(): Record<string, unknown> {
-    const view = tabs({ keys: ['a'] })
+    const view = tabs({ items: ['a'] })
     const opener = menu()
     const nodes = tree<string>({ roots: ['a'], children: () => undefined })
     const slider = range({ label: 'Amount' })
@@ -323,7 +323,7 @@ const held = (value: unknown): boolean =>
 
 // THE REVERT: hand back `combobox`'s parts without `value`, and `combobox.value` is named.
 test('every option an app binds is optional and handed back, and every id is made — 49.8', () => {
-    const view = tabs({ keys: ['a', 'b'] })
+    const view = tabs({ items: ['a', 'b'] })
     const opener = menu()
     const nodes = tree<string>({ roots: ['a'], children: () => undefined })
     const slider = range({ label: 'Amount', min: 10, max: 40 })
@@ -430,7 +430,7 @@ test('every parts function that writes ids takes the id given and hands it back 
             id: 'given-commandPalette',
             commands: [COMMAND],
         }),
-        tabs: tabs({ id: 'given-tabs', keys: ['a'] }),
+        tabs: tabs({ id: 'given-tabs', items: ['a'] }),
         tree: tree<string>({
             id: 'given-tree',
             roots: ['a'],

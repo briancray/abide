@@ -9,7 +9,6 @@ let company = reactive<Company | undefined>(undefined)
 const box = combobox({
     id: 'works-at',
     search: (q) => searchCompanies({ q }),
-    key: (found: Company) => found.id,
     label: (found: Company) => found.name,
     value: company,
 })

@@ -60,7 +60,7 @@ afterEach(() => {
 
 test('tabs spread whole warn of nothing', async () => {
     const warned = await warnings(() => {
-        const view = tabs({ keys: ['notes'] })
+        const view = tabs({ items: ['notes'] })
         const list = element('div', view.list)
         list.append(element('button', view.tab('notes').button))
         document.body.append(list, element('div', view.tab('notes').panel))
@@ -71,7 +71,7 @@ test('tabs spread whole warn of nothing', async () => {
 // THE REVERT: drop the check from `tabs`, and a tab naming a panel nobody rendered is said nothing of.
 test('a tab whose panel is not there warns once, however many tabs name one', async () => {
     const warned = await warnings(() => {
-        const view = tabs({ keys: ['notes', 'calls'] })
+        const view = tabs({ items: ['notes', 'calls'] })
         const list = element('div', view.list)
         list.append(
             element('button', view.tab('notes').button),

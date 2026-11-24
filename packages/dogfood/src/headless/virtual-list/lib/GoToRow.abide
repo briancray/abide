@@ -5,7 +5,7 @@ const DEALS = Array.from({ length: 10_000 }, (_, id) => ({
     id,
     name: `Deal ${id + 1}`,
 }))
-const deals = virtualList({ items: DEALS, key: (deal) => String(deal.id) })
+const deals = virtualList({ items: DEALS })
 let wanted = reactive<number | undefined>(5000)
 </script>
 

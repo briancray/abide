@@ -23,7 +23,6 @@ const accounts = tree({
     id: 'campaign',
     roots: REGIONS,
     children: (account: Account) => account.under,
-    key: (account: Account) => account.id,
     label: (account: Account) => account.name,
     multiple: true,
 })

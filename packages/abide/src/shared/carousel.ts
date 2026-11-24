@@ -6,7 +6,12 @@
 
 import { checkParts } from './checkParts.ts'
 import { handFocus } from './handFocus.ts'
-import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
+import {
+    keyOfItem,
+    type KeyOption,
+    type LabelOption,
+    writtenBy,
+} from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { media } from './media.ts'
 import { resized } from './observe/resized.ts'
@@ -71,7 +76,7 @@ type SnapEvent = Event & {
 /** A scroll-snap carousel resting on a selection, as parts to spread. */
 export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     // 49.11 — read where they are used.
-    const keyOf = (item: Item) => writtenBy(options.key, item)
+    const keyOf = (item: Item) => keyOfItem(options.key, item)
     const labelOf = (item: Item) => writtenBy(options.label, item)
     const behavior = () => live(options.behavior) ?? 'smooth'
     const keys = memo((): readonly string[] => {

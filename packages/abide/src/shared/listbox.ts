@@ -1,6 +1,6 @@
 import { checkParts } from './checkParts.ts'
 import { hotkeys } from './hotkeys.ts'
-import { type KeyOption, writtenBy } from './itemKey.ts'
+import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { memo, type Reactive, reactive } from './reactive/index.ts'
@@ -43,8 +43,8 @@ export type Listbox<Option, Multiple extends boolean = false> = {
     onkeydown: (event: KeyboardEvent) => void
     /** The list's part: its role. */
     readonly listbox: Record<string, unknown>
-    /** The option of `key`'s part: its id, role, `aria-selected`, `data-active`, `data-selected`, the pointer resting on it activating it, and its click. */
-    option(key: string): Record<string, unknown>
+    /** An option's part: its id, role, `aria-selected`, `data-active`, `data-selected`, the pointer resting on it activating it, and its click. */
+    option(option: Option): Record<string, unknown>
     /** The keys selected, read and set: the key last moved to, or every key selected where it selects many. */
     readonly selected: Reactive<Picked<string, Multiple>>
 }
@@ -57,7 +57,7 @@ export function listbox<Option, Multiple extends boolean = false>(
     // the parts.
     const options = () => live(given.options)
     const id = given.id ?? `listbox-${randomToken(4, 'hex')}`
-    const key = (option: Option) => writtenBy(given.key, option)
+    const key = (option: Option) => keyOfItem(given.key, option)
     const many = given.multiple === true
     if (process.env.NODE_ENV !== 'production') checkParts('listbox', `${id}-`)
     const selection = new Selection(
@@ -103,14 +103,11 @@ export function listbox<Option, Multiple extends boolean = false>(
         return first
     })
 
-    function optionOf(wanted: string | undefined): Option | undefined {
+    function activeOption(): Option | undefined {
+        const wanted = active()
         for (const option of options())
             if (key(option) === wanted) return option
         return undefined
-    }
-
-    function activeOption(): Option | undefined {
-        return optionOf(active())
     }
 
     function idOf(each: string): string {
@@ -199,40 +196,42 @@ export function listbox<Option, Multiple extends boolean = false>(
             'data-listbox': 'listbox',
             'aria-multiselectable': many ? 'true' : undefined,
         },
-        option: (each) => ({
-            id: idOf(each),
-            role: 'option',
-            'data-listbox': 'option',
-            // 51.98, 51.94 — where it selects one, the selection is the key moved to (51.104).
-            get 'aria-selected'() {
-                return (many ? selection.has(each) : chosen() === each)
-                    ? 'true'
-                    : 'false'
-            },
-            get 'data-active'() {
-                return active() === each ? '' : undefined
-            },
-            get 'data-selected'() {
-                return many && selection.has(each) ? '' : undefined
-            },
-            onpointermove: () => {
-                const over = chosen.peek()
-                const pointer = pointed.peek()
-                if (pointer?.key === each && pointer.over === over) return
-                pointed.set({ key: each, over })
-            },
-            // 51.99, 51.105.
-            onclick: (event: MouseEvent) => {
-                if (many) {
-                    selection.press(each, event, active.peek(), order)
+        option: (option) => {
+            const each = key(option)
+            return {
+                id: idOf(each),
+                role: 'option',
+                'data-listbox': 'option',
+                // 51.98, 51.94 — where it selects one, the selection is the key moved to (51.104).
+                get 'aria-selected'() {
+                    return (many ? selection.has(each) : chosen() === each)
+                        ? 'true'
+                        : 'false'
+                },
+                get 'data-active'() {
+                    return active() === each ? '' : undefined
+                },
+                get 'data-selected'() {
+                    return many && selection.has(each) ? '' : undefined
+                },
+                onpointermove: () => {
+                    const over = chosen.peek()
+                    const pointer = pointed.peek()
+                    if (pointer?.key === each && pointer.over === over) return
+                    pointed.set({ key: each, over })
+                },
+                // 51.99, 51.105.
+                onclick: (event: MouseEvent) => {
+                    if (many) {
+                        selection.press(each, event, active.peek(), order)
+                        moveKey(each)
+                        return
+                    }
                     moveKey(each)
-                    return
-                }
-                moveKey(each)
-                const option = optionOf(each)
-                if (option !== undefined) given.onpick?.(option)
-            },
-        }),
+                    given.onpick?.(option)
+                },
+            }
+        },
         selected: selection.selected as Reactive<Picked<string, Multiple>>,
     }
 }

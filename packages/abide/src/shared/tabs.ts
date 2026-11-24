@@ -1,23 +1,24 @@
 // 51.34-51.42 — WAI-ARIA's tabs, as parts an app spreads onto elements of its own: a tab list, a
-// tab per key, and a panel — one following the selection, or one per tab, kept while hidden. The
+// tab per item, and a panel — one following the selection, or one per tab, kept while hidden. The
 // server writes every attribute, so the page is the selected tab's before it hydrates.
 
 import { checkParts } from './checkParts.ts'
+import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { memo, type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving } from './roving.ts'
 
-/** The tabs, and the one selected. */
-export type TabsOptions = {
+/** The tabs, how each is told apart, and the one selected. */
+export type TabsOptions<Item> = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
     id?: string
-    /** The tabs' keys, in the order they render; a function is read live. */
-    keys: Live<readonly string[]>
+    /** The tabs, in the order they render; a function is read live. */
+    items: Live<readonly Item[]>
     /** The selected tab's key, where the app holds it: a `Reactive` to read and set the pick. Held by the parts, and handed back as `selected`, where none is given. A key no tab has selects the first. */
     selected?: Reactive<string | undefined>
-}
+} & KeyOption<Item>
 
 /** One tab's parts: its button, and the panel kept for it alone, hidden while another is selected. */
 export type TabParts = {
@@ -28,13 +29,13 @@ export type TabParts = {
 }
 
 /** The parts `tabs` hands back, each spread onto an element: `<button {...view.tab('notes').button}>`. */
-export type Tabs = {
+export type Tabs<Item> = {
     /** The base its parts' ids are derived from. */
     readonly id: string
     /** The tab list's attributes and its keyboard. */
     readonly list: Record<string, unknown>
     /** One tab's parts. */
-    tab(key: string): TabParts
+    tab(item: Item): TabParts
     /** The attributes of the one panel every tab shows in, holding whichever is selected. */
     readonly panel: Record<string, unknown>
     /** The key of the tab selected, the first tab's where none is picked; written, it picks one. */
@@ -42,9 +43,13 @@ export type Tabs = {
 }
 
 /** WAI-ARIA's tabs: a list of tabs and the panels they show, as parts to spread. */
-export function tabs(options: TabsOptions): Tabs {
-    const { keys } = options
-    const keysOf = () => live(keys)
+export function tabs<Item>(options: TabsOptions<Item>): Tabs<Item> {
+    const keyOf = (item: Item) => keyOfItem(options.key, item)
+    const keysOf = memo((): readonly string[] => {
+        const written: string[] = []
+        for (const item of live(options.items)) written.push(keyOf(item))
+        return written
+    })
     const picked = options.selected ?? reactive<string | undefined>(undefined)
     // 51.34 — a key no tab has selects the first.
     const current = memo((): string | undefined => {
@@ -84,41 +89,44 @@ export function tabs(options: TabsOptions): Tabs {
         },
     }
 
-    const tab = (key: string): TabParts => ({
-        button: {
-            type: 'button',
-            role: 'tab',
-            'data-tabs': 'tab',
-            id: tabId(key),
-            // 51.40 — only the selected tab names its panel: the shared panel exists for it alone, so a
-            // tab naming its own while another is selected would name nothing.
-            get 'aria-controls'() {
-                return current() === key ? panelId(key) : undefined
+    const tab = (item: Item): TabParts => {
+        const key = keyOf(item)
+        return {
+            button: {
+                type: 'button',
+                role: 'tab',
+                'data-tabs': 'tab',
+                id: tabId(key),
+                // 51.40 — only the selected tab names its panel: the shared panel exists for it alone, so a
+                // tab naming its own while another is selected would name nothing.
+                get 'aria-controls'() {
+                    return current() === key ? panelId(key) : undefined
+                },
+                get 'aria-selected'() {
+                    return current() === key ? 'true' : 'false'
+                },
+                // 51.39 — only the selected tab is in the page's tab order.
+                get tabindex() {
+                    return current() === key ? '0' : '-1'
+                },
+                get 'data-selected'() {
+                    return current() === key ? '' : undefined
+                },
+                onclick: () => select(key),
             },
-            get 'aria-selected'() {
-                return current() === key ? 'true' : 'false'
+            // 51.40 — a tab's own panel is hidden while another is selected.
+            panel: {
+                role: 'tabpanel',
+                'data-tabs': 'panel',
+                tabindex: '0',
+                id: panelId(key),
+                'aria-labelledby': tabId(key),
+                get hidden() {
+                    return current() !== key
+                },
             },
-            // 51.39 — only the selected tab is in the page's tab order.
-            get tabindex() {
-                return current() === key ? '0' : '-1'
-            },
-            get 'data-selected'() {
-                return current() === key ? '' : undefined
-            },
-            onclick: () => select(key),
-        },
-        // 51.40 — a tab's own panel is hidden while another is selected.
-        panel: {
-            role: 'tabpanel',
-            'data-tabs': 'panel',
-            tabindex: '0',
-            id: panelId(key),
-            'aria-labelledby': tabId(key),
-            get hidden() {
-                return current() !== key
-            },
-        },
-    })
+        }
+    }
 
     // 51.40 — the shared panel takes the selected tab's id, so that tab's `aria-controls` names it.
     const panel = {

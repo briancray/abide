@@ -27,7 +27,7 @@ function spread(element: HTMLElement, part: Record<string, unknown>): void {
 // THE REVERT: drop the panel's `hidden`, and both panels show at once.
 test('a panel per tab is hidden while another is selected, and kept — 51.34, 51.40', () => {
     const selected = reactive<string | undefined>('nowhere')
-    const view = tabs({ keys: ['details', 'notes'], selected })
+    const view = tabs({ items: ['details', 'notes'], selected })
     const panels = new Map<string, HTMLElement>()
     for (const key of ['details', 'notes']) {
         const tab = document.createElement('button')
@@ -52,4 +52,27 @@ test('a panel per tab is hidden while another is selected, and kept — 51.34, 5
     expect(selected.peek()).toBe('notes')
     expect(hidden()).toEqual([true, false])
     expect(notes.textContent).toBe('call back Friday')
+})
+
+// 49.8, 49.16 — A RECORD IS TOLD APART BY ITS `id`, given no `key`, and its part is a function of the
+// record. THE REVERT: key every item by `String(item)` again, and both views are `[object Object]` —
+// one key, the second tab never selected.
+test("tabs over records are told apart by each record's id, and a key replaces it — 49.8, 49.16", () => {
+    const VIEWS = [
+        { id: 'details', label: 'Details' },
+        { id: 'stage', label: 'Stage' },
+    ]
+    const view = tabs({ items: VIEWS })
+    expect(view.selected()).toBe('details')
+    ;(
+        view.tab(VIEWS[1] as (typeof VIEWS)[number]).button
+            .onclick as () => void
+    )()
+    expect(view.selected()).toBe('stage')
+    expect(
+        view.tab(VIEWS[1] as (typeof VIEWS)[number]).button['aria-selected'],
+    ).toBe('true')
+
+    const byLabel = tabs({ items: VIEWS, key: (each) => each.label })
+    expect(byLabel.selected()).toBe('Details')
 })

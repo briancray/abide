@@ -3,8 +3,6 @@ import { listbox, memo, reactive } from '@abide/abide'
 
 import listDeals from '../listDeals.handler.ts'
 
-type Deal = { id: string; name: string; stage: string; amount: number }
-
 const deals = memo(() => listDeals())
 const leads = memo(() => deals.filter((deal) => deal.stage === 'lead'))
 let calling = reactive('')
@@ -12,7 +10,6 @@ let calling = reactive('')
 const queue = listbox({
     id: 'leads',
     options: () => leads,
-    key: (deal: Deal) => deal.id,
     onpick: (deal) => {
         calling = deal.name
     },
@@ -29,7 +26,7 @@ const queue = listbox({
         [&>[data-active]]:bg-signal/10"
 >
     {#for deal of leads by deal.id}
-        <li {...queue.option(deal.id)}>{deal.name}</li>
+        <li {...queue.option(deal)}>{deal.name}</li>
     {/for}
 </ul>
 

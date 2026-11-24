@@ -12,7 +12,6 @@ let team = reactive<Contact[]>([])
 const box = combobox({
     id: 'deal-team',
     options: () => contacts,
-    key: (each) => each.id,
     label: (each) => each.name,
     multiple: true,
     value: team,

@@ -201,7 +201,7 @@ export function commandPalette(
             onmousedown: (event: MouseEvent) => event.preventDefault(),
         },
         command: (command) => ({
-            option: withPart(list.option(command.label), {
+            option: withPart(list.option(command), {
                 'data-command-palette': 'option',
             }),
             label: { 'data-command-palette': 'label' },

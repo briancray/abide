@@ -38,7 +38,7 @@ export type Playback = {
     /** The scrubber, an `<input type="range">` from the start to `duration`. */
     readonly scrubber: Record<string, unknown>
     /** The speeds: a `toggleGroup` over `rates`, each key the rate written as text. */
-    readonly speed: ToggleGroup
+    readonly speed: ToggleGroup<number>
     /** Where it is, in milliseconds; written, it moves there. */
     readonly at: Reactive<number>
     /** Whether it is playing; written, it plays or pauses. */
@@ -95,7 +95,7 @@ export function playback(options: PlaybackOptions): Playback {
 
     // 51.134 — the rate picked, as the key its button carries.
     const speed = toggleGroup({
-        keys: () => (live(options.rates) ?? [0.5, 1, 2]).map(String),
+        items: () => live(options.rates) ?? [0.5, 1, 2],
         value: reactiveOver(
             () => String(rate()),
             (key: string | undefined) => {
