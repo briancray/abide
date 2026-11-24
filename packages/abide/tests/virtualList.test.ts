@@ -1,4 +1,4 @@
-// 51.58-51.64, 51.95-51.97 — THE ITEMS OF A LONG LIST THAT ARE IN VIEW, measured from the markup they
+// 51.58-51.64, 51.95-51.97, 51.166 — THE ITEMS OF A LONG LIST THAT ARE IN VIEW, measured from the markup they
 // sit in. The emulator lays nothing out, so the test is the browser: it delivers each resize the shared
 // observer would, runs each frame a browser would, and says where the host stands as the view scrolls.
 // What a keyed `{#for}` over `shown` renders is the CRM's tests', which mount one.
@@ -184,7 +184,7 @@ test('scrollTo puts the item at the top of the view, and it is shown before the 
 
 // THE REVERT: read `current` off the first item rendered rather than the first in view, and the
 // overscan above holds it in the section before.
-test('sections start where their first item does, the one in view is current, and an empty one is disabled — 51.64, 51.95, 51.96', () => {
+test('sections start where their first item does, the one in view is current, and an empty one is disabled — 51.64, 51.95, 51.96, 51.166', () => {
     const list = virtualList({
         items: NUMBERS,
         initial: 10,

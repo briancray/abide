@@ -1,0 +1,39 @@
+<script>
+import { scrollSpy } from '@abide/abide'
+
+const SECTIONS = [
+    { id: 'acme-overview', title: 'Overview' },
+    { id: 'acme-contacts', title: 'Contacts' },
+    { id: 'acme-deals', title: 'Deals' },
+    { id: 'acme-notes', title: 'Notes' },
+]
+const record = scrollSpy({ items: SECTIONS, behavior: 'smooth' })
+</script>
+
+<div class="flex gap-4">
+    <nav class="flex flex-col" {...record.host}>
+        {#for section of record.all key section.id}
+            <a class="data-current:font-bold" {...record.jump(section)}>
+                {section.title}
+            </a>
+        {/for}
+    </nav>
+    <div class="h-64 grow overflow-y-auto">
+        <section class="h-56" id="acme-overview">
+            <h3>Overview</h3>
+            <p>Acme, renewing in March</p>
+        </section>
+        <section class="h-56" id="acme-contacts">
+            <h3>Contacts</h3>
+            <p>Ada Lovelace, Grace Hopper</p>
+        </section>
+        <section class="h-56" id="acme-deals">
+            <h3>Deals</h3>
+            <p>Engine renewal, $12,000</p>
+        </section>
+        <section class="h-24" id="acme-notes">
+            <h3>Notes</h3>
+            <p>Prefers email</p>
+        </section>
+    </div>
+</div>

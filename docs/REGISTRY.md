@@ -697,6 +697,14 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `BreadcrumbsOptions` | `<Crumb>{ trail: readonly Crumb[] \| (() => readonly Crumb[]); href: (crumb: Crumb) => string; max?: number \| (() => number); label?: string \| (() => string) }` | The crumbs from the top down, where each leads, how many show before the middle folds, and the nav's accessible name. | 51.136, 51.138, 51.140, 49.10, 49.11 |
 | `Breadcrumbs` | `<Crumb>{ readonly nav: Record<string, unknown>; get items(): readonly (Crumb \| 'overflow')[]; get folded(): readonly Crumb[]; link(crumb: Crumb): Record<string, unknown>; readonly overflow: Menu; menuItem(crumb: Crumb): Record<string, unknown> }` | The nav's part, the crumbs shown, the crumbs folded, a crumb's link, the overflow's menu, and a folded crumb's menu item. | 32.11, 51.136, 51.137, 51.138, 51.139, 49.3, 49.9, 49.17 |
 
+## `scrollSpy`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `scrollSpy` | `<Item>(options: ScrollSpyOptions<Item>) => Sections<Item>` | The section of a long page scrolled to, as a link per section an app spreads onto a nav of its own, the one scrolled to marked. | 51.169, 51.170, 51.171, 51.172, 51.173, 51.174, 51.175, 51.176, 51.177, 32.99, 49.2, 49.3, 49.4, 49.5 |
+| `ScrollSpyOptions` | `<Item>{ items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth'); scrub?: boolean \| (() => boolean) }` | The sections in the order they stand, how one is told apart and its element found by id, how a jump scrolls, and whether a drag along the links scrubs them. | 51.169, 51.175, 51.167, 49.8, 49.10, 49.11, 49.16 |
+| `Sections` | `<Section>{ readonly host: Record<string, unknown>; get all(): readonly Section[]; get current(): string \| undefined; jump(section: Section): Record<string, unknown> }` | A jump index over sections: its host, every section, the key of the one in view, and a section's jump. | 51.95, 51.167, 51.168, 49.3, 49.9, 49.17 |
+
 ## `wizard`
 
 | Name | Signature | Meaning | Rules |
@@ -787,12 +795,11 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `virtualList` | `<Item>(options: VirtualListOptions<Item>) => VirtualList<Item>` | A long list's items that are in view, measured from the app's own markup — a list or a CSS grid — as parts to spread, for a keyed `{#for}` over just those items. | 51.58, 51.59, 51.60, 51.61, 51.62, 51.63, 51.97, 32.99, 49.3 |
-| `VirtualListOptions` | `<Item>{ items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; section?: (item: Item) => string; labels?: readonly string[] \| (() => readonly string[]); overscan?: number \| (() => number); initial?: number; estimate?: number; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | The items, how one is told apart and grouped, the rows past each end, what renders before a measurement, and how a jump scrolls. | 51.58, 51.60, 51.64, 49.10, 49.11, 49.16 |
-| `VirtualList` | `<Item>{ readonly host: Record<string, unknown>; item(entry: VirtualListEntry<Item>): Record<string, unknown>; get shown(): readonly VirtualListEntry<Item>[]; readonly sections: VirtualListSections; scrollTo(index: number): void }` | The host's part, an item's part, the items to render, the sections and their jumps, and what scrolls to an item. | 51.58, 51.62, 51.63, 49.9 |
+| `virtualList` | `<Item>(options: VirtualListOptions<Item>) => VirtualList<Item>` | A long list's items that are in view, measured from the app's own markup — a list or a CSS grid — as parts to spread, for a keyed `{#for}` over just those items. | 51.58, 51.59, 51.60, 51.61, 51.62, 51.63, 51.96, 51.97, 51.166, 32.99, 49.3 |
+| `VirtualListOptions` | `<Item>{ items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; section?: (item: Item) => string; labels?: readonly string[] \| (() => readonly string[]); overscan?: number \| (() => number); initial?: number; estimate?: number; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth'); scrub?: boolean \| (() => boolean) }` | The items, how one is told apart and grouped, the rows past each end, what renders before a measurement, how a jump scrolls, and whether a drag along the jumps scrubs them. | 51.58, 51.60, 51.64, 51.167, 49.10, 49.11, 49.16 |
+| `VirtualList` | `<Item>{ readonly host: Record<string, unknown>; item(entry: VirtualListEntry<Item>): Record<string, unknown>; get shown(): readonly VirtualListEntry<Item>[]; readonly sections: Sections<VirtualListSection>; scrollTo(index: number): void }` | The host's part, an item's part, the items to render, the sections and their jumps, and what scrolls to an item. | 51.58, 51.62, 51.63, 49.9 |
 | `VirtualListEntry` | `<Item>{ item: Item; index: number; key: string }` | One item `shown` renders: the item, where it stands in `items`, and its key. | 51.58 |
 | `VirtualListSection` | `{ label: string; index: number }` | One section: its label, and the index of its first item, or `-1` where it has none. | 51.64 |
-| `VirtualListSections` | `{ readonly host: Record<string, unknown>; get all(): readonly VirtualListSection[]; get current(): string \| undefined; jump(section: VirtualListSection): Record<string, unknown> }` | The jump index: its host, every section, the one in view, and a section's jump. | 51.64, 51.95, 51.96, 49.9, 49.17 |
 
 ## `time`
 

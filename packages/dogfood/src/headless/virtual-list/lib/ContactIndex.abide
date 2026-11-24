@@ -1,0 +1,66 @@
+<script>
+import { sortBy, virtualList } from '@abide/abide'
+
+// No contact's name starts with Q or X.
+const NAMES = [
+    'Ada',
+    'Ben',
+    'Cleo',
+    'Dev',
+    'Eli',
+    'Fay',
+    'Gus',
+    'Hana',
+    'Ivo',
+    'Jo',
+    'Kai',
+    'Lena',
+    'Mo',
+    'Nia',
+    'Omar',
+    'Pia',
+    'Raj',
+    'Sol',
+    'Tess',
+    'Uma',
+    'Vic',
+    'Wren',
+    'Yara',
+    'Zed',
+]
+const CONTACTS = sortBy(
+    Array.from({ length: 1200 }, (_, id) => ({
+        id,
+        name: `${NAMES[id % NAMES.length]} ${id + 1}`,
+    })),
+    (contact) => contact.name,
+)
+
+const contacts = virtualList({
+    items: CONTACTS,
+    section: (contact) => contact.name[0] ?? '',
+    labels: [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'],
+    scrub: true,
+})
+</script>
+
+<div class="flex gap-2">
+    <div class="h-80 grow overflow-auto">
+        <ul {...contacts.host}>
+            {#for entry of contacts.shown key entry.key}
+                <li class="h-8" {...contacts.item(entry)}>
+                    {entry.item.name}
+                </li>
+            {/for}
+        </ul>
+    </div>
+    <nav class="flex touch-none flex-col select-none"
+        {...contacts.sections.host}>
+        {#for section of contacts.sections.all key section.label}
+            <button class="border-0 bg-transparent p-0 text-chrome/3 shadow-none
+                data-current:font-bold" {...contacts.sections.jump(section)}>
+                {section.label}
+            </button>
+        {/for}
+    </nav>
+</div>

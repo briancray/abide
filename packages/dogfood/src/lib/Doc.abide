@@ -11,20 +11,22 @@
 // keyed by where it is served. A document — a page read off a file in `docs/` — is not in `SITE`,
 // so it hands over its own words as `documentPage`, and has no neighbors to thread to and no markdown twin.
 //
-// THE SCROLL SPY IS THE RAIL'S, bound to it rather than to `main`: on a page the reader navigated
-// to, `main` is built before the rail, and a spy installed then finds no links to mark.
+// THE RAIL IS A `scrollSpy` over the headings the page files, each found by its id: the link of the
+// heading the reader has scrolled to is marked `aria-current`.
+import './zodJitless.ts'
+
 import {
     props,
     raw,
     reactive,
     route,
     type RouteLiteral,
+    scrollSpy,
     url,
 } from '@abide/abide'
 
 import type { Heading } from './Heading.ts'
 import { inline } from './inline.ts'
-import { installDocs } from './installDocs.ts'
 import Registry, { clausesOf, hasTypes } from './Registry.abide'
 import Rules from './Rules.abide'
 import Section from './Section.abide'
@@ -80,6 +82,7 @@ if ((documents || guide) && seeAlso.length > 0)
 if (documents && tests.length > 0)
     trailing.push({ id: 'tests', title: 'Tests', level: 2 })
 if (rules.length > 0) trailing.push({ id: 'rules', title: 'Rules', level: 2 })
+const toc = scrollSpy({ items: () => [...headings, ...trailing] })
 </script>
 
 <head>
@@ -139,13 +142,13 @@ if (rules.length > 0) trailing.push({ id: 'rules', title: 'Rules', level: 2 })
         </footer>
     {/if}
 </main>
-<aside class="toc" bind:element={installDocs}>
-    {#if headings.length + trailing.length > 1}
+<aside class="toc" {...toc.host}>
+    {#if toc.all.length > 1}
         <section>
             <h2 id="toc-title">On this page</h2>
             <ul aria-labelledby="toc-title">
-                {#for heading of [...headings, ...trailing]}
-                    <li class="lvl-{heading.level}"><a href="#{heading.id}">{raw(inline(heading.title))}</a></li>
+                {#for heading of toc.all}
+                    <li class="lvl-{heading.level}"><a {...toc.jump(heading)}>{raw(inline(heading.title))}</a></li>
                 {/for}
             </ul>
         </section>

@@ -1,0 +1,53 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import AccountRecord from './lib/AccountRecord.abide'
+import accountRecord from './lib/AccountRecord.abide' with { type: 'text' }
+import StickyHeader from './lib/StickyHeader.abide'
+import stickyHeader from './lib/StickyHeader.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/virtual-list', '/headless/tabs', '/behaviors/observe']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/AccountRecord.test.ts',
+            from: ["test('the link of the section scrolled to is marked"],
+        },
+        {
+            path: 'packages/abide/tests/scrollSpy.test.ts',
+            from: ["test('the first section is current at the very top"],
+        },
+        {
+            path: 'packages/abide/tests/scrollSpy.test.ts',
+            from: ["test('the last section is current at the end of the scroller"],
+        },
+        {
+            path: 'packages/abide/tests/scrollSpy.test.ts',
+            from: ["test('a scroll reads no layout"],
+        },
+        {
+            path: 'packages/abide/tests/scrollSpy.test.ts',
+            from: ["test('a jump links to its section"],
+        },
+    ]}
+>
+    <Section level={3} title="Mark the part of an account record in view">
+        <p>Give each section an <code>id</code> that is its item's key, spread
+            <code>host</code> on the nav and <code>jump</code> on a link per section.
+            The section scrolled to carries <code>data-current</code>, the first at the
+            top and the last at the end, however short. Each link is a real
+            <code>href</code>, so it works before the script runs.</p>
+        <Example code={accountRecord}><AccountRecord /></Example>
+    </Section>
+
+    <Section level={3} title="Land each jump below a sticky header">
+        <p>Set <code>scroll-padding-top</code> on the scroller, or
+            <code>scroll-margin-top</code> on the sections. A section is current
+            from where a jump lands it, so a jump never lands on the section
+            before.</p>
+        <Example code={stickyHeader}><StickyHeader /></Example>
+    </Section>
+</Doc>

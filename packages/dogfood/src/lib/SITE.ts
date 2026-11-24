@@ -580,6 +580,14 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/scroll-spy',
+                title: '`scrollSpy`',
+                description:
+                    'Mark the section of a long page scrolled to in a nav of links, each landing its section below any sticky header.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/wizard',
                 title: '`wizard`',
                 description:

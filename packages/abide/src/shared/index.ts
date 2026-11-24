@@ -120,12 +120,13 @@ export type { LinkTarget } from './markdown/sections.ts'
 export { type Report, ReportDraft, report } from './report.ts'
 export type { Sort } from './Sort.ts'
 export { sortBy } from './sortBy.ts'
+export type { Sections } from './sections.ts'
+export { type ScrollSpyOptions, scrollSpy } from './scrollSpy.ts'
 export {
     type VirtualList,
     type VirtualListEntry,
     type VirtualListOptions,
     type VirtualListSection,
-    type VirtualListSections,
     virtualList,
 } from './virtualList.ts'
 export type { Middleware } from './Middleware.ts'

@@ -133,7 +133,7 @@
 
 /* THE GENERATED DOCS MARKUP — what the pages script writes from markdown and example JSON, which
    carries a class because nothing can carry a utility: `.flow`, `.toc`, `.snippet`,
-   `.rules` and the rest. Each name is also a hook (`installDocs.ts`, the e2e specs), so it stays
+   `.rules` and the rest. Each name is also a hook (the e2e specs), so it stays
    a name. Pseudo-elements, a mix of two tokens and a transition on one property stay declarations:
    no utility says them more shortly. */
 @layer components {

@@ -1,4 +1,4 @@
-// 51.58-51.64, 51.95-51.97 — THE ITEMS OF A LONG LIST THAT ARE IN VIEW, as parts spread on the app's
+// 51.58-51.64, 51.95-51.97, 51.166 — THE ITEMS OF A LONG LIST THAT ARE IN VIEW, as parts spread on the app's
 // own markup: a list, a CSS grid, rows that wrap — laid out by the app's CSS, and measured rather than
 // described. The host's width and the items as they render say how many items a row holds and how tall
 // a row is, so a breakpoint, a layout switched or a font loaded re-derives both with nothing handed in.
@@ -16,6 +16,8 @@ import { type Live, live } from './live.ts'
 import { resized } from './observe/resized.ts'
 import { memo, reactive } from './reactive/index.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
+import { type Scroller, scrollerOf } from './scrollerOf.ts'
+import { type Sections, sections } from './sections.ts'
 
 /** What `virtualList` lists, how an item is told apart and grouped, and how much is rendered first. */
 export type VirtualListOptions<Item> = {
@@ -33,6 +35,8 @@ export type VirtualListOptions<Item> = {
     estimate?: number
     /** How `scrollTo` and a section's jump scroll. `'auto'` by default; a function is read live. */
     behavior?: Live<'auto' | 'smooth'>
+    /** Whether a pointer dragged along `sections`' host jumps by each jump it reaches. `false` by default; a function is read live. */
+    scrub?: Live<boolean>
 } & KeyOption<Item>
 
 /** One item `shown` renders: the item, where it stands in `items`, and its key. */
@@ -48,18 +52,6 @@ export type VirtualListSection = {
     index: number
 }
 
-/** The jump index over a list's sections: its host, every section, the one in view, and a jump's part. */
-export type VirtualListSections = {
-    /** The jump index's part. */
-    readonly host: Record<string, unknown>
-    /** Every section, in order. */
-    get all(): readonly VirtualListSection[]
-    /** The label of the section the first item in view stands in. */
-    get current(): string | undefined
-    /** A section's jump: `aria-current` while it is the one in view, `disabled` where it has no item. */
-    jump(section: VirtualListSection): Record<string, unknown>
-}
-
 /** The parts `virtualList` hands back: `<div {...list.host}>`, an `item` per entry of `shown`. */
 export type VirtualList<Item> = {
     /** The element the items sit in: what measures them, and carries the rows left out as its padding. */
@@ -69,25 +61,9 @@ export type VirtualList<Item> = {
     /** The items to render: the rows in view and `overscan` rows past each end. */
     get shown(): readonly VirtualListEntry<Item>[]
     /** The sections `section` groups the items into, and the jumps between them. */
-    readonly sections: VirtualListSections
+    readonly sections: Sections<VirtualListSection>
     /** Scrolls the item at `index` to the top of the view, past its scroll padding. */
     scrollTo(index: number): void
-}
-
-type Scroller = Element | Window
-
-// An element whose overflow scrolls, as `overflow-y` says.
-const SCROLLS = new Set(['auto', 'scroll', 'overlay'])
-
-/** The element a host scrolls in: its nearest ancestor whose overflow scrolls, or the window. */
-function scrollerOf(host: Element): Scroller {
-    for (
-        let element = host.parentElement;
-        element !== null;
-        element = element.parentElement
-    )
-        if (SCROLLS.has(getComputedStyle(element).overflowY)) return element
-    return window
 }
 
 /** A long list's items that are in view, measured from its own markup, as parts to spread. */
@@ -351,29 +327,21 @@ export function virtualList<Item>(
         get shown() {
             return shown()
         },
-        sections: {
+        sections: sections({
+            name: 'virtual-list',
             host: { 'data-virtual-list': 'sections' },
-            get all() {
-                return sectionList()
-            },
-            get current() {
-                return current()
-            },
-            // 51.95, 51.96
+            all: sectionList,
+            current,
+            keyOf: (section) => section.label,
+            // 51.96
             jump: (section) => ({
                 type: 'button',
-                'data-virtual-list': 'jump',
-                get 'aria-current'() {
-                    return current() === section.label ? 'true' : undefined
-                },
-                // 49.17
-                get 'data-current'() {
-                    return current() === section.label ? '' : undefined
-                },
                 disabled: section.index === -1,
-                onclick: () => scrollTo(section.index),
             }),
-        },
+            // 51.166
+            go: (section) => scrollTo(section.index),
+            scrub: () => live(options.scrub),
+        }),
         scrollTo,
     }
 }

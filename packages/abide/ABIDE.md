@@ -221,7 +221,7 @@ table.
   `dropzone` (a host to drop or paste files on, and a file input to pick them with), `chart`, `pie`
   and `sparkline` (headless components: parts spread on markup the app writes; `chart` carries the arithmetic
   under a chart as `chart.ticks`, `chart.scale`, `chart.path`, `chart.stack` and `chart.nearest`),
-  `sortBy`, `virtualList`, `hotkeys` and `keyLabel`, `prompts` (`prompts.confirm` /
+  `sortBy`, `virtualList`, `scrollSpy` (the section of a long page scrolled to, as a nav of links), `hotkeys` and `keyLabel`, `prompts` (`prompts.confirm` /
   `prompts.alert` / `prompts.prompt`), `toasts` (`toasts.notify`) and `announce` (a message read to a
   screen reader with nothing shown) — each shown where the root layout spreads its `host`'s parts,
   `prompts.host()`, `toasts.host()` and `announce.host()` — and `popover` (an app's own panel in the

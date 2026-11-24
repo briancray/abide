@@ -1,0 +1,26 @@
+<script>
+import { scrollSpy } from '@abide/abide'
+
+const SECTIONS = [
+    { id: 'bolt-terms', title: 'Terms' },
+    { id: 'bolt-pricing', title: 'Pricing' },
+    { id: 'bolt-signatures', title: 'Signatures' },
+]
+const contract = scrollSpy({ items: SECTIONS })
+</script>
+
+<div class="h-64 scroll-pt-10 overflow-y-auto">
+    <nav class="sticky top-0 flex h-10 gap-4 bg-paper"
+        {...contract.host}>
+        {#for section of contract.all key section.id}
+            <a class="data-current:font-bold" {...contract.jump(section)}>
+                {section.title}
+            </a>
+        {/for}
+    </nav>
+    {#for section of SECTIONS key section.id}
+        <section class="h-72" id={section.id}>
+            <h3>{section.title}</h3>
+        </section>
+    {/for}
+</div>

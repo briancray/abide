@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import AuditTrail from './lib/AuditTrail.abide'
 import auditTrail from './lib/AuditTrail.abide' with { type: 'text' }
+import ContactIndex from './lib/ContactIndex.abide'
+import contactIndex from './lib/ContactIndex.abide' with { type: 'text' }
 import DealGrid from './lib/DealGrid.abide'
 import dealGrid from './lib/DealGrid.abide' with { type: 'text' }
 import GoToRow from './lib/GoToRow.abide'
@@ -16,6 +18,7 @@ import goToRow from './lib/GoToRow.abide' with { type: 'text' }
         '/abide-files/control-flow',
         '/helpers/sort-by',
         '/headless/sortable-table',
+        '/headless/scroll-spy',
     ]}
     tests={[
         {
@@ -38,6 +41,12 @@ import goToRow from './lib/GoToRow.abide' with { type: 'text' }
             path: 'packages/abide/tests/virtualList.test.ts',
             from: [
                 "test('sections start where their first item does, the one in view is current",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactIndex.test.ts',
+            from: [
+                "test('a drag down the index clicks each letter it reaches once",
             ],
         },
     ]}
@@ -63,5 +72,14 @@ import goToRow from './lib/GoToRow.abide' with { type: 'text' }
         <p><code>scrollTo</code> scrolls the item to the top of the view and renders it at
             once, so a caller can focus it straight after.</p>
         <Example code={goToRow}><GoToRow /></Example>
+    </Section>
+
+    <Section level={3} title="Scrub an A to Z index down a long contact list">
+        <p>Set <code>scrub</code>, and a press dragged along the jumps scrolls to
+            each letter it reaches, once per letter, passing over the empty ones.
+            The host carries <code>data-scrubbing</code> meanwhile. Give it
+            <code>touch-action: none</code> so a finger drags rather than
+            scrolls the page.</p>
+        <Example code={contactIndex}><ContactIndex /></Example>
     </Section>
 </Doc>

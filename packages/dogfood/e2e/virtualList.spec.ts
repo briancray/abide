@@ -1,4 +1,4 @@
-// 51.58, 51.59, 51.64, 51.95, 51.96 — A GRID MEASURED IN A REAL BROWSER: the docs' deal grid lays its
+// 51.58, 51.59, 51.64, 51.95, 51.96, 51.166 — A GRID MEASURED IN A REAL BROWSER: the docs' deal grid lays its
 // items out with CSS alone, and `virtualList` makes only the rows in view, derives how many a row holds
 // from the layout, and jumps by letter. The emulator lays nothing out, so this is where layout is real.
 //
@@ -11,7 +11,7 @@ function underMount(address: string): string {
     return `${base.endsWith('/') ? base : `${base}/`}${address}`
 }
 
-test('a grid of three thousand deals makes only the rows in view, and jumps by letter — 51.58, 51.59, 51.64, 51.95, 51.96', async ({
+test('a grid of three thousand deals makes only the rows in view, and jumps by letter — 51.58, 51.59, 51.64, 51.95, 51.96, 51.166', async ({
     page,
 }) => {
     await page.goto(underMount('headless/virtual-list'), {

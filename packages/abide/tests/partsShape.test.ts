@@ -44,6 +44,8 @@ import {
     type RangeEnd,
     type RangeParts,
     reactive,
+    scrollSpy,
+    type Sections,
     sortableTable,
     type SortableTableColumn,
     type SortableTableParts,
@@ -61,7 +63,6 @@ import {
     type TreeNode,
     type VirtualList,
     virtualList,
-    type VirtualListSections,
     wizard,
 } from '#shared'
 import { announce, type AnnouncerHost } from '#shared/announce.ts'
@@ -153,7 +154,7 @@ test('every part is a member, a function of its item, or an action — 49.9', ()
     shaped<Autoscroll>()
     shaped<AnnouncerHost>()
     shaped<VirtualList<number>>()
-    shaped<VirtualListSections>()
+    shaped<Sections<string>>()
     shaped<Carousel<string>>()
     expect(true).toBe(true)
 })
@@ -189,6 +190,7 @@ function elementParts(): Record<string, unknown> {
     const long = virtualList({ items: [1, 2, 3] })
     const keys = listbox({ options: ['a'] })
     const slides = carousel({ items: ['a', 'b'] })
+    const spy = scrollSpy({ items: ['a', 'b'] })
     // Typed into, so each has a run of its label marked.
     for (const input of [palette.input, box.input])
         (input.oninput as (event: Event) => void)({
@@ -307,6 +309,8 @@ function elementParts(): Record<string, unknown> {
             label: 'a',
             index: 0,
         }),
+        'scrollSpy.host': spy.host,
+        'scrollSpy.jump': spy.jump('a'),
     }
 }
 
@@ -507,6 +511,7 @@ test('a part carrying aria-current or aria-expanded carries data-current or data
         expanded: reactive<readonly string[]>(['a']),
     })
     const long = virtualList({ items: [1, 2], section: (item) => `s${item}` })
+    const spy = scrollSpy({ items: ['a', 'b'] })
     const shown = popover()
     const box = combobox({ options: () => ['a'] })
     const palette = commandPalette({ commands: [COMMAND] })
@@ -529,6 +534,8 @@ test('a part carrying aria-current or aria-expanded carries data-current or data
             label: 's2',
             index: 1,
         }),
+        'scrollSpy.jump current': spy.jump('a'),
+        'scrollSpy.jump': spy.jump('b'),
         'tree.node.item open': nodes.node('a').item,
         'tree.node.item leaf': nodes.node('b').item,
         'popover.trigger': shown.trigger,
@@ -574,7 +581,8 @@ test('a part carrying aria-current or aria-expanded carries data-current or data
         steps.step('plan')['aria-current'],
         today?.date !== undefined,
         long.sections.jump({ label: 's1', index: 0 })['aria-current'],
+        spy.jump('a')['aria-current'],
         shown.trigger['aria-expanded'],
         box.input['aria-expanded'],
-    ]).toEqual(['page', 'page', 'step', true, 'true', 'true', 'true'])
+    ]).toEqual(['page', 'page', 'step', true, 'true', 'true', 'true', 'true'])
 })

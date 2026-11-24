@@ -107,20 +107,27 @@ test('a link to another page navigates without reloading — 30.7', async ({
     ).toBe('yes')
 })
 
-// `#src/lib/installDocs.ts` is a module and is evaluated ONCE, but the INSTALL is the page's own: the
-// arriving page hands `installDocs` its `<main>` and the page a reader left ran the `Disposer`
-// that took its listeners (32.9). So the rail here is wired to this page's headings rather than
-// to the ones they arrived on.
+// THE RAIL IS THE ARRIVING PAGE'S `scrollSpy` (51.169-51.177): its host is the rail, and the page a
+// reader left unbound its own. So scrolling a page a reader NAVIGATED to marks that page's heading —
+// measured against its own headings, not the ones they arrived on. THE REVERT: measure once as the host
+// is bound rather than a frame on, and the rail of a navigated page marks nothing it scrolls to.
 test('the rail follows the page a reader navigated to', async ({ page }) => {
     await page.goto(underMount('/abide-files/expressions'))
     await page.click(`nav a[href="${underMount('/reactive/reactive')}"]`)
     await expect(page.locator('main h1')).toHaveText('reactive')
 
-    const first = page.locator('.toc a[href^="#"]').first()
+    const links = page.locator('.toc a[href^="#"]')
+    const first = links.first()
     await expect(first).toHaveAttribute('href', '#syntax')
-    // The scroll spy marks where you are, and it only can where it re-measured after the
-    // navigation — offsets taken against the page a reader left are every heading at once.
+    // At the top, the first heading is current.
     await expect(first).toHaveAttribute('aria-current', 'true')
+    const second = links.nth(1)
+    const id = ((await second.getAttribute('href')) ?? '').slice(1)
+    await page.evaluate((heading) => {
+        document.getElementById(heading)?.scrollIntoView()
+    }, id)
+    await expect(second).toHaveAttribute('aria-current', 'true')
+    await expect(first).not.toHaveAttribute('aria-current', 'true')
 })
 
 // A PAGE'S TESTS AND RULES ARE READ BY ITS OWN CALLS, so on a page the reader NAVIGATED to they are
@@ -143,15 +150,22 @@ test('a page a reader navigated to reads its tests and rules', async ({
 // handlers answer. A page that throws is a 500, and one that mis-adopts rebuilds itself with only a
 // warning — so what is collected is the page error, the hydration warning and a document or module
 // that FAILED.
-// A GROUP A TEST, so the walk runs in parallel rather than as one long one.
+// A GROUP A TEST, so the walk runs in parallel rather than as one long one — and a group listed in
+// runs, a run a test: each page waits out `networkidle`, so a group of fifty walks past the timeout.
 const WALKS: { name: string; routes: string[] }[] = [
     { name: 'the home page', routes: ['/'] },
 ]
-for (const group of SITE)
-    WALKS.push({
-        name: group.group,
-        routes: group.pages.map((page) => page.route),
-    })
+for (const group of SITE) {
+    const runs = new Map<string, string[]>()
+    for (const page of group.pages) {
+        const name =
+            page.subgroup === undefined
+                ? group.group
+                : `${group.group}, ${page.subgroup}`
+        runs.set(name, [...(runs.get(name) ?? []), page.route])
+    }
+    for (const [name, routes] of runs) WALKS.push({ name, routes })
+}
 for (const walk of WALKS)
     test(`every page under ${walk.name} renders, adopts and answers`, async ({
         page,

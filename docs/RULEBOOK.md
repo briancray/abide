@@ -5670,8 +5670,7 @@ shut it where it is open, and each MUST leave its active item where it stands.
 `selected` where `multiple` is not `true`, and a pointer moving over it making that key active
 without moving to it — active until the `listbox` next moves to a key or `selected` is written.
 
-51.95 A jump `virtualList`'s `sections` hand back MUST scroll to its section's first item, and MUST
-carry `aria-current` while its section is `current`.
+51.95 A jump a `Sections` hands back MUST carry `aria-current` while its section is `current`.
 
 51.96 A jump `virtualList`'s `sections` hand back for a section no item stands in MUST be
 disabled.
@@ -5893,6 +5892,42 @@ object or an array MUST have no `valueRuns`.
 51.164 `jsonInspector`'s `inspected` MUST be the row whose pointer `selected` holds, showing or not.
 
 51.165 A `jsonInspector` given no `expanded` MUST start with its root expanded.
+
+51.166 A click on a jump `virtualList`'s `sections` hand back MUST scroll as `scrollTo` does to its
+section's first item.
+
+51.167 A pointer pressed on the `host` of a `Sections` whose `scrub` is `true` and moved MUST click,
+each time the jump nearest the pointer among those not disabled changes from the one it was pressed
+on or last clicked, that jump, and MUST click none while `scrub` is not `true`.
+
+51.168 The `host` of a `Sections` MUST capture the pointer and carry `data-scrubbing` from the first
+click 51.167 makes until that pointer is released.
+
+51.169 `scrollSpy`'s `current` MUST be the key of the item whose element — the one whose id is its
+key — stands last at or above where its scroller lands it, its `scroll-margin-top` and its scroller's
+`scroll-padding-top` counted, and the first item's key where none does, on a server as in a browser.
+
+51.170 `scrollSpy`'s `current` MUST be the key of the item whose element stands last in its scroller
+while its scroller is scrolled to its end, where it scrolls at all.
+
+51.171 `scrollSpy` MUST follow the nearest ancestor of the first of its items' elements whose
+overflow scrolls, or the window where none does.
+
+51.172 `scrollSpy` MUST NOT read an element's layout as its scroller scrolls.
+
+51.173 `scrollSpy` MUST measure where its items' elements stand a frame after its `host` is bound,
+after `items` changes, and after its scroller, the window or an element holding one of them resizes.
+
+51.174 A jump `scrollSpy` hands back MUST link to `#` followed by its item's key.
+
+51.175 A click on a jump `scrollSpy` hands back with no modifier held MUST scroll its scroller as
+`behavior` names to where it lands that item's element, and MUST be left to the browser where a
+modifier is held or the document holds no element of that id.
+
+51.176 A click on a jump `scrollSpy` hands back that scrolls as 51.175 names MUST replace the
+address's fragment with the item's key.
+
+51.177 `scrollSpy` MUST stop following its scroller once its `host` is unbound.
 
 # 52. Formatting, markdown and charts
 
