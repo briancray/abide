@@ -87,7 +87,7 @@ These are immutable. A change to them is a change to what this document is.
 - [46. Outbox](#46)
 - [47. Databases](#47)
 - [48. Problem reports](#48)
-- [49. Parts functions](#49)
+- [49. Headless components](#49)
 - [50. Dialogs, toasts and popovers](#50)
 - [51. Lists and tables](#51)
 - [52. Formatting, markdown and charts](#52)
@@ -141,7 +141,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | private handler | A handler a `<script server>` declares. |
 | menu bar extra | The item `menuBarExtra` puts in the platform's menu bar. |
 | example app | The app every `<Example>` is drawn from, kept whole so a reader can download it and run it. |
-| parts function | A function `@abide/abide` exports handing back parts an app spreads onto elements of its own. |
+| headless component | A function `@abide/abide` exports handing back parts an app spreads onto elements it writes. |
 
 RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**, **SHALL**,
 **SHOULD**, **SHOULD NOT**, **MAY**.
@@ -5049,39 +5049,39 @@ server mints.
 48.13 `ReportDraft.send` MUST settle the draft's `id`, and where a send of the draft is in flight or
 has settled it MUST settle that same `id` without handing the `Report` to any `onReport` again.
 
-# 49. Parts functions
+# 49. Headless components
 
-49.1 A parts function MUST write each state a caller can style an element by as a `data-` attribute on
+49.1 A headless component MUST write each state a caller can style an element by as a `data-` attribute on
 the part for the element the state is about, valued where the state has more than two values, and
 present only while it holds where it has two.
 
-49.2 A parts function MUST NOT write a `class`.
+49.2 A headless component MUST NOT write a `class`.
 
-49.3 Every part a parts function hands back for an element MUST carry, naming the element, a `data-`
-attribute named for the parts function — its name in kebab case, `data-sortable-table` for
+49.3 Every part a headless component hands back for an element MUST carry, naming the element, a `data-`
+attribute named for the headless component — its name in kebab case, `data-sortable-table` for
 `sortableTable`, and its namespace's for a `host`, `data-prompts` for `prompts.host`.
 
 49.4 `@abide/abide` MUST NOT ship a stylesheet.
 
-49.5 A parts function MUST write a `style` property only for a value it computes as it runs, or one a
+49.5 A headless component MUST write a `style` property only for a value it computes as it runs, or one a
 clause of its own requires.
 
-49.6 A parts function for a widget WAI-ARIA gives a pattern for MUST carry the roles and the states
+49.6 A headless component for a widget WAI-ARIA gives a pattern for MUST carry the roles and the states
 that pattern names.
 
-49.7 A parts function MUST, in development, warn once on `abide:parts` for each attribute among its
+49.7 A headless component MUST, in development, warn once on `abide:parts` for each attribute among its
 parts that names by id an element the document does not hold, and for each of its parts whose role
 stands outside the role WAI-ARIA requires around it, and a build MUST NOT carry the check.
 
-49.8 Every option of a parts function an app binds — a `Reactive` the parts read and write — MUST be
+49.8 Every option of a headless component an app binds — a `Reactive` the parts read and write — MUST be
 optional, and the parts MUST hand back what they read and write as a `Reactive` member under the
 option's name, the app's where one is given and one of their own from its default where none is; an
-id a parts function writes MUST be optional with one made where none is given, and readable among its
+id a headless component writes MUST be optional with one made where none is given, and readable among its
 parts; its `key` and `label` MUST be optional where an item is a string or a number, which is then
 its own key and label; and its `key` MUST be optional where an item carries an `id`, which, written
 as text, is then its key.
 
-49.9 A parts function MUST hand back an element there is one of as a member naming that element —
+49.9 A headless component MUST hand back an element there is one of as a member naming that element —
 save one whose parts are one element's alone, which MUST hand back that element's part itself — an
 item with one element as a function of the item answering that element's attributes, and an item
 with more than one element, or with data of its own, as a function of the item answering that item's
@@ -5089,30 +5089,30 @@ parts and data together; what a part reads that changes MUST be a `get` accessor
 among the parts MUST take an optional argument that changes what it answers, or take none to answer
 a value.
 
-49.10 Every option of a parts function that is a value — save a `Reactive` it binds, and one that
+49.10 Every option of a headless component that is a value — save a `Reactive` it binds, and one that
 takes a function of its own meaning — MUST take the value or a function answering it.
 
-49.11 A parts function MUST read each of its options where it uses it, save its `id`, a `multiple`,
+49.11 A headless component MUST read each of its options where it uses it, save its `id`, a `multiple`,
 a `range`, a `debounce`, a `rowHeight` and a size a measurement replaces, which it MUST read once.
 
 49.12 What `@abide/abide` does to an element an app writes MUST be handed out as a part, carrying
 under `bind:element` what needs the element in a browser (32.99), and MUST NOT be a function an
 app hands `bind:element` itself.
 
-49.13 A listener a parts function hands back or takes for an element's event MUST be named `on`
+49.13 A listener a headless component hands back or takes for an element's event MUST be named `on`
 followed by that event's name, and every option or part key `@abide/abide` names beginning `on`
 MUST be lowercase.
 
-49.14 A parts function among whose parts is a popover, or a part inside one, MUST, in development,
+49.14 A headless component among whose parts is a popover, or a part inside one, MUST, in development,
 warn once on `abide:parts` where that popover is drawn while it is closed, and a build MUST NOT carry
 the check.
 
-49.15 A click on a button among a parts function's parts that leaves that button disabled MUST, where
+49.15 A click on a button among a headless component's parts that leaves that button disabled MUST, where
 it held focus, move focus on: `carousel`'s and `pages`' `previous` and `next` to the other, `wizard`'s
 `next` to its `previous` and its `previous` to its `next`, and `stepper`'s `increment` and `decrement`
 to its `input`.
 
-49.16 A parts function over a list MUST take the list's items, telling them apart by its `key` (49.8),
+49.16 A headless component over a list MUST take the list's items, telling them apart by its `key` (49.8),
 and MUST NOT take a list of their keys in their place; and a part it hands back for one item MUST be
 a function of the item (49.9), not of its key.
 

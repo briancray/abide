@@ -1,4 +1,4 @@
-// 49.7 — A PARTS FUNCTION CHECKS THE MARKUP IT WAS SPREAD ON, while developing: a reference naming an
+// 49.7 — A HEADLESS COMPONENT CHECKS THE MARKUP IT WAS SPREAD ON, while developing: a reference naming an
 // element that is not there, and a part outside the role WAI-ARIA requires around it, each warn once
 // on `abide:parts` — and a build carries none of it. 49.14 — and a closed popover among the parts that
 // is drawn all the same.

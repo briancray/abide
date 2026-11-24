@@ -27,7 +27,7 @@ export function spreadProps(
     return props
 }
 
-/** 32.99 — the key a spread value carries an element binding under: a parts function's `bind:element`. */
+/** 32.99 — the key a spread value carries an element binding under: a headless component's `bind:element`. */
 export const BIND_ELEMENT = 'bind:element'
 
 // An attribute name the markup can carry: anything but space, quotes, `>`, `/` and `=`.
@@ -61,7 +61,7 @@ export function spreadEntries(
             continue
         }
         if (typeof member === 'function') continue
-        // 32.99 — an element binding a parts function carries is bound at mount, never markup.
+        // 32.99 — an element binding a headless component carries is bound at mount, never markup.
         if (lower === BIND_ELEMENT) continue
         if (!ATTRIBUTE_NAME.test(name)) continue
         // 32.37 — the named attribute's answer, so a spread and `name={expr}` never disagree.

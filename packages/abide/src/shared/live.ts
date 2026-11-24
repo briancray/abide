@@ -1,4 +1,4 @@
-// A value a parts function reads as it is used: the value itself, or a function answering it, read
+// A value a headless component reads as it is used: the value itself, or a function answering it, read
 // live — so a component hands its props over as `() => prop` and an app hands a constant as is.
 
 /** A value, or a function answering it, read each time it is used. */

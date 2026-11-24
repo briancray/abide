@@ -219,7 +219,7 @@ table.
   `pairing` (the visitor's Claude Code paired with the page, and the step it stands at), `listbox`,
   `menu`, `tabs`, `tree`, `commandPalette`, `range`, `sortableTable`, `combobox`, `time`, `dialog`,
   `dropzone` (a host to drop or paste files on, and a file input to pick them with), `chart`, `pie`
-  and `sparkline` (a widget's parts, spread on markup; `chart` carries the arithmetic
+  and `sparkline` (headless components: parts spread on markup the app writes; `chart` carries the arithmetic
   under a chart as `chart.ticks`, `chart.scale`, `chart.path`, `chart.stack` and `chart.nearest`),
   `sortBy`, `virtualList`, `hotkeys` and `keyLabel`, `prompts` (`prompts.confirm` /
   `prompts.alert` / `prompts.prompt`), `toasts` (`toasts.notify`) and `announce` (a message read to a

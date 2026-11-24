@@ -1,4 +1,4 @@
-// 49.3, 49.8, 49.9 — EVERY PARTS FUNCTION IN ONE SHAPE, listed here so a new one is a decision rather
+// 49.3, 49.8, 49.9 — EVERY HEADLESS COMPONENT IN ONE SHAPE, listed here so a new one is a decision rather
 // than an omission: each element's part names it under the attribute named for its function (49.3), each option an app binds is
 // optional and handed back (49.8), and the parts are a member per element there is one of and a
 // function per item, never a reader taking no argument or an optional one that changes the answer
@@ -150,7 +150,7 @@ test('every part is a member, a function of its item, or an action — 49.9', ()
     expect(true).toBe(true)
 })
 
-// Every element part each parts function hands back, built with the least each takes.
+// Every element part each headless component hands back, built with the least each takes.
 function elementParts(): Record<string, unknown> {
     const view = tabs({ items: ['a'] })
     const opener = menu()
@@ -420,9 +420,9 @@ test('options handed as accessors are read as they are used — 33.5, 49.11', ()
     expect(after[2]).not.toBe(before[2])
 })
 
-// 49.8 — EVERY PARTS FUNCTION THAT WRITES IDS TAKES ONE, and hands it back. THE REVERT: make `menu`'s id
+// 49.8 — EVERY HEADLESS COMPONENT THAT WRITES IDS TAKES ONE, and hands it back. THE REVERT: make `menu`'s id
 // alone and ignore the option -> 'menu' answers its own id where 'given-menu' is due.
-test('every parts function that writes ids takes the id given and hands it back — 49.8', () => {
+test('every headless component that writes ids takes the id given and hands it back — 49.8', () => {
     const made: Record<string, { id: string }> = {
         listbox: listbox({ id: 'given-listbox', options: ['a'] }),
         combobox: combobox({ id: 'given-combobox', options: ['a'] }),

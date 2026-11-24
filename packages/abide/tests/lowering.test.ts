@@ -96,7 +96,7 @@ test('a write used as a value is worth what it stored — 31.4', async () => {
 })
 
 // 31.15 — A MEMBER TYPED AS A `Reactive` IS READ AND WRITTEN AS A NAME IS, told by its type and not
-// by its owner: what a parts function hands back is a `readonly` member, which the checker types as
+// by its owner: what a headless component hands back is a `readonly` member, which the checker types as
 // an error where it is assigned, so the write is typed by its declaration. An access ON a
 // `Reactive` stays 31.5's. THE REVERT: have `memberAccesses` find nothing; the 5 member reads and
 // writes below are left as written, and `ask.open ? 'yes' : 'no'` tests an object, which is always

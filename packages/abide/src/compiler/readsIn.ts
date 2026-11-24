@@ -894,7 +894,7 @@ const ABSENT = TypeFlags.Undefined | TypeFlags.Null | TypeFlags.Void
  * 31.15 — every property or element access whose declared type is a `Reactive`, read and written
  * as a name bound to one is: `ask.open`, `rows[at]`, `route.url`.
  *
- * TOLD BY THE MEMBER'S TYPE, NOT BY ITS OWNER: what a parts function hands back, a record of
+ * TOLD BY THE MEMBER'S TYPE, NOT BY ITS OWNER: what a headless component hands back, a record of
  * `Reactive`s and `route`'s five values are one case. An access on a `Reactive` is none of these —
  * `n.ready` is the `Reactive`'s own member (31.5).
  *

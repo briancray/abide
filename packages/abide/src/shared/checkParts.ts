@@ -1,4 +1,4 @@
-// 49.7 — A PARTS FUNCTION'S STRUCTURE, CHECKED WHILE DEVELOPING. Parts leave the markup to the app, so
+// 49.7 — A HEADLESS COMPONENT'S STRUCTURE, CHECKED WHILE DEVELOPING. Parts leave the markup to the app, so
 // what a component used to guarantee — an `aria-controls` naming an element that is there, an option
 // inside its listbox — is the app's to get right, and this names what it got wrong. Every part a parts
 // function writes an id on, or names one from, carries the function's own id prefix, so the check
@@ -105,7 +105,7 @@ function rendersClosed(popover: Element): boolean {
  * Warns on `abide:parts`, once a turn after the parts have been spread, of each structure problem
  * found under `prefix` — once per problem for the page. Development only: see the head of this file.
  *
- * @param name the parts function's name, which the warning opens with
+ * @param name the headless component's name, which the warning opens with
  * @param prefix the prefix of every id the function writes
  */
 export function checkParts(name: string, prefix: string): void {

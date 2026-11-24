@@ -1,5 +1,5 @@
 // AN ITEM THAT IS ITS OWN KEY AND LABEL: a string or a number tells itself apart and reads as itself, and
-// a record carrying an `id` is told apart by it, so a parts function over such items takes `key` and
+// a record carrying an `id` is told apart by it, so a headless component over such items takes `key` and
 // `label` as options it may leave out; over any other item the type asks for them, since `String` of an
 // object is `[object Object]` for every one. 49.8.
 

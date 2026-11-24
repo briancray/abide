@@ -17,7 +17,7 @@ import { priceRowArms, replacePage } from './priceRowArms.ts'
 
 const ROWS = Number(process.argv[2] ?? '1000')
 
-// One fresh part per row, as `{...copy()}` makes one: the shape a parts function hands back.
+// One fresh part per row, as `{...copy()}` makes one: the shape a headless component hands back.
 const SCRIPT = `
 const mark = (element: Element) => { element.toggleAttribute('data-bound', true) }
 const named = () => ({ 'data-mark': 'mark', 'bind:element': mark })

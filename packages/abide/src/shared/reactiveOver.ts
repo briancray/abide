@@ -1,4 +1,4 @@
-// A BOUND PROP HANDED TO A PARTS FUNCTION AS THE `Reactive` IT TAKES. In a `.abide`, a destructured prop
+// A BOUND PROP HANDED TO A HEADLESS COMPONENT AS THE `Reactive` IT TAKES. In a `.abide`, a destructured prop
 // reaches a function as its value (31.3), so a component passing its bindable prop to its parts hands
 // over this instead: read live, and written back to whoever binds it — the three members a parts
 // function calls on a `Reactive` it is handed.

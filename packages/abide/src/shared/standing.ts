@@ -12,7 +12,7 @@ import { join } from './register.ts'
  * The hosts standing for one kind of request, and the warning it gives once where a request finds
  * none.
  *
- * @param host the parts function whose markup shows the requests: `'prompts.host()'`
+ * @param host the headless component whose markup shows the requests: `'prompts.host()'`
  * @param logger the logger the warning is written on: `'abide:prompts'`
  */
 export function standing(host: string, logger: string) {

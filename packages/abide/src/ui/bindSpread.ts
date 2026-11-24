@@ -49,7 +49,7 @@ export function bindSpread(
 /**
  * 32.99 — A SPREAD'S ELEMENT BINDING, handed the element as `bind:element` hands it: at the region's
  * mount, once the element is connected (32.68), bound again only when the value carries another, and
- * its `Disposer` run when it is replaced or the region is torn down. What lets a parts function carry
+ * its `Disposer` run when it is replaced or the region is torn down. What lets a headless component carry
  * behavior an attribute cannot — a property to set, a popover to place — inside the one spread.
  *
  * A SPREAD CARRYING NONE AT MOUNT PAYS NOTHING: no watch is made for it. A parts value's shape is
