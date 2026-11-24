@@ -16,4 +16,4 @@ const summary = memo(() => summarizeDeal())
 const doc = markdown.incremental({ source: () => summary.join('') })
 </script>
 
-<div>{#for section of doc.sections by section}{raw(section.html)}{/for}</div>
+<div>{#for section of doc.sections key section}{raw(section.html)}{/for}</div>

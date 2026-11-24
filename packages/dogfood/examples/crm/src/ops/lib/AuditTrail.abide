@@ -14,7 +14,7 @@ const trail = virtualList({
 
 <div class="h-80 overflow-auto">
     <div role="list" aria-label="Audit trail" {...trail.host}>
-        {#for entry of trail.shown by entry.key}
+        {#for entry of trail.shown key entry.key}
             <div
                 role="listitem"
                 aria-setsize={AUDIT_TRAIL.length}

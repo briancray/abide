@@ -14,7 +14,7 @@ const plot = chart({
     {...plot.svg}
     class="h-48 w-full [&_[data-series='1']]:[stroke-dasharray:4_4]"
 >
-    {#for line of plot.lines by line.series}
+    {#for line of plot.lines key line.series}
         <path {...line.path} />
     {/for}
 </svg>

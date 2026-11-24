@@ -13,7 +13,7 @@ const box = combobox({
     {#if box.open}
         <div {...box.popup}>
             <ul {...box.listbox}>
-                {#for stage of box.items by stage}
+                {#for stage of box.items key stage}
                     <li
                         {...box.option(stage)}
                         class="data-active:bg-ink data-active:text-paper

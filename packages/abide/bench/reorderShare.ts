@@ -91,7 +91,7 @@ function clear() {
 </script>
 
 <ul id="list">
-{#for row of rows by row.id}
+{#for row of rows key row.id}
     <li><span>{row.label}</span></li>
 {/for}
 </ul>

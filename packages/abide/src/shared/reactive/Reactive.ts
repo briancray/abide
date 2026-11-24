@@ -229,7 +229,7 @@ export type ReactiveOptions<
      * RULEBOOK 5.22, 32.32: what tells one element from another. The property-name form is the one
      * that crosses a wire (18.4) — a function has no serialization.
      */
-    by?:
+    key?:
         | (keyof ElementOf<Stored> & string)
         | ((element: ElementOf<Stored>) => unknown)
 }
@@ -241,7 +241,7 @@ export type ReactiveOptions<
 type ArgsOf<Args> = [Args] extends [never] ? undefined : Args
 
 /**
- * `unknown` on a value that is not an array, where `by` has no element to key and names no property.
+ * `unknown` on a value that is not an array, where `key` has no element to key and names no property.
  */
 type ElementOf<Stored> =
     NonNullable<Stored> extends readonly (infer Element)[] ? Element : unknown

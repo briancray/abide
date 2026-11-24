@@ -31,7 +31,7 @@ let tall = reactive(false)
     <button id="add" onclick={() => { rows = [...rows, rows.length + 1] }}>add</button>
     <button id="grow" onclick={() => { tall = true }}>grow</button>
     <ol id="list" {...scrollEdges()}>
-        {#for row of rows by row}<li>{row}</li>{/for}
+        {#for row of rows key row}<li>{row}</li>{/for}
     </ol>
     <div id="grown" {...scrollEdges()}><p class:tall={tall}>content</p></div>
     <div id="ltr" class="wide" {...scrollEdges()}><p></p></div>

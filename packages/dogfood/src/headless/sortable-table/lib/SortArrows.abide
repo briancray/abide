@@ -29,7 +29,7 @@ const table = sortableTable({
 >
     <thead>
         <tr>
-            {#for column of COLUMNS by column.key}
+            {#for column of COLUMNS key column.key}
                 <th {...table.column(column).header}>
                     <button {...table.column(column).sort}>
                         {column.label}
@@ -39,9 +39,9 @@ const table = sortableTable({
         </tr>
     </thead>
     <tbody>
-        {#for deal of table.rows by deal.id}
+        {#for deal of table.rows key deal.id}
             <tr>
-                {#for column of COLUMNS by column.key}
+                {#for column of COLUMNS key column.key}
                     <td {...table.column(column).cell}>
                         {table.text(deal, column)}
                     </td>

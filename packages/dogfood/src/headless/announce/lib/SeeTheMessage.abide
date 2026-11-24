@@ -10,12 +10,12 @@ const regions = announce.host()
 >Drop the connection</button>
 <div class="mt-3">
     <div {...regions.polite} class="text-signal">
-        {#for message of regions.said('polite') by message.count}
+        {#for message of regions.said('polite') key message.count}
             <span>{message.text}</span>
         {/for}
     </div>
     <div {...regions.assertive} class="text-bad">
-        {#for message of regions.said('assertive') by message.count}
+        {#for message of regions.said('assertive') key message.count}
             <span>{message.text}</span>
         {/for}
     </div>

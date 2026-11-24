@@ -23,7 +23,7 @@ function log() {
 </div>
 
 <ul class="fields stacked">
-    {#for call of calls by call.id}
+    {#for call of calls key call.id}
         <li><span>call</span><strong>{call.note}</strong></li>
     {/for}
 </ul>

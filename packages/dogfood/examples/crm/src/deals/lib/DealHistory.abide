@@ -14,7 +14,7 @@ const history = disclosure()
         {history.open() ? 'Hide' : 'Show'} stage history
     </button>
     <ol {...history.region}>
-        {#for move of MOVES by move.at}
+        {#for move of MOVES key move.at}
             <li>{move.at} — {move.stage}</li>
         {/for}
     </ol>

@@ -30,11 +30,11 @@ const accounts = tree({
 
 <p>{accounts.selected().join(', ') || 'No account in the campaign.'}</p>
 <ul {...accounts.tree} aria-label="Campaign accounts" class="tree">
-    {#for region of REGIONS by region.id}
+    {#for region of REGIONS key region.id}
         <li {...accounts.node(region).item}>
             {region.name}
             <ul {...accounts.node(region).group}>
-                {#for company of region.under by company.id}
+                {#for company of region.under key company.id}
                     <li {...accounts.node(company).item}>{company.name}</li>
                 {/for}
             </ul>

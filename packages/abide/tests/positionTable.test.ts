@@ -44,7 +44,7 @@ let shown = 1, tone = '', ready = true, rows = [{ id: 1 }], press = () => {}, la
 {#if ready}<script>
 const local = 1
 </script>{/if}
-{#for row of rows by row.id}<i></i>{/for}
+{#for row of rows key row.id}<i></i>{/for}
 <Child label={label} bind:value={held} class:x={stray}/>`
 
 // A SCAFFOLDING CHANGE CANNOT DROP A KIND: each one is in the table, over the source it was written

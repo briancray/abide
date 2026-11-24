@@ -26,12 +26,12 @@ const shown = memo(() =>
 
 <div class="flex flex-col gap-snug">
     <div class="tabs" {...chips.group}>
-        {#for stage of STAGES by stage}
+        {#for stage of STAGES key stage}
             <button {...chips.item(stage)}>{stage}</button>
         {/for}
     </div>
     <ul class="fields">
-        {#for deal of shown by deal.id}
+        {#for deal of shown key deal.id}
             <li><span>{deal.stage}</span><strong>{deal.name}</strong>
                 {format.money(deal.amount, { digits: 0 })}</li>
         {/for}

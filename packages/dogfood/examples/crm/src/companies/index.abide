@@ -12,7 +12,7 @@ const companies = memo(() => listCompanies())
 
 <Announcements />
 <ul class="fields">
-    {#for company of companies by company.id}
+    {#for company of companies key company.id}
         <li><span>{company.city}</span>
             <a href={url('/companies/[id=SLUG]', { id: company.id })}
                 style:view-transition-name="company-{company.id}"

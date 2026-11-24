@@ -1,5 +1,5 @@
 // 52.17, 52.18, 52.43 — MARKDOWN RENDERED INCREMENTALLY, as sections an app renders itself: a section a
-// stream has moved past is the SAME OBJECT on every later read, so `{#for section of sections by
+// stream has moved past is the SAME OBJECT on every later read, so `{#for section of sections key
 // section}` keeps its nodes and a chunk re-renders only the section still growing.
 
 import { type Live, live } from '../live.ts'

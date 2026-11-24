@@ -7,7 +7,7 @@ const chips = toggleGroup({ items: STAGES, multiple: true, value: stages })
 </script>
 
 <div class="tabs" {...chips.group}>
-    {#for stage of STAGES by stage}
+    {#for stage of STAGES key stage}
         <button {...chips.item(stage)}>{stage}</button>
     {/for}
 </div>

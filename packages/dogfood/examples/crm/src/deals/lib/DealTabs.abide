@@ -16,7 +16,7 @@ const deal = memo(() => getDeal({ id: 'd1' }))
 
 <div class="flex flex-col gap-snug">
     <div class="tabs" {...view.list}>
-        {#for each of VIEWS by each.id}
+        {#for each of VIEWS key each.id}
             <button {...view.tab(each).button}>{each.label}</button>
         {/for}
     </div>

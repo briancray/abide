@@ -222,7 +222,7 @@ export async function readsIn(
             held.has((names[at] as Node).getStart())
         )
             reactive[at] = symbols[at]
-    // 32.32 — A VALUE WHOSE `reactive(…)` DECLARES `by` keys a `{#for}` over it,
+    // 32.32 — A VALUE WHOSE `reactive(…)` DECLARES `key` keys a `{#for}` over it,
     // wherever the value is declared.
     const byValue = await Promise.all(
         reactive.map(async (symbol) => {
@@ -232,7 +232,7 @@ export async function readsIn(
             )
             return (
                 options !== undefined &&
-                optionNamed(options, 'by') !== undefined
+                optionNamed(options, 'key') !== undefined
             )
         }),
     )

@@ -66,7 +66,7 @@ import { reactive } from '@abide/abide'
 
 let rows = reactive(CARDS)
 </script>
-<main id="list">{#for row of rows by row.id}${cardRow('{row.title}', '{row.body}', '{row.count}')}{/for}</main>`
+<main id="list">{#for row of rows key row.id}${cardRow('{row.title}', '{row.body}', '{row.count}')}{/for}</main>`
 }
 
 /**
@@ -170,7 +170,7 @@ import { reactive } from '@abide/abide'
 
 let rows = reactive(CARDS)
 </script>
-<main id="list">{#for row of rows by row.id}{#component Card()}${card}{/component}${invoked ? '<Card/>' : card}{/for}</main>`
+<main id="list">{#for row of rows key row.id}{#component Card()}${card}{/component}${invoked ? '<Card/>' : card}{/for}</main>`
 }
 
 /** The card-list page with each row a `<Card>` invocation, its data left as `CARDS`. */
@@ -181,5 +181,5 @@ import Card from './Card.abide'
 
 let rows = reactive(CARDS)
 </script>
-<main id="list">{#for row of rows by row.id}<Card title={row.title} body={row.body} count={row.count}/>{/for}</main>`
+<main id="list">{#for row of rows key row.id}<Card title={row.title} body={row.body} count={row.count}/>{/for}</main>`
 }

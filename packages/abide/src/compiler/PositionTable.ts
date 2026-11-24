@@ -11,7 +11,7 @@ import type { Span } from './projectShadow.ts'
  * - `attribute` — an element's attribute value that is neither a listener nor a `bind:`.
  * - `condition` — an `{#if}` or `{:else if}` subject.
  * - `subject` — a `{#for}` subject.
- * - `key` — a `{#for}`'s `by` key.
+ * - `key` — a `{#for}`'s `key` key.
  * - `listener` — an element's `on…` handler (14.9).
  * - `prop` — a value handed to a component, spread or keyed.
  * - `elementBind` / `componentBind` — a `bind:` operand on an element and on a component (32.6).

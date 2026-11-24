@@ -11,7 +11,7 @@ const team = memo(() => getTeam())
 <main>
     <h1>Admin</h1>
     <ul class="fields">
-        {#for member of team by member.name}
+        {#for member of team key member.name}
             <li><span>{member.role}</span><strong>{member.name}</strong></li>
         {/for}
     </ul>

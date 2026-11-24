@@ -7,7 +7,7 @@ let query = reactive('')
 
 <input aria-label="Find a contact" bind:value={query} />
 <ul>
-    {#for name of CONTACTS by name}
+    {#for name of CONTACTS key name}
         <li>
             {#for run of highlight(name, query)}
                 {#if run.match}

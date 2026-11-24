@@ -191,7 +191,7 @@ import { memo } from '@abide/abide'
 const rows = memo(() => Promise.resolve(['north', 'south']))
 </script>
 
-<main><h1 id="static">Regions</h1><ul id="list">{#for row of rows by row}<li>{row}</li>{/for}</ul></main>`)
+<main><h1 id="static">Regions</h1><ul id="list">{#for row of rows key row}<li>{row}</li>{/for}</ul></main>`)
 
     expect(html).toContain('<h1 id="static">Regions</h1>')
     // The block rendered its anchors and no rows, which is 32.22's zero times.
@@ -337,7 +337,7 @@ function flip() {
 }
 </script>
 
-<main><button id="b" disabled={busy} aria-busy={busy} title={undefined}>go</button><div id="s" {...shown}>s</div><button id="flip" onclick={flip}>flip</button><ul>{#for row of rows by row.id}<li><input id={'r' + row.id} disabled={row.off}></li>{/for}</ul></main>`)
+<main><button id="b" disabled={busy} aria-busy={busy} title={undefined}>go</button><div id="s" {...shown}>s</div><button id="flip" onclick={flip}>flip</button><ul>{#for row of rows key row.id}<li><input id={'r' + row.id} disabled={row.off}></li>{/for}</ul></main>`)
 
     expect(html).toContain('<button id="b" aria-busy="false">')
     expect(html).toContain('<div id="s" aria-hidden="false">')
@@ -672,7 +672,7 @@ let hot = reactive(false)
 let rows = reactive([{ id: 'a', tone: 'calm hot', on: true }])
 </script>
 
-<main><ul>{#for row of rows by row.id}<li id={row.id} class="row {row.tone}" class:on={row.on} class:hot={hot}>x</li>{/for}</ul>
+<main><ul>{#for row of rows key row.id}<li id={row.id} class="row {row.tone}" class:on={row.on} class:hot={hot}>x</li>{/for}</ul>
 <button id="move" onclick={() => { rows = [{ id: 'a', tone: 'loud', on: false }, { id: 'b', tone: 'calm', on: true }] }}>move</button>
 <button id="heat" onclick={() => { hot = true }}>heat</button>
 <button id="cool" onclick={() => { hot = false }}>cool</button></main>`)
@@ -712,7 +712,7 @@ let tone = reactive('calm')
 let rows = reactive([{ id: 'a', on: reactive(false) }, { id: 'b', on: reactive(true) }])
 </script>
 
-<main><ul>{#for row of rows by row.id}<li id={row.id} class="row active {tone}" class:active={row.on()}>x</li>{/for}</ul></main>`)
+<main><ul>{#for row of rows key row.id}<li id={row.id} class="row active {tone}" class:active={row.on()}>x</li>{/for}</ul></main>`)
     const mountWork = measure(() => {
         mounted.mount()
         flushSync()
@@ -727,7 +727,7 @@ import { reactive } from '@abide/abide'
 let rows = reactive([{ id: 'a', sel: true, cls: 'a' }])
 </script>
 
-<main><ul>{#for row of rows by row.id}<li id={row.id} class:sel={row.sel} class={row.cls}>x</li>{/for}</ul>
+<main><ul>{#for row of rows key row.id}<li id={row.id} class:sel={row.sel} class={row.cls}>x</li>{/for}</ul>
 <button id="swap" onclick={() => { rows = [{ id: 'a', sel: false, cls: 'a sel' }] }}>swap</button></main>`)
     updated.mount()
     flushSync()
@@ -752,7 +752,7 @@ let hot = reactive(false)
 let rows = reactive([{ id: 'a', tone: 'calm' }, { id: 'b', tone: 'calm' }])
 </script>
 
-<main><ul>{#for row of rows by row.id}<li class="row {row.tone}" class:hot={hot}>x</li>{/for}</ul>
+<main><ul>{#for row of rows key row.id}<li class="row {row.tone}" class:hot={hot}>x</li>{/for}</ul>
 <button id="retone" onclick={() => { rows = rows.map((row) => ({ ...row, tone: 'loud' })) }}>retone</button></main>`)
     mount()
     flushSync()
@@ -1156,7 +1156,7 @@ let rows = reactive([1])
 const slotted = '#38;'
 </script>
 
-<main><p id="named" title="AT&amp;T {n}">a</p><p id="bare" title="AT&T {n}">b</p><p id="numeric" title="AT&#38;T {n}">c</p><p id="joined" title="Q&{slotted}">j</p><a id="url" href="/q?x=1&amp;y={n}">u</a><p id="merged" class="a&amp;b {n}" class:on={n}>m</p><button id="go" onclick={() => { n = n + 1; rows = [...rows, rows.length + 1] }}>go</button><ul>{#for row of rows by row}<li id={'r' + row} title="AT&amp;T {row}" data-live="AT&amp;T {n}">r</li>{/for}</ul></main>`)
+<main><p id="named" title="AT&amp;T {n}">a</p><p id="bare" title="AT&T {n}">b</p><p id="numeric" title="AT&#38;T {n}">c</p><p id="joined" title="Q&{slotted}">j</p><a id="url" href="/q?x=1&amp;y={n}">u</a><p id="merged" class="a&amp;b {n}" class:on={n}>m</p><button id="go" onclick={() => { n = n + 1; rows = [...rows, rows.length + 1] }}>go</button><ul>{#for row of rows key row}<li id={'r' + row} title="AT&amp;T {row}" data-live="AT&amp;T {n}">r</li>{/for}</ul></main>`)
 
     expect(html).toContain('<p id="named" title="AT&amp;T 0">')
     expect(html).toContain('<p id="bare" title="AT&amp;T 0">')
@@ -1209,7 +1209,7 @@ import { reactive } from '@abide/abide'
 let rows = reactive([1])
 </script>
 
-<main><button id="go" onclick={() => { rows = [...rows, rows.length + 1] }}>go</button><ul>{#for row of rows by row}<li id={'r' + row} data-s="&notin;x &amp;notin" title="&notin &amp; {row}">&notin &amp; {row}|</li>{/for}</ul></main>`)
+<main><button id="go" onclick={() => { rows = [...rows, rows.length + 1] }}>go</button><ul>{#for row of rows key row}<li id={'r' + row} data-s="&notin;x &amp;notin" title="&notin &amp; {row}">&notin &amp; {row}|</li>{/for}</ul></main>`)
     const read = (id: string) => {
         const row = document.querySelector(`#${id}`) as Element
         return [

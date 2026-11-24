@@ -13,7 +13,7 @@ const NAMED_ALONE = new RegExp(
 /**
  * Whether `subject` is one identifier and nothing else.
  *
- * The case 32.32 keys by the value's own `by`, and a component tag a call can spell
+ * The case 32.32 keys by the value's own `key`, and a component tag a call can spell
  * (`projectShadow`).
  */
 export function isNamedAlone(subject: string): boolean {

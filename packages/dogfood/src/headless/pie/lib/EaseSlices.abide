@@ -20,7 +20,7 @@ const ring = pie({
 
 <button onclick={() => (spring = !spring)}>Switch quarter</button>
 <svg {...ring.svg} class="size-40">
-    {#for slice of ring.slices by slice.index}
+    {#for slice of ring.slices key slice.index}
         <circle
             {...slice.circle}
             class="transition-all motion-reduce:transition-none"

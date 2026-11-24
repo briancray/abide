@@ -42,7 +42,7 @@ import Section from '#src/lib/Section.abide'
                 class="h-24 overflow-y-auto data-[scrollable~=top]:mask-t-from-70%
                     data-[scrollable~=bottom]:mask-b-from-70%"
                 {...scrollEdges()}>
-                {#for deal of deals by deal.id}<li>{deal.name}</li>{/for}
+                {#for deal of deals key deal.id}<li>{deal.name}</li>{/for}
             </ol>
         `} />
     </Section>

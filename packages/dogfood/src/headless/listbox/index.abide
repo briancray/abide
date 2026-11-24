@@ -65,7 +65,7 @@ import leadBatch from './lib/LeadBatch.abide' with { type: 'text' }
             <code>onpick</code> with it. <code>idOf(key)</code> and <code>active</code> stay for
             markup of your own.</p>
         <Code language="abide" caption="abide" code={`
-            {#for deal of leads by deal.id}
+            {#for deal of leads key deal.id}
                 <li {...queue.option(deal)}>{deal.name}</li>
             {/for}
         `} />

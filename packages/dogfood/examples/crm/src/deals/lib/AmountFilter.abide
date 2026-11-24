@@ -39,7 +39,7 @@ const shown = memo(() =>
     {format.money(amount[0], { compact: true })} to {format.money(amount[1], { compact: true })}
 </p>
 <ul>
-    {#for deal of shown by deal.id}
+    {#for deal of shown key deal.id}
         <li>{deal.name}</li>
     {/for}
 </ul>

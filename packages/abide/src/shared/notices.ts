@@ -187,7 +187,7 @@ export function notices(options: NoticesOptions = {}): Notices {
         enter(notice, given, now)
         seeded.push(notice)
     }
-    const list = reactive<Notice[]>(seeded, { by: 'id' })
+    const list = reactive<Notice[]>(seeded, { key: 'id' })
 
     // 50.15, 50.42, 50.69 — takes the notice holding `id` out of the list, remembers a dismissal or
     // an action in the store, and tells its `onclose` why.

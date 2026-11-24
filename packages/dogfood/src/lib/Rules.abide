@@ -27,7 +27,7 @@ const clauses = memo(() => clauseTexts({ ids: [...ids] }))
 {#if ids.length > 0}
     <Section title="Rules" filed={false}>
         <ul class="rules">
-            {#for clause of clauses by clause.id}
+            {#for clause of clauses key clause.id}
                 <li><a href="{rulebook}#{clause.id}">{clause.id}</a> {raw(inline(clause.text))}</li>
             {/for}
         </ul>

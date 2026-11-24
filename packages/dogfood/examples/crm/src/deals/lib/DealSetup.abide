@@ -20,7 +20,7 @@ const setup = wizard({
     <input aria-label="Deal name" bind:value={name} />
 {:else if setup.current() === 'stage'}
     <select aria-label="Stage" bind:value={stage}>
-        {#for each of STAGES by each}<option>{each}</option>{/for}
+        {#for each of STAGES key each}<option>{each}</option>{/for}
     </select>
 {:else}
     <p class="status">{name} — {stage}</p>

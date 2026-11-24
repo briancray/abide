@@ -86,7 +86,7 @@ import { reactive } from '@abide/abide'
 let rows = reactive([{ id: 'a', on: true }, { id: 'b', on: false }])
 </script>
 
-<ul id="list">{#for row of rows by row.id}{#if row.on}<b>on</b>{/if}<span>{row.id}</span>{/for}</ul>`
+<ul id="list">{#for row of rows key row.id}{#if row.on}<b>on</b>{/if}<span>{row.id}</span>{/for}</ul>`
 
     const said = await warningsWhile(async () => {
         await mountPage(source)
@@ -426,7 +426,7 @@ function swap() {
 }
 </script>
 
-<ul id="list">{#for row of rows by row.id}{row.tag}<span>{row.id}{mark}</span>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}{row.tag}<span>{row.id}{mark}</span>{/for}</ul>
 <button id="swap" onclick={swap}>swap</button>`
 
     const said = await warningsWhile(async () => {
@@ -479,7 +479,7 @@ let rows = reactive([{ id: 'a' }, { id: 'b' }])
 let prefix = reactive('p')
 </script>
 
-<ul id="list">{#for row of rows by row.id}<li>id {prefix}-{row.id}</li>{/for}</ul>`
+<ul id="list">{#for row of rows key row.id}<li>id {prefix}-{row.id}</li>{/for}</ul>`
 
     const { mount } = await renderPage(source)
 
@@ -524,7 +524,7 @@ function swap() {
 }
 </script>
 
-<ul id="list">{#for row of rows by row.id}<li id={row.id}>{#if row.id}<b>{row.id}</b>{/if}{mark}</li>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}<li id={row.id}>{#if row.id}<b>{row.id}</b>{/if}{mark}</li>{/for}</ul>
 <button id="swap" onclick={swap}>swap</button>`
 
     const said = await warningsWhile(async () => {
@@ -561,7 +561,7 @@ let mark = reactive('')
 let on = reactive(true)
 </script>
 
-<ul>{#for row of rows by row}<li>{#if on}<b>{row + mark}</b>{/if}</li>{/for}</ul>
+<ul>{#for row of rows key row}<li>{#if on}<b>{row + mark}</b>{/if}</li>{/for}</ul>
 <button id="drop" onclick={() => { rows = ['one'] }}>drop</button>
 <button id="bump" onclick={() => { mark = '!' }}>bump</button>`)
     flushSync()
@@ -588,7 +588,7 @@ let mark = reactive('')
 let inner = reactive(['x'])
 </script>
 
-<ul>{#for row of rows by row}<li>{#for i of inner by i}<b>{row + i + mark}</b>{/for}</li>{/for}</ul>
+<ul>{#for row of rows key row}<li>{#for i of inner key i}<b>{row + i + mark}</b>{/for}</li>{/for}</ul>
 <button id="drop" onclick={() => { rows = ['one'] }}>drop</button>
 <button id="bump" onclick={() => { mark = '!' }}>bump</button>`)
     flushSync()
@@ -655,7 +655,7 @@ let rows = reactive(['one', 'two'])
 let mark = reactive('')
 </script>
 
-<ul>{#for row of rows by row}<script>
+<ul>{#for row of rows key row}<script>
 ${COUNTED.replace('NAME', 'row')}
 </script><li>{row}</li>{/for}</ul>
 <button id="drop" onclick={() => { rows = ['one'] }}>drop</button>
@@ -747,7 +747,7 @@ let rows = reactive(['one'])
 {#if on}<script>
 const theme = reactive.share('theme', () => reactive('arm-own'))
 </script><b>{theme}</b>{/if}
-<ul>{#for row of rows by row}<script>
+<ul>{#for row of rows key row}<script>
 const theme = reactive.share('theme', () => reactive('row-own'))
 </script><li>{row} {theme}</li>{/for}</ul>
 <button id="flip" onclick={() => { on = !on }}>flip</button>
@@ -859,7 +859,7 @@ let rows = reactive(['one', 'two'])
 let level = reactive(0)
 </script>
 
-<ul>{#for row of rows by row}<script>
+<ul>{#for row of rows key row}<script>
 const plus = memo(() => level + 1)
 const twice = memo(() => level * 2)
 </script><li>{row} {plus} {twice}</li>{/for}</ul>
@@ -1073,7 +1073,7 @@ const ROWS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((id) => ({ id, stub: id % 2 ===
 let selected = reactive(1)
 </script>
 
-<ul>{#for row of ROWS by row.id}<li>{#if row.stub}<i>stub</i>{/if}{#for part of row.parts}<b>{part}</b>{/for}{#if row.id === selected}<em>on</em>{/if}</li>{/for}</ul>
+<ul>{#for row of ROWS key row.id}<li>{#if row.stub}<i>stub</i>{/if}{#for part of row.parts}<b>{part}</b>{/for}{#if row.id === selected}<em>on</em>{/if}</li>{/for}</ul>
 <button id="pick" onclick={() => { selected = 2 }}>pick</button>`)
     expect(held(scope)).toEqual({ scopes: 21, stops: 31 })
     expect(document.querySelectorAll('i')).toHaveLength(5)
@@ -1116,7 +1116,7 @@ function add() {
 }
 </script>
 
-<ul id="list">{#for row of rows by row.id}<li>{#if row.on}<b>on</b>{/if}<span>{row.id}</span></li>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}<li>{#if row.on}<b>on</b>{/if}<span>{row.id}</span></li>{/for}</ul>
 <button id="add" onclick={add}>add</button>`
 
     await mountPage(source)
@@ -1158,7 +1158,7 @@ function add() {
 }
 </script>
 
-<ul id="list">{#for row of rows by row.id}<li><span>Hello {row.name}! <em>one</em></span></li>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}<li><span>Hello {row.name}! <em>one</em></span></li>{/for}</ul>
 <button id="add" onclick={add}>add</button>`
 
     await mountPage(source)
@@ -1325,7 +1325,7 @@ function add() {
 }
 </script>
 
-<ul id="list">{#for row of rows by row.id}${body}{/for}</ul>
+<ul id="list">{#for row of rows key row.id}${body}{/for}</ul>
 <button id="add" onclick={add}>add</button>`
 
         await mountPage(source)
@@ -1468,7 +1468,7 @@ const { r } = props<{ r: number }>()
 <g class="sprite"><circle r={r}/><text>{r}</text></g>`
 const COMPONENT_SVG_SHAPES: [string, string][] = [
     ['a row', '{#for r of rows}<Sprite r={r}/>{/for}'],
-    ['a keyed row', '{#for r, at of rows by at}<Sprite r={r}/>{/for}'],
+    ['a keyed row', '{#for r, at of rows key at}<Sprite r={r}/>{/for}'],
     ['an arm', '{#if on}<Sprite r={1}/>{:else}<Sprite r={2}/>{/if}'],
     [
         'slotted children',
@@ -1550,7 +1550,7 @@ function next() {
 }
 </script>
 
-<ul id="list">{#for row of rows by row.id}{#if row.on}<b>{row.id}{mark}</b>{/if}<span>{row.id}</span>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}{#if row.on}<b>{row.id}{mark}</b>{/if}<span>{row.id}</span>{/for}</ul>
 <button id="next" onclick={next}>next</button>`
 
 // The list's children as one line: an anchor by its data, an element by its tag and its text. A
@@ -1699,7 +1699,7 @@ function swap() {
 }
 </script>
 
-<ul id="list">{#for row of rows by row.id}{#if row.id}{#for x of row.xs}<i>{x}{mark}</i><u>{x}</u>{/for}{/if}<span>{row.id}</span>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}{#if row.id}{#for x of row.xs}<i>{x}{mark}</i><u>{x}</u>{/for}{/if}<span>{row.id}</span>{/for}</ul>
 <button id="swap" onclick={swap}>swap</button>`)
     })
     expect(said).toEqual([])

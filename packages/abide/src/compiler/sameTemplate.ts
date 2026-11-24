@@ -63,7 +63,7 @@ function nodesShape(nodes: TemplateNode[], parts: string[]): void {
         }
         if (node.block === 'for') {
             parts.push(
-                `{#for ${codeShape(node.item)},${codeShape(node.index)} of ${codeShape(node.subject)} by ${codeShape(node.key)}`,
+                `{#for ${codeShape(node.item)},${codeShape(node.index)} of ${codeShape(node.subject)} key ${codeShape(node.key)}`,
             )
             bodyShape(node, parts)
         } else {

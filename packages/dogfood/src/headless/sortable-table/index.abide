@@ -94,7 +94,7 @@ import sortedByClose from './lib/SortedByClose.abide' with { type: 'text' }
                 },
             ]
 
-            {#for column of COLUMNS by column.key}
+            {#for column of COLUMNS key column.key}
                 <td {...table.column(column).cell}>{table.text(deal, column)}</td>
             {/for}
         `} />
