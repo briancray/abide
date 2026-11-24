@@ -5,6 +5,7 @@
 
 import { isRecord } from './isRecord.ts'
 import { numberFromText } from './numberFromText.ts'
+import { parsedJson } from './parsedJson.ts'
 import { bareName } from './queryText.ts'
 
 /** The part of a JSON Schema document coercion reads: each member's declared types. */
@@ -102,15 +103,6 @@ function holdsStructure(member: Document): boolean {
 /** Whether a list's element made the list one JSON text: a record or a list. */
 function isStructure(element: unknown): boolean {
     return Array.isArray(element) || isRecord(element)
-}
-
-/** The JSON `text` holds, or `undefined` where it holds none — left as text, for the schema to refuse. */
-function parsedJson(text: string): unknown {
-    try {
-        return JSON.parse(text)
-    } catch {
-        return undefined
-    }
 }
 
 /**

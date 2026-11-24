@@ -20,6 +20,7 @@ import { messageOf } from './messageOf.ts'
 import { reactive } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 import { withPart } from './withPart.ts'
+import { wordsOf } from './wordsOf.ts'
 
 type Image = Extract<AssistantContent, { type: 'image' }>
 type Document = Extract<AssistantContent, { type: 'document' }>
@@ -186,15 +187,6 @@ function written(message: AssistantMessage): boolean {
     for (const block of blocksOf(message))
         if (block.type !== 'tool_result') return true
     return false
-}
-
-/** A tool result's words: its string, or its text blocks joined. */
-function wordsOf(result: ToolResult): string {
-    if (typeof result.content === 'string') return result.content
-    let text = ''
-    for (const block of result.content ?? [])
-        if (block.type === 'text') text += block.text
-    return text
 }
 
 /** A conversation over an assistant handler, as parts: the transcript and the composer. */
@@ -443,7 +435,9 @@ export function chat(options: ChatOptions): ChatParts {
                 status,
                 toolResult,
                 answer:
-                    toolResult === undefined ? undefined : wordsOf(toolResult),
+                    toolResult === undefined
+                        ? undefined
+                        : wordsOf(toolResult.content),
             }
         },
         get permissions() {

@@ -27,9 +27,11 @@ import type {
 import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
+import { parsedJson } from '#shared/parsedJson.ts'
 import { randomToken } from '#shared/randomToken.ts'
 import { abortSignal } from '#shared/reactive/poll.ts'
 import { refuse } from '#shared/refuse.ts'
+import { wordsOf } from '#shared/wordsOf.ts'
 
 import {
     carriesWindowCredential,
@@ -307,19 +309,10 @@ async function* read(
                 ...event,
                 value:
                     valued.get(event.tool_use_id) === true && !event.is_error
-                        ? valueOf(textOf(event.content))
+                        ? parsedJson(wordsOf(event.content))
                         : undefined,
             }
         else yield event
-    }
-}
-
-/** An answer's words as the JSON value they spell, or `undefined` where they spell none. */
-function valueOf(text: string): unknown {
-    try {
-        return JSON.parse(text)
-    } catch {
-        return undefined
     }
 }
 
@@ -585,13 +578,4 @@ export function toolBlocksOf(
         else if (/\S/.test(piece.text))
             blocks.push({ type: 'text', text: piece.text })
     return blocks
-}
-
-/** The words of `content`, its images and documents left out. */
-function textOf(
-    content: readonly (AssistantContent | ToolAnswer['content'][number])[],
-): string {
-    let text = ''
-    for (const piece of content) if (piece.type === 'text') text += piece.text
-    return text
 }

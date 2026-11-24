@@ -1,8 +1,10 @@
 import type { AssistantMessage } from './AssistantEvent.ts'
 import { unmounted } from './mount.ts'
+import { parsedJson } from './parsedJson.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 import type { Rpc } from './rpc.ts'
 import { surfaceName } from './surfaceName.ts'
+import { wordsOf } from './wordsOf.ts'
 
 /**
  * What every call to `handler` in `messages` answered, in order, each its value read as JSON (44.49)
@@ -33,23 +35,9 @@ export function resultsOf<Value>(
                 block.is_error !== true &&
                 calls.has(block.tool_use_id)
             ) {
-                const value = valueOf(block.content)
+                const value = parsedJson(wordsOf(block.content))
                 if (value !== undefined) values.push(value as Value)
             }
     }
     return values
-}
-
-/** A result's words as the JSON value they spell, or `undefined` where they spell none. */
-function valueOf(content: unknown): unknown {
-    let text = ''
-    if (typeof content === 'string') text = content
-    else if (Array.isArray(content))
-        for (const block of content)
-            if (block?.type === 'text') text += block.text
-    try {
-        return JSON.parse(text)
-    } catch {
-        return undefined
-    }
 }
