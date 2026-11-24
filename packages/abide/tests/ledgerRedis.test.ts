@@ -69,9 +69,9 @@ test.skipIf(URL === undefined)(
         await Bun.sleep(50)
         await writing.append('moved')
         const deadline = Date.now() + 2_000
-        while (reading.head() !== 1 && Date.now() < deadline)
+        while ((reading.peek()?.length ?? 0) !== 1 && Date.now() < deadline)
             await Bun.sleep(10)
-        expect(`head: ${reading.head()}`).toBe('head: 1')
+        expect(`kept: ${reading.peek()?.length}`).toBe('kept: 1')
         one.close()
         two.close()
     },

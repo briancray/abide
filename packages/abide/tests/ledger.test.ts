@@ -6,7 +6,11 @@ import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
 
 import { store } from '#server'
-import { jsonSchema, ledger } from '#shared'
+import { jsonSchema, ledger, type Logged } from '#shared'
+
+/** The numbers of the entries a ledger's value holds, in order. */
+const seqs = (entries: Logged<unknown>[]): string =>
+    entries.map((logged) => logged.seq).join(',')
 
 /** The first `count` entries `stream` hands on, then the stream let go. */
 async function taken<Entry>(
@@ -32,17 +36,19 @@ test('each ledger call answers a ledger of its own — 58.1', async () => {
     expect(`first: ${first}, other: ${other}`).toBe('first: 1, other: 1')
 })
 
-// 58.2, 58.8 — EACH APPEND IS NUMBERED ONE PAST THE LAST, and `head` is the last. THE REVERT: number
-// from the head before it moved, and both appends answer 1.
-test('appends are numbered in order, and head is the last — 58.2, 58.8', async () => {
+// 58.2, 58.8 — EACH APPEND IS NUMBERED ONE PAST THE LAST, and the ledger's value is every entry
+// kept. THE REVERT: drop `mirror` from `append`, and `kept: ` after both.
+test('appends are numbered in order, and the value is every entry kept — 58.2, 58.8', async () => {
     const deals = ledger<string>()
-    expect(`head: ${deals.head()}`).toBe('head: 0')
+    expect(`kept: ${seqs(await deals)}`).toBe('kept: ')
     const first = await deals.append('opened')
     const second = await deals.append('won')
-    expect(`${first}, ${second}, head: ${deals.head()}`).toBe('1, 2, head: 2')
+    expect(`${first}, ${second}, kept: ${seqs(await deals)}`).toBe(
+        '1, 2, kept: 1,2',
+    )
 })
 
-// 58.3 — WHAT THE SCHEMA REFUSES IS KEPT NOWHERE. THE REVERT: append before the gate, and `head: 1`.
+// 58.3 — WHAT THE SCHEMA REFUSES IS KEPT NOWHERE. THE REVERT: append before the gate, and `kept: 1`.
 test('an entry the schema refuses is not kept and the append rejects — 58.3', async () => {
     const amounts = ledger({
         schema: jsonSchema<number>({ type: 'number' }),
@@ -53,7 +59,7 @@ test('an entry the schema refuses is not kept and the append rejects — 58.3', 
     } catch (thrown) {
         said = (thrown as Error).message.includes('58.3') ? 'refused' : 'other'
     }
-    expect(`${said}, head: ${amounts.head()}`).toBe('refused, head: 0')
+    expect(`${said}, kept: ${seqs(await amounts)}`).toBe('refused, kept: ')
 })
 
 // 58.4 — A KEY APPENDED ONCE IS NOT APPENDED AGAIN: the outbox's resend of one call is one entry.
@@ -62,8 +68,8 @@ test('an append under a key already kept keeps nothing and answers its number �
     const calls = ledger<string>()
     const once = await calls.append('save d2', { key: 'k1' })
     const again = await calls.append('save d2', { key: 'k1' })
-    expect(`once: ${once}, again: ${again}, head: ${calls.head()}`).toBe(
-        'once: 1, again: 1, head: 1',
+    expect(`once: ${once}, again: ${again}, kept: ${seqs(await calls)}`).toBe(
+        'once: 1, again: 1, kept: 1',
     )
 })
 
@@ -118,17 +124,19 @@ test('a ledger in store.sqlite keeps a row per entry, and its cursors — 58.9',
     const reopened = ledger<{ kind: string }>({ store: kept })
     const resumed = await taken(reopened.read({ cursor: 'feed' }), 1)
     expect(
-        `rows: ${rows.rows}, head: ${reopened.head()}, resumed: ${resumed[0]?.entry.kind}`,
-    ).toBe('rows: 2, head: 2, resumed: Email')
+        `rows: ${rows.rows}, kept: ${seqs(await reopened)}, resumed: ${resumed[0]?.entry.kind}`,
+    ).toBe('rows: 2, kept: 1,2, resumed: Email')
 })
 
 // 58.10, 58.11 — `retain` KEEPS THE LAST ENTRIES AND LETS THE REST GO, and keeping none is refused.
-// THE REVERT: drop the trim, and the read from 0 starts at 1.
+// THE REVERT: drop the trim, and the read from 0 starts at 1; drop `over` from `mirror`, and the
+// value is `1,2,3,4,5`.
 test('retain keeps the last entries, and under one is refused — 58.10, 58.11', async () => {
     const recent = ledger<number>({ retain: 2 })
     for (let n = 1; n <= 5; n += 1) await recent.append(n)
     const left = await taken(recent.read(0), 2)
     expect(left.map((logged) => logged.seq)).toEqual([4, 5])
+    expect(`value: ${seqs(await recent)}`).toBe('value: 4,5')
     let said = 'built'
     try {
         ledger({ retain: 0 })
@@ -147,9 +155,9 @@ test('ttl lets an entry go once its life from the append has passed — 58.14', 
     await Bun.sleep(60)
     await recent.append('c')
     const kept = await taken(recent.read(0), 1)
-    expect(`kept: ${kept.map((logged) => logged.entry).join(', ')}`).toBe(
-        'kept: c',
-    )
+    expect(
+        `kept: ${kept.map((logged) => logged.entry).join(', ')}, value: ${seqs(await recent)}`,
+    ).toBe('kept: c, value: 3')
 })
 
 // 58.15 — A READ PAST WHICH ENTRIES WERE LET GO SAYS SO rather than stepping over them, and a read

@@ -10,6 +10,12 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/ledger.test.ts',
             from: [
+                "test('appends are numbered in order, and the value is every entry kept — 58.2, 58.8'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/ledger.test.ts',
+            from: [
                 "test('a read hands on every entry past its position, and waits for the next — 58.5, 58.7'",
             ],
         },
@@ -35,8 +41,22 @@ import Section from '#src/lib/Section.abide'
             import { ledger } from '@abide/abide'
 
             export const calls = ledger<{ contact: string; minutes: number }>()
-            await calls.append({ contact: 'c1', minutes: 12 })
-            calls.head() // 1
+            await calls.append({ contact: 'c1', minutes: 12 }) // 1
+        `} />
+    </Section>
+
+    <Section level={3} title="List the calls in a page">
+        <p>A ledger is a <code>Reactive</code> of every entry it keeps, oldest first: read it by
+            name, and the list grows as each call is appended. Only <code>append</code> writes
+            it.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { calls } from './calls.ts'
+            </script>
+
+            {#each calls as call (call.seq)}
+                <p>{call.entry.contact}: {call.entry.minutes} min</p>
+            {/each}
         `} />
     </Section>
 
@@ -67,19 +87,31 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Follow the call log from a page">
-        <p>A ledger crosses the wire as a streaming <code>GET</code>: a page reading it is handed
-            every entry past <code>after</code>, then each one appended after. An append is a
-            <code>POST</code> whose <code>key</code> the page makes, so an outbox resend keeps one
-            entry.</p>
+        <p>Serve the ledger with <code>GET</code>, and a page reading it holds every entry kept;
+            each append reaches it as the patch that pushed the entry, not the whole log. An
+            append is a <code>POST</code> whose <code>key</code> the page makes, so an outbox
+            resend keeps one entry.</p>
         <Code language="ts" caption="server" code={`
             import { GET, ledger, POST } from '@abide/abide/server'
 
             const calls = ledger<{ contact: string; minutes: number }>()
 
-            export const getCalls = GET(async function* ({ after }: { after: number }) {
+            export const listCalls = GET(calls)
+            export const logCall = POST(({ call, key }) => calls.append(call, { key }))
+        `} />
+    </Section>
+
+    <Section level={3} title="Resume a reader across the wire">
+        <p>A reader that resumes from a position reads a streaming <code>GET</code>: it is handed
+            every entry past <code>after</code>, then each one appended after.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, ledger } from '@abide/abide/server'
+
+            const calls = ledger<{ contact: string; minutes: number }>()
+
+            export const callsAfter = GET(async function* ({ after }: { after: number }) {
                 yield* calls.read(after)
             })
-            export const logCall = POST(({ call, key }) => calls.append(call, { key }))
         `} />
     </Section>
 
@@ -109,7 +141,7 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Keep a rep's offline notes in the browser">
         <p>Hand it <code>store.indexedDB</code>, and the entries outlive a reload. An append in
-            another tab moves this tab's <code>head</code> and wakes its reads.</p>
+            another tab reaches this tab's value and wakes its reads.</p>
         <Code language="ts" caption="browser" code={`
             import { ledger, store } from '@abide/abide'
 

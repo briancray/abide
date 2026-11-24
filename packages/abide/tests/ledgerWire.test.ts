@@ -1,5 +1,8 @@
-// 58.5, 58.4 — A LEDGER OVER THE WIRE IS A STREAMING `GET` AND A `POST`, with nothing of its own: the
-// read is a generator yielding what `read` hands on (9.6, 16.93), so a reader across the wire is handed
+// 58.8, 16.6 — A LEDGER IS A `Reactive`, SO `GET(calls)` SERVES IT: a page reading it holds every entry
+// kept, and an append reaches a page following it as the patch that pushed the entry (18.11).
+//
+// 58.5, 58.4 — A READER THAT RESUMES FROM A POSITION reads a streaming `GET` instead: the read is a
+// generator yielding what `read` hands on (9.6, 16.93), so a reader across the wire is handed
 // every entry past its position and then each one appended after — live, with the answer still
 // open — and the append is a `POST` whose args carry the key an outbox resend repeats.
 
@@ -15,6 +18,7 @@ type Call = { contact: string; minutes: number }
 
 const calls = ledger<Call>()
 
+const listCalls = GET(calls)
 const getCalls = GET(async function* ({ after }: { after: number }) {
     yield* calls.read(after)
 })
@@ -75,4 +79,27 @@ test('a ledger read across the wire is handed every entry, then each one appende
         '1:c1',
         '2:c2',
     ])
+})
+
+test('GET over a ledger answers every entry it keeps — 58.8, 16.6', async () => {
+    const app = await inMemoryApp({
+        'calls/listCalls.handler.ts': { default: listCalls },
+        'calls/logCall.handler.ts': { default: logCall },
+    })
+    await app.fetch(
+        new Request(`${ORIGIN}/calls/logCall`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                call: { contact: 'c9', minutes: 1 },
+                key: 'k9',
+            }),
+        }),
+    )
+    const answer = await app.fetch(new Request(`${ORIGIN}/calls/listCalls`))
+    const kept = (await answer.json()) as { seq: number; entry: Call }[]
+    expect(kept.at(-1)?.entry.contact).toBe('c9')
+    expect(kept.map((logged) => logged.seq)).toEqual(
+        (await calls).map((logged) => logged.seq),
+    )
 })

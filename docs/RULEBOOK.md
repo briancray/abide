@@ -6732,7 +6732,8 @@ the cursor past an entry once its reader asks for the next.
 
 58.7 An entry written to a `Ledger`'s `writable` MUST be appended as `append` appends it.
 
-58.8 `head` MUST be the number of the last entry a `ledger` kept, 0 where it has kept none.
+58.8 A `Ledger` MUST be a `Reactive` whose value is every entry it keeps, oldest first, changed in
+place as an entry is kept or let go, and MUST NOT accept a write.
 
 58.9 A `ledger` given a `store` MUST keep its entries and its cursors there, and `store.sqlite`,
 `store.indexedDB` and `store.redis` MUST each keep one record per entry.
