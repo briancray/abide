@@ -1,5 +1,5 @@
-// 56.29-56.32 — A NUMBER STEPPED UP AND DOWN: WAI-ARIA's spin button, as parts an app spreads onto a
-// field and the buttons either side of it. The keys step it; typing a number takes it, kept to its
+// 56.29-56.33 — A NUMBER STEPPED UP AND DOWN: WAI-ARIA's spin button, as parts an app spreads onto a
+// field and the buttons either side of it. The keys step it; a number typed is taken as it is typed, and kept to its
 // bounds and its step; the buttons stand outside the tab order, as the field holds the keys.
 
 import { handFocus } from './handFocus.ts'
@@ -115,6 +115,20 @@ export function stepper(options: StepperOptions = {}): Stepper {
                 if (move === undefined) return
                 event.preventDefault()
                 move()
+            },
+            // 56.33 — taken as typed only where the text already reads as the number it is kept to,
+            // so the field's own write-back is the text already there and nothing moves under the caret.
+            oninput: (event: Event) => {
+                const text = (
+                    event.currentTarget as HTMLInputElement
+                ).value.trim()
+                const typed = Number(text)
+                if (
+                    text !== '' &&
+                    Number.isFinite(typed) &&
+                    String(kept(typed)) === text
+                )
+                    value.set(typed)
             },
             // 56.32 — the text typed, read as a number; anything else puts the number back.
             onchange: (event: Event) => {

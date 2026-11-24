@@ -18,15 +18,19 @@ import dealSeats from './lib/DealSeats.abide' with { type: 'text' }
         },
         {
             path: 'packages/abide/tests/stepper.test.ts',
-            from: ["test('a number typed is kept to its bounds and its step"],
+            from: [
+                "test('a number typed is kept to its bounds and its step",
+                "test('a number is taken as it is typed",
+            ],
         },
     ]}
 >
     <Section level={3} title="Choose a deal's seats">
         <p>Spread <code>input</code> on a field, and <code>decrement</code> and
             <code>increment</code> on the buttons beside it. The arrow keys step it, PageUp and
-            PageDown ten at a time, and Home and End to its bounds; a number typed is kept to
-            them and to <code>step</code>. The buttons stand outside the tab order, since the
+            PageDown ten at a time, and Home and End to its bounds. A number is taken as it is
+            typed once it stands within them and on <code>step</code>, and kept to both when the
+            field is left. The buttons stand outside the tab order, since the
             field holds the keys.</p>
         <Example code={dealSeats}><DealSeats /></Example>
     </Section>

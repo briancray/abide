@@ -608,8 +608,8 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `stepper` | `(options?: StepperOptions) => Stepper` | WAI-ARIA's spin button as parts an app spreads onto a field and the buttons either side of it. | 56.29, 56.30, 56.31, 56.32, 49.2, 49.4, 49.5, 49.6, 49.15 |
-| `StepperOptions` | `{ id?: string; value?: Reactive<number>; min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); label?: string \| (() => string) }` | The base of its id, the number, its bounds, how far a step moves it, and its accessible name. | 56.29, 56.30, 56.32, 49.8, 49.10, 49.11 |
+| `stepper` | `(options?: StepperOptions) => Stepper` | WAI-ARIA's spin button as parts an app spreads onto a field and the buttons either side of it. | 56.29, 56.30, 56.31, 56.32, 56.33, 49.2, 49.4, 49.5, 49.6, 49.15 |
+| `StepperOptions` | `{ id?: string; value?: Reactive<number>; min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); label?: string \| (() => string) }` | The base of its id, the number, its bounds, how far a step moves it, and its accessible name. | 56.29, 56.30, 56.32, 56.33, 49.8, 49.10, 49.11 |
 | `Stepper` | `{ readonly input: Record<string, unknown>; readonly decrement: Record<string, unknown>; readonly increment: Record<string, unknown>; readonly value: Reactive<number> }` | The field's part, the buttons stepping it down and up, and the number. | 32.11, 56.29, 56.31, 49.3, 49.8, 49.9 |
 
 ## `combobox`

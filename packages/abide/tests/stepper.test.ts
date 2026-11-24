@@ -1,4 +1,4 @@
-// 56.29-56.32 and 51.141-51.144 — `stepper` and `wizard`, their parts read and pressed as a template
+// 56.29-56.33 and 51.141-51.144 — `stepper` and `wizard`, their parts read and pressed as a template
 // and a browser would.
 
 import { expect, test } from 'bun:test'
@@ -69,6 +69,25 @@ test('a number typed is kept to its bounds and its step, and anything else is pu
     key(tenths.input, 'ArrowUp')
     key(tenths.input, 'ArrowUp')
     expect(tenths.value()).toBe(0.3)
+})
+
+// THE REVERT: keep every `input` that reads as a number, and the 60 still being typed is taken as 50 —
+// which a mounted field then writes back over the text under the caret.
+test('a number is taken as it is typed, where it already stands within its bounds and its step — 56.33', () => {
+    const seats = stepper({ value: reactive(5), min: 5, max: 50 })
+    const field = document.createElement('input')
+    field.addEventListener('input', seats.input.oninput as EventListener)
+    const type = (text: string) => {
+        field.value = text
+        field.dispatchEvent(new Event('input'))
+        flushSync()
+        return [seats.value(), field.value]
+    }
+    expect(type('1')).toEqual([5, '1'])
+    expect(type('12')).toEqual([12, '12'])
+    expect(type('012')).toEqual([12, '012'])
+    expect(type('')).toEqual([12, ''])
+    expect(type('60')).toEqual([12, '60'])
 })
 
 // THE REVERT: drop `valid` from `next`, and a step that is not done is left all the same.

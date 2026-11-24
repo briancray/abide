@@ -6664,6 +6664,10 @@ order, and MUST be disabled where `value` is at `max` and at `min`.
 to `max` and to a whole number of steps from `min`, or from `0` where `min` is not given, and MUST
 write `value` back as the input's text, a text that is no number leaving `value` as it was.
 
+56.33 An `input` of `stepper`'s `input` MUST set `value` to the number its text holds where 56.32
+would keep that number as it is and would write back the text as it stands, and MUST otherwise leave
+both `value` and the text as they are until a `change`.
+
 # 57. Pipes
 
 57.1 `pipe` MUST hand an item to its first step, and each later step what the step before it
