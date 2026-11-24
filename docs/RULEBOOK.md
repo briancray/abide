@@ -4447,7 +4447,8 @@ of its own.
 each one.
 
 44.5 `provider.claudeCode` MUST send a transcript to Claude Code as one message, its earlier turns
-folded above the last and each `AssistantContent` block that is not words in its place.
+folded above the last, each `tool_use` and `tool_result` block written out in words, and each other
+`AssistantContent` block that is not words in its place.
 
 44.6 With `mcp`, the `Toolbox` `assistant` hands a `Provider` MUST list the tools `/__abide/mcp`
 lists, and MUST call each as a request through the app answering the request.
@@ -4463,8 +4464,10 @@ stops for `tool_use`, and MUST send each assistant turn's blocks back as they ar
 44.10 `provider.claudeApi` MUST throw where no `apiKey` is given, and MUST NOT read a key from the
 environment.
 
-44.11 A conversation reaching `maxTurns` with a tool call pending MUST end on a `done` whose `stop`
-is `max_turns`, and MUST NOT run that call.
+44.11 A conversation MUST end on a `done` carrying the Messages API's `stop_reason` and the `usage`
+of the whole conversation under the API's names — each count summed over every request it made —
+and one reaching `maxTurns` with a tool call pending MUST end on a `done` whose `stop_reason` is
+`max_turns`, and MUST NOT run that call.
 
 44.12 `provider.claudeApi` MUST send the results of one turn's tool calls back in one message.
 
@@ -4549,7 +4552,7 @@ and the command it yields MUST pair that one.
 
 44.35 A `Toolbox` call MUST hand as its `ToolAnswer`'s `content` the pieces `/__abide/mcp` carries
 for the same call, `provider.claudeApi` MUST show the model those pieces as the call's result, and
-the `result` `AssistantEvent` MUST carry their words and none of their images.
+the `result` `AssistantEvent` MUST carry their words as its `content` and none of their images.
 
 44.36 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript holding an
 `AssistantContent` image or document with no `source`, an image whose base64 `source` is not of
@@ -4561,7 +4564,8 @@ other source and any search result.
 `AssistantContent` image, document or search result in a turn that is not the user's.
 
 44.38 `provider.claudeApi` MUST send each `AssistantContent` block that is not words to the model
-as it is, the Messages API's block, in its place in its turn.
+as it is, the Messages API's block, in its place in its turn — a `tool_use` and a `tool_result`
+included.
 
 44.39 `assistant` MUST hand a `Provider` each turn as its `AssistantContent` pieces, a turn's string
 as one text piece.
@@ -4602,8 +4606,8 @@ the authorities its machine trusts sign, however the bridge was started.
 `Toolbox` lists the `method` and the `address` the called handler's `Rpc` reads, and MUST carry
 `undefined` for a call to any other tool.
 
-44.49 A `result` `AssistantEvent` MUST carry as its `value` its text read as JSON where its call did
-not fail and its handler has a schema 19.21 derives, and MUST carry `undefined` otherwise.
+44.49 A `result` `AssistantEvent` MUST carry as its `value` its `content` read as JSON where its
+call did not fail and its handler has a schema 19.21 derives, and MUST carry `undefined` otherwise.
 
 44.50 A `Provider` MUST name the tool of each `tool` event it yields as its `Toolbox` lists it.
 
@@ -4813,6 +4817,10 @@ run it, MUST run its conversation carrying no asker's credentials, and MUST thro
 
 44.103 `provider.claudeCode` MUST refuse 400, before the bridge is asked, a transcript holding an
 `AssistantContent` block, or a block inside one, whose `cache_control` is not of `ttl` `'1h'`.
+
+44.104 A `Provider` MUST yield a cited run of words — a text block the model cites from — as one
+`text` event once the block ends, carrying the block's `citations`, and MUST yield every other run
+of words as it arrives.
 
 # 45. Offline
 
@@ -6371,19 +6379,23 @@ is absent or refuses, laying every string its value holds on the `copy` event un
 53.23 `copy` MUST write `data-copied` on its element once a copy lands, and MUST remove it
 `copiedFor` milliseconds after the last.
 
-53.24 `transcript.fold` MUST join a `text` event to the text part ending the turn, in place, and MUST
-otherwise add a text part holding it.
+53.24 `transcript.fold` MUST join a `text` event carrying no `citations` to an uncited text part
+ending the turn, in place, MUST otherwise add a text part holding it, and MUST add a `text` event
+carrying `citations` as a text part of its own holding them.
 
 53.25 `transcript.fold` MUST set a tool part's `input` from the `input` event naming its id, and its
-`result`, `failed` and `value` from the `result` event naming it.
+`content`, `is_error` and `value` from the `result` event whose `tool_use_id` names it.
 
 53.26 `transcript.fold` MUST add a `permission` event as a permission part whose `allowed` is
 `undefined`.
 
-53.27 `transcript.fold` MUST set a turn's `stop` from a `done` event.
+53.27 `transcript.fold` MUST set a turn's `stop_reason` from a `done` event.
 
-53.28 `transcript.messages` MUST send a user turn's text, image and document parts in order, and an
-assistant turn's text parts alone.
+53.28 `transcript.messages` MUST send a user turn's text, image, document and search result parts
+in order, and an assistant turn as the Messages API holds it: its text parts with their citations
+and each answered tool part as a `tool_use`, with a user turn after them holding each such call's
+`tool_result`, the assistant's words after its calls in a turn of their own — and MUST leave out a
+tool part that holds no `content`, its call and its result alike.
 
 53.29 `transcript.messages` MUST leave out a turn with nothing to send.
 
@@ -6402,7 +6414,7 @@ and what it is sent while an answer streams MUST be queued, shown in its compose
 cancelled or the answer ends, and asked once the answer ends.
 
 53.35 `chat`'s `stop` part MUST abort the `signal` it handed `ask`, keeping what arrived and setting
-the answer's `stop` to `stopped`.
+the answer's `stop_reason` to `stopped`.
 
 53.36 `chat` MUST set an answer's `failed` to the message of what `ask` threw, save where its `stop`
 part aborted it.

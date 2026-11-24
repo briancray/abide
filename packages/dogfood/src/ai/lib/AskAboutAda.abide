@@ -15,7 +15,7 @@ const talk = chat({ ask: askAssistant })
                 {#for part of turn.parts key part}
                     {#if part.type === 'tool'}
                         <p {...talk.tool(part).tool} class="status">
-                            {part.name} answered {part.result}
+                            {part.name} answered {part.content}
                         </p>
                     {:else if part.type === 'text'}
                         <p {...talk.text}>{part.text}</p>

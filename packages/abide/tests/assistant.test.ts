@@ -30,6 +30,7 @@ import { BRIDGE_SCHEME } from '../src/shared/BRIDGE_SCHEME.ts'
 import { resultsOf } from '../src/shared/resultsOf.ts'
 import type { Rpc } from '../src/shared/rpc.ts'
 import { handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
+import { CITATION } from './fixtures/assistant/CITATION.ts'
 import { inMemoryApp } from './inMemoryApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -96,14 +97,14 @@ const own: Provider = {
         yield { type: 'tool', id: 'a', name: 'post_invoices_whoami' }
         const answer = await tools.call('post_invoices_whoami', {})
         const [piece] = answer.content
-        yield { type: 'result', id: 'a', text: piece?.type === 'text' ? piece.text : '', failed: answer.failed }
+        yield { type: 'result', tool_use_id: 'a', content: piece?.type === 'text' ? piece.text : '', is_error: answer.failed }
         yield { type: 'tool', id: 'b', name: 'web_search' }
-        yield { type: 'result', id: 'b', text: '{"hits":[]}', failed: false }
+        yield { type: 'result', tool_use_id: 'b', content: '{"hits":[]}', is_error: false }
         yield { type: 'tool', id: 'c', name: 'post_invoices_whoami' }
-        yield { type: 'result', id: 'c', text: '"refused"', failed: true }
+        yield { type: 'result', tool_use_id: 'c', content: '"refused"', is_error: true }
         yield { type: 'tool', id: 'd', name: 'get_pictures_drawn' }
-        yield { type: 'result', id: 'd', text: '[1]', failed: false }
-        yield { type: 'done', stop: 'end_turn', usage: { input: 0, output: 0 } }
+        yield { type: 'result', tool_use_id: 'd', content: '[1]', is_error: false }
+        yield { type: 'done', stop_reason: 'end_turn', usage: { input_tokens: 0, output_tokens: 0 } }
     },
 }
 
@@ -385,20 +386,47 @@ test('both providers play one conversation as one event sequence, tools called a
         { type: 'input', id: 'toolu_1', input: {} },
         {
             type: 'result',
-            id: 'toolu_1',
-            text: '"ada"',
-            failed: false,
+            tool_use_id: 'toolu_1',
+            content: '"ada"',
+            is_error: false,
             handler: WHOAMI,
             value: 'ada',
         },
         { type: 'text', text: 'saw "ada"' },
-        { type: 'done', stop: 'end_turn', usage: { input: 3, output: 5 } },
+        {
+            type: 'done',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 3, output_tokens: 5 },
+        },
     ]
     expect(await events(await ask('one', 'api', 'who am I?'))).toEqual(expected)
     await pairBridge('one')
     expect(await events(await ask('one', 'code', 'who am I?'))).toEqual(
         expected,
     )
+}, 30_000)
+
+// 44.11, 44.104 — CLAUDE CODE'S ANSWER ENDS AND CITES AS THE API'S DOES, through the bridge: the cited
+// run whole with its citation, and the usage of the whole turn under the API's names, cache counts and
+// all. THE REVERTS: report every text delta as it arrives in the bridge's `claudeTurn`, and the cited
+// run arrives as `is 4217`, `.` with no citation; fold the usage into `input` and `output` as the
+// bridge did, and `cache_read_input_tokens` is undefined where 7 is due.
+test('Claude Code ends on the API’s stop_reason and usage and cites as the API does, through the bridge — 44.11, 44.104', async () => {
+    await pairBridge('one')
+    expect(await events(await ask('one', 'code', 'cite it'))).toEqual([
+        { type: 'text', text: 'Your balance ' },
+        { type: 'text', text: 'is 4217.', citations: [CITATION] },
+        {
+            type: 'done',
+            stop_reason: 'end_turn',
+            usage: {
+                input_tokens: 4,
+                output_tokens: 6,
+                cache_creation_input_tokens: 2,
+                cache_read_input_tokens: 7,
+            },
+        },
+    ])
 }, 30_000)
 
 // 44.35 — AN IMAGE A TOOL ANSWERS IS SHOWN THE MODEL AS ONE: the call's `tool_result` carries it as an
@@ -409,9 +437,9 @@ test('provider.claudeApi shows a tool answered image to the model as one, and th
     const said = await events(await ask('one', 'api', 'show me'))
     expect(said).toContainEqual({
         type: 'result',
-        id: 'toolu_1',
-        text: '',
-        failed: false,
+        tool_use_id: 'toolu_1',
+        content: '',
+        is_error: false,
         handler: { method: 'GET', address: '/pictures/drawn' },
     })
     expect(said).toContainEqual({
@@ -425,7 +453,7 @@ test('provider.claudeApi shows a tool answered image to the model as one, and th
 // that is not the app's carries no handler, and a failed call or one to a handler answering no value
 // (a picture, 19.21) carries no value, whatever its words spell. THE REVERTS: carry no handler in
 // `read`, and `resultsOf` finds none of the two calls rather than one; read every answer's words as
-// JSON, and `web_search`'s value is `{ hits: [] }` and the picture's `[1]`; drop `!event.failed` from
+// JSON, and `web_search`'s value is `{ hits: [] }` and the picture's `[1]`; drop `!event.is_error` from
 // `resultsOf`, and it hands back `["ada", undefined]`.
 test('a call carries its handler and its answer its value, whoever ran it — 44.48, 44.49, 44.50, 44.51', async () => {
     const said = (await events(
@@ -434,33 +462,33 @@ test('a call carries its handler and its answer its value, whoever ran it — 44
     expect(said.filter((event) => event.type === 'result')).toEqual([
         {
             type: 'result',
-            id: 'a',
-            text: '"ada"',
-            failed: false,
+            tool_use_id: 'a',
+            content: '"ada"',
+            is_error: false,
             handler: WHOAMI,
             value: 'ada',
         },
         {
             type: 'result',
-            id: 'b',
-            text: '{"hits":[]}',
-            failed: false,
+            tool_use_id: 'b',
+            content: '{"hits":[]}',
+            is_error: false,
             handler: undefined,
             value: undefined,
         },
         {
             type: 'result',
-            id: 'c',
-            text: '"refused"',
-            failed: true,
+            tool_use_id: 'c',
+            content: '"refused"',
+            is_error: true,
             handler: WHOAMI,
             value: undefined,
         },
         {
             type: 'result',
-            id: 'd',
-            text: '[1]',
-            failed: false,
+            tool_use_id: 'd',
+            content: '[1]',
+            is_error: false,
             handler: { method: 'GET', address: '/pictures/drawn' },
             value: undefined,
         },
@@ -481,9 +509,9 @@ test('a handler that takes args is one resultsOf reads — 44.51', () => {
         [
             {
                 type: 'result',
-                id: 'a',
-                text: '"north"',
-                failed: false,
+                tool_use_id: 'a',
+                content: '"north"',
+                is_error: false,
                 handler: { method: 'POST', address: '/homes/setHome' },
                 value: 'north',
             },
@@ -508,7 +536,11 @@ test('a conversation out of turns ends on max_turns without running the pending 
             handler: WHOAMI,
         },
         { type: 'input', id: 'toolu_1', input: {} },
-        { type: 'done', stop: 'max_turns', usage: { input: 1, output: 2 } },
+        {
+            type: 'done',
+            stop_reason: 'max_turns',
+            usage: { input_tokens: 1, output_tokens: 2 },
+        },
     ])
 })
 

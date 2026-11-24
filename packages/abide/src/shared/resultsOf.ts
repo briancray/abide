@@ -13,7 +13,7 @@ export function resultsOf<Value>(
     for (const event of events)
         if (
             event.type === 'result' &&
-            !event.failed &&
+            !event.is_error &&
             event.handler !== undefined &&
             event.handler.method === handler.method &&
             event.handler.address === handler.address

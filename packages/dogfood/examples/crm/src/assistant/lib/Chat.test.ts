@@ -382,13 +382,13 @@ test('a conversation handed in as turns is shown, and asked about with what foll
             parts: [
                 { type: 'text' as const, text: 'Which company is Ada at?' },
             ],
-            stop: undefined,
+            stop_reason: undefined,
             failed: undefined,
         },
         {
             role: 'assistant' as const,
             parts: [{ type: 'text' as const, text: 'Analytical Engines.' }],
-            stop: 'end' as const,
+            stop_reason: 'end' as const,
             failed: undefined,
         },
     ])

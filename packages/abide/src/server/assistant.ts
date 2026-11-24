@@ -57,7 +57,12 @@ import type { Listed } from './surfaceOf.ts'
 export type ProviderEvent =
     | Exclude<AssistantEvent, { type: 'tool' | 'result' }>
     | { type: 'tool'; id: string; name: string }
-    | { type: 'result'; id: string; text: string; failed: boolean }
+    | {
+          type: 'result'
+          tool_use_id: string
+          content: string
+          is_error: boolean
+      }
 
 /** A tool as the app's MCP surface lists it. */
 export type ToolDefinition = {
@@ -321,16 +326,16 @@ async function* read(
                 handler: called.handler,
             }
         } else if (event.type === 'result') {
-            const called = calls.get(event.id) ?? NOT_THE_APPS
+            const called = calls.get(event.tool_use_id) ?? NOT_THE_APPS
             yield {
                 type: 'result',
-                id: event.id,
-                text: event.text,
-                failed: event.failed,
+                tool_use_id: event.tool_use_id,
+                content: event.content,
+                is_error: event.is_error,
                 handler: called.handler,
                 value:
-                    called.valued && !event.failed
-                        ? valueOf(event.text)
+                    called.valued && !event.is_error
+                        ? valueOf(event.content)
                         : undefined,
             }
         } else yield event
@@ -372,7 +377,7 @@ async function* traced(
         throw thrown
     } finally {
         const ending =
-            done?.stop ??
+            done?.stop_reason ??
             (signal.aborted
                 ? 'unfinished aborted'
                 : failure === undefined
@@ -384,7 +389,7 @@ async function* traced(
             `${calls} tool calls`,
             done === undefined
                 ? 'no usage'
-                : `${done.usage.input}/${done.usage.output} tokens`,
+                : `${done.usage.input_tokens}/${done.usage.output_tokens} tokens`,
             `${(performance.now() - started).toFixed(1)}ms`,
             ...(ending === 'unfinished failed' ? [failure] : []),
         )

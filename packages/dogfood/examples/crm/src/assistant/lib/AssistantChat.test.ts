@@ -23,7 +23,7 @@ test('the model calls the CRM search, through the app', async () => {
         .split('\n')
         .map((line) => JSON.parse(line))
     const result = events.find((event) => event.type === 'result')
-    expect(JSON.parse(result.text)).toEqual([
+    expect(JSON.parse(result.content)).toEqual([
         { id: 'c1', name: 'Ada Lovelace', company: 'Analytical Engines' },
     ])
 })

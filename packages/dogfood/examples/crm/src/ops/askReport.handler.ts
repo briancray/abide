@@ -19,9 +19,18 @@ const recorded: Provider = {
         const { content, failed } = await tools.call(name, input)
         const [words] = content
         const text = words?.type === 'text' ? words.text : ''
-        yield { type: 'result', id: 'toolu_1', text, failed }
+        yield {
+            type: 'result',
+            tool_use_id: 'toolu_1',
+            content: text,
+            is_error: failed,
+        }
         yield { type: 'text', text: 'I filled in the report. Read, then send.' }
-        yield { type: 'done', stop: 'end_turn', usage: { input: 0, output: 0 } }
+        yield {
+            type: 'done',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 0, output_tokens: 0 },
+        }
     },
 }
 

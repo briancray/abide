@@ -18,9 +18,9 @@ test('an answer folds into one turn: words joined, each call paired with its inp
         { type: 'input', id: 't1', input: { name: 'Ada' } },
         {
             type: 'result',
-            id: 't1',
-            text: '[]',
-            failed: false,
+            tool_use_id: 't1',
+            content: '[]',
+            is_error: false,
             handler: undefined,
             value: [],
         },
@@ -31,12 +31,16 @@ test('an answer folds into one turn: words joined, each call paired with its inp
             name: 'Bash',
             input: { command: 'ls' },
         },
-        { type: 'done', stop: 'end_turn', usage: { input: 1, output: 2 } },
+        {
+            type: 'done',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 1, output_tokens: 2 },
+        },
     ]
     for (const event of events) fold(answering, event)
     expect(answering).toEqual({
         role: 'assistant',
-        stop: 'end_turn',
+        stop_reason: 'end_turn',
         failed: undefined,
         parts: [
             { type: 'text', text: 'Looking Ada up.' },
@@ -45,8 +49,8 @@ test('an answer folds into one turn: words joined, each call paired with its inp
                 id: 't1',
                 name: 'searchContacts',
                 input: { name: 'Ada' },
-                result: '[]',
-                failed: false,
+                content: '[]',
+                is_error: false,
                 value: [],
             },
             {
@@ -54,8 +58,8 @@ test('an answer folds into one turn: words joined, each call paired with its inp
                 id: 't2',
                 name: 'listDeals',
                 input: undefined,
-                result: undefined,
-                failed: false,
+                content: undefined,
+                is_error: false,
                 value: undefined,
             },
             { type: 'text', text: 'Ada is at Analytical Engines.' },
@@ -131,7 +135,7 @@ test('a turn sets every field it declares — 53.30', () => {
     expect(Object.keys(turn('user'))).toEqual([
         'role',
         'parts',
-        'stop',
+        'stop_reason',
         'failed',
     ])
 })

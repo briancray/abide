@@ -10,7 +10,7 @@ import Conversation from './Conversation.abide'
 
 const NO_HANDLER = undefined
 
-// THE REVERT: read `part.result` once at setup in `AnswerTool` — the line stays `Reading the docs:
+// THE REVERT: read `part.content` once at setup in `AnswerTool` — the line stays `Reading the docs:
 // page…` after the tool answered.
 test('a docs tool reads as being read, then as read, and the words after it render — 40.28', async () => {
     const steps: (() => void)[] = []
@@ -25,9 +25,9 @@ test('a docs tool reads as being read, then as read, and the words after it rend
         await step()
         yield {
             type: 'result',
-            id: 't1',
-            text: 'the page',
-            failed: false,
+            tool_use_id: 't1',
+            content: 'the page',
+            is_error: false,
             handler: NO_HANDLER,
             value: undefined,
         }
@@ -36,7 +36,11 @@ test('a docs tool reads as being read, then as read, and the words after it rend
             text: 'Read it here:\n\n```show page="/reactive/watch"\n```\n',
         }
         await step()
-        yield { type: 'done', stop: 'end_turn', usage: { input: 0, output: 0 } }
+        yield {
+            type: 'done',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 0, output_tokens: 0 },
+        }
     }
     const settled = async () => {
         for (let turn = 0; turn < 5; turn += 1) await Bun.sleep(0)
@@ -75,7 +79,11 @@ test('an answer leaves out what it is still writing until the turn ends — 52.5
         await step()
         yield { type: 'text', text: 'ld** and [the do' }
         await step()
-        yield { type: 'done', stop: 'end_turn', usage: { input: 0, output: 0 } }
+        yield {
+            type: 'done',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 0, output_tokens: 0 },
+        }
     }
     const settled = async () => {
         for (let turn = 0; turn < 5; turn += 1) await Bun.sleep(0)

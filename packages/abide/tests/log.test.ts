@@ -202,8 +202,12 @@ test('a conversation writes one debug line on abide:assistant when it ends — 4
     const played: ProviderEvent[] = [
         { type: 'tool', id: 't1', name: 'get_contacts' },
         { type: 'input', id: 't1', input: {} },
-        { type: 'result', id: 't1', text: '[]', failed: false },
-        { type: 'done', stop: 'end_turn', usage: { input: 12, output: 3 } },
+        { type: 'result', tool_use_id: 't1', content: '[]', is_error: false },
+        {
+            type: 'done',
+            stop_reason: 'end_turn',
+            usage: { input_tokens: 12, output_tokens: 3 },
+        },
     ]
     const provider = {
         async *run() {

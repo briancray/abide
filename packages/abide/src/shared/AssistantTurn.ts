@@ -9,38 +9,38 @@ export type AssistantTurn = {
     /** What the turn holds, in the order it arrived. */
     parts: AssistantTurnPart[]
     /** Why the answer ended, as its `done` event names it (`end_turn`), or `stopped`; `undefined` while it runs. */
-    stop: string | undefined
+    stop_reason: string | undefined
     /** The message the answer failed with, or `undefined`. */
     failed: string | undefined
 }
 
-/** One piece of a turn: words, an image, a document, a search result, a tool call, or a permission prompt. */
+/**
+ * One piece of a turn, each the Messages API's block where it is one: words, with what they cite; an
+ * image, a document or a search result; a tool call joined with what it answered; or a permission
+ * prompt.
+ */
 export type AssistantTurnPart =
-    | {
-          type: 'text'
-          /** The words, every `text` event of a run joined. */
-          text: string
-      }
     /**
-     * An image, a document or a search result the visitor's turn carried, as `userMessage` makes it —
-     * a search result shown by no part of its own.
+     * Words, every `text` event of a run joined — a cited run its own part, with its citations — or an
+     * image, a document or a search result the visitor's turn carried, as `userMessage` makes it, a
+     * search result shown by no part of its own.
      */
     | Extract<
           AssistantContent,
-          { type: 'image' | 'document' | 'search_result' }
+          { type: 'text' | 'image' | 'document' | 'search_result' }
       >
     | {
           type: 'tool'
-          /** The call's id, which its `input` and `result` events name. */
+          /** The call's id, which its `input` and `result` events name: the `tool_use` block's `id`. */
           id: string
           /** The tool, as the app's MCP surface lists it. */
           name: string
           /** What the model called it with, once written; `undefined` before. */
           input: unknown
-          /** What it answered, as text; `undefined` while it runs. */
-          result: string | undefined
-          /** Whether it answered with a failure. */
-          failed: boolean
+          /** What it answered, as text, the `tool_result` block's `content`; `undefined` while it runs. */
+          content: string | undefined
+          /** Whether it answered with a failure, the `tool_result` block's `is_error`. */
+          is_error: boolean
           /** What a handler of the app answered, as JSON, where one did. */
           value: unknown
       }

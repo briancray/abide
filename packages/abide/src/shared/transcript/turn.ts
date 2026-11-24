@@ -11,5 +11,5 @@ export function turn(
     role: AssistantTurn['role'],
     parts: AssistantTurnPart[] = [],
 ): AssistantTurn {
-    return { role, parts, stop: undefined, failed: undefined }
+    return { role, parts, stop_reason: undefined, failed: undefined }
 }

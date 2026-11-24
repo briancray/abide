@@ -30,49 +30,74 @@ type ImageBlock = {
     cache_control?: CacheControl
 }
 
+type DocumentBlock = {
+    type: 'document'
+    source:
+        | { type: 'base64'; media_type: 'application/pdf'; data: string }
+        | { type: 'text'; media_type: 'text/plain'; data: string }
+        | {
+              type: 'content'
+              content: string | (TextBlock | ImageBlock)[]
+          }
+        | { type: 'url'; url: string }
+        | { type: 'file'; file_id: string }
+    title?: string
+    context?: string
+    citations?: { enabled: boolean }
+    cache_control?: CacheControl
+}
+
+type SearchResultBlock = {
+    type: 'search_result'
+    source: string
+    title: string
+    content: TextBlock[]
+    citations?: { enabled: boolean }
+    cache_control?: CacheControl
+}
+
 /**
- * A piece of a turn, as the Messages API's content block for it, which a user turn may carry: words;
- * an image as base64, at a URL, or an uploaded file; a document — a PDF as base64 or at a URL, text,
- * content of its own, or an uploaded file — with its title, its context and whether answers cite it;
- * and a search result whose text an answer may cite.
+ * A piece of a turn, as the Messages API's content block for it: words, with the citations an
+ * answer's carry; an image as base64, at a URL, or an uploaded file; a document — a PDF as base64 or
+ * at a URL, text, content of its own, or an uploaded file — with its title, its context and whether
+ * answers cite it; a search result whose text an answer may cite; a tool call the model made, in its
+ * own turn; and what that call answered, in the user turn after it.
  */
 export type AssistantContent =
     | TextBlock
     | ImageBlock
+    | DocumentBlock
+    | SearchResultBlock
     | {
-          type: 'document'
-          source:
-              | { type: 'base64'; media_type: 'application/pdf'; data: string }
-              | { type: 'text'; media_type: 'text/plain'; data: string }
-              | {
-                    type: 'content'
-                    content: string | (TextBlock | ImageBlock)[]
-                }
-              | { type: 'url'; url: string }
-              | { type: 'file'; file_id: string }
-          title?: string
-          context?: string
-          citations?: { enabled: boolean }
+          type: 'tool_use'
+          id: string
+          name: string
+          input: unknown
           cache_control?: CacheControl
       }
     | {
-          type: 'search_result'
-          source: string
-          title: string
-          content: TextBlock[]
-          citations?: { enabled: boolean }
+          type: 'tool_result'
+          tool_use_id: string
+          content?:
+              | string
+              | (TextBlock | ImageBlock | DocumentBlock | SearchResultBlock)[]
+          is_error?: boolean
           cache_control?: CacheControl
       }
 
-/** One turn of the transcript a caller sends: its words, or its pieces in order. */
+/** One turn of the transcript, as the Messages API takes it: its words, or its blocks in order. */
 export type AssistantMessage = {
     role: 'user' | 'assistant'
     content: string | AssistantContent[]
 }
 
-/** What a conversation yields, the same from every provider. */
+/**
+ * What a conversation yields, the same from every provider, each field under the Messages API's name
+ * for it where it has one: words, a cited run of them whole; a tool call as it starts, its input once
+ * written, and its result; a permission prompt; and the end, with why and what it used.
+ */
 export type AssistantEvent =
-    | { type: 'text'; text: string }
+    | { type: 'text'; text: string; citations?: Record<string, unknown>[] }
     | {
           type: 'tool'
           id: string
@@ -82,15 +107,21 @@ export type AssistantEvent =
     | { type: 'input'; id: string; input: unknown }
     | {
           type: 'result'
-          id: string
-          text: string
-          failed: boolean
+          tool_use_id: string
+          content: string
+          is_error: boolean
           handler: { method: Method; address: string } | undefined
           value: unknown
       }
     | { type: 'permission'; id: string; name: string; input: unknown }
     | {
           type: 'done'
-          stop: string
-          usage: { input: number; output: number }
+          stop_reason: string
+          usage: {
+              input_tokens: number
+              output_tokens: number
+              cache_creation_input_tokens?: number
+              cache_read_input_tokens?: number
+              [field: string]: unknown
+          }
       }

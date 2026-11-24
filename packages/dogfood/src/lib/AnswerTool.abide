@@ -10,6 +10,6 @@ const { part } = props<{
 const name = part.name.replace(/^.*_ask_tools_/, '')
 </script>
 
-<p class="status">{part.result === undefined
+<p class="status">{part.content === undefined
     ? `Reading the docs: ${name}…`
     : `Read the docs: ${name}`}</p>

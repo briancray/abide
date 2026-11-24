@@ -39,12 +39,7 @@ export type TurnRequest = {
     maxTurns: number
 }
 
-type Usage = {
-    input_tokens?: number
-    cache_creation_input_tokens?: number
-    cache_read_input_tokens?: number
-    output_tokens?: number
-}
+type Usage = Record<string, unknown>
 
 type McpContent = { type: string; text?: string }
 
@@ -53,8 +48,18 @@ type CodeLine = {
     subtype?: string
     event?: {
         type: string
-        delta?: { type: string; text?: string }
-        content_block?: { type: string; id?: string; name?: string }
+        index?: number
+        delta?: {
+            type: string
+            text?: string
+            citation?: Record<string, unknown>
+        }
+        content_block?: {
+            type: string
+            id?: string
+            name?: string
+            citations?: Record<string, unknown>[] | null
+        }
     }
     message?: {
         content:
@@ -164,17 +169,12 @@ function textOf(content: McpContent[] | string | undefined): string {
     return text
 }
 
-function done(stop: string, usage: Usage | undefined): ProviderEvent {
+/** The end of the turn: why, and Claude Code's usage for the whole of it, under the API's names. 44.11. */
+function done(stopReason: string, usage: Usage | undefined): ProviderEvent {
     return {
         type: 'done',
-        stop,
-        usage: {
-            input:
-                (usage?.input_tokens ?? 0) +
-                (usage?.cache_creation_input_tokens ?? 0) +
-                (usage?.cache_read_input_tokens ?? 0),
-            output: usage?.output_tokens ?? 0,
-        },
+        stop_reason: stopReason,
+        usage: { input_tokens: 0, output_tokens: 0, ...usage },
     }
 }
 
@@ -254,6 +254,11 @@ export async function claudeTurn(
     )
     child.stdin.end()
     const stderr = new Response(child.stderr).text()
+    // 44.104 — each cited text block of the message streaming, by its index, held until it ends.
+    const cited = new Map<
+        number,
+        { text: string; citations: Record<string, unknown>[] }
+    >()
     try {
         for await (const text of readLines(child.stdout)) {
             if (text === '') continue
@@ -261,11 +266,43 @@ export async function claudeTurn(
             if (line.type === 'stream_event') {
                 const delta = line.event?.delta
                 const started = line.event?.content_block
-                if (
+                const index = line.event?.index ?? 0
+                const held = cited.get(index)
+                if (line.event?.type === 'message_start') cited.clear()
+                else if (
+                    line.event?.type === 'content_block_start' &&
+                    started?.type === 'text' &&
+                    Array.isArray(started.citations)
+                )
+                    cited.set(index, { text: '', citations: [] })
+                else if (
+                    line.event?.type === 'content_block_delta' &&
+                    delta?.type === 'citations_delta' &&
+                    delta.citation !== undefined
+                ) {
+                    if (held === undefined)
+                        cited.set(index, {
+                            text: '',
+                            citations: [delta.citation],
+                        })
+                    else held.citations.push(delta.citation)
+                } else if (
                     line.event?.type === 'content_block_delta' &&
                     delta?.type === 'text_delta'
-                )
-                    options.report({ type: 'text', text: delta.text as string })
+                ) {
+                    if (held !== undefined) held.text += delta.text as string
+                    else
+                        options.report({
+                            type: 'text',
+                            text: delta.text as string,
+                        })
+                } else if (
+                    line.event?.type === 'content_block_stop' &&
+                    held !== undefined
+                ) {
+                    cited.delete(index)
+                    options.report({ type: 'text', ...held })
+                }
                 // 44.28 — the call is announced as the model starts writing it, its input once written.
                 else if (
                     line.event?.type === 'content_block_start' &&
@@ -290,9 +327,9 @@ export async function claudeTurn(
                     else if (block.type === 'tool_result')
                         options.report({
                             type: 'result',
-                            id: block.tool_use_id as string,
-                            text: textOf(block.content),
-                            failed: block.is_error === true,
+                            tool_use_id: block.tool_use_id as string,
+                            content: textOf(block.content),
+                            is_error: block.is_error === true,
                         })
             } else if (line.type === 'result') {
                 // The turn cap is one stop, whichever provider reached it.

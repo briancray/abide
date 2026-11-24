@@ -122,18 +122,21 @@ function cachedAnHour(piece: AssistantContent): boolean {
     const inner =
         piece.type === 'search_result'
             ? piece.content
-            : piece.type === 'document' &&
-                piece.source.type === 'content' &&
-                typeof piece.source.content !== 'string'
-              ? piece.source.content
-              : []
+            : piece.type === 'tool_result' && Array.isArray(piece.content)
+              ? piece.content
+              : piece.type === 'document' &&
+                  piece.source.type === 'content' &&
+                  typeof piece.source.content !== 'string'
+                ? piece.source.content
+                : []
     for (const block of inner) if (!cachedAnHour(block)) return false
     return true
 }
 
 /**
  * The transcript as the one message Claude Code is sent, as Messages API blocks: earlier turns folded
- * above the last, and each image in its place. 44.5.
+ * above the last, each image in its place, and each tool call and what it answered written out in
+ * words, since a call this Claude Code did not make is none it can be handed as one. 44.5.
  */
 function foldedContent(
     messages: (AssistantMessage & { content: AssistantContent[] })[],
@@ -149,6 +152,25 @@ function foldedContent(
             if (at > 0) words += '\n'
             if (piece.type === 'text') {
                 words += piece.text
+                continue
+            }
+            if (piece.type === 'tool_use') {
+                words += `<tool_use name="${piece.name}">${JSON.stringify(piece.input)}</tool_use>`
+                continue
+            }
+            if (piece.type === 'tool_result') {
+                words += `<tool_result${piece.is_error === true ? ' error' : ''}>`
+                const answered =
+                    typeof piece.content === 'string'
+                        ? [{ type: 'text' as const, text: piece.content }]
+                        : (piece.content ?? [])
+                for (const block of answered)
+                    if (block.type === 'text') words += block.text
+                    else {
+                        pieces.push({ type: 'text', text: words }, block)
+                        words = ''
+                    }
+                words += '</tool_result>'
                 continue
             }
             pieces.push({ type: 'text', text: words }, piece)
@@ -333,13 +355,13 @@ async function calledByTurn(
                 id: event.id,
                 allow: event.name === tool,
             })
-        else if (event.type === 'result' && event.id === callId) {
+        else if (event.type === 'result' && event.tool_use_id === callId) {
             // 44.18 — ended while the turn still listens, so the bridge stops the run before the
             // model writes a word about the answer.
             ending.abort()
             return {
-                content: [{ type: 'text', text: event.text }],
-                failed: event.failed,
+                content: [{ type: 'text', text: event.content }],
+                failed: event.is_error,
             }
         }
     }

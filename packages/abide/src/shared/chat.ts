@@ -218,7 +218,7 @@ export function chat(options: ChatOptions): ChatParts {
         turns.patch((all) => {
             const answering = all[all.length - 1]
             if (answering === undefined) return
-            if (controller.signal.aborted) answering.stop = 'stopped'
+            if (controller.signal.aborted) answering.stop_reason = 'stopped'
             else answering.failed = messageOf(error)
         })
     }
@@ -283,7 +283,7 @@ export function chat(options: ChatOptions): ChatParts {
                     get 'data-streaming'() {
                         return answering(index) ? '' : undefined
                     },
-                    'data-stop': turn.stop,
+                    'data-stop': turn.stop_reason,
                     'data-failed': turn.failed === undefined ? undefined : '',
                 },
                 speaker: { 'data-chat': 'speaker' },
@@ -304,9 +304,9 @@ export function chat(options: ChatOptions): ChatParts {
         }),
         tool(part) {
             const status =
-                part.result === undefined
+                part.content === undefined
                     ? 'running'
-                    : part.failed
+                    : part.is_error
                       ? 'failed'
                       : 'done'
             return {

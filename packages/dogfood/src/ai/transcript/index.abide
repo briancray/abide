@@ -22,6 +22,18 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/transcript.test.ts',
             from: ["test('a turn sets every field it declares — 53.30'"],
         },
+        {
+            path: 'packages/abide/tests/assistantBlocks.test.ts',
+            from: [
+                "test('a conversation folded from its events goes back to the API as the blocks it was — 53.28, 44.38'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/assistantBlocks.test.ts',
+            from: [
+                "test('a call that never answered goes back as neither its call nor its result — 53.28'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Fold a streamed answer into the assistant's turn">
@@ -61,7 +73,25 @@ import Section from '#src/lib/Section.abide'
                 {#if part.type === 'text'}
                     <p>{part.text}</p>
                 {:else if part.type === 'tool'}
-                    <p>{part.name}: {part.result === undefined ? 'running' : 'done'}</p>
+                    <p>{part.name}: {part.content === undefined ? 'running' : 'done'}</p>
+                {/if}
+            {/for}
+        `} />
+    </Section>
+
+    <Section level={3} title="Show the page of the statement an answer cites">
+        <p>A run of words the model cited is a text part of its own, holding the Messages
+            API's <code>citations</code>. <code>transcript.messages</code> sends it back with
+            them, and each tool call as the <code>tool_use</code> and <code>tool_result</code>
+            the model saw.</p>
+        <Code language="abide" caption="abide" code={`
+            {#for part of turn.parts}
+                {#if part.type === 'text'}
+                    <p>{part.text}
+                        {#for citation of part.citations ?? []}
+                            <cite>{String(citation.document_title)}</cite>
+                        {/for}
+                    </p>
                 {/if}
             {/for}
         `} />

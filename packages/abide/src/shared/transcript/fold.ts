@@ -3,8 +3,9 @@ import type { AssistantTurn, AssistantTurnPart } from '../AssistantTurn.ts'
 
 /**
  * Folds one event of an answer into the answering turn, in place: a `text` event joins the words
- * before it, a `tool` call is paired with its `input` and its `result` by id, a `permission` prompt
- * waits for its answer, and `done` names why the answer ended. 53.24-53.27.
+ * before it — a cited run is a part of its own, as the Messages API holds it a block of its own — a
+ * `tool` call is paired with its `input` and its `result` by id, a `permission` prompt waits for its
+ * answer, and `done` names why the answer ended. 53.24-53.27.
  *
  * Fold each event once, as it arrives, inside the `patch` of the value holding the turn: folding
  * every event again per chunk costs the square of the answer's length.
@@ -16,8 +17,17 @@ export function fold(answering: AssistantTurn, event: AssistantEvent): void {
     const { parts } = answering
     switch (event.type) {
         case 'text': {
+            if (event.citations !== undefined) {
+                parts.push({
+                    type: 'text',
+                    text: event.text,
+                    citations: event.citations,
+                })
+                return
+            }
             const last = parts[parts.length - 1]
-            if (last?.type === 'text') last.text += event.text
+            if (last?.type === 'text' && last.citations === undefined)
+                last.text += event.text
             else parts.push({ type: 'text', text: event.text })
             return
         }
@@ -27,8 +37,8 @@ export function fold(answering: AssistantTurn, event: AssistantEvent): void {
                 id: event.id,
                 name: event.name,
                 input: undefined,
-                result: undefined,
-                failed: false,
+                content: undefined,
+                is_error: false,
                 value: undefined,
             })
             return
@@ -38,10 +48,10 @@ export function fold(answering: AssistantTurn, event: AssistantEvent): void {
             return
         }
         case 'result': {
-            const call = callOf(parts, event.id)
+            const call = callOf(parts, event.tool_use_id)
             if (call === undefined) return
-            call.result = event.text
-            call.failed = event.failed
+            call.content = event.content
+            call.is_error = event.is_error
             call.value = event.value
             return
         }
@@ -55,7 +65,7 @@ export function fold(answering: AssistantTurn, event: AssistantEvent): void {
             })
             return
         case 'done':
-            answering.stop = event.stop
+            answering.stop_reason = event.stop_reason
     }
 }
 

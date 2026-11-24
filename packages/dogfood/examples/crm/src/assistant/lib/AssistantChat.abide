@@ -26,7 +26,7 @@ const events = memo(() =>
                 </p></li>
         {:else if event.type === 'result'}
             <li><span>your handler answered</span>
-                <p class="font-mono text-chrome">{event.text}</p></li>
+                <p class="font-mono text-chrome">{event.content}</p></li>
         {:else if event.type === 'text'}
             <li><span>assistant</span><p>{event.text}</p></li>
         {/if}

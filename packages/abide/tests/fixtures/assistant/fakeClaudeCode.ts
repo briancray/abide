@@ -73,6 +73,59 @@ if (told !== null) {
     text('the meetings are')
     await new Promise(() => {})
 }
+// A prompt holding `cite` is answered as `fakeCitingApi.ts` answers, in the order Claude Code streams
+// it: a plain run, a cited one whose citation comes ahead of its words, and the usage of the whole.
+if (words.includes('cite')) {
+    const { CITATION } = await import('./CITATION.ts')
+    const event = (line: unknown) =>
+        print({ type: 'stream_event', event: line })
+    event({ type: 'message_start', message: {} })
+    event({
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'text', text: '' },
+    })
+    event({
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'Your balance ' },
+    })
+    event({ type: 'content_block_stop', index: 0 })
+    event({
+        type: 'content_block_start',
+        index: 1,
+        content_block: { type: 'text', text: '' },
+    })
+    event({
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'citations_delta', citation: CITATION },
+    })
+    event({
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'text_delta', text: 'is 4217' },
+    })
+    event({
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'text_delta', text: '.' },
+    })
+    event({ type: 'content_block_stop', index: 1 })
+    print({
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        stop_reason: 'end_turn',
+        usage: {
+            input_tokens: 4,
+            output_tokens: 6,
+            cache_creation_input_tokens: 2,
+            cache_read_input_tokens: 7,
+        },
+    })
+    process.exit(0)
+}
 text('checking')
 if (words.includes('hang')) await new Promise(() => {})
 
