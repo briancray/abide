@@ -15,8 +15,18 @@ import {
 } from './docsPages.ts'
 
 // EVERY PAGE, LOADED ONCE AHEAD OF THE TESTS: under the parallel gate the first test to ask would pay
-// for the whole load against the other suites, inside its own five seconds.
-beforeAll(() => Promise.all([renderedMarkdown(), renderedHtml()]), 60_000)
+// for the whole load against the other suites, inside its own five seconds. The bundle renders every
+// page again, one after another, so it is loaded here too.
+let bundle = ''
+beforeAll(async () => {
+    const { base } = await servedDocs()
+    const [, , answer] = await Promise.all([
+        renderedMarkdown(),
+        renderedHtml(),
+        Bun.fetch(`${base}/abide.md`),
+    ])
+    bundle = await answer.text()
+}, 60_000)
 
 /** Every route the site has: its pages, and the rulebook a page links each clause it cites into (40.11). */
 function routes(): Set<string> {
@@ -56,9 +66,7 @@ test('every internal link in a markdown twin names a page that exists', async ()
     expect(broken).toEqual([])
 })
 
-test('the bundle carries every page, in reading order', async () => {
-    const { base } = await servedDocs()
-    const bundle = await (await Bun.fetch(`${base}/abide.md`)).text()
+test('the bundle carries every page, in reading order', () => {
     const markers = [...bundle.matchAll(/^<!-- (\S+\.md) -->$/gm)].map(
         (match) => match[1],
     )
