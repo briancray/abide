@@ -4,7 +4,7 @@ import { retryWait } from '#shared/retryWait.ts'
  * The next attempt at what the network did not answer, waited out as `retryWait` times it from
  * `floor` to `ceiling` — 18.33's mux and 46.8's outbox, each with its own pair.
  */
-export class Backoff {
+export class RetryTimer {
     floor: number
     ceiling: number
     /** The retries made since the last reset: how many times the wait has doubled. */

@@ -14,6 +14,7 @@
 // never reaches where it would land: there is no room left to scroll it there.
 
 import { resized } from './element/resized.ts'
+import { isPlainClick } from './isPlainClick.ts'
 import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { memo, reactive } from './reactive/index.ts'
@@ -214,14 +215,7 @@ export function scrollSpy<Item>(
 
     // 51.175, 51.176 — a plain click lands the section as a link to it would, past any sticky header.
     const go = (item: Item, event: MouseEvent): void => {
-        if (
-            event.button !== 0 ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.shiftKey ||
-            event.altKey
-        )
-            return
+        if (!isPlainClick(event)) return
         const key = keyOf(item)
         const element = document.getElementById(key)
         if (element === null) return

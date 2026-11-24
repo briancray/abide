@@ -280,6 +280,9 @@ export function namedLogger(namespace: string): Logger {
 /** Both lanes' render logger (28.8): the server's escalations and 32.20's dropped URLs. */
 export const RENDER_LOG = namedLogger('abide:render')
 
+/** Both lanes' hydration logger (28.8): a client mismatch, and 41.12's seed-buffer miss on the server. */
+export const HYDRATE_LOG = namedLogger('abide:hydrate')
+
 /**
  * A logger whose namespace is asked per line.
  *

@@ -26,7 +26,7 @@
 // refresh, and says nothing.
 
 import { type Cookies, cookies } from '#shared/cookies.ts'
-import { namedLogger } from '#shared/log.ts'
+import { HYDRATE_LOG } from '#shared/log.ts'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { isReactive, STREAMING } from '#shared/reactive/index.ts'
 import {
@@ -36,8 +36,6 @@ import {
 
 import { positiveSetting } from './config.ts'
 import { currentRequestScope, heldByApp, holdScope } from './requestScope.ts'
-
-const HYDRATE_LOG = namedLogger('abide:hydrate')
 
 const ENCODER = new TextEncoder()
 

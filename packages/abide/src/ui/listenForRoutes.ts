@@ -1,3 +1,5 @@
+import { isPlainClick } from '#shared/isPlainClick.ts'
+
 import type { Router } from './Router.ts'
 
 /**
@@ -78,22 +80,4 @@ function sameOriginLink(event: Event): URL | undefined {
     const url = new URL(anchor.href, location.href)
     if (url.origin !== location.origin) return undefined
     return url
-}
-
-/**
- * Whether a click is an unmodified primary click the app may take.
- *
- * A MODIFIED CLICK IS THE READER ASKING THE BROWSER, not the app: ctrl/cmd opens a tab, shift a
- * window, alt downloads. Taking those is the single most complained-about thing a client router
- * does, and it is four fields.
- */
-function isPlainClick(event: MouseEvent): boolean {
-    return (
-        event.button === 0 &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.shiftKey &&
-        !event.altKey &&
-        !event.defaultPrevented
-    )
 }

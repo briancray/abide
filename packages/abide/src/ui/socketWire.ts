@@ -10,6 +10,7 @@ import {
     noAnswer,
 } from '#shared/answerOf.ts'
 import { applyPatch } from '#shared/applyPatch.ts'
+import { HYDRATE_LOG } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
 import { MUX_FOLLOWS } from '#shared/MUX_FOLLOWS.ts'
 import type { BrowserFrame, ServerFrame } from '#shared/muxFrames.ts'
@@ -27,9 +28,8 @@ import {
 } from '#shared/reactive/producer.ts'
 import type { RpcRequest } from '#shared/rpcRequest.ts'
 
-import { Backoff } from './Backoff.ts'
-import { HYDRATE_LOG } from './Mismatch.ts'
 import { undelivered, whenDelivered } from './outboxQueue.ts'
+import { RetryTimer } from './RetryTimer.ts'
 
 const RETRY_FLOOR_MS = 250
 const RETRY_CEILING_MS = 10_000
@@ -281,7 +281,7 @@ class Mux {
     subscriptions: Map<number, Following>
     streams: Map<number, MuxStream>
     nextId: number
-    backoff: Backoff
+    backoff: RetryTimer
 
     constructor(url: string) {
         this.url = url
@@ -289,7 +289,7 @@ class Mux {
         this.subscriptions = new Map()
         this.streams = new Map()
         this.nextId = 1
-        this.backoff = new Backoff(RETRY_FLOOR_MS, RETRY_CEILING_MS, () =>
+        this.backoff = new RetryTimer(RETRY_FLOOR_MS, RETRY_CEILING_MS, () =>
             this.connect(),
         )
         onPrincipalRotated(() => this.reopen(), true)

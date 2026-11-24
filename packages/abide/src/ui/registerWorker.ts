@@ -2,11 +2,10 @@
 // server write. The route table calls this in every app, so what the server says decides.
 
 import { WORKER_ADDRESS } from '#shared/ADDRESSES.ts'
+import { HYDRATE_LOG } from '#shared/log.ts'
 import { MOUNT, mounted } from '#shared/mount.ts'
 import { OFFLINE_META } from '#shared/OFFLINE_META.ts'
 import { onPrincipalRotated } from '#shared/principalRotated.ts'
-
-import { HYDRATE_LOG } from './Mismatch.ts'
 
 /** Registers the app's service worker once the page has loaded, over the mount's whole scope. */
 export function registerWorker(): void {

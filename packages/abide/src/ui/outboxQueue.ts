@@ -31,7 +31,7 @@ import { requested } from '#shared/requested.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import { TRANSIENT_STATUSES } from '#shared/TRANSIENT_STATUSES.ts'
 
-import { Backoff } from './Backoff.ts'
+import { RetryTimer } from './RetryTimer.ts'
 
 // 46.11 — a bare `busy` hears the call this queue has in flight.
 OUTBOX_SENDING.any = anySending
@@ -67,7 +67,7 @@ let sending = false
 /** 46.6 — a call refused 401 holds the line until `principal` changes or `retry` is called. */
 let held = false
 /** 46.8 — the next try, backing off from a second to a minute while nothing answers. */
-const backoff = new Backoff(RETRY_FLOOR_MS, RETRY_CEILING_MS, deliver)
+const backoff = new RetryTimer(RETRY_FLOOR_MS, RETRY_CEILING_MS, deliver)
 let askedToPersist = false
 /**
  * The value each call stands in for, by its id: the one its call settled, where this page made it,

@@ -1,8 +1,9 @@
 import { listOf } from '#shared/listOf.ts'
+import { HYDRATE_LOG } from '#shared/log.ts'
 import { untracked } from '#shared/reactive/tracking.ts'
 import { openedUnder, runningEffect } from '#shared/reactive/watch.ts'
 
-import { HYDRATE_LOG, Mismatch, warnMismatch } from './Mismatch.ts'
+import { Mismatch, warnMismatch } from './Mismatch.ts'
 import { clearList, reconcile } from './reconcile.ts'
 import { isEmptyRegion, type Region, removeUntil } from './regions.ts'
 import { makeRow, paintedRow, type Row, type RowSetUp, rowsIn } from './rows.ts'

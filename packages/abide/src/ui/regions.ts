@@ -108,7 +108,7 @@ export function fillRegion(
 }
 
 /**
- * Fills a region nobody painted; answers whether it did.
+ * Fills a region nobody painted.
  *
  * 32.17, 41.4, 30.7 — THE FIRST ENTRY OF A REGION THAT FILLS ITSELF: a component the server
  * rendered, a page it served, a slot it wrote, arrives with its markup and is hydrated; one the
@@ -119,10 +119,8 @@ export function fillRegion(
 export function fillEmpty(
     region: Region,
     build?: (parent: Node) => Node[],
-): boolean {
-    if (!isEmptyRegion(region)) return false
-    fillRegion(region, build)
-    return true
+): void {
+    if (isEmptyRegion(region)) fillRegion(region, build)
 }
 
 /**

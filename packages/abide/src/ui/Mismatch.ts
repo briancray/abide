@@ -1,7 +1,4 @@
-import { namedLogger } from '#shared/log.ts'
-
-/** The browser lane's hydration logger (28.8). */
-export const HYDRATE_LOG = namedLogger('abide:hydrate')
+import { HYDRATE_LOG } from '#shared/log.ts'
 
 /**
  * A hydration mismatch, thrown so the enclosing block rebuilds instead of the page dying.
