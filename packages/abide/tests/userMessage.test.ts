@@ -52,12 +52,15 @@ async function blockOf(file: Blob): Promise<AssistantContent> {
     return content[0] as AssistantContent
 }
 
-const imageOf = async (file: Blob) => ((await blockOf(file)) as Image).source
+type Inline = Extract<Image['source'], { type: 'base64' }>
 
-const imageBlock = (
-    media_type: Image['source']['media_type'],
-    data: string,
-): Image => ({ type: 'image', source: { type: 'base64', media_type, data } })
+const imageOf = async (file: Blob) =>
+    ((await blockOf(file)) as Image).source as Inline
+
+const imageBlock = (media_type: Inline['media_type'], data: string): Image => ({
+    type: 'image',
+    source: { type: 'base64', media_type, data },
+})
 
 // THE REVERTS: drop `Math.min(1, …)` and a small image is drawn up to 1568 rather than sent as it
 // is; draw a GIF and it arrives as one frame's PNG; keep a HEIC's type and the model is handed an
@@ -195,4 +198,49 @@ test('words of whitespace alone are left out, and a file no model reads throws n
             new File(['zip'], 'archive.zip', { type: 'application/zip' }),
         ]),
     ).rejects.toThrow('archive.zip')
+})
+
+// THE REVERTS: read every URL as an image, and a statement at a URL is handed to the model as an
+// image it cannot read — `image` where `document` is due; push a built block as a text of its JSON,
+// and the search result reaches the model as words — `text` where `search_result` is due.
+test('a URL is the block the API fetches it into, and a block built by hand goes as written, in order — 44.55', async () => {
+    const fees: AssistantContent = {
+        type: 'search_result',
+        source: 'https://bank.example/fees',
+        title: 'Fees',
+        content: [{ type: 'text', text: 'The Q3 fee was $731.' }],
+    }
+    expect(
+        await userMessage([
+            'Does this statement',
+            new URL('https://bank.example/statements/q3.pdf'),
+            'match the fee on this receipt?',
+            new URL('https://bank.example/receipts/q3.PNG?size=full'),
+            fees,
+        ]),
+    ).toEqual({
+        role: 'user',
+        content: [
+            { type: 'text', text: 'Does this statement' },
+            {
+                type: 'document',
+                source: {
+                    type: 'url',
+                    url: 'https://bank.example/statements/q3.pdf',
+                },
+            },
+            { type: 'text', text: 'match the fee on this receipt?' },
+            {
+                type: 'image',
+                source: {
+                    type: 'url',
+                    url: 'https://bank.example/receipts/q3.PNG?size=full',
+                },
+            },
+            fees,
+        ],
+    })
+    await expect(
+        userMessage([new URL('https://bank.example/statements/q3.html')]),
+    ).rejects.toThrow('https://bank.example/statements/q3.html')
 })

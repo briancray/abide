@@ -4441,7 +4441,7 @@ of its own.
 each one.
 
 44.5 `provider.claudeCode` MUST send a transcript to Claude Code as one message, its earlier turns
-folded above the last and each `AssistantContent` image in its place.
+folded above the last and each `AssistantContent` block that is not words in its place.
 
 44.6 With `mcp`, the `Toolbox` `assistant` hands a `Provider` MUST list the tools `/__abide/mcp`
 lists, and MUST call each as a request through the app answering the request.
@@ -4546,15 +4546,16 @@ for the same call, `provider.claudeApi` MUST show the model those pieces as the 
 the `result` `AssistantEvent` MUST carry their words and none of their images.
 
 44.36 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript holding an
-`AssistantContent` image whose `source` is not base64 of `image/png`, `image/jpeg`, `image/gif` or
-`image/webp`, or a document whose `source` is neither base64 of `application/pdf` nor text of
-`text/plain`.
+`AssistantContent` image or document with no `source`, an image whose base64 `source` is not of
+`image/png`, `image/jpeg`, `image/gif` or `image/webp`, or a document whose base64 `source` is not of
+`application/pdf` or whose text `source` is not of `text/plain` — and MUST hand on as written any
+other source and any search result.
 
 44.37 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript holding an
-`AssistantContent` image or document in a turn that is not the user's.
+`AssistantContent` image, document or search result in a turn that is not the user's.
 
-44.38 `provider.claudeApi` MUST send each `AssistantContent` image and document to the model as it
-is, the Messages API's block, in its place in its turn.
+44.38 `provider.claudeApi` MUST send each `AssistantContent` block that is not words to the model
+as it is, the Messages API's block, in its place in its turn.
 
 44.39 `assistant` MUST hand a `Provider` each turn as its `AssistantContent` pieces, a turn's string
 as one text piece.
@@ -4615,8 +4616,9 @@ that image is of a type 44.36 does not name.
 44.55 `userMessage` MUST make a user turn of a block per part, in the order given: words where they
 hold more than whitespace as a text block, an image or a HEIC or HEIF as an image 44.52 draws, a PDF
 as a base64 document, a file of `text/*`, of JSON or named `.csv`, `.json`, `.md` or `.txt` as a text
-document, a document titled with its file's name where it has one — and MUST throw, naming the file,
-on any other.
+document, a document titled with its file's name where it has one, a URL whose path ends `.pdf` as a
+document and one ending `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp` as an image, each of that URL, and
+a block as it is written — and MUST throw, naming the file or the URL, on any other.
 
 44.56 The `install` of a pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge`
 mints MUST run `abide-bridge install` at the bridge release its command runs.
@@ -4802,6 +4804,9 @@ credential and no principal, through the app the executable booted last.
 run it, MUST run its conversation carrying no asker's credentials, and MUST throw where given `mcp`.
 
 44.102 `pairing`'s `retry` MUST read the pairing again, over a read in flight.
+
+44.103 `provider.claudeCode` MUST refuse 400, before the bridge is asked, a transcript holding an
+`AssistantContent` block, or a block inside one, whose `cache_control` is not of `ttl` `'1h'`.
 
 # 45. Offline
 

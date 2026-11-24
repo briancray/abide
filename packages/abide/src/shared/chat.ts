@@ -129,8 +129,13 @@ export type ChatParts = {
     readonly send: Record<string, unknown>
 }
 
+// An image shows from its bytes or its URL; one uploaded to the Files API has nothing a page can show.
 const sourceOf = (image: Image) =>
-    `data:${image.source.media_type};base64,${image.source.data}`
+    image.source.type === 'base64'
+        ? `data:${image.source.media_type};base64,${image.source.data}`
+        : image.source.type === 'url'
+          ? image.source.url
+          : undefined
 
 /** A conversation over an assistant handler, as parts: the transcript and the composer. */
 export function chat(options: ChatOptions): ChatParts {
@@ -225,7 +230,8 @@ export function chat(options: ChatOptions): ChatParts {
                 const { content } = await userMessage([file])
                 attached.patch((all) => {
                     for (const piece of content)
-                        if (piece.type !== 'text') all.push(piece)
+                        if (piece.type === 'image' || piece.type === 'document')
+                            all.push(piece)
                 })
             } catch {
                 // A file this browser cannot draw, or none a model reads, is left out.

@@ -22,6 +22,12 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/userMessage.test.ts',
             from: [
+                "test('a URL is the block the API fetches it into, and a block built by hand goes as written, in order — 44.55'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/userMessage.test.ts',
+            from: [
                 "test('an image is drawn down to 1568 on its long side, a photo as a JPEG — 44.52, 44.53'",
             ],
         },
@@ -95,6 +101,41 @@ import Section from '#src/lib/Section.abide'
                 receipt,
                 'paid by this invoice?',
                 invoice,
+            ])
+            askAssistant({ messages: [message] })
+        `} />
+    </Section>
+
+    <Section level={3} title="Ask about a statement the bank serves at a URL">
+        <p>A URL whose path ends <code>.pdf</code> goes as a document, and one ending in an
+            image's extension as an image. The API fetches it, so nothing is downloaded
+            first.</p>
+        <Code language="ts" caption="browser" code={`
+            import { userMessage } from '@abide/abide'
+            import askAssistant from './askAssistant.handler.ts'
+
+            const statement = new URL('https://bank.example/statements/q3.pdf')
+            const message = await userMessage([statement, 'What did I hold?'])
+            askAssistant({ messages: [message] })
+        `} />
+    </Section>
+
+    <Section level={3} title="Hand the assistant a search result to cite">
+        <p>A block written by hand goes as it is, in its place: any content block the Messages
+            API takes in a user turn. A search result rides in the turn and the transcript with
+            no part of its own in <a href={url('/headless/chat')}><code>chat</code></a>.</p>
+        <Code language="ts" caption="browser" code={`
+            import { userMessage } from '@abide/abide'
+            import askAssistant from './askAssistant.handler.ts'
+
+            const message = await userMessage([
+                {
+                    type: 'search_result',
+                    source: 'https://bank.example/fees',
+                    title: 'Fees',
+                    content: [{ type: 'text', text: 'The Q3 fee was $731.' }],
+                },
+                'What was I charged in Q3?',
             ])
             askAssistant({ messages: [message] })
         `} />

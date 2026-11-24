@@ -34,22 +34,41 @@ export const ATTACHABLE = [
 ].join(',')
 
 type Image = Extract<AssistantContent, { type: 'image' }>
-type Shown = Image['source']['media_type']
+type Shown = Extract<Image['source'], { type: 'base64' }>['media_type']
+
+// 44.55 — what a URL's path names, which the API fetches itself.
+const URL_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp']
 
 /**
- * The user turn of `parts` in order: words as a text block where they hold any, and each file as its
- * block — so `['Compare', receipt, 'with', invoice]` reads as written. 44.52-44.55.
+ * The user turn of `parts` in order: words as a text block where they hold any, each file as its
+ * block, a URL as the block the API fetches it into, and a block as it is written — so
+ * `['Compare', receipt, 'with', invoice]` reads as written. 44.52-44.55.
  *
- * @param parts what was written and attached: words, and images, PDFs or files of text
+ * @param parts what was written and attached: words, images, PDFs or files of text, URLs of an image
+ * or a PDF, and blocks built by hand
  */
 export async function userMessage(
-    parts: readonly (string | Blob)[],
+    parts: readonly (string | Blob | URL | AssistantContent)[],
 ): Promise<{ role: 'user'; content: AssistantContent[] }> {
     const content: AssistantContent[] = []
     for (const part of parts)
-        if (typeof part !== 'string') content.push(await blockOf(part))
-        else if (/\S/.test(part)) content.push({ type: 'text', text: part })
+        if (typeof part === 'string') {
+            if (/\S/.test(part)) content.push({ type: 'text', text: part })
+        } else if (part instanceof Blob) content.push(await blockOf(part))
+        else if (part instanceof URL) content.push(urlBlockOf(part))
+        else content.push(part)
     return { role: 'user', content }
+}
+
+function urlBlockOf(url: URL): AssistantContent {
+    const extension = extensionOf(url.pathname)
+    if (extension === '.pdf')
+        return { type: 'document', source: { type: 'url', url: url.href } }
+    if (URL_IMAGE_EXTENSIONS.includes(extension))
+        return { type: 'image', source: { type: 'url', url: url.href } }
+    throw new Error(
+        `abide: ${url.href} names neither an image nor a PDF by its path, and a model is handed only those by URL. RULEBOOK 44.55.`,
+    )
 }
 
 async function blockOf(file: Blob): Promise<AssistantContent> {

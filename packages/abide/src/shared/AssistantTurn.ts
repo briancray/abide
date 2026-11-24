@@ -14,15 +14,21 @@ export type AssistantTurn = {
     failed: string | undefined
 }
 
-/** One piece of a turn: words, an image, a document, a tool call, or a permission prompt. */
+/** One piece of a turn: words, an image, a document, a search result, a tool call, or a permission prompt. */
 export type AssistantTurnPart =
     | {
           type: 'text'
           /** The words, every `text` event of a run joined. */
           text: string
       }
-    /** An image or a document the visitor attached, as `userMessage` makes it. */
-    | Extract<AssistantContent, { type: 'image' | 'document' }>
+    /**
+     * An image, a document or a search result the visitor's turn carried, as `userMessage` makes it —
+     * a search result shown by no part of its own.
+     */
+    | Extract<
+          AssistantContent,
+          { type: 'image' | 'document' | 'search_result' }
+      >
     | {
           type: 'tool'
           /** The call's id, which its `input` and `result` events name. */

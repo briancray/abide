@@ -1294,6 +1294,12 @@ const STATEMENT = {
     source: { type: 'base64', media_type: 'application/pdf', data: 'JVBERg==' },
     title: 'statement.pdf',
 }
+const FEES = {
+    type: 'search_result',
+    source: 'https://bank.example/fees',
+    title: 'Fees',
+    content: [{ type: 'text', text: 'The Q3 fee was $731.' }],
+}
 
 // A transcript showing an image and a document: a question about them, beside the turns before.
 const LOOKED_AT = [
@@ -1379,6 +1385,71 @@ test("an image or document a model cannot take, or one in a turn not the user's,
             { role: 'user', content: 'well?' },
         ]),
     ).toBe('400 44.37')
+    expect(
+        await refusal([
+            { role: 'user', content: 'look' },
+            { role: 'assistant', content: [FEES] },
+            { role: 'user', content: 'well?' },
+        ]),
+    ).toBe('400 44.37')
+}, 30_000)
+
+// 44.36 — A SOURCE ABIDE CARRIES NO BYTES OF IS THE API'S TO JUDGE: an image at a URL, a document
+// uploaded to the Files API, and a search result reach the model as written, in their place. THE
+// REVERT: refuse a source with no `data` as before, and the URL image is refused — `400` where the
+// model's answer is due.
+test('an image at a URL, an uploaded document and a search result reach the model as written — 44.36, 44.38', async () => {
+    const fetched = {
+        type: 'image',
+        source: { type: 'url', url: 'https://bank.example/receipt.png' },
+    }
+    const uploaded = {
+        type: 'document',
+        source: { type: 'file', file_id: 'file_011' },
+        title: 'Q3 statement',
+        citations: { enabled: true },
+    }
+    const content = [
+        { type: 'text', text: 'do these agree?' },
+        fetched,
+        uploaded,
+        FEES,
+    ]
+    const answer = await askWith('one', 'api', [{ role: 'user', content }])
+    expect(answer.status).toBe(200)
+    expect(await events(answer)).toContainEqual({
+        type: 'text',
+        text: `saw ${JSON.stringify(content)}`,
+    })
+}, 30_000)
+
+// 44.103 — CLAUDE CODE CACHES FOR AN HOUR AFTER THE TRANSCRIPT, and the API refuses a five-minute
+// breakpoint ahead of an hour's, so one is refused here by name rather than by Claude Code's 400. THE
+// REVERT: drop the check in `provider.claudeCode`'s `run`, and the turn is handed on to a bridge
+// nobody paired — `409` where `400 44.103` is due.
+test('provider.claudeCode refuses a block cached for less than an hour, a search result’s inner text too — 44.103', async () => {
+    const refusal = async (piece: unknown) => {
+        const answer = await askWith('one', 'code', [
+            { role: 'user', content: [{ type: 'text', text: 'well?' }, piece] },
+        ])
+        const text = await answer.text()
+        return `${answer.status} ${/RULEBOOK (44\.\d+)/.exec(text)?.[1]}`
+    }
+    expect(
+        await refusal({ ...STATEMENT, cache_control: { type: 'ephemeral' } }),
+    ).toBe('400 44.103')
+    expect(
+        await refusal({
+            ...FEES,
+            content: [
+                {
+                    type: 'text',
+                    text: 'The Q3 fee was $731.',
+                    cache_control: { type: 'ephemeral', ttl: '5m' },
+                },
+            ],
+        }),
+    ).toBe('400 44.103')
 }, 30_000)
 
 // 44.38 — AN IMAGE OR A DOCUMENT IN THE TRANSCRIPT REACHES THE MODEL AS ITS BLOCK, unchanged, in its

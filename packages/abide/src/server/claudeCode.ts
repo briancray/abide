@@ -86,6 +86,14 @@ type PairingOptions = Pick<ClaudeCodeConfig, 'tools'> & {
 function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
     return {
         async *run(messages, tools, { maxTurns, signal }) {
+            // 44.103 — refused before the bridge is asked, rather than answered by Claude Code's 400.
+            for (const message of messages)
+                for (const piece of message.content)
+                    if (!cachedAnHour(piece))
+                        throw refuse(
+                            400,
+                            `A ${piece.type} in the transcript is cached for five minutes, and Claude Code caches for an hour after it — name ttl: '1h'. RULEBOOK 44.103.`,
+                        )
             yield* runTurn({
                 ...asker(),
                 prompt: foldedContent(messages),
@@ -100,6 +108,27 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
             })
         },
     }
+}
+
+/**
+ * Whether `piece`, and every block inside it, is cached for an hour where it is cached at all. 44.103.
+ *
+ * Claude Code puts breakpoints of an hour of its own after the transcript, and the API refuses a
+ * five-minute breakpoint ahead of an hour's.
+ */
+function cachedAnHour(piece: AssistantContent): boolean {
+    if (piece.cache_control !== undefined && piece.cache_control.ttl !== '1h')
+        return false
+    const inner =
+        piece.type === 'search_result'
+            ? piece.content
+            : piece.type === 'document' &&
+                piece.source.type === 'content' &&
+                typeof piece.source.content !== 'string'
+              ? piece.source.content
+              : []
+    for (const block of inner) if (!cachedAnHour(block)) return false
+    return true
 }
 
 /**

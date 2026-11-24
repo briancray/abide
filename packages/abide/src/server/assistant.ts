@@ -199,14 +199,20 @@ async function* converse(
         }
         turns.push({ role: message.role, content: message.content })
         for (const piece of message.content) {
-            if (piece?.type !== 'image' && piece?.type !== 'document') continue
+            if (
+                piece?.type !== 'image' &&
+                piece?.type !== 'document' &&
+                piece?.type !== 'search_result'
+            )
+                continue
             // 44.37 — an attachment is the asker's to show, never a turn the model answered.
             if (message.role !== 'user')
                 throw refuse(
                     400,
-                    `An ${piece.type} can only stand in a user turn of the transcript. RULEBOOK 44.37.`,
+                    `A ${piece.type} can only stand in a user turn of the transcript. RULEBOOK 44.37.`,
                 )
             // 44.36.
+            if (piece.type === 'search_result') continue
             const refused = refusalOf(piece)
             if (refused !== undefined) throw refuse(400, refused)
         }
@@ -527,15 +533,21 @@ function toolboxOver(surface: McpSurface, asker: Request): Toolbox {
 }
 
 /**
- * 44.36 — why a transcript's image or document is none the Messages API takes, or `undefined`: an
- * image of a type other than 44.36 names, a document neither a base64 PDF nor plain text.
+ * 44.36 — why a transcript's image or document is none the Messages API takes, or `undefined`: one
+ * with no source, an image carried inline of a type other than 44.36 names, a document carried inline
+ * that is not a PDF or text that is not plain. A source abide does not carry the bytes of — a URL, an
+ * uploaded file, content of its own — is the API's to judge.
  */
 function refusalOf(
     piece: Extract<AssistantContent, { type: 'image' | 'document' }>,
 ): string | undefined {
     const source = piece.source as
         { type?: unknown; media_type?: unknown; data?: unknown } | undefined
-    if (typeof source?.data !== 'string')
+    if (typeof source?.type !== 'string')
+        return `An ${piece.type} in the transcript carries no source. RULEBOOK 44.36.`
+    const inline = source.type === 'base64' || source.type === 'text'
+    if (!inline) return undefined
+    if (typeof source.data !== 'string')
         return `An ${piece.type} in the transcript carries no source data. RULEBOOK 44.36.`
     if (piece.type === 'image')
         return source.type === 'base64' &&
@@ -546,7 +558,7 @@ function refusalOf(
         source.media_type === 'application/pdf') ||
         (source.type === 'text' && source.media_type === 'text/plain')
         ? undefined
-        : `A document in the transcript is ${String(source.media_type)}, and a model reads only a base64 application/pdf or a text/plain one. RULEBOOK 44.36.`
+        : `A document in the transcript is ${String(source.media_type)}, and one carried inline is read only as a base64 application/pdf or text/plain. RULEBOOK 44.36.`
 }
 
 /**
