@@ -11,14 +11,13 @@ const COLUMNS: Column<Company>[] = [{ key: 'name', label: 'Company' }]
 const table = sortableTable({
     rows: COMPANIES,
     columns: COLUMNS,
-    key: (company) => company.id,
 })
 </script>
 
 <table>
     <thead>
         <tr>
-            {#for column of COLUMNS by column.key}
+            {#for column of COLUMNS key column.key}
                 <th {...table.column(column).header}>
                     <button {...table.column(column).sort}>
                         {column.label}
@@ -28,7 +27,7 @@ const table = sortableTable({
         </tr>
     </thead>
     <tbody>
-        {#for company of table.rows by company.id}
+        {#for company of table.rows key company.id}
             <tr {...table.row(company).row}>
                 <td>{company.name}</td>
             </tr>

@@ -10,7 +10,7 @@
 // laid things out, the scroller is found at the first of them, and a scroll is read once a frame. Until
 // the first measurement, `shown` is the first `initial` items, on a server as in a browser.
 
-import { type KeyOption, writtenBy } from './itemKey.ts'
+import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { lastAtOrBefore } from './lastAtOrBefore.ts'
 import { type Live, live } from './live.ts'
 import { resized } from './observe/resized.ts'
@@ -98,8 +98,7 @@ export function virtualList<Item>(
     const initial = options.initial ?? 40
     const estimate = options.estimate ?? 48
     const items = () => live(options.items)
-    const keyOf = (item: Item) =>
-        writtenBy(options.key as ((item: Item) => string) | undefined, item)
+    const keyOf = (item: Item) => keyOfItem(options.key, item)
 
     // What the measurements say: items a row holds, a row's height with its gap, the first row in view
     // and how many fit — and whether there is anything measured yet.

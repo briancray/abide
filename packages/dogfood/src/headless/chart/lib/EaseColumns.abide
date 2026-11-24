@@ -14,7 +14,7 @@ const plot = chart({
 
 <label><input type="checkbox" bind:checked={stacked} /> Stack</label>
 <svg {...plot.svg} class="h-48 w-full">
-    {#for bar of plot.bars by bar.key}
+    {#for bar of plot.bars key bar.key}
         <rect
             {...bar.rect}
             class="transition-transform motion-reduce:transition-none"

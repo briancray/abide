@@ -9,7 +9,7 @@ const months = carousel({ items: MONTHS, align: 'start' })
     <button {...months.previous}>Back</button>
     <ul {...months.host} aria-label="Close months"
         class="flex snap-x snap-mandatory overflow-x-auto">
-        {#for month of MONTHS by month}
+        {#for month of MONTHS key month}
             <li {...months.item(month)}
                 class="shrink-0 basis-[calc(100%/3.1)] snap-start p-snug">
                 {month}

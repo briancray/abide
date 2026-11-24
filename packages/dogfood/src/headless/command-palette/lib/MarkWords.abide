@@ -17,7 +17,7 @@ const palette = commandPalette({
 <dialog {...palette.dialog} class="palette">
     <input {...palette.input} placeholder="Type “deal ad”">
     <ul {...palette.listbox}>
-        {#for command of palette.results by command.label}
+        {#for command of palette.results key command.label}
             <li {...palette.command(command).option}>
                 <span {...palette.command(command).label}>
                     {#for run of palette.command(command).runs}

@@ -22,7 +22,7 @@ const palette = commandPalette({
 <dialog {...palette.dialog} class="palette">
     <input {...palette.input} placeholder="Go to…">
     <ul {...palette.listbox}>
-        {#for command of palette.results by command.label}
+        {#for command of palette.results key command.label}
             <li {...palette.command(command).option}>
                 {command.label}
                 <small class="text-muted">{command.keywords?.join(', ')}</small>

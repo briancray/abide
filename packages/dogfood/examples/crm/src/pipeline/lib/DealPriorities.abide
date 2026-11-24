@@ -12,13 +12,12 @@ const ranks = sortableList({
     items: DEALS,
     order,
     multiple: true,
-    key: (deal) => deal.id,
     label: (deal) => deal.name,
 })
 </script>
 
 <ol class="flex flex-col gap-hair" aria-label="Priorities" {...ranks.list}>
-    {#for deal of ranks.sorted by deal.id}
+    {#for deal of ranks.sorted key deal.id}
         <li class="row data-selected:bg-raised" {...ranks.item(deal).item}>
             <span class="cursor-grab" {...ranks.item(deal).handle}>⠿</span>
             <span>{deal.name}</span>

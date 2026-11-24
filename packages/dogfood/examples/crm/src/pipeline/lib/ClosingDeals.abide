@@ -38,7 +38,6 @@ let picked = reactive<string | undefined>(undefined)
 const table = sortableTable({
     rows: () => deals,
     columns: COLUMNS,
-    key: (deal) => deal.id,
     sort,
 })
 </script>
@@ -52,7 +51,7 @@ const table = sortableTable({
 >
     <thead>
         <tr>
-            {#for column of COLUMNS by column.key}
+            {#for column of COLUMNS key column.key}
                 <th {...table.column(column).header}>
                     {#if column.sortable === false}
                         {column.label}
@@ -67,14 +66,14 @@ const table = sortableTable({
         </tr>
     </thead>
     <tbody>
-        {#for deal of table.rows by deal.id}
+        {#for deal of table.rows key deal.id}
             <tr
                 {...table.row(deal).row}
                 data-stage={deal.stage}
                 onclick={() => (picked = deal.name)}
                 class="cursor-pointer data-[stage=won]:font-semibold"
             >
-                {#for column of COLUMNS by column.key}
+                {#for column of COLUMNS key column.key}
                     <td {...table.column(column).cell}>
                         {table.text(deal, column)}
                     </td>

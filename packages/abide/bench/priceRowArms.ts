@@ -40,7 +40,7 @@ function replace() {
 </script>
 
 <ul id="list">
-{#for row of rows by row.id}
+{#for row of rows key row.id}
     ${row}
 {/for}
 </ul>

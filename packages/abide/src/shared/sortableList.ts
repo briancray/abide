@@ -5,7 +5,12 @@
 // is heard on the window, so moving reads no layout and a reorder moving the grip loses nothing.
 
 import { announce } from './announce.ts'
-import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
+import {
+    keyOfItem,
+    type KeyOption,
+    type LabelOption,
+    writtenBy,
+} from './itemKey.ts'
 import { type Listbox, listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
 import { memo, type Reactive, reactive } from './reactive/index.ts'
@@ -52,7 +57,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
     options: SortableListOptions<Item, Multiple>,
 ): SortableList<Item, Multiple> {
     const order = options.order ?? reactive<readonly string[]>([])
-    const keyOf = (item: Item) => writtenBy(options.key, item)
+    const keyOf = (item: Item) => keyOfItem(options.key, item)
     const labelOf = (item: Item) => writtenBy(options.label, item)
     const many = options.multiple === true
     const grabbed = reactive<ReadonlySet<string>>(new Set())
@@ -128,7 +133,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
         let made = parts.get(key)
         if (made !== undefined) return made
         made = {
-            item: withPart(withPart({}, choices.option(key)), {
+            item: withPart(withPart({}, choices.option(entry)), {
                 'data-sortable-list': 'item',
                 get 'data-grabbed'() {
                     return grabbed().has(key) ? '' : undefined

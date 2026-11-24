@@ -98,7 +98,7 @@ export type ChartXTick = {
 
 /** One column of a series at one x. */
 export type ChartBar = {
-    /** Stable across a redraw: `series:index`, so `{#for bar of plot.bars() by bar.key}` keeps each element. */
+    /** Stable across a redraw: `series:index`, so `{#for bar of plot.bars() key bar.key}` keeps each element. */
     key: string
     series: number
     index: number

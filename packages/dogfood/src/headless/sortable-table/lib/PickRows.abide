@@ -13,7 +13,6 @@ let selected = reactive<readonly string[]>([])
 const table = sortableTable({
     rows: DEALS,
     columns: COLUMNS,
-    key: (deal) => deal.id,
     selected,
 })
 </script>
@@ -29,7 +28,7 @@ const table = sortableTable({
         </tr>
     </thead>
     <tbody>
-        {#for deal of table.rows by deal.id}
+        {#for deal of table.rows key deal.id}
             <tr {...table.row(deal).row} class="data-selected:bg-signal/10">
                 <td {...table.row(deal).select}>
                     <input {...table.row(deal).checkbox}>

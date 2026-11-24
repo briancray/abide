@@ -64,7 +64,7 @@ export type Projection = {
      */
     slots: Map<object, Position>
     /**
-     * Per `{#for}` block, the position of its `by` key, which stands inside the loop and sees the row.
+     * Per `{#for}` block, the position of its `key` key, which stands inside the loop and sees the row.
      */
     keys: Map<object, Position>
     /** 32.67 — per `{#for}` block, where its row's item binding starts. */

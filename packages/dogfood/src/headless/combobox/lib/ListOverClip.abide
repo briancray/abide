@@ -13,7 +13,7 @@ const box = combobox({
         {#if box.open}
             <div {...box.popup} class="m-0 w-(--anchor-width)">
                 <ul {...box.listbox}>
-                    {#for name of box.items by name}
+                    {#for name of box.items key name}
                         <li {...box.option(name)}>{name}</li>
                     {/for}
                 </ul>

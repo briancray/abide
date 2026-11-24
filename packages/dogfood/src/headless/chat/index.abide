@@ -66,9 +66,9 @@ import Section from '#src/lib/Section.abide'
 
             <section {...talk.root}>
                 <ol {...talk.transcript}>
-                    {#for turn, index of talk.turns by turn}
+                    {#for turn, index of talk.turns key turn}
                         <li {...talk.turn(turn, index).turn}>
-                            {#for part of turn.parts by part}
+                            {#for part of turn.parts key part}
                                 {#if part.type === 'text'}
                                     <p {...talk.text}>{part.text}</p>
                                 {/if}

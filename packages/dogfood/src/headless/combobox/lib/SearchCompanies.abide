@@ -22,7 +22,6 @@ const box = combobox({
     id: 'works-at',
     search: (q) => searchCompanies({ q }),
     debounce: 200,
-    key: (found: Company) => found.id,
     label: (found: Company) => found.name,
 })
 </script>
@@ -33,7 +32,7 @@ const box = combobox({
     {#if box.open}
         <div {...box.popup}>
             <ul {...box.listbox}>
-                {#for found of box.items by found.id}
+                {#for found of box.items key found.id}
                     <li {...box.option(found)}>{found.name}</li>
                 {/for}
             </ul>

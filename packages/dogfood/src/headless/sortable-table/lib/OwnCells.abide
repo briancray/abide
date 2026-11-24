@@ -15,14 +15,13 @@ const COLUMNS: Column<Deal>[] = [
 const table = sortableTable({
     rows: DEALS,
     columns: COLUMNS,
-    key: (deal) => deal.id,
 })
 </script>
 
 <table class="w-full [&_[data-align=end]]:text-right">
     <thead>
         <tr>
-            {#for column of COLUMNS by column.key}
+            {#for column of COLUMNS key column.key}
                 <th {...table.column(column).header}>
                     <button {...table.column(column).sort}>
                         {column.label}
@@ -32,7 +31,7 @@ const table = sortableTable({
         </tr>
     </thead>
     <tbody>
-        {#for deal of table.rows by deal.id}
+        {#for deal of table.rows key deal.id}
             <tr>
                 <td>
                     <strong>{deal.name}</strong>

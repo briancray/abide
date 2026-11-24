@@ -69,7 +69,8 @@ import sortedByClose from './lib/SortedByClose.abide' with { type: 'text' }
         <p>Spread a column's <code>header</code> onto its header and its <code>sort</code> onto
             the button, and walk <code>rows</code>: the rows come back in the order the sort names.
             Pressing a header sorts ascending, and pressing it again turns the direction round.
-            <code>key</code> lets a re-sort move rows rather than rewrite them. Each cell is yours,
+            A row is told apart by its <code>id</code>, or by <code>key</code> where it has none,
+            so a re-sort moves rows rather than rewriting them. Each cell is yours,
             so a deal's owner can sit under its name.</p>
         <Example code={ownCells}><OwnCells /></Example>
     </Section>
@@ -93,7 +94,7 @@ import sortedByClose from './lib/SortedByClose.abide' with { type: 'text' }
                 },
             ]
 
-            {#for column of COLUMNS by column.key}
+            {#for column of COLUMNS key column.key}
                 <td {...table.column(column).cell}>{table.text(deal, column)}</td>
             {/for}
         `} />

@@ -2,7 +2,7 @@
 import { tabs } from '@abide/abide'
 
 const notes = ['Called Ada', 'Sent the quote']
-const view = tabs({ keys: ['details', 'notes'] })
+const view = tabs({ items: ['details', 'notes'] })
 </script>
 
 <div {...view.list}>

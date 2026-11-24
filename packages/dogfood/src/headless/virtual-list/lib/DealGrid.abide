@@ -12,7 +12,6 @@ const DEALS = sortBy(
 
 const deals = virtualList({
     items: DEALS,
-    key: (deal) => String(deal.id),
     section: (deal) => deal.name[0] ?? '',
     labels: [...'ABCDEFG'],
 })
@@ -22,14 +21,14 @@ const deals = virtualList({
     <div class="h-80 grow overflow-auto">
         <div class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-2"
             {...deals.host}>
-            {#for entry of deals.shown by entry.key}
+            {#for entry of deals.shown key entry.key}
                 <div class="h-12 rounded border border-rule p-2"
                     {...deals.item(entry)}>{entry.item.name}</div>
             {/for}
         </div>
     </div>
     <nav class="flex flex-col" {...deals.sections.host}>
-        {#for section of deals.sections.all by section.label}
+        {#for section of deals.sections.all key section.label}
             <button class="aria-[current]:font-bold disabled:opacity-40"
                 {...deals.sections.jump(section)}>{section.label}</button>
         {/for}

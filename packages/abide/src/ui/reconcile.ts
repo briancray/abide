@@ -219,7 +219,7 @@ function patchedSince(row: Row): boolean {
 /**
  * Warns about a repeated `{#for}` key, once per block.
  *
- * 41.15 — ONCE FOR THE BLOCK, not once a reconcile. A repeated key is a property of the `by`
+ * 41.15 — ONCE FOR THE BLOCK, not once a reconcile. A repeated key is a property of the `key`
  * expression rather than of one write, so it holds for every reconcile the region ever runs and a
  * warning per write is a console nobody reads.
  *

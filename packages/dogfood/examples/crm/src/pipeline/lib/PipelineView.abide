@@ -5,7 +5,7 @@ import { STAGES } from './STAGES.ts'
 
 let view = reactive<string | undefined>('list')
 const views = toggleGroup({
-    keys: ['list', 'board'],
+    items: ['list', 'board'],
     value: view,
     label: 'Pipeline view',
 })
@@ -18,11 +18,11 @@ const views = toggleGroup({
     </div>
     {#if view === 'board'}
         <div class="tiles">
-            {#for stage of STAGES by stage}<div>{stage}</div>{/for}
+            {#for stage of STAGES key stage}<div>{stage}</div>{/for}
         </div>
     {:else}
         <ol>
-            {#for stage of STAGES by stage}<li>{stage}</li>{/for}
+            {#for stage of STAGES key stage}<li>{stage}</li>{/for}
         </ol>
     {/if}
 </div>

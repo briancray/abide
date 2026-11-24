@@ -18,7 +18,6 @@ let contact = reactive<Contact | undefined>(undefined)
 const box = combobox({
     id: 'deal-contact',
     options: () => contacts,
-    key: (each) => each.id,
     label: (each) => each.name,
     value: contact,
 })
@@ -30,7 +29,7 @@ const box = combobox({
     {#if box.open}
         <div {...box.popup}>
             <ul {...box.listbox}>
-                {#for each of box.items by each.id}
+                {#for each of box.items key each.id}
                     <li {...box.option(each)}>{each.name}</li>
                 {/for}
             </ul>

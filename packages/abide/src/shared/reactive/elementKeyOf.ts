@@ -6,10 +6,10 @@ import { CELL } from './CELL.ts'
 import type { Callable } from './cellShape.ts'
 import { isReactive } from './isReactive.ts'
 
-/** The `by` a `Reactive` declared (32.32), or `null` where it declared none or `value` is not one. */
-export function byOf(
+/** The `key` a `Reactive` declared (32.32), or `null` where it declared none or `value` is not one. */
+export function elementKeyOf(
     value: unknown,
 ): string | ((element: unknown) => unknown) | null {
     if (!isReactive(value)) return null
-    return (value as unknown as Callable)[CELL].by
+    return (value as unknown as Callable)[CELL].key
 }

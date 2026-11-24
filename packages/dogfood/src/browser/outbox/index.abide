@@ -61,7 +61,7 @@ import Section from '#src/lib/Section.abide'
             import logCall from './logCall.handler.ts'
             </script>
 
-            {#for call of outbox(logCall) by call.id}
+            {#for call of outbox(logCall) key call.id}
                 {#if call.value.error()}
                     <p>{call.args?.note}: {call.value.error()?.message}</p>
                     <button onclick={call.retry}>Retry</button>

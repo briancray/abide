@@ -19,10 +19,10 @@ const { plot, ...rest } = props<
     {#for tick of plot.xTicks}
         <text {...tick.text}>{tick.label}</text>
     {/for}
-    {#for mark of plot.marks by mark.series}
+    {#for mark of plot.marks key mark.series}
         {#if mark.kind === 'column'}
             <g {...mark.columns}>
-                {#for bar of mark.bars by bar.index}
+                {#for bar of mark.bars key bar.index}
                     <rect {...bar.rect} />
                 {/for}
             </g>

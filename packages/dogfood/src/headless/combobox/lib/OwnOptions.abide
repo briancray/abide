@@ -11,7 +11,6 @@ const CONTACTS: Contact[] = [
 const box = combobox({
     id: 'deal-owner',
     options: () => CONTACTS,
-    key: (contact) => contact.id,
     label: (contact) => contact.name,
 })
 const initials = (name: string) =>
@@ -27,7 +26,7 @@ const initials = (name: string) =>
     {#if box.open}
         <div {...box.popup}>
             <ul {...box.listbox}>
-                {#for contact of box.items by contact.id}
+                {#for contact of box.items key contact.id}
                     <li {...box.option(contact)}>
                         <b>{initials(contact.name)}</b>
                         {contact.name}

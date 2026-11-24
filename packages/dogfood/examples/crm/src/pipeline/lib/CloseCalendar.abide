@@ -29,21 +29,21 @@ const view = calendar({ month, selected })
         <button {...view.next}>›</button>
     </div>
     <div data-months>
-        {#for shown of view.months by shown.month}
+        {#for shown of view.months key shown.month}
             <section>
                 <h3 {...shown.heading}>{shown.label}</h3>
                 <div {...shown.grid}>
                     <div {...view.header}>
-                        {#for weekday of view.weekdays by weekday.day}
+                        {#for weekday of view.weekdays key weekday.day}
                             <div {...weekday.header}>{weekday.short}</div>
                         {/for}
                     </div>
-                    {#for week of shown.weeks by week[0]?.date}
+                    {#for week of shown.weeks key week[0]?.date}
                         <div {...view.week}>
-                            {#for day of week by day.date}
+                            {#for day of week key day.date}
                                 <div {...day.cell}>
                                     {day.day}
-                                    {#for deal of closing.get(day.date) ?? [] by deal.id}
+                                    {#for deal of closing.get(day.date) ?? [] key deal.id}
                                         <span data-deal>{deal.name}</span>
                                     {/for}
                                 </div>

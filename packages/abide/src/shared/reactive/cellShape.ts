@@ -1,6 +1,6 @@
 // A VALUE'S RECORD, AND THE ONE PLACE ITS SHAPE IS DECLARED. `Cell` and the sub-records it holds
 // (`Cap`, `Persisted`, `Stream`, `Adoption`) live here rather than in `Reactive.ts` so a sibling
-// that reaches a value's record — `Keyed`, `watch`, `byOf`, the selection index, the producer port —
+// that reaches a value's record — `Keyed`, `watch`, `elementKeyOf`, the selection index, the producer port —
 // names the real type instead of re-declaring the few fields it reads.
 //
 // NO RUNTIME EDGE BACK TO THE CORE. `Reactive.ts` imports this, and a module reaching this ahead
@@ -448,11 +448,11 @@ export class Cell {
     /** `null` on every value declaring no `store`, which is what keeps `serve` from persisting. */
     declare store: Persisted | null
     /**
-     * The declared `by`.
+     * The declared `key`.
      *
      * 5.22 — held as declared rather than as a function, so the property name is still there to send.
      */
-    declare by: string | ((element: unknown) => unknown) | null
+    declare key: string | ((element: unknown) => unknown) | null
     /** The probe pass this cell was last visited in. See `walkBusy` and `walkReady`. */
     declare probePass: number
     /**
@@ -614,7 +614,7 @@ export class Cell {
                       unconfirmed: undefined,
                       unwatch: null,
                   }
-        this.by = (options?.by ?? null) as
+        this.key = (options?.key ?? null) as
             string | ((element: unknown) => unknown) | null
         this.probePass = 0
         this.owes = OWES_NOTHING
@@ -742,7 +742,7 @@ export function simpleShape(cell: Cell): void {
  * The record `value` keeps its state on: `value` is a `Reactive`, and this is the cast from what an
  * app holds to the record, for a module that already value-imports `cellShape`.
  *
- * A module importing `cellShape` TYPE-ONLY (`byOf`, `watch`) spells
+ * A module importing `cellShape` TYPE-ONLY (`elementKeyOf`, `watch`) spells
  * `(x as Callable)[CELL]` itself, which keeps `cellShape`'s value graph out of its own; the core's
  * paths read `[CELL]` inline; and `producer.isStreaming` reads `?.[CELL]`, which this cast would
  * not allow.

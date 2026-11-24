@@ -10,7 +10,7 @@ const kept = memo(() =>
 
 <input aria-label="Find a contact" bind:value={query} />
 <ul>
-    {#for name of query.trim() === '' ? CONTACTS : kept by name}
+    {#for name of query.trim() === '' ? CONTACTS : kept key name}
         <li>
             {#for run of highlight(name, query)}
                 {#if run.match}<mark {...run.match}>{run.text}</mark>{:else}{run.text}{/if}

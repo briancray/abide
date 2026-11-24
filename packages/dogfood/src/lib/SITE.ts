@@ -501,6 +501,14 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/spoiler',
+                title: '`spoiler`',
+                description:
+                    'Cover content of your own with a button in its place, hidden from find in page and screen readers until pressed.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/pages',
                 title: '`pages`',
                 description:

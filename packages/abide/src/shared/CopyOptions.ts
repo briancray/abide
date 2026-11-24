@@ -4,10 +4,10 @@
  * 18.4 — WHAT A `GET`'s VALUE DECLARES THAT ITS BROWSER COPY HAS TO BEHAVE BY, as the build reads
  * it off the declaration and writes it into the wrapper: data, because it crosses as text.
  * `deepEqual` is named rather than carried, being abide's own comparator on both sides; an app's
- * own has no serialization and stays the server's, as a function `by` or `tags` does.
+ * own has no serialization and stays the server's, as a function `key` or `tags` does.
  */
 export type CopyOptions = {
-    by?: string
+    key?: string
     tags?: string[]
     identity?: 'deepEqual'
     /**

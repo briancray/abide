@@ -5,7 +5,7 @@ const DEALS = Array.from({ length: 10_000 }, (_, id) => ({
     id,
     name: `Deal ${id + 1}`,
 }))
-const deals = virtualList({ items: DEALS, key: (deal) => String(deal.id) })
+const deals = virtualList({ items: DEALS })
 let wanted = reactive<number | undefined>(5000)
 </script>
 
@@ -15,7 +15,7 @@ let wanted = reactive<number | undefined>(5000)
 <button onclick={() => deals.scrollTo((wanted ?? 1) - 1)}>Show it</button>
 <div class="h-60 overflow-auto">
     <div {...deals.host}>
-        {#for entry of deals.shown by entry.key}
+        {#for entry of deals.shown key entry.key}
             <div class="h-7 data-[wanted]:font-semibold"
                 data-wanted={entry.index === (wanted ?? 1) - 1 ? '' : undefined}
                 {...deals.item(entry)}>{entry.item.name}</div>

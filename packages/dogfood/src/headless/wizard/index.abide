@@ -25,7 +25,7 @@ import newDeal from './lib/NewDeal.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Set up a deal in steps">
-        <p>Spread <code>step(key)</code> on each step's marker: the one on carries
+        <p>Spread <code>step(step)</code> on each step's marker: the one on carries
             <code>aria-current="step"</code>, and those before it <code>data-done</code>, a click
             going back to it. <code>next</code> waits on <code>valid</code> for the step on, and
             <code>progress</code> is a <code>meter</code> of how far it has come.</p>

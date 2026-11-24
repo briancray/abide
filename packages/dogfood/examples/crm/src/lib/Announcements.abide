@@ -6,7 +6,7 @@ const shown = announcements.host({ label: 'Announcements' })
 </script>
 
 <ul {...shown.region} class="flex flex-col gap-tight">
-    {#for notice of shown.notices by notice.id}
+    {#for notice of shown.notices key notice.id}
         <li
             {...shown.notice(notice).notice}
             class="row rounded-lg border border-rule bg-raised px-4 py-2"

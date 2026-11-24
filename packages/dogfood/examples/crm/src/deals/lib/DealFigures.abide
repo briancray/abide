@@ -20,7 +20,7 @@ function addLead() {
 <table>
     <thead><tr><th>Deal</th><th>Amount</th><th>Chance</th></tr></thead>
     <tbody>
-        {#for deal of deals by deal.name}
+        {#for deal of deals key deal.name}
             <tr>
                 <td>{deal.name}</td>
                 <td>{format.money(deal.amount, { digits: 0 })}</td>

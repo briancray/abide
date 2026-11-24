@@ -5,7 +5,12 @@
 
 import { checkParts } from './checkParts.ts'
 import { hotkeys } from './hotkeys.ts'
-import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
+import {
+    keyOfItem,
+    type KeyOption,
+    type LabelOption,
+    writtenBy,
+} from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { memo, type Reactive, reactive } from './reactive/index.ts'
@@ -71,7 +76,7 @@ export function tree<Node, Multiple extends boolean = false>(
 ): Tree<Node, Multiple> {
     // 49.11 — read where they are used; whether it selects many is fixed for the life of the parts.
     const children = (node: Node) => options.children(node)
-    const key = (node: Node) => writtenBy(options.key, node)
+    const key = (node: Node) => keyOfItem(options.key, node)
     const label = (node: Node) => writtenBy(options.label, node)
     const rootsOf = () => live(options.roots)
     const expanded = options.expanded ?? reactive<readonly string[]>([])

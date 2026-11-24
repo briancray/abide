@@ -175,9 +175,9 @@ let maybe = reactive<string | undefined>(undefined)
 let rows = reactive([{ id: 1 }])
 let keyed = reactive(
     [{ id: 1 }],
-    { by: 'id' },
+    { key: 'id' },
 )
-let decoy = reactive([{ id: 1, by: 'someone' }])
+let decoy = reactive([{ id: 1, key: 'someone' }])
 const picked = memo(() => (flag ? one : two))
 const same = memo(() => (flag ? flag : false))
 const late = memo(async () => {
@@ -194,7 +194,7 @@ const unsure = memo(() => maybe ?? 'nobody')
 </script>
 
 {#for row of rows}<input value={row.id}/>{/for}
-{#for row of rows by row.id}<input value={row.id}/>{/for}
+{#for row of rows key row.id}<input value={row.id}/>{/for}
 {#for label of ['a', 'b']}<input value={label}/>{/for}
 {#for row of rows}<b>{row.id}</b>{/for}
 {#for row of keyed}<input value={row.id}/>{/for}
@@ -826,7 +826,7 @@ test('a plain let the setup writes in a script module is warned on — 34.18', (
 })
 
 // 32.14 — UNKEYED, OVER STATE, OVER A LIST THAT CAN CHANGE: the loops that are all three, less the one
-// whose value declares `by` (32.32) — and not the decoy, whose ROWS carry a `by` and whose value does
+// whose value declares `key` (32.32) — and not the decoy, whose ROWS carry a `key` and whose value does
 // not. THE REVERT: drop `holdsState` from `templateWarnings`; the `<b>` loop warns too (3 against 2).
 // Drop `canChange` and the constant list warns (3 against 2). Drop `keyedByValue` and `keyed` warns
 // (3 against 2).
@@ -1153,7 +1153,7 @@ import { props } from '@abide/abide'
 const { items, onpick } = props<{ items: Item[]; onpick: (item: Item) => void }>()
 const label: string = items[0]?.label ?? ''
 </script>
-<ul>{#for item of items by item.id}<li onclick={() => onpick(item)}>{item.label}</li>{/for}</ul><p>{label}</p>`,
+<ul>{#for item of items key item.id}<li onclick={() => onpick(item)}>{item.label}</li>{/for}</ul><p>{label}</p>`,
         'index.abide': `<script>
 import Select from '#src/lib/Select.abide'
 type Film = { id: string; label: string; year: number }
@@ -1213,13 +1213,13 @@ const running = sweep()
     ).toEqual([{ file: 'Status.abide', line: 6, code: 2339 }])
 }, 60_000)
 
-// 32.32 — A VALUE DECLARED IN ANOTHER MODULE KEYS BY ITS `by` TOO, imported under its own name or
-// another. THE REVERT: read `by` off the page's own setup text rather than the checker's
+// 32.32 — A VALUE DECLARED IN ANOTHER MODULE KEYS BY ITS `key` TOO, imported under its own name or
+// another. THE REVERT: read `key` off the page's own setup text rather than the checker's
 // declaration; both imported loops warn (3 against 1).
-test('an unkeyed loop over an imported value that declares `by` does not warn — 32.32', async () => {
+test('an unkeyed loop over an imported value that declares `key` does not warn — 32.32', async () => {
     const imported = appFixture({
         'lib/rows.ts': `import { reactive } from '@abide/abide'
-export const shared = reactive([{ id: 1 }], { by: 'id' })
+export const shared = reactive([{ id: 1 }], { key: 'id' })
 export const plain = reactive([{ id: 1 }])
 `,
         'index.abide': `<script>

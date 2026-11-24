@@ -3,7 +3,7 @@ import { reactive, toggleGroup } from '@abide/abide'
 
 let view = reactive<string | undefined>('list')
 const views = toggleGroup({
-    keys: ['list', 'board'],
+    items: ['list', 'board'],
     value: view,
     label: 'View',
 })

@@ -4,20 +4,20 @@ import { format, memo, reactive, tabs } from '@abide/abide'
 import getDeal from '../getDeal.handler.ts'
 
 const VIEWS = [
-    { key: 'details', label: 'Details' },
-    { key: 'value', label: 'Value' },
-    { key: 'stage', label: 'Stage' },
+    { id: 'details', label: 'Details' },
+    { id: 'value', label: 'Value' },
+    { id: 'stage', label: 'Stage' },
 ]
 
 let tab = reactive<string | undefined>('details')
-const view = tabs({ keys: VIEWS.map((each) => each.key), selected: tab })
+const view = tabs({ items: VIEWS, selected: tab })
 const deal = memo(() => getDeal({ id: 'd1' }))
 </script>
 
 <div class="flex flex-col gap-snug">
     <div class="tabs" {...view.list}>
-        {#for each of VIEWS by each.key}
-            <button {...view.tab(each.key).button}>{each.label}</button>
+        {#for each of VIEWS key each.id}
+            <button {...view.tab(each).button}>{each.label}</button>
         {/for}
     </div>
     <ul class="fields" {...view.panel}>

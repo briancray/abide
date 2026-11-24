@@ -129,7 +129,7 @@ const sliders = [{ k: 'a' as const }, { k: 'b' as const }]
 let key = reactive<'a' | 'b'>('b')
 </script>
 
-{#for s of sliders by s.k}<input id={'f' + s.k} type="range" bind:value={params[s.k]}>{/for}
+{#for s of sliders key s.k}<input id={'f' + s.k} type="range" bind:value={params[s.k]}>{/for}
 <input id="top" type="range" bind:value={params[key]}>
 <button id="flip" onclick={() => { key = 'a' }}>flip</button>
 <p id="out">{params.a} {params.b}</p>`)
@@ -416,7 +416,7 @@ let size = reactive('m')
 let mine = reactive('s')
 </script>
 
-<main>{#for option of options by option.id}<input id={'o' + option.id} type="radio" name="o" value={option.id} bind:group={choice}>{/for}
+<main>{#for option of options key option.id}<input id={'o' + option.id} type="radio" name="o" value={option.id} bind:group={choice}>{/for}
 <input id="moving" type="radio" value={mine} bind:group={size}>
 <button id="move" onclick={() => { mine = 'm' }}>move</button>
 <p id="out">{typeof choice} {choice}</p></main>`)

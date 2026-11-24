@@ -10,7 +10,6 @@ const leads: Deal[] = [
 const batch = listbox({
     id: 'batch',
     options: () => leads,
-    key: (deal: Deal) => deal.id,
     multiple: true,
 })
 </script>
@@ -19,8 +18,8 @@ const batch = listbox({
     aria-label="Leads to hand over" aria-activedescendant={batch.activeId}
     class="fields select-none [&_[data-active]]:bg-signal/10
         [&_[data-selected]]:font-semibold">
-    {#for deal of leads by deal.id}
-        <li {...batch.option(deal.id)}>{deal.name}</li>
+    {#for deal of leads key deal.id}
+        <li {...batch.option(deal)}>{deal.name}</li>
     {/for}
 </ul>
 <p>Handing over: {batch.selected().length} of {leads.length}</p>

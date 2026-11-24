@@ -9,7 +9,7 @@ const { deals = dealsOf(4) } = props<{ deals?: ExportedDeal[] }>()
 <table>
     <thead><tr><th>Company</th><th>Amount</th></tr></thead>
     <tbody>
-        {#for deal of deals by deal.company}
+        {#for deal of deals key deal.company}
             <tr>
                 <td>{deal.company}</td>
                 <td>${deal.amount}</td>

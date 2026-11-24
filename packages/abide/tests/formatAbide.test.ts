@@ -73,7 +73,7 @@ test('every expression a slot, an attribute, a spread or a block head holds is f
     {:else if count===1}
         <p>one</p>
     {/if}
-    {#for item,index of items.filter(x=>x.ok) by item.id}
+    {#for item,index of items.filter(x=>x.ok) key item.id}
         <b>{index}</b>
     {/for}
 </div>
@@ -85,7 +85,7 @@ test('every expression a slot, an attribute, a spread or a block head holds is f
     {:else if count === 1}
         <p>one</p>
     {/if}
-    {#for item, index of items.filter((x) => x.ok) by item.id}
+    {#for item, index of items.filter((x) => x.ok) key item.id}
         <b>{index}</b>
     {/for}
 </div>

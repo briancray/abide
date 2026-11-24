@@ -1,53 +1,59 @@
 // 51.110-51.115 — A ROW OF BUTTONS THAT HOLD A CHOICE, as parts an app spreads onto a group and a
-// button per key of its own. Picking many, it is a `toggle` per key, each pressed while `value` holds
+// button per item of its own. Picking many, it is a `toggle` per key, each pressed while `value` holds
 // its key: filter chips. Picking one, it is WAI-ARIA's radio group, the arrow keys moving the pick and
 // focus together: a segmented control. What it picks is a `Selection`, as a `listbox`'s is.
 
+import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import type { Reactive } from './reactive/index.ts'
+import { memo, type Reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving } from './roving.ts'
 import { type Picked, Selection } from './Selection.ts'
 import { toggle } from './toggle.ts'
 import { withPart } from './withPart.ts'
 
-/** The keys a group offers, what it picks, and what it is called. */
-export type ToggleGroupOptions<Multiple extends boolean = false> = {
+/** The items a group offers, how each is told apart, what it picks, and what it is called. */
+export type ToggleGroupOptions<Item, Multiple extends boolean = false> = {
     /** The base the ids its buttons write are derived from; unique on the page. One is made where none is given. */
     id?: string
-    /** The keys, in the order their buttons render; a function is read live. */
-    keys: Live<readonly string[]>
+    /** The items, in the order their buttons render; a function is read live. */
+    items: Live<readonly Item[]>
     /** Whether it picks many, each press adding its key or taking it out. `false` by default. */
     multiple?: Multiple
     /** The key picked, or every key picked where it picks many: a `Reactive` to read and set. Held by the parts, and handed back as `value`, where none is given. */
     value?: Reactive<Picked<string, Multiple>>
     /** The group's accessible name; a function is read live. */
     label?: Live<string>
-}
+} & KeyOption<Item>
 
 /** The parts `toggleGroup` hands back: `<div {...view.group}>`, `<button {...view.item('board')}>`. */
-export type ToggleGroup<Multiple extends boolean = false> = {
+export type ToggleGroup<Item, Multiple extends boolean = false> = {
     /** The base its buttons' ids are derived from. */
     readonly id: string
     /** The group's attributes, and its keyboard where it picks one. */
     readonly group: Record<string, unknown>
-    /** A key's button: its attributes and its click. */
-    item(key: string): Record<string, unknown>
+    /** An item's button: its attributes and its click. */
+    item(item: Item): Record<string, unknown>
     /** The key picked, or every key picked where it picks many; written, it picks. */
     readonly value: Reactive<Picked<string, Multiple>>
 }
 
-/** Toggle buttons over a set of keys, picking one as a radio group does or picking many. */
-export function toggleGroup<Multiple extends boolean = false>(
-    options: ToggleGroupOptions<Multiple>,
-): ToggleGroup<Multiple> {
+/** Toggle buttons over a set of items, picking one as a radio group does or picking many. */
+export function toggleGroup<Item, Multiple extends boolean = false>(
+    options: ToggleGroupOptions<Item, Multiple>,
+): ToggleGroup<Item, Multiple> {
     const many = options.multiple === true
     const picks = new Selection(
         options.value as Reactive<Picked<string, boolean>> | undefined,
         many,
     )
-    const keysOf = () => live(options.keys)
+    const keyOf = (item: Item) => keyOfItem(options.key, item)
+    const keysOf = memo((): readonly string[] => {
+        const written: string[] = []
+        for (const item of live(options.items)) written.push(keyOf(item))
+        return written
+    })
     // Hydration runs setup again (41.6), and the focus a key moves is found by these ids.
     const base = options.id ?? `toggle-group-${randomToken(4, 'hex')}`
     const itemId = (key: string) => `${base}-${encodeURIComponent(key)}`
@@ -96,12 +102,13 @@ export function toggleGroup<Multiple extends boolean = false>(
     })
 
     // Each key's part is built once and kept, so a render asking for it again builds nothing.
-    const items = new Map<string, Record<string, unknown>>()
-    const item = (key: string): Record<string, unknown> => {
-        let part = items.get(key)
+    const parts = new Map<string, Record<string, unknown>>()
+    const item = (entry: Item): Record<string, unknown> => {
+        const key = keyOf(entry)
+        let part = parts.get(key)
         if (part === undefined) {
             part = many ? toggled(key) : radio(key)
-            items.set(key, part)
+            parts.set(key, part)
         }
         return part
     }

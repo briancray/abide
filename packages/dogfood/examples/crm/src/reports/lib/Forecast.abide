@@ -11,7 +11,7 @@ const expected = memo(() => forecast(deals))
 </script>
 
 <ul class="fields">
-    {#for deal, index of deals by deal.company}
+    {#for deal, index of deals key deal.company}
         <li>
             <span>{deal.company}</span><strong>{deal.stage}</strong>
             <button

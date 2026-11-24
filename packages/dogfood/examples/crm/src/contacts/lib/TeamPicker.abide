@@ -12,7 +12,6 @@ let team = reactive<Contact[]>([])
 const box = combobox({
     id: 'deal-team',
     options: () => contacts,
-    key: (each) => each.id,
     label: (each) => each.name,
     multiple: true,
     value: team,
@@ -21,7 +20,7 @@ const box = combobox({
 
 <label for="deal-team">On the deal</label>
 <div {...box.root} class="picker flex-row flex-wrap">
-    {#for contact of box.value by contact.id}
+    {#for contact of box.value key contact.id}
         <span {...box.chip(contact).chip} class="rounded-md bg-signal/10 px-2"><span>{contact.name}</span>
             <button {...box.chip(contact).remove}>×</button></span>
     {/for}
@@ -29,7 +28,7 @@ const box = combobox({
     {#if box.open}
         <div {...box.popup}>
             <ul {...box.listbox}>
-                {#for contact of box.items by contact.id}
+                {#for contact of box.items key contact.id}
                     <li {...box.option(contact)}>
                         <span>{contact.name}</span>
                         <small class="block text-muted">{contact.company}</small>

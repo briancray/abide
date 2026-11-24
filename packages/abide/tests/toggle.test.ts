@@ -38,7 +38,7 @@ test('a toggle flips pressed on a click, and says so as a toggle button or a swi
 test('a group picking many is a toggle per key, pressed while value holds it — 51.110', () => {
     const value = reactive<readonly string[]>(['won'])
     const chips = toggleGroup({
-        keys: ['lead', 'proposal', 'won'],
+        items: ['lead', 'proposal', 'won'],
         multiple: true,
         value,
     })
@@ -63,7 +63,7 @@ test('a group picking many is a toggle per key, pressed while value holds it —
 // THE REVERT: hand a group picking one the toggles a group picking many hands out, and its buttons
 // carry `aria-pressed` where `role="radio"` and `aria-checked` are due.
 test('a group picking one is a radio group, and a press on the key picked keeps it — 51.111, 51.112, 51.115', () => {
-    const view = toggleGroup({ keys: ['list', 'board'], label: 'View' })
+    const view = toggleGroup({ items: ['list', 'board'], label: 'View' })
     expect([view.group.role, view.group['aria-label']]).toEqual([
         'radiogroup',
         'View',
@@ -76,14 +76,14 @@ test('a group picking one is a radio group, and a press on the key picked keeps 
     click(view.item('board'))
     expect(view.value()).toBe('board')
     expect(view.item('board')['data-pressed']).toBe('')
-    expect(toggleGroup({ keys: ['a'], multiple: true }).group.role).toBe(
+    expect(toggleGroup({ items: ['a'], multiple: true }).group.role).toBe(
         'group',
     )
 })
 
 // THE REVERT: move focus on an arrow without picking, and the arrows leave `value` where it was.
 test('in a group picking one, the arrows move the pick and focus together, going round — 51.113', () => {
-    const view = toggleGroup({ id: 'view', keys: ['list', 'board', 'chart'] })
+    const view = toggleGroup({ id: 'view', items: ['list', 'board', 'chart'] })
     for (const key of ['list', 'board', 'chart']) {
         const button = document.createElement('button')
         button.id = view.item(key).id as string
@@ -106,7 +106,7 @@ test('in a group picking one, the arrows move the pick and focus together, going
 
 // THE REVERT: put every radio in the tab order, and Tab stops on each of them.
 test('in a group picking one, only the key picked, or the first, is in the tab order — 51.114', () => {
-    const view = toggleGroup({ keys: ['list', 'board'] })
+    const view = toggleGroup({ items: ['list', 'board'] })
     const order = () => ['list', 'board'].map((key) => view.item(key).tabindex)
     expect(order()).toEqual(['0', '-1'])
     view.value.set('board')

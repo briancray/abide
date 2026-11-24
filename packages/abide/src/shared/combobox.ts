@@ -4,7 +4,12 @@
 // `listbox` the input's keys move through, opened in the top layer against the input as `popover`
 // opens one. Bound to an array, it picks many: each pick adds an item or takes it out again.
 
-import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
+import {
+    keyOfItem,
+    type KeyOption,
+    type LabelOption,
+    writtenBy,
+} from './itemKey.ts'
 import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
@@ -90,7 +95,7 @@ export function combobox<Item, Multiple extends boolean = false>(
     const id = options.id ?? `combobox-${randomToken(4, 'hex')}`
     // 49.11 — read where they are used; the id, the debounce and whether it picks many are
     // fixed for the life of the parts.
-    const key = (item: Item) => writtenBy(options.key, item)
+    const key = (item: Item) => keyOfItem(options.key, item)
     const label = (item: Item) => writtenBy(options.label, item)
     const many = options.multiple === true
     const value = (options.value ??
@@ -312,7 +317,7 @@ export function combobox<Item, Multiple extends boolean = false>(
             return found() as readonly Item[]
         },
         option: (item) =>
-            withPart(list.option(key(item)), {
+            withPart(list.option(item), {
                 'data-combobox': 'option',
                 get 'data-selected'() {
                     return pickedKeys().has(key(item)) ? '' : undefined

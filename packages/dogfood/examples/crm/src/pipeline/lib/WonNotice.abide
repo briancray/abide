@@ -16,7 +16,7 @@ function fadeOut(element: Element) {
 </button>
 
 <div {...shown.region} class="fixed right-5 bottom-5 flex flex-col gap-tight">
-    {#for toast of shown.notices by toast.id}
+    {#for toast of shown.notices key toast.id}
         <div {...shown.notice(toast).notice}>
             <p class="row" bind:element={fadeOut}>
                 <strong>Won.</strong> {toast.text}

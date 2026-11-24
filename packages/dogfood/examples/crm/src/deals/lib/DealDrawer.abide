@@ -26,7 +26,7 @@ function show(deal: (typeof DEALS)[number]) {
 </script>
 
 <ul>
-    {#for deal of DEALS by deal.id}
+    {#for deal of DEALS key deal.id}
         <li><button onclick={() => show(deal)}>{deal.name}</button></li>
     {/for}
 </ul>

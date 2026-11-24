@@ -40,7 +40,6 @@ let selected = reactive<readonly string[]>([])
 const table = sortableTable({
     rows: () => deals,
     columns: COLUMNS,
-    key: (deal) => deal.id,
     selected,
 })
 
@@ -61,7 +60,7 @@ function markLost() {
     <thead>
         <tr>
             <th {...table.selectAll.select}><input {...table.selectAll.checkbox}></th>
-            {#for column of COLUMNS by column.key}
+            {#for column of COLUMNS key column.key}
                 <th {...table.column(column).header} class="data-[align=end]:text-right">
                     <button {...table.column(column).sort} class="bg-transparent p-0 text-muted">{column.label}</button>
                 </th>
@@ -69,7 +68,7 @@ function markLost() {
         </tr>
     </thead>
     <tbody>
-        {#for deal of table.rows by deal.id}
+        {#for deal of table.rows key deal.id}
             <tr {...table.row(deal).row}>
                 <td {...table.row(deal).select}><input {...table.row(deal).checkbox}></td>
                 <td>{deal.name}</td>

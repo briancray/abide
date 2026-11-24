@@ -359,7 +359,7 @@ MUST NOT be held.
 
 5.21 An entry a `Keyed` window is holding back MUST report `s.busy` true.
 
-5.22 `by` MUST key an element by the property it names, or by what the function it is returns for
+5.22 `key` MUST key an element by the property it names, or by what the function it is returns for
 that element.
 
 5.23 `throttle` and `debounce` MUST cap the wakes an `s.patch` makes as they cap a production's.
@@ -1501,9 +1501,9 @@ and MUST NOT answer 204.
 18.3 A client reading a `GET` MUST be subscribed over the socket mux to that handler's productions
 for those `Args`.
 
-18.4 A subscriber's copy of a wired `Reactive` MUST carry what that `Reactive` declares of `by` as a
+18.4 A subscriber's copy of a wired `Reactive` MUST carry what that `Reactive` declares of `key` as a
 property name, `tags` as a list of names, and `identity` as `deepEqual`, and MUST NOT carry a
-function form of `by` or `tags`, which stays the server's (13.15).
+function form of `key` or `tags`, which stays the server's (13.15).
 
 18.5 A `GET` answered from a `global` value MUST carry the version of the production it answered
 with as its `etag`.
@@ -1531,7 +1531,7 @@ the value again.
 
 18.14 A subscriber's copy of a `GET` MUST go stale when the `max-age` its answer carried runs out.
 
-18.15 The build MUST warn where a `GET`'s `Reactive` declares `by` or `tags` by a value that is not a
+18.15 The build MUST warn where a `GET`'s `Reactive` declares `key` or `tags` by a value that is not a
 function and whose type is not the one 18.4 carries.
 
 18.16 Every frame on one connection to the socket mux MUST be answered in one request scope, whose
@@ -2405,7 +2405,7 @@ string.
 
 32.12 `{#if}` MUST render one branch.
 
-32.13 `{#for}` with neither a key nor a `by` 32.32 reads MUST be positional.
+32.13 `{#for}` with neither a `key` of its own nor one 32.32 reads off its value MUST be positional.
 
 32.14 `{#for}` without a key over a stateful body and a subject that reads a `Reactive` or calls a
 function MUST warn in development.
@@ -2458,7 +2458,7 @@ and MUST NOT be bounded by one while it holds none.
 a `{#for}`, a `{#try}`, a `<slot/>` or a `<Name/>`.
 
 32.32 `{#for}` without a key over a subject that is a `Reactive` named alone MUST key its rows by
-that value's `by`, where it declares one.
+that value's `key`, where it declares one.
 
 32.33 A `{#for}` MUST take an `s.patch` written to a row's item, or to an object the patch reached
 through it, as that item changing under 32.67.
@@ -5077,8 +5077,9 @@ stands outside the role WAI-ARIA requires around it, and a build MUST NOT carry 
 optional, and the parts MUST hand back what they read and write as a `Reactive` member under the
 option's name, the app's where one is given and one of their own from its default where none is; an
 id a parts function writes MUST be optional with one made where none is given, and readable among its
-parts; and its `key` and `label` MUST be optional where an item is a string or a number, which is then
-its own key and label.
+parts; its `key` and `label` MUST be optional where an item is a string or a number, which is then
+its own key and label; and its `key` MUST be optional where an item carries an `id`, which, written
+as text, is then its key.
 
 49.9 A parts function MUST hand back an element there is one of as a member naming that element —
 save one whose parts are one element's alone, which MUST hand back that element's part itself — an
@@ -5110,6 +5111,10 @@ the check.
 it held focus, move focus on: `carousel`'s and `pages`' `previous` and `next` to the other, `wizard`'s
 `next` to its `previous` and its `previous` to its `next`, and `stepper`'s `increment` and `decrement`
 to its `input`.
+
+49.16 A parts function over a list MUST take the list's items, telling them apart by its `key` (49.8),
+and MUST NOT take a list of their keys in their place; and a part it hands back for one item MUST be
+a function of the item (49.9), not of its key.
 
 # 50. Dialogs, toasts and popovers
 
@@ -5799,6 +5804,17 @@ and `selected`, in the tab order and naming the active option as its `aria-activ
 item's `item` part MUST be that listbox's `option` part.
 
 51.151 An item's `handle` part MUST carry `aria-hidden="true"` and MUST NOT stand in the tab order.
+
+51.152 A click on `spoiler`'s `cover` part MUST write `true` to `open`, and MUST move focus to its
+`content` part.
+
+51.153 `spoiler`'s `content` part MUST carry `hidden` while `open` does not hold, and no `hidden`
+while it does.
+
+51.154 `spoiler`'s `cover` part MUST carry `hidden` while `open` holds, and no `hidden` while it does
+not.
+
+51.155 `spoiler`'s `content` part MUST carry `data-open` while `open` holds.
 
 # 52. Formatting, markdown and charts
 

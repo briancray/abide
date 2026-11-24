@@ -9,7 +9,6 @@ let company = reactive<Company | undefined>(undefined)
 const box = combobox({
     id: 'works-at',
     search: (q) => searchCompanies({ q }),
-    key: (found: Company) => found.id,
     label: (found: Company) => found.name,
     value: company,
 })
@@ -21,7 +20,7 @@ const box = combobox({
     {#if box.open}
         <div {...box.popup}>
             <ul {...box.listbox}>
-                {#for found of box.items by found.id}
+                {#for found of box.items key found.id}
                     <li {...box.option(found)}>{found.name} · {found.city}</li>
                 {/for}
             </ul>

@@ -16,7 +16,7 @@ function done(contact: string) {
 </script>
 
 <ul class="fields">
-    {#for followUp of followUps by followUp.contact}
+    {#for followUp of followUps key followUp.contact}
         <li>
             <span>Call {followUp.contact}</span>
             <strong><time {...due.at(followUp.at).time}>{due.at(followUp.at).text}</time></strong>

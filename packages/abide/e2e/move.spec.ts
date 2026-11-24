@@ -46,7 +46,7 @@ const rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 </script>
 
 <ul id="list">
-{#for row of rows by row.id}
+{#for row of rows key row.id}
     <li><input id={'i-' + row.id}/></li>
 {/for}
 </ul>

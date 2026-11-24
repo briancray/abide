@@ -10,7 +10,7 @@ const FOLLOW_UPS = [
 </script>
 
 <ul>
-    {#for followUp of FOLLOW_UPS by followUp.contact}
+    {#for followUp of FOLLOW_UPS key followUp.contact}
         <li>
             Call {followUp.contact}
             <time {...due.at(followUp.at).time} class="font-medium text-ink">
