@@ -6642,7 +6642,8 @@ headers and `as` was answered with, for `ttl` milliseconds from that answer.
 54.13 A `GET` given a `ttl` MUST join a `GET` of the same URL, headers and `as` in flight rather
 than ask again.
 
-54.14 A `FetchFailed`, and a stream 54.32 reads, MUST NOT be held under 54.12.
+54.14 A `FetchFailed`, and a stream 54.32 reads, MUST NOT be held under 54.12, and a stream MUST
+NOT be shared under 54.13: a `GET` that joined one in flight MUST ask for its own.
 
 54.15 `ttl` MUST be inert on a method other than `GET`.
 

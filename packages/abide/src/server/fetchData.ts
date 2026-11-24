@@ -88,14 +88,19 @@ function answerOf<T>(
     if (ttl <= 0 || method !== 'GET') return asked(url, options, signal)
     const key = keyOf(url, options)
     const now = Date.now()
-    let held = HELD.get(key)
-    if (held === undefined || held.expiresAt <= now) {
+    const held = HELD.get(key)
+    let answer: Promise<unknown>
+    if (held !== undefined && held.expiresAt > now)
+        // 54.14 — a stream is its first reader's to drain, so a caller that joined one asks for its own.
+        answer = held.answer.then((settled) =>
+            isStream(settled) ? asked(url, options, signal) : settled,
+        )
+    else {
         for (const [stale, each] of HELD)
             if (each.expiresAt <= now) HELD.delete(stale)
         // Asked with no caller's signal: one caller leaving does not end it for the rest.
-        const answer = asked(url, options, undefined)
+        answer = asked(url, options, undefined)
         const fresh: Held = { answer, expiresAt: Number.POSITIVE_INFINITY }
-        held = fresh
         HELD.set(key, fresh)
         answer.then((settled) => {
             // 54.14 — a failure is not kept, and neither is a stream, which its first reader drains.
@@ -103,7 +108,7 @@ function answerOf<T>(
             else fresh.expiresAt = Date.now() + ttl
         })
     }
-    return signal == null ? held.answer : abortable(held.answer, signal)
+    return signal == null ? answer : abortable(answer, signal)
 }
 
 function isStream(value: unknown): boolean {

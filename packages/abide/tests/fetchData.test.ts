@@ -54,6 +54,12 @@ const service = Bun.serve({
                 headers: { 'content-type': 'image/png' },
             })
         if (pathname === '/plain-json') return new Response('{"deals":3}')
+        if (pathname === '/feed') {
+            await Bun.sleep(20)
+            return new Response('{"deal":1}\n{"deal":2}\n', {
+                headers: { 'content-type': 'application/jsonl' },
+            })
+        }
         return Response.json({ name: 'Hopper & Co', employees: 'many' })
     },
 })
@@ -221,6 +227,21 @@ test('a failure is not held, and the next ask runs again — 54.14', async () =>
     await fetchData(at('/missing'), { ttl: 60_000 })
     await fetchData(at('/missing'), { ttl: 60_000 })
     expect((asked.get('/missing') ?? 0) - before).toBe(2)
+})
+
+// THE REVERT: hand a caller that joined the ask in flight `held.answer` whatever it settled to; the
+// second reader shares the first's iterator, which the first drained — `2,0` where `2,2` is due.
+test('a stream is not held, and a caller that joined one in flight reads its own — 54.14', async () => {
+    const drained = async (answer: unknown) => {
+        let chunks = 0
+        for await (const _ of answer as AsyncIterable<unknown>) chunks += 1
+        return chunks
+    }
+    const first = fetchData(at('/feed'), { ttl: 60_000 })
+    const joined = fetchData(at('/feed'), { ttl: 60_000 })
+    const read = [await drained(await first), await drained(await joined)]
+    expect(read.join()).toBe('2,2')
+    expect(asked.get('/feed')).toBe(2)
 })
 
 test('a ttl on a POST holds nothing — 54.15', async () => {
