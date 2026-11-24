@@ -8,7 +8,7 @@ import rankDeals from './lib/RankDeals.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/behaviors/announce', '/headless/sortable-table']}
+    seeAlso={['/headless/announce', '/headless/sortable-table']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/DealPriorities.test.ts',

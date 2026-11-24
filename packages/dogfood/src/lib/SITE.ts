@@ -340,6 +340,14 @@ const WRITTEN: readonly {
                 subgroup: 'Overlays',
             },
             {
+                route: '/headless/announce',
+                title: '`announce`',
+                description:
+                    'Tell a screen reader what changed where nothing on screen says it, politely or interrupting.',
+                where: 'component',
+                subgroup: 'Overlays',
+            },
+            {
                 route: '/headless/tooltip',
                 title: '`tooltip`',
                 description:
@@ -400,6 +408,14 @@ const WRITTEN: readonly {
                 title: '`form`',
                 description:
                     'Check a form against the handler it submits to before calling it, show what is wrong beside each field, and mark what an edit changed.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/dropzone',
+                title: '`dropzone`',
+                description:
+                    'Take the files dropped on an element, or pasted into it, filtered by type, and highlight the target while files hover.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -532,6 +548,22 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/resizable',
+                title: '`resizable`',
+                description:
+                    'Size a panel of your own by dragging its edge or with the arrow keys, kept within the room its parent leaves.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
+                route: '/headless/pan-zoom',
+                title: '`panZoom`',
+                description:
+                    'Move and magnify a map, a plan or a drawing of your own with the wheel, a drag, a pinch or the keys.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/listbox',
                 title: '`listbox`',
                 description:
@@ -588,6 +620,14 @@ const WRITTEN: readonly {
                 subgroup: 'Data',
             },
             {
+                route: '/headless/autoscroll',
+                title: '`autoscroll`',
+                description:
+                    'Keep a scrolling log or transcript at its newest line as lines arrive, until the reader scrolls up to an earlier one.',
+                where: 'component',
+                subgroup: 'Data',
+            },
+            {
                 route: '/headless/chart',
                 title: '`chart`',
                 description:
@@ -624,20 +664,13 @@ const WRITTEN: readonly {
     {
         group: 'Element behaviors',
         description:
-            'One behavior added to an element the app already has: dismissing, dropping, copying, keys, scrolling, resizing and announcing.',
+            'One behavior added to an element the app already has: dismissing, copying, keys, scroll edges and observing.',
         pages: [
             {
                 route: '/behaviors/dismissible',
                 title: '`dismissible`',
                 description:
                     'Close a panel or popover when someone presses outside it or hits Escape.',
-                where: 'component',
-            },
-            {
-                route: '/behaviors/dropzone',
-                title: '`dropzone`',
-                description:
-                    'Take the files dropped on an element, or pasted into it, filtered by type, and highlight the target while files hover.',
                 where: 'component',
             },
             {
@@ -662,13 +695,6 @@ const WRITTEN: readonly {
                 where: 'browser',
             },
             {
-                route: '/behaviors/follow-bottom',
-                title: '`followBottom`',
-                description:
-                    'Keep a scrolling log or transcript at its newest line as lines arrive, until the reader scrolls up to an earlier one.',
-                where: 'component',
-            },
-            {
                 route: '/behaviors/scroll-edges',
                 title: '`scrollEdges`',
                 description:
@@ -676,31 +702,10 @@ const WRITTEN: readonly {
                 where: 'component',
             },
             {
-                route: '/behaviors/resizable',
-                title: '`resizable`',
-                description:
-                    'Size a panel of your own by dragging its edge or with the arrow keys, kept within the room its parent leaves.',
-                where: 'component',
-            },
-            {
-                route: '/behaviors/pan-zoom',
-                title: '`panZoom`',
-                description:
-                    'Move and magnify a map, a plan or a drawing of your own with the wheel, a drag, a pinch or the keys.',
-                where: 'component',
-            },
-            {
                 route: '/behaviors/observe',
                 title: '`observe`',
                 description:
                     "Bind an element's size, visibility or position to reactive values a template reads.",
-                where: 'component',
-            },
-            {
-                route: '/behaviors/announce',
-                title: '`announce`',
-                description:
-                    'Tell a screen reader what changed where nothing on screen says it, politely or interrupting.',
                 where: 'component',
             },
         ],

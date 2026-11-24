@@ -6,7 +6,7 @@
 import type { AssistantEvent, AssistantMessage } from './AssistantEvent.ts'
 import type { AssistantTurn, AssistantTurnPart } from './AssistantTurn.ts'
 import { dropzone } from './dropzone.ts'
-import { followBottom } from './followBottom.ts'
+import { autoscroll } from './autoscroll.ts'
 import { hotkeys } from './hotkeys.ts'
 import { imageFiles, imagePiece } from './imagePiece.ts'
 import { type Live, live } from './live.ts'
@@ -70,7 +70,7 @@ export type ChatParts = {
     get streaming(): boolean
     /** The root's attributes: `data-chat="root"` and `data-streaming`. */
     readonly root: Record<string, unknown>
-    /** 53.39, 53.40 — the transcript: `role="log"`, kept at its bottom as `followBottom`'s host. */
+    /** 53.39, 53.40 — the transcript: `role="log"`, kept at its bottom as `autoscroll`'s host. */
     readonly transcript: Record<string, unknown>
     /** 53.39 — the button taking a reader who scrolled up back down. */
     readonly jump: Record<string, unknown>
@@ -240,7 +240,7 @@ export function chat(options: ChatOptions): ChatParts {
     // 53.17-53.20 — images dropped on the composer or pasted into it.
     const drop = dropzone({ accept: imageFiles, paste: true, onfiles: attach })
     // 53.39 — the transcript kept at its bottom.
-    const follow = followBottom()
+    const follow = autoscroll()
 
     const answering = (index: number) =>
         streaming() && index === turns().length - 1

@@ -8,7 +8,7 @@ import dealSheet from './lib/DealSheet.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/headless/drawer', '/behaviors/resizable']}
+    seeAlso={['/headless/drawer', '/headless/resizable']}
     tests={[
         {
             path: 'packages/abide/tests/drawer.test.ts',

@@ -8,7 +8,7 @@ import filterDrawer from './lib/FilterDrawer.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/headless/dialog', '/behaviors/resizable', '/headless/sheet']}
+    seeAlso={['/headless/dialog', '/headless/resizable', '/headless/sheet']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/DealPanel.test.ts',

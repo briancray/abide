@@ -72,10 +72,10 @@ export {
 } from './dismissible.ts'
 // 53.50, 53.58-53.60 — a scrolling element kept at its bottom, and the button taking a reader back down.
 export {
-    type FollowBottom,
-    type FollowBottomOptions,
-    followBottom,
-} from './followBottom.ts'
+    type Autoscroll,
+    type AutoscrollOptions,
+    autoscroll,
+} from './autoscroll.ts'
 // 32.101-32.108 — the part marking the edges a scrolling element can scroll toward.
 export { scrollEdges } from './scrollEdges.ts'
 // 53.17-53.20 — the parts taking dropped and pasted files.

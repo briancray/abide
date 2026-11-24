@@ -19,7 +19,7 @@ import copyRecord from './lib/CopyRecord.abide' with { type: 'text' }
     seeAlso={[
         '/behaviors/observe',
         '/behaviors/dismissible',
-        '/behaviors/dropzone',
+        '/headless/dropzone',
     ]}
     tests={[
         {

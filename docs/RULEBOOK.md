@@ -4045,6 +4045,11 @@ say it runs on the server, and a page documenting a name `@abide/abide` exports 
 40.37 A group MAY list its pages in runs, each under the label its pages' `SITE` entries name as
 their `subgroup`, and the pages of one run MUST be adjacent in the group.
 
+40.38 A REGISTRY section MUST NOT be filed under `Element behaviors` where its rows cite 49.6 or
+49.8: a name carrying a WAI-ARIA pattern or binding a value is a headless component, filed under
+`Headless components`, and `Element behaviors` is one behavior added to an element the app already
+has.
+
 # 41. Rendering and hydration
 
 41.1 `render` MUST send nothing until the page and every layout around it are set up and built, and a
@@ -6183,7 +6188,7 @@ its `composer` part as an image part `imagePiece` draws.
 53.38 `chat` MUST answer a permission part through `permit` with the part's id and the visitor's
 answer, and MUST disable the part's buttons where `permit` is absent or the part is answered.
 
-53.39 `chat`'s `transcript` part MUST be `followBottom`'s `host`, and its `jump` part `followBottom`'s
+53.39 `chat`'s `transcript` part MUST be `autoscroll`'s `host`, and its `jump` part `autoscroll`'s
 `jump`.
 
 53.40 `chat`'s `transcript` part MUST carry `role="log"` and `aria-live="polite"`.
@@ -6218,7 +6223,7 @@ folds to `turns`.
 
 53.49 `pairing`'s `step` MUST be `offline` while `online` is false, whatever its status.
 
-53.50 `followBottom`'s `host` MUST keep the element it is spread on scrolled to its bottom as what the
+53.50 `autoscroll`'s `host` MUST keep the element it is spread on scrolled to its bottom as what the
 element holds changes, while `following` is true.
 
 53.51 `keyLabel` writing for an Apple platform MUST write Enter as ↩, Escape as ⎋, Backspace as ⌫,
@@ -6241,14 +6246,14 @@ MUST leave them as they are.
 53.57 A pick through `dropzone`'s `input` MUST be taken as a drop is, a function `accept` handed a
 transfer of the files picked, and the input MUST be emptied after it.
 
-53.58 `followBottom` MUST set `following` to false when the reader scrolls its `host` further than
+53.58 `autoscroll` MUST set `following` to false when the reader scrolls its `host` further than
 `threshold` pixels from the bottom, and to true when they scroll back within it.
 
-53.59 `followBottom`'s `jump` part MUST be hidden while `following` is true, and MUST carry
+53.59 `autoscroll`'s `jump` part MUST be hidden while `following` is true, and MUST carry
 `data-unseen` once what the `host` holds changes while `following` is false, until `following` is
 true again.
 
-53.60 `FollowBottom`'s `toBottom` MUST scroll the `host` to its bottom as `behavior` names, and MUST
+53.60 `Autoscroll`'s `toBottom` MUST scroll the `host` to its bottom as `behavior` names, and MUST
 set `following` to true.
 
 53.61 `carousel` MUST rest on the item `selected` names, and on its first item where `selected` names

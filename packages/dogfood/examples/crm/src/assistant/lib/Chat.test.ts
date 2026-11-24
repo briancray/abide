@@ -257,7 +257,7 @@ test('an answer that fails says why, and the composer sends again', async () => 
     expect(document.querySelector('[data-chat=send]')).not.toBeNull()
 })
 
-// THE REVERT: drop the `following` check in `followBottom`, and a reader scrolled up to an earlier
+// THE REVERT: drop the `following` check in `autoscroll`, and a reader scrolled up to an earlier
 // answer is pulled back down by every chunk.
 test('the transcript follows its bottom until the reader scrolls up', async () => {
     const stream = fed()

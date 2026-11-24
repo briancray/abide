@@ -7,7 +7,7 @@ import { type Reactive, reactive } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
 
 /** Whether the scroller is following, how near its bottom counts as at it, and how a jump scrolls. */
-export type FollowBottomOptions = {
+export type AutoscrollOptions = {
     /** Whether the scroller is kept at its bottom: a `Reactive` to read it and to stop following from the app. Held by the parts, `true`, and handed back as `following`, where none is given. */
     following?: Reactive<boolean>
     /** Pixels from the bottom that still count as at it. `2` by default; a function is read live. */
@@ -16,8 +16,8 @@ export type FollowBottomOptions = {
     behavior?: Live<'auto' | 'smooth'>
 }
 
-/** The parts `followBottom` hands back: `<ol {...follow.host}>` and `<button {...follow.jump}>`. */
-export type FollowBottom = {
+/** The parts `autoscroll` hands back: `<ol {...follow.host}>` and `<button {...follow.jump}>`. */
+export type Autoscroll = {
     /** The scroller's part: what keeps it at its bottom, and `data-following` while it does. */
     readonly host: Record<string, unknown>
     /** The button's part taking the reader back down: `hidden` while following, `data-unseen` once something arrived while scrolled up. */
@@ -29,7 +29,7 @@ export type FollowBottom = {
 }
 
 /** A scrolling element kept at its bottom as what it holds grows, until the reader scrolls up. */
-export function followBottom(options: FollowBottomOptions = {}): FollowBottom {
+export function autoscroll(options: AutoscrollOptions = {}): Autoscroll {
     const following = options.following ?? reactive(true)
     const unseen = reactive(false)
     let scroller: Element | undefined
@@ -88,14 +88,14 @@ export function followBottom(options: FollowBottomOptions = {}): FollowBottom {
     return {
         host: {
             'bind:element': bind,
-            'data-follow-bottom': 'host',
+            'data-autoscroll': 'host',
             get 'data-following'() {
                 return following() ? '' : undefined
             },
         },
         jump: {
             type: 'button',
-            'data-follow-bottom': 'jump',
+            'data-autoscroll': 'jump',
             get hidden() {
                 return following()
             },

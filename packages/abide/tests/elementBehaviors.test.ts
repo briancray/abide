@@ -7,7 +7,7 @@ import { flushSync, watch } from '#shared'
 import { copy } from '#shared/copy.ts'
 import { dismissible } from '#shared/dismissible.ts'
 import { dropzone } from '#shared/dropzone.ts'
-import { followBottom } from '#shared/followBottom.ts'
+import { autoscroll } from '#shared/autoscroll.ts'
 import { imageFiles } from '#shared/imagePiece.ts'
 import { tip } from '#shared/tooltip/tip.ts'
 import { shown } from '#shared/tooltip/tips.ts'
@@ -595,7 +595,7 @@ test('with no value, a click copies the element clicked as its text and its mark
     stop()
 })
 
-// THE REVERT: drop the `following` check in `followBottom`'s observer — the reader scrolled up to 0
+// THE REVERT: drop the `following` check in `autoscroll`'s observer — the reader scrolled up to 0
 // is pulled back to 180 by the next line, and the jump never reads unseen.
 test('a scroller follows its bottom until the reader scrolls up, and the jump takes them back — 53.50, 53.58-53.60', async () => {
     const log = element()
@@ -608,7 +608,7 @@ test('a scroller follows its bottom until the reader scrolls up, and the jump ta
         log.scrollTop = to.top ?? 0
         log.dispatchEvent(new Event('scroll'))
     }) as typeof log.scrollTo
-    const follow = followBottom()
+    const follow = autoscroll()
     const stop = (
         follow.host['bind:element'] as (element: Element) => () => void
     )(log)

@@ -23,8 +23,8 @@ import {
     type DialogParts,
     dropzone,
     type DropzoneParts,
-    type FollowBottom,
-    followBottom,
+    type Autoscroll,
+    autoscroll,
     type Form,
     form,
     type FormField,
@@ -139,7 +139,7 @@ test('every part is a member, a function of its item, or an action — 49.9', ()
     shaped<Form<typeof ADD>>()
     shaped<FormField>()
     shaped<DropzoneParts>()
-    shaped<FollowBottom>()
+    shaped<Autoscroll>()
     shaped<AnnouncerHost>()
     shaped<VirtualList<number>>()
     shaped<VirtualListSections>()
@@ -173,7 +173,7 @@ function elementParts(): Record<string, unknown> {
     const trend = sparkline({ label: 'Trend', values: [1, 2] })
     const deal = form(ADD)
     const drop = dropzone()
-    const follow = followBottom()
+    const follow = autoscroll()
     const regions = standing(() => announce.host())
     const long = virtualList({ items: [1, 2, 3] })
     const keys = listbox({ options: ['a'] })
@@ -279,8 +279,8 @@ function elementParts(): Record<string, unknown> {
         'form.field.error': deal.field('name').error,
         'dropzone.host': drop.host,
         'dropzone.input': drop.input,
-        'followBottom.host': follow.host,
-        'followBottom.jump': follow.jump,
+        'autoscroll.host': follow.host,
+        'autoscroll.jump': follow.jump,
         'announce.host.polite': regions.polite,
         'announce.host.assertive': regions.assertive,
         'virtualList.host': long.host,
@@ -334,7 +334,7 @@ test('every option an app binds is optional and handed back, and every id is mad
     const modal = dialog()
     const keys = listbox({ options: () => ['a'] })
     const drop = dropzone()
-    const follow = followBottom()
+    const follow = autoscroll()
     const slides = carousel({ items: ['a', 'b'] })
     const handed: Record<string, unknown> = {
         'tabs.selected': view.selected,
@@ -349,7 +349,7 @@ test('every option an app binds is optional and handed back, and every id is mad
         'sortableTable.selected': table.selected,
         'dialog.open': modal.open,
         'dropzone.files': drop.files,
-        'followBottom.following': follow.following,
+        'autoscroll.following': follow.following,
         'carousel.selected': slides.selected,
     }
     const missing: string[] = []

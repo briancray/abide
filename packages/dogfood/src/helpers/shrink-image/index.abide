@@ -8,7 +8,7 @@ import shrinkPhoto from './lib/ShrinkPhoto.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/behaviors/dropzone', '/helpers/download']}
+    seeAlso={['/headless/dropzone', '/helpers/download']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPhoto.test.ts',

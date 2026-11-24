@@ -811,6 +811,49 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `MeterOptions` | `{ value: number \| undefined \| (() => number \| undefined); min?: number \| (() => number); max?: number \| (() => number); low?: number \| (() => number); high?: number \| (() => number); role?: 'meter' \| 'progressbar' \| (() => 'meter' \| 'progressbar'); label?: string \| (() => string) }` | The value, the range it falls in, the bands marking it low or high, whether it is progress, and its accessible name. | 52.106, 52.107, 52.109, 49.10, 49.11 |
 | `Meter` | `{ readonly meter: Record<string, unknown>; readonly fill: Record<string, unknown>; get fraction(): number \| undefined }` | The track's part, the fill's, and how far along the range the value is. | 32.11, 52.106, 52.108, 49.3, 49.9 |
 
+## `dropzone`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `dropzone` | `(options?: DropzoneOptions) => DropzoneParts` | Files dropped on an element, pasted into it, or picked through a file input, as parts an app spreads onto a host and an input of its own. | 53.17, 53.18, 53.19, 53.20, 53.45, 53.56, 53.57, 49.3, 49.8, 49.9 |
+| `DropzoneOptions` | `{ accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean \| (() => boolean); multiple?: boolean \| (() => boolean); files?: Reactive<readonly File[]>; onfiles?: (files: File[], event: Event) => void; onreject?: (files: File[], event: Event) => void }` | Which files a drop, a paste or a pick takes, the files it binds, and what hears them. | 53.19, 53.20, 53.45, 53.56, 49.8, 49.10, 49.11 |
+| `DropzoneParts` | `{ readonly host: Record<string, unknown>; readonly input: Record<string, unknown>; readonly files: Reactive<readonly File[]>; readonly rejected: readonly File[] }` | The drop target's part, a file input's part, the files taken last, and the files turned away last. | 53.17, 53.18, 53.45, 53.56, 53.57, 49.3, 49.9 |
+
+## `autoscroll`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `autoscroll` | `(options?: AutoscrollOptions) => Autoscroll` | A scrolling element kept at its bottom as what it holds grows, until the reader scrolls up, and a button taking them back down, as parts to spread. | 32.99, 53.50, 53.58, 53.59, 53.60, 49.3, 49.8 |
+| `AutoscrollOptions` | `{ following?: Reactive<boolean>; threshold?: number \| (() => number); behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | Whether the scroller is following, how near its bottom counts as at it, and how a jump scrolls. | 53.58, 53.60, 49.8, 49.10, 49.11 |
+| `Autoscroll` | `{ readonly host: Record<string, unknown>; readonly jump: Record<string, unknown>; readonly following: Reactive<boolean>; toBottom(): void }` | The scroller's part, the jump button's part, whether it is following, and what takes it back down. | 53.50, 53.59, 53.60, 49.9 |
+
+## `resizable`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `resizable` | `(options?: ResizableOptions) => Resizable` | WAI-ARIA's window splitter as parts an app spreads onto a panel and a handle of its own: dragging the handle, or its keys, sizes the panel. | 53.72, 53.73, 53.74, 53.75, 53.76, 53.77, 53.78, 49.2, 49.4, 49.5, 49.6 |
+| `ResizableOptions` | `{ id?: string; axis?: 'x' \| 'y'; edge?: 'start' \| 'end'; size?: Reactive<number \| undefined>; min?: number \| (() => number); max?: number \| (() => number); keep?: number \| (() => number); step?: number \| (() => number); label?: string \| (() => string) }` | The axis it sizes, the edge its handle stands on, its size, the bounds it keeps to, how far a key moves it, and the handle's accessible name. | 53.72, 53.73, 53.74, 53.75, 49.8, 49.10, 49.11 |
+| `Resizable` | `{ readonly id: string; readonly panel: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly size: Reactive<number \| undefined> }` | The base of its ids, the panel's part, the handle's, and the panel's size. | 32.11, 53.72, 53.78, 49.3, 49.8, 49.9 |
+
+## `panZoom`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `panZoom` | `(options?: PanZoomOptions) => PanZoom` | A surface moved and magnified by its wheel, its pointers and its keys, as parts an app spreads onto a surface and the content inside it. | 53.84, 53.85, 53.86, 53.87, 53.88, 53.89, 53.90, 32.99, 49.2, 49.4, 49.5, 49.6 |
+| `PanZoomOptions` | `{ view?: Reactive<PanZoomView>; min?: number \| (() => number); max?: number \| (() => number); label?: string \| (() => string) }` | Where it stands, the bounds of its magnification, and the surface's accessible name. | 53.87, 49.8, 49.10, 49.11 |
+| `PanZoomView` | `{ readonly x: number; readonly y: number; readonly k: number }` | Where the content stands in the surface: moved by `x` and `y` pixels and magnified by `k`. | 53.84 |
+| `PanZoom` | `{ readonly surface: Record<string, unknown>; readonly content: Record<string, unknown>; readonly view: Reactive<PanZoomView>; zoomBy(factor: number, at?: { x: number; y: number }): void; fit(box: { x: number; y: number; width: number; height: number }, margin?: number): void }` | The surface's part, the content's, where it stands, and what magnifies it and frames a box of it from code. | 32.11, 53.84, 53.87, 53.89, 49.3, 49.8, 49.9 |
+
+## `announce`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `announce` | `(text: string, options?: AnnounceOptions) => void` | A message a screen reader reads out from the regions the app spreads `announce.host` on, with nothing shown. | 50.36, 50.49, 50.50 |
+| `announce.host` | `() => AnnouncerHost` | The polite and the assertive live region `announce` is read out from, as parts an app spreads onto markup of its own, from the script of the one component that renders them. | 50.36, 50.51, 49.3, 49.9, 49.2, 49.4, 49.5, 49.6 |
+| `AnnouncerHost` | `{ readonly polite: Record<string, unknown>; readonly assertive: Record<string, unknown>; said(politeness: 'polite' \| 'assertive'): readonly Announcement[] }` | The two regions' parts, and the message each holds. | 50.51, 50.52, 49.9 |
+| `Announcement` | `{ text: string; politeness: 'polite' \| 'assertive'; count: number }` | One message `announce` gave: its words, how urgently they are read, and which message it is. | 50.49, 50.52 |
+| `AnnounceOptions` | `{ politeness?: 'polite' \| 'assertive' }` | How urgently a message interrupts what a screen reader is reading. | 50.49 |
+
 # Element behaviors
 
 ## `dismissible`
@@ -820,14 +863,6 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `dismissible` | `(onDismiss: (event: PointerEvent \| KeyboardEvent) => void, options?: DismissibleOptions) => DismissibleParts` | A panel closed on a press outside it or on Escape, as parts an app spreads onto the panel and onto what counts as inside it. | 53.12, 53.13, 53.14, 53.15, 53.16, 32.99, 49.12 |
 | `DismissibleOptions` | `{ escape?: boolean; outside?: boolean }` | Whether Escape dismisses, and whether a press outside does. | 53.12, 53.14 |
 | `DismissibleParts` | `{ readonly host: Record<string, unknown>; readonly inside: Record<string, unknown> }` | The panel's part, and the part for an element a press on is not outside. | 53.12, 49.3, 49.9 |
-
-## `dropzone`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `dropzone` | `(options?: DropzoneOptions) => DropzoneParts` | Files dropped on an element, pasted into it, or picked through a file input, as parts an app spreads onto a host and an input of its own. | 53.17, 53.18, 53.19, 53.20, 53.45, 53.56, 53.57, 49.3, 49.8, 49.9 |
-| `DropzoneOptions` | `{ accept?: string \| ((data: DataTransfer \| null) => File[]); paste?: boolean \| (() => boolean); multiple?: boolean \| (() => boolean); files?: Reactive<readonly File[]>; onfiles?: (files: File[], event: Event) => void; onreject?: (files: File[], event: Event) => void }` | Which files a drop, a paste or a pick takes, the files it binds, and what hears them. | 53.19, 53.20, 53.45, 53.56, 49.8, 49.10, 49.11 |
-| `DropzoneParts` | `{ readonly host: Record<string, unknown>; readonly input: Record<string, unknown>; readonly files: Reactive<readonly File[]>; readonly rejected: readonly File[] }` | The drop target's part, a file input's part, the files taken last, and the files turned away last. | 53.17, 53.18, 53.45, 53.56, 53.57, 49.3, 49.9 |
 
 ## `copy`
 
@@ -848,36 +883,11 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- | --- |
 | `isEditableTarget` | `(target: EventTarget \| null) => boolean` | Whether a key event's target is somewhere the visitor types. | 53.10 |
 
-## `followBottom`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `followBottom` | `(options?: FollowBottomOptions) => FollowBottom` | A scrolling element kept at its bottom as what it holds grows, until the reader scrolls up, and a button taking them back down, as parts to spread. | 32.99, 53.50, 53.58, 53.59, 53.60, 49.3, 49.8 |
-| `FollowBottomOptions` | `{ following?: Reactive<boolean>; threshold?: number \| (() => number); behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | Whether the scroller is following, how near its bottom counts as at it, and how a jump scrolls. | 53.58, 53.60, 49.8, 49.10, 49.11 |
-| `FollowBottom` | `{ readonly host: Record<string, unknown>; readonly jump: Record<string, unknown>; readonly following: Reactive<boolean>; toBottom(): void }` | The scroller's part, the jump button's part, whether it is following, and what takes it back down. | 53.50, 53.59, 53.60, 49.9 |
-
 ## `scrollEdges`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `scrollEdges` | `() => Record<string, unknown>` | The part marking the scrolling element it is spread on with the edges it can still scroll toward. | 32.99, 32.101, 32.102, 32.103, 32.104, 32.105, 32.106, 32.107, 32.108, 49.3, 49.12 |
-
-## `resizable`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `resizable` | `(options?: ResizableOptions) => Resizable` | WAI-ARIA's window splitter as parts an app spreads onto a panel and a handle of its own: dragging the handle, or its keys, sizes the panel. | 53.72, 53.73, 53.74, 53.75, 53.76, 53.77, 53.78, 49.2, 49.4, 49.5, 49.6 |
-| `ResizableOptions` | `{ id?: string; axis?: 'x' \| 'y'; edge?: 'start' \| 'end'; size?: Reactive<number \| undefined>; min?: number \| (() => number); max?: number \| (() => number); keep?: number \| (() => number); step?: number \| (() => number); label?: string \| (() => string) }` | The axis it sizes, the edge its handle stands on, its size, the bounds it keeps to, how far a key moves it, and the handle's accessible name. | 53.72, 53.73, 53.74, 53.75, 49.8, 49.10, 49.11 |
-| `Resizable` | `{ readonly id: string; readonly panel: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly size: Reactive<number \| undefined> }` | The base of its ids, the panel's part, the handle's, and the panel's size. | 32.11, 53.72, 53.78, 49.3, 49.8, 49.9 |
-
-## `panZoom`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `panZoom` | `(options?: PanZoomOptions) => PanZoom` | A surface moved and magnified by its wheel, its pointers and its keys, as parts an app spreads onto a surface and the content inside it. | 53.84, 53.85, 53.86, 53.87, 53.88, 53.89, 53.90, 32.99, 49.2, 49.4, 49.5, 49.6 |
-| `PanZoomOptions` | `{ view?: Reactive<PanZoomView>; min?: number \| (() => number); max?: number \| (() => number); label?: string \| (() => string) }` | Where it stands, the bounds of its magnification, and the surface's accessible name. | 53.87, 49.8, 49.10, 49.11 |
-| `PanZoomView` | `{ readonly x: number; readonly y: number; readonly k: number }` | Where the content stands in the surface: moved by `x` and `y` pixels and magnified by `k`. | 53.84 |
-| `PanZoom` | `{ readonly surface: Record<string, unknown>; readonly content: Record<string, unknown>; readonly view: Reactive<PanZoomView>; zoomBy(factor: number, at?: { x: number; y: number }): void; fit(box: { x: number; y: number; width: number; height: number }, margin?: number): void }` | The surface's part, the content's, where it stands, and what magnifies it and frames a box of it from code. | 32.11, 53.84, 53.87, 53.89, 49.3, 49.8, 49.9 |
 
 ## `observe`
 
@@ -886,16 +896,6 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `observe.size` | `{ (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): Record<string, unknown>; (target: Reactive<unknown, { width: number; height: number }, unknown, unknown>, options?: { box?: 'content' \| 'border' }): Record<string, unknown>; (target: ((size: { width: number; height: number }) => void), options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): Record<string, unknown>; (target: ((size: { width: number; height: number }) => void), options?: { box?: 'content' \| 'border' }): Record<string, unknown>; (options?: { box?: Reactive<'content' \| 'border', never, unknown, unknown> }): { readonly host: Record<string, unknown>; readonly width: number \| undefined; readonly height: number \| undefined }; (options?: { box?: 'content' \| 'border' }): { readonly host: Record<string, unknown>; readonly width: number \| undefined; readonly height: number \| undefined } }` | The part writing the size of the element it is spread on into a target, or, given none, that part as `host` beside the width and the height read by name. | 32.79, 32.81, 32.82, 32.83, 32.90, 32.91, 32.92, 32.98, 32.99, 49.3, 49.12, 32.110 |
 | `observe.visible` | `{ (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): Record<string, unknown>; (target: Reactive<unknown, boolean, unknown, unknown>, options?: { in?: Element \| Document; once?: boolean }): Record<string, unknown>; (target: ((visible: boolean) => void), options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): Record<string, unknown>; (target: ((visible: boolean) => void), options?: { in?: Element \| Document; once?: boolean }): Record<string, unknown>; (options?: { in?: Reactive<Element \| Document \| null \| undefined, never, unknown, unknown>; once?: boolean }): { readonly host: Record<string, unknown>; readonly visible: boolean \| undefined }; (options?: { in?: Element \| Document; once?: boolean }): { readonly host: Record<string, unknown>; readonly visible: boolean \| undefined } }` | The part writing whether the element it is spread on is in view into a target, or, given none, that part as `host` beside `visible` read by name. | 32.80, 32.81, 32.82, 32.83, 32.89, 32.91, 32.92, 32.98, 32.100, 32.99, 49.3, 49.12, 32.110 |
 | `observe.rect` | `{ (target: Reactive<unknown, { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }, unknown, unknown>): Record<string, unknown>; (target: ((rect: { x: number; y: number; top: number; left: number; right: number; bottom: number; width: number; height: number }) => void)): Record<string, unknown>; (): { readonly host: Record<string, unknown>; readonly x: number \| undefined; readonly y: number \| undefined; readonly top: number \| undefined; readonly left: number \| undefined; readonly right: number \| undefined; readonly bottom: number \| undefined; readonly width: number \| undefined; readonly height: number \| undefined } }` | The part writing the rectangle, in the viewport, of the element it is spread on into a target, or, given none, that part as `host` beside each of the eight read by name. | 32.81, 32.83, 32.84, 32.85, 32.86, 32.87, 32.88, 32.91, 32.92, 32.98, 32.99, 49.3, 49.12, 32.110 |
-
-## `announce`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `announce` | `(text: string, options?: AnnounceOptions) => void` | A message a screen reader reads out from the regions the app spreads `announce.host` on, with nothing shown. | 50.36, 50.49, 50.50 |
-| `announce.host` | `() => AnnouncerHost` | The polite and the assertive live region `announce` is read out from, as parts an app spreads onto markup of its own, from the script of the one component that renders them. | 50.36, 50.51, 49.3, 49.9, 49.2, 49.4, 49.5, 49.6 |
-| `AnnouncerHost` | `{ readonly polite: Record<string, unknown>; readonly assertive: Record<string, unknown>; said(politeness: 'polite' \| 'assertive'): readonly Announcement[] }` | The two regions' parts, and the message each holds. | 50.51, 50.52, 49.9 |
-| `Announcement` | `{ text: string; politeness: 'polite' \| 'assertive'; count: number }` | One message `announce` gave: its words, how urgently they are read, and which message it is. | 50.49, 50.52 |
-| `AnnounceOptions` | `{ politeness?: 'polite' \| 'assertive' }` | How urgently a message interrupts what a screen reader is reading. | 50.49 |
 
 # Helpers
 

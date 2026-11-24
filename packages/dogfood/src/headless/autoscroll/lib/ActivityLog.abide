@@ -1,8 +1,8 @@
 <script>
-import { followBottom, reactive } from '@abide/abide'
+import { autoscroll, reactive } from '@abide/abide'
 
 let activity = reactive(['Ledger audit opened'])
-const follow = followBottom()
+const follow = autoscroll()
 </script>
 
 <ol class="h-32 overflow-y-auto" {...follow.host}>

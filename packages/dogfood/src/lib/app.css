@@ -483,7 +483,7 @@ html:has(> body > .site)::view-transition-new(root) {
     }
 
     /* Shown only once the reader has scrolled the transcript up (53.59). */
-    .conversation [data-follow-bottom="jump"] {
+    .conversation [data-autoscroll="jump"] {
         @apply self-center rounded-full border border-rule bg-raised px-3 py-1 text-chrome text-muted hover:text-ink;
     }
 

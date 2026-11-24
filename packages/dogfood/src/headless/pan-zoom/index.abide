@@ -8,7 +8,7 @@ import territoryMap from './lib/TerritoryMap.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/behaviors/resizable', '/headless/chart']}
+    seeAlso={['/headless/resizable', '/headless/chart']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/companies/lib/TerritoryMap.test.ts',

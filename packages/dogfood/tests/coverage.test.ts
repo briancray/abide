@@ -367,6 +367,20 @@ test("every page is listed under its section's REGISTRY group", () => {
     expect(misfiled).toEqual([])
 })
 
+// 40.38 — AN ELEMENT BEHAVIOR CARRIES NO WIDGET: a section citing 49.6 is a WAI-ARIA pattern and one
+// citing 49.8 binds a value, and either is a headless component. THE REVERT: move `## \`dropzone\``
+// back under `# Element behaviors` in REGISTRY, and it cites 49.8 there.
+test('no Element behaviors section carries a WAI-ARIA pattern or binds a value', () => {
+    const widgets: string[] = []
+    for (const row of registryRows(registry)) {
+        if (row.group !== 'Element behaviors') continue
+        const cited = (row.cells.at(-1) ?? '').split(',').map((id) => id.trim())
+        for (const id of ['49.6', '49.8'])
+            if (cited.includes(id)) widgets.push(`${row.section}: ${id}`)
+    }
+    expect([...new Set(widgets)]).toEqual([])
+})
+
 // 40.36 — WHAT A PAGE SAYS OF ITS SIDE IS WHAT THE BARRELS EXPORT, read off them rather than off the
 // page: a name only `@abide/abide/server` exports cannot be imported in the browser, and one
 // `@abide/abide` exports can. THE REVERT: mark `/middleware/signed-in` as `anywhere`, and it is a
