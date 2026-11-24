@@ -18,7 +18,7 @@ import pageLinks from './lib/PageLinks.abide' with { type: 'text' }
         },
         {
             path: 'packages/abide/tests/pages.test.ts',
-            from: ["test('the pages listed are the first, the last"],
+            from: ["test('the pages listed hold one length"],
         },
     ]}
 >

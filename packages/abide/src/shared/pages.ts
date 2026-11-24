@@ -44,19 +44,26 @@ export function pages(options: PagesOptions): Pages {
     const on = () => Math.min(Math.max(1, page()), count())
     const { href } = options
 
-    // 51.125 — a gap that would stand for one page is that page.
+    // 51.125 — always `2 × around + 5` entries once there are more pages than that, so the list
+    // keeps its length as `page` moves: near an end, the run reaches it instead of a short gap.
     const items = (): (number | 'gap')[] => {
         const last = count()
-        const near = live(options.around) ?? 1
+        const near = Math.max(0, live(options.around) ?? 1)
         const listed: (number | 'gap')[] = []
-        let previous = 0
-        for (let at = 1; at <= last; at += 1) {
-            if (at !== 1 && at !== last && Math.abs(at - on()) > near) continue
-            if (at - previous === 2) listed.push(at - 1)
-            else if (at - previous > 2) listed.push('gap')
-            listed.push(at)
-            previous = at
+        if (last <= 2 * near + 5) {
+            for (let at = 1; at <= last; at += 1) listed.push(at)
+            return listed
         }
+        const at = on()
+        const leftEdge = at - near <= 3
+        const rightEdge = at + near >= last - 2
+        const from = leftEdge ? 2 : rightEdge ? last - 2 * near - 2 : at - near
+        const to = rightEdge ? last - 1 : leftEdge ? 2 * near + 3 : at + near
+        listed.push(1)
+        if (!leftEdge) listed.push('gap')
+        for (let page = from; page <= to; page += 1) listed.push(page)
+        if (!rightEdge) listed.push('gap')
+        listed.push(last)
         return listed
     }
 

@@ -18,12 +18,32 @@ const press = (label: string) => {
 test('the deals turn a page at a time, the far pages folded', async () => {
     using _pages = await mount(DealPages({}))
     expect(deals()).toEqual(['Deal 1', 'Deal 2', 'Deal 3'])
-    expect(listed()).toEqual(['Previous', '1', '2', '…', '8', 'Next'])
+    expect(listed()).toEqual([
+        'Previous',
+        '1',
+        '2',
+        '3',
+        '4',
+        '5',
+        '…',
+        '8',
+        'Next',
+    ])
     press('8')
     expect(deals()).toEqual(['Deal 22', 'Deal 23'])
     expect(document.querySelector('[aria-current=page]')?.textContent).toBe('8')
     press('Next')
     expect(deals()).toEqual(['Deal 22', 'Deal 23'])
     press('Previous')
-    expect(listed()).toEqual(['Previous', '1', '…', '6', '7', '8', 'Next'])
+    expect(listed()).toEqual([
+        'Previous',
+        '1',
+        '…',
+        '4',
+        '5',
+        '6',
+        '7',
+        '8',
+        'Next',
+    ])
 })

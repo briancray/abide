@@ -9,27 +9,48 @@ const click = (part: Record<string, unknown>): void => {
     flushSync()
 }
 
-// THE REVERT: fold every run of left-out pages into a gap, and page 2 of ten on page 4 reads as a gap
-// standing for a single page.
-test('the pages listed are the first, the last and those around the page on, the rest gaps — 51.125', () => {
+// THE REVERT: list only the pages within `around` of the page on, and page 1 of ten reads
+// [1, 2, 'gap', 10] — four entries where page 5 reads seven.
+test('the pages listed hold one length whatever the page on, the rest gaps — 51.125', () => {
     const page = reactive(5)
     const list = pages({ count: 10, page })
     expect(list.items).toEqual([1, 'gap', 4, 5, 6, 'gap', 10])
     page.set(4)
     flushSync()
     expect(list.items).toEqual([1, 2, 3, 4, 5, 'gap', 10])
+    page.set(1)
+    flushSync()
+    expect(list.items).toEqual([1, 2, 3, 4, 5, 'gap', 10])
+    page.set(8)
+    flushSync()
+    expect(list.items).toEqual([1, 'gap', 6, 7, 8, 9, 10])
     expect(pages({ count: 3 }).items).toEqual([1, 2, 3])
-    expect(pages({ count: 10, page: reactive(5), around: 2 }).items).toEqual([
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        'gap',
-        10,
-    ])
+    expect(pages({ count: 7 }).items).toEqual([1, 2, 3, 4, 5, 6, 7])
+    for (const around of [0, 1, 2, 3]) {
+        for (const count of [8, 9, 10, 20, 50]) {
+            const lengths = new Set<number>()
+            for (let on = 1; on <= count; on += 1) {
+                const items = pages({ count, page: reactive(on), around }).items
+                lengths.add(items.length)
+                expect(items).toContain(on)
+                expect([items[0], items.at(-1)]).toEqual([1, count])
+                for (let index = 1; index < items.length; index += 1) {
+                    const before = items[index - 1] as number | 'gap'
+                    const item = items[index]
+                    if (item === 'gap' || before === 'gap') continue
+                    expect(item).toBe(before + 1)
+                }
+                for (let index = 1; index < items.length - 1; index += 1) {
+                    if (items[index] !== 'gap') continue
+                    const span =
+                        (items[index + 1] as number) -
+                        (items[index - 1] as number)
+                    expect(span).toBeGreaterThan(2)
+                }
+            }
+            expect([...lengths]).toEqual([Math.min(count, 2 * around + 5)])
+        }
+    }
 })
 
 // THE REVERT: drop `aria-current` from a page's link, and the page on reads like every other.

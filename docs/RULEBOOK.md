@@ -5633,9 +5633,12 @@ show, measured as the text resizes while `open` does not hold.
 
 51.124 `clamp`'s `button` part MUST be a `disclosure`'s `button` over its `text`, flipping `open`.
 
-51.125 `pages`' `items` MUST be the first page, the last, and every page within `around` of `page`,
-in order, with a `gap` where the pages between two of them are left out, save a gap that would stand
-for one page, which MUST be that page.
+51.125 `pages`' `items` MUST hold the same number of entries whatever `page` is: every page, in
+order, where there are no more than `2 × around + 5`, and else exactly that many — the first page,
+the last, and a run of pages around `page`, with a `gap` where the pages between two of them are
+left out. The run MUST be the `2 × around + 1` pages centered on `page`, save where that would leave
+a gap standing for one page or none at an end, where the run MUST instead reach that end and hold
+`2 × around + 3` pages.
 
 51.126 A click on `pages`' `link` of a page MUST write that page to `page`, and where `href` is given
 the link MUST carry `href` naming that page's address.
