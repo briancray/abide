@@ -465,8 +465,8 @@ test('a for head splits outside its string literals', async () => {
 })
 
 // `key` IS A COMMON NAME, so it divides a `{#for}` head only after a token a subject ends on, and
-// never before a `.`. THE REVERT: take the first `key` at depth zero after the `of`, as `by` was
-// taken; `of key` then has no subject, `of a + key` ends at the `+`, and `of key.split('')` keys
+// never before a `.`. THE REVERT: take the first `key` at depth zero after the `of`, whatever
+// precedes it; `of key` then has no subject, `of a + key` ends at the `+`, and `of key.split('')` keys
 // every row by `.split('')`.
 test('a key in a for head is the separator only where it follows the subject', () => {
     const head = (source: string) => {
