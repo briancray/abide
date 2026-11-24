@@ -22,7 +22,6 @@ const box = combobox({
     id: 'works-at',
     search: (q) => searchCompanies({ q }),
     debounce: 200,
-    key: (found: Company) => found.id,
     label: (found: Company) => found.name,
 })
 </script>

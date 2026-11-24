@@ -41,7 +41,6 @@ let selected = reactive<string | undefined>(undefined)
 const accounts = tree({
     roots: REGIONS,
     children: (account: Account) => account.under,
-    key: (account: Account) => account.id,
     label: (account: Account) => account.name,
     expanded,
     selected,

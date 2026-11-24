@@ -14,7 +14,6 @@ const companies = memo(() => listCompanies())
 const table = sortableTable({
     rows: () => companies,
     columns: COLUMNS,
-    key: (company) => company.id,
 })
 </script>
 

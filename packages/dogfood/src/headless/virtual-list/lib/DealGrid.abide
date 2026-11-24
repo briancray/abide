@@ -12,7 +12,6 @@ const DEALS = sortBy(
 
 const deals = virtualList({
     items: DEALS,
-    key: (deal) => String(deal.id),
     section: (deal) => deal.name[0] ?? '',
     labels: [...'ABCDEFG'],
 })

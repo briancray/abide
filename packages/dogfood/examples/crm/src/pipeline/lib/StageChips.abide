@@ -12,7 +12,7 @@ const DEALS = [
 
 let stages = reactive<readonly string[]>([])
 const chips = toggleGroup({
-    keys: STAGES,
+    items: STAGES,
     multiple: true,
     value: stages,
     label: 'Stages',

@@ -59,14 +59,14 @@ import leadBatch from './lib/LeadBatch.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Mark the active lead, and call one on a click">
-        <p>Spread <code>listbox</code> on the list and <code>option(key)</code> on each option:
+        <p>Spread <code>listbox</code> on the list and <code>option(option)</code> on each option:
             the option carries its id, its role, <code>aria-selected</code> and
             <code>data-active</code>, a pointer resting on it makes it active, and a click calls
             <code>onpick</code> with it. <code>idOf(key)</code> and <code>active</code> stay for
             markup of your own.</p>
         <Code language="abide" caption="abide" code={`
             {#for deal of leads by deal.id}
-                <li {...queue.option(deal.id)}>{deal.name}</li>
+                <li {...queue.option(deal)}>{deal.name}</li>
             {/for}
         `} />
     </Section>
@@ -86,7 +86,7 @@ import leadBatch from './lib/LeadBatch.abide' with { type: 'text' }
             import { listbox, reactive } from '@abide/abide'
 
             const leads = reactive([ada, grace, linus])
-            const queue = listbox({ id: 'leads', options: leads, key: (lead) => lead.id })
+            const queue = listbox({ id: 'leads', options: leads })
             queue.activate('grace')
             leads.set([ada, grace]) // grace stays active
             leads.set([ada]) // ada, the first, is active

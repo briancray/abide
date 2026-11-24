@@ -33,7 +33,7 @@ import pickView from './lib/PickView.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Pick one view from a segmented control">
-        <p>Spread <code>group</code> on a row and <code>item(key)</code> on a button per key.
+        <p>Spread <code>group</code> on a row and <code>item(item)</code> on a button per item.
             <code>toggleGroup</code> picks one key by default, as a radio group: the arrow keys
             move the pick and focus together, and only the key picked is a stop in the tab
             order.</p>

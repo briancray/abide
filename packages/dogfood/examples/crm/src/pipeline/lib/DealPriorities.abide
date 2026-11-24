@@ -12,7 +12,6 @@ const ranks = sortableList({
     items: DEALS,
     order,
     multiple: true,
-    key: (deal) => deal.id,
     label: (deal) => deal.name,
 })
 </script>

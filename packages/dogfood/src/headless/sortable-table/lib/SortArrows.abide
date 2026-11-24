@@ -19,7 +19,6 @@ const COLUMNS: Column<Deal>[] = [
 const table = sortableTable({
     rows: DEALS,
     columns: COLUMNS,
-    key: (deal) => deal.id,
 })
 </script>
 

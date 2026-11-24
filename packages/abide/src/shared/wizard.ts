@@ -3,25 +3,26 @@
 // its own. Going on waits on `valid`; going back is always open, to any step done.
 
 import { handFocus, nearest } from './handFocus.ts'
+import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { type Meter, meter } from './meter.ts'
-import { type Reactive, reactive } from './reactive/index.ts'
+import { memo, type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 
-/** The steps, the one on, and whether the one on may be left forward. */
-export type WizardOptions = {
-    /** The steps' keys, in order; a function is read live. */
-    steps: Live<readonly string[]>
+/** The steps, how each is told apart, the one on, and whether the one on may be left forward. */
+export type WizardOptions<Step> = {
+    /** The steps, in order; a function is read live. */
+    steps: Live<readonly Step[]>
     /** The key of the step on: a `Reactive` to read and set. Held by the parts, and handed back as `current`, where none is given. A key no step has is the first. */
     current?: Reactive<string | undefined>
-    /** Whether the step a key names is done enough to go on from. Every step is by default. */
-    valid?: (step: string) => boolean
-}
+    /** Whether a step is done enough to go on from. Every step is by default. */
+    valid?: (step: Step) => boolean
+} & KeyOption<Step>
 
 /** The parts `wizard` hands back: `<li {...signup.step('plan')}>`, `<button {...signup.next}>`. */
-export type Wizard = {
+export type Wizard<Step> = {
     /** A step's marker in the list of steps: current, done or ahead, and a way back where done. */
-    step(key: string): Record<string, unknown>
+    step(step: Step): Record<string, unknown>
     /** The button going on to the step after, disabled on the last or where `valid` refuses. */
     readonly next: Record<string, unknown>
     /** The button going back to the step before, disabled on the first. */
@@ -35,9 +36,14 @@ export type Wizard = {
 }
 
 /** A task taken in steps, with next and previous, the steps' markers and a meter of progress. */
-export function wizard(options: WizardOptions): Wizard {
+export function wizard<Step>(options: WizardOptions<Step>): Wizard<Step> {
     const picked = options.current ?? reactive<string | undefined>(undefined)
-    const steps = () => live(options.steps)
+    const keyOf = (step: Step) => keyOfItem(options.key, step)
+    const steps = memo((): readonly string[] => {
+        const written: string[] = []
+        for (const step of live(options.steps)) written.push(keyOf(step))
+        return written
+    })
     // 51.141 — a key no step has is the first.
     const at = (): number => Math.max(0, steps().indexOf(picked() as string))
     const key = (index: number) => steps()[index]
@@ -45,34 +51,44 @@ export function wizard(options: WizardOptions): Wizard {
         const to = key(index)
         if (to !== undefined) picked.set(to)
     }
-    const valid = (step: string | undefined) =>
-        step === undefined || options.valid === undefined || options.valid(step)
+    // Whether the step at `index` may be left forward: the step itself is what `valid` is handed.
+    const valid = (index: number): boolean => {
+        const step = live(options.steps)[index]
+        return (
+            step === undefined ||
+            options.valid === undefined ||
+            options.valid(step)
+        )
+    }
     return {
         // 51.143
-        step: (step) => ({
-            'data-wizard': 'step',
-            get 'aria-current'() {
-                return key(at()) === step ? 'step' : undefined
-            },
-            get 'data-done'() {
-                const index = steps().indexOf(step)
-                return index !== -1 && index < at() ? '' : undefined
-            },
-            onclick: () => {
-                const index = steps().indexOf(step)
-                if (index !== -1 && index < at()) go(index)
-            },
-        }),
+        step: (item) => {
+            const step = keyOf(item)
+            return {
+                'data-wizard': 'step',
+                get 'aria-current'() {
+                    return key(at()) === step ? 'step' : undefined
+                },
+                get 'data-done'() {
+                    const index = steps().indexOf(step)
+                    return index !== -1 && index < at() ? '' : undefined
+                },
+                onclick: () => {
+                    const index = steps().indexOf(step)
+                    if (index !== -1 && index < at()) go(index)
+                },
+            }
+        },
         // 51.142
         next: {
             type: 'button',
             'data-wizard': 'next',
             get disabled() {
-                return at() >= steps().length - 1 || !valid(key(at()))
+                return at() >= steps().length - 1 || !valid(at())
             },
             // 49.15 — on the last step, focus goes to `previous`.
             onclick: (event?: MouseEvent) => {
-                if (at() >= steps().length - 1 || !valid(key(at()))) return
+                if (at() >= steps().length - 1 || !valid(at())) return
                 go(at() + 1)
                 handFocus(
                     event?.currentTarget,

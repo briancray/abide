@@ -10,7 +10,6 @@ let contact = reactive<Contact | undefined>(undefined)
 const box = combobox({
     id: 'deal-contact',
     options: () => contacts,
-    key: (each) => each.id,
     label: (each) => each.name,
     value: contact,
 })

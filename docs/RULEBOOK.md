@@ -5077,8 +5077,9 @@ stands outside the role WAI-ARIA requires around it, and a build MUST NOT carry 
 optional, and the parts MUST hand back what they read and write as a `Reactive` member under the
 option's name, the app's where one is given and one of their own from its default where none is; an
 id a parts function writes MUST be optional with one made where none is given, and readable among its
-parts; and its `key` and `label` MUST be optional where an item is a string or a number, which is then
-its own key and label.
+parts; its `key` and `label` MUST be optional where an item is a string or a number, which is then
+its own key and label; and its `key` MUST be optional where an item carries an `id`, which, written
+as text, is then its key.
 
 49.9 A parts function MUST hand back an element there is one of as a member naming that element —
 save one whose parts are one element's alone, which MUST hand back that element's part itself — an
@@ -5110,6 +5111,10 @@ the check.
 it held focus, move focus on: `carousel`'s and `pages`' `previous` and `next` to the other, `wizard`'s
 `next` to its `previous` and its `previous` to its `next`, and `stepper`'s `increment` and `decrement`
 to its `input`.
+
+49.16 A parts function over a list MUST take the list's items, telling them apart by its `key` (49.8),
+and MUST NOT take a list of their keys in their place; and a part it hands back for one item MUST be
+a function of the item (49.9), not of its key.
 
 # 50. Dialogs, toasts and popovers
 

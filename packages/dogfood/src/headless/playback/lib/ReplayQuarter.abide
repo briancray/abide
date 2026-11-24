@@ -10,7 +10,7 @@ const replay = playback({ duration: WEEKS * 1000 })
         <button {...replay.play}>{replay.playing() ? '❚❚' : '▶'}</button>
         <input {...replay.scrubber} />
         <div {...replay.speed.group}>
-            {#for rate of ['0.5', '1', '2'] by rate}
+            {#for rate of [0.5, 1, 2] by rate}
                 <button {...replay.speed.item(rate)}>{rate}×</button>
             {/for}
         </div>

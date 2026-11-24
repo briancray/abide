@@ -40,7 +40,6 @@ let selected = reactive<readonly string[]>([])
 const table = sortableTable({
     rows: () => deals,
     columns: COLUMNS,
-    key: (deal) => deal.id,
     selected,
 })
 

@@ -2,7 +2,7 @@
 import { reactive, tabs } from '@abide/abide'
 
 let tab = reactive<string | undefined>('details')
-const view = tabs({ keys: ['details', 'stage'], selected: tab })
+const view = tabs({ items: ['details', 'stage'], selected: tab })
 </script>
 
 <div {...view.list}>
