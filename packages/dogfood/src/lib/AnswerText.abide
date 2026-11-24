@@ -4,8 +4,8 @@
 // the docs' code, and a `show` fence as the live thing it names (40.28).
 import { markdown, props, raw } from '@abide/abide'
 
-import AnswerCode from './AnswerCode.abide'
 import { answerHref } from './answerHref.ts'
+import Code from './Code.abide'
 import ShowBlock from './ShowBlock.abide'
 
 const { text, streaming = false } = props<{
@@ -37,4 +37,4 @@ const answer = markdown.incremental({
 })
 </script>
 
-<div class="flow">{#for section of answer.sections key section}{#if section.block?.name === 'show'}<ShowBlock info={section.block.info} />{:else if section.block}<AnswerCode source={section.block.source} />{:else}{raw(section.html)}{/if}{/for}</div>
+<div class="flow">{#for section of answer.sections key section}{#if section.block?.name === 'show'}<ShowBlock info={section.block.info} />{:else if section.block}<Code code={section.block.source} />{:else}{raw(section.html)}{/if}{/for}</div>

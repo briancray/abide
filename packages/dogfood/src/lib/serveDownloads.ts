@@ -7,6 +7,7 @@ import { isFailed, type Middleware } from '@abide/abide'
 import type { FetchFailed } from '@abide/abide/server'
 
 import { exampleArchive } from './exampleArchive.server.ts'
+import { ownOrigin } from './ownOrigin.server.ts'
 import { pageMarkdown } from './pageMarkdown.server.ts'
 import { SITE } from './SITE.ts'
 import { markdownAddressOf, PAGES } from './sitePages.ts'
@@ -53,7 +54,8 @@ export const serveDownloads: Middleware<Response> = async (
     next,
     { request },
 ) => {
-    const { pathname, origin } = new URL(request.url)
+    const { pathname } = new URL(request.url)
+    const origin = ownOrigin()
     const archived = /^\/examples\/([^/]+)\.tar\.gz$/.exec(pathname)
     if (archived) {
         const archive = await exampleArchive(archived[1] as string)

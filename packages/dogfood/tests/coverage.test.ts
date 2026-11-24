@@ -26,6 +26,7 @@ beforeAll(() => renderedMarkdown(), 60_000)
 const registry = await Bun.file(
     new URL('../../../docs/REGISTRY.md', import.meta.url),
 ).text()
+const REGISTRY_ROWS = registryRows(registry)
 
 // Every name in the FIRST column of a REGISTRY table is a capability or a variant an app
 // author can reach. This reads REGISTRY.md rather than a copied list, so a capability
@@ -40,7 +41,7 @@ const capabilities: {
     signature: string | undefined
     section: string
 }[] = []
-for (const row of registryRows(registry)) {
+for (const row of REGISTRY_ROWS) {
     const name = row.cells[0]
     if (name === undefined || !name.startsWith('`')) continue
     const signed = /^(Type )?Signature$/.test(row.header[1] ?? '')
@@ -347,7 +348,7 @@ test('every registry section is carried by exactly one page', async () => {
                     page.route,
                 ])
     const sections = new Set<string>()
-    for (const row of registryRows(registry)) sections.add(row.section)
+    for (const row of REGISTRY_ROWS) sections.add(row.section)
     const wrong: string[] = []
     for (const section of sections) {
         const routes = carriedBy.get(section) ?? []
@@ -365,8 +366,7 @@ test('every registry section is carried by exactly one page', async () => {
 // `Element behaviors` in `SITE`, and it is listed under a group its section is not in.
 test("every page is listed under its section's REGISTRY group", () => {
     const groupOfSection = new Map<string, string>()
-    for (const row of registryRows(registry))
-        groupOfSection.set(row.section, row.group)
+    for (const row of REGISTRY_ROWS) groupOfSection.set(row.section, row.group)
     const misfiled: string[] = []
     for (const group of SITE)
         for (const page of group.pages) {
@@ -383,7 +383,7 @@ test("every page is listed under its section's REGISTRY group", () => {
 // back under `# Element behaviors` in REGISTRY, and it cites 49.8 there.
 test('no Element behaviors section carries a WAI-ARIA pattern or binds a value', () => {
     const widgets: string[] = []
-    for (const row of registryRows(registry)) {
+    for (const row of REGISTRY_ROWS) {
         if (row.group !== 'Element behaviors') continue
         const cited = (row.cells.at(-1) ?? '').split(',').map((id) => id.trim())
         for (const id of ['49.6', '49.8'])
@@ -555,7 +555,7 @@ test('every source fence carries a caption', async () => {
 // pages are generated with, so a slip in that is caught rather than agreed with.
 // A section whose heading names an `@abide/harness/…` entry holds that entry's names; every other, abide's.
 const named = new Set<string>()
-for (const row of registryRows(registry)) {
+for (const row of REGISTRY_ROWS) {
     const entry = /`(@abide\/[^`]+)`/.exec(row.section)?.[1]
     const scope = entry === undefined ? 'abide' : scopeOf(entry)
     const options = /`([^`]+)`/.exec(row.subsection ?? '')?.[1]
@@ -591,7 +591,7 @@ test('every registry row is on exactly one page', async () => {
     const key = (cells: string[]): string =>
         cells.join(' | ').replace(/\s+/g, ' ')
     const written = new Map<string, number>()
-    for (const row of registryRows(registry)) {
+    for (const row of REGISTRY_ROWS) {
         const cells = key(row.cells.slice(0, -1))
         written.set(cells, (written.get(cells) ?? 0) + 1)
     }
@@ -649,7 +649,7 @@ function partsOf(body: string): string[] {
 test('every function and constant a public entry exports heads a registry section', async () => {
     const headed = new Set<string>()
     const read = new Set<string>()
-    for (const row of registryRows(registry)) {
+    for (const row of REGISTRY_ROWS) {
         const [names = '', entry] = row.section.split(' — ')
         const scope =
             entry === undefined || !entry.includes('@abide/')
@@ -730,7 +730,7 @@ test('a signature is short above the examples and whole in Types', async () => {
     const full = new Map<string, Set<string>>()
     // Each signature's short form as its page shows it: an overload's keeps the type telling it apart.
     const overloads = new Map<string, string[]>()
-    const rows = registryRows(registry)
+    const rows = REGISTRY_ROWS
     for (const row of rows) {
         const at = row.header.indexOf('Signature')
         const signature = row.cells[at]
@@ -799,7 +799,7 @@ test('no two overloads of a name read the same in a short form', async () => {
 // is named.
 test('the syntax shows what is called, a type being in Types alone', async () => {
     const typesOf = new Map<string, string[]>()
-    for (const row of registryRows(registry)) {
+    for (const row of REGISTRY_ROWS) {
         const name = row.cells[0] ?? ''
         const declared = /^`([A-Z][a-z]\w*)`$/.exec(name)?.[1]
         if (!row.header.includes('Signature') || row.subsection !== undefined)
@@ -876,7 +876,7 @@ test('every page carries at least one example', async () => {
 // THE REVERT: list only the first clause of each row in `clausesOf`, and pages are named.
 test("a page's rules are every clause its rows cite", async () => {
     const cited = new Map<string, Set<string>>()
-    for (const row of registryRows(registry)) {
+    for (const row of REGISTRY_ROWS) {
         const ids = cited.get(row.section) ?? new Set<string>()
         for (const id of (row.cells.at(-1) ?? '').split(','))
             if (/^\d+\.\d+$/.test(id.trim())) ids.add(id.trim())

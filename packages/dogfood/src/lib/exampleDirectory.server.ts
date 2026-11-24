@@ -1,6 +1,6 @@
-// WHERE THE CRM IS ON DISK: `examples/<app>` beside the docs app, walked up to from this module
-// rather than computed from its depth, because where the server's modules sit is the build's business.
+// WHERE THE CRM IS ON DISK: `examples/<app>` beside the docs app.
 
+import { directoryAbove } from './directoryAbove.ts'
 import type { ExampleResults } from './ExampleResults.ts'
 
 const APP_NAME = /^crm$/
@@ -10,15 +10,8 @@ export async function exampleDirectory(
     app: string,
 ): Promise<string | undefined> {
     if (!APP_NAME.test(app)) return undefined
-    let directory = import.meta.dir
-    while (
-        !(await Bun.file(`${directory}/examples/${app}/package.json`).exists())
-    ) {
-        const parent = directory.slice(0, directory.lastIndexOf('/'))
-        if (parent === '' || parent === directory) return undefined
-        directory = parent
-    }
-    return `${directory}/examples/${app}`
+    const above = directoryAbove(`examples/${app}/package.json`)
+    return above && `${above}/examples/${app}`
 }
 
 /** What `bun run examples:results` last kept for `app`, or `null` where this build never ran it. */

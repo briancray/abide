@@ -1,10 +1,9 @@
 <script server>
-// `node:fs` for the CRM's directory, found synchronously on the walk up as `SiteTree` finds it.
-import { existsSync } from 'node:fs'
+import { GET, refuse } from '@abide/abide/server'
 
-import { GET, refuse, request, server } from '@abide/abide/server'
-
+import { directoryAbove } from './directoryAbove.ts'
 import { folded } from './folded.ts'
+import { ownOrigin } from './ownOrigin.server.ts'
 
 // THE ONLY COMMANDS THIS RUNS (40.46), each as a page writes it: its program, then its words, split
 // on spaces into argv and run with no shell — so nothing a browser sends reaches an argument. None
@@ -29,14 +28,9 @@ let crm: string | undefined
 /** The CRM, found by walking up from this module to the docs app's `examples`. */
 function crmDirectory(): string {
     if (crm !== undefined) return crm
-    let directory = import.meta.dir
-    while (!existsSync(`${directory}/examples/crm/package.json`)) {
-        const parent = directory.slice(0, directory.lastIndexOf('/'))
-        if (parent === '' || parent === directory)
-            throw new Error('docs: no CRM above the docs app')
-        directory = parent
-    }
-    crm = `${directory}/examples/crm`
+    const above = directoryAbove('examples/crm/package.json')
+    if (above === undefined) throw new Error('docs: no CRM above the docs app')
+    crm = `${above}/examples/crm`
     return crm
 }
 
@@ -54,16 +48,6 @@ async function programFile(program: string): Promise<string> {
 
 // Run once per process and origin: an answer is the same on every load, and a check takes seconds.
 const RAN = new Map<string, Promise<{ output: string; code: number }>>()
-
-// The origin a command is aimed at: the socket this app listens on, never the origin a request
-// names, which a `Host` header makes anyone's — save under `abide dev`, which binds none (42.9).
-function aimedAt(): string {
-    try {
-        return server().url.origin
-    } catch {
-        return new URL(request().url).origin
-    }
-}
 
 async function ran(
     command: string,
@@ -111,7 +95,7 @@ async function ran(
 const transcript = GET(async ({ command }: { command: string }) => {
     if (!COMMANDS.has(command))
         refuse(404, `docs: ${command} is not a command the docs run`)
-    const origin = aimedAt()
+    const origin = ownOrigin()
     const key = `${origin} ${command}`
     let running = RAN.get(key)
     if (running === undefined) {

@@ -1,7 +1,8 @@
 <script server>
-import { GET, request } from '@abide/abide/server'
+import { GET } from '@abide/abide/server'
 
 import { folded } from './folded.ts'
+import { ownOrigin } from './ownOrigin.server.ts'
 
 // What changes on every answer and says nothing about the handler: shown, they would make the same
 // exchange read differently on each render.
@@ -50,7 +51,7 @@ const exchange = GET(
         }
         if (body !== undefined && !sent.has('content-type'))
             sent.set('content-type', 'application/json')
-        const answer = await fetch(new URL(path, request().url), {
+        const answer = await fetch(new URL(path, ownOrigin()), {
             method,
             headers: sent,
             redirect: 'manual',

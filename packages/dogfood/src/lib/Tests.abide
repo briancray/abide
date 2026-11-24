@@ -2,10 +2,11 @@
 // `node:fs` for its synchronous read, which bun has no api for: `Bun.file().text()` is a promise, and
 // a render sends its first byte once the microtasks of setup have run (41.19) — an async read here
 // would stream in after it, and miss the page's markdown twin, which reads that first answer.
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 
 import { GET } from '@abide/abide/server'
 
+import { directoryAbove } from './directoryAbove.ts'
 import { slice } from './slice.ts'
 
 // A test file of the workspace, by its path from the repo's root — never a path off it.
@@ -15,14 +16,10 @@ let root: string | undefined
 
 /** The workspace's root: the nearest directory above this module holding `docs/RULEBOOK.md`. */
 function repositoryRoot(): string {
-    let directory = import.meta.dir
-    while (!existsSync(`${directory}/docs/RULEBOOK.md`)) {
-        const parent = directory.slice(0, directory.lastIndexOf('/'))
-        if (parent === '' || parent === directory)
-            throw new Error('docs: no workspace above the docs app')
-        directory = parent
-    }
-    return directory
+    const above = directoryAbove('docs/RULEBOOK.md')
+    if (above === undefined)
+        throw new Error('docs: no workspace above the docs app')
+    return above
 }
 
 // Read on the server (40.15): a test file is hundreds of lines, and a page shows a case or two of it.

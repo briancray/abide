@@ -1,22 +1,20 @@
 <script server>
 // `node:fs` for a handler file's text, read synchronously inside the walk.
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 
-import { GET, request } from '@abide/abide/server'
+import { GET } from '@abide/abide/server'
+
+import { directoryAbove } from './directoryAbove.ts'
+import { ownOrigin } from './ownOrigin.server.ts'
 
 let crm: string | undefined
 
 /** The CRM's `src`, found by walking up from this module to the docs app's `examples`. */
 function crmSource(): string {
     if (crm !== undefined) return crm
-    let directory = import.meta.dir
-    while (!existsSync(`${directory}/examples/crm/src/index.abide`)) {
-        const parent = directory.slice(0, directory.lastIndexOf('/'))
-        if (parent === '' || parent === directory)
-            throw new Error('docs: no CRM above the docs app')
-        directory = parent
-    }
-    crm = `${directory}/examples/crm/src`
+    const above = directoryAbove('examples/crm/src/index.abide')
+    if (above === undefined) throw new Error('docs: no CRM above the docs app')
+    crm = `${above}/examples/crm/src`
     return crm
 }
 
@@ -131,7 +129,7 @@ const filesUnder = GET(async ({ directory }: { directory: string }) => {
     await Promise.all(
         entries.map(async (entry) => {
             if (!entry.link) return
-            const answer = await fetch(new URL(entry.address, request().url), {
+            const answer = await fetch(new URL(entry.address, ownOrigin()), {
                 method: 'HEAD',
                 redirect: 'manual',
             })

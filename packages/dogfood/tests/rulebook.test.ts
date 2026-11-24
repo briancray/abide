@@ -16,6 +16,7 @@ import { rulebookClauses } from '../src/rulebook/lib/rulebookClauses.ts'
 const DOCS = new URL('../../../docs/', import.meta.url)
 
 const registry = await Bun.file(new URL('REGISTRY.md', DOCS)).text()
+const REGISTRY_ROWS = registryRows(registry)
 const rulebook = await Bun.file(new URL('RULEBOOK.md', DOCS)).text()
 
 // The format-rule preamble of each document states these keywords, so the checks below run over
@@ -66,7 +67,7 @@ const RATIONALE = /\b(because|so that|in order to|which is why)\b/
 // exists for: it reads as documentation and it is a second home for a rule that has a number.
 test('no registry row states a requirement', async () => {
     const offenders: string[] = []
-    for (const { line, cells } of registryRows(registry)) {
+    for (const { line, cells } of REGISTRY_ROWS) {
         const meaning = cells[cells.length - 2] ?? ''
         if (REQUIREMENT.test(meaning))
             offenders.push(`REGISTRY.md:${line}: ${cells[0]}`)
@@ -79,7 +80,7 @@ test('no registry row states a requirement', async () => {
 // are blanked first, a signature carrying a `.` in every member otherwise reading as ten sentences.
 test('a registry meaning is one sentence', async () => {
     const offenders: string[] = []
-    for (const { line, cells } of registryRows(registry)) {
+    for (const { line, cells } of REGISTRY_ROWS) {
         const meaning = (cells[cells.length - 2] ?? '').replace(
             /`[^`]*`/g,
             'CODE',
@@ -213,7 +214,7 @@ test('no clause number is used twice', async () => {
 test('every rule a registry row cites exists', async () => {
     const ids = new Set(clauses().map((clause) => clause.id))
     const dangling: string[] = []
-    for (const { line, cells } of registryRows(registry)) {
+    for (const { line, cells } of REGISTRY_ROWS) {
         const cited = cells[cells.length - 1] ?? ''
         if (cited === '—' || !cited) continue
         for (const id of cited.split(',')) {
@@ -243,7 +244,7 @@ function freeStanding(): Set<string> {
 
 test('every clause is cited by a registry row', async () => {
     const cited = new Set<string>()
-    for (const { cells } of registryRows(registry)) {
+    for (const { cells } of REGISTRY_ROWS) {
         for (const id of (cells[cells.length - 1] ?? '').split(','))
             cited.add(id.trim())
     }
@@ -262,7 +263,7 @@ test('every clause is cited by a registry row', async () => {
 // section with no table rows passes a count without being read.
 test('every registry section is governed by some clause', () => {
     const sections = new Map<string, string[]>()
-    for (const row of registryRows(registry))
+    for (const row of REGISTRY_ROWS)
         sections.set(row.section, [
             ...(sections.get(row.section) ?? []),
             row.cells.at(-1) ?? '',

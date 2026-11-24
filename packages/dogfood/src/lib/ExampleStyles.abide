@@ -1,26 +1,21 @@
 <script server>
 // `node:fs` for its synchronous read, which bun has no api for: an async read here would stream in
 // after the first byte, and miss the page's markdown twin (see `Tests.abide`).
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 
 import { GET } from '@abide/abide/server'
+
+import { directoryAbove } from './directoryAbove.ts'
 
 let stylesheet: string | undefined
 
 /** The CRM's stylesheet, found by walking up from this module to the docs app's `examples`. */
 function crmStylesheet(): string {
     if (stylesheet !== undefined) return stylesheet
-    let directory = import.meta.dir
-    while (!existsSync(`${directory}/examples/crm/src/lib/crm.css`)) {
-        const parent = directory.slice(0, directory.lastIndexOf('/'))
-        if (parent === '' || parent === directory)
-            throw new Error('docs: no CRM stylesheet above the docs app')
-        directory = parent
-    }
-    stylesheet = readFileSync(
-        `${directory}/examples/crm/src/lib/crm.css`,
-        'utf8',
-    )
+    const above = directoryAbove('examples/crm/src/lib/crm.css')
+    if (above === undefined)
+        throw new Error('docs: no CRM stylesheet above the docs app')
+    stylesheet = readFileSync(`${above}/examples/crm/src/lib/crm.css`, 'utf8')
     return stylesheet
 }
 

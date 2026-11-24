@@ -2,6 +2,8 @@
 // against is what the browser holds this moment — the parts a headless component spread, the state
 // it set — and never a description of it. Comments are the anchors hydration walks, so they are dropped.
 
+import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
+
 // A drawing's geometry is long and says nothing a stylesheet reaches, so it alone is cut short; a
 // class or a style is what an example is about, and is shown whole.
 const DRAWN = new Set(['d', 'points', 'transform'])
@@ -40,7 +42,7 @@ function write(node: Node, depth: number, lines: string[]): void {
                 : ` ${attribute.name}="${value}"`
     }
     open += '>'
-    if (VOID.has(tag)) {
+    if (VOID_ELEMENTS.has(tag)) {
         lines.push(indent + open)
         return
     }
@@ -57,21 +59,6 @@ function write(node: Node, depth: number, lines: string[]): void {
     for (const child of element.childNodes) write(child, depth + 1, lines)
     lines.push(`${indent}</${tag}>`)
 }
-
-const VOID = new Set([
-    'area',
-    'br',
-    'col',
-    'embed',
-    'hr',
-    'img',
-    'input',
-    'link',
-    'meta',
-    'source',
-    'track',
-    'wbr',
-])
 
 /**
  * The selectors a stylesheet reaches the markup under `root` by: each part a headless component
