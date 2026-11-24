@@ -1,0 +1,293 @@
+<script>
+import { url } from '@abide/abide'
+
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Exchange from '#src/lib/Exchange.abide'
+import Section from '#src/lib/Section.abide'
+
+import AskAboutAda from './lib/AskAboutAda.abide'
+import askAboutAda from './lib/AskAboutAda.abide' with { type: 'text' }
+
+// One JSON-RPC message to the CRM's MCP endpoint, as a model's client posts it.
+const rpc = (method: string, params: Record<string, unknown>) =>
+    JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }, null, 2)
+
+// A transcript as the browser sends it to the CRM's assistant handler.
+const transcript = (messages: { role: string; content: unknown }[]) =>
+    JSON.stringify({ messages }, null, 2)
+</script>
+
+<Doc
+    seeAlso={[
+        '/ai/assistant',
+        '/ai/provider',
+        '/ai/pairing',
+        '/ai/transcript',
+        '/ai/results-of',
+        '/ai/image-piece',
+        '/ai/image-files',
+        '/headless/chat',
+        '/handlers/mcp',
+        '/handlers/clients',
+        '/app/on-pairing',
+        '/cli/bridge',
+    ]}
+>
+    <Section title="Every handler the app serves is already a tool">
+        <p>The model reaches the CRM through <a href={url('/handlers/mcp')}>MCP</a>, and
+            <code>/__abide/mcp</code> lists each handler as a tool. The handler's
+            <code>description</code> is what the model reads, and its parameter's annotation is
+            the schema. You write no tool definitions. The CRM's contact search, as the tool
+            list answered when this page loaded:</p>
+        <Exchange
+            method="POST"
+            path="/__abide/mcp"
+            body={rpc('tools/list', {})}
+            pick={[
+                '/result/tools/[name=get_assistant_searchContacts]/name',
+                '/result/tools/[name=get_assistant_searchContacts]/description',
+                '/result/tools/[name=get_assistant_searchContacts]/inputSchema',
+            ]} />
+    </Section>
+
+    <Section title="Run the conversation from a handler you write">
+        <p><a href={url('/ai/assistant')}><code>assistant</code></a> has no address of its own.
+            Yield it from a streaming <code>POST</code>, so the address and the middleware are
+            yours. <code>mcp: true</code> hands the model the tools <code>/__abide/mcp</code>
+            lists, and each call the model makes runs on the server, through the app.</p>
+        <Code language="ts" caption="server" code={`
+            import {
+                assistant,
+                type AssistantMessage,
+                POST,
+                provider,
+            } from '@abide/abide/server'
+
+            const claude = provider.claudeApi({
+                apiKey: Bun.env.ANTHROPIC_API_KEY ?? '',
+                model: 'claude-opus-5',
+                max_tokens: 1024,
+            })
+
+            export default POST(
+                async function* ({ messages }: { messages: AssistantMessage[] }) {
+                    yield* assistant(messages, claude, { mcp: true })
+                },
+                { clients: { mcp: false } },
+            )
+        `} />
+        <p>The CRM's assistant runs the same loop on a recorded model. Asked when this page
+            loaded, its tool call ran the real contact search, and the answer streamed back as
+            events:</p>
+        <Exchange
+            method="POST"
+            path="/assistant/askAssistant"
+            body={transcript([{ role: 'user', content: 'Which company is Ada at?' }])} />
+    </Section>
+
+    <Section title="Show the model's tool calls in the conversation">
+        <p>Hand the assistant handler to <a href={url('/headless/chat')}><code>chat</code></a>
+            as <code>ask</code>. A tool part holds the call the model made and what your handler
+            answered. Send the question to see the CRM's search run.</p>
+        <Example code={askAboutAda}><AskAboutAda /></Example>
+    </Section>
+
+    <Section title="The model calls each tool as the person who asked">
+        <p>A tool call carries the asking request's cookie and authorization, and nothing else
+            of it. A model reaches what the person asking could reach, and no more. The CRM's
+            commission takes <a href={url('/middleware/signed-in')}><code>signedIn</code></a>, so
+            asked by nobody signed in, the tool refuses as the page would:</p>
+        <Exchange
+            method="POST"
+            path="/__abide/mcp"
+            body={rpc('tools/call', {
+                name: 'get_account_getCommission',
+                arguments: {},
+            })} />
+    </Section>
+
+    <Section title="Keep a handler off the model's tool list">
+        <p>Set <code>mcp</code> to <code>false</code> in
+            <a href={url('/handlers/clients')}><code>clients</code></a>. The CRM's assistant
+            handler withholds itself, so the model cannot call the assistant from inside a
+            conversation. <code>clients</code> withholds a surface and guards nothing: the
+            address still answers a page.</p>
+        <Exchange
+            method="POST"
+            path="/__abide/mcp"
+            body={rpc('tools/call', {
+                name: 'post_assistant_askAssistant',
+                arguments: {},
+            })} />
+    </Section>
+
+    <Section title="Swap the model by swapping the provider">
+        <p><a href={url('/ai/provider')}><code>provider</code></a> picks where a turn runs:
+            <code>provider.claudeApi</code> on your key, or <code>provider.claudeCode</code> on
+            the visitor's own Claude Code and their plan. A recorded
+            <a href={url('/ai/assistant')}><code>Provider</code></a> with fixed lines is what the
+            CRM's tests and this page run. Every one yields the same events, so the page asking
+            does not change. The CRM's Claude Code handler:</p>
+        <Code language="ts" caption="server" code={`
+            import {
+                assistant,
+                type AssistantMessage,
+                POST,
+                provider,
+            } from '@abide/abide/server'
+
+            export default POST(
+                async function* ({ messages }: { messages: AssistantMessage[] }) {
+                    yield* assistant(
+                        messages,
+                        provider.claudeCode({
+                            systemPrompt: 'Answer in one sentence.',
+                        }),
+                        { mcp: true },
+                    )
+                },
+                {
+                    description: "Asks the visitor's Claude Code.",
+                    clients: { mcp: false },
+                },
+            )
+        `} />
+    </Section>
+
+    <Section title="Pair the visitor's Claude Code before the first question">
+        <p><a href={url('/ai/pairing')}><code>pairing</code></a> runs in the browser, and connects
+            this browser to the visitor's Claude Code through
+            <a href={url('/cli/bridge')}><code>abide-bridge</code></a>. Until they pair,
+            <code>provider.claudeCode</code> refuses the turn <code>409</code>, so show the chat
+            only in the <code>paired</code> step.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { pairing } from '@abide/abide'
+            import askClaudeCode from '../askClaudeCode.handler.ts'
+            import Chat from './Chat.abide'
+
+            const { status, step, start } = pairing()
+            </script>
+
+            {#if step === 'paired'}
+                <Chat ask={askClaudeCode} />
+            {:else if step === 'click'}
+                <pre>{status?.command}</pre>
+                <button onclick={start}>Pair with a click</button>
+            {/if}
+        `} />
+    </Section>
+
+    <Section title="Claude Code on the visitor's machine uses only the tools both sides name">
+        <p>A paired turn runs in an empty directory, with the app's tools. A tool of the
+            visitor's machine joins them only where the site's <code>tools</code> and the
+            visitor's own <code>--tools</code> both name it, so asking cannot reach their files.
+            A visitor who runs the bridge <code>--full</code> grants everything.
+            <a href={url('/app/on-pairing')}><code>onPairing</code></a> sets what the pairing
+            command passes.</p>
+        <Code language="ts" caption="server" code={`
+            import { provider } from '@abide/abide/server'
+
+            const claudeCode = provider.claudeCode({ tools: ['WebSearch'] })
+        `} />
+        <p>A tool the site asked for and the visitor did not grant is in the pairing's
+            <code>status.missing</code>:</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { pairing } from '@abide/abide'
+            const { status } = pairing()
+            </script>
+
+            {#if status?.missing.length}
+                <p>Claude Code here cannot use {status.missing.join(', ')}.</p>
+            {/if}
+        `} />
+    </Section>
+
+    <Section title="The browser keeps the conversation and sends it whole">
+        <p>The server holds no conversation between calls, so each question sends every turn
+            before it. <a href={url('/ai/transcript')}><code>transcript</code></a> folds the
+            streamed events into turns and turns them back into messages, and
+            <code>chat</code> does both for you.</p>
+        <Code language="ts" caption="browser" code={`
+            import { type AssistantTurn, reactive, transcript } from '@abide/abide'
+            import askAssistant from './askAssistant.handler.ts'
+
+            const turns = reactive<AssistantTurn[]>([])
+            async function ask(text: string) {
+                turns.patch((all) => {
+                    all.push(transcript.turn('user', [{ type: 'text', text }]))
+                    all.push(transcript.turn('assistant'))
+                })
+                const messages = transcript.messages(turns())
+                for await (const event of askAssistant({ messages }))
+                    turns.patch((all) => {
+                        const answering = all[all.length - 1]
+                        if (answering) transcript.fold(answering, event)
+                    })
+            }
+        `} />
+        <p>A transcript ending on the assistant's turn has nothing to answer, and is refused
+            before any model is asked:</p>
+        <Exchange
+            method="POST"
+            path="/assistant/askAssistant"
+            body={transcript([
+                { role: 'user', content: 'Which company is Ada at?' },
+                { role: 'assistant', content: 'Analytical Engines.' },
+            ])} />
+    </Section>
+
+    <Section title="Read what a tool answered as its handler's own value">
+        <p>A tool's answer reaches the model as text.
+            <a href={url('/ai/results-of')}><code>resultsOf</code></a> hands the page the value
+            each call to one handler answered, typed as that handler's, and leaves a failed call
+            out.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { type AssistantEvent, props, resultsOf } from '@abide/abide'
+            import searchContacts from './searchContacts.handler.ts'
+
+            const { events } = props<{ events: AssistantEvent[] }>()
+            const found = resultsOf(events, searchContacts).flat()
+            </script>
+
+            {#for contact of found}<p>{contact.name}</p>{/for}
+        `} />
+    </Section>
+
+    <Section title="Send a picture in the question">
+        <p><a href={url('/ai/image-files')}><code>imageFiles</code></a> takes the images from a
+            paste or a drop, and <a href={url('/ai/image-piece')}><code>imagePiece</code></a>
+            draws each down to what a model looks at, as a piece of the person's turn.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { imageFiles, imagePiece, reactive } from '@abide/abide'
+
+            let attached = reactive<{ data: string; mimeType: string }[]>([])
+            async function paste(event: ClipboardEvent) {
+                for (const file of imageFiles(event.clipboardData))
+                    attached.push(await imagePiece(file))
+            }
+            </script>
+
+            <textarea onpaste={paste}></textarea>
+        `} />
+        <p>Send a phone's HEIC as it is, and the assistant refuses it before any model is
+            asked. <code>imagePiece</code> redraws one the browser can draw as a JPEG.</p>
+        <Exchange
+            method="POST"
+            path="/assistant/askAssistant"
+            body={transcript([
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'image', data: 'AAAA', mimeType: 'image/heic' },
+                        { type: 'text', text: 'Add this contact.' },
+                    ],
+                },
+            ])} />
+    </Section>
+</Doc>

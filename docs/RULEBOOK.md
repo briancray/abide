@@ -4092,7 +4092,8 @@ their `subgroup`, and the pages of one run MUST be adjacent in the group.
 has.
 
 40.39 A group MAY open with a guide: a page of `SITE` documenting no REGISTRY section, which MUST say how its
-group's names work together, and MUST render its own sections and its See also alone.
+group's names work together, MUST render its own sections and its See also alone, and MUST be
+linked from its group's heading in the nav rather than listed beneath it.
 
 40.40 Every group MUST name a form in its `SITE` entry — `reference`, `authoring`, `anatomy`, `work`,
 `exchange` or `transcript` — and a group whose pages document a construct an app writes MUST be

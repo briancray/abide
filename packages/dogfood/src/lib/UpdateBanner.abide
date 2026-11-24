@@ -1,14 +1,38 @@
 <script>
-// The update the native app has staged (38.148), offered where every page shows it; `undefined` in a
-// browser, so nothing renders there.
-import { pendingUpdate } from '@abide/abide'
+// The update the native app has staged (38.148), offered where every page shows it as a banner of
+// `notices`: its region a status, so a screen reader hears the update arrive. `pendingUpdate` is
+// `undefined` in a browser, so nothing is ever listed there.
+import { notices, pendingUpdate, watch } from '@abide/abide'
+
+const updates = notices({ timeout: Infinity })
+const banner = updates.host({ label: 'Update' })
+
+// A newer update takes the place of the one offered before it.
+let offered: string | undefined
+watch(() => {
+    const update = pendingUpdate
+    if (offered !== undefined) updates.dismiss(offered)
+    offered =
+        update === undefined
+            ? undefined
+            : updates.notify(
+                  `abide docs ${update.version} ${update.required ? 'has to be installed to go on.' : 'installs when you quit.'}`,
+                  {
+                      id: `update ${update.version}`,
+                      action: {
+                          label: 'Restart now',
+                          run: () => update.install(),
+                      },
+                  },
+              )
+})
 </script>
 
-{#if pendingUpdate}
-    <p class="update col-span-full flex items-center justify-center gap-snug border-b border-rule bg-signal/10 px-4 py-1 text-chrome">
-        abide docs {pendingUpdate.version} {pendingUpdate.required
-            ? 'has to be installed to go on.'
-            : 'installs when you quit.'}
-        <button class="quiet" onclick={() => pendingUpdate?.install()}>Restart now</button>
-    </p>
-{/if}
+<div {...banner.region} class="col-span-full">
+    {#for notice of banner.notices key notice.id}
+        <p {...banner.notice(notice).notice} class="flex items-center justify-center gap-snug border-b border-rule bg-signal/10 px-4 py-1 text-chrome">
+            <span {...banner.notice(notice).text}>{notice.text}</span>
+            <button {...banner.notice(notice).action} class="quiet">{notice.action?.label}</button>
+        </p>
+    {/for}
+</div>

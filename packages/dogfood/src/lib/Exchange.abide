@@ -80,9 +80,22 @@ const exchange = GET(
                             last = token
                                 .replaceAll('~1', '/')
                                 .replaceAll('~0', '~')
-                            value = (
-                                value as Record<string, unknown> | undefined
-                            )?.[last]
+                            // `[key=value]` picks the item of a list whose `key` is `value`, so a
+                            // page names the entry it means rather than its place in the list.
+                            const match = /^\[(\w+)=(.*)\]$/.exec(last)
+                            value = match
+                                ? (
+                                      value as
+                                          Record<string, unknown>[] | undefined
+                                  )?.find(
+                                      (item) =>
+                                          String(item?.[match[1] as string]) ===
+                                          match[2],
+                                  )
+                                : (
+                                      value as
+                                          Record<string, unknown> | undefined
+                                  )?.[last]
                         }
                         picked[last] = value
                     }
@@ -124,7 +137,10 @@ const {
     body?: string
     /** Each `Name: value`. */
     headers?: readonly string[]
-    /** JSON pointers to the parts of a JSON answer shown, e.g. `/paths/~1deals~1getDeal/get/operationId`. */
+    /**
+     * JSON pointers to the parts of a JSON answer shown, e.g. `/paths/~1deals~1getDeal/get/operationId`;
+     * a `[key=value]` token picks a list's item by a field, e.g. `/result/tools/[name=get_deals_getDeal]`.
+     */
     pick?: readonly string[]
 }>()
 

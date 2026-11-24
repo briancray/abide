@@ -29,7 +29,7 @@ import { isFramed } from './sitePages.ts'
         data-abide-titlebar
     >
         <a class="brand flex items-baseline gap-tight self-center px-4 pl-[calc(1rem+var(--abide-titlebar-inset,0px))] font-display text-title/5 font-bold tracking-display text-ink no-underline *:font-mono *:text-micro/2 *:font-medium *:tracking-brand *:text-muted *:uppercase" href={url('/')}>abide<span>docs</span></a>
-        <div class="relative px-10 max-lg:px-3"><Ask /></div>
+        <div class="px-10 max-lg:px-3"><Ask /></div>
         {#if native() === undefined}
             <a class="px-4 text-chrome text-muted no-underline hover:text-ink" href={url('/configuration/native' as RouteLiteral)} {...tooltip.tip(
                 'These docs as a native app, with Claude Code paired already',

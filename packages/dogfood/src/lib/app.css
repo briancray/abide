@@ -494,13 +494,15 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply font-mono text-micro text-muted max-sm:hidden;
     }
 
-    /* Hidden rather than unmounted, so closing it ends no answer: `flex` would outrank `[hidden]`. */
-    .answers[hidden] {
-        @apply hidden;
+    /* `popover`'s panel, placed under the bar and as wide as it (`--anchor-width`). Hidden rather
+       than unmounted, so closing it ends no answer: `flex` — and `main section`'s, in the menu bar's
+       panel — would outrank the UA's hiding of a closed popover. */
+    .answers {
+        @apply m-0 flex max-h-[min(72vh,52rem)] w-(--anchor-width) flex-col gap-section overflow-y-auto rounded-lg border border-rule bg-paper p-6 text-ink shadow-xl;
     }
 
-    .answers {
-        @apply absolute top-[calc(100%+0.5rem)] right-10 left-10 z-3 flex max-h-[min(72vh,52rem)] flex-col gap-section overflow-y-auto rounded-lg border border-rule bg-paper p-6 shadow-xl max-lg:right-3 max-lg:left-3;
+    .answers:not(:popover-open) {
+        @apply hidden;
     }
 
     .answers > header {
@@ -522,12 +524,12 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply flex flex-wrap items-center gap-snug;
     }
 
-    .pairing > :not(button) {
+    .pairing:not([data-step="paired"]) > :not(button) {
         @apply basis-full;
     }
 
     .pairing[data-step="paired"] {
-        @apply flex-col flex-nowrap items-stretch gap-section;
+        @apply min-h-0 flex-col flex-nowrap items-stretch gap-section;
     }
 
     .pairing[data-step="paired"] > [data-pairing="pair"] {
@@ -538,11 +540,16 @@ html:has(> body > .site)::view-transition-new(root) {
        bubble; the answer is the page's own prose, with no speaker line, and says it is still
        thinking for as long as it streams. */
     .conversation {
-        @apply flex flex-col gap-section;
+        @apply flex min-h-0 flex-col gap-section;
     }
 
+    /* THE TRANSCRIPT IS THE SCROLLER, not the panel: it is `chat`'s `autoscroll` host (53.39), so it
+       follows an answer as it streams and offers Latest once scrolled up, and the composer under it
+       stays in view. Every box from the panel down shrinks (`min-h-0`) so the panel's height
+       reaches it, and it is `relative` so the speakers' `sr-only` boxes scroll inside it rather
+       than stretching the panel. */
     .conversation [data-chat="transcript"] {
-        @apply m-0 flex list-none flex-col gap-section p-0;
+        @apply relative m-0 flex min-h-0 list-none flex-col gap-section overflow-y-auto p-0;
     }
 
     .conversation [data-chat="turn"] {

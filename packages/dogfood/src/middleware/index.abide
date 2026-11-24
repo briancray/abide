@@ -1,0 +1,167 @@
+<script>
+import { url } from '@abide/abide'
+
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Exchange from '#src/lib/Exchange.abide'
+import Section from '#src/lib/Section.abide'
+import SiteTree from '#src/lib/SiteTree.abide'
+
+// A model's client calling one tool, as the JSON-RPC body it posts.
+const callTool = (name: string) =>
+    JSON.stringify(
+        {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name, arguments: {} },
+        },
+        null,
+        2,
+    )
+</script>
+
+<Doc
+    seeAlso={[
+        '/middleware/middleware',
+        '/middleware/signed-in',
+        '/middleware/require-role',
+        '/middleware/read-only',
+        '/middleware/trusted-identity',
+        '/middleware/csp',
+        '/ambients/principal',
+        '/app/on-principal',
+    ]}
+>
+    <Section title="A rung answers in the handler's place, or lets the request through">
+        <p>A rung is a function handed <code>next</code>. Return <code>next()</code> and the
+            request goes on to the handler. Return a
+            <a href={url('/reactive/refuse')}><code>refuse</code></a> and the refusal is the
+            answer, so the handler never runs. The CRM's commission lists
+            <a href={url('/middleware/signed-in')}><code>signedIn</code></a> in its own
+            <code>middleware</code> option.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, signedIn } from '@abide/abide/server'
+
+            export default GET(() => ({ amount: '$6,200' }), {
+                middleware: [signedIn],
+            })
+        `} />
+        <p>Asked by nobody signed in, the rung answers <code>401</code>:</p>
+        <Exchange path="/account/getCommission" />
+    </Section>
+
+    <Section title="Write your own rung as a function of `next`">
+        <p>Type it <code>Middleware</code> and read the caller from
+            <a href={url('/ambients/principal')}><code>principal</code></a>. The CRM keeps
+            <code>adminsOnly</code> in <code>account/lib</code>, so a layout and a handler
+            import the same rung.</p>
+        <Code language="ts" caption="server" code={`
+            import { type Middleware, principal, refuse } from '@abide/abide'
+
+            export const adminsOnly: Middleware = async (next) => {
+                const { role } = await principal.resolved
+                return role === 'admin' ? next() : refuse(403, 'Admins only.')
+            }
+        `} />
+        <p>The contacts export lists it in its own <code>middleware</code>:</p>
+        <Code language="ts" caption="server" code={`
+            import { POST } from '@abide/abide/server'
+            import { CONTACTS } from '../contacts/lib/CONTACTS.server.ts'
+            import { adminsOnly } from './lib/adminsOnly.ts'
+
+            export default POST(async () => CONTACTS, {
+                middleware: [adminsOnly],
+            })
+        `} />
+        <Exchange method="POST" path="/account/exportContacts" body={'{}'} />
+    </Section>
+
+    <Section title="Guard every page and handler under a directory with its layout">
+        <p>Call <a href={url('/middleware/middleware')}><code>middleware</code></a> in a
+            layout's <code>&lt;script server&gt;</code>. The rung runs over every page and
+            every handler at that directory and below, so a handler added there later is
+            guarded without naming the rung. The CRM's admin section:</p>
+        <SiteTree directory="account/admin" />
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { middleware } from '@abide/abide/server'
+            import { adminsOnly } from '../lib/adminsOnly.ts'
+
+            middleware(adminsOnly)
+            </script>
+
+            <slot />
+        `} />
+        <p><code>getTeam.handler.ts</code> lists no rung of its own, and is refused all the
+            same:</p>
+        <Exchange path="/account/admin/getTeam" />
+    </Section>
+
+    <Section title="A refused call is refused on every surface">
+        <p>The rungs run on the call, whichever surface it came in by. A model calling the
+            admin section's handler as a tool on <code>/__abide/mcp</code> gets the layout's
+            refusal back, with <code>isError</code>. See
+            <a href={url('/handlers/mcp')}>MCP</a>.</p>
+        <Exchange
+            method="POST"
+            path="/__abide/mcp"
+            body={callTool('get_account_admin_getTeam')}
+         />
+    </Section>
+
+    <Section title="Rungs run from the root layout inward, and a handler's own run last">
+        <p>The root layout's rungs run first, before routing, over every request the app
+            answers, abide's own addresses included. Each directory's layout runs next,
+            outermost first. A handler's <code>middleware</code> runs last, in the order it
+            lists its rungs.</p>
+        <Code code={`
+            src/layout.abide                csp         before routing
+            src/account/admin/layout.abide  adminsOnly  after routing, outer first
+            getTeam.handler.ts              none        last, in the order listed
+        `} />
+        <p>For the admin section's <code>getTeam</code>, that is two rungs and none of its
+            own. An outer rung is handed what an inner one answered. The CRM's root layout files
+            <a href={url('/middleware/csp')}><code>csp</code></a>, so the admin page the
+            section's rung refuses still carries the root's policy:</p>
+        <Exchange method="HEAD" path="/account/admin" />
+    </Section>
+
+    <Section title="Keep an archive's reads open and refuse every write">
+        <p><a href={url('/middleware/read-only')}><code>readOnly</code></a> passes a
+            <code>GET</code>, <code>HEAD</code> or <code>OPTIONS</code> and refuses any other
+            method at <code>403</code>. The CRM files it over last year's pipeline.</p>
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { middleware, readOnly } from '@abide/abide/server'
+
+            middleware(readOnly({ message: 'Last year’s pipeline is archived.' }))
+            </script>
+
+            <slot />
+        `} />
+        <Exchange path="/pipeline/archive/getArchivedDeal" />
+        <Exchange method="POST" path="/pipeline/archive/reopenDeal" />
+    </Section>
+
+    <Section title="Reach for a built-in guard before writing a rung">
+        <p>Each is a rung, filed in a layout or listed in a handler's
+            <code>middleware</code>.</p>
+        <ul>
+            <li><a href={url('/middleware/signed-in')}><code>signedIn</code></a> refuses
+                anyone not signed in, at <code>401</code>.</li>
+            <li><a href={url('/middleware/require-role')}><code>requireRole</code></a> admits
+                a role, or whoever a test of the principal passes. It refuses a member
+                without the role at <code>403</code>, and nobody signed in at
+                <code>401</code>.</li>
+            <li><a href={url('/middleware/read-only')}><code>readOnly</code></a> refuses every
+                write, keeping open the handlers you allow.</li>
+            <li><a href={url('/middleware/trusted-identity')}><code>trustedIdentity</code></a>
+                signs in the caller a single sign-on proxy names in a header. File it ahead
+                of the rungs that check the caller, or they see nobody signed in.</li>
+            <li><a href={url('/middleware/csp')}><code>csp</code></a> sets a content security
+                policy. File it in the root layout, so every page carries it.</li>
+        </ul>
+        <p>Write your own where the rule is the app's, as <code>adminsOnly</code> is.</p>
+    </Section>
+</Doc>

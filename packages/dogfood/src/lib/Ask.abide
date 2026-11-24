@@ -8,15 +8,18 @@
 // wraps (41.11), so a `show open` block can move the page under an answer without ending it. The
 // panel is hidden rather than unmounted, so closing it ends no answer, and the turns are bound here.
 //
+// THE PANEL IS A `popover` OF THE BAR: the bar is its trigger, so it says whether the answers are
+// open (`aria-expanded`), and Escape or a press outside closes them as the Close button does.
+//
 // THE TRANSCRIPT IS THE WORDS, the rendering is not: each turn sends every earlier question and the
 // text Claude wrote for it (44.4), and what was rendered from that text stays here.
 import {
     type AssistantTurn,
     copy,
-    flushSync,
     keyLabel,
     navigate,
     pairing,
+    popover,
     reactive,
     type RouteLiteral,
     url,
@@ -50,7 +53,7 @@ const WORDS = {
 
 let open = reactive(false)
 let turns = reactive<AssistantTurn[]>([])
-let panel: HTMLElement | undefined
+const answers = popover({ open, align: 'start' })
 
 // A `show open` block moves the page under the answer once, as its fence closes: counted per answer,
 // so the same answer read again moves nothing.
@@ -68,11 +71,14 @@ watch(() => {
         navigate(url(routes[opened.count] as RouteLiteral))
 })
 
-// The answers opened, and the composer focused where pairing has put one there.
-function show() {
-    open = true
-    flushSync()
-    panel?.querySelector<HTMLElement>('[data-chat=input]')?.focus()
+// The composer, where pairing has put one in the answers.
+const composer = () =>
+    document
+        .getElementById(answers.id)
+        ?.querySelector<HTMLElement>('[data-chat=input]')
+
+function focusComposer(event: ToggleEvent) {
+    if (event.newState === 'open') composer()?.focus()
 }
 
 function clear() {
@@ -81,19 +87,20 @@ function clear() {
 }
 
 // ⌘K (Ctrl+K off a Mac) opens the answers: the native app's Ask menu item, whose key a page in a
-// browser answers itself, from anywhere, a field included (38.213).
-ASK_ITEM.on(show)
+// browser answers itself, from anywhere, a field included (38.213) — and, open already, it goes
+// back to the composer.
+ASK_ITEM.on(() => {
+    if (open) composer()?.focus()
+    else open = true
+})
 </script>
 
-<button type="button" class="ask" id="ask" aria-label="Ask Claude about abide" onclick={show}>
+<button type="button" class="ask" aria-label="Ask Claude about abide" {...answers.trigger}>
     <span>Ask how to do anything in abide…</span>
     <kbd>{keyLabel('mod+k')}</kbd>
 </button>
 
-<section class="answers" aria-label="Answers" hidden={!open}
-    bind:element={(element: HTMLElement) => {
-        panel = element
-    }}>
+<section class="answers" aria-label="Answers" {...answers.popover} ontoggle={focusComposer}>
     <header>
         <span class="eyebrow">Claude Code · answers from these docs</span>
         {#if turns.length > 0}<button class="quiet" onclick={clear}>New conversation</button>{/if}

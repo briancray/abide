@@ -1,0 +1,217 @@
+<script>
+import { url } from '@abide/abide'
+
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Exchange from '#src/lib/Exchange.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/data/database',
+        '/data/table',
+        '/data/job',
+        '/data/fetch-json',
+        '/data/fetch-text',
+        '/data/handle',
+        '/reactive/refresh',
+        '/reactive/is-failed',
+    ]}
+>
+    <Section title="Open the CRM's database once, in a server file">
+        <p><a href={url('/data/database')}><code>database</code></a> comes from
+            <code>@abide/abide/server</code>, so the opener lives in a <code>.server.ts</code>
+            file and never reaches a browser. The first call opens <code>crm.sqlite</code> and runs
+            each migration it has not run, in order. Every call after hands back the same
+            <code>bun:sqlite</code> <code>Database</code>.</p>
+        <Code language="ts" caption="server" code={`
+            import { database } from '@abide/abide/server'
+
+            export const crmDatabase = database('crm', {
+                migrations: [
+                    \`CREATE TABLE targets (
+                        id INTEGER PRIMARY KEY,
+                        target INTEGER NOT NULL,
+                        setAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )\`,
+                    'CREATE TABLE digests (sentAt INTEGER NOT NULL)',
+                ],
+            })
+        `} />
+    </Section>
+
+    <Section title="Read the rows in a handler, and a page calls the handler">
+        <p>A page reaches the rows through a handler declared with
+            <a href={url('/handlers/get')}><code>GET</code></a>, which runs the query on the
+            server and answers the rows as JSON.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET } from '@abide/abide/server'
+            import { crmDatabase } from './lib/crmDatabase.server.ts'
+
+            export default GET(
+                () =>
+                    crmDatabase()
+                        .query(
+                            \`SELECT id, target, setAt FROM targets
+                            ORDER BY id DESC LIMIT 5\`,
+                        )
+                        .all() as { id: number; target: number; setAt: string }[],
+                { description: 'Lists the targets the team has set, newest first.' },
+            )
+        `} />
+        <p>The CRM's targets, asked when this page loaded. A server nobody has set a target on
+            answers an empty list.</p>
+        <Exchange path="/pipeline/listTargets" />
+    </Section>
+
+    <Section title="A write on the server changes nothing a page holds">
+        <p>Write the row in a <a href={url('/handlers/post')}><code>POST</code></a>, then
+            reload what read the table. The list a page holds is its last answer, and nothing
+            tells the page a row was added until
+            <a href={url('/reactive/refresh')}><code>refresh</code></a> asks again.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { memo } from '@abide/abide'
+            import listTargets from '../listTargets.handler.ts'
+            import setTarget from '../setTarget.handler.ts'
+
+            const targets = memo(() => listTargets())
+
+            async function record() {
+                await setTarget({ target: 600_000 })
+                targets.refresh()
+            }
+            </script>
+
+            <button onclick={record}>Set target</button>
+        `} />
+    </Section>
+
+    <Section title="Reload every value tagged with a table, whoever wrote the row">
+        <p>A refresh after the CRM's own write misses a row the <code>sqlite3</code> shell or a
+            second server commits. Name the table with
+            <a href={url('/data/table')}><code>table</code></a>, and every value whose
+            <code>tags</code> name it loads again after any committed change.</p>
+        <Code language="ts" caption="server" code={`
+            import { memo, table } from '@abide/abide/server'
+            import { crmDatabase } from '../pipeline/lib/crmDatabase.server.ts'
+
+            const latest = 'SELECT target FROM targets ORDER BY id DESC'
+
+            table(crmDatabase, 'targets')
+            export const target = memo(() => crmDatabase().query(latest).get(), {
+                global: true,
+                tags: ['targets'],
+            })
+        `} />
+    </Section>
+
+    <Section title="Work on the records every night with a job">
+        <p>A <a href={url('/data/job')}><code>job</code></a> runs on the server, one run at a
+            time, and nothing runs as the file loads. The CRM's digest writes a row as it goes
+            out and reads the newest back as <code>lastRun</code>, so a restart waits out the
+            rest of the night rather than mail the team twice.</p>
+        <Code language="ts" caption="server" code={`
+            import { job, log } from '@abide/abide/server'
+            import { crmDatabase } from '../../pipeline/lib/crmDatabase.server.ts'
+            import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
+
+            export const digest = job('digest', {
+                every: 24 * 60 * 60_000,
+                run: async () => {
+                    const leads = DEALS.filter((deal) => deal.stage === 'lead')
+                    await Bun.sleep(300) // the mail going out
+                    crmDatabase().run('INSERT INTO digests (sentAt) VALUES (?)', [
+                        Date.now(),
+                    ])
+                    log.info(\`digest sent: \${leads.length} leads to follow up\`)
+                },
+                lastRun: () =>
+                    crmDatabase()
+                        .query<{ sentAt: number | null }, []>(
+                            'SELECT max(sentAt) AS sentAt FROM digests',
+                        )
+                        .get()?.sentAt ?? undefined,
+            })
+        `} />
+    </Section>
+
+    <Section title="A run that throws is the job's status, not a crash">
+        <p>The error is logged under <code>job:digest</code> and kept as
+            <code>lastError</code> until a run succeeds, and the schedule goes on. The CRM serves
+            <code>digest.status</code> from a <code>GET</code>, so every page reads where the
+            digest stands. <code>runNow</code> in a <code>POST</code> sends the digest ahead of
+            the schedule.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET } from '@abide/abide/server'
+            import { digest } from './lib/digest.server.ts'
+
+            export default GET(digest.status, {
+                description: 'When the follow-up digest last went out, and goes next.',
+            })
+        `} />
+        <p>The digest's status, asked when this page loaded:</p>
+        <Exchange path="/ops/getDigest" />
+    </Section>
+
+    <Section title="Another service giving up is a value, not a throw">
+        <p><a href={url('/data/fetch-json')}><code>fetchJson</code></a> asks with a deadline
+            and asks again after a 503, twice by default. Where the service still fails it
+            settles to a <code>FetchFailed</code> rather than throwing, and a handler returning
+            the failure refuses at 502.</p>
+        <Code language="ts" caption="server" code={`
+            import { fetchJson, GET } from '@abide/abide/server'
+            import { registryOrigin } from './lib/registryOrigin.server.ts'
+
+            type Registration = { founded: number; employees: number }
+
+            export default GET(
+                ({ id }: { id: string }) =>
+                    fetchJson<Registration>(\`\${registryOrigin()}/companies/\${id}\`, {
+                        ttl: 60_000,
+                    }),
+                { description: "A company's entry at the business registry." },
+            )
+        `} />
+        <p>The CRM's registry answers Hopper &amp; Co on every third ask, so the retries reach
+            an answer. Asked when this page loaded:</p>
+        <Exchange path="/companies/getRegistration?id=hopper-and-co" />
+        <p>The registry never answers Langley Research, so the retries run out and the refusal
+            is the answer:</p>
+        <Exchange path="/companies/getRegistration?id=langley-research" />
+    </Section>
+
+    <Section title="Check for a FetchFailed before reading the body">
+        <p><a href={url('/data/fetch-text')}><code>fetchText</code></a> asks and settles as
+            <code>fetchJson</code> does, and answers the body as a string. Either answer is a
+            body or a <code>FetchFailed</code>, so test it with
+            <a href={url('/reactive/is-failed')}><code>isFailed</code></a> first. The one thing
+            either throws is the abort of a <code>signal</code> you passed.</p>
+        <Code language="ts" caption="server" code={`
+            import { fetchText, isFailed, log } from '@abide/abide/server'
+
+            const filing = await fetchText('https://registry.example/filings/ada.txt', {
+                timeout: 2_000,
+            })
+            if (isFailed(filing))
+                log.warning('registry gave up', filing.data, filing.cause)
+        `} />
+    </Section>
+
+    <Section title="Read a response you fetched yourself, on either side">
+        <p><a href={url('/data/handle')}><code>handle</code></a> comes from
+            <code>@abide/abide</code> and runs in the browser as well as on the server. It asks
+            nothing and retries nothing: it reads a <code>Response</code> as its
+            <code>content-type</code> says. A status outside 2xx is a <code>FetchFailed</code>,
+            and what <code>fetch</code> throws reaches you untouched.</p>
+        <Code language="ts" caption="shared" code={`
+            import { handle, isFailed } from '@abide/abide'
+
+            const response = await fetch('https://registry.example/companies/hopper')
+            const session = response.headers.get('x-session')
+            const company = await handle(response)
+            if (isFailed(company)) return company
+        `} />
+    </Section>
+</Doc>

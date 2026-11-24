@@ -1,0 +1,32 @@
+<script>
+import { chat } from '@abide/abide'
+import askAssistant from 'crm/src/assistant/askAssistant.handler.ts'
+
+const talk = chat({ ask: askAssistant })
+</script>
+
+<section {...talk.root} class="flex flex-col gap-snug">
+    <ol {...talk.transcript} class="chat">
+        {#for turn, index of talk.turns key turn}
+            <li {...talk.turn(turn, index).turn}>
+                <span {...talk.turn(turn, index).speaker}>
+                    {talk.turn(turn, index).role}
+                </span>
+                {#for part of turn.parts key part}
+                    {#if part.type === 'tool'}
+                        <p {...talk.tool(part).tool} class="status">
+                            {part.name} answered {part.result}
+                        </p>
+                    {:else if part.type === 'text'}
+                        <p {...talk.text}>{part.text}</p>
+                    {/if}
+                {/for}
+            </li>
+        {/for}
+    </ol>
+    <form {...talk.composer} class="row">
+        <textarea {...talk.input}
+            placeholder="Which company is Ada at?"></textarea>
+        <button {...talk.send}>Send</button>
+    </form>
+</section>

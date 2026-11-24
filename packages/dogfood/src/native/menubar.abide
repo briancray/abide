@@ -8,5 +8,5 @@ import Ask from '#src/lib/Ask.abide'
 <head><title>Ask abide</title></head>
 
 <main class="col-span-full p-3" data-abide-titlebar>
-    <div class="relative"><Ask /></div>
+    <div><Ask /></div>
 </main>

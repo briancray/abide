@@ -172,7 +172,7 @@ it writes, grouped as REGISTRY groups them, and a prompt above every page that a
 | | |
 | --- | --- |
 | A page | the name, what you use it for, where it is written and the side it runs on (40.36), then its Syntax, its examples, its Types, its See also, its Tests and its Rules, always in that order save that a construct's examples come first (40.9, 40.32); an example proves its point in its group's form — the markup and the CSS of a headless component, the work of a reactive value, the answer of a handler, the output of a command (40.40-40.43, 40.45) |
-| A guide | the first page of a group whose names are reached for together — writing a component, organizing a site, reactive values, styling a headless component, a handler's surfaces — saying how they fit, each claim shown running and every name linked to its own page (40.39). It is the one page that surveys, so it teaches nothing a name's page does not also hold |
+| A guide | the first page of a group whose names are reached for together — writing a component, organizing a site, reactive values, styling a headless component, a handler's surfaces, guarding the app, records and I/O, the assistant, an app's lifecycle — reached by its group's heading in the sidebar, saying how they fit, each claim shown running and every name linked to its own page (40.39). It is the one page that surveys, so it teaches nothing a name's page does not also hold |
 | A group | the pages of one KIND of name — a headless component, an element behavior, a helper, a middleware rung — listed on the home page with each page's description, in labeled runs where the group is long (40.37) |
 | The prompt | the visitor's own Claude Code, answering from the pages, rendering the files, rows and clauses it names in the answer |
 

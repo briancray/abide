@@ -9,10 +9,19 @@
 // THE LITERAL, NOT THE ADDRESS: `route.name()` is the route an item's `href` is spelled in, where
 // `route.url()` is where the app is served — below a mount, `/docs/reactive/watch` for
 // `/reactive/watch` — and the link is written through `url` for the same reason (16.10).
-import { raw, route, type RouteLiteral, url } from '@abide/abide'
+import {
+    disclosure,
+    media,
+    raw,
+    reactive,
+    route,
+    type RouteLiteral,
+    url,
+    watch,
+} from '@abide/abide'
 
 import { inline } from './inline.ts'
-import { SITE, WHERE } from './SITE.ts'
+import { SITE, type SiteGroup, type SitePage, WHERE } from './SITE.ts'
 import { isFramed, runsOf } from './sitePages.ts'
 
 // `-ml-2` IS NOT SPACING: it pulls the link's own padding back off the rail so the TEXT lines up
@@ -20,6 +29,21 @@ import { isFramed, runsOf } from './sitePages.ts'
 // `e2e/app.spec.ts` finds the nav by.
 const LINK =
     '-ml-2 block flex-1 rounded-sm px-2 py-1 text-chrome no-underline transition-[opacity,background-color] duration-120 ease-[ease]'
+
+// ON A NARROW SCREEN THE NAV FOLDS behind a button, a `disclosure`, rather than standing as the
+// whole list above the page: open where the screen is wide — and on the server, where `media` is
+// false (23.31) — and shut where it is narrow, and again once a link in it is followed.
+const narrow = media('(max-width: 63.999rem)')
+let open = reactive(true)
+const pages = disclosure({ open })
+watch(() => {
+    route.name()
+    open = !narrow
+})
+
+// A group's guide is reached by its heading (40.39), so the list under the heading is its names.
+const guideOf = (group: SiteGroup): SitePage | undefined =>
+    group.pages.find((page) => page.guide)
 
 // The link you are on is marked and carries `aria-current`; every other is absent of it (32.37).
 const linkClass = (active: boolean): string =>
@@ -35,26 +59,33 @@ const MARK_CLASS: Readonly<Record<string, string>> = {
 
 {#if !isFramed(route.name())}
     <nav class="sidebar sticky top-bar flex h-[calc(100vh_-_var(--spacing-bar))] flex-col gap-section self-start overflow-y-auto border-r border-rule px-4 pt-7 pb-16 max-lg:static max-lg:h-auto max-lg:border-r-0 max-lg:border-b">
-        {#for group of SITE}
-            <section class="flex flex-col gap-snug">
-                <h2 class="font-mono text-micro/2 font-medium tracking-caps text-muted uppercase">{raw(inline(group.group))}</h2>
-                {#for run of runsOf(group)}
-                    {#if run.label}
-                        <h3 class="mt-tight text-chrome font-medium text-muted">{run.label}</h3>
+        <button class="group flex items-center justify-between rounded-sm border border-rule bg-raised px-3 py-2 font-mono text-chrome font-medium text-ink lg:hidden" {...pages.button}>Pages<span class="transition-transform duration-120 group-data-open:rotate-180" aria-hidden="true">▾</span></button>
+        <div class="flex flex-col gap-section" {...pages.region}>
+            {#for group of SITE}
+                <section class="flex flex-col gap-snug">
+                    {#if guideOf(group)}
+                        <h2 class="font-mono text-micro/2 font-medium tracking-caps uppercase"><a class="no-underline {guideOf(group)?.route === route.name() ? 'text-signal' : 'text-muted hover:text-signal'}" href={url(guideOf(group)?.route as RouteLiteral)} aria-current={guideOf(group)?.route === route.name() ? 'page' : undefined}>{raw(inline(group.group))}</a></h2>
+                    {:else}
+                        <h2 class="font-mono text-micro/2 font-medium tracking-caps text-muted uppercase">{raw(inline(group.group))}</h2>
                     {/if}
-                    <ul class="flex list-none flex-col gap-hair p-0">
-                        {#for item of run.pages}
-                            <li class="flex items-baseline gap-tight"><a class={linkClass(item.route === route.name())} href={url(item.route as RouteLiteral)} aria-current={item.route === route.name() ? 'page' : undefined}>{raw(inline(item.nav))}</a>{#if WHERE[item.where].mark}<span class="font-mono text-micro/2 {MARK_CLASS[WHERE[item.where].mark ?? '']}">{WHERE[item.where].mark}</span>{/if}</li>
-                        {/for}
-                    </ul>
-                {/for}
+                    {#for run of runsOf(group, false)}
+                        {#if run.label}
+                            <h3 class="mt-tight text-chrome font-medium text-muted">{run.label}</h3>
+                        {/if}
+                        <ul class="flex list-none flex-col gap-hair p-0">
+                            {#for item of run.pages}
+                                <li class="flex items-baseline gap-tight"><a class={linkClass(item.route === route.name())} href={url(item.route as RouteLiteral)} aria-current={item.route === route.name() ? 'page' : undefined}>{raw(inline(item.nav))}</a>{#if WHERE[item.where].mark}<span class="font-mono text-micro/2 {MARK_CLASS[WHERE[item.where].mark ?? '']}">{WHERE[item.where].mark}</span>{/if}</li>
+                            {/for}
+                        </ul>
+                    {/for}
+                </section>
+            {/for}
+            <section class="flex flex-col gap-snug">
+                <h2 class="font-mono text-micro/2 font-medium tracking-caps text-muted uppercase">Documents</h2>
+                <ul class="flex list-none flex-col gap-hair p-0">
+                    <li class="flex items-baseline gap-tight"><a class={linkClass(route.name() === '/rulebook')} href={url('/rulebook' as RouteLiteral)} aria-current={route.name() === '/rulebook' ? 'page' : undefined}>Rulebook</a></li>
+                </ul>
             </section>
-        {/for}
-        <section class="flex flex-col gap-snug">
-            <h2 class="font-mono text-micro/2 font-medium tracking-caps text-muted uppercase">Documents</h2>
-            <ul class="flex list-none flex-col gap-hair p-0">
-                <li class="flex items-baseline gap-tight"><a class={linkClass(route.name() === '/rulebook')} href={url('/rulebook' as RouteLiteral)} aria-current={route.name() === '/rulebook' ? 'page' : undefined}>Rulebook</a></li>
-            </ul>
-        </section>
+        </div>
     </nav>
 {/if}

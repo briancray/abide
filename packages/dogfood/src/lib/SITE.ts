@@ -943,6 +943,15 @@ const WRITTEN: readonly {
         form: 'exchange',
         pages: [
             {
+                route: '/middleware',
+                title: 'Guarding a section of the app',
+                nav: 'Guarding the app',
+                description:
+                    'Stack rungs around a directory, a handler or the whole app, in the order they run, so one rule guards every page and every surface below it.',
+                where: 'server',
+                guide: true,
+            },
+            {
                 route: '/middleware/middleware',
                 title: '`middleware`',
                 description:
@@ -1195,6 +1204,15 @@ const WRITTEN: readonly {
         form: 'reference',
         pages: [
             {
+                route: '/data',
+                title: "Keeping the CRM's records",
+                nav: 'Records and I/O',
+                description:
+                    "Keep records in a database behind a handler, work on them on a schedule, and read other services, with each step shown on the CRM's own data.",
+                where: 'server',
+                guide: true,
+            },
+            {
                 route: '/data/database',
                 title: '`database`',
                 description:
@@ -1244,6 +1262,15 @@ const WRITTEN: readonly {
             'A conversation with a model that calls your handlers as tools, as the same person who asked.',
         form: 'reference',
         pages: [
+            {
+                route: '/ai',
+                title: 'Putting an assistant in the app',
+                nav: 'Assistant setup',
+                description:
+                    "Put a model behind the CRM's handlers as tools, choose its provider, pair it with a person's own Claude Code and keep its transcript.",
+                where: 'server',
+                guide: true,
+            },
             {
                 route: '/ai/assistant',
                 title: '`assistant`',

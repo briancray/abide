@@ -62,12 +62,17 @@ export function neighborsOf(route: string): {
     return { previous: ORDER[at - 1], next: ORDER[at + 1] }
 }
 
-/** A group's pages in their runs, each under its label, or one run with none where it has no runs (40.37). */
+/**
+ * A group's pages in their runs, each under its label, or one run with none where it has no runs
+ * (40.37) — its guide among them unless `guides` is false, where the group's heading reaches it.
+ */
 export function runsOf(
     group: SiteGroup,
+    guides = true,
 ): { label: string | undefined; pages: SitePage[] }[] {
     const runs: { label: string | undefined; pages: SitePage[] }[] = []
     for (const page of group.pages) {
+        if (!guides && page.guide) continue
         const last = runs.at(-1)
         if (last !== undefined && last.label === page.subgroup)
             last.pages.push(page)
