@@ -96,12 +96,11 @@ const write = async (n: number): Promise<number> => {
 const writeLane = queue(write, LANES)
 const writePipe = pipe([write], { concurrency: LANES })
 
-const all =
-    (call: (n: number) => Promise<unknown>) => async (): Promise<void> => {
-        const pending: Promise<unknown>[] = []
-        for (let n = 0; n < ITEMS; n += 1) pending.push(call(n))
-        await Promise.all(pending)
-    }
+const all = (call: (n: number) => unknown) => async (): Promise<void> => {
+    const pending: unknown[] = []
+    for (let n = 0; n < ITEMS; n += 1) pending.push(call(n))
+    await Promise.all(pending)
+}
 
 const lanes = await fastest({
     'queue.ts, no-op step': all(lane),

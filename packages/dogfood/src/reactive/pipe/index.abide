@@ -10,6 +10,18 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/pipe.test.ts',
             from: [
+                "test('a call answers a Reactive: busy while it runs, its answer once done, a refusal its error — 57.5'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/pipe.test.ts',
+            from: [
+                "test('stop aborts every attempt in flight and refuses every later call — 57.18'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/pipe.test.ts',
+            from: [
                 "test('a pipe used as a step of two pipes is one budget for both — 57.8'",
             ],
         },
@@ -29,7 +41,8 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Tidy a deal's name and save the deal">
         <p>Each step is handed what the one before it answered. Call the pipe with a deal, and it
-            settles to what the last step answered.</p>
+            answers a <code>Reactive</code> of what the last step answered, as calling a handler
+            does: awaited, it settles to that answer.</p>
         <Code language="ts" caption="shared" code={`
             import { pipe } from '@abide/abide'
             import getDeal from './getDeal.handler.ts'
@@ -41,6 +54,23 @@ import Section from '#src/lib/Section.abide'
                 (deal) => saveDeal(deal),
             ])
             await rename('d2')
+        `} />
+    </Section>
+
+    <Section level={3} title="Show a save in progress">
+        <p>A call is <code>busy()</code> while its item runs, holds the answer once it is done,
+            and a refusal is its <code>error()</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { pipe } from '@abide/abide'
+            import saveDeal from './saveDeal.handler.ts'
+
+            const save = pipe([saveDeal], { retries: 2 })
+            const saved = save({ id: 'd2', name: 'Acme', company: 'Acme', amount: 9 })
+            </script>
+
+            {#if saved.busy()}<p>Saving…</p>{/if}
+            {#if saved.error()}<p>{saved.error().message}</p>{/if}
         `} />
     </Section>
 
@@ -79,6 +109,22 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
+    <Section level={3} title="Watch one step of a pipe">
+        <p>A step can be a pipe, with a <code>status</code> of its own to read. It counts its own
+            items, one at a time where it is given no <code>concurrency</code> — whatever the
+            pipe around it allows — so give it the same.</p>
+        <Code language="ts" caption="shared" code={`
+            import { pipe } from '@abide/abide'
+            import getDeal from './getDeal.handler.ts'
+            import saveDeal from './saveDeal.handler.ts'
+
+            const byId = (id: string) => getDeal({ id })
+            export const fetched = pipe([byId], { concurrency: 4 })
+            export const sync = pipe([fetched, saveDeal], { concurrency: 4 })
+            fetched.status().running // deals being fetched
+        `} />
+    </Section>
+
     <Section level={3} title="Ask a rate-limited service again, later">
         <p>A step that throws, or answers a refusal worth asking again, is retried up to
             <code>retries</code>, waiting <code>backoff</code> doubled. A
@@ -100,7 +146,9 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Pipe a stream of deals through a pipe">
         <p>A pipe is a stream pair too. Items leave in the order they went in, and one that fails
-            leaves as a refusal while the rest run on.</p>
+            leaves as a refusal while the rest run on. An item written to it builds no
+            <code>Reactive</code> of its own, so a server moving many items writes them here
+            rather than calling the pipe for each.</p>
         <Code language="ts" caption="shared" code={`
             import { pipe } from '@abide/abide'
 
@@ -108,6 +156,31 @@ import Section from '#src/lib/Section.abide'
                 concurrency: 8,
             })
             await ReadableStream.from(deals).pipeThrough(scored).pipeTo(report)
+        `} />
+    </Section>
+
+    <Section level={3} title="Finish what was queued, then close">
+        <p>Close the pipe's <code>writable</code> and its <code>readable</code> closes once every
+            item written has left: nothing queued is dropped.</p>
+        <Code language="ts" caption="shared" code={`
+            import { pipe } from '@abide/abide'
+
+            const scored = pipe([(deal: { value: number }) => deal.value / 1000])
+            const writer = scored.writable.getWriter()
+            for (const deal of deals) await writer.write(deal)
+            await writer.close() // scored.readable ends after the last deal
+        `} />
+    </Section>
+
+    <Section level={3} title="Stop a pipe for good">
+        <p><code>stop()</code> aborts every attempt in flight through its signal and refuses
+            every call after. It settles once nothing runs.</p>
+        <Code language="ts" caption="shared" code={`
+            import { pipe } from '@abide/abide'
+            import syncContact from './syncContact.handler.ts'
+
+            const syncs = pipe([syncContact], { concurrency: 4 })
+            await syncs.stop()
         `} />
     </Section>
 

@@ -53,11 +53,18 @@ export type PipeOptions<In = unknown> = {
     paused?: Reactive<boolean, never, never, boolean> | (() => boolean)
 }
 
-/** A pipe: a function from an item to its answer, and a stream pair an item stream is piped through. */
+/**
+ * A pipe: a function from an item to a `Reactive` of its answer, as an `Rpc` is, and a stream pair an
+ * item stream is piped through.
+ */
 export type Pipe<In, Out, Fanned extends boolean = false> = ((
     input: In,
     signal?: AbortSignal,
-) => Promise<(Fanned extends true ? Out[] : Out) | Failed<string, unknown>>) & {
+) => Reactive<
+    Fanned extends true ? Out[] : Out,
+    Fanned extends true ? Out[] : Out,
+    Failed<string, unknown>
+>) & {
     readonly readable: ReadableStream<Out | Failed<string, unknown>>
     readonly writable: WritableStream<In>
     readonly status: Reactive<PipeStatus>
@@ -128,10 +135,12 @@ export function pipe<const Steps extends readonly [Step, ...Step[]]>(
         steps as readonly Step[],
         (options ?? {}) as PipeOptions<unknown>,
     )
-    const call = (input: unknown, signal?: AbortSignal): Promise<unknown> =>
-        runner.call(input, signal)
+    // 57.5 — ONE `Reactive` PER CALL, its item's answer: a refusal is its `error` (2.8), as an `Rpc`'s
+    // is. `global`, so a call outside a request is not filed for one per request (11.32).
+    const call = (input: unknown, signal?: AbortSignal): unknown =>
+        reactive(runner.call(input, signal, true), { global: true })
     return Object.defineProperties(call, {
-        [PIPE_BRAND]: { value: true },
+        [PIPE_BRAND]: { value: runner },
         status: { get: () => runner.status },
         readable: { get: () => runner.streams().readable },
         writable: { get: () => runner.streams().writable },
@@ -259,12 +268,23 @@ class Runner {
         for (const resumer of this.resumers.splice(0)) resumer()
     }
 
-    /** 57.5, 57.13 — one item, called: its answer, every answer where a step fanned out. */
-    async call(input: unknown, signal?: AbortSignal): Promise<unknown> {
+    /**
+     * 57.5, 57.13 — one item, called: its answer, every answer where a step fanned out. A refusal is
+     * the answer for a pipe that is a step (57.9 reads its transience), and `rejects` for an app's
+     * call — rejecting here rather than in a `then` after was a quarter of the call's own cost.
+     */
+    async call(
+        input: unknown,
+        signal?: AbortSignal,
+        rejects = false,
+    ): Promise<unknown> {
         // 57.13 — read where the call is made: inside a `memo` body, the run's own (7.45).
         const told = stopSignal()
         const walked = await this.item(input, signal, told)
-        if (walked.refusal !== undefined) return walked.refusal
+        if (walked.refusal !== undefined) {
+            if (rejects) throw walked.refusal
+            return walked.refusal
+        }
         return walked.fanned ? walked.answers : walked.answers[0]
     }
 
@@ -514,10 +534,16 @@ class Runner {
             for (const answer of answers) if (isFailed(answer)) return answer
             return answers
         }
-        let answer = (step as (input: unknown, signal: AbortSignal) => unknown)(
-            input,
-            signal,
-        )
+        // 57.9 — A PIPE STEP IS ITS RUNNER, whose refusal is an answer to read for transience: called
+        // as an app calls it, the refusal would reject its `Reactive` and be retried as a throw.
+        const runner = (step as { [PIPE_BRAND]?: Runner })[PIPE_BRAND]
+        let answer =
+            runner !== undefined
+                ? runner.call(input, signal)
+                : (step as (input: unknown, signal: AbortSignal) => unknown)(
+                      input,
+                      signal,
+                  )
         // 1.6 — a `Reactive` is thenable and iterable: its value is the step's answer, read first.
         if (isReactive(answer)) answer = await answer
         else if (isThenable(answer)) answer = await answer
