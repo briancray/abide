@@ -8,7 +8,7 @@ const payload = jsonInspector({ value: WEBHOOK })
 
 <p class="status">{payload.inspected?.pointer ?? 'Pick a value.'}</p>
 <ul {...payload.tree} aria-label="Payload" class="tree">
-    {#for row of payload.rows by row.pointer}
+    {#for row of payload.rows key row.pointer}
         <li {...payload.row(row).item}
             style:padding-inline-start="{row.level - 1}rem">
             {row.key ?? 'payload'}

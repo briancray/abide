@@ -10,7 +10,7 @@ const payload = jsonInspector({ value: WEBHOOK })
     placeholder="Try “grace”">
 <p class="status">{payload.matches.length} found</p>
 <ul {...payload.tree} aria-label="Payload" class="tree">
-    {#for row of payload.rows by row.pointer}
+    {#for row of payload.rows key row.pointer}
         <li {...payload.row(row).item}
             style:padding-inline-start="{row.level - 1}rem">
             {#for run of payload.row(row).keyRuns}
