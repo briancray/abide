@@ -35,13 +35,24 @@ export function rootOf(scroller: Scroller): Element {
 
 /** What a section's top in the viewport adds up to where `scroller` lands it: its scroll less its scroll padding. */
 export function offsetIn(scroller: Scroller): number {
-    const viewTop =
-        scroller === window
-            ? 0
-            : (scroller as Element).getBoundingClientRect().top
+    const viewTop = viewTopOf(scroller)
     const padding =
         Number.parseFloat(
             getComputedStyle(rootOf(scroller)).scrollPaddingTop,
         ) || 0
     return scrolledIn(scroller) - viewTop - padding
+}
+
+/** Where the scroller's view starts in the viewport: the top of the window, or of the element. */
+export function viewTopOf(scroller: Scroller): number {
+    return scroller === window
+        ? 0
+        : (scroller as Element).getBoundingClientRect().top
+}
+
+/** How tall the scroller's view is: the window's inner height, or the element's client height. */
+export function viewHeightOf(scroller: Scroller): number {
+    return scroller === window
+        ? window.innerHeight
+        : (scroller as Element).clientHeight
 }

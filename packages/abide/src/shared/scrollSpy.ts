@@ -25,6 +25,7 @@ import {
     scrolledIn,
     type Scroller,
     scrollerOf,
+    viewHeightOf,
 } from './scrollerOf.ts'
 import { type Sections, sections } from './sections.ts'
 
@@ -139,9 +140,7 @@ export function scrollSpy<Item>(
         landings = measured
         keys = listed
         const root = rootOf(into)
-        end =
-            root.scrollHeight -
-            (into === window ? window.innerHeight : root.clientHeight)
+        end = root.scrollHeight - viewHeightOf(into)
         // 51.173 — what moves a section is something holding one resizing, or the scroller's root.
         const following = new Set<Element>([root])
         for (const element of elements)

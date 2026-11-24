@@ -9,6 +9,7 @@ import { collapsed } from '#shared/coerceArgs.ts'
 import { CONTINUE_HEADER } from '#shared/CONTINUE_HEADER.ts'
 import { type Failed, isFailed } from '#shared/Failed.ts'
 import { framingOf } from '#shared/framing.ts'
+import { isAsyncIterable } from '#shared/isAsyncIterable.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { mounted as underMount } from '#shared/mount.ts'
 import { parsedJson } from '#shared/parsedJson.ts'
@@ -25,7 +26,7 @@ import {
     type ErrorPages,
     handlerHeaders,
 } from './answerFailure.ts'
-import { answerValue, isValues, namesEtag, sseHeaders } from './answerValue.ts'
+import { answerValue, namesEtag, sseHeaders } from './answerValue.ts'
 import { callerCookieOf } from './callerOf.ts'
 import { ownOrigin, positiveSetting } from './config.ts'
 import { allows, crossingOrigin } from './crossingOrigin.ts'
@@ -149,7 +150,8 @@ async function answerOutcome(
             value instanceof ArrayBuffer ||
             ArrayBuffer.isView(value)
         ) &&
-        (isValues(value) || (entry as { peek(): unknown }).peek() === value)
+        (isAsyncIterable(value) ||
+            (entry as { peek(): unknown }).peek() === value)
             ? entry
             : undefined
     // 21.3 — what the handler wrote through `response` is laid over it at the exit (21.10).
@@ -174,7 +176,7 @@ async function answerOutcome(
         offline &&
         found.method === 'GET' &&
         !isFailed(value) &&
-        !isValues(value) &&
+        !isAsyncIterable(value) &&
         framing !== 'jsonl' &&
         framing !== 'sse' &&
         writtenStatus() < 300
@@ -202,7 +204,7 @@ async function answerOutcome(
     if (
         etag !== undefined &&
         followers !== undefined &&
-        !isValues(outcome.value) &&
+        !isAsyncIterable(outcome.value) &&
         prefers(request, 'text/event-stream', 'application/json')
     ) {
         const events = handlerHeaders()

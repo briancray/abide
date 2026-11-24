@@ -10,6 +10,7 @@
 // chunks run side by side is a pipe of its own with a `concurrency` of its own.
 
 import { type Failed, isFailed, isTransient, retryAt } from './Failed.ts'
+import { isAsyncIterable } from './isAsyncIterable.ts'
 import { messageOf } from './messageOf.ts'
 import {
     abortSignal,
@@ -662,15 +663,6 @@ class Runner {
         this.pair = { readable, writable }
         return this.pair
     }
-}
-
-function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
-    return (
-        value !== null &&
-        typeof value === 'object' &&
-        typeof (value as AsyncIterable<unknown>)[Symbol.asyncIterator] ===
-            'function'
-    )
 }
 
 /** Waits `ms`, or rejects with `ended`'s reason where it aborts first. */

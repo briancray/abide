@@ -4,6 +4,7 @@
 // `Values` a handler returned — framed one chunk per pull (16.32, 16.44–16.47).
 
 import { isFailed, problemOf } from '#shared/Failed.ts'
+import { isAsyncIterable } from '#shared/isAsyncIterable.ts'
 
 import { compressAnswer } from './compressAnswer.ts'
 import { prefers } from './prefers.ts'
@@ -21,18 +22,6 @@ import {
 } from './streamEvent.ts'
 
 const ENCODER = new TextEncoder()
-
-/** Whether a handler's value is a stream of chunks, which answers as its own framing. */
-export function isValues(
-    value: unknown,
-): value is AsyncIterable<unknown> | ReadableStream<unknown> {
-    // A `ReadableStream` is async-iterable in bun, as `chunksOf` reads it.
-    return (
-        value !== null &&
-        typeof value === 'object' &&
-        Symbol.asyncIterator in (value as object)
-    )
-}
 
 /** The `Response` a handler's value is answered as. */
 export async function answerValue(
@@ -97,7 +86,7 @@ export async function answerValue(
         return new Response(value as BodyInit, { status, headers })
     }
     // A sync iterable is a stream only where a helper fixed the framing: an array is a value.
-    if (isValues(value) || (framing !== undefined && isIterable(value)))
+    if (isAsyncIterable(value) || (framing !== undefined && isIterable(value)))
         return answerStream(chunksOf(value), framing, request, headers, status)
     // 16.30.
     return compressAnswer(JSON.stringify(value), request, headers, status)

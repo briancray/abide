@@ -16,7 +16,13 @@ import { lastAtOrBefore } from './lastAtOrBefore.ts'
 import { type Live, live } from './live.ts'
 import { memo, reactive } from './reactive/index.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
-import { offsetIn, type Scroller, scrollerOf } from './scrollerOf.ts'
+import {
+    offsetIn,
+    type Scroller,
+    scrollerOf,
+    viewHeightOf,
+    viewTopOf,
+} from './scrollerOf.ts'
 import { type Sections, sections } from './sections.ts'
 
 /** What `virtualList` lists, how an item is told apart and grouped, and how much is rendered first. */
@@ -166,14 +172,8 @@ export function virtualList<Item>(
         if (host === undefined || scroller === undefined || itemInline === 0)
             return
         const hostTop = host.getBoundingClientRect().top
-        const viewTop =
-            scroller === window
-                ? 0
-                : (scroller as Element).getBoundingClientRect().top
-        const viewHeight =
-            scroller === window
-                ? window.innerHeight
-                : (scroller as Element).clientHeight
+        const viewTop = viewTopOf(scroller)
+        const viewHeight = viewHeightOf(scroller)
         const size = rowSize.peek() ?? estimate
         const above = viewTop - hostTop
         const row = Math.max(0, Math.floor(above / size))

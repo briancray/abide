@@ -4,11 +4,10 @@
 import { isFailed, isTransient, retryAt } from '#shared/Failed.ts'
 import { type FetchFailed, fetchFailed } from '#shared/fetchFailed.ts'
 import { readBody, refusedBy } from '#shared/handle.ts'
+import { isAsyncIterable } from '#shared/isAsyncIterable.ts'
 import { namedLogger } from '#shared/log.ts'
 import { type Backoff, backoffWait } from '#shared/retryWait.ts'
 import { runSchema, type Schema } from '#shared/Schema.ts'
-
-import { isValues } from './answerValue.ts'
 
 /** `fetch`'s own options, and the reading, the deadline, the retries, the cache and the gate beside them. */
 export type FetchOptions<T> = RequestInit & {
@@ -95,7 +94,7 @@ function answerOf<T>(
     if (held !== undefined && held.expiresAt > now)
         // 54.14 — a stream is its first reader's to drain, so a caller that joined one asks for its own.
         answer = held.answer.then((settled) =>
-            isValues(settled) ? asked(url, options, signal) : settled,
+            isAsyncIterable(settled) ? asked(url, options, signal) : settled,
         )
     else {
         for (const [stale, each] of HELD)
@@ -106,7 +105,7 @@ function answerOf<T>(
         HELD.set(key, fresh)
         answer.then((settled) => {
             // 54.14 — a failure is not kept, and neither is a stream, which its first reader drains.
-            if (isFailed(settled) || isValues(settled)) HELD.delete(key)
+            if (isFailed(settled) || isAsyncIterable(settled)) HELD.delete(key)
             else fresh.expiresAt = Date.now() + ttl
         })
     }
