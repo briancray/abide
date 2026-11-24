@@ -13,21 +13,35 @@ import { essenceOf, framedStream, framingOf } from './framing.ts'
  *
  * @param response what a `fetch` answered
  */
-export async function handle(
-    response: Response,
-): Promise<unknown | FetchFailed> {
+export function handle(response: Response): Promise<unknown | FetchFailed> {
     // 54.31 — refused: the status it was answered at, and a body nobody will read let go.
-    if (!response.ok) return refusedBy(response)
+    return response.ok ? readBody(response) : refusedBy(response)
+}
+
+/**
+ * A 2xx `Response`'s body, read as its `content-type` says (54.30, 54.32, 54.33), or as `as` names
+ * whatever its type says (54.17): `handle`'s reading, and `fetchData`'s.
+ */
+export async function readBody(
+    response: Response,
+    as?: 'json' | 'text' | 'blob',
+): Promise<unknown | FetchFailed> {
     const type = response.headers.get('content-type')
     // 54.32 — a stream is handed back as it arrives, never read to its end first.
-    const framing = framingOf(type)
+    const framing = as === undefined ? framingOf(type) : null
     if (framing !== null)
         return response.body === null
             ? emptyStream()
             : framedStream(response.body, framing)
     if (response.status === 204 || response.body === null) return undefined
+    if (as === 'text') return response.text()
+    if (as === 'blob') return response.blob()
     const essence = essenceOf(type)
-    if (essence === 'application/json' || essence.endsWith('+json')) {
+    if (
+        as === 'json' ||
+        essence === 'application/json' ||
+        essence.endsWith('+json')
+    ) {
         const text = await response.text()
         try {
             return JSON.parse(text)

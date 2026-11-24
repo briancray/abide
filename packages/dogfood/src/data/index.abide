@@ -12,8 +12,7 @@ import Section from '#src/lib/Section.abide'
         '/data/database',
         '/data/table',
         '/data/job',
-        '/data/fetch-json',
-        '/data/fetch-text',
+        '/data/fetch-data',
         '/data/handle',
         '/reactive/refresh',
         '/reactive/is-failed',
@@ -156,19 +155,19 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section title="Another service giving up is a value, not a throw">
-        <p><a href={url('/data/fetch-json')}><code>fetchJson</code></a> asks with a deadline
+        <p><a href={url('/data/fetch-data')}><code>fetchData</code></a> asks with a deadline
             and asks again after a 503, twice by default. Where the service still fails it
             settles to a <code>FetchFailed</code> rather than throwing, and a handler returning
             the failure refuses at 502.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchJson, GET } from '@abide/abide/server'
+            import { fetchData, GET } from '@abide/abide/server'
             import { registryOrigin } from './lib/registryOrigin.server.ts'
 
             type Registration = { founded: number; employees: number }
 
             export default GET(
                 ({ id }: { id: string }) =>
-                    fetchJson<Registration>(\`\${registryOrigin()}/companies/\${id}\`, {
+                    fetchData<Registration>(\`\${registryOrigin()}/companies/\${id}\`, {
                         ttl: 60_000,
                     }),
                 { description: "A company's entry at the business registry." },
@@ -183,15 +182,16 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section title="Check for a FetchFailed before reading the body">
-        <p><a href={url('/data/fetch-text')}><code>fetchText</code></a> asks and settles as
-            <code>fetchJson</code> does, and answers the body as a string. Either answer is a
-            body or a <code>FetchFailed</code>, so test it with
+        <p>The answer is a body or a <code>FetchFailed</code>, so test it with
             <a href={url('/reactive/is-failed')}><code>isFailed</code></a> first. The one thing
-            either throws is the abort of a <code>signal</code> you passed.</p>
+            <code>fetchData</code> throws is the abort of a <code>signal</code> you passed.
+            <code>as</code> reads the body as <code>'text'</code>, <code>'json'</code> or a
+            <code>'blob'</code> whatever its type says.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchText, isFailed, log } from '@abide/abide/server'
+            import { fetchData, isFailed, log } from '@abide/abide/server'
 
-            const filing = await fetchText('https://registry.example/filings/ada.txt', {
+            const filing = await fetchData('https://registry.example/filings/ada.txt', {
+                as: 'text',
                 timeout: 2_000,
             })
             if (isFailed(filing))

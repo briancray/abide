@@ -1440,19 +1440,13 @@ type Reached = { readonly [REACHED]: true }
 | `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.26, 54.27 |
 | `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.22, 54.23, 54.24, 54.25, 54.27 |
 
-## `fetchJson`
+## `fetchData`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `fetchJson` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T \| FetchFailed>` | Another service's answer as JSON, asked with a deadline, retries and an optional cache, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.34 |
-| `FetchOptions<T>` | `RequestInit & { timeout?: number; retries?: number; backoff?: number \| ((retry: number) => number); ttl?: number; schema?: Schema<T> }` | `fetch`'s own options, with the deadline, the retries and their spacing, the cache and the gate beside them. | 54.7, 54.8, 54.9, 54.10, 54.12, 54.15, 54.17 |
+| `fetchData` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T \| FetchFailed>` | Another service's answer, read as its type says or as `as` names, asked with a deadline, retries and an optional cache, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.34 |
+| `FetchOptions<T>` | `RequestInit & { as?: 'json' \| 'text' \| 'blob'; timeout?: number; retries?: number; backoff?: number \| ((retry: number) => number); ttl?: number; schema?: Schema<T> }` | `fetch`'s own options, with the reading, the deadline, the retries and their spacing, the cache and the gate beside them. | 54.7, 54.8, 54.9, 54.10, 54.12, 54.15, 54.17 |
 | `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'timeout' \| 'network' \| 'status' \| 'shape' }>` | The refusal a fetch that gave up, or a `Response` `handle` read outside 2xx, settles to. | 15.9, 54.14, 54.16, 54.17, 54.31, 54.34 |
-
-## `fetchText`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `fetchText` | `(url: string \| URL, options?: FetchOptions<string>) => Promise<string \| FetchFailed>` | Another service's answer as text, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.34 |
 
 ## `handle`
 

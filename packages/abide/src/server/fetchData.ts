@@ -3,20 +3,22 @@
 
 import { isFailed, isTransient, retryAt } from '#shared/Failed.ts'
 import { type FetchFailed, fetchFailed } from '#shared/fetchFailed.ts'
-import { refusedBy } from '#shared/handle.ts'
+import { readBody, refusedBy } from '#shared/handle.ts'
 import { namedLogger } from '#shared/log.ts'
 import { type Backoff, backoffWait } from '#shared/retryWait.ts'
 import { runSchema, type Schema } from '#shared/Schema.ts'
 
-/** `fetch`'s own options, and the deadline, the retries, the cache and the gate beside them. */
+/** `fetch`'s own options, and the reading, the deadline, the retries, the cache and the gate beside them. */
 export type FetchOptions<T> = RequestInit & {
+    /** 54.17 — the body read as JSON, text or a `Blob` whatever its type says, in place of as `handle` reads it. */
+    as?: 'json' | 'text' | 'blob'
     /** 54.7 — the milliseconds one attempt may take before it is aborted; 10000 where none is given. */
     timeout?: number
     /** 54.8, 54.9 — how many times to ask again after a failure worth asking again; 2 for an idempotent method, 0 for any other. */
     retries?: number
     /** 54.10 — the first wait before asking again, doubled per retry, or the wait before each retry; 250 where none is given. */
     backoff?: Backoff
-    /** 54.12, 54.13 — the milliseconds a `GET`'s answer is held for the same URL and headers. */
+    /** 54.12, 54.13 — the milliseconds a `GET`'s answer is held for the same URL, headers and reading. */
     ttl?: number
     /** 54.17 — what the body must be, checked before it is the answer. */
     schema?: Schema<T>
@@ -33,39 +35,58 @@ const FETCH_LOG = namedLogger('abide:fetch')
 
 /** A body held for `ttl`, or one still being asked for, which a second identical ask joins (54.12, 54.13). */
 type Held = {
-    answer: Promise<string | FetchFailed>
+    answer: Promise<unknown>
     expiresAt: number
 }
 
 const HELD = new Map<string, Held>()
 
 /** A body as text, checked against `schema` where one is given: 54.7-54.17. */
-export async function fetchText(
+export function fetchData<T = string>(
     url: string | URL,
-    options: FetchOptions<string> = {},
-): Promise<string | FetchFailed> {
-    const body = await bodyOf(url, options)
-    if (isFailed(body) || options.schema === undefined) return body
-    return checked(body, options.schema)
-}
-
-/** `value` as `schema` accepts it, or a `FetchFailed` for its shape (54.17). */
-export function checked<T>(value: unknown, schema: Schema<T>): T | FetchFailed {
-    const result = runSchema(schema, value)
+    options: FetchOptions<T> & { as: 'text' },
+): Promise<T | FetchFailed>
+/** A body as a `Blob`, checked against `schema` where one is given: 54.7-54.17. */
+export function fetchData<T = Blob>(
+    url: string | URL,
+    options: FetchOptions<T> & { as: 'blob' },
+): Promise<T | FetchFailed>
+/**
+ * A body read as its `content-type` says, as `handle` reads one, or as JSON where `as` says so,
+ * checked against `schema` where one is given: 54.7-54.17.
+ */
+export function fetchData<T = unknown>(
+    url: string | URL,
+    options?: FetchOptions<T>,
+): Promise<T | FetchFailed>
+export async function fetchData<T>(
+    url: string | URL,
+    options: FetchOptions<T> = {},
+): Promise<T | FetchFailed> {
+    let asking: FetchOptions<T> = options
+    if (options.as === 'json') {
+        const headers = new Headers(options.headers)
+        if (!headers.has('accept')) headers.set('accept', 'application/json')
+        asking = { ...options, headers }
+    }
+    const body = await answerOf(url, asking)
+    if (isFailed(body)) return body as FetchFailed
+    if (options.schema === undefined) return body as T
+    const result = runSchema(options.schema, body)
     return result.issues === null
         ? (result.value as T)
         : fetchFailed({ status: null, reason: 'shape' })
 }
 
 /** The body `url` answers, held and joined where `ttl` asks (54.12, 54.13), asked again where 54.8 says. */
-export function bodyOf(
+function answerOf<T>(
     url: string | URL,
-    options: FetchOptions<unknown>,
-): Promise<string | FetchFailed> {
+    options: FetchOptions<T>,
+): Promise<unknown> {
     const { ttl = 0, signal } = options
     const method = (options.method ?? 'GET').toUpperCase()
     if (ttl <= 0 || method !== 'GET') return asked(url, options, signal)
-    const key = keyOf(url, options.headers)
+    const key = keyOf(url, options)
     const now = Date.now()
     let held = HELD.get(key)
     if (held === undefined || held.expiresAt <= now) {
@@ -77,28 +98,38 @@ export function bodyOf(
         held = fresh
         HELD.set(key, fresh)
         answer.then((settled) => {
-            // 54.14 — a failure is not kept, and the next ask runs again.
-            if (isFailed(settled)) HELD.delete(key)
+            // 54.14 — a failure is not kept, and neither is a stream, which its first reader drains.
+            if (isFailed(settled) || isStream(settled)) HELD.delete(key)
             else fresh.expiresAt = Date.now() + ttl
         })
     }
     return signal == null ? held.answer : abortable(held.answer, signal)
 }
 
-// The headers are part of the key: two callers with different credentials are two answers.
-function keyOf(url: string | URL, headers: HeadersInit | undefined): string {
-    let key = String(url)
-    for (const [name, value] of new Headers(headers))
+function isStream(value: unknown): boolean {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        Symbol.asyncIterator in value
+    )
+}
+
+// The headers are part of the key: two callers with different credentials are two answers. So is the
+// reading: one body read as text and as JSON is two answers.
+function keyOf<T>(url: string | URL, options: FetchOptions<T>): string {
+    let key = `${options.as ?? ''} ${url}`
+    for (const [name, value] of new Headers(options.headers))
         key += `\n${name}: ${value}`
     return key
 }
 
-async function asked(
+async function asked<T>(
     url: string | URL,
-    options: FetchOptions<unknown>,
+    options: FetchOptions<T>,
     signal: AbortSignal | null | undefined,
-): Promise<string | FetchFailed> {
+): Promise<unknown> {
     const {
+        as,
         timeout = DEFAULT_TIMEOUT,
         retries: retriesGiven,
         backoff,
@@ -118,7 +149,7 @@ async function asked(
                 ...init,
                 signal: signal ? AbortSignal.any([deadline, signal]) : deadline,
             })
-            if (response.ok) return await response.text()
+            if (response.ok) return await readBody(response, as)
             failure = await refusedBy(response)
             if (!isTransient(response.status)) return failure
             notBefore = retryAt(failure)

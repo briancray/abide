@@ -1242,17 +1242,10 @@ const WRITTEN: readonly {
                 where: 'server',
             },
             {
-                route: '/data/fetch-json',
-                title: '`fetchJson`',
+                route: '/data/fetch-data',
+                title: '`fetchData`',
                 description:
-                    'Ask another service for JSON with a deadline, retries and an optional cache, and get a refusal rather than a throw when it gives up.',
-                where: 'server',
-            },
-            {
-                route: '/data/fetch-text',
-                title: '`fetchText`',
-                description:
-                    'Ask another service for a text answer with a deadline, retries and an optional cache, and get a refusal when it gives up.',
+                    'Ask another service with a deadline, retries and an optional cache, read the answer as its type says, and get a refusal rather than a throw when it gives up.',
                 where: 'server',
             },
             {

@@ -1,9 +1,9 @@
-// `fetchJson` AND `fetchText` against a service this file serves on a local port: what a fetch asks,
+// `fetchData` against a service this file serves on a local port: what a fetch asks,
 // how often, and what it settles to (54.7-54.17). No network — every address is this process's.
 
 import { afterAll, expect, test } from 'bun:test'
 
-import { fetchJson, fetchText } from '#server'
+import { fetchData } from '#server'
 import { answered } from '#server/answerFailure.ts'
 import { type Failed, problemOf } from '#shared/Failed.ts'
 import type { FetchFailed } from '#shared/fetchFailed.ts'
@@ -45,6 +45,15 @@ const service = Bun.serve({
         }
         if (pathname === '/written') return new Response('', { status: 503 })
         if (pathname === '/not-json') return new Response('<html>')
+        if (pathname === '/report.csv')
+            return new Response('name,deals\nada,3', {
+                headers: { 'content-type': 'text/csv' },
+            })
+        if (pathname === '/logo.png')
+            return new Response(new Uint8Array([137, 80, 78, 71]), {
+                headers: { 'content-type': 'image/png' },
+            })
+        if (pathname === '/plain-json') return new Response('{"deals":3}')
         return Response.json({ name: 'Hopper & Co', employees: 'many' })
     },
 })
@@ -56,13 +65,13 @@ const at = (path: string) => `${service.url.origin}${path}`
 // THE REVERT: return the failure at the first 503 rather than asking again, and the body reads a
 // FetchFailed at 503.
 test('a 503 is asked again, and the answer after it is the body — 54.8', async () => {
-    expect(await fetchJson(at('/flaky'))).toEqual({ name: 'Hopper & Co' })
+    expect(await fetchData(at('/flaky'))).toEqual({ name: 'Hopper & Co' })
     expect(asked.get('/flaky')).toBe(3)
 })
 
 // THE REVERT: count every status transient in `asked`, and `/missing` is asked 3 times.
 test('a 404 is answered at once, as a FetchFailed carrying the status — 54.8, 54.16', async () => {
-    const answer = await fetchText(at('/missing'))
+    const answer = await fetchData(at('/missing'))
     expect(answer).toMatchObject({
         name: 'FetchFailed',
         status: 502,
@@ -73,17 +82,17 @@ test('a 404 is answered at once, as a FetchFailed carrying the status — 54.8, 
 })
 
 test('a Retry-After is waited, and one past the deadline is not — 54.10', async () => {
-    const answer = await fetchText(at('/slow-down'), { timeout: 1_000 })
+    const answer = await fetchData(at('/slow-down'), { timeout: 1_000 })
     expect(answer).toMatchObject({ data: { status: 429, reason: 'status' } })
     // Asked again after the first step for `0`, then given up on for an hour.
     expect(asked.get('/slow-down')).toBe(2)
 })
 
 // A HANDLER HANDING ON WHAT A FETCH WAS REFUSED hands on the service's wait with it, whether
-// `fetchText` asked or the app's own `fetch` read through `handle`. THE REVERT: drop the `holdUntil` in
+// `fetchData` asked or the app's own `fetch` read through `handle`. THE REVERT: drop the `holdUntil` in
 // `refusedBy`; both answers carry `null` where `30` is due.
 test("a refusal's Retry-After is held, and crosses the wire again — 15.23, 15.24", async () => {
-    const asked = await fetchText(at('/limited'))
+    const asked = await fetchData(at('/limited'))
     const read = await fetch(at('/limited')).then(handle)
     expect([
         answered(asked as FetchFailed).headers.get('retry-after'),
@@ -92,7 +101,7 @@ test("a refusal's Retry-After is held, and crosses the wire again — 15.23, 15.
 })
 
 test('an attempt past its timeout is a FetchFailed for the timeout — 54.7', async () => {
-    const answer = await fetchText(at('/stalled'), { timeout: 50, retries: 0 })
+    const answer = await fetchData(at('/stalled'), { timeout: 50, retries: 0 })
     expect(answer).toMatchObject({ data: { status: null, reason: 'timeout' } })
 })
 
@@ -100,7 +109,7 @@ test('a service nobody answers for is a FetchFailed for the network — 54.16', 
     const closed = Bun.serve({ port: 0, fetch: () => new Response() })
     const origin = closed.url.origin
     await closed.stop(true)
-    const answer = await fetchText(origin, { retries: 0 })
+    const answer = await fetchData(origin, { retries: 0 })
     expect(answer).toMatchObject({ data: { status: null, reason: 'network' } })
 })
 
@@ -109,7 +118,7 @@ test('a FetchFailed carries what fetch threw as its cause, and the wire carries 
     const closed = Bun.serve({ port: 0, fetch: () => new Response() })
     const origin = closed.url.origin
     await closed.stop(true)
-    const answer = await fetchText(origin, { retries: 0 })
+    const answer = await fetchData(origin, { retries: 0 })
     const cause = (answer as Error).cause as { code?: string } | undefined
     expect(cause?.code).toBe('ECONNREFUSED')
     expect(
@@ -119,24 +128,24 @@ test('a FetchFailed carries what fetch threw as its cause, and the wire carries 
 
 test("the caller's own abort is thrown, and nothing is asked again — 54.11", async () => {
     const leaving = new AbortController()
-    const answer = fetchText(at('/stalled'), { signal: leaving.signal })
+    const answer = fetchData(at('/stalled'), { signal: leaving.signal })
     leaving.abort(new Error('the caller left'))
     await expect(answer).rejects.toThrow('the caller left')
 })
 
 test('a write is not asked again unless `retries` says so — 54.9', async () => {
-    const once = await fetchText(at('/written'), { method: 'POST', body: '' })
+    const once = await fetchData(at('/written'), { method: 'POST', body: '' })
     expect(once).toMatchObject({ data: { status: 503 } })
     expect(asked.get('/written')).toBe(1)
-    await fetchText(at('/written'), { method: 'POST', body: '', retries: 1 })
+    await fetchData(at('/written'), { method: 'POST', body: '', retries: 1 })
     expect(asked.get('/written')).toBe(3)
 })
 
 test('a body that is not JSON, or that the schema refuses, is a FetchFailed for its shape — 54.17', async () => {
-    expect(await fetchJson(at('/not-json'))).toMatchObject({
-        data: { status: null, reason: 'shape' },
+    expect(await fetchData(at('/not-json'), { as: 'json' })).toMatchObject({
+        data: { status: 200, reason: 'shape' },
     })
-    const refused = await fetchJson(at('/company'), {
+    const refused = await fetchData(at('/company'), {
         schema: (value) => {
             const { employees } = value as { employees: unknown }
             if (typeof employees !== 'number') throw new Error('not a count')
@@ -144,24 +153,55 @@ test('a body that is not JSON, or that the schema refuses, is a FetchFailed for 
         },
     })
     expect(refused).toMatchObject({ data: { reason: 'shape' } })
-    const accepted = await fetchText(at('/company'), {
+    const accepted = await fetchData(at('/company'), {
+        as: 'text',
         schema: (value) => String(value).toUpperCase(),
     })
     expect(accepted).toBe('{"NAME":"HOPPER & CO","EMPLOYEES":"MANY"}')
+})
+
+// THE REVERT: read every 2xx as text in `asked`, and the JSON and the PNG are
+// strings — `object` and `Blob` read `string` and `string`.
+test('a body is read as its content-type says, as handle reads it — 54.17, 54.30, 54.33', async () => {
+    const kinds = [
+        await fetchData(at('/company')),
+        await fetchData(at('/report.csv')),
+        await fetchData(at('/logo.png')),
+    ].map((body) => (body instanceof Blob ? 'Blob' : typeof body))
+    expect(kinds).toEqual(['object', 'string', 'Blob'])
+})
+
+// THE REVERT: drop `as` from `readBody`, and each is read as its type says — `object`, `string` and
+// `object` where `string`, `Blob` and `object` are due, the last read from text/plain.
+test('`as` reads the body as JSON, text or a Blob whatever its type says — 54.17', async () => {
+    const kinds = [
+        await fetchData(at('/company'), { as: 'text' }),
+        await fetchData(at('/company'), { as: 'blob' }),
+        await fetchData(at('/plain-json'), { as: 'json' }),
+    ].map((body) => (body instanceof Blob ? 'Blob' : typeof body))
+    expect(kinds).toEqual(['string', 'Blob', 'object'])
+})
+
+// THE REVERT: key a held answer by its URL and headers alone, and the JSON reading is answered with
+// the text one held — `string` where `object` is due.
+test('one URL read two ways under a ttl is two answers — 54.12', async () => {
+    await fetchData(at('/held-twice'), { as: 'text', ttl: 60_000 })
+    const parsed = await fetchData(at('/held-twice'), { ttl: 60_000 })
+    expect(typeof parsed).toBe('object')
 })
 
 // THE REVERT: drop the in-flight entry, so each ask fetches, and `/held` is asked 5 times.
 test('identical asks under a ttl are one request, and a held answer asks nothing — 54.12, 54.13', async () => {
     const answers = await Promise.all(
         Array.from({ length: 5 }, () =>
-            fetchJson(at('/held'), { ttl: 60_000 }),
+            fetchData(at('/held'), { ttl: 60_000 }),
         ),
     )
     expect(answers).toEqual(Array(5).fill({ asked: 1 }))
-    expect(await fetchJson(at('/held'), { ttl: 60_000 })).toEqual({ asked: 1 })
+    expect(await fetchData(at('/held'), { ttl: 60_000 })).toEqual({ asked: 1 })
     expect(asked.get('/held')).toBe(1)
     // Other credentials are another answer.
-    await fetchJson(at('/held'), {
+    await fetchData(at('/held'), {
         ttl: 60_000,
         headers: { authorization: 'Bearer theo' },
     })
@@ -169,23 +209,23 @@ test('identical asks under a ttl are one request, and a held answer asks nothing
 })
 
 test('a held answer past its ttl is asked again — 54.12', async () => {
-    await fetchJson(at('/brief'), { ttl: 1 })
+    await fetchData(at('/brief'), { ttl: 1 })
     // The clock passing the ttl: nothing settles as it does.
     await Bun.sleep(5)
-    expect(await fetchJson(at('/brief'), { ttl: 1 })).toEqual({ asked: 2 })
+    expect(await fetchData(at('/brief'), { ttl: 1 })).toEqual({ asked: 2 })
 })
 
 // THE REVERT: keep a failure in `bodyOf`, and the second ask is answered from the cache — 2 asks.
 test('a failure is not held, and the next ask runs again — 54.14', async () => {
     const before = asked.get('/missing') ?? 0
-    await fetchText(at('/missing'), { ttl: 60_000 })
-    await fetchText(at('/missing'), { ttl: 60_000 })
+    await fetchData(at('/missing'), { ttl: 60_000 })
+    await fetchData(at('/missing'), { ttl: 60_000 })
     expect((asked.get('/missing') ?? 0) - before).toBe(2)
 })
 
 test('a ttl on a POST holds nothing — 54.15', async () => {
     const before = asked.get('/held') ?? 0
-    await fetchText(at('/held'), { method: 'POST', body: '', ttl: 60_000 })
-    await fetchText(at('/held'), { method: 'POST', body: '', ttl: 60_000 })
+    await fetchData(at('/held'), { method: 'POST', body: '', ttl: 60_000 })
+    await fetchData(at('/held'), { method: 'POST', body: '', ttl: 60_000 })
     expect((asked.get('/held') ?? 0) - before).toBe(2)
 })

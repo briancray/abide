@@ -231,8 +231,8 @@ table.
   the root layout spreads `tooltip.host()`) beside `observe` — every behavior on an element is a
   part, spread as `{...copy()}`, two elements' parts find each other with no element handed between
   them, and several parts spread on one element each bind it.
-- From `@abide/abide/server`: the rungs `signedIn`, `authorize` (a signed-in caller holding the claims it names: `authorize({ groups: ['sales'] })`) and `readOnly`, `fetchJson` /
-  `fetchText` (a deadline, retries worth retrying, a cache), and `job` (work on a schedule, one run at
+- From `@abide/abide/server`: the rungs `signedIn`, `authorize` (a signed-in caller holding the claims it names: `authorize({ groups: ['sales'] })`) and `readOnly`, `fetchData`
+  (a deadline, retries worth retrying, a cache, the body read as its type says or as `as` names), and `job` (work on a schedule, one run at
   a time).
 
 abide ships no markup and no stylesheet for any of these: the parts land on elements you write, so

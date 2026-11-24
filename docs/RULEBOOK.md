@@ -6618,10 +6618,10 @@ request of any other method with a refusal named `ReadOnly`, at status 403, save
 
 ## Fetches
 
-54.7 `fetchJson` and `fetchText` MUST abort an attempt not answered within `timeout` milliseconds,
+54.7 `fetchData` MUST abort an attempt not answered within `timeout` milliseconds,
 10000 where none is given.
 
-54.8 `fetchJson` and `fetchText` MUST ask again, up to `retries` times, after an attempt that threw,
+54.8 `fetchData` MUST ask again, up to `retries` times, after an attempt that threw,
 that 54.7 aborted, or that was answered at a status 15.19 counts transient, and MUST NOT ask again
 after an attempt answered at any other status.
 
@@ -6633,25 +6633,27 @@ retry before it — or, where `backoff` is a function, what it answers given the
 from 1 — or the time the answer's `Retry-After` names, in seconds or as an HTTP date, where that is
 later, and MUST NOT be made where that wait is longer than `timeout`.
 
-54.11 An abort of the `signal` a caller passes `fetchJson` or `fetchText` MUST be thrown as its
+54.11 An abort of the `signal` a caller passes `fetchData` MUST be thrown as its
 reason, and MUST NOT be asked again.
 
-54.12 A `GET` given a `ttl` MUST be answered with the body an earlier `GET` of the same URL and
-headers was answered with, for `ttl` milliseconds from that answer.
+54.12 A `GET` given a `ttl` MUST be answered with the body an earlier `GET` of the same URL,
+headers and `as` was answered with, for `ttl` milliseconds from that answer.
 
-54.13 A `GET` given a `ttl` MUST join a `GET` of the same URL and headers in flight rather than ask
-again.
+54.13 A `GET` given a `ttl` MUST join a `GET` of the same URL, headers and `as` in flight rather
+than ask again.
 
-54.14 A `FetchFailed` MUST NOT be held under 54.12.
+54.14 A `FetchFailed`, and a stream 54.32 reads, MUST NOT be held under 54.12.
 
 54.15 `ttl` MUST be inert on a method other than `GET`.
 
-54.16 `fetchJson` and `fetchText` MUST settle to a `FetchFailed` at status 502 where they give up,
+54.16 `fetchData` MUST settle to a `FetchFailed` at status 502 where it gives up,
 carrying the status the last attempt was answered at, or null where none answered, and why, and MUST
 throw nothing but 54.11's abort.
 
-54.17 `fetchJson` MUST settle to a `FetchFailed` where the body does not parse as JSON, and
-`fetchJson` and `fetchText` MUST settle to one where their `schema` refuses the body.
+54.17 `fetchData` MUST read a 2xx body as `handle` does under 54.30, 54.31, 54.32 and 54.33, save
+where `as` names a reading — `json` parsed as JSON, `text` as its text, `blob` as a `Blob`, whatever
+its type says — and MUST settle to a `FetchFailed` for the reason `shape` where its `schema` refuses
+what was read.
 
 ## Jobs
 
@@ -6703,7 +6705,7 @@ chunks, each yielded as the frame carrying it completes.
 54.33 `handle` MUST answer a `text/` type, and a `Response` naming no type, as its text, and a 204 or
 a `Response` with no body as `undefined`.
 
-54.34 A `FetchFailed` that `fetchJson` or `fetchText` settles to for a thrown attempt MUST carry what
+54.34 A `FetchFailed` that `fetchData` settles to for a thrown attempt MUST carry what
 was thrown as its `cause`, and Problem Details MUST NOT carry a `cause`.
 
 54.35 `trustedIdentity` MUST sign in, for the request it runs in, the caller its `header` names on a
