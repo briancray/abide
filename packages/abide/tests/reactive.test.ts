@@ -2423,6 +2423,49 @@ test('a probe a body stops reading stops waking it', async () => {
     expect(`guard runs: ${guardRuns}`).toBe('guard runs: 2')
 })
 
+// 3.2 AND 5.11 THROUGH THE PROBE WALK. A derived body over nothing but a probe is reached by
+// `markAsked` rather than by a production's `markReaders`, and the two reach a derived reader through
+// one arm (`markDerived`): a guard over THAT body's own probe is queued, and its cap holds the run.
+//
+// THE REVERT, run: `markAsked` marking the body and descending without the arm reports
+// `guard saw: false` (never woken, where asking it directly reads `true`) and `seen: idle,busy`
+// (the debounce bypassed, the body rerun at once).
+test('a guard over a body that reads only a probe wakes when that probe moves', async () => {
+    const answer = 1
+    const source = memo(() => Promise.resolve(answer))
+    await source
+    const { promise: never } = Promise.withResolvers<string>()
+    const label = memo(() => (source.busy() ? never : 'idle'))
+    const seen: boolean[] = []
+    const stop = watch(() => {
+        seen.push(label.busy())
+    })
+    flushSync()
+    source.refresh()
+    flushSync()
+    expect(`guard saw: ${seen.join(',')}`).toBe('guard saw: false,true')
+    stop()
+})
+
+test('a capped body over a probe holds the run its probe moving marks', async () => {
+    const answer = 1
+    const source = memo(() => Promise.resolve(answer))
+    await source
+    const label = memo(() => (source.busy() ? 'busy' : 'idle'), {
+        debounce: WINDOW,
+    })
+    const seen: string[] = []
+    const stop = watch(() => {
+        seen.push(label())
+    })
+    flushSync()
+    source.refresh()
+    flushSync()
+    expect(`seen: ${seen.join(',')}`).toBe('seen: idle')
+    await source
+    stop()
+})
+
 // THE CAP (RULEBOOK 5.8-5.15). Every claim below is about WORK — the values these tests
 // read are right whether or not a window exists, which is what makes a correctness test
 // blind to the whole mechanism. So they count wakes, and they count PRODUCTIONS against

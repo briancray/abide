@@ -632,61 +632,68 @@ function markReaders(cell: Cell, wanted: number): void {
             if (was === CLEAN) queueEffect(reader)
             continue
         }
-        const below = reader as unknown as Cell
-        // Marked is not directly servable, whatever it holds.
-        below.direct = false
-        // 2.13, 3.2, AND THE ONLY PLACE PUSH-PULL RUNS A DERIVED BODY. What is asking is a GUARD: a
-        // reader on the probe edge asks `ready()` and never the value, so no read of its will pull
-        // this body forward, and what the probe answers is about the value a read WOULD serve
-        // (3.2) — a body whose inputs moved to a load is not ready, whatever its last run held. So
-        // the drain pulls it, and the guard wakes only where a probe moved. A reader on the VALUE
-        // edge needs none of this — its own read pulls — so this is the probe edge alone, and a
-        // body nothing probes stays as lazy as 11.5 makes it.
-        if (was === CLEAN && below.probeReaders.length !== 0) {
-            PENDING[pendingCount] = reader
-            pendingCount += 1
-        }
-        // 5.11: A CAPPED BODY IS A BARRIER IN THE CASCADE. The mark arrives here and
-        // stops — nothing downstream is woken (5.8) and the body does not run, so the
-        // load it would have issued is never issued rather than issued and discarded.
-        // That is the whole difference between capping a value and capping a body: a
-        // value's production has already been handed in and must be retained (5.9),
-        // where a body's work has not started yet and 5.11 says not to start it.
-        //
-        // THE WINDOW IS ARMED HERE BECAUSE THIS IS WHERE A SOURCE PRODUCING IS VISIBLE.
-        // A read cannot tell one change from ten, so a debounce armed at the read fires
-        // a fixed interval after the first change rather than once the changes stop.
-        //
-        // THE LOAD IS NOT MEASURABLE. It was the reason to expect a cost here — one more
-        // field read per marked node in the hottest walk in the core — and across two
-        // runs the abide arm is flat on every graph row: chain 20 at 2.47x against a
-        // 2.44x-2.50x baseline, DAG 5x3 at 1.96x against 1.93x, fan-in 100 unchanged. The
-        // ratios wobble because the hand-written arm moves with machine state; `below` was
-        // stored to on the line above, so this reads a line already in cache.
-        const cap = below.cap
-        if (cap !== null && below.body !== null) {
-            if (windowHolds(below, cap)) {
-                // 5.15: the held run is a production held back, so `busy` moves as it is owed.
-                if (!cap.owed) {
-                    cap.owed = true
-                    probesMoved(below)
-                }
-                // BACK TO CLEAN so the next source production marks it again and re-arms.
-                // Left marked it takes this walk's own `state >= wanted` short-circuit,
-                // and the changes after the first become invisible to the window.
-                below.state = CLEAN
-                setDirect(below, below.servable)
-                continue
-            }
-        }
-        // Only a node this walk has not reached descends, and only where it HAS a
-        // subtree: one already marked is already at least `CHECK`, which is the
-        // strongest thing this walk could say, and one with no readers is the shape
-        // push-pull makes most of — a fan of a hundred derived values that nothing
-        // downstream reads was entering the walk a hundred times to loop over nothing.
-        if (was === CLEAN && below.readers.length !== 0)
-            markReaders(below, CHECK)
+        markDerived(reader, was)
     }
+}
+
+/**
+ * The arm of a mark walk for a DERIVED `reader` just marked from `was` — stated once, so the probe
+ * walk (`markAsked`) reaches a derived body exactly as a production's walk does (3.2, 5.11).
+ */
+function markDerived(reader: Subscriber, was: number): void {
+    const below = reader as unknown as Cell
+    // Marked is not directly servable, whatever it holds.
+    below.direct = false
+    // 2.13, 3.2, AND THE ONLY PLACE PUSH-PULL RUNS A DERIVED BODY. What is asking is a GUARD: a
+    // reader on the probe edge asks `ready()` and never the value, so no read of its will pull
+    // this body forward, and what the probe answers is about the value a read WOULD serve
+    // (3.2) — a body whose inputs moved to a load is not ready, whatever its last run held. So
+    // the drain pulls it, and the guard wakes only where a probe moved. A reader on the VALUE
+    // edge needs none of this — its own read pulls — so this is the probe edge alone, and a
+    // body nothing probes stays as lazy as 11.5 makes it.
+    if (was === CLEAN && below.probeReaders.length !== 0) {
+        PENDING[pendingCount] = reader
+        pendingCount += 1
+    }
+    // 5.11: A CAPPED BODY IS A BARRIER IN THE CASCADE. The mark arrives here and
+    // stops — nothing downstream is woken (5.8) and the body does not run, so the
+    // load it would have issued is never issued rather than issued and discarded.
+    // That is the whole difference between capping a value and capping a body: a
+    // value's production has already been handed in and must be retained (5.9),
+    // where a body's work has not started yet and 5.11 says not to start it.
+    //
+    // THE WINDOW IS ARMED HERE BECAUSE THIS IS WHERE A SOURCE PRODUCING IS VISIBLE.
+    // A read cannot tell one change from ten, so a debounce armed at the read fires
+    // a fixed interval after the first change rather than once the changes stop.
+    //
+    // THE LOAD IS NOT MEASURABLE. It was the reason to expect a cost here — one more
+    // field read per marked node in the hottest walk in the core — and across two
+    // runs the abide arm is flat on every graph row: chain 20 at 2.47x against a
+    // 2.44x-2.50x baseline, DAG 5x3 at 1.96x against 1.93x, fan-in 100 unchanged. The
+    // ratios wobble because the hand-written arm moves with machine state; `below` was
+    // stored to on the line above, so this reads a line already in cache.
+    const cap = below.cap
+    if (cap !== null && below.body !== null) {
+        if (windowHolds(below, cap)) {
+            // 5.15: the held run is a production held back, so `busy` moves as it is owed.
+            if (!cap.owed) {
+                cap.owed = true
+                probesMoved(below)
+            }
+            // BACK TO CLEAN so the next source production marks it again and re-arms.
+            // Left marked it takes this walk's own `state >= wanted` short-circuit,
+            // and the changes after the first become invisible to the window.
+            below.state = CLEAN
+            setDirect(below, below.servable)
+            return
+        }
+    }
+    // Only a node this walk has not reached descends, and only where it HAS a
+    // subtree: one already marked is already at least `CHECK`, which is the
+    // strongest thing this walk could say, and one with no readers is the shape
+    // push-pull makes most of — a fan of a hundred derived values that nothing
+    // downstream reads was entering the walk a hundred times to loop over nothing.
+    if (was === CLEAN && below.readers.length !== 0) markReaders(below, CHECK)
 }
 
 /**
@@ -835,10 +842,7 @@ function markAsked(asked: Subscriber[]): void {
             if (was === CLEAN) queueEffect(reader)
             continue
         }
-        const below = reader as unknown as Cell
-        below.direct = false
-        if (was === CLEAN && below.readers.length !== 0)
-            markReaders(below, CHECK)
+        markDerived(reader, was)
     }
 }
 
