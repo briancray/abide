@@ -45,6 +45,35 @@ const view = carousel({ items: STAGES, selected })
 #host li { flex: 0 0 200px; height: 50px; scroll-snap-align: center; }
 </style>`
 
+// The same scroller inside a closed `<dialog>`, where it is bound with no box.
+const VIEWER = `<script>
+import { lightbox } from '@abide/abide'
+
+const STAGES = ['lead', 'qualified', 'proposal', 'negotiation', 'won']
+const viewer = lightbox({ items: STAGES })
+</script>
+
+<main>
+    {#for stage of STAGES by stage}
+        <button id={'open-' + stage} onclick={() => viewer.show(stage)}>{stage}</button>
+    {/for}
+    <dialog {...viewer.dialog}>
+        <p id="centered">{viewer.centered}</p>
+        <button id="previous" {...viewer.previous}>previous</button>
+        <button id="next" {...viewer.next}>next</button>
+        <ul id="host" {...viewer.host}>
+            {#for stage of STAGES by stage}
+                <li id={stage} {...viewer.item(stage)}>{stage}</li>
+            {/for}
+        </ul>
+    </dialog>
+</main>
+
+<style>
+#host { display: flex; box-sizing: border-box; width: 300px; margin: 0; padding: 0 50px; overflow-x: auto; scroll-snap-type: x mandatory; list-style: none; }
+#host li { flex: 0 0 200px; height: 50px; scroll-snap-align: center; }
+</style>`
+
 let server: Subprocess | undefined
 let base = ''
 
@@ -52,7 +81,11 @@ let base = ''
 test.beforeAll(async ({}, testInfo) => {
     ;({ base, server } = await servedFixture(
         `e2e-carousel-${testInfo.project.name}`,
-        { 'layout.abide': LAYOUT, 'index.abide': PAGE },
+        {
+            'layout.abide': LAYOUT,
+            'index.abide': PAGE,
+            'viewer.abide': VIEWER,
+        },
     ))
 })
 
@@ -141,4 +174,26 @@ test('a new selection scrolls the carousel to it — 53.62', async ({ page }) =>
     await expect.poll(() => offCenter(page, 'lead')).toBe(0)
     await expect(page.locator('#centered')).toHaveText('lead')
     await expect(page.locator('#previous')).toBeDisabled()
+})
+
+// 53.62, 53.63 — A SCROLLER BOUND INSIDE A CLOSED DIALOG RESTS WHEN IT OPENS, EACH TIME IT OPENS. THE
+// REVERT: drop the host's resize listener; the dialog opens on `lead` with `next` disabled. The two
+// `previous` clicks land while the first scroll is on its way: scroll `by` the measured offset rather
+// than `to` it, and webkit stops ~27px short of `proposal`.
+test('a carousel in a dialog opens resting on the item picked, each time — 53.62, 53.63', async ({
+    page,
+}) => {
+    await page.goto(`${base}/viewer`)
+    await page.click('#open-won')
+    await expect.poll(() => offCenter(page, 'won')).toBe(0)
+    await expect(page.locator('#centered')).toHaveText('won')
+    await page.click('#previous')
+    await page.click('#previous')
+    await expect(page.locator('#centered')).toHaveText('proposal')
+    await expect.poll(() => offCenter(page, 'proposal')).toBe(0)
+    await expect(page.locator('#next')).toBeEnabled()
+    await page.keyboard.press('Escape')
+    await page.click('#open-won')
+    await expect.poll(() => offCenter(page, 'won')).toBe(0)
+    await expect(page.locator('#centered')).toHaveText('won')
 })

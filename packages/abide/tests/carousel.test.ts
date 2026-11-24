@@ -6,7 +6,25 @@ import { afterEach, expect, test } from 'bun:test'
 
 import { carousel, flushSync, reactive, watch } from '#shared'
 
-afterEach(() => document.body.replaceChildren())
+// The shared resize observer is made by the first bind (32.81), so the stand-in is installed at load,
+// and every bind is released after its test so the next bind makes it again.
+type Delivery = (entries: { target: Element; contentRect: DOMRect }[]) => void
+let deliver: Delivery | undefined
+class ResizeStandIn {
+    constructor(given: Delivery) {
+        deliver = given
+    }
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+}
+Object.assign(globalThis, { ResizeObserver: ResizeStandIn })
+
+const bound: (() => void)[] = []
+afterEach(() => {
+    for (const release of bound.splice(0)) release()
+    document.body.replaceChildren()
+})
 
 const STAGES = ['lead', 'qualified', 'proposal', 'won']
 
@@ -27,22 +45,27 @@ function spread(element: HTMLElement, part: Record<string, unknown>): void {
     })
     const bind = part['bind:element'] as
         ((element: Element) => unknown) | undefined
-    bind?.(element)
+    const release = bind?.(element)
+    if (typeof release === 'function') bound.push(release as () => void)
 }
 
 // A 100px-wide scroller over a row of 100px items, `scrollLeft` moving the items' rects, and each
-// `scrollBy` written down.
-function laidOut(view: ReturnType<typeof carousel<string>>) {
+// `scrollTo` written down. `hidden` lays it out as a closed dialog does: every rect 0, and a scroll
+// going nowhere, until `show` gives it a box and delivers the resize.
+function laidOut(view: ReturnType<typeof carousel<string>>, hidden = false) {
     const host = document.createElement('div')
     const scrolls: ScrollToOptions[] = []
     let left = 0
     const rect = (x: number) =>
-        ({ left: x, top: 0, width: 100, height: 50 }) as DOMRect
+        (hidden
+            ? { left: 0, top: 0, width: 0, height: 0 }
+            : { left: x, top: 0, width: 100, height: 50 }) as DOMRect
     host.getBoundingClientRect = () => rect(0)
-    host.scrollBy = ((by: ScrollToOptions) => {
-        scrolls.push(by)
-        left += by.left ?? 0
-    }) as Element['scrollBy']
+    Object.defineProperty(host, 'scrollLeft', { get: () => left })
+    host.scrollTo = ((to: ScrollToOptions) => {
+        scrolls.push(to)
+        if (!hidden) left = to.left ?? 0
+    }) as Element['scrollTo']
     const items = new Map<string, HTMLElement>()
     STAGES.forEach((stage, index) => {
         const item = document.createElement('div')
@@ -60,6 +83,13 @@ function laidOut(view: ReturnType<typeof carousel<string>>) {
         scrollTo(to: number) {
             left = to
             host.dispatchEvent(new Event('scroll'))
+        },
+        show(shown: boolean) {
+            hidden = !shown
+            deliver?.([
+                { target: host, contentRect: host.getBoundingClientRect() },
+            ])
+            flushSync()
         },
     }
 }
@@ -89,7 +119,37 @@ test('the scroller centers the resting item at once when bound, and smoothly whe
     selected.set('won')
     flushSync()
     expect(view.centered).toBe('won')
-    expect(row.scrolls[1]).toEqual({ left: 200, top: 0, behavior: 'smooth' })
+    expect(row.scrolls[1]).toEqual({ left: 300, top: 0, behavior: 'smooth' })
+})
+
+// THE REVERT: drop the resize listener from the host's bind, and a carousel bound inside a closed
+// dialog opens on its first item — scrolled nowhere — with `centered` naming the one picked, so `next`
+// is disabled over an item that has one after it.
+test('a scroller bound with no box rests at once when it gets one, and again each time after — 53.62', () => {
+    const selected = reactive<string | undefined>(undefined)
+    const view = carousel({ items: STAGES, selected })
+    const row = laidOut(view, true)
+    selected.set('won')
+    flushSync()
+    row.show(true)
+    expect(row.scrolls.at(-1)).toEqual({
+        left: 300,
+        top: 0,
+        behavior: 'instant',
+    })
+    row.scrollTo(100)
+    row.show(false)
+    row.show(true)
+    expect(view.centered).toBe('won')
+    expect(row.scrolls.at(-1)).toEqual({
+        left: 300,
+        top: 0,
+        behavior: 'instant',
+    })
+    // A resize of a host that already has a box is not a showing.
+    const count = row.scrolls.length
+    row.show(true)
+    expect(row.scrolls.length).toBe(count)
 })
 
 // THE REVERT: measure on every `scroll` rather than once a frame, and three scrolls measure three times.
@@ -197,7 +257,7 @@ test('reset scrolls back to the resting item — 53.68', async () => {
     view.reset()
     expect(view.centered).toBe('qualified')
     expect(row.scrolls.at(-1)).toEqual({
-        left: -200,
+        left: 100,
         top: 0,
         behavior: 'smooth',
     })

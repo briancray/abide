@@ -6313,10 +6313,12 @@ set `following` to true.
 none of them.
 
 53.62 `carousel`'s `host` MUST scroll the item the carousel rests on to its center at once when it is
-bound, and as `behavior` names whenever the item it rests on changes after.
+bound and whenever it goes from having no box to having one, and as `behavior` names whenever the
+item it rests on changes after.
 
 53.63 `Carousel`'s `centered` MUST be the key of the item the carousel rests on, until a scroll of the
-`host`, `scrollTo` or `reset` sets it, and again whenever the item it rests on changes.
+`host`, `scrollTo` or `reset` sets it, and again whenever the item it rests on changes or 53.62
+scrolls the `host` to it on getting a box.
 
 53.64 A scroll of `carousel`'s `host` MUST set `centered` to the key of the item whose center is
 nearest the host's center, measured at most once a frame, save where 53.66 sets it.

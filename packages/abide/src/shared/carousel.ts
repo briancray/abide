@@ -7,6 +7,7 @@ import { checkParts } from './checkParts.ts'
 import { handFocus } from './handFocus.ts'
 import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
 import { type Live, live } from './live.ts'
+import { resized } from './observe/resized.ts'
 import { randomToken } from './randomToken.ts'
 import { memo, type Reactive, reactive, watch } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
@@ -111,7 +112,14 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
             (Math.round(left) !== 0 || Math.round(top) !== 0)
         )
             heading = key
-        scroller.scrollBy({ left, top, behavior: how })
+        // To an offset rather than by one: webkit resolves a smooth `scrollBy` made while another is
+        // on its way against neither where the scroll is nor where it is going, and a quick second
+        // click of `previous` landed ~26px off its item.
+        scroller.scrollTo({
+            left: scroller.scrollLeft + left,
+            top: scroller.scrollTop + top,
+            behavior: how,
+        })
     }
 
     function scrollTo(key: string): void {
@@ -196,6 +204,23 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         element.addEventListener('scrollsnapchanging', snap)
         element.addEventListener('scrollsnapchange', snap)
         element.addEventListener('scrollend', ended)
+        // 53.62 — a host with no box (in a closed dialog, a hidden panel) measures every rect as 0 and
+        // scrolls nowhere, so it rests again, at once, the moment it gets one.
+        const box = element.getBoundingClientRect()
+        let boxed = box.width > 0 || box.height > 0
+        const unresize = resized(element, (entry) => {
+            const showing =
+                entry.contentRect.width > 0 || entry.contentRect.height > 0
+            if (showing && !boxed) {
+                const key = resting.peek()
+                const target = restingElement.peek()
+                if (key !== undefined && target !== undefined) {
+                    centered.set(key)
+                    center(key, target, 'instant')
+                }
+            }
+            boxed = showing
+        })
         // 53.62 — at once when bound, as `behavior` names after.
         let rested = false
         const stop = watch(() => {
@@ -210,6 +235,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         })
         return () => {
             stop()
+            unresize()
             if (frame !== 0) cancelAnimationFrame(frame)
             element.removeEventListener('scroll', scrolled)
             element.removeEventListener('scrollsnapchanging', snap)
