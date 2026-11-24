@@ -58,7 +58,7 @@ test('a label waits until format.relative next writes it differently — 52.74',
 
 // 52.73 — ONE TIMER FOR EVERY TIME FOLLOWED, set for the soonest change, and none once nothing is.
 // THE REVERT: drop the clear in `schedule` — three follows leave three timers standing.
-test('one timer stands for every time followed, at the soonest change — 52.73', () => {
+test('one timer stands for every time followed, at the soonest change — 52.73', async () => {
     const now = Date.now()
     const leave = [
         follow(now - 3 * HOUR),
@@ -67,8 +67,9 @@ test('one timer stands for every time followed, at the soonest change — 52.73'
     ]
     expect(standing()).toHaveLength(1)
     expect(standing()[0]?.wait).toBe(MINUTE / 2)
-    // The soonest one gone, the next soonest is waited for.
+    // The soonest one gone, the next soonest is waited for — from the end of the turn it left in.
     leave[1]?.()
+    await Promise.resolve()
     expect(standing()).toHaveLength(1)
     expect(standing()[0]?.wait).toBe(HOUR / 2)
     for (const each of leave) each()
@@ -97,5 +98,29 @@ test('a hidden page sets no timer, and schedules again once shown — 52.75', ()
         configurable: true,
     })
     document.dispatchEvent(new Event('visibilitychange'))
+    expect(standing()).toHaveLength(0)
+})
+
+// 52.73 AT A LIST'S SIZE — A FOLLOW WEIGHS ITS OWN TIME, AND A LIST LEAVING RESCHEDULES ONCE. A label
+// that changes later than the timer already stands for sets nothing, and a turn in which the soonest
+// and every other leave rescans once at its end. THE REVERT, run: rescanning every followed time and
+// re-arming on each follow and each leave reports `set mounting: 100, set leaving: 99` against 1 and 1
+// — and the scan was 190 ms to mount 4,000 labels.
+test('a list of labels sets one timer mounting and one leaving — 52.73', async () => {
+    const now = Date.now()
+    const leave: (() => void)[] = []
+    // Each further in the past than the last, so each changes no sooner than the first.
+    for (let index = 0; index < 100; index += 1)
+        leave.push(follow(now - (5 + index) * MINUTE - 20_000))
+    const mounting = timers.length
+    // The soonest first, as a list unmounts in order, and one label left standing.
+    for (let index = 0; index < 99; index += 1) leave[index]?.()
+    await Promise.resolve()
+    const leaving = timers.length - mounting
+    expect(`set mounting: ${mounting}, set leaving: ${leaving}`).toBe(
+        'set mounting: 1, set leaving: 1',
+    )
+    expect(standing()).toHaveLength(1)
+    leave[99]?.()
     expect(standing()).toHaveLength(0)
 })

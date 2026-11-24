@@ -10,16 +10,20 @@ import { RELATIVE_UNITS } from './format/RELATIVE_UNITS.ts'
 import { isServer } from './isServer.ts'
 import { reactive } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
-import { register } from './register.ts'
 
 // The length `format.relative` writes a gap under a minute in: `now`, until the gap is one.
 const MINUTE = 60_000
 
 /** The time every followed label is written against, in epoch milliseconds. */
 const current = /* @__PURE__ */ reactive(0)
-// The instants followed, one entry per `time` standing.
-const followed = /* @__PURE__ */ reactive<readonly number[]>([])
+// The instants followed, each with how many `time`s stand on it. Read by nothing reactive: the timer
+// is the only thing that asks.
+const followed = new Map<number, number>()
 let timer: ReturnType<typeof setTimeout> | undefined
+// When the standing timer fires, in epoch milliseconds, and the instant it was set for.
+let due = Number.POSITIVE_INFINITY
+let dueFor: number | undefined
+let rescheduling = false
 
 const inBrowser = (): boolean => typeof window !== 'undefined' && !isServer()
 
@@ -53,12 +57,21 @@ export function nextChange(time: number, now: number): number {
 function schedule(): void {
     clearTimeout(timer)
     timer = undefined
-    const times = followed.peek() ?? []
-    if (times.length === 0 || document.visibilityState === 'hidden') return
+    due = Number.POSITIVE_INFINITY
+    dueFor = undefined
+    if (followed.size === 0 || document.visibilityState === 'hidden') return
     const now = Date.now()
-    let wait = Number.POSITIVE_INFINITY
-    for (const time of times) wait = Math.min(wait, nextChange(time, now))
-    timer = setTimeout(tick, wait)
+    for (const time of followed.keys()) soonest(time, now)
+}
+
+/** The timer moved to `time`'s next change, where that comes before the one standing. */
+function soonest(time: number, now: number): void {
+    const at = now + nextChange(time, now)
+    if (at >= due) return
+    clearTimeout(timer)
+    due = at
+    dueFor = time
+    timer = setTimeout(tick, at - now)
 }
 
 function tick(): void {
@@ -78,17 +91,35 @@ function shown(): void {
  */
 export function follow(time: number): Disposer {
     if (!inBrowser()) return () => {}
-    if ((followed.peek() ?? []).length === 0) {
+    if (followed.size === 0) {
         document.addEventListener('visibilitychange', shown)
         current.set(Date.now())
     }
-    const leave = register(followed, time)
-    schedule()
+    followed.set(time, (followed.get(time) ?? 0) + 1)
+    // ONE TIME WEIGHED, NOT EVERY ONE: the timer already stands at the soonest change of the rest, so
+    // a time arriving moves it only where its own change comes first. Rescanning every time on every
+    // follow made a list of n labels n² to mount — 190 ms at 4,000.
+    if (document.visibilityState !== 'hidden') soonest(time, Date.now())
+    let left = false
     return () => {
-        leave()
-        if ((followed.peek() ?? []).length === 0)
+        if (left) return
+        left = true
+        const standing = (followed.get(time) ?? 1) - 1
+        if (standing === 0) followed.delete(time)
+        else followed.set(time, standing)
+        if (followed.size === 0) {
             document.removeEventListener('visibilitychange', shown)
-        schedule()
+            schedule()
+            return
+        }
+        // Only the time the timer was set for moves it, and once a turn however many leave in it — a
+        // list unmounting reschedules once rather than once a row.
+        if (standing !== 0 || time !== dueFor || rescheduling) return
+        rescheduling = true
+        queueMicrotask(() => {
+            rescheduling = false
+            schedule()
+        })
     }
 }
 
