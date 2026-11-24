@@ -46,7 +46,7 @@ const MIGRATIONS: Migration[] = [
             for (const path of await sources()) {
                 const text = await read(path)
                 if (text === undefined || !text.includes('reactive')) continue
-                const migrated = toMemo(text, path).text
+                const migrated = toMemo(text, path)
                 if (migrated !== text) changed[path] = migrated
             }
             return changed

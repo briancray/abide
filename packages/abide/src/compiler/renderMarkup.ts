@@ -130,11 +130,8 @@ export const HEADS = '__heads'
  * the card bench went 0.9 µs -> 1.7 µs at 10 cards and 0.70x -> 1.20x against the hand-written
  * page, which is the headline ratio inverted for a guard that could never fire.
  */
-export function unlandable(
-    lowering: Lowering,
-    holder: object,
-    lowered: string,
-): string {
+export function unlandable(lowering: Lowering, holder: object): string {
+    const lowered = lowering.expression(holder)
     if (!lowering.isLive(holder)) return lowered
     return slotValueOf(lowering, lowered)
 }
@@ -179,7 +176,7 @@ function renderPosition(
             parts.push(
                 piece.kind === 'text'
                     ? JSON.stringify(piece.text)
-                    : `${lowering.use('escapeText')}(${unlandable(lowering, piece, lowering.expression(piece))})`,
+                    : `${lowering.use('escapeText')}(${unlandable(lowering, piece)})`,
             )
         // 32.30 — A RUN THAT CAN HOLD MARKUP IS ANCHORED WHILE IT DOES (`markupRun`), so the client
         // finds the end of what a `Raw` part parsed into. The count is read BEFORE the parts are
@@ -198,7 +195,12 @@ function renderPosition(
         // 32.13 — the body repeats. 32.22: an absent subject iterates zero times, which is what
         // the guard is for rather than a `?? []` that would also swallow a genuine mistake.
         // 32.21: the subject is read ONCE for the whole block, not once per row.
-        const subject = lowering.expression(node)
+        // 41.4 FOR A SUBJECT STILL IN FLIGHT. The read is the block's one expression, so an
+        // unlanded one aborts it and nothing else: the abort answers `undefined`, `listOf` reads
+        // that as absent, and 32.22's zero rows is already what absent means here. Read ONCE for
+        // the block (32.21), so the thunk is per block rather than per row.
+        // Lowered ahead of the row, so the source map's chunks keep their order.
+        const guarded = unlandable(lowering, node)
         const row = rowMarkup(
             at.inner[0] as Cursor,
             !isSingleRooted(node.children),
@@ -217,11 +219,6 @@ function renderPosition(
         // convenience `[Symbol.iterator]` was async here and sync there, so the page was blank
         // without JS and whole after hydration.
         const listOf = lowering.use('listOf')
-        // AND 41.4 FOR A SUBJECT STILL IN FLIGHT. The read is the block's one expression, so an
-        // unlanded one aborts it and nothing else: the abort answers `undefined`, `listOf` reads
-        // that as absent, and 32.22's zero rows is already what absent means here. Read ONCE for
-        // the block (32.21), so the thunk is per block rather than per row.
-        const guarded = unlandable(lowering, node, subject)
         // 14.8 — the row's branch-local `<script>`, run at the head of each row, untracked like the
         // component's own setup (14.7) since the render tracks nothing.
         // 32.43 — and the components it declares, each closing over the row.
@@ -357,7 +354,7 @@ function renderPosition(
         if (one.kind === 'spread') {
             parts.push(
                 JSON.stringify(open),
-                `${lowering.use('spreadAttributes')}(${unlandable(lowering, one.attribute, lowering.expression(one.attribute))}, ${JSON.stringify(one.explicit)})`,
+                `${lowering.use('spreadAttributes')}(${unlandable(lowering, one.attribute)}, ${JSON.stringify(one.explicit)})`,
             )
             open = ''
             continue
@@ -605,11 +602,7 @@ export function concat(parts: string[]): string {
  * past.
  */
 function dynamicMarkup(attribute: Attribute, lowering: Lowering): string {
-    const value = unlandable(
-        lowering,
-        attribute,
-        lowering.expression(attribute),
-    )
+    const value = unlandable(lowering, attribute)
     return `${lowering.use('attributeMarkup')}(${JSON.stringify(attribute.name)}, ${value})`
 }
 
@@ -632,11 +625,7 @@ function boundMarkup(
                   written.own === undefined
                       ? "'on'"
                       : written.own.expression
-                        ? unlandable(
-                              lowering,
-                              written.own,
-                              lowering.expression(written.own),
-                          )
+                        ? unlandable(lowering, written.own)
                         : JSON.stringify(written.own.value)
               })`
             : read
@@ -733,9 +722,9 @@ export type ValueRender = {
 function markupRender(lowering: Lowering): ValueRender {
     return {
         dynamic: (attribute) =>
-            `${lowering.use('escapeAttribute')}(${unlandable(lowering, attribute, lowering.expression(attribute))})`,
+            `${lowering.use('escapeAttribute')}(${unlandable(lowering, attribute)})`,
         declaration: (attribute) =>
-            `${lowering.use('escapeStyleValue')}(${unlandable(lowering, attribute, lowering.expression(attribute))})`,
+            `${lowering.use('escapeStyleValue')}(${unlandable(lowering, attribute)})`,
         bytes: (bytes) => JSON.stringify(bytes),
     }
 }
@@ -835,7 +824,7 @@ function classValue(
         // hydrated page never flips a class it was served with (`classifyAttributes.test.ts`).
         parts.push(
             attribute.expression
-                ? `(${unlandable(lowering, attribute, lowering.expression(attribute))} ? ${written} : '')`
+                ? `(${unlandable(lowering, attribute)} ? ${written} : '')`
                 : written,
         )
     }

@@ -1197,7 +1197,7 @@ function builtAttribute(
  */
 function buildRender(lowering: Lowering): ValueRender {
     const guarded = (attribute: Attribute): string =>
-        `${lowering.use('escapeless')}(${unlandable(lowering, attribute, lowering.expression(attribute))})`
+        `${lowering.use('escapeless')}(${unlandable(lowering, attribute)})`
     return {
         dynamic: guarded,
         declaration: (attribute) =>
@@ -1817,11 +1817,7 @@ function rowUpdate(
                                 `__a${slot}`,
                                 one.toggles.name,
                                 groupArguments(one.group, (attribute) =>
-                                    unlandable(
-                                        lowering,
-                                        attribute,
-                                        lowering.expression(attribute),
-                                    ),
+                                    unlandable(lowering, attribute),
                                 ),
                                 lowering,
                             ),

@@ -9,44 +9,30 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
-import { type Token, tokenize } from './tokenize.ts'
-
-/** A file's text with every body-form `reactive` renamed, and the lines of the calls left unread. */
-export type MemoMigration = { text: string; unread: number[] }
+import { closerOf, type Token, tokenize } from './tokenize.ts'
 
 /** Which grammar `text` is: a TypeScript module, an `.abide` file, or Markdown with code fences. */
 type Kind = 'ts' | 'abide' | 'md'
 
 /** 38.215 — `text`, a file at `path`, with each `reactive` handed a body renamed `memo`. */
-export function toMemo(text: string, path: string): MemoMigration {
+export function toMemo(text: string, path: string): string {
     const kind: Kind = path.endsWith('.abide')
         ? 'abide'
         : path.endsWith('.md')
           ? 'md'
           : 'ts'
-    const unreadAt: number[] = []
-    const migrated = migrate(text, kind, 0, unreadAt)
-    const unread: number[] = []
-    for (const offset of unreadAt) unread.push(lineAt(text, offset))
-    return { text: migrated, unread }
+    return migrate(text, kind)
 }
 
-function migrate(
-    text: string,
-    kind: Kind,
-    base: number,
-    unread: number[],
-): string {
+function migrate(text: string, kind: Kind): string {
     if (!text.includes('reactive')) return text
-    if (kind === 'ts') return migrateModule(text, base, unread)
+    if (kind === 'ts') return migrateModule(text)
     if (kind === 'md')
         return replaceSpans(
             text,
             /^([ \t]*)(```|~~~)([\w-]*)[^\n]*\n([\s\S]*?)^\1\2[ \t]*$/gm,
             4,
             (inner) => (inner.includes('<script') ? 'abide' : 'ts'),
-            base,
-            unread,
         )
     // An `.abide` file: its script blocks are modules, and a code sample written in its markup — a
     // template literal handed to a prop — is a file of its own, shown rather than run.
@@ -55,10 +41,8 @@ function migrate(
         /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g,
         2,
         () => 'ts',
-        base,
-        unread,
     )
-    return replaceOutsideScripts(migrated, base, unread)
+    return replaceOutsideScripts(migrated)
 }
 
 /** Each match's group `group` migrated as the grammar `kindOf` reads it as, the rest kept. */
@@ -67,8 +51,6 @@ function replaceSpans(
     pattern: RegExp,
     group: number,
     kindOf: (inner: string) => Kind,
-    base: number,
-    unread: number[],
 ): string {
     let out = ''
     let last = 0
@@ -77,43 +59,34 @@ function replaceSpans(
         const inner = match[group] ?? ''
         const start = match.indices?.[group]?.[0] ?? match.index ?? 0
         out += text.slice(last, start)
-        out += migrate(inner, kindOf(inner), base + start, unread)
+        out += migrate(inner, kindOf(inner))
         last = start + inner.length
     }
     return out + text.slice(last)
 }
 
 /** The template literals an `.abide` file's markup holds, each migrated as the code it shows. */
-function replaceOutsideScripts(
-    text: string,
-    base: number,
-    unread: number[],
-): string {
+function replaceOutsideScripts(text: string): string {
     let out = ''
     let last = 0
     for (const script of text.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/g)) {
         const start = script.index ?? 0
-        out += samples(text.slice(last, start), base + last, unread)
+        out += samples(text.slice(last, start))
         out += script[0]
         last = start + script[0].length
     }
-    return out + samples(text.slice(last), base + last, unread)
+    return out + samples(text.slice(last))
 }
 
 /** `markup` with each backtick-delimited sample in it migrated. */
-function samples(markup: string, base: number, unread: number[]): string {
-    return replaceSpans(
-        markup,
-        /`((?:\\[\s\S]|[^`\\])*)`/g,
-        1,
-        (inner) => (inner.includes('<script') ? 'abide' : 'ts'),
-        base,
-        unread,
+function samples(markup: string): string {
+    return replaceSpans(markup, /`((?:\\[\s\S]|[^`\\])*)`/g, 1, (inner) =>
+        inner.includes('<script') ? 'abide' : 'ts',
     )
 }
 
 /** A module's `reactive` calls over a body renamed, and `memo` imported beside `reactive`. */
-function migrateModule(text: string, base: number, unread: number[]): string {
+function migrateModule(text: string): string {
     const tokens = tokenize(text)
     const renames: number[] = []
     for (let at = 0; at < tokens.length; at += 1) {
@@ -128,9 +101,7 @@ function migrateModule(text: string, base: number, unread: number[]): string {
             SyntaxKind.OpenParenToken
         )
             continue
-        const form = formOf(tokens, open + 1, text)
-        if (form === 'body') renames.push(token.start)
-        else if (form === 'name') unread.push(base + token.start)
+        if (isBody(tokens, open + 1, text)) renames.push(token.start)
     }
     let migrated = text
     for (let index = renames.length - 1; index >= 0; index -= 1) {
@@ -140,12 +111,12 @@ function migrateModule(text: string, base: number, unread: number[]): string {
             'memo' +
             migrated.slice(start + 'reactive'.length)
     }
-    migrated = migrateSamples(migrated, base, unread)
+    migrated = migrateSamples(migrated)
     return withMemoImported(migrated, renames.length > 0)
 }
 
 /** The template literals a module holds — a code sample a docs page shows — each migrated. */
-function migrateSamples(text: string, base: number, unread: number[]): string {
+function migrateSamples(text: string): string {
     if (!/`[^`]*reactive/.test(text)) return text
     let out = ''
     let last = 0
@@ -157,12 +128,7 @@ function migrateSamples(text: string, base: number, unread: number[]): string {
             continue
         const inner = token.text.slice(1, -1)
         out += text.slice(last, token.start + 1)
-        out += migrate(
-            inner,
-            inner.includes('<script') ? 'abide' : 'ts',
-            base + token.start + 1,
-            unread,
-        )
+        out += migrate(inner, inner.includes('<script') ? 'abide' : 'ts')
         last = token.end - 1
     }
     return out + text.slice(last)
@@ -186,17 +152,13 @@ function afterTypeArguments(tokens: Token[], at: number): number {
 }
 
 /**
- * Whether the argument starting at `at` is a body written in place, a bare name — a body only where
- * `text` binds it to one — or anything else.
+ * Whether the argument starting at `at` is a body: one written in place, or a bare name `text` binds
+ * to one. A member (`feed.body`) is left for the checker, whose value only it knows.
  */
-function formOf(
-    tokens: Token[],
-    at: number,
-    text: string,
-): 'body' | 'name' | 'value' {
+function isBody(tokens: Token[], at: number, text: string): boolean {
     const first = tokens[at] as Token | undefined
-    if (first === undefined) return 'value'
-    if (first.kind === SyntaxKind.FunctionKeyword) return 'body'
+    if (first === undefined) return false
+    if (first.kind === SyntaxKind.FunctionKeyword) return true
     if (first.text === 'async') {
         const next = tokens[at + 1] as Token | undefined
         if (
@@ -205,59 +167,32 @@ function formOf(
             (next?.kind === SyntaxKind.Identifier &&
                 tokens[at + 2]?.kind === SyntaxKind.EqualsGreaterThanToken)
         )
-            return 'body'
+            return true
     }
     if (first.kind === SyntaxKind.OpenParenToken) {
-        const close = matching(tokens, at)
-        const next = tokens[close + 1] as Token | undefined
-        if (
-            next?.kind === SyntaxKind.EqualsGreaterThanToken ||
-            next?.kind === SyntaxKind.ColonToken
-        )
-            return 'body'
-        return 'value'
+        return closesArrow(tokens, closerOf(tokens, at))
     }
-    if (first.kind === SyntaxKind.LessThanToken) return 'body'
+    if (first.kind === SyntaxKind.LessThanToken) return true
     if (first.kind === SyntaxKind.Identifier) {
         const next = tokens[at + 1] as Token | undefined
-        if (next?.kind === SyntaxKind.EqualsGreaterThanToken) return 'body'
+        if (next?.kind === SyntaxKind.EqualsGreaterThanToken) return true
         if (
             next?.kind === SyntaxKind.CloseParenToken ||
             next?.kind === SyntaxKind.CommaToken
         )
             return bindsFunction(text, first.text, first.start)
-                ? 'body'
-                : 'name'
-        // `feed.body`: a member whose value only the checker knows.
-        let end = at + 1
-        while (
-            tokens[end]?.kind === SyntaxKind.DotToken &&
-            tokens[end + 1]?.kind === SyntaxKind.Identifier
-        )
-            end += 2
-        const after = tokens[end] as Token | undefined
-        if (
-            end > at + 1 &&
-            (after?.kind === SyntaxKind.CloseParenToken ||
-                after?.kind === SyntaxKind.CommaToken)
-        )
-            return 'name'
     }
-    return 'value'
+    return false
 }
 
-/** The index of the `)` closing the `(` at `at`. */
-function matching(tokens: Token[], at: number): number {
-    let depth = 0
-    for (let index = at; index < tokens.length; index += 1) {
-        const kind = (tokens[index] as Token).kind
-        if (kind === SyntaxKind.OpenParenToken) depth += 1
-        else if (kind === SyntaxKind.CloseParenToken) {
-            depth -= 1
-            if (depth === 0) return index
-        }
-    }
-    return tokens.length - 1
+/** Whether the `)` at `close` ends an arrow's parameters: `=>` follows it, or a return type's `:`. */
+function closesArrow(tokens: Token[], close: number): boolean {
+    if (close === -1) return false
+    const after = tokens[close + 1]
+    return (
+        after?.kind === SyntaxKind.EqualsGreaterThanToken ||
+        after?.kind === SyntaxKind.ColonToken
+    )
 }
 
 /**
@@ -284,12 +219,7 @@ function bindsFunction(text: string, name: string, before: number): boolean {
     const tokens = tokenize(
         text.slice((nearest.index ?? 0) + nearest[0].length - 1),
     )
-    const close = matching(tokens, 0)
-    const after = tokens[close + 1]
-    return (
-        after?.kind === SyntaxKind.EqualsGreaterThanToken ||
-        after?.kind === SyntaxKind.ColonToken
-    )
+    return closesArrow(tokens, closerOf(tokens, 0))
 }
 
 /**
@@ -351,11 +281,4 @@ function calls(text: string): boolean {
             return true
     }
     return false
-}
-
-function lineAt(text: string, offset: number): number {
-    let line = 1
-    for (let index = 0; index < offset && index < text.length; index += 1)
-        if (text.charCodeAt(index) === 10) line += 1
-    return line
 }
