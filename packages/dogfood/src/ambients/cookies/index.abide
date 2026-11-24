@@ -6,9 +6,9 @@ import Section from '#src/lib/Section.abide'
 
 <Doc
     seeAlso={[
-        '/request/request',
-        '/request/response',
-        '/request/principal',
+        '/ambients/request',
+        '/ambients/response',
+        '/ambients/principal',
         '/reactive/store',
     ]}
     tests={[

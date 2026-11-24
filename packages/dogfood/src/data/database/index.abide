@@ -8,7 +8,7 @@ import Section from '#src/lib/Section.abide'
     seeAlso={[
         '/reactive/store',
         '/handlers/post',
-        '/request/config',
+        '/ambients/config',
         '/app/environment',
         '/reactive/refresh',
     ]}

@@ -8,7 +8,7 @@ import Section from '#src/lib/Section.abide'
     seeAlso={[
         '/middleware/signed-in',
         '/middleware/require-role',
-        '/request/request',
+        '/ambients/request',
     ]}
     tests={[
         {
