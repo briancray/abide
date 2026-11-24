@@ -1004,6 +1004,23 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `deepEqual` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator over arrays and plain objects that an app declares on `identity`. | 5.4, 5.5, 18.4 |
 
+## `validateJson`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T>` | The two forms a shape may be declared in. | 19.2, 19.3, 19.4, 19.6, 19.8, 19.9, 19.10, 19.18, 19.11, 19.12 |
+| `Issues<T>` | `T extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced> ? Issues<Args> : T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | 19.4, 19.19, 19.26 |
+| `Paths<T>` | `string` | The dot-joined leaf paths of a type. | 19.5 |
+| `validateJson` | `<T>(schema: JsonSchema, value: unknown) => Issues<T> \| null` | The native validator. | 19.13, 19.25 |
+
+## `jsonSchema`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `JsonValue` | `null \| boolean \| number \| string \| JsonValue[] \| { [k: string]: JsonValue }` | What an `Args` may hold. | — |
+| `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.7, 19.14 |
+| `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. | 19.13, 19.14, 19.23, 20.11, 19.28 |
+
 # Handlers
 
 ## `GET`
@@ -1073,23 +1090,6 @@ type Reached = { readonly [REACHED]: true }
 | `health.handler.ts` | `export default GET(…)` | `/health` | 16.2, 23.14 |
 | `media/[id]/save.handler.ts` | `export default POST(…)` | `/media/[id]/save`, `id` reaching its `Args` | 16.2, 16.65, 16.66, 16.67, 16.69 |
 | `media/[id]/lib/Comments.abide` | `const addComment = POST(…)` in its `<script server>` | `/__abide/handlers/media/id/lib/Comments/addComment` | 16.70, 16.71, 16.72 |
-
-## `validateJson`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `Schema<T>` | `((value: unknown) => T) \| StandardSchemaV1<T>` | The two forms a shape may be declared in. | 19.2, 19.3, 19.4, 19.6, 19.8, 19.9, 19.10, 19.18, 19.11, 19.12 |
-| `Issues<T>` | `T extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced> ? Issues<Args> : T extends object ? Partial<Record<Paths<T> \| '', string[]>> : string[]` | What was wrong, keyed by where. | 19.4, 19.19, 19.26 |
-| `Paths<T>` | `string` | The dot-joined leaf paths of a type. | 19.5 |
-| `validateJson` | `<T>(schema: JsonSchema, value: unknown) => Issues<T> \| null` | The native validator. | 19.13, 19.25 |
-
-## `jsonSchema`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `JsonValue` | `null \| boolean \| number \| string \| JsonValue[] \| { [k: string]: JsonValue }` | What an `Args` may hold. | — |
-| `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.7, 19.14 |
-| `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. | 19.13, 19.14, 19.23, 20.11, 19.28 |
 
 ## Headers abide generates
 
