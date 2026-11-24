@@ -6,7 +6,7 @@ import { expect, test } from 'bun:test'
 
 import { job, type JobStatus, log, watch } from '#server'
 import type { App, BootedApp } from '#server/createApp.ts'
-import type { Reactive } from '#shared'
+import { type Reactive, reactive } from '#shared'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -200,4 +200,55 @@ test('stop aborts the run in flight, waits on it, and starts no run after — 54
     })
     await digest.runNow()
     expect(runs).toBe(1)
+})
+
+// 54.26, 7.45 — A RUN OUTLIVES THE LOOK THAT STARTED IT: under `from: 'start'` a look does not wait
+// on the run, so the looks after it are new runs of the job's own value — and a run handed that
+// value's signal was aborted by the next look. THE REVERT: hand the run `stopSignal()` read in the
+// look, and `aborted by a look: true`.
+test('a run that overruns its interval is not aborted by the looks after it — 54.26, 54.29', async () => {
+    const release = Promise.withResolvers<void>()
+    let told: AbortSignal | undefined
+    const scrape = job('overrun', {
+        every: 5,
+        from: 'start',
+        run: async (signal) => {
+            told ??= signal
+            await release.promise
+        },
+    })
+    await serving(async () => {
+        await until(scrape.status, (status) => status.running)
+        await Bun.sleep(40)
+        const aborted = told?.aborted
+        release.resolve()
+        await scrape.stop()
+        expect(`aborted by a look: ${aborted}`).toBe('aborted by a look: false')
+    })
+})
+
+// 54.38 — WHILE `paused` READS TRUE A LOOK STARTS NO RUN, and `runNow` still does. THE REVERT: drop
+// the pause from `look`, and `runs while paused: 1` or more.
+test('a paused job starts no run from a look, and runNow still runs — 54.38', async () => {
+    const paused = reactive(true)
+    let runs = 0
+    const sweep = job('paused', {
+        every: 5,
+        paused,
+        run: () => {
+            runs += 1
+        },
+    })
+    await serving(async () => {
+        await Bun.sleep(30)
+        const whilePaused = runs
+        await sweep.runNow()
+        const asked = runs
+        paused.set(false)
+        await until(sweep.status, () => runs > asked)
+        await sweep.stop()
+        expect(`runs while paused: ${whilePaused}, asked: ${asked}`).toBe(
+            'runs while paused: 0, asked: 1',
+        )
+    })
 })

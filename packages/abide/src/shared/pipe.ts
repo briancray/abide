@@ -1,0 +1,605 @@
+// 57 — A PIPE: steps an item runs through in order, under a budget, with retries, a deadline per
+// attempt and a pause — a function to call and a `TransformStream` pair to pipe through.
+//
+// A BUDGET IS A PIPE'S IDENTITY. `concurrency` counts the items this pipe runs, from every caller and
+// every pipe it is a step of (57.8), so one pipe declared once and used in many places is one budget,
+// and a pipe written inline in another is its own. There is no separate `limit`: a lane is a pipe.
+//
+// AN ITEM HOLDS ONE SLOT FOR ITS WHOLE WALK, fan-out included: what one item's streaming step yields
+// runs on through the steps after it inside that item's slot, in order (57.4). A step that wants its
+// chunks run side by side is a pipe of its own with a `concurrency` of its own.
+
+import { type Failed, isFailed, isTransient, retryAt } from './Failed.ts'
+import {
+    isReactive,
+    type Reactive,
+    reactive,
+    stopSignal,
+    watch,
+} from './reactive/index.ts'
+import { isThenable } from './reactive/isThenable.ts'
+import { refuse } from './refuse.ts'
+import { type Backoff, backoffWait } from './retryWait.ts'
+
+const PIPE_BRAND: unique symbol = Symbol('abide.pipe')
+
+/** A step's function: the item, and the signal that says its attempt is over. */
+type StepFunction = (input: never, signal: AbortSignal) => unknown
+
+/** What one place in a pipe's steps holds: a function, a pipe, or several of those run at once. */
+export type Step =
+    | StepFunction
+    | Pipe<never, unknown, boolean>
+    | readonly (StepFunction | Pipe<never, unknown, boolean>)[]
+
+/** Where a pipe's items stand. */
+export type PipeStatus = {
+    waiting: number
+    running: number
+    done: number
+    failed: number
+    paused: boolean
+}
+
+/** What `pipe` takes beside its steps. */
+export type PipeOptions<In = unknown> = {
+    concurrency?: number
+    key?: (input: In) => string
+    ordered?: boolean
+    retries?: number
+    backoff?: Backoff
+    timeout?: number
+    paused?: Reactive<boolean, never, never, boolean> | (() => boolean)
+}
+
+/** A pipe: a function from an item to its answer, and a stream pair an item stream is piped through. */
+export type Pipe<In, Out, Fanned extends boolean = false> = ((
+    input: In,
+    signal?: AbortSignal,
+) => Promise<(Fanned extends true ? Out[] : Out) | Failed<string, unknown>>) & {
+    readonly readable: ReadableStream<Out | Failed<string, unknown>>
+    readonly writable: WritableStream<In>
+    readonly status: Reactive<PipeStatus>
+    stop(): Promise<void>
+}
+
+/** What a step hands on: a pipe's answer, a function's settled answer, a chunk where it streams. */
+type StepOut<S> = S extends readonly unknown[]
+    ? { -readonly [K in keyof S]: StepOut<S[K]> }
+    : S extends Pipe<never, infer Out, infer _Fanned>
+      ? Exclude<Out, Failed<string, unknown>>
+      : S extends (...given: never[]) => infer Result
+        ? Awaited<Result> extends AsyncIterable<infer Chunk>
+            ? Chunk
+            : Exclude<Awaited<Result>, Failed<string, unknown>>
+        : never
+/** Whether a step hands on more than one answer per item. */
+type StepFans<S> = S extends readonly unknown[]
+    ? false
+    : S extends Pipe<never, unknown, infer Fanned>
+      ? Fanned
+      : S extends (...given: never[]) => infer Result
+        ? Awaited<Result> extends AsyncIterable<unknown>
+            ? true
+            : false
+        : false
+type AnyFans<Steps> = Steps extends readonly [infer First, ...infer Rest]
+    ? StepFans<First> extends true
+        ? true
+        : AnyFans<Rest>
+    : false
+type StepIn<S> = S extends readonly (infer Member)[]
+    ? StepIn<Member>
+    : S extends Pipe<infer In, unknown, boolean>
+      ? In
+      : S extends (input: infer In, signal: AbortSignal) => unknown
+        ? In
+        : never
+type LastOut<Steps> = Steps extends readonly [...unknown[], infer Last]
+    ? StepOut<Last>
+    : never
+type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]]
+    ? StepIn<First>
+    : never
+
+/** Whether `value` is a pipe. */
+export function isPipe(value: unknown): value is Pipe<never, unknown, boolean> {
+    return typeof value === 'function' && PIPE_BRAND in value
+}
+
+/**
+ * Steps an item runs through in order, at most `concurrency` items at once — per `key` where one is
+ * given — each step's attempt retried, timed out and held as its options say (57).
+ */
+export function pipe<const Steps extends readonly [Step, ...Step[]]>(
+    steps: Steps,
+    options?: PipeOptions<FirstIn<Steps>>,
+): Pipe<FirstIn<Steps>, LastOut<Steps>, AnyFans<Steps>> {
+    // 57.3 — at construction: an array in an array has no one reading.
+    for (const step of steps)
+        if (Array.isArray(step))
+            for (const member of step)
+                if (Array.isArray(member))
+                    throw new TypeError(
+                        'abide: a pipe step run at once is a list of functions and pipes, not of lists. Write the sequence inside it as a pipe. RULEBOOK 57.3.',
+                    )
+    const runner = new Runner(
+        steps as readonly Step[],
+        (options ?? {}) as PipeOptions<unknown>,
+    )
+    const call = (input: unknown, signal?: AbortSignal): Promise<unknown> =>
+        runner.call(input, signal)
+    return Object.defineProperties(call, {
+        [PIPE_BRAND]: { value: true },
+        status: { get: () => runner.status },
+        readable: { get: () => runner.streams().readable },
+        writable: { get: () => runner.streams().writable },
+        stop: { value: () => runner.stop() },
+    }) as unknown as Pipe<FirstIn<Steps>, LastOut<Steps>, AnyFans<Steps>>
+}
+
+/** One key's slots: how many items run, and the items waiting for one in the order they came. */
+type Lane = { running: number; waiting: (() => void)[] }
+
+/** What one item's walk answered: its answers in order, whether a step fanned out, or a refusal. */
+type Walked = {
+    answers: unknown[]
+    fanned: boolean
+    refusal: Failed<string, unknown> | undefined
+}
+
+/** A streaming step's attempt that yielded: the first chunk, and the rest to come. */
+class Streamed {
+    first: IteratorResult<unknown>
+    iterator: AsyncIterator<unknown>
+    constructor(
+        first: IteratorResult<unknown>,
+        iterator: AsyncIterator<unknown>,
+    ) {
+        this.first = first
+        this.iterator = iterator
+    }
+}
+
+class Runner {
+    steps: readonly Step[]
+    concurrency: number
+    key: ((input: unknown) => string) | undefined
+    ordered: boolean
+    retries: number
+    backoff: Backoff | undefined
+    timeout: number | undefined
+    pausedBy: (() => boolean) | undefined
+    lanes: Map<string, Lane>
+    // 57.11 — per step, the epoch ms before which no attempt of it starts.
+    heldUntil: number[]
+    resumers: (() => void)[]
+    stopping: AbortController
+    inFlight: Set<Promise<unknown>>
+    counts: PipeStatus
+    status: Reactive<PipeStatus>
+    pair:
+        | {
+              readable: ReadableStream<unknown>
+              writable: WritableStream<unknown>
+          }
+        | undefined
+    unwatch: (() => void) | undefined
+
+    constructor(steps: readonly Step[], options: PipeOptions<unknown>) {
+        this.steps = steps
+        this.concurrency = options.concurrency ?? 1
+        this.key = options.key
+        this.ordered = options.ordered ?? true
+        this.retries = options.retries ?? 0
+        this.backoff = options.backoff
+        this.timeout = options.timeout
+        const paused = options.paused
+        this.pausedBy =
+            paused === undefined ? undefined : () => paused() === true
+        this.lanes = new Map()
+        this.heldUntil = []
+        for (let index = 0; index < steps.length; index += 1)
+            this.heldUntil.push(0)
+        this.resumers = []
+        this.stopping = new AbortController()
+        this.inFlight = new Set()
+        this.counts = {
+            waiting: 0,
+            running: 0,
+            done: 0,
+            failed: 0,
+            paused: this.pausedBy?.() ?? false,
+        }
+        // 57.21 — ONE VALUE for every caller in the process, written from whichever turn moves it.
+        this.status = reactive<PipeStatus>({ ...this.counts }, { global: true })
+        this.pair = undefined
+        this.unwatch = undefined
+        // 57.17 — a pause read as state: its turning false is what lets the held attempts start.
+        if (this.pausedBy !== undefined) {
+            const read = this.pausedBy
+            this.unwatch = watch(() => {
+                const now = read()
+                if (now === this.counts.paused) return
+                this.counts.paused = now
+                this.publish()
+                if (!now) this.resume()
+            })
+        }
+    }
+
+    publish(): void {
+        this.status.set({ ...this.counts })
+    }
+
+    resume(): void {
+        for (const resumer of this.resumers.splice(0)) resumer()
+    }
+
+    /** 57.5, 57.13 — one item, called: its answer, every answer where a step fanned out. */
+    async call(input: unknown, signal?: AbortSignal): Promise<unknown> {
+        // 57.13 — read where the call is made: inside a `memo` body, the run's own (7.45).
+        const told = stopSignal()
+        const walked = await this.item(input, signal, told)
+        if (walked.refusal !== undefined) return walked.refusal
+        return walked.fanned ? walked.answers : walked.answers[0]
+    }
+
+    /** One item: a slot under 57.6-57.8, its walk through every step, and the slot handed on. */
+    async item(
+        input: unknown,
+        signal: AbortSignal | undefined,
+        told: AbortSignal,
+    ): Promise<Walked> {
+        // 57.18 — a stopped pipe takes nothing.
+        if (this.stopping.signal.aborted) throw this.stopping.signal.reason
+        const ended = AbortSignal.any(
+            signal === undefined
+                ? [this.stopping.signal, told]
+                : [this.stopping.signal, told, signal],
+        )
+        const lane = this.laneOf(input)
+        await this.slot(lane, ended)
+        const walk = this.walk(input, ended)
+        this.inFlight.add(walk)
+        try {
+            const walked = await walk
+            if (walked.refusal === undefined) this.counts.done += 1
+            else this.counts.failed += 1
+            return walked
+        } catch (thrown) {
+            this.counts.failed += 1
+            throw thrown
+        } finally {
+            this.inFlight.delete(walk)
+            this.counts.running -= 1
+            this.publish()
+            this.release(lane)
+        }
+    }
+
+    laneOf(input: unknown): Lane {
+        // 57.7 — `concurrency` counts per key.
+        const key = this.key === undefined ? '' : this.key(input)
+        let lane = this.lanes.get(key)
+        if (lane === undefined) {
+            lane = { running: 0, waiting: [] }
+            this.lanes.set(key, lane)
+        }
+        return lane
+    }
+
+    /** 57.6 — waits for a slot in `lane`, in the order items came. */
+    async slot(lane: Lane, ended: AbortSignal): Promise<void> {
+        if (lane.running < this.concurrency) {
+            lane.running += 1
+            this.counts.running += 1
+            this.publish()
+            return
+        }
+        this.counts.waiting += 1
+        this.publish()
+        await new Promise<void>((admitted, refused) => {
+            const admit = (): void => {
+                ended.removeEventListener('abort', leave)
+                admitted()
+            }
+            const leave = (): void => {
+                const at = lane.waiting.indexOf(admit)
+                if (at !== -1) lane.waiting.splice(at, 1)
+                this.counts.waiting -= 1
+                this.publish()
+                refused(ended.reason)
+            }
+            if (ended.aborted) {
+                leave()
+                return
+            }
+            ended.addEventListener('abort', leave, { once: true })
+            lane.waiting.push(admit)
+        })
+        // The slot was handed over by `release` with `running` left where it was.
+        this.counts.waiting -= 1
+        this.counts.running += 1
+        this.publish()
+    }
+
+    release(lane: Lane): void {
+        const next = lane.waiting.shift()
+        if (next !== undefined) next()
+        else lane.running -= 1
+    }
+
+    /** 57.1, 57.4 — the item through every step, a fanned step's chunks through the rest in order. */
+    async walk(input: unknown, ended: AbortSignal): Promise<Walked> {
+        const walked: Walked = {
+            answers: [],
+            fanned: false,
+            refusal: undefined,
+        }
+        await this.from(0, input, ended, walked)
+        return walked
+    }
+
+    async from(
+        index: number,
+        input: unknown,
+        ended: AbortSignal,
+        walked: Walked,
+    ): Promise<void> {
+        if (walked.refusal !== undefined) return
+        if (index === this.steps.length) {
+            walked.answers.push(input)
+            return
+        }
+        const answer = await this.attempts(index, input, ended)
+        if (answer instanceof Streamed) {
+            walked.fanned = true
+            let step = answer.first
+            while (step.done !== true) {
+                await this.from(index + 1, step.value, ended, walked)
+                if (walked.refusal !== undefined) {
+                    await answer.iterator.return?.()
+                    return
+                }
+                // 57.14 — past its first chunk, a stream's failure is the item's: no attempt again.
+                step = await answer.iterator.next()
+            }
+            return
+        }
+        if (isFailed(answer)) {
+            walked.refusal = answer
+            return
+        }
+        await this.from(index + 1, answer, ended, walked)
+    }
+
+    /** 57.9-57.12 — a step's attempts: retried, spaced, held and timed out as the options say. */
+    async attempts(
+        index: number,
+        input: unknown,
+        ended: AbortSignal,
+    ): Promise<unknown> {
+        for (let attempt = 0; ; attempt += 1) {
+            await this.ready(index, ended)
+            const deadline =
+                this.timeout === undefined
+                    ? undefined
+                    : AbortSignal.timeout(this.timeout)
+            const signal =
+                deadline === undefined
+                    ? ended
+                    : AbortSignal.any([ended, deadline])
+            let answer: unknown
+            let failure: unknown
+            let failed = false
+            try {
+                answer = await this.attempt(
+                    this.steps[index] as Step,
+                    input,
+                    signal,
+                )
+            } catch (thrown) {
+                // 57.13 — the item's end is not a failure to try again.
+                if (ended.aborted) throw ended.reason
+                failed = true
+                failure = thrown
+            }
+            if (!failed && !(isFailed(answer) && isTransient(answer.status)))
+                return answer
+            if (attempt >= this.retries) {
+                if (failed) throw failure
+                return answer
+            }
+            // 57.11 — a `Retry-After` holds the step for every item, not this one alone.
+            const notBefore = failed ? undefined : retryAt(answer as object)
+            if (notBefore !== undefined)
+                this.heldUntil[index] = Math.max(
+                    this.heldUntil[index] as number,
+                    notBefore,
+                )
+            // 57.10 — the one rule every retry is timed by.
+            await sleep(
+                backoffWait(this.backoff, attempt, 250, notBefore),
+                ended,
+            )
+        }
+    }
+
+    /** One attempt of one step: its answer settled, or the first chunk of a stream it answered. */
+    async attempt(
+        step: Step,
+        input: unknown,
+        signal: AbortSignal,
+    ): Promise<unknown> {
+        if (Array.isArray(step)) {
+            // 57.2 — the same input to each at once, and their answers in their order.
+            const runs: Promise<unknown>[] = []
+            for (const member of step)
+                runs.push(this.attempt(member as Step, input, signal))
+            const answers = await Promise.all(runs)
+            for (const answer of answers) if (isFailed(answer)) return answer
+            return answers
+        }
+        let answer = (step as (input: unknown, signal: AbortSignal) => unknown)(
+            input,
+            signal,
+        )
+        // 1.6 — a `Reactive` is thenable and iterable: its value is the step's answer, read first.
+        if (isReactive(answer)) answer = await answer
+        else if (isThenable(answer)) answer = await answer
+        if (isReactive(answer)) answer = await answer
+        if (isAsyncIterable(answer)) {
+            const iterator = answer[Symbol.asyncIterator]()
+            const first = await iterator.next()
+            return new Streamed(first, iterator)
+        }
+        return answer
+    }
+
+    /** 57.11, 57.17, 57.18 — waits out the step's hold and the pause, or the item's end. */
+    async ready(index: number, ended: AbortSignal): Promise<void> {
+        for (;;) {
+            if (ended.aborted) throw ended.reason
+            const held = (this.heldUntil[index] as number) - Date.now()
+            if (held > 0) {
+                await sleep(held, ended)
+                continue
+            }
+            if (this.pausedBy?.() === true) {
+                await new Promise<void>((resumed, refused) => {
+                    const leave = (): void => refused(ended.reason)
+                    ended.addEventListener('abort', leave, { once: true })
+                    this.resumers.push(() => {
+                        ended.removeEventListener('abort', leave)
+                        resumed()
+                    })
+                })
+                continue
+            }
+            return
+        }
+    }
+
+    /** 57.18 — every attempt aborted, every later call refused, settled once nothing runs. */
+    async stop(): Promise<void> {
+        if (!this.stopping.signal.aborted) {
+            this.stopping.abort(refuse.aborted())
+            this.unwatch?.()
+        }
+        await Promise.allSettled([...this.inFlight])
+    }
+
+    /** 57.16, 57.19, 57.20 — the stream pair, made on first reach and the same pair after. */
+    streams(): {
+        readable: ReadableStream<unknown>
+        writable: WritableStream<unknown>
+    } {
+        if (this.pair !== undefined) return this.pair
+        let out!: ReadableStreamDefaultController<unknown>
+        const readable = new ReadableStream<unknown>({
+            start(controller) {
+                out = controller
+            },
+        })
+        let written = 0
+        let next = 0
+        const finished = new Map<number, unknown[]>()
+        const pending = new Set<Promise<void>>()
+        const flush = (): void => {
+            while (finished.has(next)) {
+                for (const answer of finished.get(next) as unknown[])
+                    out.enqueue(answer)
+                finished.delete(next)
+                next += 1
+            }
+        }
+        const told = stopSignal()
+        const writable = new WritableStream<unknown>({
+            write: async (input) => {
+                const sequence = written
+                written += 1
+                const lane = this.laneOf(input)
+                const ended = AbortSignal.any([this.stopping.signal, told])
+                // 57.20 — the write waits for the slot the item runs in.
+                await this.slot(lane, ended)
+                const walk = this.walk(input, ended)
+                this.inFlight.add(walk)
+                const done = walk
+                    .then(
+                        (walked) => {
+                            if (walked.refusal === undefined)
+                                this.counts.done += 1
+                            else this.counts.failed += 1
+                            return walked.refusal === undefined
+                                ? walked.answers
+                                : [walked.refusal]
+                        },
+                        (thrown: unknown) => {
+                            this.counts.failed += 1
+                            // 57.15 — on the stream, a failure leaves as a refusal and the stream runs on.
+                            return [
+                                refuse(
+                                    500,
+                                    thrown instanceof Error
+                                        ? thrown.message
+                                        : String(thrown),
+                                ),
+                            ]
+                        },
+                    )
+                    .then((answers) => {
+                        this.inFlight.delete(walk)
+                        this.counts.running -= 1
+                        this.publish()
+                        this.release(lane)
+                        if (this.ordered) {
+                            finished.set(sequence, answers)
+                            flush()
+                        } else for (const answer of answers) out.enqueue(answer)
+                    })
+                pending.add(done)
+                void done.finally(() => pending.delete(done))
+            },
+            close: async () => {
+                // 57.19 — the readable side ends once every item written has left.
+                await Promise.allSettled([...pending])
+                out.close()
+            },
+            abort: async (reason) => {
+                await this.stop()
+                out.error(reason)
+            },
+        })
+        this.pair = { readable, writable }
+        return this.pair
+    }
+}
+
+function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
+    return (
+        value !== null &&
+        typeof value === 'object' &&
+        typeof (value as AsyncIterable<unknown>)[Symbol.asyncIterator] ===
+            'function'
+    )
+}
+
+/** Waits `ms`, or rejects with `ended`'s reason where it aborts first. */
+function sleep(ms: number, ended: AbortSignal): Promise<void> {
+    return new Promise((woke, refused) => {
+        if (ended.aborted) {
+            refused(ended.reason)
+            return
+        }
+        const leave = (): void => {
+            clearTimeout(timer)
+            refused(ended.reason)
+        }
+        const timer = setTimeout(() => {
+            ended.removeEventListener('abort', leave)
+            woke()
+        }, ms)
+        ended.addEventListener('abort', leave, { once: true })
+    })
+}

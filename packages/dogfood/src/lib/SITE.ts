@@ -218,6 +218,13 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
+                route: '/reactive/pipe',
+                title: '`pipe`',
+                description:
+                    'Run each item through steps in order and at once, a few at a time, retried, timed out and paused, as a function or a stream.',
+                where: 'anywhere',
+            },
+            {
                 route: '/reactive/watch',
                 title: '`watch`',
                 description:

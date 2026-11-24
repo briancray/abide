@@ -358,6 +358,30 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- | --- |
 | `memo` | `<Value = never, Args = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>>(body: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate>) => ReactiveOf<Args, Result, Shaped, Gate, ArgsGate>` | A value `body` produces, keyed where it declares a parameter and a stream where it hands back a generator. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.50, 11.51, 11.52, 11.53, 11.54, 11.57, 11.58, 41.6, 11.62, 11.63, 11.65, 11.66, 12.14, 12.17, 19.24, 41.34, 41.35, 11.73, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 11.2, 11.4, 11.6, 11.23, 11.55, 7.45, 7.46, 11.74 |
 
+## `pipe`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `pipe` | `<const Steps extends readonly [Step, ...Step[]]>(steps: Steps, options?: PipeOptions<FirstIn<Steps>>) => Pipe<FirstIn<Steps>, LastOut<Steps>, AnyFans<Steps>>` | Steps an item runs through in order, at most `concurrency` items at once, as a function to call and a stream pair to pipe through. | 57.1, 57.2, 57.3, 57.4, 57.6, 57.7, 57.8, 57.9, 57.10, 57.11, 57.12, 57.13, 57.14 |
+| `Pipe` | `Pipe<In, Out, Fanned extends boolean = false> = ((input: In, signal?: AbortSignal) => Promise<(Fanned extends true ? Out[] : Out) \| Failed<string, unknown>>) & { readonly readable: ReadableStream<Out \| Failed<string, unknown>>; readonly writable: WritableStream<In>; readonly status: Reactive<PipeStatus>; stop(): Promise<void> }` | What `pipe` hands back. | 57.5, 57.13, 57.15, 57.16, 57.19, 57.20 |
+| `Pipe.status` | `Reactive<PipeStatus>` | Where the pipe's items stand, one value for every caller. | 57.21 |
+| `Pipe.stop` | `() => Promise<void>` | The end of the pipe, and of every attempt in flight. | 57.18 |
+| `PipeOptions` | `<In = unknown>{ concurrency?: number; key?: (input: In) => string; ordered?: boolean; retries?: number; backoff?: number \| ((retry: number) => number); timeout?: number; paused?: Reactive<boolean> \| (() => boolean) }` | How many items run at once and by what key, the order they leave in, each step's retries, their spacing and its deadline, and what holds the pipe. | 57.6, 57.7, 57.9, 57.10, 57.12, 57.16, 57.17 |
+| `PipeStatus` | `{ waiting: number; running: number; done: number; failed: number; paused: boolean }` | How many items wait, run, are done and failed, and whether the pipe is paused. | 57.21 |
+
+The aliases `pipe` reads its steps through — what one place in the steps holds, what a step hands on,
+whether one fans out, and the item a pipe takes and the answer it gives — are declared rather than
+listed, none of them being a name an app writes:
+```ts
+type Step = ((input: never, signal: AbortSignal) => unknown) | Pipe<never, unknown, boolean> | readonly (((input: never, signal: AbortSignal) => unknown) | Pipe<never, unknown, boolean>)[]
+type StepOut<S> = S extends readonly unknown[] ? { -readonly [K in keyof S]: StepOut<S[K]> } : S extends Pipe<never, infer Out, infer _Fanned> ? Exclude<Out, Failed<string, unknown>> : S extends (...given: never[]) => infer Result ? Awaited<Result> extends AsyncIterable<infer Chunk> ? Chunk : Exclude<Awaited<Result>, Failed<string, unknown>> : never
+type StepFans<S> = S extends readonly unknown[] ? false : S extends Pipe<never, unknown, infer Fanned> ? Fanned : S extends (...given: never[]) => infer Result ? Awaited<Result> extends AsyncIterable<unknown> ? true : false : false
+type AnyFans<Steps> = Steps extends readonly [infer First, ...infer Rest] ? StepFans<First> extends true ? true : AnyFans<Rest> : false
+type StepIn<S> = S extends readonly (infer Member)[] ? StepIn<Member> : S extends Pipe<infer In, unknown, boolean> ? In : S extends (input: infer In, signal: AbortSignal) => unknown ? In : never
+type LastOut<Steps> = Steps extends readonly [...unknown[], infer Last] ? StepOut<Last> : never
+type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepIn<First> : never
+```
+
 ## `watch`
 
 | Name | Signature | Meaning | Rules |
@@ -1373,7 +1397,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29 |
+| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined; paused?: Reactive<boolean> \| (() => boolean) }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38 |
 | `Job` | `{ status: Reactive<JobStatus>; runNow: () => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
 | `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
 | `Job.runNow` | `() => Promise<JobStatus>` | A run ahead of the schedule. | 54.20 |
@@ -1385,7 +1409,7 @@ type Reached = { readonly [REACHED]: true }
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `fetchJson` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T \| FetchFailed>` | Another service's answer as JSON, asked with a deadline, retries and an optional cache, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.34 |
-| `FetchOptions<T>` | `RequestInit & { timeout?: number; retries?: number; ttl?: number; schema?: Schema<T> }` | `fetch`'s own options, with the deadline, the retries, the cache and the gate beside them. | 54.7, 54.8, 54.9, 54.12, 54.15, 54.17 |
+| `FetchOptions<T>` | `RequestInit & { timeout?: number; retries?: number; backoff?: number \| ((retry: number) => number); ttl?: number; schema?: Schema<T> }` | `fetch`'s own options, with the deadline, the retries and their spacing, the cache and the gate beside them. | 54.7, 54.8, 54.9, 54.10, 54.12, 54.15, 54.17 |
 | `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'timeout' \| 'network' \| 'status' \| 'shape' }>` | The refusal a fetch that gave up, or a `Response` `handle` read outside 2xx, settles to. | 15.9, 54.14, 54.16, 54.17, 54.31, 54.34 |
 
 ## `fetchText`

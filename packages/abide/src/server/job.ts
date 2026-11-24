@@ -5,12 +5,8 @@
 
 import { log } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
-import {
-    memo,
-    type Reactive,
-    reactive,
-    stopSignal,
-} from '#shared/reactive/index.ts'
+import { memo, type Reactive, reactive } from '#shared/reactive/index.ts'
+import { appStopSignal } from '#shared/reactive/poll.ts'
 
 /** 54.22 — where a job stands, as a page reads it through a handler. */
 export type JobStatus = {
@@ -46,6 +42,8 @@ export function job(
         run: (signal: AbortSignal) => unknown
         /** 54.21 — when the last run ended before this process, in epoch milliseconds, or `undefined` where none has. */
         lastRun?: () => number | undefined
+        /** 54.38 — what holds the schedule: while it reads true, a look starts no run. */
+        paused?: Reactive<boolean, never, never, boolean> | (() => boolean)
     },
 ): Job {
     const { every, run, from = 'end' } = options
@@ -79,7 +77,8 @@ export function job(
     }
 
     const runOnce = async (): Promise<JobStatus> => {
-        const signal = AbortSignal.any([stopSignal(), stopping.signal])
+        // 54.26 — the app's signal, not the look's: a run outlives the look that started it (7.45).
+        const signal = AbortSignal.any([appStopSignal(), stopping.signal])
         const startedAt = Date.now()
         write({ running: true })
         let lastError = current.lastError
@@ -123,6 +122,8 @@ export function job(
 
     const look = async (): Promise<void> => {
         if (stopping.signal.aborted) return
+        // 54.38 — read in the look's body, so its turning false is a look of its own.
+        if (options.paused?.() === true) return
         if (!remembered) {
             remembered = true
             lastRunAt = options.lastRun?.()

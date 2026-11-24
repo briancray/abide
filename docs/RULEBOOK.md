@@ -95,6 +95,7 @@ These are immutable. A change to them is a change to what this document is.
 - [54. Guards, fetches and jobs](#54)
 - [55. Worker files](#55)
 - [56. Forms](#56)
+- [57. Pipes](#57)
 
 ## Terms
 
@@ -6390,9 +6391,10 @@ after an attempt answered at any other status.
 54.9 `retries` MUST default to 2 for a method RFC 9110 defines as idempotent, and to 0 for any
 other.
 
-54.10 A retry under 54.8 MUST wait 250 milliseconds doubled for each retry before it, or the time
-the answer's `Retry-After` names, in seconds or as an HTTP date, where that is later, and MUST NOT be
-made where that wait is longer than `timeout`.
+54.10 A retry under 54.8 MUST wait `backoff` milliseconds, 250 where none is given, doubled for each
+retry before it — or, where `backoff` is a function, what it answers given the retry's number counted
+from 1 — or the time the answer's `Retry-After` names, in seconds or as an HTTP date, where that is
+later, and MUST NOT be made where that wait is longer than `timeout`.
 
 54.11 An abort of the `signal` a caller passes `fetchJson` or `fetchText` MUST be thrown as its
 reason, and MUST NOT be asked again.
@@ -6477,6 +6479,9 @@ process.
 
 54.37 `trustedIdentity` MUST seal no cookie, and MUST pass a request whose `header` is absent or
 empty as it came.
+
+54.38 A look MUST NOT start a run of a `job` while its `paused` reads true, and `runNow` MUST run
+it all the same.
 
 # 55. Worker files
 
@@ -6608,3 +6613,64 @@ order, and MUST be disabled where `value` is at `max` and at `min`.
 56.32 A `change` of `stepper`'s `input` MUST set `value` to the number its text holds, kept from `min`
 to `max` and to a whole number of steps from `min`, or from `0` where `min` is not given, and MUST
 write `value` back as the input's text, a text that is no number leaving `value` as it was.
+
+# 57. Pipes
+
+57.1 `pipe` MUST hand an item to its first step, and each later step what the step before it
+answered.
+
+57.2 A step that is a list MUST hand each of its members the same input, run them at once, and
+answer the list of their answers in its members' order, or the first refusal one of them answered.
+
+57.3 `pipe` MUST throw at construction where a step that is a list holds a list.
+
+57.4 A `pipe` step that answers an async iterable MUST hand each value it yields to the steps after
+it as an item of its own, in the order yielded.
+
+57.5 A `Pipe` called MUST settle to its last step's answer, or where a step 57.4 reads ran, to the
+list of every answer its last step made, in order; a step answering a refusal MUST end the item with
+that refusal, and a step that threw past 57.9 MUST reject the call with what it threw.
+
+57.6 A `pipe` MUST run at most `concurrency` items at once, 1 where none is given, starting a
+waiting item in the order it came.
+
+57.7 Where `key` is given, 57.6's count MUST be kept for each key `key` answers.
+
+57.8 A `pipe` MUST count every item it runs under 57.6, whether called by an app or as a step of
+another `pipe`.
+
+57.9 An attempt of a step that throws, that answers a refusal 15.19 counts transient, or that 57.12
+aborts MUST be made again, up to `retries` times, 0 where none is given; any other answer MUST NOT
+be.
+
+57.10 A step's attempt made again under 57.9 MUST wait as 54.10 has a fetch's retry wait, from the
+step's `backoff`.
+
+57.11 A refusal with a `Retry-After` MUST keep its step from starting an attempt, for every item of
+the `pipe`, until the time it names.
+
+57.12 An attempt MUST be aborted once it runs past `timeout` milliseconds.
+
+57.13 A step MUST be handed a signal that aborts where its attempt is aborted, where the signal the
+`Pipe` was called with aborts, where `stop` is called, and where the `stopSignal` its call was made
+under aborts.
+
+57.14 A `pipe` step 57.4 reads MUST NOT be attempted again once it has yielded.
+
+57.15 On a `Pipe`'s `readable`, an item 57.5 would reject MUST leave as a refusal at status 500
+carrying the message it threw, and the stream MUST run on.
+
+57.16 Where `ordered` is true, the default, a `Pipe`'s `readable` MUST hand on each item's answers
+in the order the items were written.
+
+57.17 While `paused` reads true a `pipe` MUST start no attempt, and attempts in flight MUST run on.
+
+57.18 `stop` MUST abort every attempt in flight, refuse every item not yet run and every later call,
+and settle once the attempts in flight have ended.
+
+57.19 Closing a `Pipe`'s `writable` MUST close its `readable` once every item written has left.
+
+57.20 A write to a `Pipe`'s `writable` MUST settle only once the item has started under 57.6.
+
+57.21 `status` MUST be one `global` value counting the items waiting, running, done and failed, and
+whether `paused` reads true.

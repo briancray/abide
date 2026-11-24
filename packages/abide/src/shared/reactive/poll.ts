@@ -116,6 +116,14 @@ export function stopSignal(): AbortSignal {
     return run.signal
 }
 
+/**
+ * The signal `App.stop` aborts (7.38), wherever it is read — for work a body starts that outlives the
+ * run, as a job's run outlives the look that started it.
+ */
+export function appStopSignal(): AbortSignal {
+    return STOPPING.signal
+}
+
 /** 7.46 — ends the signal a value's run handed out, where one was asked for: the run is over. */
 export function endRunSignal(cell: Cell): void {
     const run = cell.runStop
