@@ -1,7 +1,7 @@
 <script server>
 import { GET, refuse } from '@abide/abide/server'
 
-import { exampleDirectory } from './exampleDirectory.server.ts'
+import { crmDirectory } from './exampleDirectory.server.ts'
 import { folded } from './folded.ts'
 import { ownOrigin } from './ownOrigin.server.ts'
 
@@ -22,16 +22,6 @@ const PACKAGES: Record<string, string> = {
 }
 const DEADLINE = 30_000
 const LONGEST = 40
-
-let crm: string | undefined
-
-/** The CRM, found by walking up from this module to the docs app's `examples`. */
-function crmDirectory(): string {
-    if (crm !== undefined) return crm
-    crm = exampleDirectory('crm')
-    if (crm === undefined) throw new Error('docs: no CRM above the docs app')
-    return crm
-}
 
 // The file a program is, read off the `bin` its package declares as the CRM resolves the package.
 async function programFile(program: string): Promise<string> {

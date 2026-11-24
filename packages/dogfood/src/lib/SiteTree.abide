@@ -4,20 +4,8 @@ import { readFileSync } from 'node:fs'
 
 import { GET } from '@abide/abide/server'
 
-import { exampleDirectory } from './exampleDirectory.server.ts'
+import { crmDirectory } from './exampleDirectory.server.ts'
 import { ownOrigin } from './ownOrigin.server.ts'
-
-let crm: string | undefined
-
-/** The CRM's `src`, found by walking up from this module to the docs app's `examples`. */
-function crmSource(): string {
-    if (crm !== undefined) return crm
-    const directory = exampleDirectory('crm')
-    if (directory === undefined)
-        throw new Error('docs: no CRM above the docs app')
-    crm = `${directory}/src`
-    return crm
-}
 
 const DIRECTORY = /^(?:[\w-]+\/)*[\w-]*$/
 const METHOD = /export default (GET|POST|PUT|PATCH|DELETE)\b/
@@ -47,7 +35,7 @@ function addressOf(path: string): string {
 const filesUnder = GET(async ({ directory }: { directory: string }) => {
     if (!DIRECTORY.test(directory))
         throw new Error(`docs: ${directory} is not a directory of the CRM`)
-    const root = crmSource()
+    const root = `${crmDirectory()}/src`
     const entries: Entry[] = []
     const fenced = new Map<string, number>()
     const glob = new Bun.Glob(directory === '' ? '*/**' : `${directory}/**`)
