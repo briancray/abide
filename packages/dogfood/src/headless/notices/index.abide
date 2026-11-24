@@ -1,0 +1,109 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import Banner from './lib/Banner.abide'
+import banner from './lib/Banner.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/toasts']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/e2e/Announcements.test.ts',
+            from: [
+                "test('a closed announcement is gone from the next page the server renders'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/notices.test.ts',
+            from: ["test(\"one list's notices never enter another's"],
+        },
+        {
+            path: 'packages/abide/tests/notices.test.ts',
+            from: ["test('a list starts with its initial notices"],
+        },
+        {
+            path: 'packages/abide/tests/notices.test.ts',
+            from: [
+                "test('a notice is told apart by default by a short hash of it as JSON",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/notices.test.ts',
+            from: ["test('a notice whose id the list holds is not added again"],
+        },
+        {
+            path: 'packages/abide/tests/notices.test.ts',
+            from: [
+                'test("a dismissal is remembered by the notice\'s id where the list names no key',
+            ],
+        },
+        {
+            path: 'packages/abide/tests/notices.test.ts',
+            from: ["test('a dismissal and an action are remembered for ttl"],
+        },
+        {
+            path: 'packages/abide/tests/notices.test.ts',
+            from: ["test('a write leaves out every dismissal already forgotten"],
+        },
+        {
+            path: 'packages/abide/tests/notices.test.ts',
+            from: ["test('a notice leaves at its expires"],
+        },
+        {
+            path: 'packages/abide/tests/notices.test.ts',
+            from: [
+                "test(\"a server's render leaves out what the request's cookie remembers",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Show a banner nobody has to close twice">
+        <p>A list given a <code>store</code> remembers each notice closed in it for
+            <code>ttl</code>. Kept in <code>store.cookies</code>, the server reads it as it writes
+            the page, so a closed notice is never rendered to be taken down. Close this one and
+            reload.</p>
+        <Example code={banner}><Banner /></Example>
+    </Section>
+
+    <Section level={3} title="Take an announcement down on a date">
+        <p><code>expires</code> is the moment a notice stops showing, on a page already open and
+            in every page rendered after it.</p>
+        <Code language="ts" caption="browser" code={`
+            import { notices } from '@abide/abide'
+
+            export const announcements = notices({
+                timeout: Infinity,
+                initial: [
+                    {
+                        text: 'Forecasts lock Friday',
+                        expires: new Date('2026-12-04T17:00'),
+                    },
+                ],
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Choose what makes two announcements the same">
+        <p>A notice is told apart by its <code>id</code>, and where it is given none, by everything
+            about it, so any change, its tone included, shows it again. Give an <code>id</code> to
+            keep a reworded announcement closed, or a list's <code>key</code> to remember it by
+            something else: here only the words. What <code>key</code> answers is stored as a short
+            hash, however long.</p>
+        <Code language="ts" caption="browser" code={`
+            import { notices, store } from '@abide/abide'
+
+            export const announcements = notices({
+                store: store.cookies('announcements'),
+                timeout: Infinity,
+                key: (notice) => notice.text,
+                initial: [
+                    { id: 'sharing', text: 'Pipelines can now be shared.' },
+                ],
+            })
+        `} />
+    </Section>
+</Doc>

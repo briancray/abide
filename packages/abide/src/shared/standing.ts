@@ -12,8 +12,8 @@ import { join } from './register.ts'
  * The hosts standing for one kind of request, and the warning it gives once where a request finds
  * none.
  *
- * @param host the parts function whose markup shows the requests: `'toasts.host()'`
- * @param logger the logger the warning is written on: `'abide:toasts'`
+ * @param host the parts function whose markup shows the requests: `'prompts.host()'`
+ * @param logger the logger the warning is written on: `'abide:prompts'`
  */
 export function standing(host: string, logger: string) {
     // One per request on a server, as every `reactive` without `global` is (11.32).

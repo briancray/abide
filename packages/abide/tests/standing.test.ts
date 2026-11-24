@@ -1,5 +1,5 @@
 // 50.36 — ONE HOST SHOWS, the last of those standing, and a request no host stands to show
-// warns once rather than being lost without a word. `tooltip.host`, `toasts.host` and `prompts.host`
+// warns once rather than being lost without a word. `tooltip.host`, a `notices` host and `prompts.host`
 // each stand through one.
 
 import { expect, test } from 'bun:test'
@@ -24,7 +24,7 @@ function stand(through: ReturnType<typeof standing>) {
 // THE REVERT: have `stand` answer whether ANY host stands, and the first shows beside the second — two
 // copies of every notice, and a second modal over the first.
 test('the last host standing shows, and the one before it once the last is removed', () => {
-    const notices = standing('toasts.host()', 'abide:toasts')
+    const notices = standing('a notices host()', 'abide:notices')
     const first = stand(notices)
     expect(first.shows()).toBe(true)
     const second = stand(notices)

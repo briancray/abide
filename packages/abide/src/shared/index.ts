@@ -287,12 +287,22 @@ export { instantAt } from './instantAt.ts'
 export * as transcript from './transcript/index.ts'
 export * as outlet from './outlet.ts'
 export * as tooltip from './tooltip/index.ts'
-// 50.5, 50.12 — the queued questions and the notices, each shown where its namespace's `host` is spread.
+// 50.5 — the queued questions, shown where `prompts.host` is spread.
 export * as prompts from './prompts/index.ts'
 export type { PromptOptions } from './prompts/queue.ts'
-export * as toasts from './toasts/index.ts'
-export type { Toast } from './toasts/list.ts'
-export type { NotifyOptions } from './toasts/notify.ts'
+// 50.12 — lists of notices, each shown where its `host` is spread, and the one abide builds.
+export {
+    type CloseReason,
+    type Notice,
+    type NoticeParts,
+    type Notices,
+    type NoticesHost,
+    type NoticesHostOptions,
+    type NoticesOptions,
+    type NotifyOptions,
+    notices,
+} from './notices.ts'
+export { toasts } from './toasts.ts'
 // 50.49 — words read out to a screen reader, from the live regions `announce.host` hands back.
 export {
     type Announcement,

@@ -332,6 +332,14 @@ const WRITTEN: readonly {
                 subgroup: 'Overlays',
             },
             {
+                route: '/headless/notices',
+                title: '`notices`',
+                description:
+                    'Build a list of notices of your own: a banner seeded on the server, its dismissals remembered for as long as you say.',
+                where: 'component',
+                subgroup: 'Overlays',
+            },
+            {
                 route: '/headless/toasts',
                 title: '`toasts`',
                 description:

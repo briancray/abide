@@ -24,10 +24,12 @@ test('a notice renders in markup the app writes, and stays until its fade has fi
         ) as HTMLButtonElement
     ).click()
     flushSync()
-    const notice = document.querySelector('[data-toasts=toast]') as HTMLElement
+    const notice = document.querySelector(
+        '[data-notices=notice]',
+    ) as HTMLElement
     expect(notice.getAttribute('data-tone')).toBe('success')
     expect(notice.querySelector('strong')?.textContent).toBe('Won.')
-    expect(notice.querySelector('[data-toasts=text]')).toBeNull()
+    expect(notice.querySelector('[data-notices=text]')).toBeNull()
     ;(
         [...notice.querySelectorAll('button')].find(
             (button) => button.textContent === 'Close',

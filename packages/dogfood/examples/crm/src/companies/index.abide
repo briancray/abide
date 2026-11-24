@@ -1,6 +1,8 @@
 <script>
 import { memo, url } from '@abide/abide'
 
+import Announcements from '#src/lib/Announcements.abide'
+
 import AccountTree from './lib/AccountTree.abide'
 import CampaignAccounts from './lib/CampaignAccounts.abide'
 import listCompanies from './listCompanies.handler.ts'
@@ -8,6 +10,7 @@ import listCompanies from './listCompanies.handler.ts'
 const companies = memo(() => listCompanies())
 </script>
 
+<Announcements />
 <ul class="fields">
     {#for company of companies by company.id}
         <li><span>{company.city}</span>

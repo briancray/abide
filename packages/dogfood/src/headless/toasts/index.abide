@@ -103,7 +103,7 @@ import savePhone from './lib/SavePhone.abide' with { type: 'text' }
 
     <Section level={3} title="Show every notice of the app in one corner">
         <p>Call <code>toasts.host</code> from your root layout's script and spread its parts: the
-            live region, and for each of <code>notices</code> its <code>toast(toast)</code> parts:
+            live region, and for each of <code>notices</code> its <code>notice(toast)</code> parts:
             the notice, its text, its action and its close button. Every
             <code>toasts.notify</code> on every page lands there, read out by screen readers as it
             arrives. The parts carry the role, the tone and the closing; the markup is yours, and
@@ -118,16 +118,16 @@ import savePhone from './lib/SavePhone.abide' with { type: 'text' }
             <ol {...shown.region} class="fixed right-5 bottom-5 flex flex-col gap-2">
                 {#for toast of shown.notices by toast.id}
                     <li
-                        {...shown.toast(toast).toast}
+                        {...shown.notice(toast).notice}
                         class="rounded-lg border px-4 data-[tone=error]:border-bad"
                     >
-                        <span {...shown.toast(toast).text}>{toast.text}</span>
+                        <span {...shown.notice(toast).text}>{toast.text}</span>
                         {#if toast.action}
-                            <button {...shown.toast(toast).action}>
+                            <button {...shown.notice(toast).action}>
                                 {toast.action.label}
                             </button>
                         {/if}
-                        <button {...shown.toast(toast).close}>Close</button>
+                        <button {...shown.notice(toast).close}>Close</button>
                     </li>
                 {/for}
             </ol>
@@ -150,10 +150,10 @@ import savePhone from './lib/SavePhone.abide' with { type: 'text' }
 
             <div {...shown.region}>
                 {#for toast of shown.notices by toast.id}
-                    <div {...shown.toast(toast).toast}>
+                    <div {...shown.notice(toast).notice}>
                         <p bind:element={fadeOut}>
                             <strong>Won.</strong> {toast.text}
-                            <button onclick={shown.toast(toast).dismiss}>Close</button>
+                            <button onclick={shown.notice(toast).dismiss}>Close</button>
                         </p>
                     </div>
                 {/for}
