@@ -9,6 +9,8 @@ import { afterEach, expect, test } from 'bun:test'
 import { POST } from '#server'
 import { addressed } from '#server/addressed.ts'
 import {
+    type Autoscroll,
+    autoscroll,
     type Carousel,
     carousel,
     chart,
@@ -23,8 +25,6 @@ import {
     type DialogParts,
     dropzone,
     type DropzoneParts,
-    type Autoscroll,
-    autoscroll,
     type Form,
     form,
     type FormField,

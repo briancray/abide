@@ -5,8 +5,8 @@
 
 import type { AssistantEvent, AssistantMessage } from './AssistantEvent.ts'
 import type { AssistantTurn, AssistantTurnPart } from './AssistantTurn.ts'
-import { dropzone } from './dropzone.ts'
 import { autoscroll } from './autoscroll.ts'
+import { dropzone } from './dropzone.ts'
 import { hotkeys } from './hotkeys.ts'
 import { imageFiles, imagePiece } from './imagePiece.ts'
 import { type Live, live } from './live.ts'

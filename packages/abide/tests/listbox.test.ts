@@ -139,12 +139,12 @@ test('an option’s part carries its id and whether it is active, and a pointer 
     ;(c.onpointermove as () => void)()
     flushSync()
     // Read again, not rebuilt: the part's getters answer what is active now (49.9).
-    expect([b['aria-selected'], c['aria-selected'], b['data-active'], c['data-active']]).toEqual([
-        'true',
-        'false',
-        undefined,
-        '',
-    ])
+    expect([
+        b['aria-selected'],
+        c['aria-selected'],
+        b['data-active'],
+        c['data-active'],
+    ]).toEqual(['true', 'false', undefined, ''])
     expect([list.active, list.selected()]).toEqual(['c', 'b'])
     // The arrows step on from where the pointer rests, and the step selects.
     press(list.onkeydown, 'ArrowUp')

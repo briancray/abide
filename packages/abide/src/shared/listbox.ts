@@ -80,7 +80,9 @@ export function listbox<Option, Multiple extends boolean = false>(
         : undefined
     // 51.94 — the key a pointer last moved over, and the key moved to when it did: a pointer
     // activates without moving, so it holds only until a move or a write to `selected` changes that key.
-    const pointed = reactive<{ key: string; over: string | undefined } | undefined>(undefined)
+    const pointed = reactive<
+        { key: string; over: string | undefined } | undefined
+    >(undefined)
     function moveKey(each: string): void {
         pointed.set(undefined)
         chosen.set(each)
@@ -89,7 +91,9 @@ export function listbox<Option, Multiple extends boolean = false>(
         const moved = chosen()
         const pointer = pointed()
         const wanted =
-            pointer !== undefined && pointer.over === moved ? pointer.key : moved
+            pointer !== undefined && pointer.over === moved
+                ? pointer.key
+                : moved
         let first: string | undefined
         for (const option of options()) {
             const each = key(option)

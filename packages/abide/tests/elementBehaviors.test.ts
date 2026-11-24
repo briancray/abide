@@ -4,10 +4,10 @@
 import { afterEach, expect, test } from 'bun:test'
 
 import { flushSync, watch } from '#shared'
+import { autoscroll } from '#shared/autoscroll.ts'
 import { copy } from '#shared/copy.ts'
 import { dismissible } from '#shared/dismissible.ts'
 import { dropzone } from '#shared/dropzone.ts'
-import { autoscroll } from '#shared/autoscroll.ts'
 import { imageFiles } from '#shared/imagePiece.ts'
 import { tip } from '#shared/tooltip/tip.ts'
 import { shown } from '#shared/tooltip/tips.ts'
