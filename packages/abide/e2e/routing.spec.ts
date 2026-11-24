@@ -55,7 +55,6 @@ let server: Server<undefined> | null = null
 // Playwright reads the FIRST parameter to decide which fixtures to build, and `{}` is how it is
 // told "none" while still handing back `testInfo` in the second. A named parameter there asks for
 // the whole fixtures object instead.
-// Playwright's "no fixtures" spelling — see above.
 test.beforeAll(async ({}, testInfo) => {
     APP = join(REPO, `.test-modules/e2e-routeapp-${testInfo.project.name}`)
     rmSync(APP, { recursive: true, force: true })

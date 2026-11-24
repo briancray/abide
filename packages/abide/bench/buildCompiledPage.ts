@@ -141,8 +141,7 @@ export async function buildCompiledPage(
         const { default: Component } = await import(
             `${scratch}/Page.abide?component`
         )
-        let markup = ''
-        markup += new TextDecoder().decode(await render(Component))
+        const markup = new TextDecoder().decode(await render(Component))
 
         const built = await Bun.build({
             entrypoints: [`${scratch}/entry.ts`],
@@ -201,7 +200,7 @@ export async function openCompiledPage(
  */
 export async function loadCompiledPage(
     page: Page,
-    built: { markup: string; script: string },
+    built: CompiledPage,
 ): Promise<void> {
     await page.goto('about:blank')
     await page.setContent(

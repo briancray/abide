@@ -20,9 +20,9 @@ import { Database } from 'bun:sqlite'
 
 import { RedisClient } from 'bun'
 
-import * as store from '../src/server/stores.ts'
-import { ledger } from '../src/shared/ledger.ts'
-import { pipe } from '../src/shared/pipe.ts'
+import * as store from '#server/stores.ts'
+import { ledger } from '#shared/ledger.ts'
+import { pipe } from '#shared/pipe.ts'
 
 const ITEMS = 20_000
 const ROUNDS = 5
@@ -182,22 +182,21 @@ if (process.env.ABIDE_REDIS_URL !== undefined) {
     }
 }
 const atOnce =
-    (name: string, make: () => ReturnType<typeof ledger<number>>) =>
+    (make: () => ReturnType<typeof ledger<number>>) =>
     async (): Promise<void> => {
         const log = make()
         const pending: Promise<number>[] = []
         for (let n = 0; n < STORED; n += 1) pending.push(log.append(n))
         await Promise.all(pending)
-        void name
     }
-kept['sqlite, at once'] = atOnce('sqlite', () =>
+kept['sqlite, at once'] = atOnce(() =>
     ledger<number>({
         store: store.sqlite(sqliteFile, `bench-${(named += 1)}`),
     }),
 )
 if (process.env.ABIDE_REDIS_URL !== undefined) {
     const many = new RedisClient(process.env.ABIDE_REDIS_URL)
-    kept['redis, at once'] = atOnce('redis', () =>
+    kept['redis, at once'] = atOnce(() =>
         ledger<number>({
             store: store.redis(many, `bench-${Date.now()}-${(named += 1)}`),
         }),

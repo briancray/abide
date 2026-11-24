@@ -108,32 +108,25 @@ try {
             await settle(tab)
             const session = await context.newCDPSession(tab)
             const taskDuration = await taskDurationOf(session)
-            const before = await tab.evaluate(() => {
-                const state = globalThis as {
-                    __ARMS__?: { made: number; armMs: number }
-                    __RECT_WRITES__?: number
-                }
-                return {
-                    made: state.__ARMS__?.made ?? 0,
-                    armMs: state.__ARMS__?.armMs ?? 0,
-                    writes: state.__RECT_WRITES__ ?? 0,
-                }
-            })
+            // What the page counted so far: arms made, their milliseconds, and rect writes.
+            const counters = () =>
+                tab.evaluate(() => {
+                    const state = globalThis as {
+                        __ARMS__?: { made: number; armMs: number }
+                        __RECT_WRITES__?: number
+                    }
+                    return {
+                        made: state.__ARMS__?.made ?? 0,
+                        armMs: state.__ARMS__?.armMs ?? 0,
+                        writes: state.__RECT_WRITES__ ?? 0,
+                    }
+                })
+            const before = await counters()
             const taskBefore = await taskDuration()
             // 60 FRAMES OF SCROLL, one step per frame, then two quiet frames for the settle.
             await scrollFrames(tab, FRAMES, 4)
             const taskAfter = await taskDuration()
-            const after = await tab.evaluate(() => {
-                const state = globalThis as {
-                    __ARMS__?: { made: number; armMs: number }
-                    __RECT_WRITES__?: number
-                }
-                return {
-                    made: state.__ARMS__?.made ?? 0,
-                    armMs: state.__ARMS__?.armMs ?? 0,
-                    writes: state.__RECT_WRITES__ ?? 0,
-                }
-            })
+            const after = await counters()
             rows.push({
                 frameMs: ((taskAfter - taskBefore) * 1000) / FRAMES,
                 armMs: (after.armMs - before.armMs) / FRAMES,
