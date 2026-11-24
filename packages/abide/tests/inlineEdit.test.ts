@@ -64,10 +64,19 @@ test('a press turns the text into its field, holding the value, selected and foc
 test('Enter saves before the value takes it, and a failed save keeps the field open with why — 56.25, 56.26', async () => {
     const saved: string[] = []
     let refuse = false
+    // The first save is held open until the test lets it go, so `busy` is read while it is in flight
+    // however long `type` takes on a loaded machine.
+    let release = () => {}
+    let held = true
     const { name, view, type } = standing({
         value: reactive('Engine renewal'),
         save: async (text) => {
-            await Bun.sleep(1)
+            if (held) {
+                held = false
+                await new Promise<void>((resolve) => {
+                    release = resolve
+                })
+            }
             if (refuse) throw new Error('Names are unique')
             saved.push(text)
         },
@@ -77,6 +86,7 @@ test('Enter saves before the value takes it, and a failed save keeps the field o
     refuse = true
     await type('Babbage pilot', 'Enter')
     expect(name.busy).toBe(true)
+    release()
     await Bun.sleep(5)
     flushSync()
     expect([name.value(), name.editing(), name.error]).toEqual([
