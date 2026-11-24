@@ -19,5 +19,5 @@ const viewer = lightbox({ items: PAGES, loop: true })
             </li>
         {/for}
     </ul>
-    <p class="status">{viewer.centered}</p>
+    <p class="status">{viewer.current}</p>
 </dialog>

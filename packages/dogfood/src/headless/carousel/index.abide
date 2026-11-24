@@ -9,6 +9,8 @@ import PlayStages from './lib/PlayStages.abide'
 import playStages from './lib/PlayStages.abide' with { type: 'text' }
 import RestOnStage from './lib/RestOnStage.abide'
 import restOnStage from './lib/RestOnStage.abide' with { type: 'text' }
+import StepMonths from './lib/StepMonths.abide'
+import stepMonths from './lib/StepMonths.abide' with { type: 'text' }
 import StepStages from './lib/StepStages.abide'
 import stepStages from './lib/StepStages.abide' with { type: 'text' }
 </script>
@@ -43,6 +45,14 @@ import stepStages from './lib/StepStages.abide' with { type: 'text' }
             from: ["test('a carousel that loops steps past each end to the other"],
         },
         {
+            path: 'packages/abide/tests/carousel.test.ts',
+            from: ["test(\"align start brings an item's start to the scroller's"],
+        },
+        {
+            path: 'packages/abide/e2e/carousel.spec.ts',
+            from: ["test('a carousel aligned by its start shows three and a tenth"],
+        },
+        {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageTour.test.ts',
             from: [
                 "test('the tour arrives playing, and its button pauses and plays it'",
@@ -67,25 +77,25 @@ import stepStages from './lib/StepStages.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/carousel.test.ts',
             from: [
-                "test('what a scroll to an item passes on the way is not centered",
+                "test('what a scroll to an item passes on the way is not current",
             ],
         },
         {
             path: 'packages/abide/tests/carousel.test.ts',
             from: [
-                "test('once the scroller reports a snap, the snap target alone sets centered",
+                "test('once the scroller reports a snap, the snap target alone sets current",
             ],
         },
         {
             path: 'packages/abide/e2e/carousel.spec.ts',
-            from: ["test('a scroll moves centered to the item it snaps to"],
+            from: ["test('a scroll moves current to the item it snaps to"],
         },
     ]}
 >
     <Section level={3} title="Rest a row of stages on the deal's own">
         <p>Spread <code>host</code> on the scroller and <code>item</code> on each stage. The
             page arrives scrolled to the stage <code>selected</code> names, and
-            <code>centered</code> follows the stage a swipe lands on. The snapping is your CSS:
+            <code>current</code> follows the stage a swipe lands on. The snapping is your CSS:
             give the scroller <code>snap-x</code> and each item <code>snap-center</code>, and pad
             the scroller by half of what an item leaves (<code>px-[12.5%]</code> beside
             <code>basis-3/4</code>) so the first and last stages can reach the center too.</p>
@@ -94,7 +104,7 @@ import stepStages from './lib/StepStages.abide' with { type: 'text' }
 
     <Section level={3} title="Step through stages with buttons, and go back to where it rests">
         <p>Spread <code>previous</code> and <code>next</code> on two buttons: each steps from
-            the centered stage and is disabled at its end. <code>reset</code> scrolls back to
+            the current stage and is disabled at its end. <code>reset</code> scrolls back to
             the stage the carousel rests on, the first where nothing is selected.</p>
         <Example code={stepStages}><StepStages /></Example>
     </Section>
@@ -104,6 +114,16 @@ import stepStages from './lib/StepStages.abide' with { type: 'text' }
             first, <code>previous</code> at the first to the last, and neither is disabled. A
             lightbox takes the same option.</p>
         <Example code={loopStages}><LoopStages /></Example>
+    </Section>
+
+    <Section level={3} title="Show three and a bit, a month at a time">
+        <p>Pass <code>align: 'start'</code> and the carousel lines each item's start up with
+            the scroller's, as <code>snap-start</code> does, rather than its center. Make each
+            item a little less than a third of the row (<code>basis-[calc(100%/3.1)]</code>)
+            and three months show with a sliver of the fourth, and <code>next</code> moves one.
+            Near the end, where the row runs out before a month can reach the start,
+            <code>next</code> is disabled rather than pressing to no effect.</p>
+        <Example code={stepMonths}><StepMonths /></Example>
     </Section>
 
     <Section level={3} title="Play through the stages on their own">

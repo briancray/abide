@@ -36,7 +36,7 @@ export function lightbox<Item>(options: LightboxOptions<Item>): Lightbox<Item> {
         arrowleft: press(pictures.previous),
         arrowright: press(pictures.next),
     })
-    // Laid over the carousel's parts, so its `centered` stays the getter it is (49.9).
+    // Laid over the carousel's parts, so its `current` stays the getter it is (49.9).
     return withPart(withPart({}, pictures), {
         // 50.65
         dialog: withPart(withPart({}, shown.dialog), {

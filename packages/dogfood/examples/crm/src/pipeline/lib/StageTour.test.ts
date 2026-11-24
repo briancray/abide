@@ -9,8 +9,8 @@ const play = () =>
     [...document.querySelectorAll('button')].find(
         (button) => button.getAttribute('data-carousel') === 'play',
     ) as HTMLButtonElement
-const centered = () =>
-    document.querySelector('[data-centered]')?.getAttribute('aria-label')
+const current = () =>
+    document.querySelector('[data-current]')?.getAttribute('aria-label')
 
 // 53.75, 53.77 — THE TOUR ARRIVES PLAYING, AND ITS BUTTON PAUSES IT. THE REVERT: drop `autoplay` from the
 // tour, and it arrives paused.
@@ -25,5 +25,5 @@ test('the tour arrives playing, and its button pauses and plays it', async () =>
     play().click()
     flushSync()
     expect(play().getAttribute('aria-pressed')).toBe('true')
-    expect(centered()).toBe('lead')
+    expect(current()).toBe('lead')
 })

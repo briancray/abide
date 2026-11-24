@@ -19,7 +19,7 @@ test('show opens the lightbox resting on the item picked â€” 50.65, 50.67', () =
     expect(viewer.open()).toBe(false)
     viewer.show('side')
     flushSync()
-    expect([viewer.open(), viewer.selected(), viewer.centered]).toEqual([
+    expect([viewer.open(), viewer.selected(), viewer.current]).toEqual([
         true,
         'side',
         'side',
@@ -33,10 +33,10 @@ test('the arrow keys step it as its carousel buttons do, stopping at the ends â€
     viewer.show('front')
     flushSync()
     key(viewer, 'ArrowRight')
-    expect(viewer.centered).toBe('side')
+    expect(viewer.current).toBe('side')
     key(viewer, 'ArrowRight')
     key(viewer, 'ArrowRight')
-    expect(viewer.centered).toBe('back')
+    expect(viewer.current).toBe('back')
     key(viewer, 'ArrowLeft')
-    expect(viewer.centered).toBe('side')
+    expect(viewer.current).toBe('side')
 })

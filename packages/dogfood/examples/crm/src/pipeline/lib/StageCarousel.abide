@@ -14,7 +14,7 @@ const stages = carousel({ items: STAGES, selected: stage })
         class="flex snap-x snap-mandatory gap-snug overflow-x-auto px-[12.5%]">
         {#for name of STAGES key name}
             <li {...stages.item(name)} class="shrink-0 basis-3/4 snap-center
-                rounded-md border border-rule p-snug data-centered:border-signal">
+                rounded-md border border-rule p-snug data-current:border-signal">
                 <button onclick={() => (stage = name)}>Move to {name}</button>
             </li>
         {/for}
@@ -24,6 +24,6 @@ const stages = carousel({ items: STAGES, selected: stage })
 
 <ul class="fields">
     <li><span>at</span><strong>{stage}</strong></li>
-    <li><span>centered</span><strong>{stages.centered}</strong></li>
+    <li><span>current</span><strong>{stages.current}</strong></li>
 </ul>
 <button onclick={stages.reset}>Back to {stage}</button>

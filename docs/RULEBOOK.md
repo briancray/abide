@@ -6351,42 +6351,42 @@ set `following` to true.
 53.61 `carousel` MUST rest on the item `selected` names, and on its first item where `selected` names
 none of them.
 
-53.62 `carousel`'s `host` MUST scroll the item the carousel rests on to its center at once when it is
-bound and whenever it goes from having no box to having one, and as `behavior` names whenever the
-item it rests on changes after.
+53.62 `carousel`'s `host` MUST align the item the carousel rests on at once when it is bound and
+whenever it goes from having no box to having one, and as `behavior` names whenever the item it rests
+on changes after.
 
-53.63 `Carousel`'s `centered` MUST be the key of the item the carousel rests on, until a scroll of the
+53.63 `Carousel`'s `current` MUST be the key of the item the carousel rests on, until a scroll of the
 `host`, `scrollTo` or `reset` sets it, and again whenever the item it rests on changes or 53.62
-scrolls the `host` to it on getting a box.
+aligns it on the `host` getting a box.
 
-53.64 A scroll of `carousel`'s `host` MUST set `centered` to the key of the item whose center is
-nearest the host's center, measured at most once a frame, save where 53.66 sets it.
+53.64 A scroll of `carousel`'s `host` MUST set `current` to the key of the item whose point 53.99
+aligns is nearest the host's point it aligns to, measured at most once a frame, save where 53.66 sets
+it.
 
 53.65 While a scroll `scrollTo`, `reset` or a change of the item `carousel` rests on started is on its
-way, what the `host`'s scrolling passes MUST NOT set `centered`, until it reaches that item or a
-`scrollend` arrives.
+way, what the `host`'s scrolling passes MUST NOT set `current`, until it reaches where aligning that
+item leaves the host or a `scrollend` arrives.
 
 53.66 Once `carousel`'s `host` has dispatched a `scrollsnapchanging` or a `scrollsnapchange`,
-`centered` MUST be set from those events alone, to the key of the item whose element is, holds or is
+`current` MUST be set from those events alone, to the key of the item whose element is, holds or is
 held by the event's snap target.
 
-53.67 `carousel`'s `previous` and `next` MUST scroll to the item before and the item after the
-centered one as `scrollTo` does, and MUST be disabled where there is no such item. Where `loop` holds,
-the item before the first MUST be the last and the item after the last the first, save where there is
-only one.
+53.67 `carousel`'s `previous` and `next` MUST scroll as `scrollTo` does to the nearest item before
+and the nearest item after the current one that aligning leaves the `host` somewhere other than
+aligning the current one does, and MUST be disabled where there is no such item. Where `loop` holds,
+the item before the first MUST be the last and the item after the last the first.
 
-53.68 `Carousel`'s `scrollTo` MUST set `centered` to the key it is handed and scroll that key's item
-to the `host`'s center as `behavior` names, and `reset` MUST do so for the item the carousel rests
-on.
+53.68 `Carousel`'s `scrollTo` MUST set `current` to the key it is handed and align that key's item
+as `behavior` names, and `reset` MUST do so for the item the carousel rests on.
 
-53.69 `carousel`'s `item` MUST carry `data-centered` while it is centered, and `data-selected` while
+53.69 `carousel`'s `item` MUST carry `data-current` while it is current, and `data-selected` while
 `selected` names it.
 
 53.70 `carousel`'s `host` MUST carry `role="region"` and `aria-roledescription="carousel"`, and its
 `item` MUST carry `role="group"`, `aria-roledescription="slide"` and its label as `aria-label`.
 
 53.71 While `carousel` rotates, it MUST step to the item `next` steps to every `autoplay`
-milliseconds, counted afresh whenever `centered` changes.
+milliseconds, counted afresh whenever `current` changes.
 
 53.72 Where `next` is disabled when 53.71's time comes, `carousel` MUST write `false` to `playing`
 rather than step.
@@ -6469,6 +6469,16 @@ magnification.
 each side, centered, its magnification kept from `min` to `max`.
 
 53.98 A double click on `panZoom`'s `surface` MUST magnify it twice about the pointer.
+
+53.99 `carousel` MUST align an item by scrolling its `host` until the item's start, center or end,
+as `align` names and as the host's direction reads them, meets the same point of the host's box less
+its border, its scrollbar and its `scroll-padding`, or as near that as the host scrolls.
+
+53.100 A scroll or a snap of `carousel`'s `host` MUST NOT set `current` to an item that aligning
+leaves the host where aligning the current one does.
+
+53.101 A scroll that `scrollTo`, `reset` or a change of the item `carousel` rests on starts, and that
+leaves the `host` where it already is, MUST NOT be on its way in 53.65's sense.
 
 # 54. Guards, fetches and jobs
 

@@ -50,25 +50,36 @@ function spread(element: HTMLElement, part: Record<string, unknown>): void {
     if (typeof release === 'function') bound.push(release as () => void)
 }
 
-// A 100px-wide scroller over a row of 100px items, `scrollLeft` moving the items' rects, and each
-// `scrollTo` written down. `hidden` lays it out as a closed dialog does: every rect 0, and a scroll
-// going nowhere, until `show` gives it a box and delivers the resize.
-function laidOut(view: ReturnType<typeof carousel<string>>, hidden = false) {
+// A `width`-wide scroller (100px by default) over a row of 100px items, `scrollLeft` moving the items'
+// rects, and each `scrollTo` written down. `hidden` lays it out as a closed dialog does: every rect 0,
+// and a scroll going nowhere, until `show` gives it a box and delivers the resize.
+function laidOut(
+    view: ReturnType<typeof carousel<string>>,
+    hidden = false,
+    { items: names = STAGES, width = 100 } = {},
+) {
     const host = document.createElement('div')
     const scrolls: ScrollToOptions[] = []
     let left = 0
-    const rect = (x: number) =>
+    const rect = (x: number, wide = 100) =>
         (hidden
             ? { left: 0, top: 0, width: 0, height: 0 }
-            : { left: x, top: 0, width: 100, height: 50 }) as DOMRect
-    host.getBoundingClientRect = () => rect(0)
+            : { left: x, top: 0, width: wide, height: 50 }) as DOMRect
+    host.getBoundingClientRect = () => rect(0, width)
     Object.defineProperty(host, 'scrollLeft', { get: () => left })
+    // As far as it scrolls is the row less what shows, nothing while it has no box.
+    Object.defineProperty(host, 'clientWidth', {
+        get: () => (hidden ? 0 : width),
+    })
+    Object.defineProperty(host, 'scrollWidth', {
+        get: () => (hidden ? 0 : names.length * 100),
+    })
     host.scrollTo = ((to: ScrollToOptions) => {
         scrolls.push(to)
         if (!hidden) left = to.left ?? 0
     }) as Element['scrollTo']
     const items = new Map<string, HTMLElement>()
-    STAGES.forEach((stage, index) => {
+    names.forEach((stage, index) => {
         const item = document.createElement('div')
         item.getBoundingClientRect = () => rect(index * 100 - left)
         items.set(stage, item)
@@ -101,13 +112,13 @@ const frame = () => new Promise((done) => requestAnimationFrame(done))
 test('it rests on the selection, and on the first item where the selection names none — 53.61, 53.69', () => {
     const selected = reactive<string | undefined>('proposal')
     const view = carousel({ items: STAGES, selected })
-    expect(view.centered).toBe('proposal')
+    expect(view.current).toBe('proposal')
     expect(view.item('proposal')['data-selected']).toBe('')
-    expect(view.item('proposal')['data-centered']).toBe('')
-    expect(view.item('lead')['data-centered']).toBeUndefined()
+    expect(view.item('proposal')['data-current']).toBe('')
+    expect(view.item('lead')['data-current']).toBeUndefined()
     selected.set('archived')
     flushSync()
-    expect(view.centered).toBe('lead')
+    expect(view.current).toBe('lead')
     expect(view.item('lead')['data-selected']).toBeUndefined()
 })
 
@@ -119,12 +130,12 @@ test('the scroller centers the resting item at once when bound, and smoothly whe
     expect(row.scrolls).toEqual([{ left: 100, top: 0, behavior: 'instant' }])
     selected.set('won')
     flushSync()
-    expect(view.centered).toBe('won')
+    expect(view.current).toBe('won')
     expect(row.scrolls[1]).toEqual({ left: 300, top: 0, behavior: 'smooth' })
 })
 
 // THE REVERT: drop the resize listener from the host's bind, and a carousel bound inside a closed
-// dialog opens on its first item — scrolled nowhere — with `centered` naming the one picked, so `next`
+// dialog opens on its first item — scrolled nowhere — with `current` naming the one picked, so `next`
 // is disabled over an item that has one after it.
 test('a scroller bound with no box rests at once when it gets one, and again each time after — 53.62', () => {
     const selected = reactive<string | undefined>(undefined)
@@ -141,7 +152,7 @@ test('a scroller bound with no box rests at once when it gets one, and again eac
     row.scrollTo(100)
     row.show(false)
     row.show(true)
-    expect(view.centered).toBe('won')
+    expect(view.current).toBe('won')
     expect(row.scrolls.at(-1)).toEqual({
         left: 300,
         top: 0,
@@ -157,6 +168,8 @@ test('a scroller bound with no box rests at once when it gets one, and again eac
 test('a scroll centers the nearest item, measured once a frame — 53.64', async () => {
     const view = carousel({ items: STAGES })
     const row = laidOut(view)
+    // The stops a bind measures (53.67) are taken in the frame after it, and are not a scroll's.
+    await frame()
     let measured = 0
     const read = row.host.getBoundingClientRect
     row.host.getBoundingClientRect = () => {
@@ -168,29 +181,29 @@ test('a scroll centers the nearest item, measured once a frame — 53.64', async
     row.scrollTo(210)
     await frame()
     expect(measured).toBe(1)
-    expect(view.centered).toBe('proposal')
-    expect(row.items.get('proposal')?.hasAttribute('data-centered')).toBe(true)
-    expect(row.items.get('lead')?.hasAttribute('data-centered')).toBe(false)
+    expect(view.current).toBe('proposal')
+    expect(row.items.get('proposal')?.hasAttribute('data-current')).toBe(true)
+    expect(row.items.get('lead')?.hasAttribute('data-current')).toBe(false)
 })
 
-// THE REVERT: drop `heading` from `arrive`, and the stage a smooth scroll passes is centered on the
+// THE REVERT: drop `heading` from `arrive`, and the stage a smooth scroll passes is current on the
 // way, so a second click of next steps from it rather than from where the first was going.
-test('what a scroll to an item passes on the way is not centered, until the scrolling ends — 53.65', async () => {
+test('what a scroll to an item passes on the way is not current, until the scrolling ends — 53.65', async () => {
     const view = carousel({ items: STAGES })
     const row = laidOut(view)
     view.scrollTo('won')
     row.scrollTo(100)
     await frame()
-    expect(view.centered).toBe('won')
+    expect(view.current).toBe('won')
     row.host.dispatchEvent(new Event('scrollend'))
     row.scrollTo(100)
     await frame()
-    expect(view.centered).toBe('qualified')
+    expect(view.current).toBe('qualified')
 })
 
 // THE REVERT: keep measuring scrolls once a snap event has come, and the scroll after it moves
-// `centered` off the snap target.
-test('once the scroller reports a snap, the snap target alone sets centered — 53.66', async () => {
+// `current` off the snap target.
+test('once the scroller reports a snap, the snap target alone sets current — 53.66', async () => {
     const view = carousel({ items: STAGES })
     const row = laidOut(view)
     const inner = document.createElement('span')
@@ -200,20 +213,20 @@ test('once the scroller reports a snap, the snap target alone sets centered — 
         snapTargetBlock: null,
     })
     row.host.dispatchEvent(snap)
-    expect(view.centered).toBe('won')
+    expect(view.current).toBe('won')
     row.scrollTo(100)
     await frame()
-    expect(view.centered).toBe('won')
+    expect(view.current).toBe('won')
 })
 
 // THE REVERT: drop `disabled` from `previous`, and it stays enabled at the first stage.
-test('previous and next step from the centered item, and are disabled at the ends — 53.67, 53.68', () => {
+test('previous and next step from the current item, and are disabled at the ends — 53.67, 53.68', () => {
     const view = carousel({ items: STAGES, behavior: 'auto' })
     const row = laidOut(view)
     expect(view.previous.disabled).toBe(true)
     expect(view.next.disabled).toBe(false)
     ;(view.next.onclick as () => void)()
-    expect(view.centered).toBe('qualified')
+    expect(view.current).toBe('qualified')
     expect(row.scrolls.at(-1)).toEqual({ left: 100, top: 0, behavior: 'auto' })
     view.scrollTo('won')
     expect(view.next.disabled).toBe(true)
@@ -226,13 +239,100 @@ test('a carousel that loops steps past each end to the other, and one item steps
     const row = laidOut(view)
     expect(view.previous.disabled).toBe(false)
     ;(view.previous.onclick as () => void)()
-    expect(view.centered).toBe('won')
+    expect(view.current).toBe('won')
     expect(row.scrolls.at(-1)).toEqual({ left: 300, top: 0, behavior: 'auto' })
     expect(view.next.disabled).toBe(false)
     ;(view.next.onclick as () => void)()
-    expect(view.centered).toBe('lead')
+    expect(view.current).toBe('lead')
     const alone = carousel({ items: ['lead'], loop: true })
     expect([alone.previous.disabled, alone.next.disabled]).toEqual([true, true])
+})
+
+// Eight months in a 310px scroller: three items and a tenth of the fourth show, and it scrolls 490px.
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug']
+const THREE_AND_A_TENTH = { items: MONTHS, width: 310 }
+
+// THE REVERT: read `align` as `'center'` whatever it names, and next scrolls to 45 — feb's center on
+// the scroller's — rather than to 100, where feb's start is at the scroller's.
+test("align start brings an item's start to the scroller's, and next moves one item — 53.99, 53.68", () => {
+    const view = carousel({ items: MONTHS, align: 'start', behavior: 'auto' })
+    const row = laidOut(view, false, THREE_AND_A_TENTH)
+    expect(row.scrolls).toEqual([{ left: 0, top: 0, behavior: 'instant' }])
+    ;(view.next.onclick as () => void)()
+    expect(view.current).toBe('feb')
+    expect(row.scrolls.at(-1)).toEqual({ left: 100, top: 0, behavior: 'auto' })
+    flushSync()
+    expect(row.items.get('feb')?.hasAttribute('data-current')).toBe(true)
+    const ending = carousel({ items: MONTHS, align: 'end', behavior: 'auto' })
+    const other = laidOut(ending, false, THREE_AND_A_TENTH)
+    ending.scrollTo('jun')
+    // jun's end, 600px along, at the scroller's 310px end.
+    expect(other.scrolls.at(-1)).toEqual({
+        left: 290,
+        top: 0,
+        behavior: 'auto',
+    })
+})
+
+// THE REVERT: step to the next key whether or not a scroll to it moves anything, and next stays
+// enabled at the end of the row: two more clicks move `current` across jul and aug with the scroller
+// still, and the one before them is where it stopped.
+test('next passes the items a scroll to would leave where the scroller ends — 53.67', async () => {
+    const view = carousel({ items: MONTHS, align: 'start', behavior: 'auto' })
+    const row = laidOut(view, false, THREE_AND_A_TENTH)
+    await frame()
+    view.scrollTo('may')
+    ;(view.next.onclick as () => void)()
+    // jun's start is past where the scroller ends, so it stops there, and jul and aug stop there too.
+    expect(view.current).toBe('jun')
+    expect(row.scrolls.at(-1)).toEqual({ left: 490, top: 0, behavior: 'auto' })
+    expect(view.next.disabled).toBe(true)
+    ;(view.previous.onclick as () => void)()
+    expect(view.current).toBe('may')
+    const looping = carousel({
+        items: MONTHS,
+        align: 'start',
+        behavior: 'auto',
+        loop: true,
+    })
+    laidOut(looping, false, THREE_AND_A_TENTH)
+    await frame()
+    looping.scrollTo('jun')
+    ;(looping.next.onclick as () => void)()
+    expect(looping.current).toBe('jan')
+})
+
+// THE REVERT: drop `together` from `arrive`'s last line, and a scroll left at the start moves
+// `current` off jan to feb, which a scroll to leaves the scroller in the same place.
+test('a centered carousel at its start steps past the item that cannot reach the center, and a scroll keeps the one it rests on — 53.67, 53.100', async () => {
+    const view = carousel({ items: MONTHS, behavior: 'auto' })
+    const row = laidOut(view, false, THREE_AND_A_TENTH)
+    await frame()
+    row.scrollTo(0)
+    await frame()
+    expect(view.current).toBe('jan')
+    expect(view.previous.disabled).toBe(true)
+    ;(view.next.onclick as () => void)()
+    // mar's center, 250px along, at the scroller's 155px center.
+    expect(view.current).toBe('mar')
+    expect(row.scrolls.at(-1)).toEqual({ left: 95, top: 0, behavior: 'auto' })
+})
+
+// THE REVERT: name `heading` whenever the item is off the line rather than when the scroller would
+// move, and a scroll to an item the scroller ends before reaching ends nothing — the next scroll the
+// reader makes is passed over as if on its way there.
+test('a scroll to an item the scroller is already as near as it goes is on no way — 53.101', async () => {
+    const view = carousel({ items: MONTHS, align: 'start', behavior: 'smooth' })
+    const row = laidOut(view, false, THREE_AND_A_TENTH)
+    await frame()
+    view.scrollTo('aug')
+    row.scrollTo(490)
+    row.host.dispatchEvent(new Event('scrollend'))
+    await frame()
+    view.scrollTo('aug')
+    row.scrollTo(200)
+    await frame()
+    expect(view.current).toBe('mar')
 })
 
 // THE REVERT: drop the hand-off from the stepping button's click, and the button its click disables
@@ -252,7 +352,7 @@ test('a button its own click disables hands focus to the other — 49.15', () =>
     view.scrollTo('proposal')
     next.focus()
     next.click()
-    expect(view.centered).toBe('won')
+    expect(view.current).toBe('won')
     expect(document.activeElement).toBe(previous)
     // A click that leaves its button enabled keeps focus where it was.
     previous.click()
@@ -260,7 +360,7 @@ test('a button its own click disables hands focus to the other — 49.15', () =>
     for (const button of buttons) button.remove()
 })
 
-// THE REVERT: make `reset` scroll to `centered`, and it stays on the stage the reader scrolled to.
+// THE REVERT: make `reset` scroll to `current`, and it stays on the stage the reader scrolled to.
 test('reset scrolls back to the resting item — 53.68', async () => {
     const view = carousel({
         items: STAGES,
@@ -269,9 +369,9 @@ test('reset scrolls back to the resting item — 53.68', async () => {
     const row = laidOut(view)
     row.scrollTo(300)
     await frame()
-    expect(view.centered).toBe('won')
+    expect(view.current).toBe('won')
     view.reset()
-    expect(view.centered).toBe('qualified')
+    expect(view.current).toBe('qualified')
     expect(row.scrolls.at(-1)).toEqual({
         left: 100,
         top: 0,
@@ -328,7 +428,7 @@ function elapse(): void {
     flushSync()
 }
 
-// THE REVERT: drop `centered()` from the timer's watch, and the step it takes arms no next one.
+// THE REVERT: drop `current()` from the timer's watch, and the step it takes arms no next one.
 test('playing steps on its own every autoplay, counted afresh after a step by hand, and stops at the end — 53.71, 53.72', () => {
     handTimers()
     const view = carousel({
@@ -341,17 +441,17 @@ test('playing steps on its own every autoplay, counted afresh after a step by ha
     expect(view.playing()).toBe(true)
     expect(timers.map((timer) => timer.delay)).toEqual([AUTOPLAY])
     elapse()
-    expect(view.centered).toBe('qualified')
+    expect(view.current).toBe('qualified')
     const armed = timers[0]?.id
     ;(view.next.onclick as () => void)()
     flushSync()
-    expect(view.centered).toBe('proposal')
+    expect(view.current).toBe('proposal')
     expect(timers.length).toBe(1)
     expect(timers[0]?.id).not.toBe(armed)
     elapse()
-    expect(view.centered).toBe('won')
+    expect(view.current).toBe('won')
     elapse()
-    expect([view.centered, view.playing(), timers.length]).toEqual([
+    expect([view.current, view.playing(), timers.length]).toEqual([
         'won',
         false,
         0,
@@ -435,7 +535,7 @@ test('play is a toggle over playing, and playing from the last item starts at th
     view.scrollTo('won')
     ;(view.play.onclick as () => void)()
     flushSync()
-    expect([view.playing(), view.centered]).toEqual([true, 'lead'])
+    expect([view.playing(), view.current]).toEqual([true, 'lead'])
     expect([view.play['aria-pressed'], view.play['aria-label']]).toEqual([
         'true',
         'Pause',
