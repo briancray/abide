@@ -27,6 +27,12 @@ import banner from './lib/Banner.abide' with { type: 'text' }
         },
         {
             path: 'packages/abide/tests/notices.test.ts',
+            from: [
+                "test('a notice is keyed by default by a short hash of it as JSON",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/notices.test.ts',
             from: ["test('a dismissal and an action are remembered for ttl"],
         },
         {
@@ -71,21 +77,18 @@ import banner from './lib/Banner.abide' with { type: 'text' }
         `} />
     </Section>
 
-    <Section level={3} title="Show a reworded announcement to everyone again">
-        <p>A dismissal is remembered by the notice's text, so new words are a new notice. Give it a
-            <code>key</code> to keep it closed through a rewording.</p>
+    <Section level={3} title="Choose what makes two announcements the same">
+        <p>A dismissal is remembered by a short hash of the whole notice, so any change to it, its
+            tone included, shows it again. <code>key</code> picks what counts: here only the
+            words.</p>
         <Code language="ts" caption="browser" code={`
             import { notices, store } from '@abide/abide'
 
             export const announcements = notices({
                 store: store.cookies('announcements'),
                 timeout: Infinity,
-                initial: [
-                    {
-                        text: 'Pipelines can now be shared with a link.',
-                        key: 'shared-pipelines',
-                    },
-                ],
+                key: (notice) => notice.text,
+                initial: ['Pipelines can now be shared with a link.'],
             })
         `} />
     </Section>

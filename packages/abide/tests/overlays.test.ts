@@ -188,7 +188,7 @@ test('a notice lands at the end of the list and leaves it at its timeout — 50.
     expect(id).not.toBe(first)
     expect(toasts.list().at(-1)).toEqual({
         id,
-        key: 'Phone saved',
+        key: expect.any(String),
         text: 'Phone saved',
         tone: 'success',
         action: undefined,

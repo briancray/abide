@@ -5,6 +5,7 @@
 // The list is one per request on a server, as every `reactive` without `global` is (11.32), and
 // `notify` never writes it there (50.16): one visitor's notice cannot reach another's page by either.
 
+import { hashText } from './hashText.ts'
 import { isServer } from './isServer.ts'
 import { type Live, live } from './live.ts'
 import { type Reactive, reactive, type Store } from './reactive/index.ts'
@@ -14,7 +15,7 @@ import { standing } from './standing.ts'
 export type Notice = {
     /** What `notify` handed back for it, and what `dismiss` takes. */
     id: number
-    /** What a dismissal is remembered by: its `key` option, or its text (50.71). */
+    /** What a dismissal is remembered by: the list's `key` called with it (50.71). */
     key: string
     /** What it says, written in the `text` part. */
     text: string
@@ -39,8 +40,6 @@ export type NotifyOptions = {
     timeout?: number
     /** The moment it stops showing, wherever it is rendered — a server's render included (50.72). */
     expires?: Date | number
-    /** What a dismissal is remembered by in the list's `store`. Default its text (50.71). */
-    key?: string
     /** A button on the notice that takes the notice down and calls `run`: an undo, a retry, or `report({ trace }).open()` for a failed call. */
     action?: { label: string; run: () => unknown }
     /** Written onto the notice's element: a `data-` attribute an analytics tag reads, say (50.41). */
@@ -59,6 +58,8 @@ export type NoticesOptions = {
     store?: Store<Record<string, number>>
     /** How long a dismissal is remembered, in milliseconds. Default `Infinity`. */
     ttl?: number
+    /** What a notice's dismissal is remembered by. Default a hash of the notice as JSON (50.71). */
+    key?: (notice: Omit<Notice, 'id' | 'key'>) => string
 }
 
 /** What the region is called. */
@@ -116,6 +117,11 @@ const LONGEST_TIMER_MS = 2 ** 31 - 1
 // for every list, so `dismiss` on the wrong list finds nothing (50.15).
 let lastId = 0
 
+// 50.71 — the notice as JSON, without the `id` a page load mints afresh: its action's label, and not
+// its `run`, which JSON leaves out.
+const hashNotice = (notice: Omit<Notice, 'id' | 'key'>): string =>
+    hashText(JSON.stringify(notice))
+
 /** A list of notices, shown where the app spreads its `host` (50.12). */
 export function notices(options: NoticesOptions = {}): Notices {
     // 50.36 — this list's hosts standing: the last shows its notices.
@@ -130,6 +136,7 @@ export function notices(options: NoticesOptions = {}): Notices {
             ? undefined
             : reactive<Record<string, number>>({}, { store: options.store })
     const rememberTtl = options.ttl ?? Infinity
+    const keyOf = options.key ?? hashNotice
 
     const build = (
         text: string,
@@ -152,15 +159,14 @@ export function notices(options: NoticesOptions = {}): Notices {
             if (due <= LONGEST_TIMER_MS)
                 setTimeout(() => close(id, 'timeout'), Math.max(due, 0))
         }
-        return {
-            id,
-            key: given.key ?? text,
+        const content = {
             text,
             tone,
             action: given.action,
             attributes: given.attributes ?? {},
             expires,
         }
+        return { id, key: keyOf(content), ...content }
     }
 
     const seeded: Notice[] = []

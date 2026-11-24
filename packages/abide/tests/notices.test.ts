@@ -56,15 +56,50 @@ test("one list's notices never enter another's — 50.68", () => {
     expect(texts(shown(banner).notices)).toEqual(['We are live'])
 })
 
-test('a list starts with its initial notices, in order, each keyed by its key or its text — 50.70, 50.71', () => {
+// Keyed by text, so what a store holds reads as what was closed.
+const byText = (notice: { text: string }): string => notice.text
+
+test('a list starts with its initial notices, in order, each keyed by its list — 50.70, 50.71', () => {
     const banner = notices({
         timeout: Infinity,
-        initial: ['We are live', { text: 'Pipelines', key: 'beta-2' }],
+        key: (notice) => `${notice.tone}:${notice.text}`,
+        initial: ['We are live', { text: 'Pipelines', tone: 'success' }],
     })
     expect(banner.list().map((notice) => [notice.key, notice.text])).toEqual([
-        ['We are live', 'We are live'],
-        ['beta-2', 'Pipelines'],
+        ['info:We are live', 'We are live'],
+        ['success:Pipelines', 'Pipelines'],
     ])
+})
+
+// THE REVERT: hash the notice with its `id` in it, and the same announcement is a new key on every
+// page load — the two lists below disagree, and nothing closed stays closed.
+test('a notice is keyed by default by a short hash of it as JSON, its id left out — 50.71', () => {
+    const LONG =
+        'Pipelines can now be shared with a link, from the menu on any pipeline.'
+    const run = () => {}
+    const first = notices({ timeout: Infinity, initial: [LONG] }).list()[0]
+    const second = notices({
+        timeout: Infinity,
+        initial: ['other', LONG, { text: LONG, tone: 'error' }],
+    }).list()
+    expect(first?.id).not.toBe(second[1]?.id)
+    expect(second[1]?.key).toBe(first?.key as string)
+    expect(first?.key.length).toBeLessThan(12)
+    // Its content is the key: other words, or another tone, are another notice.
+    expect(second[0]?.key).not.toBe(first?.key as string)
+    expect(second[2]?.key).not.toBe(first?.key as string)
+    // An action's `run` is no part of it, as JSON has no function.
+    const withAction = (label: string) =>
+        notices({
+            timeout: Infinity,
+            initial: [{ text: LONG, action: { label, run } }],
+        }).list()[0]?.key
+    expect(withAction('Open')).toBe(
+        notices({
+            timeout: Infinity,
+            initial: [{ text: LONG, action: { label: 'Open', run: () => 1 } }],
+        }).list()[0]?.key as string,
+    )
 })
 
 // THE REVERT: remember a notice whatever took it, and the timed-out one lands in the store beside the
@@ -75,9 +110,10 @@ test('a dismissal and an action are remembered for ttl, and a timeout is not —
         store,
         ttl: 60_000,
         timeout: Infinity,
+        key: byText,
         initial: [
             'We are live',
-            { text: 'Pipelines', key: 'beta-2' },
+            'Pipelines',
             { text: 'Brief', timeout: 5 },
             { text: 'Try it', action: { label: 'Open', run: () => {} } },
         ],
@@ -88,19 +124,16 @@ test('a dismissal and an action are remembered for ttl, and a timeout is not —
     host.notice(banner.list().at(-1) as never).act()
     await Bun.sleep(20)
     const remembered = writes.at(-1) ?? {}
-    expect(Object.keys(remembered).sort()).toEqual(['Try it', 'beta-2'])
-    expect(remembered['beta-2']).toBeGreaterThanOrEqual(before + 60_000)
-    expect(remembered['beta-2']).toBeLessThan(Date.now() + 60_001)
+    expect(Object.keys(remembered).sort()).toEqual(['Pipelines', 'Try it'])
+    expect(remembered.Pipelines).toBeGreaterThanOrEqual(before + 60_000)
+    expect(remembered.Pipelines).toBeLessThan(Date.now() + 60_001)
 
     // The next page builds the list again over the same store, and shows only what nobody closed.
     const again = notices({
         store,
         timeout: Infinity,
-        initial: [
-            'We are live',
-            { text: 'Pipelines', key: 'beta-2' },
-            { text: 'Try it' },
-        ],
+        key: byText,
+        initial: ['We are live', 'Pipelines', 'Try it'],
     })
     expect(texts(shown(again).notices)).toEqual(['We are live'])
     // `list` holds them still: the host is what leaves them out.
@@ -117,6 +150,7 @@ test('a write leaves out every dismissal already forgotten — 50.73', () => {
     const banner = notices({
         store,
         timeout: Infinity,
+        key: byText,
         initial: ['We are live'],
     })
     banner.dismiss((banner.list()[0] as { id: number }).id)
@@ -131,6 +165,7 @@ test('a dismissal remembered forever is kept as a number JSON holds — 50.69', 
     const banner = notices({
         store,
         timeout: Infinity,
+        key: byText,
         initial: ['We are live'],
     })
     banner.dismiss((banner.list()[0] as { id: number }).id)
@@ -165,6 +200,7 @@ test("a server's render leaves out what the request's cookie remembers — 50.70
     const banner = notices({
         store: cookies('announcements'),
         timeout: Infinity,
+        key: byText,
         initial: ['We are live', 'New: pipelines'],
     })
     const kept = encodeURIComponent(

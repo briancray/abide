@@ -8,10 +8,7 @@ export const announcements = notices({
     ttl: THIRTY_DAYS_MS,
     timeout: Infinity,
     initial: [
-        {
-            text: 'Pipelines can now be shared with a link.',
-            key: 'shared-pipelines',
-        },
+        'Pipelines can now be shared with a link.',
         'Forecasts lock at the end of each quarter.',
     ],
 })
