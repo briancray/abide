@@ -2,7 +2,8 @@
 import { lightbox } from '@abide/abide'
 
 const PAGES = ['Terms', 'Pricing', 'Signatures']
-const viewer = lightbox({ items: PAGES })
+// A reader paging through a contract goes from its last page back to its first.
+const viewer = lightbox({ items: PAGES, loop: true })
 </script>
 
 <div class="row">

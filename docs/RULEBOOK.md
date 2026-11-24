@@ -6333,7 +6333,9 @@ way, what the `host`'s scrolling passes MUST NOT set `centered`, until it reache
 held by the event's snap target.
 
 53.67 `carousel`'s `previous` and `next` MUST scroll to the item before and the item after the
-centered one as `scrollTo` does, and MUST be disabled where there is no such item.
+centered one as `scrollTo` does, and MUST be disabled where there is no such item. Where `loop` holds,
+the item before the first MUST be the last and the item after the last the first, save where there is
+only one.
 
 53.68 `Carousel`'s `scrollTo` MUST set `centered` to the key it is handed and scroll that key's item
 to the `host`'s center as `behavior` names, and `reset` MUST do so for the item the carousel rests

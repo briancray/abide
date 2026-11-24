@@ -219,6 +219,21 @@ test('previous and next step from the centered item, and are disabled at the end
     expect(view.previous.disabled).toBe(false)
 })
 
+// THE REVERT: step only within the list, and `previous` at the first stage is disabled with `loop` given.
+test('a carousel that loops steps past each end to the other, and one item steps nowhere — 53.67', () => {
+    const view = carousel({ items: STAGES, behavior: 'auto', loop: true })
+    const row = laidOut(view)
+    expect(view.previous.disabled).toBe(false)
+    ;(view.previous.onclick as () => void)()
+    expect(view.centered).toBe('won')
+    expect(row.scrolls.at(-1)).toEqual({ left: 300, top: 0, behavior: 'auto' })
+    expect(view.next.disabled).toBe(false)
+    ;(view.next.onclick as () => void)()
+    expect(view.centered).toBe('lead')
+    const alone = carousel({ items: ['lead'], loop: true })
+    expect([alone.previous.disabled, alone.next.disabled]).toEqual([true, true])
+})
+
 // THE REVERT: drop the hand-off from the stepping button's click, and the button its click disables
 // leaves focus on the page, where the keys of a lightbox around it go unheard.
 test('a button its own click disables hands focus to the other — 49.15', () => {

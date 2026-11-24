@@ -22,6 +22,8 @@ export type CarouselOptions<Item> = {
     selected?: Reactive<string | undefined>
     /** How `scrollTo`, `reset`, `previous` and `next` scroll. `'smooth'` by default; a function is read live. */
     behavior?: Live<'auto' | 'smooth'>
+    /** Whether `next` at the last item goes to the first, and `previous` at the first to the last. `false` by default; a function is read live. */
+    loop?: Live<boolean>
 } & KeyOption<Item> &
     LabelOption<Item>
 
@@ -33,9 +35,9 @@ export type Carousel<Item> = {
     readonly host: Record<string, unknown>
     /** One item's part, carrying `data-centered` and `data-selected` while each holds. */
     item(item: Item): Record<string, unknown>
-    /** The button's part scrolling to the item before the centered one, disabled at the first. */
+    /** The button's part scrolling to the item before the centered one, disabled at the first unless it loops. */
     readonly previous: Record<string, unknown>
-    /** The button's part scrolling to the item after the centered one, disabled at the last. */
+    /** The button's part scrolling to the item after the centered one, disabled at the last unless it loops. */
     readonly next: Record<string, unknown>
     /** The key of the item centered in the scroller. */
     get centered(): string | undefined
@@ -245,11 +247,17 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         }
     }
 
-    // 53.67 — the key `step` places from the centered one, where there is one.
+    // 53.67 — the key `step` places from the centered one, where there is one, past an end to the
+    // other where `loop` holds, and never the centered one itself.
     const beside = (step: number): string | undefined => {
         const listed = keys()
         const at = listed.indexOf(centered() as string)
-        return at === -1 ? undefined : listed[at + step]
+        if (at === -1 || listed.length < 2) return undefined
+        const to = at + step
+        if (to >= 0 && to < listed.length) return listed[to]
+        return live(options.loop) === true
+            ? listed[(to + listed.length) % listed.length]
+            : undefined
     }
     const stepper = (part: string, step: number) => ({
         type: 'button',
