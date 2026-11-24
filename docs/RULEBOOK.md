@@ -6338,6 +6338,9 @@ each side, centered, its magnification kept from `min` to `max`.
 
 53.90 A double click on `panZoom`'s `surface` MUST magnify it twice about the pointer.
 
+53.91 A click on `carousel`'s `previous` or `next` that leaves the button it was made on disabled MUST,
+where that button held focus, move focus to the other.
+
 # 54. Guards, fetches and jobs
 
 ## Rungs

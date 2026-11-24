@@ -231,9 +231,25 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         get disabled() {
             return beside(step) === undefined
         },
-        onclick: () => {
+        onclick: (event?: MouseEvent) => {
             const key = beside(step)
-            if (key !== undefined) scrollTo(key)
+            if (key === undefined) return
+            scrollTo(key)
+            // 53.91 — a button its own click disables would drop focus to the page: it goes to the
+            // button stepping the other way, so the keys of what holds the carousel still reach it.
+            const pressed = event?.currentTarget as
+                HTMLElement | null | undefined
+            if (
+                beside(step) !== undefined ||
+                pressed !== globalThis.document?.activeElement
+            )
+                return
+            const other = step < 0 ? 'next' : 'previous'
+            globalThis.document
+                ?.querySelector<HTMLElement>(
+                    `[data-carousel="${other}"][aria-controls="${CSS.escape(base)}"]`,
+                )
+                ?.focus()
         },
     })
 

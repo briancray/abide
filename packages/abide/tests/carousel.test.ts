@@ -159,6 +159,31 @@ test('previous and next step from the centered item, and are disabled at the end
     expect(view.previous.disabled).toBe(false)
 })
 
+// THE REVERT: drop the hand-off from the stepping button's click, and the button its click disables
+// leaves focus on the page, where the keys of a lightbox around it go unheard.
+test('a button its own click disables hands focus to the other — 53.91', () => {
+    const view = carousel({ id: 'stages', items: STAGES, behavior: 'auto' })
+    const buttons = (['previous', 'next'] as const).map((part) => {
+        const button = document.createElement('button')
+        for (const [name, value] of Object.entries(view[part]))
+            if (name.startsWith('on'))
+                button.addEventListener(name.slice(2), value as EventListener)
+            else if (typeof value === 'string') button.setAttribute(name, value)
+        document.body.append(button)
+        return button
+    })
+    const [previous, next] = buttons as [HTMLButtonElement, HTMLButtonElement]
+    view.scrollTo('proposal')
+    next.focus()
+    next.click()
+    expect(view.centered).toBe('won')
+    expect(document.activeElement).toBe(previous)
+    // A click that leaves its button enabled keeps focus where it was.
+    previous.click()
+    expect(document.activeElement).toBe(previous)
+    for (const button of buttons) button.remove()
+})
+
 // THE REVERT: make `reset` scroll to `centered`, and it stays on the stage the reader scrolled to.
 test('reset scrolls back to the resting item — 53.68', async () => {
     const view = carousel({
