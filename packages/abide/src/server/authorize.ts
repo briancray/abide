@@ -4,6 +4,7 @@
 import type { Failed } from '#shared/Failed.ts'
 import type { Middleware } from '#shared/Middleware.ts'
 import { type Principal, principal } from '#shared/principal.ts'
+import { matchesPattern } from '#shared/reactive/matchesPattern.ts'
 import { refuse } from '#shared/refuse.ts'
 
 import { currentRequestScope } from './requestScope.ts'
@@ -60,36 +61,12 @@ export function authorize(
     const passes =
         typeof admits === 'function'
             ? admits
-            : (resolved: Principal) => holds(resolved, admits)
+            : (resolved: Principal) => matchesPattern(resolved, admits)
     return async (next) => {
         const resolved = await principal.resolved
         if (!resolved.authenticated) return signedOut()
         return (await passes(resolved)) ? next() : refused()
     }
-}
-
-// 54.3 — an object holds every member `wanted` names as `wanted` holds it, an array holds every item
-// `wanted` lists in any order beside any others, and anything else is the same value.
-function holds(held: unknown, wanted: unknown): boolean {
-    if (Array.isArray(wanted)) {
-        if (!Array.isArray(held)) return false
-        for (const item of wanted)
-            if (!held.some((candidate) => holds(candidate, item))) return false
-        return true
-    }
-    if (typeof wanted === 'object' && wanted !== null) {
-        if (typeof held !== 'object' || held === null) return false
-        for (const key in wanted)
-            if (
-                !holds(
-                    (held as Record<string, unknown>)[key],
-                    (wanted as Record<string, unknown>)[key],
-                )
-            )
-                return false
-        return true
-    }
-    return held === wanted
 }
 
 // 54.28 — the refusal 15.7 answers an address nothing serves, word for word, so the two cannot be

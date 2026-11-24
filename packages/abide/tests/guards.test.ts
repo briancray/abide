@@ -110,7 +110,7 @@ test('authorize refuses a member the claims do not match Forbidden at 403, befor
     )
 })
 
-// THE REVERT: compare arrays item for item in `holds`, and Maya, in a group beside sales, is
+// THE REVERT: compare arrays item for item in `matchesPattern`, and Maya, in a group beside sales, is
 // refused — `403 Forbidden` where `200 "pipeline"` is due.
 test('authorize admits a member whose claims hold the ones it names, an array holding every item it lists — 54.3', async () => {
     const maya = {

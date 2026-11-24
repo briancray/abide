@@ -516,6 +516,34 @@ test('a pattern narrows an rpc to the entries it matches, in each spelling — 1
     expect(loads.sort().join()).toBe('east,west')
 })
 
+// 13.12 — A PATTERN IS HELD, NOT COMPARED: an array in it names items the args' array holds, in any
+// order beside others, and a nested object names some of its members. THE REVERT: compare each
+// member with `!==` one level down; no two arrays are the same object, so nothing reloads — `` where
+// `won-lost` is due.
+test('a pattern matches args holding its arrays and nested members — 13.12', async () => {
+    const loads: string[] = []
+    const getDeals = GET(
+        ({
+            stages,
+        }: {
+            stages: string[]
+            owner: { team: string; region?: string }
+        }) => {
+            loads.push(stages.join('-'))
+            return stages.length
+        },
+    )
+    for (const stages of [['won', 'lost'], ['open']])
+        watch(() => {
+            getDeals({ stages, owner: { team: 'sales', region: 'emea' } })()
+        })
+    loads.length = 0
+
+    refresh(getDeals, { stages: ['lost'], owner: { team: 'sales' } })
+    flushSync()
+    expect(loads.join()).toBe('won-lost')
+})
+
 // THE FOUR TAKE THE SAME TWO ARGUMENTS, and the pattern is checked against `Args` on each. The
 // `@ts-expect-error` lines are the assertion: typecheck fails if any of the four stops refusing a
 // pattern it has no entry for. THE REVERT: type each pattern as `unknown` — the three lines below

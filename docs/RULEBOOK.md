@@ -979,7 +979,9 @@ and `memo` in the process.
 13.11 `ready` over a `Selection` MUST answer whether EVERY entry in it is ready.
 
 13.12 A pattern given beside a `Keyed` or an `Rpc` MUST narrow it to the entries whose `Args`
-match the pattern.
+hold the pattern: an object holds another where it holds every member the other names, an array
+holds another where it holds each of the other's items in any order beside any others, and any
+other value holds only itself.
 
 13.13 A `Selection` made in any scope MUST reach every `global` `reactive` and `memo` it matches,
 and every entry of a `global` `Keyed` it matches.
@@ -6566,10 +6568,9 @@ leaves the `host` where it already is, MUST NOT be on its way in 53.65's sense.
 54.2 `authorize` MUST answer a caller whose `principal.resolved` is not authenticated as
 `signedIn` does, before it reads anything else of it.
 
-54.3 `authorize` given an object MUST admit a caller whose `principal.resolved` holds it — an object
-holds another where it holds every member the other names, an array holds another where it holds
-each of the other's items in any order beside any others, and any other value holds only itself —
-and given a function MUST admit a caller whose `principal.resolved` it answers true for.
+54.3 `authorize` given an object MUST admit a caller whose `principal.resolved` holds it as 13.12
+reads holding, and given a function MUST admit a caller whose `principal.resolved` it answers true
+for.
 
 54.4 `authorize` MUST answer an authenticated caller it does not admit with a refusal named
 `Forbidden`, at status 403, carrying the `message` it was given.
