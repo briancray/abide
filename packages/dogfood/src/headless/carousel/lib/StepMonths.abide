@@ -1,0 +1,20 @@
+<script>
+import { carousel } from '@abide/abide'
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug']
+const months = carousel({ items: MONTHS, align: 'start' })
+</script>
+
+<div class="row">
+    <button {...months.previous}>Back</button>
+    <ul {...months.host} aria-label="Close months"
+        class="flex snap-x snap-mandatory overflow-x-auto">
+        {#for month of MONTHS by month}
+            <li {...months.item(month)}
+                class="shrink-0 basis-[calc(100%/3.1)] snap-start p-snug">
+                {month}
+            </li>
+        {/for}
+    </ul>
+    <button {...months.next}>Forward</button>
+</div>

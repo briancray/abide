@@ -517,7 +517,7 @@
         backdrop-filter: blur(2px);
     }
 
-    /* A carousel is a row it scrolls along, a slide a card, the centered one lit. */
+    /* A carousel is a row it scrolls along, a slide a card, the current one lit. */
     [aria-roledescription=carousel] {
         flex-direction: row;
         list-style: none;
@@ -530,7 +530,7 @@
         background: var(--color-raised);
     }
 
-    [aria-roledescription=slide][data-centered] {
+    [aria-roledescription=slide][data-current] {
         border-color: var(--color-signal);
     }
 

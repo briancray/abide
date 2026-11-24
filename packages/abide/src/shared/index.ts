@@ -25,7 +25,7 @@ export type {
 export type { AssistantTurn, AssistantTurnPart } from './AssistantTurn.ts'
 // 33.23 — an element's attributes, typed as a component's props.
 export type { Attributes } from './Attributes.ts'
-// 53.61-53.70 — a scroll-snap carousel resting on a selection, as parts.
+// 53.61-53.78, 53.99-53.101 — a scroll-snap carousel resting on a selection, as parts.
 export { type Carousel, type CarouselOptions, carousel } from './carousel.ts'
 // 51.30-51.41 — a sortable table's columns, its sort, and the order its rows are in.
 export type { Column } from './Column.ts'
