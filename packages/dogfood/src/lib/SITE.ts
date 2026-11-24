@@ -1287,18 +1287,11 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
-                route: '/ai/image-piece',
-                title: '`imagePiece`',
+                route: '/ai/user-message',
+                title: '`userMessage`',
                 description:
-                    'Turn an image into a piece of a turn, drawn down to what a model looks at.',
+                    "Turn a question and the files attached to it — photos, PDFs, text — into the person's turn, as the model reads it.",
                 where: 'anywhere',
-            },
-            {
-                route: '/ai/image-files',
-                title: '`imageFiles`',
-                description:
-                    'Take the images a model is shown from a paste or a drop.',
-                where: 'browser',
             },
             {
                 route: '/ai/provider',

@@ -1,5 +1,7 @@
 // 53.24-53.30 — a conversation as a chat holds it: `transcript` folds an answer's events into one.
 
+import type { AssistantContent } from './AssistantEvent.ts'
+
 /** One turn of a conversation as a chat holds it: who spoke, and what they said in order. */
 export type AssistantTurn = {
     /** Who spoke: the visitor at the composer, or the assistant answering. */
@@ -12,20 +14,15 @@ export type AssistantTurn = {
     failed: string | undefined
 }
 
-/** One piece of a turn: words, an image, a tool call, or a permission prompt. */
+/** One piece of a turn: words, an image, a document, a tool call, or a permission prompt. */
 export type AssistantTurnPart =
     | {
           type: 'text'
           /** The words, every `text` event of a run joined. */
           text: string
       }
-    | {
-          type: 'image'
-          /** The image as base64, as `imagePiece` draws it. */
-          data: string
-          /** The image's type, `image/png` say. */
-          mimeType: string
-      }
+    /** An image or a document the visitor attached, as `userMessage` makes it. */
+    | Extract<AssistantContent, { type: 'image' | 'document' }>
     | {
           type: 'tool'
           /** The call's id, which its `input` and `result` events name. */

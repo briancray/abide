@@ -430,7 +430,7 @@ export class McpSurface {
                 const [piece] = content
                 return {
                     result: {
-                        // 20.21 — an AssistantContent piece is already an MCP content item.
+                        // 20.21 — a `ToolAnswer`'s pieces are already MCP content items.
                         content,
                         // 20.16 — the same value as structured content, where the tool declares
                         // its shape; a refusal is not that value. A tool declaring one answers no

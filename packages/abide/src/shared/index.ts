@@ -102,8 +102,6 @@ export type { FetchFailed } from './fetchFailed.ts'
 export { type FieldName, type Form, type FormField, form } from './form.ts'
 export { handle } from './handle.ts'
 export { type Health, health } from './health.ts'
-// 44.52-44.55 — a pasted, dropped or picked image as a turn's piece.
-export { imageFiles, imagePiece } from './imagePiece.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'
 // 51.1-51.8 — the keyboard over a list of keyed options, the one `combobox` runs on.
@@ -295,6 +293,8 @@ export {
 // 52.102, 52.103 — the instant a day and a time name in a zone.
 export { instantAt } from './instantAt.ts'
 export * as transcript from './transcript/index.ts'
+// 44.52-44.55 — what a visitor writes and attaches, as the user turn a transcript carries.
+export { userMessage } from './userMessage.ts'
 export * as outlet from './outlet.ts'
 export * as tooltip from './tooltip/index.ts'
 // 50.5 — the queued questions, shown where `prompts.host` is spread.

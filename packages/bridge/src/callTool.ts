@@ -2,7 +2,7 @@
 // server itself — the server as 44.58 finds it, started as Claude Code would start it — and hands back
 // what the tool answered. A server is started for the one call and ended with it.
 
-import type { AssistantContent, ToolAnswer } from '@abide/abide/server'
+import type { ToolAnswer } from '@abide/abide/server'
 
 import { messageOf } from './messageOf.ts'
 import { readLines } from './readLines.ts'
@@ -121,7 +121,7 @@ function answerOf(result: unknown): ToolAnswer {
         structuredContent?: unknown
         isError?: boolean
     }
-    const pieces: AssistantContent[] = []
+    const pieces: ToolAnswer['content'] = []
     for (const piece of content ?? [])
         if (piece.type === 'text')
             pieces.push({ type: 'text', text: piece.text ?? '' })

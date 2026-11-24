@@ -4546,14 +4546,15 @@ for the same call, `provider.claudeApi` MUST show the model those pieces as the 
 the `result` `AssistantEvent` MUST carry their words and none of their images.
 
 44.36 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript holding an
-`AssistantContent` image whose `mimeType` is none of `image/png`, `image/jpeg`, `image/gif` and
-`image/webp`.
+`AssistantContent` image whose `source` is not base64 of `image/png`, `image/jpeg`, `image/gif` or
+`image/webp`, or a document whose `source` is neither base64 of `application/pdf` nor text of
+`text/plain`.
 
 44.37 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript holding an
-`AssistantContent` image in a turn that is not the user's.
+`AssistantContent` image or document in a turn that is not the user's.
 
-44.38 `provider.claudeApi` MUST send each `AssistantContent` image to the model as an image block,
-base64 with its type, in its place in its turn.
+44.38 `provider.claudeApi` MUST send each `AssistantContent` image and document to the model as it
+is, the Messages API's block, in its place in its turn.
 
 44.39 `assistant` MUST hand a `Provider` each turn as its `AssistantContent` pieces, a turn's string
 as one text piece.
@@ -4602,17 +4603,20 @@ not fail and its handler has a schema 19.21 derives, and MUST carry `undefined` 
 44.51 `resultsOf` MUST hand back, in order, the `value` of each `result` `AssistantEvent` whose
 handler is the `Rpc` it is given, and none of a call that failed.
 
-44.52 `imagePiece` MUST draw an image longer than 1568 pixels on its long side down to 1568, and a
+44.52 `userMessage` MUST draw an image longer than 1568 pixels on its long side down to 1568, and a
 JPEG and an image of a type 44.36 does not name at their own size, so a photo's metadata — where it
 was taken — does not go with it, and MUST NOT draw a GIF.
 
-44.53 An image `imagePiece` draws MUST be a PNG where it was a PNG or a WebP, and a JPEG otherwise.
+44.53 An image `userMessage` draws MUST be a PNG where it was a PNG or a WebP, and a JPEG otherwise.
 
-44.54 `imagePiece` MUST hand on as it is an image it does not draw or cannot, and MUST throw where
+44.54 `userMessage` MUST hand on as it is an image it does not draw or cannot, and MUST throw where
 that image is of a type 44.36 does not name.
 
-44.55 `imageFiles` MUST hand back, in order, the files a `DataTransfer` carries of a type 44.36
-names or a HEIC or HEIF, which 44.52 draws, reading its `items` where its `files` hold none.
+44.55 `userMessage` MUST make a user turn of one block per file, in order, and then the words where
+they hold more than whitespace: an image or a HEIC or HEIF as an image 44.52 draws, a PDF as a base64
+document, a file of `text/*`, of JSON or named `.csv`, `.json`, `.md` or `.txt` as a text document, a
+document titled with its file's name where it has one — and MUST throw, naming the file, on any
+other.
 
 44.56 The `install` of a pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge`
 mints MUST run `abide-bridge install` at the bridge release its command runs.
@@ -6362,8 +6366,8 @@ otherwise add a text part holding it.
 
 53.27 `transcript.fold` MUST set a turn's `stop` from a `done` event.
 
-53.28 `transcript.messages` MUST send a user turn's text and image parts in order, and an assistant
-turn's text parts alone.
+53.28 `transcript.messages` MUST send a user turn's text, image and document parts in order, and an
+assistant turn's text parts alone.
 
 53.29 `transcript.messages` MUST leave out a turn with nothing to send.
 
@@ -6377,7 +6381,7 @@ question included, and with a `signal` of its own.
 53.33 `chat`'s `input` part MUST send on Enter, and MUST NOT on Shift+Enter or on an Enter an input
 method is composing.
 
-53.34 `chat` MUST NOT send while `disabled` is `true`, or with neither words nor an image to send,
+53.34 `chat` MUST NOT send while `disabled` is `true`, or with neither words nor a file to send,
 and what it is sent while an answer streams MUST be queued, shown in its composer until it is
 cancelled or the answer ends, and asked once the answer ends.
 
@@ -6387,8 +6391,9 @@ the answer's `stop` to `stopped`.
 53.36 `chat` MUST set an answer's `failed` to the message of what `ask` threw, save where its `stop`
 part aborted it.
 
-53.37 `chat` MUST take an image `imageFiles` finds in a paste into or a drop on the element carrying
-its `composer` part as an image part `imagePiece` draws.
+53.37 `chat` MUST take a file 44.55 makes a block of, pasted into or dropped on the element carrying
+its `composer` part, as the image or document part `userMessage` makes of it, and MUST leave out one
+`userMessage` throws on.
 
 53.38 `chat` MUST answer a permission part through `permit` with the part's id and the visitor's
 answer, and MUST disable the part's buttons where `permit` is absent or the part is answered.
@@ -6448,8 +6453,8 @@ MIME type the record names.
 53.56 What a drop, a paste or a pick `dropzone` takes MUST replace its `files`, and one taking none
 MUST leave them as they are.
 
-53.57 A pick through `dropzone`'s `input` MUST be taken as a drop is, a function `accept` handed a
-transfer of the files picked, and the input MUST be emptied after it.
+53.57 A pick through `dropzone`'s `input` MUST be taken as a drop is, and the input MUST be emptied
+after it.
 
 53.58 `autoscroll` MUST set `following` to false when the reader scrolls its `host` further than
 `threshold` pixels from the bottom, and to true when they scroll back within it.

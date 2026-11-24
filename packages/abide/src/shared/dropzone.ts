@@ -8,13 +8,10 @@ import { type Reactive, reactive } from './reactive/index.ts'
 /** What `dropzone` takes, and what hears it. */
 export type DropzoneOptions = {
     /**
-     * The files taken. A string is written as an `<input type="file">`'s `accept`: MIME types,
-     * `image/*` wildcards and `.pdf` extensions, separated by commas. A function is handed the
-     * transfer and answers the files it takes, as `imageFiles` does for the images a model is
-     * shown; a pick through `input` is handed to it as a transfer of the files picked. Every file
-     * by default.
+     * The files taken, written as an `<input type="file">`'s `accept`: MIME types, `image/*`
+     * wildcards and `.pdf` extensions, separated by commas. Every file by default.
      */
-    accept?: string | ((data: DataTransfer | null) => File[])
+    accept?: string
     /** Whether a paste of files into the host is taken as a drop. `false` by default; a function is read live. */
     paste?: Live<boolean>
     /** Whether more than the first accepted file is taken. `true` by default; a function is read live. */
@@ -49,11 +46,7 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
     // 49.11 — read where they are used.
     const multiple = () => live(options.multiple) ?? true
     const taken = (data: DataTransfer | null): File[] => {
-        const accept = options.accept ?? ''
-        const files =
-            typeof accept === 'function'
-                ? accept(data)
-                : acceptedBy(acceptOf(accept))(data)
+        const files = accepted(acceptOf(options.accept ?? ''), data)
         return multiple() || files.length < 2 ? files : files.slice(0, 1)
     }
     const files = options.files ?? reactive<readonly File[]>([])
@@ -123,10 +116,7 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
     const input: Record<string, unknown> = {
         type: 'file',
         get accept() {
-            const accept = options.accept
-            return typeof accept === 'string' && accept !== ''
-                ? accept
-                : undefined
+            return options.accept === '' ? undefined : options.accept
         },
         get multiple() {
             return multiple()
@@ -167,15 +157,14 @@ function acceptOf(accept: string): string[] {
 }
 
 /** The files a transfer carries that an `accept` list takes. */
-function acceptedBy(
-    accepted: readonly string[],
-): (data: DataTransfer | null) => File[] {
-    return (data) => {
-        const files: File[] = []
-        for (const file of filesOf(data))
-            if (accepts(accepted, file)) files.push(file)
-        return files
-    }
+function accepted(
+    accepting: readonly string[],
+    data: DataTransfer | null,
+): File[] {
+    const files: File[] = []
+    for (const file of filesOf(data))
+        if (accepts(accepting, file)) files.push(file)
+    return files
 }
 
 function accepts(accepted: readonly string[], file: File): boolean {

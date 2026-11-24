@@ -119,6 +119,17 @@ export const asking = GET(() => provider.claudeCode.bridge({ tools: ['WebSearch'
 
 export const permit = POST(({ id, allow }: { id: string; allow: boolean }) => provider.claudeCode.permit(id, allow), HIDDEN)
 
+// Its transcript unchecked by any schema of its own, so what reaches \`assistant\` is what was sent.
+export const askLoose = POST(
+    async function* ({ messages }: { messages: unknown[] }) {
+        yield* assistant(
+            messages as AssistantMessage[],
+            provider.claudeApi({ apiKey: 'key', baseURL: process.env.FAKE_API, model: 'claude-opus-5', max_tokens: 1000 }),
+        )
+    },
+    HIDDEN,
+)
+
 export const ask = POST(
     async function* ({ messages, via, maxTurns, config }: { messages: AssistantMessage[]; via: 'api' | 'code' | 'own'; maxTurns?: number; config?: Record<string, unknown> }) {
         yield* assistant(
@@ -392,7 +403,7 @@ test('both providers play one conversation as one event sequence, tools called a
 
 // 44.35 — AN IMAGE A TOOL ANSWERS IS SHOWN THE MODEL AS ONE: the call's `tool_result` carries it as an
 // image block, base64 with its type, which the scripted API answers back; the `result` event carries the
-// answer's words, which an image has none of. THE REVERTS: drop the image arm of `blocksOf` and the model
+// answer's words, which an image has none of. THE REVERTS: drop the image arm of `toolBlocksOf` and the model
 // is handed nothing; spread the whole answer into the event and it carries the image's bytes.
 test('provider.claudeApi shows a tool answered image to the model as one, and the event carries no bytes — 44.35', async () => {
     const said = await events(await ask('one', 'api', 'show me'))
@@ -1273,16 +1284,24 @@ test('a transcript that does not end on a user turn is refused — 44.3', async 
     expect(await answer.text()).toContain('44.3')
 }, 30_000)
 
-// A transcript showing an image: a question about it, the picture, beside the turns before.
+// The Messages API's own blocks: a picture, and a statement as a PDF.
+const SNAPSHOT = {
+    type: 'image',
+    source: { type: 'base64', media_type: 'image/png', data: 'iVBORw==' },
+}
+const STATEMENT = {
+    type: 'document',
+    source: { type: 'base64', media_type: 'application/pdf', data: 'JVBERg==' },
+    title: 'statement.pdf',
+}
+
+// A transcript showing an image and a document: a question about them, beside the turns before.
 const LOOKED_AT = [
     { role: 'user', content: 'earlier question' },
     { role: 'assistant', content: 'earlier answer' },
     {
         role: 'user',
-        content: [
-            { type: 'text', text: 'what is this?' },
-            { type: 'image', data: 'iVBORw==', mimeType: 'image/png' },
-        ],
+        content: [{ type: 'text', text: 'what is this?' }, SNAPSHOT, STATEMENT],
     },
 ]
 
@@ -1303,59 +1322,84 @@ function askWith(
     })
 }
 
-// 44.36, 44.37 — AN IMAGE IS THE ASKER'S TO SHOW, AND ONE A MODEL TAKES: refused 400 before any
-// provider runs. THE REVERTS: drop the role check and the model is handed an image as its own turn;
-// drop the type check and an SVG reaches the API, which refuses it there.
-test("an image a model cannot take, or one in a turn not the user's, is refused — 44.36, 44.37", async () => {
-    const svg = await askWith('one', 'api', [
-        {
-            role: 'user',
-            content: [
-                { type: 'image', data: 'PHN2Zz4=', mimeType: 'image/svg+xml' },
-            ],
-        },
-    ])
-    expect(svg.status).toBe(400)
-    expect(await svg.text()).toContain('44.36')
-    const theirs = await askWith('one', 'api', [
-        { role: 'user', content: 'look' },
-        {
-            role: 'assistant',
-            content: [
-                { type: 'image', data: 'iVBORw==', mimeType: 'image/png' },
-            ],
-        },
-        { role: 'user', content: 'well?' },
-    ])
-    expect(theirs.status).toBe(400)
-    expect(await theirs.text()).toContain('44.37')
+// 44.36, 44.37 — AN ATTACHMENT IS THE ASKER'S TO SHOW, AND ONE A MODEL TAKES: refused 400 before any
+// provider runs. THE REVERTS: drop the role check and the model is handed a document as its own
+// turn; drop the type check and an SVG, or an HTML document, reaches the API, which refuses it there;
+// read `source` unchecked and an image in the old `{ data, mimeType }` shape throws a 500. Asked of
+// a handler typing its transcript as no more than a list: one typed `AssistantMessage[]` refuses all
+// of these at 422 first, by its own schema, and never reaches the rule.
+test("an image or document a model cannot take, or one in a turn not the user's, is refused — 44.36, 44.37", async () => {
+    const refusal = async (messages: unknown[]) => {
+        const answer = await Bun.fetch(`${base}/askLoose`, {
+            method: 'POST',
+            headers: {
+                ...asPage('one'),
+                'content-type': 'application/json',
+                accept: 'application/jsonl',
+            },
+            body: JSON.stringify({ messages }),
+        })
+        const text = await answer.text()
+        return `${answer.status} ${/RULEBOOK (44\.\d+)/.exec(text)?.[1]}`
+    }
+    const ask = (piece: unknown) => [{ role: 'user', content: [piece] }]
+    expect(
+        await refusal(
+            ask({
+                type: 'image',
+                source: {
+                    type: 'base64',
+                    media_type: 'image/svg+xml',
+                    data: 'PHN2Zz4=',
+                },
+            }),
+        ),
+    ).toBe('400 44.36')
+    expect(
+        await refusal(
+            ask({
+                type: 'document',
+                source: {
+                    type: 'base64',
+                    media_type: 'text/html',
+                    data: 'PHA+',
+                },
+            }),
+        ),
+    ).toBe('400 44.36')
+    expect(
+        await refusal(
+            ask({ type: 'image', data: 'iVBORw==', mimeType: 'image/png' }),
+        ),
+    ).toBe('400 44.36')
+    expect(
+        await refusal([
+            { role: 'user', content: 'look' },
+            { role: 'assistant', content: [STATEMENT] },
+            { role: 'user', content: 'well?' },
+        ]),
+    ).toBe('400 44.37')
 }, 30_000)
 
-// 44.38 — AN IMAGE IN THE TRANSCRIPT IS SHOWN THE MODEL AS ONE, in its place in its turn: the scripted
-// API answers the last turn's content back as it came. THE REVERT: send `content` as it is and the API
-// is handed the pieces in abide's own shape, which it refuses.
-test('provider.claudeApi shows a transcript image to the model in its place — 44.38', async () => {
+// 44.38 — AN IMAGE OR A DOCUMENT IN THE TRANSCRIPT REACHES THE MODEL AS ITS BLOCK, unchanged, in its
+// place in its turn: the scripted API answers the last turn's content back as it came. THE REVERT:
+// keep text alone in `blocksOf` and the model sees the question alone.
+test('provider.claudeApi shows a transcript image and document to the model in their place — 44.38', async () => {
     const said = await events(await askWith('one', 'api', LOOKED_AT))
     expect(said).toContainEqual({
         type: 'text',
         text: `saw ${JSON.stringify([
             { type: 'text', text: 'what is this?' },
-            {
-                type: 'image',
-                source: {
-                    type: 'base64',
-                    media_type: 'image/png',
-                    data: 'iVBORw==',
-                },
-            },
+            SNAPSHOT,
+            STATEMENT,
         ])}`,
     })
 }, 30_000)
 
-// 44.5 — CLAUDE CODE IS SENT ONE MESSAGE, earlier turns folded above the last and the image in its place,
-// as Messages API blocks. THE REVERT: fold the pieces to text and the
-// image is dropped from what Claude Code was sent.
-test('Claude Code is sent a transcript image in its place in the one message — 44.5', async () => {
+// 44.5 — CLAUDE CODE IS SENT ONE MESSAGE, earlier turns folded above the last and the image and the
+// document in their place, as Messages API blocks. THE REVERT: fold the pieces to text and both are
+// dropped from what Claude Code was sent.
+test('Claude Code is sent a transcript image and document in their place in the one message — 44.5', async () => {
     await pairBridge('four')
     await events(await askWith('four', 'code', LOOKED_AT))
     const record = (await Bun.file(RECORD).json()) as { prompt: unknown }
@@ -1364,14 +1408,8 @@ test('Claude Code is sent a transcript image in its place in the one message —
             type: 'text',
             text: '<conversation>\n<user>\nearlier question\n</user>\n<assistant>\nearlier answer\n</assistant>\n</conversation>\n\nwhat is this?\n',
         },
-        {
-            type: 'image',
-            source: {
-                type: 'base64',
-                media_type: 'image/png',
-                data: 'iVBORw==',
-            },
-        },
+        SNAPSHOT,
+        STATEMENT,
     ])
 }, 30_000)
 

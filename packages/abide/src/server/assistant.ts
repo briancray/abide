@@ -73,7 +73,13 @@ export type ToolDefinition = {
 }
 
 /** What a tool call answered: its pieces, and whether it failed. 20.21, 44.35. */
-export type ToolAnswer = { content: AssistantContent[]; failed: boolean }
+export type ToolAnswer = {
+    content: (
+        | { type: 'text'; text: string }
+        | { type: 'image'; data: string; mimeType: string }
+    )[]
+    failed: boolean
+}
 
 /** The app's MCP tools, called as the asker. */
 export type Toolbox = {
@@ -193,19 +199,16 @@ async function* converse(
         }
         turns.push({ role: message.role, content: message.content })
         for (const piece of message.content) {
-            if (piece?.type !== 'image') continue
-            // 44.37 — an image is the asker's to show, never a turn the model answered.
+            if (piece?.type !== 'image' && piece?.type !== 'document') continue
+            // 44.37 — an attachment is the asker's to show, never a turn the model answered.
             if (message.role !== 'user')
                 throw refuse(
                     400,
-                    'An image can only stand in a user turn of the transcript. RULEBOOK 44.37.',
+                    `An ${piece.type} can only stand in a user turn of the transcript. RULEBOOK 44.37.`,
                 )
             // 44.36.
-            if (!IMAGE_TYPES.has(piece.mimeType))
-                throw refuse(
-                    400,
-                    `An image in the transcript is ${piece.mimeType}, and a model is shown only ${[...IMAGE_TYPES].join(', ')}. RULEBOOK 44.36.`,
-                )
+            const refused = refusalOf(piece)
+            if (refused !== undefined) throw refuse(400, refused)
         }
     }
     const surface = options.mcp === true ? appSurface() : NO_SURFACE
@@ -524,10 +527,44 @@ function toolboxOver(surface: McpSurface, asker: Request): Toolbox {
 }
 
 /**
- * Pieces as Messages API blocks, in order: text as text, an image as base64 with its type. A text of
- * whitespace alone is left out, as the API refuses one. 44.38.
+ * 44.36 — why a transcript's image or document is none the Messages API takes, or `undefined`: an
+ * image of a type other than 44.36 names, a document neither a base64 PDF nor plain text.
  */
-export function blocksOf(content: AssistantContent[]): unknown[] {
+function refusalOf(
+    piece: Extract<AssistantContent, { type: 'image' | 'document' }>,
+): string | undefined {
+    const source = piece.source as
+        { type?: unknown; media_type?: unknown; data?: unknown } | undefined
+    if (typeof source?.data !== 'string')
+        return `An ${piece.type} in the transcript carries no source data. RULEBOOK 44.36.`
+    if (piece.type === 'image')
+        return source.type === 'base64' &&
+            IMAGE_TYPES.has(source.media_type as string)
+            ? undefined
+            : `An image in the transcript is ${String(source.media_type)}, and a model is shown only ${[...IMAGE_TYPES].join(', ')}. RULEBOOK 44.36.`
+    return (source.type === 'base64' &&
+        source.media_type === 'application/pdf') ||
+        (source.type === 'text' && source.media_type === 'text/plain')
+        ? undefined
+        : `A document in the transcript is ${String(source.media_type)}, and a model reads only a base64 application/pdf or a text/plain one. RULEBOOK 44.36.`
+}
+
+/**
+ * Pieces as the Messages API's blocks, which they already are, in order — save a text of whitespace
+ * alone, which the API refuses. 44.38.
+ */
+export function blocksOf(content: AssistantContent[]): AssistantContent[] {
+    const blocks: AssistantContent[] = []
+    for (const piece of content)
+        if (piece.type !== 'text' || /\S/.test(piece.text)) blocks.push(piece)
+    return blocks
+}
+
+/**
+ * A tool's answer as the Messages API's blocks for a `tool_result`: text as text, save whitespace
+ * alone, and an MCP image as an image block. 44.35.
+ */
+export function toolBlocksOf(content: ToolAnswer['content']): unknown[] {
     const blocks: unknown[] = []
     for (const piece of content)
         if (piece.type === 'image')
@@ -544,8 +581,10 @@ export function blocksOf(content: AssistantContent[]): unknown[] {
     return blocks
 }
 
-/** The words of `content`, its images left out. */
-export function textOf(content: AssistantContent[]): string {
+/** The words of `content`, its images and documents left out. */
+export function textOf(
+    content: readonly (AssistantContent | ToolAnswer['content'][number])[],
+): string {
     let text = ''
     for (const piece of content) if (piece.type === 'text') text += piece.text
     return text

@@ -205,31 +205,74 @@ test('a permission prompt is answered through permit', async () => {
     await settled()
 })
 
+/** Drops `files` on the composer, as a drag from the desktop would. */
+async function dropped(files: File[]) {
+    const drop = new DragEvent('drop', { bubbles: true, cancelable: true })
+    Object.defineProperty(drop, 'dataTransfer', {
+        value: { types: ['Files'], files, items: [] },
+    })
+    document.querySelector('form')?.dispatchEvent(drop)
+    await settled()
+    flushSync()
+}
+
 // THE REVERT: drop the `dropzone` from the composer, and the screenshot dropped on it never reaches
 // the question.
 test('an image dropped on the composer goes with the next question', async () => {
     const stream = fed()
     using _chat = await mount(Chat({ ask: stream.ask }))
-    const card = new File([new Uint8Array([137, 80, 78, 71])], 'card.png', {
-        type: 'image/png',
-    })
-    const drop = new DragEvent('drop', { bubbles: true, cancelable: true })
-    Object.defineProperty(drop, 'dataTransfer', {
-        value: { types: ['Files'], files: [card], items: [] },
-    })
-    document.querySelector('form')?.dispatchEvent(drop)
-    await settled()
-    flushSync()
+    await dropped([
+        new File([new Uint8Array([137, 80, 78, 71])], 'card.png', {
+            type: 'image/png',
+        }),
+    ])
     expect(document.querySelectorAll('[data-chat=attachment]')).toHaveLength(1)
     type('Who is on this card?')
     press({})
     const [message] = stream.asked[0] ?? []
     expect(message?.role).toBe('user')
     expect(message?.content).toEqual([
-        { type: 'image', data: 'iVBORw==', mimeType: 'image/png' },
+        {
+            type: 'image',
+            source: {
+                type: 'base64',
+                media_type: 'image/png',
+                data: 'iVBORw==',
+            },
+        },
         { type: 'text', text: 'Who is on this card?' },
     ])
     expect(document.querySelector('[data-chat=attachment]')).toBeNull()
+    stream.end()
+    await settled()
+})
+
+// THE REVERT: hand the composer's dropzone an image's accept alone, as before documents, and the
+// statement is turned away — no attachment, and the question goes without it.
+test('a PDF dropped on the composer goes with the next question as a document', async () => {
+    const stream = fed()
+    using _chat = await mount(Chat({ ask: stream.ask }))
+    await dropped([
+        new File(['%PDF'], 'statement.pdf', { type: 'application/pdf' }),
+    ])
+    expect(
+        document.querySelector('[data-chat=attachment]')?.textContent,
+    ).toContain('statement.pdf')
+    type('What does this owe?')
+    press({})
+    const [message] = stream.asked[0] ?? []
+    expect(message?.content).toEqual([
+        {
+            type: 'document',
+            source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: btoa('%PDF'),
+            },
+            title: 'statement.pdf',
+        },
+        { type: 'text', text: 'What does this owe?' },
+    ])
     stream.end()
     await settled()
 })

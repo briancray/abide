@@ -8,7 +8,6 @@ import { autoscroll } from '#shared/autoscroll.ts'
 import { copy } from '#shared/copy.ts'
 import { dismissible } from '#shared/dismissible.ts'
 import { dropzone } from '#shared/dropzone.ts'
-import { imageFiles } from '#shared/imagePiece.ts'
 import { tip } from '#shared/tooltip/tip.ts'
 import { shown } from '#shared/tooltip/tips.ts'
 
@@ -238,7 +237,7 @@ test('data-dragging stays while a drag crosses into a child, and leaves with it 
     stop()
 })
 
-test('a drop takes what accept takes, by type, extension or function — 53.18, 53.19', () => {
+test('a drop takes what accept takes, by type, extension or wildcard — 53.18, 53.19', () => {
     const zone = element()
     const taken: string[][] = []
     const take = (files: File[]) => taken.push(files.map((file) => file.name))
@@ -248,7 +247,7 @@ test('a drop takes what accept takes, by type, extension or function — 53.18, 
             zone,
             dropzone({ onfiles: take, accept: 'image/*', multiple: false }),
         ).stop,
-        hosted(zone, dropzone({ onfiles: take, accept: imageFiles })).stop,
+        hosted(zone, dropzone({ onfiles: take, accept: 'image/png' })).stop,
     ]
     expect(drag(zone, 'dragover', [CONTRACT, PHOTO])).toBe(true)
     expect(drag(zone, 'drop', [CONTRACT, PHOTO, PHOTO])).toBe(true)
@@ -367,10 +366,7 @@ test('a pick through the input lands in files, filtered as a drop is — 53.57',
     ])
     expect(input.value).toBe('')
     expect(byType.input.accept).toBe('image/*')
-    const byFunction = dropzone({ accept: imageFiles })
-    picked(byFunction, [CONTRACT, PHOTO])
-    expect(byFunction.files().map((file) => file.name)).toEqual(['signing.png'])
-    expect(byFunction.input.accept).toBeUndefined()
+    expect(dropzone().input.accept).toBeUndefined()
 })
 
 // 53.56 — WHAT A DROP TAKES REPLACES THE FILES, one under `multiple: false`, and a drop taking nothing

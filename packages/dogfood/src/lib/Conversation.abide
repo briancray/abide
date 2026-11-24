@@ -42,6 +42,8 @@ const talk = chat({
                         <p {...talk.text}>{part.text}</p>
                     {:else if part.type === 'image'}
                         <img {...talk.image(part)} alt="an image you sent">
+                    {:else if part.type === 'document'}
+                        <span {...talk.document(part)}>{part.title ?? 'a document'}</span>
                     {:else if part.type === 'tool'}
                         <div {...talk.tool(part).tool}><AnswerTool part={part} /></div>
                     {:else if part.type === 'permission'}
@@ -64,10 +66,14 @@ const talk = chat({
     <form {...talk.composer}>
         {#if talk.attached.length > 0}
             <div {...talk.attachments}>
-                {#for image of talk.attached key image}
-                    <span {...talk.attachment(image).attachment}>
-                        <img {...talk.attachment(image).image} alt="an image to send">
-                        <button {...talk.attachment(image).remove}>×</button>
+                {#for piece of talk.attached key piece}
+                    <span {...talk.attachment(piece).attachment}>
+                        {#if piece.type === 'image'}
+                            <img {...talk.attachment(piece).image} alt="an image to send">
+                        {:else}
+                            <span>{piece.title ?? 'a document'}</span>
+                        {/if}
+                        <button {...talk.attachment(piece).remove}>×</button>
                     </span>
                 {/for}
             </div>
@@ -75,7 +81,7 @@ const talk = chat({
         {#if talk.pending}
             <div {...talk.queued}>
                 <span>{talk.pending
-                    .map((part) => (part.type === 'text' ? part.text : 'an image'))
+                    .map((part) => (part.type === 'text' ? part.text : `a ${part.type}`))
                     .join(' ')}</span>
                 <button {...talk.cancel}>Cancel</button>
             </div>

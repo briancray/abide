@@ -4,10 +4,28 @@
 
 import type { Method } from './rpc.ts'
 
-/** A piece of a turn: words, or an image as base64 with its type. */
+/**
+ * A piece of a turn, as the Messages API's content block: words, an image as base64, or a document —
+ * a PDF as base64, or a file's text — titled with its file's name.
+ */
 export type AssistantContent =
     | { type: 'text'; text: string }
-    | { type: 'image'; data: string; mimeType: string }
+    | {
+          type: 'image'
+          source: {
+              type: 'base64'
+              media_type:
+                  'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+              data: string
+          }
+      }
+    | {
+          type: 'document'
+          source:
+              | { type: 'base64'; media_type: 'application/pdf'; data: string }
+              | { type: 'text'; media_type: 'text/plain'; data: string }
+          title?: string
+      }
 
 /** One turn of the transcript a caller sends: its words, or its pieces in order. */
 export type AssistantMessage = {

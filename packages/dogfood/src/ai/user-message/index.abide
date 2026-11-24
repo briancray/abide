@@ -1,0 +1,96 @@
+<script>
+import { url } from '@abide/abide'
+
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/ai/assistant', '/headless/dropzone', '/headless/chat']}
+    tests={[
+        {
+            path: 'packages/abide/tests/userMessage.test.ts',
+            from: [
+                "test('a PDF is a document, a file of text a text document, each titled with its name, and the words come last — 44.55'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/userMessage.test.ts',
+            from: [
+                "test('an image is drawn down to 1568 on its long side, a photo as a JPEG — 44.52, 44.53'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/userMessage.test.ts',
+            from: [
+                "test('an image nothing can draw goes as it is, or throws where a model is not shown its type — 44.54'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Ask about a statement dropped on the question">
+        <p>Keep the files a <a href={url('/headless/dropzone')}><code>dropzone</code></a> takes,
+            and hand them to <code>userMessage</code> with the question when it is sent. A PDF
+            goes as a document, titled with its file's name.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { dropzone, reactive, userMessage } from '@abide/abide'
+            import askAssistant from './askAssistant.handler.ts'
+
+            let question = reactive('')
+            let files = reactive<File[]>([])
+            const drop = dropzone({
+                accept: 'application/pdf,image/*',
+                onfiles: (taken) => files.patch((all) => all.push(...taken)),
+            })
+
+            async function send() {
+                const message = await userMessage(question, files)
+                askAssistant({ messages: [message] })
+                files = []
+            }
+            </script>
+
+            <form {...drop.host} onsubmit={send}>
+                <textarea bind:value={question}></textarea>
+                <button>Ask</button>
+            </form>
+        `} />
+    </Section>
+
+    <Section level={3} title="Ask the assistant about a photo of a business card">
+        <p>A photo is drawn down to 1568 pixels on its long side, with where it was taken left
+            behind.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { userMessage } from '@abide/abide'
+            import askAssistant from './askAssistant.handler.ts'
+
+            async function ask(event: Event) {
+                const [card] = (event.target as HTMLInputElement).files ?? []
+                if (card === undefined) return
+                const message = await userMessage('Add this contact.', [card])
+                askAssistant({ messages: [message] })
+            }
+            </script>
+
+            <input type="file" accept="image/*" onchange={ask}>
+        `} />
+    </Section>
+
+    <Section level={3} title="Tell the person which file the assistant cannot read">
+        <p>A file no model reads, or a phone's HEIC this browser cannot redraw, throws, naming
+            the file.</p>
+        <Code language="ts" caption="browser" code={`
+            import { userMessage } from '@abide/abide'
+            import askAssistant from './askAssistant.handler.ts'
+
+            try {
+                askAssistant({ messages: [await userMessage(question, files)] })
+            } catch (error) {
+                failure = (error as Error).message
+            }
+        `} />
+    </Section>
+</Doc>

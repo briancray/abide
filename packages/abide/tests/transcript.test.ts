@@ -82,17 +82,35 @@ test('a run of text grows one part in place — 53.24', () => {
     expect((part as { text: string }).text).toHaveLength(50)
 })
 
-test('a conversation sends its words and images, and leaves out an answer with none — 53.28, 53.29', () => {
+// THE REVERT: pass on a user turn's image parts alone, as before documents; the statement is left
+// out — the third message's content holds the image and the words and no document.
+test('a conversation sends its words, images and documents, and leaves out an answer with none — 53.28, 53.29', () => {
     const image = {
         type: 'image' as const,
-        data: 'AAAA',
-        mimeType: 'image/png',
+        source: {
+            type: 'base64' as const,
+            media_type: 'image/png' as const,
+            data: 'AAAA',
+        },
+    }
+    const statement = {
+        type: 'document' as const,
+        source: {
+            type: 'base64' as const,
+            media_type: 'application/pdf' as const,
+            data: 'JVBERg==',
+        },
+        title: 'statement.pdf',
     }
     expect(
         messages([
             turn('user', [{ type: 'text', text: 'Who is this?' }]),
             turn('assistant', [{ type: 'text', text: 'Ada.' }]),
-            turn('user', [image, { type: 'text', text: 'And this card?' }]),
+            turn('user', [
+                image,
+                statement,
+                { type: 'text', text: 'And this card?' },
+            ]),
             turn('assistant'),
         ]),
     ).toEqual([
@@ -100,7 +118,11 @@ test('a conversation sends its words and images, and leaves out an answer with n
         { role: 'assistant', content: 'Ada.' },
         {
             role: 'user',
-            content: [image, { type: 'text', text: 'And this card?' }],
+            content: [
+                image,
+                statement,
+                { type: 'text', text: 'And this card?' },
+            ],
         },
     ])
 })

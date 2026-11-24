@@ -9,7 +9,7 @@
 import { framedStream } from '#shared/framing.ts'
 import { refuse } from '#shared/refuse.ts'
 
-import { blocksOf, type Provider, textOf } from './assistant.ts'
+import { blocksOf, type Provider, textOf, toolBlocksOf } from './assistant.ts'
 
 /** A Messages API request body, less what abide writes, with the client's key and origin. */
 export type ClaudeApiConfig = {
@@ -81,7 +81,7 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
                     input_schema: tool.inputSchema,
                 })
             const history: { role: string; content: unknown }[] = []
-            // 44.38 — each image in its place in its turn.
+            // 44.38 — each image and document in its place in its turn.
             for (const message of messages)
                 history.push({
                     role: message.role,
@@ -215,7 +215,7 @@ export function claudeApi(config: ClaudeApiConfig): Provider {
                     content.push({
                         type: 'tool_result',
                         tool_use_id: answer.id,
-                        content: blocksOf(answer.content),
+                        content: toolBlocksOf(answer.content),
                         is_error: answer.failed,
                     })
                 }

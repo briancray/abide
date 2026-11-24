@@ -8,7 +8,6 @@ import type { AssistantTurn, AssistantTurnPart } from './AssistantTurn.ts'
 import { autoscroll } from './autoscroll.ts'
 import { dropzone } from './dropzone.ts'
 import { hotkeys } from './hotkeys.ts'
-import { imageFiles, imagePiece } from './imagePiece.ts'
 import { type Live, live } from './live.ts'
 import { messageOf } from './messageOf.ts'
 import { reactive } from './reactive/index.ts'
@@ -16,9 +15,12 @@ import type { Reactive } from './reactive/Reactive.ts'
 import { fold } from './transcript/fold.ts'
 import { messages } from './transcript/messages.ts'
 import { turn as turnOf } from './transcript/turn.ts'
+import { ATTACHABLE, userMessage } from './userMessage.ts'
 import { withPart } from './withPart.ts'
 
 type Image = Extract<AssistantTurnPart, { type: 'image' }>
+type Document = Extract<AssistantTurnPart, { type: 'document' }>
+type Attached = Image | Document
 type ToolPart = Extract<AssistantTurnPart, { type: 'tool' }>
 type Permission = Extract<AssistantTurnPart, { type: 'permission' }>
 
@@ -80,6 +82,8 @@ export type ChatParts = {
     readonly text: Record<string, unknown>
     /** An image piece's element: its `src`. */
     image(image: Image): Record<string, unknown>
+    /** A document piece's element: `data-chat="document"`, its `title` the file's name. */
+    document(document: Document): Record<string, unknown>
     /** A tool call's elements: the call, with `data-status`, and its name, input and result. */
     tool(part: ToolPart): {
         readonly tool: Record<string, unknown>
@@ -97,18 +101,18 @@ export type ChatParts = {
         readonly deny: Record<string, unknown>
         readonly answer: 'waiting' | 'allowed' | 'denied'
     }
-    /** 53.17-53.20 — the composer: a `<form>` that sends, and takes images dropped on it or pasted into it. */
+    /** 53.17-53.20 — the composer: a `<form>` that sends, and takes files dropped on it or pasted into it. */
     readonly composer: Record<string, unknown>
     /** 53.33 — the text input: Enter sends, Shift+Enter breaks the line. */
     readonly input: Record<string, unknown>
     /** What is being written. */
     readonly draft: Reactive<string>
-    /** The images attached to what is being written. */
-    get attached(): readonly Image[]
-    /** The element holding the attached images. */
+    /** The images and documents attached to what is being written. */
+    get attached(): readonly Attached[]
+    /** The element holding what is attached. */
     readonly attachments: Record<string, unknown>
-    /** An attached image's elements: the image, and the button taking it off. */
-    attachment(image: Image): {
+    /** An attachment's elements: the attachment, with `data-type`, an image's `src`, and the button taking it off. */
+    attachment(attached: Attached): {
         readonly attachment: Record<string, unknown>
         readonly image: Record<string, unknown>
         readonly remove: Record<string, unknown>
@@ -125,7 +129,8 @@ export type ChatParts = {
     readonly send: Record<string, unknown>
 }
 
-const sourceOf = (image: Image) => `data:${image.mimeType};base64,${image.data}`
+const sourceOf = (image: Image) =>
+    `data:${image.source.media_type};base64,${image.source.data}`
 
 /** A conversation over an assistant handler, as parts: the transcript and the composer. */
 export function chat(options: ChatOptions): ChatParts {
@@ -134,7 +139,7 @@ export function chat(options: ChatOptions): ChatParts {
     const draft = reactive('')
     // 53.34 — what was sent while an answer streamed, sent once it ends unless it is cancelled.
     const queued = reactive<AssistantTurnPart[] | undefined>(undefined)
-    const attached = reactive<Image[]>([])
+    const attached = reactive<Attached[]>([])
     const streaming = reactive(false)
     // The answer in flight, which `stop` aborts.
     let asking: AbortController | undefined
@@ -213,15 +218,17 @@ export function chat(options: ChatOptions): ChatParts {
         })
     }
 
+    // 53.37 — each file as `userMessage` makes it, taken when it lands so its image shows at once.
     async function attach(files: File[]) {
         for (const file of files)
             try {
-                const piece = await imagePiece(file)
+                const { content } = await userMessage('', [file])
                 attached.patch((all) => {
-                    all.push(piece)
+                    for (const piece of content)
+                        if (piece.type !== 'text') all.push(piece)
                 })
             } catch {
-                // An image this browser cannot draw is left out.
+                // A file this browser cannot draw, or none a model reads, is left out.
             }
     }
 
@@ -237,8 +244,8 @@ export function chat(options: ChatOptions): ChatParts {
 
     // 53.33 — Enter sends and Shift+Enter breaks the line; `hotkeys` leaves an input method's Enter be.
     const keys = hotkeys({ Enter: { run: () => send(), editable: true } })
-    // 53.17-53.20 — images dropped on the composer or pasted into it.
-    const drop = dropzone({ accept: imageFiles, paste: true, onfiles: attach })
+    // 53.17-53.20 — files dropped on the composer or pasted into it.
+    const drop = dropzone({ accept: ATTACHABLE, paste: true, onfiles: attach })
     // 53.39 — the transcript kept at its bottom.
     const follow = autoscroll()
 
@@ -285,6 +292,10 @@ export function chat(options: ChatOptions): ChatParts {
         },
         text: { 'data-chat': 'text' },
         image: (image) => ({ 'data-chat': 'image', src: sourceOf(image) }),
+        document: (document) => ({
+            'data-chat': 'document',
+            title: document.title,
+        }),
         tool(part) {
             const status =
                 part.result === undefined
@@ -357,17 +368,25 @@ export function chat(options: ChatOptions): ChatParts {
             return attached()
         },
         attachments: { 'data-chat': 'attachments' },
-        attachment(image) {
+        attachment(piece) {
             return {
-                attachment: { 'data-chat': 'attachment' },
-                image: { src: sourceOf(image) },
+                attachment: {
+                    'data-chat': 'attachment',
+                    'data-type': piece.type,
+                },
+                image: {
+                    src: piece.type === 'image' ? sourceOf(piece) : undefined,
+                },
                 remove: {
                     type: 'button',
                     'data-chat': 'remove',
-                    'aria-label': 'Remove this image',
+                    'aria-label':
+                        piece.type === 'image'
+                            ? 'Remove this image'
+                            : `Remove ${piece.title ?? 'this document'}`,
                     onclick: () =>
                         attached.patch((all) => {
-                            const at = all.indexOf(image)
+                            const at = all.indexOf(piece)
                             if (at >= 0) all.splice(at, 1)
                         }),
                 },
