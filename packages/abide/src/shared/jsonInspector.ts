@@ -1,4 +1,4 @@
-// 51.153-51.161 — A JSON VALUE TO SEARCH AND INSPECT, as parts an app spreads onto elements of its own: a
+// 51.157-51.165 — A JSON VALUE TO SEARCH AND INSPECT, as parts an app spreads onto elements of its own: a
 // search field, and `tree`'s parts over a row per value, each told apart by its JSON Pointer. The rows
 // are flat — a row says its depth through `aria-level` — so a large document renders as one list, and
 // a search narrows the tree to its matches and what holds them, opened, without writing `expanded`.
@@ -168,7 +168,7 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
 
     const needles = memo(() => needlesOf(query(), false))
 
-    // 51.156, 51.157 — WHAT A SEARCH KEEPS: each row matching, in order; each row's entries that
+    // 51.160, 51.161 — WHAT A SEARCH KEEPS: each row matching, in order; each row's entries that
     // match or hold a match — all of them under a row that matches — and the rows holding a match.
     // None while the query is blank.
     const found = memo(() => {
@@ -204,7 +204,7 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
         }
     })
 
-    // 51.157 — under a query the rows holding a match are open, and a toggle there is held apart from
+    // 51.161 — under a query the rows holding a match are open, and a toggle there is held apart from
     // `expanded` for as long as that query stands.
     const searched = reactive<
         { query: string; open: readonly string[] } | undefined
@@ -241,7 +241,7 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
 
     return {
         id: base,
-        // 51.159 — typing searches, and the field shows what is searched for.
+        // 51.163 — typing searches, and the field shows what is searched for.
         search: {
             type: 'search',
             'data-json-inspector': 'search',
@@ -298,7 +298,7 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
         get matches() {
             return found()?.matches ?? NO_ROWS
         },
-        // 51.160
+        // 51.164
         get inspected() {
             const pointer = selected()
             return pointer === undefined

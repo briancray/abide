@@ -226,6 +226,7 @@ export {
     accordion,
 } from './accordion.ts'
 export { type Clamp, type ClampOptions, clamp } from './clamp.ts'
+export { type Spoiler, type SpoilerOptions, spoiler } from './spoiler.ts'
 export {
     type Breadcrumbs,
     type BreadcrumbsOptions,
@@ -270,7 +271,7 @@ export {
     toggleGroup,
 } from './toggleGroup.ts'
 export { type Tree, type TreeNode, type TreeOptions, tree } from './tree.ts'
-// 51.153-51.161 — a JSON value to search and inspect, as `tree`'s parts and a search field.
+// 51.157-51.165 — a JSON value to search and inspect, as `tree`'s parts and a search field.
 export {
     type JsonInspector,
     type JsonInspectorOptions,
