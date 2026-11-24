@@ -1,5 +1,0 @@
----
-"@abide/abide": minor
----
-
-Every behavior abide applies to an element is a part you spread, not a function handed to `bind:element` (RULEBOOK 49.12). `tooltip.tip`, `dismissible`, `popover`, `copy`, `scrollEdges`, `observe.size`, `observe.visible` and `observe.rect` each hand back a part: write `{...copy()}` where you wrote `bind:element={copy()}`, `{...scrollEdges()}` where you wrote `bind:element={scrollEdges}`, and spread each one of a `bind:element={[a, b]}` list on its own. Several spread on one element, and a written `bind:element` beside them, are each handed the element in source order (32.99). A part also works on a component that spreads its rest onto its root, where `bind:element` is refused. What a behavior needs in the markup is now written by the server: `tooltip.tip`'s `aria-description` (50.23) and `popover`'s `popover="manual"` (50.48), with an attribute the element writes itself winning. Each part carries its `data-` name (49.3): `data-copy`, `data-dismissible`, `data-popover`, `data-scroll-edges`, `data-observe` (`host`) and `data-tooltip` (`anchor`).
