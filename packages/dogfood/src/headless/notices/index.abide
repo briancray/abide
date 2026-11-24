@@ -28,7 +28,17 @@ import banner from './lib/Banner.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/notices.test.ts',
             from: [
-                "test('a notice is keyed by default by a short hash of it as JSON",
+                "test('a notice is told apart by default by a short hash of it as JSON",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/notices.test.ts',
+            from: ["test('a notice whose id the list holds is not added again"],
+        },
+        {
+            path: 'packages/abide/tests/notices.test.ts',
+            from: [
+                'test("a dismissal is remembered by the notice\'s id where the list names no key',
             ],
         },
         {
@@ -78,9 +88,11 @@ import banner from './lib/Banner.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Choose what makes two announcements the same">
-        <p>By default two notices are the same only where everything about them is, so any change,
-            its tone included, shows a notice again. <code>key</code> picks what counts: here only
-            the words. What it answers is stored as a short hash, however long.</p>
+        <p>A notice is told apart by its <code>id</code>, and where it is given none, by everything
+            about it, so any change, its tone included, shows it again. Give an <code>id</code> to
+            keep a reworded announcement closed, or a list's <code>key</code> to remember it by
+            something else: here only the words. What <code>key</code> answers is stored as a short
+            hash, however long.</p>
         <Code language="ts" caption="browser" code={`
             import { notices, store } from '@abide/abide'
 
@@ -88,7 +100,9 @@ import banner from './lib/Banner.abide' with { type: 'text' }
                 store: store.cookies('announcements'),
                 timeout: Infinity,
                 key: (notice) => notice.text,
-                initial: ['Pipelines can now be shared with a link.'],
+                initial: [
+                    { id: 'sharing', text: 'Pipelines can now be shared.' },
+                ],
             })
         `} />
     </Section>

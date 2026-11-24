@@ -5129,8 +5129,10 @@ text typed, trimmed, matches `mustType`, trimmed, ignoring case.
 
 50.11 `prompts.confirm`, `prompts.alert` and `prompts.prompt` MUST throw where `isServer` is true.
 
-50.12 A `notices` list's `notify` MUST add its notice to the end of its `list` under an id no other
-notice of any list holds, and hand back that id.
+50.12 A `notices` list's `notify` MUST add its notice to the end of its `list` and hand back its
+id, save that a notice whose id the list holds already MUST NOT be added, nor its timer started nor
+its `onclose` kept, and its id MUST be handed back all the same; and `initial` MUST hold no id
+twice, by the same rule.
 
 50.13 A notice MUST leave its `list` once its `timeout` has passed, and a `timeout` of `Infinity`
 MUST keep it there.
@@ -5324,8 +5326,9 @@ be remembered in that `store` under its key until `ttl` milliseconds after it le
 50.70 A `notices` list's `list` MUST start holding its `initial` notices in the order given, on a
 server too.
 
-50.71 A notice's key MUST be a hash of what its list's `key` answers for it, and where the list is
-given none, of the notice as JSON, its `id` and its key left out.
+50.71 A notice's id MUST be the `id` it was given, and where it was given none a hash of the notice
+as JSON, its id left out; and the key a dismissal is remembered by MUST be a hash of what its list's
+`key` answers for it, and where the list is given none, of its id.
 
 50.72 A notice MUST leave its `list` once its `expires` has passed, as 50.13 has it leave at its
 `timeout`.

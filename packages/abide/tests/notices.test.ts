@@ -57,36 +57,32 @@ test("one list's notices never enter another's — 50.68", () => {
     expect(texts(shown(banner).notices)).toEqual(['We are live'])
 })
 
-// Keyed by text, and the key a store holds for `text`.
+// Remembered by text, and the key a store holds for `text`.
 const byText = (notice: { text: string }): string => notice.text
 const keyed = hashText
 
-// THE REVERT: keep what `key` answers as it is, and the long announcement's key is the whole
-// sentence — what the store would hold, in a cookie of 4096 bytes.
-test('a list starts with its initial notices, in order, each keyed by a hash of what its key answers — 50.70, 50.71', () => {
+test('a list starts with its initial notices, in order, each under the id it was given or a short hash of it — 50.70, 50.71', () => {
     const banner = notices({
         timeout: Infinity,
-        key: (notice) => `${notice.tone}:${notice.text}`,
         initial: [
-            'We are live',
+            { text: 'We are live', id: 'launch' },
             {
                 text: 'Pipelines can now be shared with a link, from any pipeline.',
                 tone: 'success',
             },
         ],
     })
-    expect(banner.list().map((notice) => notice.key)).toEqual([
-        keyed('info:We are live'),
-        keyed(
-            'success:Pipelines can now be shared with a link, from any pipeline.',
-        ),
+    expect(banner.list().map((notice) => notice.text)).toEqual([
+        'We are live',
+        'Pipelines can now be shared with a link, from any pipeline.',
     ])
-    expect(banner.list()[1]?.key.length).toBeLessThan(12)
+    expect(banner.list()[0]?.id).toBe('launch')
+    expect(banner.list()[1]?.id.length).toBeLessThan(12)
 })
 
-// THE REVERT: hash the notice with its `id` in it, and the same announcement is a new key on every
-// page load — the two lists below disagree, and nothing closed stays closed.
-test('a notice is keyed by default by a short hash of it as JSON, its id left out — 50.71', () => {
+// THE REVERT: hash the notice with a page load's counter in it, and the same announcement is a new id
+// on every page load — the two lists below disagree, and nothing closed stays closed.
+test('a notice is told apart by default by a short hash of it as JSON — 50.71', () => {
     const LONG =
         'Pipelines can now be shared with a link, from the menu on any pipeline.'
     const run = () => {}
@@ -95,24 +91,55 @@ test('a notice is keyed by default by a short hash of it as JSON, its id left ou
         timeout: Infinity,
         initial: ['other', LONG, { text: LONG, tone: 'error' }],
     }).list()
-    expect(first?.id).not.toBe(second[1]?.id)
-    expect(second[1]?.key).toBe(first?.key as string)
-    expect(first?.key.length).toBeLessThan(12)
-    // Its content is the key: other words, or another tone, are another notice.
-    expect(second[0]?.key).not.toBe(first?.key as string)
-    expect(second[2]?.key).not.toBe(first?.key as string)
+    expect(second[1]?.id).toBe(first?.id as string)
+    expect(first?.id.length).toBeLessThan(12)
+    // Its content is its id: other words, or another tone, are another notice.
+    expect(second[0]?.id).not.toBe(first?.id as string)
+    expect(second[2]?.id).not.toBe(first?.id as string)
     // An action's `run` is no part of it, as JSON has no function.
     const withAction = (label: string) =>
         notices({
             timeout: Infinity,
             initial: [{ text: LONG, action: { label, run } }],
-        }).list()[0]?.key
+        }).list()[0]?.id
     expect(withAction('Open')).toBe(
         notices({
             timeout: Infinity,
             initial: [{ text: LONG, action: { label: 'Open', run: () => 1 } }],
-        }).list()[0]?.key as string,
+        }).list()[0]?.id as string,
     )
+})
+
+// THE REVERT: drop the `holds` check from `notify`, and the list holds `Saved` twice, its second
+// `onclose` told as well — two notices where one is due, and a reason for a notice never shown.
+test('a notice whose id the list holds is not added again, and hands back that id — 50.12', async () => {
+    const reasons: string[] = []
+    const corner = notices({ timeout: Infinity })
+    const id = corner.notify('Saved', {
+        onclose: (reason) => reasons.push(`first ${reason}`),
+    })
+    const again = corner.notify('Saved', {
+        onclose: (reason) => reasons.push(`second ${reason}`),
+    })
+    corner.notify('Saving', { id: 'progress' })
+    expect(corner.notify('Saved 40%', { id: 'progress' })).toBe('progress')
+    expect(again).toBe(id)
+    expect(texts(corner.list())).toEqual(['Saved', 'Saving'])
+    corner.dismiss(id)
+    expect(reasons).toEqual(['first dismissed'])
+})
+
+// THE REVERT: remember a dismissal by the notice's text where no `key` is given, and the store holds
+// the words' hash rather than the id's.
+test("a dismissal is remembered by the notice's id where the list names no key — 50.71, 50.69", () => {
+    const { store, writes } = memory()
+    const banner = notices({
+        store,
+        timeout: Infinity,
+        initial: [{ text: 'We are live', id: 'launch' }],
+    })
+    banner.dismiss('launch')
+    expect(Object.keys(writes.at(-1) ?? {})).toEqual([keyed('launch')])
 })
 
 // THE REVERT: remember a notice whatever took it, and the timed-out one lands in the store beside the
@@ -133,7 +160,7 @@ test('a dismissal and an action are remembered for ttl, and a timeout is not —
     })
     const host = shown(banner)
     const before = Date.now()
-    banner.dismiss((banner.list()[1] as { id: number }).id)
+    banner.dismiss((banner.list()[1] as { id: string }).id)
     host.notice(banner.list().at(-1) as never).act()
     await Bun.sleep(20)
     const remembered = writes.at(-1) ?? {}
@@ -170,7 +197,7 @@ test('a write leaves out every dismissal already forgotten — 50.73', () => {
         key: byText,
         initial: ['We are live'],
     })
-    banner.dismiss((banner.list()[0] as { id: number }).id)
+    banner.dismiss((banner.list()[0] as { id: string }).id)
     expect(Object.keys(writes.at(-1) ?? {}).sort()).toEqual(
         [keyed('We are live'), 'kept'].sort(),
     )
@@ -184,7 +211,7 @@ test('a dismissal remembered forever is kept as a number JSON holds — 50.69', 
         key: byText,
         initial: ['We are live'],
     })
-    banner.dismiss((banner.list()[0] as { id: number }).id)
+    banner.dismiss((banner.list()[0] as { id: string }).id)
     expect(JSON.parse(JSON.stringify(writes.at(-1)))).toEqual({
         [keyed('We are live')]: Number.MAX_SAFE_INTEGER,
     })

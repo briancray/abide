@@ -188,7 +188,6 @@ test('a notice lands at the end of the list and leaves it at its timeout — 50.
     expect(id).not.toBe(first)
     expect(toasts.list().at(-1)).toEqual({
         id,
-        key: expect.any(String),
         text: 'Phone saved',
         tone: 'success',
         action: undefined,
@@ -282,8 +281,7 @@ test('the notices and the prompts are one list per request — 11.32', async () 
     await inScope(new Request('http://app/a'), async () => {
         toasts.list.set([
             {
-                id: 1,
-                key: 'Ada saved',
+                id: 'ada',
                 text: 'Ada saved',
                 tone: 'info',
                 action: undefined,

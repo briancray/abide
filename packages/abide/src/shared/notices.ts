@@ -13,10 +13,8 @@ import { standing } from './standing.ts'
 
 /** One notice in a `notices` list: what it says, its tone, and the action it offers, where it offers one. */
 export type Notice = {
-    /** What `notify` handed back for it, and what `dismiss` takes. */
-    id: number
-    /** What a dismissal is remembered by: a hash of what the list's `key` answers for it (50.71). */
-    key: string
+    /** What tells it from another notice: the `id` it was given, or a hash of it as JSON (50.71). What `notify` hands back and `dismiss` takes. */
+    id: string
     /** What it says, written in the `text` part. */
     text: string
     /** Written as `data-tone` on the notice. */
@@ -34,6 +32,8 @@ export type CloseReason = 'timeout' | 'dismissed' | 'action'
 
 /** How a notice reads, how long it stays, and what it offers. */
 export type NotifyOptions = {
+    /** What tells it from another notice. A hash of it as JSON by default, so the same notice has the same id on every page (50.71). */
+    id?: string
     /** `'info'`, `'success'` or `'error'`, written as `data-tone` on the notice. Default `'info'`. */
     tone?: Notice['tone']
     /** Milliseconds before it takes itself down; `Infinity` keeps it until it is dismissed. Default the list's `timeout`. */
@@ -58,8 +58,8 @@ export type NoticesOptions = {
     store?: Store<Record<string, number>>
     /** How long a dismissal is remembered, in milliseconds. Default `Infinity`. */
     ttl?: number
-    /** What makes two notices the same one, kept hashed. Default the notice as JSON (50.71). */
-    key?: (notice: Omit<Notice, 'id' | 'key'>) => string
+    /** What a dismissal is remembered by, kept hashed. The notice's `id` by default (50.71). */
+    key?: (notice: Notice) => string
 }
 
 /** What the region is called. */
@@ -97,9 +97,9 @@ export type NoticesHost = {
 /** A list of notices: what adds one and takes one down, the list itself, and where it shows. */
 export type Notices = {
     /** Shows a notice where the list's `host` is spread, handing back its id for `dismiss`. */
-    notify(text: string, options?: NotifyOptions): number
+    notify(text: string, options?: NotifyOptions): string
     /** Takes a notice down before its timeout; a notice already gone leaves the list as it is (50.15). */
-    dismiss(id: number): void
+    dismiss(id: string): void
     /** The notices added and not yet closed, oldest first. */
     readonly list: Reactive<Notice[]>
     /** The live region the list shows in, as parts to spread, from the script of the one component that shows it. */
@@ -113,14 +113,12 @@ const ERROR_TIMEOUT_MS = 10_000
 // the `expires` filter of the next render.
 const LONGEST_TIMER_MS = 2 ** 31 - 1
 
-// A counter rather than `crypto.randomUUID`, which a page served over plain http does not have; one
-// for every list, so `dismiss` on the wrong list finds nothing (50.15).
-let lastId = 0
-
-// 50.71 — the notice as JSON, without the `id` a page load mints afresh: its action's label, and not
-// its `run`, which JSON leaves out.
-const asJson = (notice: Omit<Notice, 'id' | 'key'>): string =>
-    JSON.stringify(notice)
+// 50.71 — what a notice is told apart by where it names no `id`: it as JSON, hashed so a server's
+// render and every later page agree on it — its action's label, and not its `run`, which JSON leaves
+// out.
+const idOf = (notice: Omit<Notice, 'id'>): string =>
+    hashText(JSON.stringify(notice))
+const byId = (notice: Notice): string => notice.id
 
 /** A list of notices, shown where the app spreads its `host` (50.12). */
 export function notices(options: NoticesOptions = {}): Notices {
@@ -128,7 +126,7 @@ export function notices(options: NoticesOptions = {}): Notices {
     const hosts = standing('a notices host()', 'abide:notices')
     // 50.42 — each notice's `onclose`, by its id, until the notice leaves. Off the `Notice`, which is
     // what `host` shows and an app reads, and a callback is neither.
-    const closers = new Map<number, (reason: CloseReason) => void>()
+    const closers = new Map<string, (reason: CloseReason) => void>()
     // 50.69 — key → the moment its dismissal is forgotten. Built with a `store` alone, so `toasts`
     // reads and writes nothing.
     const remembered =
@@ -136,57 +134,68 @@ export function notices(options: NoticesOptions = {}): Notices {
             ? undefined
             : reactive<Record<string, number>>({}, { store: options.store })
     const rememberTtl = options.ttl ?? Infinity
-    const keyOf = options.key ?? asJson
+    // Hashed whatever `key` answers, so the store holds a short key however long the words.
+    const keyOf = (notice: Notice): string =>
+        hashText((options.key ?? byId)(notice))
 
-    const build = (
-        text: string,
-        given: NotifyOptions,
-        started: number,
-    ): Notice => {
-        lastId += 1
-        const id = lastId
-        if (given.onclose !== undefined) closers.set(id, given.onclose)
-        const tone = given.tone ?? 'info'
-        const expires = given.expires === undefined ? Infinity : +given.expires
-        // 50.13, 50.72 — whichever of its timeout and its expiry comes first takes it down, in a
-        // browser alone: a server renders once, and drops what has expired by the filter in `host`.
-        if (!isServer()) {
-            const timeout =
-                given.timeout ??
-                options.timeout ??
-                (tone === 'error' ? ERROR_TIMEOUT_MS : TIMEOUT_MS)
-            const due = Math.min(timeout, expires - started)
-            if (due <= LONGEST_TIMER_MS)
-                setTimeout(() => close(id, 'timeout'), Math.max(due, 0))
-        }
+    const build = (text: string, given: NotifyOptions): Notice => {
         const content = {
             text,
-            tone,
+            tone: given.tone ?? 'info',
             action: given.action,
             attributes: given.attributes ?? {},
-            expires,
+            expires: given.expires === undefined ? Infinity : +given.expires,
         }
-        // Hashed whatever `key` answers, so the store holds a short key however long the words.
-        return { id, key: hashText(keyOf(content)), ...content }
+        return { id: given.id ?? idOf(content), ...content }
+    }
+
+    // 50.12 — a notice whose id the list holds already is that notice, and is not added twice.
+    const holds = (held: readonly Notice[], id: string): boolean => {
+        for (const notice of held) if (notice.id === id) return true
+        return false
+    }
+
+    // A notice entering the list: its `onclose` kept, and its timer started.
+    const enter = (
+        notice: Notice,
+        given: NotifyOptions,
+        started: number,
+    ): void => {
+        const { id } = notice
+        if (given.onclose !== undefined) closers.set(id, given.onclose)
+        // 50.13, 50.72 — whichever of its timeout and its expiry comes first takes it down, in a
+        // browser alone: a server renders once, and drops what has expired by the filter in `host`.
+        if (isServer()) return
+        const timeout =
+            given.timeout ??
+            options.timeout ??
+            (notice.tone === 'error' ? ERROR_TIMEOUT_MS : TIMEOUT_MS)
+        const due = Math.min(timeout, notice.expires - started)
+        if (due <= LONGEST_TIMER_MS)
+            setTimeout(() => close(id, 'timeout'), Math.max(due, 0))
     }
 
     const seeded: Notice[] = []
     const now = Date.now()
-    for (const entry of options.initial ?? [])
-        seeded.push(
-            typeof entry === 'string'
-                ? build(entry, {}, now)
-                : build(entry.text, entry, now),
+    for (const entry of options.initial ?? []) {
+        const given = typeof entry === 'string' ? {} : entry
+        const notice = build(
+            typeof entry === 'string' ? entry : entry.text,
+            given,
         )
+        if (holds(seeded, notice.id)) continue
+        enter(notice, given, now)
+        seeded.push(notice)
+    }
     const list = reactive<Notice[]>(seeded, { by: 'id' })
 
     // 50.15, 50.42, 50.69 — takes the notice holding `id` out of the list, remembers a dismissal or
     // an action in the store, and tells its `onclose` why.
-    const close = (id: number, reason: CloseReason): void => {
+    const close = (id: string, reason: CloseReason): void => {
         const held = list.peek() ?? []
         const at = held.findIndex((notice) => notice.id === id)
         if (at === -1) return
-        const { key } = held[at] as Notice
+        const leaving = held[at] as Notice
         list.patch((notices) => {
             notices.splice(at, 1)
         })
@@ -200,7 +209,7 @@ export function notices(options: NoticesOptions = {}): Notices {
             ))
                 if (forgotten > closedAt) kept[held] = forgotten
             // JSON has no `Infinity` (8.28), so forever is the furthest moment a number holds exactly.
-            kept[key] = Math.min(
+            kept[keyOf(leaving)] = Math.min(
                 closedAt + rememberTtl,
                 Number.MAX_SAFE_INTEGER,
             )
@@ -212,7 +221,7 @@ export function notices(options: NoticesOptions = {}): Notices {
         onclose(reason)
     }
 
-    const dismiss = (id: number): void => close(id, 'dismissed')
+    const dismiss = (id: string): void => close(id, 'dismissed')
 
     return {
         notify(text, given = {}) {
@@ -221,7 +230,9 @@ export function notices(options: NoticesOptions = {}): Notices {
                     'notify shows a notice to a person, and a server has none to show it to. RULEBOOK 50.16.',
                 )
             hosts.asked()
-            const notice = build(text, given, Date.now())
+            const notice = build(text, given)
+            if (holds(list.peek() ?? [], notice.id)) return notice.id
+            enter(notice, given, Date.now())
             list.patch((notices) => {
                 notices.push(notice)
             })
@@ -257,7 +268,8 @@ export function notices(options: NoticesOptions = {}): Notices {
                         const notice = all[index] as Notice
                         const hidden =
                             notice.expires <= at ||
-                            (forgets[notice.key] ?? 0) > at
+                            (remembered !== undefined &&
+                                (forgets[keyOf(notice)] ?? 0) > at)
                         if (hidden && showing === undefined)
                             showing = all.slice(0, index)
                         else if (!hidden && showing !== undefined)
