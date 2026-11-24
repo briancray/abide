@@ -10,7 +10,7 @@ import Section from '#src/lib/Section.abide'
         '/reactive/refuse',
         '/reactive/is-failed',
         '/handlers/get',
-        '/request/request',
+        '/ambients/request',
     ]}
     tests={[
         {

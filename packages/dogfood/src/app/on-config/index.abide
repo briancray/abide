@@ -5,7 +5,7 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={['/request/config', '/app/environment', '/app/on-start']}
+    seeAlso={['/ambients/config', '/app/environment', '/app/on-start']}
     tests={[
         {
             path: 'packages/abide/tests/routeHooks.test.ts',

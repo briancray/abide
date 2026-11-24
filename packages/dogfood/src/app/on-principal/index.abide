@@ -6,7 +6,7 @@ import Section from '#src/lib/Section.abide'
 
 <Doc
     seeAlso={[
-        '/request/principal',
+        '/ambients/principal',
         '/middleware/signed-in',
         '/middleware/require-role',
         '/app/create-app',

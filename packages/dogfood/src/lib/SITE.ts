@@ -916,63 +916,63 @@ const WRITTEN: readonly {
             'What is true of the work being done — the request, the response, the cookies, the person, the signal that says stop — read without passing it in.',
         pages: [
             {
-                route: '/request/request',
+                route: '/ambients/request',
                 title: '`request`',
                 description:
                     "Read the request being answered, its headers, signal and caller's address, from anywhere in the code answering it.",
                 where: 'server',
             },
             {
-                route: '/request/response',
+                route: '/ambients/response',
                 title: '`response`',
                 description:
                     'Set the status and headers of the answer, or fix it as a page, JSON, a redirect, or a stream.',
                 where: 'server',
             },
             {
-                route: '/request/cookies',
+                route: '/ambients/cookies',
                 title: '`cookies`',
                 description:
                     'Read and write cookies by name on both sides, so the server paints what the browser chose.',
                 where: 'anywhere',
             },
             {
-                route: '/request/principal',
+                route: '/ambients/principal',
                 title: '`principal`',
                 description:
                     'Sign a caller in and out, read who they are, and decide in a handler what they see.',
                 where: 'anywhere',
             },
             {
-                route: '/request/config',
+                route: '/ambients/config',
                 title: '`config`',
                 description:
                     'Read typed settings, defaulted by `onConfig` and overridden by the environment, validated once at start.',
                 where: 'server',
             },
             {
-                route: '/request/server',
+                route: '/ambients/server',
                 title: '`server`',
                 description:
                     'Reach the listening Bun server for what abide does not carry, such as requests in flight.',
                 where: 'server',
             },
             {
-                route: '/request/reachable',
+                route: '/ambients/reachable',
                 title: '`reachable`',
                 description:
                     'Ask whether another host answers, so a handler can refuse at once while it is down.',
                 where: 'server',
             },
             {
-                route: '/request/is-server',
+                route: '/ambients/is-server',
                 title: '`isServer`',
                 description:
                     "Tell whether code is running in a server's request or render or in the browser, to guard browser-only APIs.",
                 where: 'anywhere',
             },
             {
-                route: '/request/abort-signal',
+                route: '/ambients/abort-signal',
                 title: '`abortSignal`',
                 description:
                     "Read the signal that says stop, so a memo's superseded run, a caller who hung up or a stopping app ends its fetch early.",

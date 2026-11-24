@@ -5,7 +5,7 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={['/app/on-health', '/middleware/middleware', '/request/server']}
+    seeAlso={['/app/on-health', '/middleware/middleware', '/ambients/server']}
     tests={[
         {
             path: 'packages/abide/tests/app.test.ts',
