@@ -55,9 +55,9 @@ export { fetchJson } from './fetchJson.ts'
 export { type FetchOptions, fetchText } from './fetchText.ts'
 export { type Job, type JobStatus, job } from './job.ts'
 export { readOnly } from './readOnly.ts'
-export { requireRole } from './requireRole.ts'
 export { trustedIdentity } from './trustedIdentity.ts'
 export { signedIn } from './signedIn.ts'
+export { authorize } from './authorize.ts'
 // 42 — the app object, and 37's hooks a `<script server>` calls.
 export { type App, createApp } from './createApp.ts'
 // 37 — the hooks a `<script server>` and a server module call.

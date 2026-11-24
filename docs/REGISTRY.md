@@ -1154,11 +1154,11 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `signedIn` | `Middleware<never, object, Failed<'SignedOut', undefined>>` | A rung admitting a caller the server authenticated, from `@abide/abide/server`. | 15.9, 54.1 |
 
-## `requireRole`
+## `authorize`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `requireRole` | `(role: string \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string; status?: 403 \| 404 }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined> \| Failed<'NotFound', { path: string; method: string }>>` | A rung admitting a signed-in caller with a role, or one a function passes, from `@abide/abide/server`. | 15.7, 15.9, 54.2, 54.3, 54.4, 54.28 |
+| `authorize` | `(admits: Partial<Principal> \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string; status?: 403 \| 404 }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined> \| Failed<'NotFound', { path: string; method: string }>>` | A rung admitting a signed-in caller whose claims hold the ones it names, or whom a function passes, from `@abide/abide/server`. | 15.7, 15.9, 54.2, 54.3, 54.4, 54.28 |
 
 ## `trustedIdentity`
 

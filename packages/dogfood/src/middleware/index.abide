@@ -25,7 +25,7 @@ const callTool = (name: string) =>
     seeAlso={[
         '/middleware/middleware',
         '/middleware/signed-in',
-        '/middleware/require-role',
+        '/middleware/authorize',
         '/middleware/read-only',
         '/middleware/trusted-identity',
         '/middleware/csp',
@@ -150,9 +150,10 @@ const callTool = (name: string) =>
         <ul>
             <li><a href={url('/middleware/signed-in')}><code>signedIn</code></a> refuses
                 anyone not signed in, at <code>401</code>.</li>
-            <li><a href={url('/middleware/require-role')}><code>requireRole</code></a> admits
-                a role, or whoever a test of the principal passes. It refuses a member
-                without the role at <code>403</code>, and nobody signed in at
+            <li><a href={url('/middleware/authorize')}><code>authorize</code></a> admits
+                a member whose claims hold the ones it names, such as
+                <code>{`{ role: 'admin' }`}</code>, or whoever a test of the principal passes.
+                It refuses anyone else signed in at <code>403</code>, and nobody signed in at
                 <code>401</code>.</li>
             <li><a href={url('/middleware/read-only')}><code>readOnly</code></a> refuses every
                 write, keeping open the handlers you allow.</li>

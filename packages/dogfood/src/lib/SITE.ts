@@ -966,10 +966,10 @@ const WRITTEN: readonly {
                 where: 'server',
             },
             {
-                route: '/middleware/require-role',
-                title: '`requireRole`',
+                route: '/middleware/authorize',
+                title: '`authorize`',
                 description:
-                    'Admit only signed-in callers with a role, or ones a test of the principal passes, refusing the rest `Forbidden` at 403.',
+                    'Admit only signed-in callers whose claims hold the ones you name, or that a test of the principal passes, refusing the rest `Forbidden` at 403.',
                 where: 'server',
             },
             {

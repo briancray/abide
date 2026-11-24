@@ -11,51 +11,73 @@ import Section from '#src/lib/Section.abide'
         '/middleware/read-only',
         '/ambients/principal',
         '/app/on-principal',
-        '/handlers/get',
+        '/middleware/middleware',
+        '/app/on-refusal',
     ]}
     tests={[
         {
             path: 'packages/abide/tests/guards.test.ts',
             from: [
-                "test('requireRole refuses a member without the role Forbidden at 403, before the body runs",
+                "test('authorize refuses a member the claims do not match Forbidden at 403, before the body runs",
             ],
         },
         {
             path: 'packages/abide/tests/guards.test.ts',
-            from: ["test('requireRole given a function admits whom it passes"],
+            from: [
+                "test('authorize admits a member whose claims hold the ones it names, an array holding every item it lists",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/guards.test.ts',
+            from: ["test('authorize given a function admits whom it passes"],
         },
         {
             path: 'packages/abide/tests/guards.test.ts',
             from: [
-                "test('requireRole at 404 answers a member without the role as an address nothing serves",
+                "test('authorize at 404 answers a member it does not admit as an address nothing serves",
             ],
         },
     ]}
 >
     <Section level={3} title="Show the team's commission to admins alone">
-        <p><code>requireRole('admin')</code> compares the <code>role</code> on
-            <code>principal.resolved</code>. Nobody signed in is refused <code>SignedOut</code> at
-            401, and a member without the role <code>Forbidden</code> at 403, before the body
-            runs.</p>
+        <p>Pass the claims a member must carry. <code>{`authorize({ role: 'admin' })`}</code>
+            admits a member whose <code>principal.resolved</code> has the role. Nobody signed in
+            is refused <code>SignedOut</code> at 401, as <code>signedIn</code> refuses them, and
+            anyone else signed in <code>Forbidden</code> at 403, before the body runs.</p>
         <Code language="ts" caption="server" code={`
-            import { GET, requireRole } from '@abide/abide/server'
+            import { authorize, GET } from '@abide/abide/server'
 
             export default GET(() => ({ total: '$18,400' }), {
-                middleware: [requireRole('admin')],
+                middleware: [authorize({ role: 'admin' })],
             })
         `} />
         <p>The CRM's, asked by nobody signed in, and its answer:</p>
         <Exchange path="/account/getTeamCommission" />
     </Section>
 
+    <Section level={3} title="Admit a member of a group">
+        <p>The claims are matched as a subset. An array names items the member's array holds, in
+            any order and beside any others, so <code>{`{ groups: ['sales'] }`}</code> admits a
+            member in <code>{`['support', 'sales']`}</code>. A nested object is matched the
+            same way.</p>
+        <Code language="ts" caption="server" code={`
+            import { authorize, GET } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
+
+            export default GET(() => DEALS, {
+                middleware: [authorize({ groups: ['sales'] })],
+            })
+        `} />
+    </Section>
+
     <Section level={3} title="Admit a member by any test of the principal">
-        <p>Pass a function of the principal in place of the role. <code>message</code> is what
+        <p>Pass a function of the principal in place of the claims. <code>message</code> is what
             the <code>Forbidden</code> refusal says.</p>
         <Code language="ts" caption="server" code={`
-            import { GET, requireRole } from '@abide/abide/server'
+            import { authorize, GET } from '@abide/abide/server'
             import { TEAM } from './lib/TEAM.server.ts'
 
-            const onTheTeam = requireRole(
+            const onTheTeam = authorize(
                 (member) => member.role === 'admin' || member.role === 'sales',
                 { message: 'Only the team sees the team.' },
             )
@@ -64,7 +86,7 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Tell a missing role from a missing sign-in">
+    <Section level={3} title="Tell a missing claim from a missing sign-in">
         <p>Both refusals are typed on the handler's failures, so a page narrows each by name.</p>
         <Code language="abide" caption="abide" code={`
             <script>
@@ -84,14 +106,15 @@ import Section from '#src/lib/Section.abide'
             {/if}
         `} />
     </Section>
+
     <Section level={3} title="Hide payroll from everyone but admins">
-        <p><code>status: 404</code> answers a member without the role as an address nothing
+        <p><code>status: 404</code> answers a member it does not admit as an address nothing
             serves, word for word, so they cannot tell the page exists.</p>
         <Code language="ts" caption="server" code={`
-            import { GET, requireRole } from '@abide/abide/server'
+            import { authorize, GET } from '@abide/abide/server'
 
             export default GET(listPayroll, {
-                middleware: [requireRole('admin', { status: 404 })],
+                middleware: [authorize({ role: 'admin' }, { status: 404 })],
             })
         `} />
     </Section>

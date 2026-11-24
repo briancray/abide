@@ -6563,15 +6563,16 @@ leaves the `host` where it already is, MUST NOT be on its way in 53.65's sense.
 54.1 `signedIn` MUST answer a caller whose `principal.authenticated` is false with a refusal named
 `SignedOut`, at status 401, and MUST hand any other caller to `next`.
 
-54.2 `requireRole` MUST answer a caller whose `principal.resolved` is not authenticated as
-`signedIn` does, before it reads a role.
+54.2 `authorize` MUST answer a caller whose `principal.resolved` is not authenticated as
+`signedIn` does, before it reads anything else of it.
 
-54.3 `requireRole` given a string MUST admit a caller whose `principal.resolved` carries it as
-`role`, and given a function MUST admit a caller whose `principal.resolved` it answers true for.
+54.3 `authorize` given an object MUST admit a caller whose `principal.resolved` holds it — an object
+holds another where it holds every member the other names, an array holds another where it holds
+each of the other's items in any order beside any others, and any other value holds only itself —
+and given a function MUST admit a caller whose `principal.resolved` it answers true for.
 
-54.4 `requireRole` MUST answer an authenticated caller it does not admit with a refusal named
-`Forbidden`, at status 403, carrying the `message` it was given, or one naming the role where it was
-given a string and none.
+54.4 `authorize` MUST answer an authenticated caller it does not admit with a refusal named
+`Forbidden`, at status 403, carrying the `message` it was given.
 
 54.5 `readOnly` MUST hand a `GET`, a `HEAD` or an `OPTIONS` request to `next`, and MUST answer a
 request of any other method with a refusal named `ReadOnly`, at status 403, save one 54.6 admits.
@@ -6647,7 +6648,7 @@ throwing.
 54.27 `Job.stop` MUST settle once a run in flight has ended, and a `job` it stopped MUST start no
 run, from a look or from `runNow`, and MUST hold `nextRun` null.
 
-54.28 `requireRole` given `status: 404` MUST answer an authenticated caller it does not admit with
+54.28 `authorize` given `status: 404` MUST answer an authenticated caller it does not admit with
 the refusal 15.7 answers an address nothing serves, naming the path and method of the request.
 
 54.29 A `job` given `from: 'start'` MUST measure `every` from when its last run started, and its

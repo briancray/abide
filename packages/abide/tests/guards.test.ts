@@ -3,7 +3,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET, POST, readOnly, requireRole, signedIn } from '#server'
+import { authorize, GET, POST, readOnly, signedIn } from '#server'
 import { MOUNT } from '#shared/mount.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -15,18 +15,23 @@ const getFigure = GET(
         bodyRuns += 1
         return { total: 18_400 }
     },
-    { middleware: [requireRole('admin')] },
+    { middleware: [authorize({ role: 'admin' })] },
 )
 const getOwn = GET(() => 'own', { middleware: [signedIn] })
 const getAudit = GET(() => 'audit', {
     middleware: [
-        requireRole((member) => member.name === 'maya', {
+        authorize((member) => member.name === 'maya', {
             message: 'Maya audits.',
         }),
     ],
 })
 const getPayroll = GET(() => 'payroll', {
-    middleware: [requireRole('admin', { status: 404 })],
+    middleware: [authorize({ role: 'admin' }, { status: 404 })],
+})
+const getPipeline = GET(() => 'pipeline', {
+    middleware: [
+        authorize({ groups: ['sales'], region: { codes: ['emea', 'apac'] } }),
+    ],
 })
 const signIn = POST(() => 'signed in')
 const archive = POST(() => 'archived', {
@@ -38,6 +43,7 @@ const app = await inMemoryApp({
     'team/getOwn.handler.ts': { default: getOwn },
     'team/getAudit.handler.ts': { default: getAudit },
     'team/getPayroll.handler.ts': { default: getPayroll },
+    'team/getPipeline.handler.ts': { default: getPipeline },
     'team/signIn.handler.ts': { default: signIn },
     'team/archive.handler.ts': { default: archive },
 })
@@ -63,7 +69,7 @@ async function answered(
 // 54.28 UNDER A SUB-PATH: word for word, the path included — the one routing names, below the mount.
 // THE REVERT: name the request bun received, and the hidden 404 says `/docs/team/getPayroll` where
 // the unserved address says `/team/getNothing`.
-test('requireRole at 404 names the path routing names, under a mount — 54.28, 15.7', async () => {
+test('authorize at 404 names the path routing names, under a mount — 54.28, 15.7', async () => {
     const standing = MOUNT.current
     MOUNT.current = () => '/docs'
     const body = async (address: string) =>
@@ -91,12 +97,12 @@ test('signedIn refuses nobody SignedOut at 401, and lets a member through — 54
     expect(await answered('getOwn', { name: 'theo' })).toBe('200 "own"')
 })
 
-// THE REVERT: compare nothing in `requireRole`, and Theo reads the figure — `200 {"total":18400}`.
-test('requireRole refuses a member without the role Forbidden at 403, before the body runs — 54.2, 54.3, 54.4', async () => {
+// THE REVERT: compare nothing in `authorize`, and Theo reads the figure — `200 {"total":18400}`.
+test('authorize refuses a member the claims do not match Forbidden at 403, before the body runs — 54.2, 54.3, 54.4', async () => {
     const before = bodyRuns
     expect(await answered('getFigure')).toBe('401 SignedOut: Sign in first.')
     expect(await answered('getFigure', { name: 'theo', role: 'sales' })).toBe(
-        '403 Forbidden: Only admins may do this.',
+        '403 Forbidden: Forbidden',
     )
     expect(bodyRuns).toBe(before)
     expect(await answered('getFigure', { name: 'maya', role: 'admin' })).toBe(
@@ -104,7 +110,30 @@ test('requireRole refuses a member without the role Forbidden at 403, before the
     )
 })
 
-test('requireRole given a function admits whom it passes, refusing with the message given — 54.3, 54.4', async () => {
+// THE REVERT: compare arrays item for item in `holds`, and Maya, in a group beside sales, is
+// refused — `403 Forbidden` where `200 "pipeline"` is due.
+test('authorize admits a member whose claims hold the ones it names, an array holding every item it lists — 54.3', async () => {
+    const maya = {
+        name: 'maya',
+        groups: ['support', 'sales'],
+        region: { name: 'world', codes: ['apac', 'amer', 'emea'] },
+    }
+    expect(await answered('getPipeline', maya)).toBe('200 "pipeline"')
+    expect(
+        await answered('getPipeline', { ...maya, groups: ['support'] }),
+    ).toBe('403 Forbidden: Forbidden')
+    expect(
+        await answered('getPipeline', {
+            ...maya,
+            region: { codes: ['emea'] },
+        }),
+    ).toBe('403 Forbidden: Forbidden')
+    expect(await answered('getPipeline', { ...maya, groups: 'sales' })).toBe(
+        '403 Forbidden: Forbidden',
+    )
+})
+
+test('authorize given a function admits whom it passes, refusing with the message given — 54.3, 54.4', async () => {
     expect(await answered('getAudit', { name: 'theo' })).toBe(
         '403 Forbidden: Maya audits.',
     )
@@ -112,7 +141,7 @@ test('requireRole given a function admits whom it passes, refusing with the mess
 })
 
 // THE REVERT: ignore `status`, and Theo is told the address exists — `403 Forbidden`.
-test('requireRole at 404 answers a member without the role as an address nothing serves — 54.28', async () => {
+test('authorize at 404 answers a member it does not admit as an address nothing serves — 54.28', async () => {
     expect(await answered('getPayroll', { name: 'theo', role: 'sales' })).toBe(
         await answered('getNothing', { name: 'theo', role: 'sales' }),
     )
