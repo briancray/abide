@@ -117,11 +117,13 @@ test('each key has its own id, and the active one’s is `activeId` — 51.10, 5
 })
 
 // THE REVERT: read `data-active` off the key the part was built for rather than the active one, and
-// every option reads active.
-test('an option’s part carries its id and whether it is active, and a pointer on it activates it — 51.94', () => {
-    const list = listbox({ id: 'letters', options: () => ['a', 'b'] })
+// every option reads active; let the pointer move to the key, as the arrows do, and `selected` and
+// `aria-selected` follow it — b reads selected.
+test('an option’s part carries its id and whether it is active, and a pointer on it activates it without selecting it — 51.94', () => {
+    const list = listbox({ id: 'letters', options: () => ['a', 'b', 'c'] })
     const a = list.option('a')
     const b = list.option('b')
+    const c = list.option('c')
     expect([a.id, a.role, a['data-listbox'], list.listbox.role]).toEqual([
         'letters-option-a',
         'option',
@@ -129,18 +131,28 @@ test('an option’s part carries its id and whether it is active, and a pointer 
         'listbox',
     ])
     expect([a['aria-selected'], a['data-active'], b['data-active']]).toEqual([
-        'true',
+        'false',
         '',
         undefined,
     ])
-    ;(b.onpointermove as () => void)()
+    press(list.onkeydown, 'ArrowDown')
+    ;(c.onpointermove as () => void)()
     flushSync()
     // Read again, not rebuilt: the part's getters answer what is active now (49.9).
-    expect([a['aria-selected'], b['aria-selected'], b['data-active']]).toEqual([
-        'false',
+    expect([b['aria-selected'], c['aria-selected'], b['data-active'], c['data-active']]).toEqual([
         'true',
+        'false',
+        undefined,
         '',
     ])
+    expect([list.active, list.selected()]).toEqual(['c', 'b'])
+    // The arrows step on from where the pointer rests, and the step selects.
+    press(list.onkeydown, 'ArrowUp')
+    expect([list.active, list.selected()]).toEqual(['b', 'b'])
+    ;(a.onpointermove as () => void)()
+    // A key written to `selected` takes over from the pointer's.
+    list.selected.set('c')
+    expect(list.active).toBe('c')
 })
 
 // THE REVERT: extend from the active option rather than the anchor, and Shift on `a` after Shift on `d`

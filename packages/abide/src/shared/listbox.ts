@@ -78,8 +78,18 @@ export function listbox<Option, Multiple extends boolean = false>(
     const selectAll = many
         ? hotkeys({ 'mod+a': () => selection.all(order) })
         : undefined
+    // 51.94 — the key a pointer last moved over, and the key moved to when it did: a pointer
+    // activates without moving, so it holds only until a move or a write to `selected` changes that key.
+    const pointed = reactive<{ key: string; over: string | undefined } | undefined>(undefined)
+    function moveKey(each: string): void {
+        pointed.set(undefined)
+        chosen.set(each)
+    }
     const active = reactive(() => {
-        const wanted = chosen()
+        const moved = chosen()
+        const pointer = pointed()
+        const wanted =
+            pointer !== undefined && pointer.over === moved ? pointer.key : moved
         let first: string | undefined
         for (const option of options()) {
             const each = key(option)
@@ -109,7 +119,7 @@ export function listbox<Option, Multiple extends boolean = false>(
         if (option === undefined) return
         const each = key(option)
         const from = active.peek()
-        chosen.set(each)
+        moveKey(each)
         // 51.103 — Shift carries the selection along with the move.
         if (extend) selection.extend(from, each, order)
         // The active option kept in view as the arrows step through a list longer than its box.
@@ -177,7 +187,7 @@ export function listbox<Option, Multiple extends boolean = false>(
             const current = active()
             return current === undefined ? undefined : idOf(current)
         },
-        activate: (each) => chosen.set(each),
+        activate: moveKey,
         idOf,
         onkeydown: keydown,
         listbox: {
@@ -189,9 +199,9 @@ export function listbox<Option, Multiple extends boolean = false>(
             id: idOf(each),
             role: 'option',
             'data-listbox': 'option',
-            // 51.98 — where it selects one, the selection is the active option (51.104).
+            // 51.98, 51.94 — where it selects one, the selection is the key moved to (51.104).
             get 'aria-selected'() {
-                return (many ? selection.has(each) : active() === each)
+                return (many ? selection.has(each) : chosen() === each)
                     ? 'true'
                     : 'false'
             },
@@ -201,15 +211,20 @@ export function listbox<Option, Multiple extends boolean = false>(
             get 'data-selected'() {
                 return many && selection.has(each) ? '' : undefined
             },
-            onpointermove: () => chosen.set(each),
+            onpointermove: () => {
+                const over = chosen.peek()
+                const pointer = pointed.peek()
+                if (pointer?.key === each && pointer.over === over) return
+                pointed.set({ key: each, over })
+            },
             // 51.99, 51.105.
             onclick: (event: MouseEvent) => {
                 if (many) {
                     selection.press(each, event, active.peek(), order)
-                    chosen.set(each)
+                    moveKey(each)
                     return
                 }
-                chosen.set(each)
+                moveKey(each)
                 const option = optionOf(each)
                 if (option !== undefined) given.onpick?.(option)
             },

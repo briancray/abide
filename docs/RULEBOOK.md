@@ -5273,8 +5273,8 @@ to `open`.
 
 # 51. Lists and tables
 
-51.1 `listbox` MUST keep active the option whose key it last moved to, for as long as the options
-hold that key.
+51.1 `listbox` MUST keep active the option a pointer holds active as 51.94 names, and otherwise the
+option whose key it last moved to, for as long as the options hold that key.
 
 51.2 `listbox` MUST make the first option active where the options do not hold the key it last moved
 to.
@@ -5534,8 +5534,9 @@ it.
 shut it where it is open, and each MUST leave its active item where it stands.
 
 51.94 `Listbox`'s `option` MUST answer the option of a key with the id `idOf` derives for it,
-`data-active` saying whether that key is the active one, `aria-selected` saying the same where
-`multiple` is not `true`, and a pointer moving over it making that key active.
+`data-active` saying whether that key is the active one, `aria-selected` saying whether it is
+`selected` where `multiple` is not `true`, and a pointer moving over it making that key active
+without moving to it — active until the `listbox` next moves to a key or `selected` is written.
 
 51.95 A jump `virtualList`'s `sections` hand back MUST scroll to its section's first item, and MUST
 carry `aria-current` while its section is `current`.
