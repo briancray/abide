@@ -72,19 +72,19 @@ const hints = tooltip.host()
 <!-- Ahead of the page, so an example's own announce.host, standing after it, is the one that shows (50.36). -->
 <div class="sr-only">
             <div {...regions.polite}>
-                {#for message of regions.said('polite') by message.count}
+                {#for message of regions.said('polite') key message.count}
                     <span>{message.text}</span>
                 {/for}
             </div>
             <div {...regions.assertive}>
-                {#for message of regions.said('assertive') by message.count}
+                {#for message of regions.said('assertive') key message.count}
                     <span>{message.text}</span>
                 {/for}
             </div>
         </div>
 <!-- The hosts an example's notices and prompts show in, ahead of the page for the same reason. -->
 <div {...shown.region} class="fixed right-5 bottom-5 z-10 flex flex-col gap-2">
-            {#for toast of shown.notices by toast.id}
+            {#for toast of shown.notices key toast.id}
                 <div
                     {...shown.notice(toast).notice}
                     class="flex items-center gap-3 rounded-lg border border-rule bg-raised px-4 py-2

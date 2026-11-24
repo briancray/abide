@@ -72,7 +72,7 @@ test('an inner {#if} does not run once the {#if} around it has gone false', asyn
 test('nor through a {#for} between the two that the write did not wake', async () => {
     const reported = await reportedOnClose(`${script()}
 {#if page}
-    {#for row of rows by row}
+    {#for row of rows key row}
         {#if section}<p>{section}</p>{:else if page.kind === 'trail'}<p>{row}</p>{/if}
     {/for}
 {/if}`)

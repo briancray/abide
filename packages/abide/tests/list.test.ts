@@ -52,7 +52,7 @@ function reverse() {
 }
 </script>
 
-<ul id="list">{#for row of rows by row.id}<li data-id={row.id}>{row.name}</li>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}<li data-id={row.id}>{row.name}</li>{/for}</ul>
 <button id="swap" onclick={swapTop}>swap</button>
 <button id="reverse" onclick={reverse}>reverse</button>`
 
@@ -93,7 +93,7 @@ test('a two-row swap moves one node', async () => {
     expect(document.querySelectorAll('#list li')[2]).toBe(before)
 })
 
-// 32.32 OVER A CHANNEL — AN ARRAY APPENDED TO AND TRIMMED FROM THE FRONT, keyed by the `by` the value
+// 32.32 OVER A CHANNEL — AN ARRAY APPENDED TO AND TRIMMED FROM THE FRONT, keyed by the `key` the value
 // declares, makes one row for the message that arrived and keeps every other. Keyed by position, the
 // same patch shifts every row's item and the whole list is made again.
 //
@@ -105,7 +105,7 @@ import { reactive } from '@abide/abide'
 
 const turns: { id: number; text: string }[] = []
 for (let id = 1; id <= 50; id += 1) turns.push({ id, text: \`message \${id}\` })
-let room = reactive(turns, { by: 'id' })
+let room = reactive(turns, { key: 'id' })
 
 function arrive() {
     room.patch((list) => {
@@ -181,7 +181,7 @@ function reverse() {
 }
 </script>
 
-<dl id="pairs">{#for row of rows by row.id}<dt>{row.k}</dt><dd>{row.v}</dd>{/for}</dl>
+<dl id="pairs">{#for row of rows key row.id}<dt>{row.k}</dt><dd>{row.v}</dd>{/for}</dl>
 <button id="rev" onclick={reverse}>reverse</button>`
 
 const pairText = (): string[] =>
@@ -293,7 +293,7 @@ function bump() {
 }
 </script>
 
-<ul id="leaving">{#for row of rows by row.id}<li>{count}</li>{/for}</ul>
+<ul id="leaving">{#for row of rows key row.id}<li>{count}</li>{/for}</ul>
 <button id="drop" onclick={drop}>drop</button>
 <button id="empty" onclick={() => { rows = [] }}>empty</button>
 <button id="tick" onclick={bump}>tick</button>`
@@ -365,7 +365,7 @@ function replaceMiddle() {
 }
 </script>
 
-<ul id="refetched">{#for row of rows by row.id}<li data-id={row.id}>{row.name}</li>{/for}</ul>
+<ul id="refetched">{#for row of rows key row.id}<li data-id={row.id}>{row.name}</li>{/for}</ul>
 <button id="refetch" onclick={refetch}>refetch</button>
 <button id="middle" onclick={replaceMiddle}>middle</button>`
 
@@ -437,7 +437,7 @@ function rename() {
 }
 </script>
 
-<ul id="list">{#for row of rows by row.id}<li data-id={row.id}><input id={'edit-' + row.id} />{row.name}</li>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}<li data-id={row.id}><input id={'edit-' + row.id} />{row.name}</li>{/for}</ul>
 <button id="rename" onclick={rename}>rename</button>`
 
 test('a kept key over a new object keeps its row, its text updated and its focus held — 32.67', async () => {
@@ -505,7 +505,7 @@ function finish() {
 }
 </script>
 
-<ul id="list">{#for row of rows by row.id}<li data-id={row.id} class:on={selected === row.id && row.done} onclick={() => { heard = row.name }}>{row.name}{#if row.done}<b>done</b>{/if}</li>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}<li data-id={row.id} class:on={selected === row.id && row.done} onclick={() => { heard = row.name }}>{row.name}{#if row.done}<b>done</b>{/if}</li>{/for}</ul>
 <p id="heard">{heard}</p>
 <button id="finish" onclick={finish}>finish</button>`)
     const row = document.querySelector('#list li') as HTMLElement
@@ -541,7 +541,7 @@ function toText() { rows = rows.map((row) => ({ ...row, html: '' })) }
 function add() { rows = [...rows, { id: 'b', html: '', text: 'made' }] }
 </script>
 
-<ul id="list">{#for row of rows by row.id}<li data-id={row.id}>{row.html ? raw(row.html) : row.text}{suffix}</li>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}<li data-id={row.id}>{row.html ? raw(row.html) : row.text}{suffix}</li>{/for}</ul>
 <button id="markup" onclick={toMarkup}>markup</button>
 <button id="text" onclick={toText}>text</button>
 <button id="add" onclick={add}>add</button>
@@ -604,7 +604,7 @@ let rows = reactive([{ id: 'a', follows: false, text: 'own' }])
 let other = reactive('one')
 </script>
 
-<ul id="list">{#for row of rows by row.id}<li title={row.follows ? other : row.text}>{row.follows ? other : row.text}</li>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}<li title={row.follows ? other : row.text}>{row.follows ? other : row.text}</li>{/for}</ul>
 <button id="follow" onclick={() => { rows = rows.map((row) => ({ ...row, follows: true })) }}>follow</button>
 <button id="other" onclick={() => { other = 'two' }}>other</button>`)
     const row = document.querySelector('#list li') as HTMLElement
@@ -630,7 +630,7 @@ let rows = reactive([{ id: 'a', label: 'A' }])
 let selected = reactive('b')
 </script>
 
-<ul id="list">{#for row of rows by row.id}<li class={row.id === selected ? 'danger' : ''}>{row.label}{row.id === selected ? '*' : ''}</li>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}<li class={row.id === selected ? 'danger' : ''}>{row.label}{row.id === selected ? '*' : ''}</li>{/for}</ul>
 <button id="grow" onclick={() => { rows = [...rows, { id: 'b', label: 'B' }, { id: 'c', label: 'C' }, { id: 'd', label: 'D' }] }}>grow</button>
 <button id="relabel" onclick={() => { rows = rows.map((row) => row.id === 'c' ? { ...row, id: 'c', label: 'C!' } : row) }}>relabel</button>
 <button id="select" onclick={() => { selected = 'c' }}>select</button>`)
@@ -656,8 +656,8 @@ let selected = reactive('b')
 test('a destructured row takes a new value in place — 32.67', async () => {
     await mountPage(
         EDITED.replace(
-            "{#for row of rows by row.id}<li data-id={row.id}><input id={'edit-' + row.id} />{row.name}</li>{/for}",
-            '{#for { id, name } of rows by id}<li data-id={id}>{name}</li>{/for}',
+            "{#for row of rows key row.id}<li data-id={row.id}><input id={'edit-' + row.id} />{row.name}</li>{/for}",
+            '{#for { id, name } of rows key id}<li data-id={id}>{name}</li>{/for}',
         ),
     )
     expect(document.querySelector('#list input')).toBeNull()
@@ -779,7 +779,7 @@ test('a for over an async iterable appends each item as it arrives', async () =>
     ).toEqual(['first', 'second', 'third'])
 })
 
-// 41.14, 41.15 — A REPEATED `by` KEY. Two tasks sharing a status is the ordinary way to reach one,
+// 41.14, 41.15 — A REPEATED `key` KEY. Two tasks sharing a status is the ordinary way to reach one,
 // and the map a reconcile holds its rows in cannot hold two under one key. The row it shadowed was
 // unreachable from every one of the three places the reconcile cleans up through, so it was never
 // stopped and its nodes were never removed: the list grew by one on EVERY reconcile and a watch
@@ -809,7 +809,7 @@ function bump() {
 }
 </script>
 
-<ul id="repeated">{#for task of tasks by task.status}<li>{task.label} {tick}</li>{/for}</ul>
+<ul id="repeated">{#for task of tasks key task.status}<li>{task.label} {tick}</li>{/for}</ul>
 <button id="touch" onclick={touch}>touch</button>
 <button id="bump" onclick={bump}>bump</button>`
 
@@ -1142,8 +1142,8 @@ import { reactive } from '@abide/abide'
 let rows = reactive(['a', 'b', 'c'])
 </script>
 
-<ul id="shared"><li id="head">head</li>{#for row of rows by row}<li>{row}</li>{/for}<li id="tail">tail</li></ul>
-<ul id="alone">{#for row of rows by row}<li>{row}</li>{/for}</ul>
+<ul id="shared"><li id="head">head</li>{#for row of rows key row}<li>{row}</li>{/for}<li id="tail">tail</li></ul>
+<ul id="alone">{#for row of rows key row}<li>{row}</li>{/for}</ul>
 <button id="clear" onclick={() => { rows = [] }}>clear</button>
 <button id="fill" onclick={() => { rows = ['x', 'y'] }}>fill</button>`)
     const text = (selector: string): string[] =>
@@ -1318,7 +1318,7 @@ import { reactive } from '@abide/abide'
 let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 </script>
 
-<ul id="fresh">{#for row of rows.map((r) => ({ ...r })) by row.id}<li>{row.id}</li>{/for}</ul>`
+<ul id="fresh">{#for row of rows.map((r) => ({ ...r })) key row.id}<li>{row.id}</li>{/for}</ul>`
 
 test('a subject building fresh items keeps the rows the server sent', async () => {
     const { mount } = await renderPage(FRESH)
@@ -1355,7 +1355,7 @@ import { reactive } from '@abide/abide'
 let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }, { id: 'e' }])
 </script>
 
-<ul id="five">{#for row of rows by row.id}<li>{row.id}</li>{/for}</ul>`
+<ul id="five">{#for row of rows key row.id}<li>{row.id}</li>{/for}</ul>`
 
 test('a document holding fewer rows than the client computes reconciles — 41.10', async () => {
     const { mount } = await renderPage(FIVE)
@@ -1392,7 +1392,7 @@ import { reactive } from '@abide/abide'
 let rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
 </script>
 
-<ul id="three">{#for row of rows by row.id}<li>{row.id}</li>{/for}</ul>`
+<ul id="three">{#for row of rows key row.id}<li>{row.id}</li>{/for}</ul>`
 
 test('a document holding more rows than the client computes warns and rebuilds — 41.10', async () => {
     const { mount } = await renderPage(THREE)
@@ -1415,14 +1415,14 @@ test('a document holding more rows than the client computes warns and rebuilds �
     expect(said.join(' ')).toContain('holds 5 rows')
 })
 
-// 32.32 — A `{#for}` WITH NO KEY OVER A `Reactive` NAMED ALONE KEYS BY THAT VALUE'S `by`. The page
+// 32.32 — A `{#for}` WITH NO KEY OVER A `Reactive` NAMED ALONE KEYS BY THAT VALUE'S `key`. The page
 // is `PAGE` with the key moved off the block and onto the value, so the counts are the ones the
 // written key earns above.
 //
 // THE REVERT: emit `written` whatever the subject in `emitList`. The order still comes out right —
 // a positional list remakes every row where it stands — and the swap reports 4 nodes created where
 // 0 are due.
-function byPage(by: string, subject = 'rows'): string {
+function keyedPage(key: string, subject = 'rows'): string {
     return `<script>
 import { reactive } from '@abide/abide'
 
@@ -1431,7 +1431,7 @@ let rows = reactive([
     { id: 'grace', name: 'Grace Hopper' },
     { id: 'katherine', name: 'Katherine Johnson' },
     { id: 'dorothy', name: 'Dorothy Vaughan' },
-], { by: ${by} })
+], { key: ${key} })
 
 function swapTop() {
     const [first, second, ...rest] = rows
@@ -1456,8 +1456,8 @@ const nodesById = (): Map<string | null, Element> =>
         ]),
     )
 
-test('a {#for} with no key takes the property its value names on `by`', async () => {
-    await mountPage(byPage(`'id'`))
+test('a {#for} with no key takes the property its value names on `key`', async () => {
+    await mountPage(keyedPage(`'id'`))
     const before = document.querySelectorAll('#list li')[2] as HTMLElement
 
     const work = measure(() => {
@@ -1470,8 +1470,8 @@ test('a {#for} with no key takes the property its value names on `by`', async ()
     expect(document.querySelectorAll('#list li')[2]).toBe(before)
 })
 
-test('a {#for} with no key takes the function its value declares on `by`, and reverses whole', async () => {
-    await mountPage(byPage('(row) => row.id'))
+test('a {#for} with no key takes the function its value declares on `key`, and reverses whole', async () => {
+    await mountPage(keyedPage('(row) => row.id'))
     const nodes = nodesById()
 
     click('#reverse')
@@ -1481,10 +1481,10 @@ test('a {#for} with no key takes the function its value declares on `by`, and re
         expect(document.querySelector(`#list li[data-id="${id}"]`)).toBe(node)
 })
 
-// A SUBJECT COMPUTED FROM THE VALUE declared no `by` of its own, and stays positional (32.13):
+// A SUBJECT COMPUTED FROM THE VALUE declared no `key` of its own, and stays positional (32.13):
 // every row is rewritten where it stands rather than moved.
-test('a {#for} over a value computed from one declaring `by` stays positional', async () => {
-    await mountPage(byPage(`'id'`, 'rows.slice()'))
+test('a {#for} over a value computed from one declaring `key` stays positional', async () => {
+    await mountPage(keyedPage(`'id'`, 'rows.slice()'))
     const nodes = nodesById()
 
     click('#reverse')
@@ -1504,7 +1504,7 @@ test('a {#for} over a value computed from one declaring `by` stays positional', 
 // is kept, and each of the four reports the text it showed before the patch.
 test('a row patched in place shows the patch', async () => {
     await mountPage(
-        byPage(`'id'`).replace(
+        keyedPage(`'id'`).replace(
             '<button id="reverse"',
             `<button id="rename" onclick={() => rows.patch((list) => { list[1].name = 'Grace Brewster Hopper' })}>rename</button>
 <button id="reverse"`,
@@ -1528,7 +1528,7 @@ let rows = reactive([
 ])
 </script>
 
-<ul id="list">{#for row of ${subject} by row.id}<li data-id={row.id}>{row.name}, {row.place.city}</li>{/for}</ul>
+<ul id="list">{#for row of ${subject} key row.id}<li data-id={row.id}>{row.name}, {row.place.city}</li>{/for}</ul>
 <button id="patch" onclick={() => rows.patch((list) => { ${mutation} })}>patch</button>`
 
 const textOf = (id: string): string | null | undefined =>
@@ -1561,7 +1561,7 @@ const byId = reactive(new Map([['a', { id: 'a', n: 1 }], ['b', { id: 'b', n: 2 }
 const rows = memo(() => [...byId.values()])
 </script>
 
-<ul id="list">{#for row of rows by row.id}<li data-id={row.id}>{row.n}</li>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}<li data-id={row.id}>{row.n}</li>{/for}</ul>
 <button id="patch" onclick={() => byId.patch((held) => { const row = held.get('a'); if (row) row.n = 9 })}>p</button>`)
     click('#patch')
     expect(textOf('a')).toBe('9')
@@ -1623,7 +1623,7 @@ let rows = reactive([
 ])
 </script>
 
-<ul id="list">{#for row of rows by row.id}<li data-id={row.id}>{row.name}, {row.place.city}</li>{/for}</ul>
+<ul id="list">{#for row of rows key row.id}<li data-id={row.id}>{row.name}, {row.place.city}</li>{/for}</ul>
 <button id="patch" onclick={() => rows.patch((list) => { list[0].place.city = 'Crystal City'; void list[1].place })}>patch</button>`)
     click('#patch')
     expect(textOf('ada')).toBe('Ada, Crystal City')
@@ -1645,7 +1645,7 @@ function more() {
 }
 </script>
 
-<ul id="static-rows">{#for row of rows by row.id}<li>{row.id}</li>{/for}</ul>
+<ul id="static-rows">{#for row of rows key row.id}<li>{row.id}</li>{/for}</ul>
 <button id="more" onclick={more}>more</button>`
 
 test('a row that binds nothing allocates no scope, hydrated or made', async () => {

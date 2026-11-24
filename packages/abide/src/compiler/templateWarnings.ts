@@ -76,7 +76,7 @@ export function templateWarnings(
                         text,
                         file.origins.holders.get(node) ?? 0,
                         'warning',
-                        `abide: this {#for} has no key and its body holds state, so a reorder hands one row's state to another item. Name what tells two items apart with \`by\`: {#for ${node.item} of ${node.subject} by …}, or \`by\` on the value it walks. RULEBOOK 32.14, 32.32.`,
+                        `abide: this {#for} has no key and its body holds state, so a reorder hands one row's state to another item. Name what tells two items apart with \`key\`: {#for ${node.item} of ${node.subject} key …}, or \`key\` on the value it walks. RULEBOOK 32.14, 32.32.`,
                     ),
                 )
         }
@@ -153,7 +153,7 @@ function canChange(node: ForBlock, lowering: Lowering): boolean {
 }
 
 /**
- * Whether a `{#for}` subject is a name alone whose `reactive` declares `by`, keying it by value.
+ * Whether a `{#for}` subject is a name alone whose `reactive` declares `key`, keying it by value.
  *
  * 32.32 — such a subject IS KEYED, by the value rather than the block. The checker has already said
  * which names that is (`Read.byValue`), through an import as well as in the page's own setup.

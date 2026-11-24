@@ -13,7 +13,7 @@ const plot = chart({
 </script>
 
 <svg {...plot.svg} class="h-48 w-full">
-    {#for area of plot.areas by area.series}
+    {#for area of plot.areas key area.series}
         <path {...area.path} />
     {/for}
 </svg>

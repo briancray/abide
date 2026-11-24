@@ -506,15 +506,15 @@ function headerPieces(inner: string, at: number): Piece[] {
 }
 
 /**
- * `{#for item, index of subject by key}` split where `forBlock` splits it — at the `of`, the `,`
- * and the `by` that stand at depth zero — or `undefined` where it has no `of`.
+ * `{#for item, index of subject key expression}` split where `forBlock` splits it — at the `of`,
+ * the `,` and the `key` that stand at depth zero — or `undefined` where it has no `of`.
  */
 function forPieces(header: string, at: number): Piece[] | undefined {
-    const { of, by, item, index } = forSeparators(header)
+    const { of, key, item, index } = forSeparators(header)
     if (of === undefined) return undefined
     const subject = header.slice(
         of.end,
-        by === undefined ? header.length : by.start,
+        key === undefined ? header.length : key.start,
     )
     const pieces: Piece[] = [
         {
@@ -523,10 +523,10 @@ function forPieces(header: string, at: number): Piece[] | undefined {
         },
         trimmedExpression(subject, at + of.end),
     ]
-    if (by !== undefined)
+    if (key !== undefined)
         pieces.push(
-            { kind: 'text', text: ' by ' },
-            trimmedExpression(header.slice(by.end), at + by.end),
+            { kind: 'text', text: ' key ' },
+            trimmedExpression(header.slice(key.end), at + key.end),
         )
     return pieces
 }

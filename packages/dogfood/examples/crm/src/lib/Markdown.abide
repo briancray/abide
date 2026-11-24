@@ -29,4 +29,4 @@ const doc = markdown.incremental({
 })
 </script>
 
-<div {...rest}>{#for section of doc.sections by section}{#if section.block}<CopyableCode source={section.block.source} />{:else}{raw(section.html)}{/if}{/for}</div>
+<div {...rest}>{#for section of doc.sections key section}{#if section.block}<CopyableCode source={section.block.source} />{:else}{raw(section.html)}{/if}{/for}</div>

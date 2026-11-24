@@ -12,18 +12,18 @@ const dates = calendar({ selected: closes, months: 2 })
         <button {...dates.next}>›</button>
     </div>
     <div data-months>
-        {#for shown of dates.months by shown.month}
+        {#for shown of dates.months key shown.month}
             <section>
                 <h3 {...shown.heading}>{shown.label}</h3>
                 <div {...shown.grid}>
                     <div {...dates.header}>
-                        {#for weekday of dates.weekdays by weekday.day}
+                        {#for weekday of dates.weekdays key weekday.day}
                             <div {...weekday.header}>{weekday.short}</div>
                         {/for}
                     </div>
-                    {#for week of shown.weeks by week[0]?.date}
+                    {#for week of shown.weeks key week[0]?.date}
                         <div {...dates.week}>
-                            {#for day of week by day.date}
+                            {#for day of week key day.date}
                                 <div {...day.cell}>{day.day}</div>
                             {/for}
                         </div>

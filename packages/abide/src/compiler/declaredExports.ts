@@ -426,9 +426,9 @@ function literalDefaults(node: Node | undefined): Defaults | null {
  * 20.4's reason: what the build can read without running it. The `reactive(…)` the `GET` is handed,
  * or the `GET`'s own options where it is handed a plain function (16.6), and the options object,
  * each written inline or bound to a name first. A value is
- * read off its TYPE, so `by: KEY` over a `const KEY = 'id'` carries `'id'` as `by: 'id'` does: a
- * string `by`, string `tags`, and an `identity` of abide's `deepEqual`. A
- * function form has no serialization and stays the server's. 18.15 — anything else of `by` or `tags`
+ * read off its TYPE, so `key: KEY` over a `const KEY = 'id'` carries `'id'` as `key: 'id'` does: a
+ * string `key`, string `tags`, and an `identity` of abide's `deepEqual`. A
+ * function form has no serialization and stays the server's. 18.15 — anything else of `key` or `tags`
  * is handed back UNREAD, for the build to warn on.
  */
 async function declaredCopy(
@@ -459,7 +459,7 @@ async function declaredCopy(
                 (await isAbideStructural(checker, value, abide))
             )
                 copy.identity = 'deepEqual'
-        } else if (name === 'by' || name === 'tags') {
+        } else if (name === 'key' || name === 'tags') {
             const type = await checker.getTypeAtLocation(value)
             if (type === undefined) continue
             if (
@@ -467,8 +467,8 @@ async function declaredCopy(
                     .length > 0
             )
                 continue
-            if (name === 'by' && type.isStringLiteralType())
-                copy.by = type.value
+            if (name === 'key' && type.isStringLiteralType())
+                copy.key = type.value
             else if (name === 'tags') {
                 const tags = await stringLiteralsOf(checker, value, type)
                 if (tags === undefined) unread.push(value)

@@ -116,7 +116,7 @@ import savePhone from './lib/SavePhone.abide' with { type: 'text' }
             </script>
 
             <ol {...shown.region} class="fixed right-5 bottom-5 flex flex-col gap-2">
-                {#for toast of shown.notices by toast.id}
+                {#for toast of shown.notices key toast.id}
                     <li
                         {...shown.notice(toast).notice}
                         class="rounded-lg border px-4 data-[tone=error]:border-bad"
@@ -149,7 +149,7 @@ import savePhone from './lib/SavePhone.abide' with { type: 'text' }
             </script>
 
             <div {...shown.region}>
-                {#for toast of shown.notices by toast.id}
+                {#for toast of shown.notices key toast.id}
                     <div {...shown.notice(toast).notice}>
                         <p bind:element={fadeOut}>
                             <strong>Won.</strong> {toast.text}

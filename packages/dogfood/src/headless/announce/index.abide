@@ -67,12 +67,12 @@ import seeTheMessage from './lib/SeeTheMessage.abide' with { type: 'text' }
                     <slot />
                     <div class="sr-only">
                         <div {...regions.polite}>
-                            {#for message of regions.said('polite') by message.count}
+                            {#for message of regions.said('polite') key message.count}
                                 <span>{message.text}</span>
                             {/for}
                         </div>
                         <div {...regions.assertive}>
-                            {#for message of regions.said('assertive') by message.count}
+                            {#for message of regions.said('assertive') key message.count}
                                 <span>{message.text}</span>
                             {/for}
                         </div>

@@ -59,7 +59,7 @@ An element an arm leaves open is closed by the next arm
 For, with an index and a key
 ================================================================================
 
-{#for row, i of rows by row.id}<li>{row.name}</li>{/for}
+{#for row, i of rows key row.id}<li>{row.name}</li>{/for}
 
 --------------------------------------------------------------------------------
 

@@ -89,7 +89,7 @@ export type ElementNode = {
 export type ForBlock = Body & {
     kind: 'block'
     block: 'for'
-    /** `{#for item, index of list by key}` — `index` and `key` are optional. */
+    /** `{#for item, index of list key expression}` — `index` and `key` are optional. */
     item: string
     index: string
     subject: string

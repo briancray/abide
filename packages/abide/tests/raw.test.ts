@@ -210,7 +210,7 @@ let tag = reactive('b')
 let rows = reactive([{ id: 'a' }])
 </script>
 
-<ul id="out">{#for row of rows by row.id}<li>{raw('<' + tag + '>' + row.id + '</' + tag + '>')}</li>{/for}</ul>
+<ul id="out">{#for row of rows key row.id}<li>{raw('<' + tag + '>' + row.id + '</' + tag + '>')}</li>{/for}</ul>
 <button id="add" onclick={() => { rows = [...rows, { id: 'z' }] }}>add</button>
 <button id="tag" onclick={() => { tag = 'i' }}>tag</button>
 <button id="reverse" onclick={() => { rows = [...rows].reverse() }}>reverse</button>`)
@@ -246,7 +246,7 @@ let tag = reactive('b')
 let rows = reactive([{ id: 'a' }, { id: 'c' }])
 </script>
 
-<div id="out">{#for row of rows by row.id}{raw('<' + tag + '>' + row.id + '</' + tag + '>')}<span>{row.id}{tag}</span>{/for}</div>
+<div id="out">{#for row of rows key row.id}{raw('<' + tag + '>' + row.id + '</' + tag + '>')}<span>{row.id}{tag}</span>{/for}</div>
 <button id="tag" onclick={() => { tag = 'i' }}>tag</button>
 <button id="reverse" onclick={() => { rows = [...rows].reverse() }}>reverse</button>`)
     expect(said).toEqual([])

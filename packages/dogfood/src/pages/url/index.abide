@@ -31,7 +31,7 @@ import Section from '#src/lib/Section.abide'
             import { url } from '@abide/abide'
             </script>
 
-            {#for company of companies by company.id}
+            {#for company of companies key company.id}
                 <a href={url('/companies/[id=SLUG]', { id: company.id })}>
                     {company.name}</a>
             {/for}

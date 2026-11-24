@@ -1261,17 +1261,33 @@ function trimmed(
     return { text: text.trimEnd(), at: start + raw.length - text.length }
 }
 
+// The tokens a subject can end on, so a `key` after one divides the header (`rows key row.id`) and a
+// `key` after anything else — `of`, an operator, a `.` — is the subject's own (`of key`, `of a + key`,
+// `of row.key`).
+const ENDS_SUBJECT = new Set<SyntaxKind>([
+    SyntaxKind.Identifier,
+    SyntaxKind.CloseParenToken,
+    SyntaxKind.CloseBracketToken,
+    SyntaxKind.CloseBraceToken,
+    SyntaxKind.StringLiteral,
+    SyntaxKind.NumericLiteral,
+    SyntaxKind.NoSubstitutionTemplateLiteral,
+    SyntaxKind.TemplateTail,
+    SyntaxKind.ThisKeyword,
+])
+
 /**
- * The `of`, the `,` and the `by` that divide a `{#for}` header — each the first at depth zero.
+ * The `of`, the `,` and the `key` that divide a `{#for}` header — each the first at depth zero.
  *
- * THE HEADER IS TOKENS, read by the scanner a slot is: an `of`, a `,` or a `by` inside a string,
+ * THE HEADER IS TOKENS, read by the scanner a slot is: an `of`, a `,` or a `key` inside a string,
  * a call or an object pattern is the expression's own, and only one at depth zero divides the
- * header. `by` is a word rather than a keyword, so a member named `by` is not one.
+ * header. `key` is a word rather than a keyword, and a common name, so it divides the header only
+ * where it follows a token the subject can end on and is not followed by `.`.
  */
 export function forSeparators(header: string): {
     of: Token | undefined
     comma: Token | undefined
-    by: Token | undefined
+    key: Token | undefined
     /** The header before the `,` (or the `of`), trimmed — `''` where there is no `of`. */
     item: string
     /** The header between the `,` and the `of`, trimmed — `''` where either is missing. */
@@ -1281,7 +1297,7 @@ export function forSeparators(header: string): {
     let depth = 0
     let of: Token | undefined
     let comma: Token | undefined
-    let by: Token | undefined
+    let key: Token | undefined
     for (let index = 0; index < tokens.length; index += 1) {
         const token = tokens[index] as Token
         const kind = token.kind
@@ -1293,31 +1309,32 @@ export function forSeparators(header: string): {
             else if (kind === SyntaxKind.CommaToken && comma === undefined)
                 comma = token
         } else if (
-            by === undefined &&
+            key === undefined &&
             kind === SyntaxKind.Identifier &&
-            token.text === 'by' &&
-            (tokens[index - 1] as Token).kind !== SyntaxKind.DotToken
+            token.text === 'key' &&
+            ENDS_SUBJECT.has((tokens[index - 1] as Token).kind) &&
+            tokens[index + 1]?.kind !== SyntaxKind.DotToken
         )
-            by = token
+            key = token
     }
-    if (of === undefined) return { of, comma, by, item: '', index: '' }
+    if (of === undefined) return { of, comma, key, item: '', index: '' }
     const item = header.slice(0, (comma ?? of).start).trim()
     const index =
         comma === undefined ? '' : header.slice(comma.end, of.start).trim()
-    return { of, comma, by, item, index }
+    return { of, comma, key, item, index }
 }
 
 /**
  * Parses a `{#for}` header into its item, index, subject and key.
  *
- * `item, index of list by key` — `index` and `by` are optional, and everything after `of` up to
- * a top-level `by` is the subject. Split on the KEYWORDS rather than on commas, because the
+ * `item, index of list key expression` — `index` and `key` are optional, and everything after `of`
+ * up to a top-level `key` is the subject. Split on the KEYWORDS rather than on commas, because the
  * subject may hold both.
  *
  * THE SEPARATOR IS THE ONE AT DEPTH ZERO AND OUTSIDE A STRING — all three of them, and each was
  * wrong its own way. `{#for { id, name } of rows}` split on the pattern's own comma and the item
  * became `{ id`, which the emitters write straight into a parameter list. `{#for x of
- * names.filter(n => n !== "run by me")}` split on the ` by ` inside the string literal and the
+ * names.filter(n => n !== "key in")}` split on the ` key ` inside the string literal and the
  * subject ended mid-quote. One scanner for all three rather than one fix for the comma.
  */
 function forBlock(
@@ -1326,7 +1343,7 @@ function forBlock(
     origins: Origins,
 ): ForBlock {
     const source = header.text
-    const { of, comma, by, item, index } = forSeparators(source)
+    const { of, comma, key: keyword, item, index } = forSeparators(source)
     // A `{#for}` with nothing to iterate rendered as a block over the subject '' — zero rows,
     // forever, with nothing saying why (32.22 is an ABSENT subject, not a missing one).
     if (of === undefined)
@@ -1343,12 +1360,12 @@ function forBlock(
     const subject = trimmed(
         file,
         header.at + of.end,
-        by === undefined ? end : header.at + by.start,
+        keyword === undefined ? end : header.at + keyword.start,
     )
     const key =
-        by === undefined
+        keyword === undefined
             ? { text: '', at: end }
-            : trimmed(file, header.at + by.end, end)
+            : trimmed(file, header.at + keyword.end, end)
     const block: ForBlock = {
         kind: 'block',
         block: 'for',

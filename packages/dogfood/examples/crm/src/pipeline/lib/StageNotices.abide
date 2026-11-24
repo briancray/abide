@@ -20,7 +20,7 @@ function advance() {
 </p>
 
 <ol {...shown.region} class="flex flex-col gap-tight">
-    {#for toast of shown.notices by toast.id}
+    {#for toast of shown.notices key toast.id}
         <li {...shown.notice(toast).notice} class="row data-[tone=success]:text-good">
             <span>{toast.text}</span>
             {#if toast.action}

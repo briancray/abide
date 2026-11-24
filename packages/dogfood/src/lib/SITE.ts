@@ -738,7 +738,7 @@ const WRITTEN: readonly {
     {
         group: 'Helpers',
         description:
-            'Plain functions over data: formatting, sorting, markdown, wall-clock times and key labels.',
+            'Plain functions over data: formatting, sorting, markdown, wall-clock times, key labels and JSON Schema validation.',
         pages: [
             {
                 route: '/helpers/format',
@@ -803,6 +803,20 @@ const WRITTEN: readonly {
                     'Compare arrays and plain objects by contents rather than reference, so an equal reload or write wakes nobody.',
                 where: 'anywhere',
             },
+            {
+                route: '/helpers/validate-json',
+                title: '`validateJson`',
+                description:
+                    'Check a value against a JSON Schema document, and read what was wrong keyed by the path to it.',
+                where: 'anywhere',
+            },
+            {
+                route: '/helpers/json-schema',
+                title: '`jsonSchema`',
+                description:
+                    "Turn a JSON Schema document into a `Schema` that gates a handler's args and is published as written.",
+                where: 'anywhere',
+            },
         ],
     },
     {
@@ -831,20 +845,6 @@ const WRITTEN: readonly {
                 description:
                     "Find the address a handler answers at from its file's path, its `[param]` segments and its `<script server>`.",
                 where: 'server',
-            },
-            {
-                route: '/handlers/validate-json',
-                title: '`validateJson`',
-                description:
-                    'Check a value against a JSON Schema document, and read what was wrong keyed by the path to it.',
-                where: 'anywhere',
-            },
-            {
-                route: '/handlers/json-schema',
-                title: '`jsonSchema`',
-                description:
-                    "Turn a JSON Schema document into a `Schema` that gates a handler's args and is published as written.",
-                where: 'anywhere',
             },
             {
                 route: '/handlers/headers',

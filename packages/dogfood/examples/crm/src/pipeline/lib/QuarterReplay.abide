@@ -15,7 +15,7 @@ const week = () => Math.min(WON.length - 1, Math.floor(replay.at() / 1000))
         <button {...replay.play}>{replay.playing() ? 'Pause' : 'Play'}</button>
         <input {...replay.scrubber} />
         <div {...replay.speed.group}>
-            {#for rate of [0.5, 1, 2] by rate}
+            {#for rate of [0.5, 1, 2] key rate}
                 <button {...replay.speed.item(rate)}>{rate}×</button>
             {/for}
         </div>

@@ -8,7 +8,7 @@ let open = reactive('Grace Hopper')
     <button onclick={() => (open = 'Grace Hopper')}>Grace Hopper</button>
     <button onclick={() => (open = 'Ada Lovelace')}>Ada Lovelace</button>
 </div>
-{#for shown of [open] by shown}
+{#for shown of [open] key shown}
     <p class="transition-opacity duration-500 starting:opacity-0">
         <strong>{shown}</strong>
     </p>

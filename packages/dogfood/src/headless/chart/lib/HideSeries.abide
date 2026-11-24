@@ -13,7 +13,7 @@ const plot = chart({
 
 <label><input type="checkbox" bind:checked={leads} /> Leads</label>
 <svg {...plot.svg} class="h-48 w-full">
-    {#for line of plot.lines by line.series}
+    {#for line of plot.lines key line.series}
         <path {...line.path} />
     {/for}
 </svg>

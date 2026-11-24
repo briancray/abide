@@ -58,7 +58,7 @@ const ROWS = REPS.map((rep) => ({
 <table>
     <thead><tr><th>Rep</th><th>November</th><th>Trend</th><th>Deals</th></tr></thead>
     <tbody>
-        {#for row of ROWS by row.name}
+        {#for row of ROWS key row.name}
             <tr>
                 <td>{row.name}</td>
                 <td>{format.money(row.november, { digits: 0 })}</td>

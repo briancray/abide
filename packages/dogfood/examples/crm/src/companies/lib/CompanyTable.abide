@@ -20,7 +20,7 @@ const table = sortableTable({
 <table {...table.table}>
     <thead>
         <tr>
-            {#for column of COLUMNS by column.key}
+            {#for column of COLUMNS key column.key}
                 <th {...table.column(column).header}>
                     <button
                         {...table.column(column).sort}
@@ -31,7 +31,7 @@ const table = sortableTable({
         </tr>
     </thead>
     <tbody>
-        {#for company of table.rows by company.id}
+        {#for company of table.rows key company.id}
             <tr {...table.row(company).row}>
                 <td>
                     <a href={url('/companies/[id=SLUG]', { id: company.id })}>

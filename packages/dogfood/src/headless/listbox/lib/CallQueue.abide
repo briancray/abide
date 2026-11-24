@@ -18,7 +18,7 @@ const queue = listbox({
 <ul {...queue.listbox} tabindex="0" onkeydown={queue.onkeydown}
     class="[&_[data-active]]:bg-signal/10"
     aria-activedescendant={queue.activeId}>
-    {#for deal of leads by deal.id}
+    {#for deal of leads key deal.id}
         <li {...queue.option(deal)}>{deal.name}</li>
     {/for}
 </ul>

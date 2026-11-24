@@ -78,7 +78,7 @@ globalThis.__TOGGLE__ = () => { shown = !shown }
 globalThis.__ADD__ = () => { rows = [...rows, rows.length] }
 </script>
 
-{#if shown}<ol id="list" ${arm === 'abide' ? '{...scrollEdges()}' : 'bind:element={vanilla}'}>{#for row of rows by row}<li>{row}</li>{/for}</ol>{/if}
+{#if shown}<ol id="list" ${arm === 'abide' ? '{...scrollEdges()}' : 'bind:element={vanilla}'}>{#for row of rows key row}<li>{row}</li>{/for}</ol>{/if}
 
 <style>
 #list { height: 300px; overflow-y: auto; margin: 0; }

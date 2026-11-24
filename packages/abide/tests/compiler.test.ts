@@ -339,7 +339,7 @@ test('a destructuring loop item survives the head split', () => {
     expect(block.index).toBe('')
     expect(block.subject).toBe('rows')
 
-    const pair = parseAbide('{#for row, at of rows by row.id}x{/for}')
+    const pair = parseAbide('{#for row, at of rows key row.id}x{/for}')
         .template[0] as { item: string; index: string; key: string }
     expect(pair.item).toBe('row')
     expect(pair.index).toBe('at')
@@ -442,14 +442,14 @@ test('an else arm is told from a name that starts with if', async () => {
 })
 
 // THE `{#for}` HEAD SPLITS AT DEPTH ZERO AND OUTSIDE A STRING. THE REVERT: split on `/ of /` and
-// `/ by /` with a plain regex; the subject below ends mid-quote at `names.filter(n => n !== "run`
+// `/ key /` with a plain regex; the subject below ends mid-quote at `names.filter(n => n !== "run`
 // and the key becomes `me")`, which the emitters write straight into the row function.
 test('a for head splits outside its string literals', async () => {
     const block = parseAbide(
-        '{#for x of names.filter(n => n !== "run by me")}y{/for}',
+        '{#for x of names.filter(n => n !== "run key me")}y{/for}',
     ).template[0] as { item: string; subject: string; key: string }
     expect(block.item).toBe('x')
-    expect(block.subject).toBe('names.filter(n => n !== "run by me")')
+    expect(block.subject).toBe('names.filter(n => n !== "run key me")')
     expect(block.key).toBe('')
 
     // A `{#for}` with nothing to iterate rendered zero rows forever and said nothing. 32.22 is an
@@ -462,6 +462,31 @@ test('a for head splits outside its string literals', async () => {
     expect(await refusal(serverOf('{#for , i of rows}y{/for}'))).toContain(
         'names no item',
     )
+})
+
+// `key` IS A COMMON NAME, so it divides a `{#for}` head only after a token a subject ends on, and
+// never before a `.`. THE REVERT: take the first `key` at depth zero after the `of`, whatever
+// precedes it; `of key` then has no subject, `of a + key` ends at the `+`, and `of key.split('')` keys
+// every row by `.split('')`.
+test('a key in a for head is the separator only where it follows the subject', () => {
+    const head = (source: string) => {
+        const block = parseAbide(`{#for ${source}}y{/for}`).template[0] as {
+            subject: string
+            key: string
+        }
+        return [block.subject, block.key]
+    }
+    expect(head('row of rows key row.id')).toEqual(['rows', 'row.id'])
+    expect(head('row of rows() key row.id')).toEqual(['rows()', 'row.id'])
+    expect(head('row of byStage[key] key row.id')).toEqual([
+        'byStage[key]',
+        'row.id',
+    ])
+    expect(head('row of item.key key row.id')).toEqual(['item.key', 'row.id'])
+    expect(head('letter of key')).toEqual(['key', ''])
+    expect(head('letter of a + key')).toEqual(['a + key', ''])
+    expect(head("letter of key.split('')")).toEqual(["key.split('')", ''])
+    expect(head('letter of key key letter')).toEqual(['key', 'letter'])
 })
 
 // AN EXPRESSION SLOT HAS COMMENTS IN IT. THE REVERT: drop the comment and regex cases from
@@ -759,7 +784,7 @@ test('a for row binds its item on the client too', async () => {
     ).toContain('const ls0_subject = () => rows()')
 })
 
-// AN INDEX AND A DESTRUCTURED ITEM BIND TOO, and a `by` key is inside the binding while the
+// AN INDEX AND A DESTRUCTURED ITEM BIND TOO, and a `key` key is inside the binding while the
 // subject is not.
 test('a for index and a destructured item shadow as the item does', async () => {
     const indexed = await serverOf(
@@ -778,7 +803,7 @@ test('a for index and a destructured item shadow as the item does', async () => 
 
     // A KEY IS READ INSIDE THE BINDING. `by id` names the row's own `id`, not the page's.
     const keyed = await clientOf(
-        '<script>let id = reactive(0)</script>{#for id of rows by id}<li>{id}</li>{/for}',
+        '<script>let id = reactive(0)</script>{#for id of rows key id}<li>{id}</li>{/for}',
         ['id'],
     )
     expect(keyed).toContain('const ls0_key = (id, __at) => id')
@@ -1502,7 +1527,7 @@ const xs = [1]
 </script>
 
 <Card body={raw(html)}/>
-{#for x of xs by raw(String(x))}<i>{x}</i>{/for}
+{#for x of xs key raw(String(x))}<i>{x}</i>{/for}
 <button onclick={() => raw(html)}>b</button>`
 
 test('a key, a prop and a listener refuse await as a slot does, and only the prop lowers raw — 32.25, 32.57', async () => {
@@ -1513,7 +1538,7 @@ const xs = [1]
 const k = Promise.resolve(1)
 </script>
 
-{#for x of xs by await k}<i>{x}</i>{/for}`),
+{#for x of xs key await k}<i>{x}</i>{/for}`),
         ),
     ).toContain('a template position cannot await')
     // A listener that makes its own function may await in it, as a slot's may.

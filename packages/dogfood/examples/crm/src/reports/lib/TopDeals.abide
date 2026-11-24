@@ -19,7 +19,7 @@ const shown = (deal: { amount: number; idle: number }) =>
     </button>
 </div>
 <ul class="fields">
-    {#for deal of top by deal.company}
+    {#for deal of top key deal.company}
         <li>
             <span>{deal.company}</span>
             <strong>{shown(deal)}</strong>

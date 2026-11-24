@@ -29,7 +29,7 @@ const ring = pie({
         [&_[data-pie=slice]]:transition-[stroke-dasharray,stroke-dashoffset]
         [&_[data-pie=slice]:hover]:opacity-80"
 >
-    {#for slice of ring.slices by slice.index}
+    {#for slice of ring.slices key slice.index}
         <circle {...slice.circle} />
     {/for}
 </svg>

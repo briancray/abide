@@ -50,7 +50,7 @@ let open = reactive(false)
 <button id="open" onclick={() => (open = true)}>Open</button>
 {#if open}
     <div class="viewport" id="viewport">
-        {#for row of rows by row.id}
+        {#for row of rows key row.id}
             <div class="row"><span>{row.name}</span><span>{row.amount}</span></div>
         {/for}
     </div>
@@ -131,7 +131,7 @@ const view = virtualList({ items: rows, key: (row) => String(row.id) })
 {#if open}
     <div class="viewport" id="viewport">
         <div {...view.host}>
-            {#for entry of view.shown by entry.key}
+            {#for entry of view.shown key entry.key}
                 <div class="row" {...view.item(entry)}><span>{entry.item.name}</span><span>{entry.item.amount}</span></div>
             {/for}
         </div>

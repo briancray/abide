@@ -378,7 +378,7 @@ import Tag from './Tag.abide'
 let rows = reactive(['one'])
 </script>
 
-<ul>{#for row of rows by row}<li>{row}<Tag/></li>{/for}</ul>
+<ul>{#for row of rows key row}<li>{row}<Tag/></li>{/for}</ul>
 <button id="add" onclick={() => { rows = ['one', 'two'] }}>add</button>`,
         { Tag: '<b class="tag">static</b>' },
     )
@@ -580,7 +580,7 @@ import Row from './Row.abide'
 let titles = reactive(['a'])
 </script>
 
-<ul>{#for title of titles by title}<Row title={title}/>{/for}</ul>
+<ul>{#for title of titles key title}<Row title={title}/>{/for}</ul>
 <button id="grow" onclick={() => { titles = ['a', 'b', 'c'] }}>grow</button>
 <button id="reverse" onclick={() => { titles = ['c', 'b', 'a'] }}>reverse</button>`,
         { Row: ROW },
@@ -657,7 +657,7 @@ let rows = reactive(['one', 'two'])
 let mark = reactive('')
 </script>
 
-<ul>{#for row of rows by row}<Row label={row + mark}/>{/for}</ul>
+<ul>{#for row of rows key row}<Row label={row + mark}/>{/for}</ul>
 <button id="drop" onclick={() => { rows = ['one'] }}>drop</button>
 <button id="bump" onclick={() => { mark = '!' }}>bump</button>`,
         { Row: row },
@@ -708,7 +708,7 @@ let rows = reactive(['one', 'two'])
 let mark = reactive('')
 </script>
 
-<ul>{#for row of rows by row}<Row label={row} tick={mark}/>{/for}</ul>
+<ul>{#for row of rows key row}<Row label={row} tick={mark}/>{/for}</ul>
 <button id="drop" onclick={() => { rows = ['one'] }}>drop</button>
 <button id="bump" onclick={() => { mark = '!' }}>bump</button>`,
         { Row: row },

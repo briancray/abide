@@ -5,6 +5,6 @@ export type Entry = { id: string; kind: string; at: string }
 /** One feed per account, shared by every caller; idle for an hour, let go. */
 export const feeds = memo((_account: { account: string }): Entry[] => [], {
     global: true,
-    by: 'id',
+    key: 'id',
     ttl: 3_600_000,
 })

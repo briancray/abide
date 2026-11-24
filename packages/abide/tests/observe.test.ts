@@ -108,7 +108,7 @@ let rows = reactive(Array.from({ length: 50 }, (_, index) => ({ id: index, box: 
 </script>
 
 <button id="clear" onclick={() => { rows = [] }}>clear</button>
-{#for row of rows by row.id}<div class="row" {...observe.size(row.box)} {...observe.visible(row.seen)}>{row.id}</div>{/for}`
+{#for row of rows key row.id}<div class="row" {...observe.size(row.box)} {...observe.visible(row.seen)}>{row.id}</div>{/for}`
 
 // 32.81 — ONE OBSERVER EACH FOR FIFTY ELEMENTS, and every element observed by it. THE REVERT:
 // make the observer per call in `resized` / `visible` (`const observer = new ResizeObserver(…)`
@@ -268,7 +268,7 @@ let rows = reactive(Array.from({ length: 20 }, (_, index) => ({ id: index, seen:
 <button id="unroot" onclick={() => { rooted = !rooted }}>unroot</button>
 <button id="clear" onclick={() => { rows = [] }}>clear</button>
 <div id="scroller" bind:element={scroller}>
-    {#for row of rows by row.id}<p class="row" {...observe.visible(row.seen, { in: root })}>{row.id}</p>{/for}
+    {#for row of rows key row.id}<p class="row" {...observe.visible(row.seen, { in: root })}>{row.id}</p>{/for}
 </div>`
 
 // 32.81 — ONE OBSERVER FOR EVERY RESIZE IN THE DOCUMENT: an `observe.size`, an `observe.rect` and a
