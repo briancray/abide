@@ -33,7 +33,7 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Answer a rep's question with the CRM's own handlers">
         <p>Yield <code>assistant</code> from a streaming handler you write, so its address and its
-            middleware are yours. <code>mcp: true</code> hands the model the app's tools, each
+            middleware are yours. <code>tools: true</code> hands the model the app's tools, each
             called as the person asking.</p>
         <Code language="ts" caption="server" code={`
             import {
@@ -51,7 +51,7 @@ import Section from '#src/lib/Section.abide'
 
             export default POST(
                 async function* ({ messages }: { messages: AssistantMessage[] }) {
-                    yield* assistant(messages, claude, { mcp: true })
+                    yield* assistant(messages, claude, { tools: true })
                 },
                 { clients: { mcp: false } },
             )

@@ -49,7 +49,7 @@ const recorded: Provider = {
 export default POST(
     async function* ({ draft }: { draft: string }) {
         const content = `Write my problem report from this draft:\n\n${draft}`
-        yield* assistant([{ role: 'user', content }], recorded, { mcp: true })
+        yield* assistant([{ role: 'user', content }], recorded, { tools: true })
     },
     {
         description: 'Asks the assistant to write a report.',

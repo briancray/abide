@@ -414,7 +414,7 @@ async function pairedBridge(
     if (bridge === undefined)
         throw refuse(
             409,
-            'No Claude Code is paired with this browser as the one signed in. provider.claudeCode.bridgeCommand() is the command that pairs one.',
+            'No Claude Code is paired with this browser as the one signed in. provider.claudeCode.bridge() answers the command that pairs one.',
         )
     return bridge
 }

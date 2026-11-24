@@ -4451,13 +4451,13 @@ each one.
 folded above the last, each `tool_use` and `tool_result` block written out in words, and each other
 `AssistantContent` block that is not words in its place.
 
-44.6 With `mcp`, the `Toolbox` `assistant` hands a `Provider` MUST list the tools `/__abide/mcp`
+44.6 With `tools`, the `Toolbox` `assistant` hands a `Provider` MUST list the tools `/__abide/mcp`
 lists, and MUST call each as a request through the app answering the request.
 
 44.7 A `Toolbox` call MUST carry the asking request's `cookie` and `authorization` headers, and MUST
 NOT carry any other header of it.
 
-44.8 `mcp` over an app whose route table lists no handler for `/__abide/mcp` MUST throw.
+44.8 `tools` over an app whose route table lists no handler for `/__abide/mcp` MUST throw.
 
 44.9 `provider.claudeApi` MUST call the Messages API again with the tool results only while a turn
 stops for `tool_use`, and MUST send each assistant turn's blocks back as they arrived.
@@ -4475,7 +4475,7 @@ tool call pending MUST end after the run that called it, and MUST NOT run that c
 browser, or of the native app's own bridge where 44.77 pairs it, and MUST refuse 409 where neither
 is paired.
 
-44.14 A code `provider.claudeCode.bridgeCommand` mints MUST pair one bridge with the browser that
+44.14 A code `provider.claudeCode.bridge` mints MUST pair one bridge with the browser that
 asked for it, once, and MUST NOT pair once it has expired.
 
 44.15 A bridge MUST run Claude Code in an empty directory removed when the run ends, and, save where
@@ -4539,7 +4539,7 @@ ended before they did, followed by why — `aborted` where the signal 44.57 hand
 aborted, else `failed` where its provider threw, with the throw's message ending the line, else
 `stopped` where its caller stopped reading.
 
-44.32 A command `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge` mints with
+44.32 A command `provider.claudeCode.bridge` mints with
 `tools` MUST grant those tools after its `--` as `--tools`, and one minted without `tools` MUST
 carry no `--`.
 
@@ -4572,7 +4572,7 @@ included.
 44.39 `assistant` MUST hand a `Provider` each turn as its `AssistantContent` pieces, a turn's string
 as one text piece.
 
-44.40 A pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge` mints MUST
+44.40 A pairing `provider.claudeCode.bridge` mints MUST
 carry, beside its command, a link in the `abide-bridge` scheme naming the same site, code, bridge
 release and tools, and whether it asks for full access (44.85).
 
@@ -4635,7 +4635,7 @@ where it has one, a URL whose path ends `.pdf` as a document and one ending `.pn
 `.gif` or `.webp` as an image, each of that URL, and a block as it is written — and MUST throw,
 naming the file or the URL, on any other.
 
-44.56 The `install` of a pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge`
+44.56 The `install` of a pairing `provider.claudeCode.bridge`
 mints MUST run `abide-bridge install` at the bridge release its command runs.
 
 44.57 `assistant` MUST hand its `Provider` a `limits.signal` that aborts once the `signal` its caller
@@ -4709,7 +4709,7 @@ and `step` where they stand.
 pairing changes, and where the code it was last answered with expires or pairs.
 
 44.76 The command and the install of every pairing `/__abide/pairing`,
-`provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge` answers MUST carry after a `--`,
+`provider.claudeCode.bridge` answers MUST carry after a `--`,
 behind the command's `--tools`, the arguments every `onPairing` answers in the asking request's
 scope, each quoted where a shell would split or expand it, and the link MUST carry none of them.
 
@@ -4747,7 +4747,7 @@ refuse 404 otherwise; a prompt it allows MUST run with the input the event named
 44.84 A bridge MUST deny a permission prompt `/__abide/bridge` sent no answer to within 120 seconds,
 or whose turn ended first.
 
-44.85 A pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge` mints with `full`
+44.85 A pairing `provider.claudeCode.bridge` mints with `full`
 MUST carry `--full` in its command ahead of any `--`, and one minted without it MUST NOT.
 
 44.86 A bridge opening an `abide-bridge` link that asks for full access or for any tool of the

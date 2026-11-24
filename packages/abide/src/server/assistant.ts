@@ -95,7 +95,7 @@ export type Provider = {
 
 /** What `assistant` takes beside a provider, the same for every one. */
 export type AssistantOptions = {
-    mcp?: boolean
+    tools?: boolean
     maxTurns?: number
     signal?: AbortSignal
 }
@@ -164,7 +164,7 @@ export async function* assistant(
     }
     // 44.101 — NO ONE ASKED: a `global` value's run, a timer's, `onStart`'s. There is no one for a
     // tool to act as, and a `global` value's answer is every caller's.
-    if (asking === undefined && options.mcp === true)
+    if (asking === undefined && options.tools === true)
         throw new Error(
             'abide: assistant was asked for tools outside a request, and there is no asker for them to act as — no request is being answered, and outside the native app there is no window to ask as. RULEBOOK 44.101.',
         )
@@ -214,7 +214,7 @@ async function* converse(
             if (refused !== undefined) throw refuse(400, refused)
         }
     }
-    const surface = options.mcp === true ? appSurface() : NO_SURFACE
+    const surface = options.tools === true ? appSurface() : NO_SURFACE
     const tools = toolboxOver(
         surface,
         asking === undefined ? NO_ASKER : askerOf(asking),

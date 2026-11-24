@@ -41,7 +41,6 @@ import {
 import {
     type Asker,
     fromNativeWindow,
-    mintCode,
     pairingArgs,
     pairingNow,
     pairingStatus,
@@ -212,27 +211,6 @@ function askingCaller(): string {
 }
 
 /**
- * The command and the link that pair a bridge with this browser, and when their code stops standing.
- * 44.14. The `tools` it is given are written after the command's `--` and in the link, so the visitor
- * running either grants them (44.29, 44.32, 44.40), `full` is the command's `--full` and the link's
- * ask for it (44.85), and `note` is kept with the code, for the question its link asks (44.91).
- */
-function bridgeCommand(options: PairingOptions = {}): {
-    command: string
-    link: string
-    install: string
-    expires: number
-} {
-    const { code, expires } = mintCode(
-        askingCaller(),
-        signedInAs(),
-        options.tools,
-        options.note,
-    )
-    return { ...commandFor(code, options), expires }
-}
-
-/**
  * The command and the link that pair a bridge by `code`, granting `tools` and asking for `full`, and
  * the command that installs the app the link opens — of the release the command runs, 44.56.
  */
@@ -400,12 +378,10 @@ function mcpContentOf(
 /** The visitor's own Claude Code as a provider, with the pairing that reaches it. */
 export const claudeCode: typeof claudeCodeProvider & {
     bridge: typeof bridge
-    bridgeCommand: typeof bridgeCommand
     callTool: typeof callTool
     permit: typeof permit
 } = Object.assign(claudeCodeProvider, {
     bridge,
-    bridgeCommand,
     callTool,
     permit,
 })

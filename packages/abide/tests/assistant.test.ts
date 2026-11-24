@@ -84,7 +84,7 @@ import { POST, provider } from '@abide/abide/server'
 
 export default POST(async ({ id }: { id: string }) => {
     await principal.set({ id, iat: 1 })
-    return provider.claudeCode.bridgeCommand()
+    return (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })()
 }, { clients: { mcp: false } })
 `
 
@@ -117,11 +117,11 @@ const own: Provider = {
 
 export const bridge = GET(() => provider.claudeCode.bridge(), { ...HIDDEN, timeout: Infinity })
 
-export const command = GET(() => provider.claudeCode.bridgeCommand(), HIDDEN)
+export const command = GET(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })(), HIDDEN)
 
-export const granting = GET(() => provider.claudeCode.bridgeCommand({ tools: ['WebSearch', 'WebFetch'] }), HIDDEN)
-export const noting = GET(() => provider.claudeCode.bridgeCommand({ note: 'one\\ntwo ' + 'a'.repeat(300) }), HIDDEN)
-export const askingFull = GET(() => provider.claudeCode.bridgeCommand({ full: true, note: 'So it can build what you ask for.' }), HIDDEN)
+export const granting = GET(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })({ tools: ['WebSearch', 'WebFetch'] }), HIDDEN)
+export const noting = GET(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })({ note: 'one\\ntwo ' + 'a'.repeat(300) }), HIDDEN)
+export const askingFull = GET(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })({ full: true, note: 'So it can build what you ask for.' }), HIDDEN)
 
 export const asking = GET(() => provider.claudeCode.bridge({ tools: ['WebSearch', 'mcp__calendar__meetings'] }), { ...HIDDEN, timeout: Infinity })
 
@@ -148,7 +148,7 @@ export const ask = POST(
                 ? provider.claudeApi({ apiKey: 'key', baseURL: process.env.FAKE_API, model: 'claude-opus-5', max_tokens: 1000 })
                 // Loose, so an option no site may set reaches the bridge to be refused there.
                 : provider.claudeCode((config ?? { model: 'sonnet', appendSystemPrompt: 'Be brief.' }) as ClaudeCodeConfig),
-            { mcp: true, maxTurns },
+            { tools: true, maxTurns },
         )
     },
     HIDDEN,
@@ -1665,7 +1665,7 @@ await serveLocally('window-secret')
 const talk = async () => {
     try {
         let text = ''
-        for await (const event of assistant([{ role: 'user', content: 'who am I?' }], provider.claudeCode(), { mcp: true }))
+        for await (const event of assistant([{ role: 'user', content: 'who am I?' }], provider.claudeCode(), { tools: true }))
             if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') text += event.delta.text
         return text
     } catch (thrown) {

@@ -29,7 +29,7 @@ const docsOnly: Provider = {
 // panel's to answer (44.81, `permit`).
 export default POST(
     async function* ({ messages }: { messages: AssistantMessage[] }) {
-        yield* assistant(messages, docsOnly, { mcp: true })
+        yield* assistant(messages, docsOnly, { tools: true })
     },
     {
         description:

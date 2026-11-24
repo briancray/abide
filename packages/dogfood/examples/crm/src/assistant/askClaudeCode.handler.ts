@@ -10,7 +10,7 @@ export default POST(
         yield* assistant(
             messages,
             provider.claudeCode({ systemPrompt: 'Answer in one sentence.' }),
-            { mcp: true },
+            { tools: true },
         )
     },
     { description: "Asks the visitor's Claude Code.", clients: { mcp: false } },

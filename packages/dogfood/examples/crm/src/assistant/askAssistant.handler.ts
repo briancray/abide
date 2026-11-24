@@ -42,7 +42,7 @@ const recorded: Provider = {
 
 export default POST(
     async function* ({ messages }: { messages: AssistantMessage[] }) {
-        yield* assistant(messages, recorded, { mcp: true })
+        yield* assistant(messages, recorded, { tools: true })
     },
     { description: 'Asks the CRM assistant.', clients: { mcp: false } },
 )

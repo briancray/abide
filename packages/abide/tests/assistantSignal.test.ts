@@ -137,7 +137,7 @@ test('a global handler streams a conversation its first reader leaving does not 
 // for them to act as.
 test('a conversation outside a request asked for tools throws — 44.101', async () => {
     const { provider } = stuckProvider()
-    const thrown = await assistant(ASKED, provider, { mcp: true })
+    const thrown = await assistant(ASKED, provider, { tools: true })
         .next()
         .catch((error: unknown) => error)
     expect((thrown as Error).message).toContain('RULEBOOK 44.101')

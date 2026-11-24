@@ -21,7 +21,7 @@ const HANDLERS = `import { GET, POST, provider } from '@abide/abide/server'
 
 const HIDDEN = { clients: { mcp: false } }
 
-export const command = GET(() => provider.claudeCode.bridgeCommand(), HIDDEN)
+export const command = GET(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })(), HIDDEN)
 
 export const call = POST(({ tool, input }: { tool: string; input: unknown }) => provider.claudeCode.callTool(tool, input), HIDDEN)
 `
