@@ -5044,7 +5044,7 @@ present only while it holds where it has two.
 
 49.3 Every part a parts function hands back for an element MUST carry, naming the element, a `data-`
 attribute named for the parts function — its name in kebab case, `data-sortable-table` for
-`sortableTable`, and its namespace's for a `host`, `data-toasts` for `toasts.host`.
+`sortableTable`, and its namespace's for a `host`, `data-prompts` for `prompts.host`.
 
 49.4 `@abide/abide` MUST NOT ship a stylesheet.
 
@@ -5129,24 +5129,25 @@ text typed, trimmed, matches `mustType`, trimmed, ignoring case.
 
 50.11 `prompts.confirm`, `prompts.alert` and `prompts.prompt` MUST throw where `isServer` is true.
 
-50.12 `toasts.notify` MUST add its notice to the end of `toasts.list` under an id no other notice
-holds, and hand back that id.
+50.12 A `notices` list's `notify` MUST add its notice to the end of its `list` under an id no other
+notice of any list holds, and hand back that id.
 
-50.13 A notice MUST leave `toasts.list` once its `timeout` has passed, and a `timeout` of `Infinity`
+50.13 A notice MUST leave its `list` once its `timeout` has passed, and a `timeout` of `Infinity`
 MUST keep it there.
 
-50.14 A notice's `timeout` MUST default to 3000 milliseconds, and to 10000 where its tone is
-`error`.
+50.14 A notice's `timeout` MUST default to its list's `timeout`, and where that is not given to
+3000 milliseconds, and to 10000 where its tone is `error`.
 
-50.15 `toasts.dismiss` MUST take the notice holding its id out of `toasts.list`, and MUST NOT write
-`toasts.list` where no notice holds it.
+50.15 A `notices` list's `dismiss` MUST take the notice holding its id out of its `list`, and MUST
+NOT write that `list` where no notice of it holds the id.
 
-50.16 `toasts.notify` MUST throw where `isServer` is true.
+50.16 A `notices` list's `notify` MUST throw where `isServer` is true.
 
-50.17 `toasts.host`'s `notices` MUST be `toasts.list` in order, and its `region` part MUST carry the
-role `status`.
+50.17 A `notices` host's `notices` MUST be its list's `list` in order, less each notice whose key its
+`store` remembers per 50.69 and each notice whose `expires` has passed, and its `region` part MUST
+carry the role `status`.
 
-50.18 A notice's action MUST take the notice out of `toasts.list` and then call its `run`.
+50.18 A notice's action MUST take the notice out of its `list` and then call its `run`.
 
 50.19 An anchored layer — the element carrying `tooltip.host`'s `hint` part while it shows a hint,
 an element `popover` is bound to and the element carrying `combobox`'s `popup`
@@ -5207,10 +5208,10 @@ confirming button, and `undefined` where it closed any other way.
 its facing edge, and MUST put it at that edge's middle where the edge is shorter than both.
 
 50.36 One hint MUST show at a time. The hint, the notices, the prompts and the message `announce`
-gives MUST each show in the last `tooltip.host`, `toasts.host`, `prompts.host` and `announce.host`
-of those standing, the others showing none, and a hint, a notice, a prompt or a message asked for
-with none standing MUST warn once, on `abide:tooltip`, `abide:toasts`, `abide:prompts` and
-`abide:announce`.
+gives MUST each show in the last `tooltip.host`, `host` of its `notices` list, `prompts.host` and
+`announce.host` of those standing, the others showing none, and a hint, a notice, a prompt or a
+message asked for with none standing MUST warn once, on `abide:tooltip`, `abide:notices`,
+`abide:prompts` and `abide:announce`.
 
 50.37 A `menu`'s parts MUST be a `popover`'s, given every option the `menu` was, with `align`
 `start` and `offset` `4` where none is given: its `trigger`, `anchor` and `menu` that popover's
@@ -5226,11 +5227,11 @@ its `menu` open.
 50.40 A printable key in an open `menu` MUST move focus to the next menu item whose text starts with
 the keys typed within 500 milliseconds of each other.
 
-50.41 `toasts.host`'s `toast` part of a notice MUST carry each attribute the notice's `attributes`
-names, under its `data-toasts` and `data-tone`.
+50.41 A `notices` host's `notice` part of a notice MUST carry each attribute the notice's
+`attributes` names, under its `data-notices` and `data-tone`.
 
-50.42 A notice's `onclose` MUST be called once, as the notice leaves `toasts.list`, with `timeout`
-where its timeout took it, `action` where its action did, and `dismissed` otherwise.
+50.42 A notice's `onclose` MUST be called once, as the notice leaves its `list`, with `timeout`
+where its timeout or its `expires` took it, `action` where its action did, and `dismissed` otherwise.
 
 50.43 A prompt whose `signal` aborts MUST leave the queue, showing or waiting, and settle as one closed
 other than by the confirming button, and a prompt whose `signal` is aborted already MUST NOT be
@@ -5314,6 +5315,23 @@ milliseconds, and MUST write `false` to `open` where no stop is nearer that heig
 
 50.67 `lightbox`'s `show` MUST set its carousel's `selected` to the key it is handed and write `true`
 to `open`.
+
+50.68 A notice of one `notices` list MUST NOT enter another's `list`, nor show in another's `host`.
+
+50.69 A notice that leaves a `notices` list given a `store`, by its action or by a dismissal, MUST
+be remembered in that `store` under its key until `ttl` milliseconds after it left.
+
+50.70 A `notices` list's `list` MUST start holding its `initial` notices in the order given, on a
+server too.
+
+50.71 A notice's key MUST be its `key`, and its text where it is given none.
+
+50.72 A notice MUST leave its `list` once its `expires` has passed, as 50.13 has it leave at its
+`timeout`.
+
+50.73 A write to a `notices` list's `store` MUST NOT hold a key whose remembering has ended.
+
+50.74 `toasts` MUST be a `notices` list built with no options.
 
 # 51. Lists and tables
 

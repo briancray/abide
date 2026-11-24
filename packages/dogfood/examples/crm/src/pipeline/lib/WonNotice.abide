@@ -17,10 +17,10 @@ function fadeOut(element: Element) {
 
 <div {...shown.region} class="fixed right-5 bottom-5 flex flex-col gap-tight">
     {#for toast of shown.notices by toast.id}
-        <div {...shown.toast(toast).toast}>
+        <div {...shown.notice(toast).notice}>
             <p class="row" bind:element={fadeOut}>
                 <strong>Won.</strong> {toast.text}
-                <button onclick={shown.toast(toast).dismiss}>Close</button>
+                <button onclick={shown.notice(toast).dismiss}>Close</button>
             </p>
         </div>
     {/for}

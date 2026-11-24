@@ -526,19 +526,25 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `PromptsHost` | `{ readonly dialog: Record<string, unknown>; readonly form: Record<string, unknown>; get current(): ShownPrompt \| undefined; get typing(): boolean; readonly title: Record<string, unknown>; readonly body: Record<string, unknown>; readonly field: Record<string, unknown>; readonly input: Record<string, unknown>; get failed(): string \| undefined; readonly error: Record<string, unknown>; readonly confirm: Record<string, unknown>; readonly cancel: Record<string, unknown>; readonly actions: Record<string, unknown> }` | The dialog's, the form's, the title's, the body's, the field's, the input's, the error's, the two buttons' and their holder's parts, the prompt showing, whether it asks for text, and what its `run` failed with. | 32.11, 32.99, 50.6, 50.10, 50.34, 50.45, 49.3, 49.9 |
 | `ShownPrompt` | `Readonly<{ title: string \| undefined; body: string; confirm: string; cancel: string; danger: boolean; mustType: string \| undefined; value: string; placeholder: string \| undefined; modal: boolean; kind: 'confirm' \| 'alert' \| 'prompt' }>` | The prompt showing, as markup reads it. | 50.6 |
 
+## `notices`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `notices` | `(options?: NoticesOptions) => Notices` | A list of notices, shown where the app spreads its `host`. | 50.12, 50.68, 50.70, 50.74 |
+| `NoticesOptions` | `{ initial?: readonly (string \| ({ text: string } & NotifyOptions))[]; timeout?: number; store?: Store<Record<string, number>>; ttl?: number }` | The notices it starts with, how long a notice stays, and where and for how long a dismissal is remembered. | 50.14, 50.69, 50.70, 50.73 |
+| `Notices` | `{ notify(text: string, options?: NotifyOptions): number; dismiss(id: number): void; readonly list: Reactive<Notice[]>; host(options?: NoticesHostOptions): NoticesHost }` | What adds a notice and takes one down, the notices added and not yet closed, and where they show. | 50.12, 50.13, 50.15, 50.16, 50.17, 50.36, 50.68, 11.32 |
+| `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; expires?: Date \| number; key?: string; action?: { label: string; run: () => unknown }; attributes?: Record<string, string>; onclose?: (reason: CloseReason) => void }` | A notice's tone, how long it stays and the moment it stops showing, what its dismissal is remembered by, the one action it offers, the attributes on its element, and what hears it leave. | 50.13, 50.14, 50.18, 50.41, 50.42, 50.71, 50.72 |
+| `CloseReason` | `'timeout' \| 'dismissed' \| 'action'` | Why a notice left its list. | 50.42, 50.69 |
+| `Notice` | `{ id: number; key: string; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined; attributes: Record<string, string>; expires: number }` | One notice a list holds. | 50.12, 50.41, 50.71, 50.72 |
+| `NoticesHostOptions` | `{ label?: string \| (() => string) }` | The region's accessible name. | 50.17 |
+| `NoticesHost` | `{ readonly region: Record<string, unknown>; get notices(): readonly Notice[]; notice(notice: Notice): NoticeParts }` | The region's part, the notices to render, and a notice's parts. | 32.11, 50.17, 50.18, 50.41, 49.2, 49.3, 49.4, 49.5, 49.6, 49.9 |
+| `NoticeParts` | `{ readonly notice: Record<string, unknown>; readonly text: Record<string, unknown>; readonly action: Record<string, unknown>; readonly close: Record<string, unknown>; act(): void; dismiss(): void }` | A notice's, its text's, its action's and its close button's parts, and what runs its action or closes it. | 50.15, 50.17, 50.18, 50.41, 49.3, 49.9 |
+
 ## `toasts`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `toasts.notify` | `(text: string, options?: NotifyOptions) => number` | A notice added to `toasts.list`, by the id it hands back. | 50.12, 50.13, 50.14, 50.16, 50.36 |
-| `NotifyOptions` | `{ tone?: 'info' \| 'success' \| 'error'; timeout?: number; action?: { label: string; run: () => unknown }; attributes?: Record<string, string>; onclose?: (reason: 'timeout' \| 'dismissed' \| 'action') => void }` | A notice's tone, how long it stays, the one action it offers, the attributes on its element, and what hears it leave. | 50.13, 50.14, 50.18, 50.41, 50.42 |
-| `toasts.dismiss` | `(id: number) => void` | Takes a notice down before its timeout. | 50.15 |
-| `toasts.list` | `Reactive<Toast[]>` | The notices showing, oldest first. | 50.12, 50.13, 50.15, 11.32 |
-| `Toast` | `{ id: number; text: string; tone: 'info' \| 'success' \| 'error'; action: { label: string; run: () => unknown } \| undefined; attributes: Record<string, string> }` | One notice `toasts.list` holds. | 50.12, 50.41 |
-| `toasts.host` | `(options?: ToastsHostOptions) => ToastsHost` | The live region the notices show in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.17, 50.18, 50.36, 49.2, 49.4, 49.5, 49.6 |
-| `ToastsHostOptions` | `{ label?: string \| (() => string) }` | The region's accessible name. | 50.17 |
-| `ToastsHost` | `{ readonly region: Record<string, unknown>; get notices(): readonly Toast[]; toast(toast: Toast): ToastParts }` | The region's part, the notices to render, and a notice's parts. | 32.11, 50.17, 50.18, 50.41, 49.3, 49.9 |
-| `ToastParts` | `{ readonly toast: Record<string, unknown>; readonly text: Record<string, unknown>; readonly action: Record<string, unknown>; readonly close: Record<string, unknown>; act(): void; dismiss(): void }` | A notice's, its text's, its action's and its close button's parts, and what runs its action or closes it. | 50.15, 50.17, 50.18, 50.41, 49.3, 49.9 |
+| `toasts` | `Notices` | The notices abide builds for an app, every timeout its default. | 50.74 |
 
 ## `tooltip`
 

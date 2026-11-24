@@ -1,0 +1,20 @@
+<script>
+import { notices, store } from '@abide/abide'
+
+const banner = notices({
+    store: store.cookies('docs-banner'),
+    ttl: 30 * 24 * 60 * 60 * 1000,
+    timeout: Infinity,
+    initial: ['Pipelines can now be shared with a link.'],
+})
+const shown = banner.host({ label: 'Announcements' })
+</script>
+
+<ul {...shown.region}>
+    {#for notice of shown.notices by notice.id}
+        <li {...shown.notice(notice).notice} class="row">
+            <span {...shown.notice(notice).text}>{notice.text}</span>
+            <button {...shown.notice(notice).close}>Close</button>
+        </li>
+    {/for}
+</ul>

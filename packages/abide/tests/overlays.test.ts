@@ -11,7 +11,7 @@ import { anchored } from '#shared/anchored.ts'
 import { place } from '#shared/place.ts'
 import * as prompts from '#shared/prompts/index.ts'
 import { queue } from '#shared/prompts/queue.ts'
-import * as toasts from '#shared/toasts/index.ts'
+import { toasts } from '#shared/toasts.ts'
 
 installServer()
 
@@ -188,10 +188,12 @@ test('a notice lands at the end of the list and leaves it at its timeout — 50.
     expect(id).not.toBe(first)
     expect(toasts.list().at(-1)).toEqual({
         id,
+        key: 'Phone saved',
         text: 'Phone saved',
         tone: 'success',
         action: undefined,
         attributes: {},
+        expires: Infinity,
     })
     await Bun.sleep(20)
     expect(toasts.list().map((toast) => toast.text)).toEqual(['Saved'])
@@ -281,10 +283,12 @@ test('the notices and the prompts are one list per request — 11.32', async () 
         toasts.list.set([
             {
                 id: 1,
+                key: 'Ada saved',
                 text: 'Ada saved',
                 tone: 'info',
                 action: undefined,
                 attributes: {},
+                expires: Infinity,
             },
         ])
         queue.set([

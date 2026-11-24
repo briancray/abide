@@ -9,10 +9,10 @@ import Toasts from '#src/lib/Toasts.abide'
 import SavePhone from './SavePhone.abide'
 
 const notices = () =>
-    [...document.querySelectorAll('[data-toasts=toast]')].map((toast) => [
+    [...document.querySelectorAll('[data-notices=notice]')].map((toast) => [
         toast.getAttribute('data-tone'),
-        toast.querySelector('[data-toasts=text]')?.textContent,
-        toast.querySelector('[data-toasts=action]')?.textContent ?? null,
+        toast.querySelector('[data-notices=text]')?.textContent,
+        toast.querySelector('[data-notices=action]')?.textContent ?? null,
     ])
 
 async function save(phone: string) {
@@ -30,7 +30,7 @@ test('a refused save says why and offers a report', async () => {
     // The live region a screen reader reads each notice out from.
     expect(
         document
-            .querySelector('[data-toasts=toast]')
+            .querySelector('[data-notices=notice]')
             ?.parentElement?.getAttribute('role'),
     ).toBe('status')
     expect(notices()).toEqual([['success', 'Phone saved', null]])
@@ -40,7 +40,7 @@ test('a refused save says why and offers a report', async () => {
         ['error', 'A phone number needs at least seven digits.', 'Report'],
     ])
     for (const close of document.querySelectorAll<HTMLButtonElement>(
-        '[data-toasts=close]',
+        '[data-notices=close]',
     ))
         close.click()
     flushSync()
@@ -52,7 +52,7 @@ test('closing one notice leaves the others where they are', async () => {
     await save('555 0100')
     await save('12')
     const [first] = document.querySelectorAll<HTMLButtonElement>(
-        '[data-toasts=close]',
+        '[data-notices=close]',
     )
     const work = measure(() => {
         first?.click()
@@ -63,23 +63,23 @@ test('closing one notice leaves the others where they are', async () => {
     ])
     // The one move is the closed notice leaving.
     atMost(work, { nodesCreated: 0, elementsMoved: 1, attributesSet: 0 })
-    document.querySelector<HTMLButtonElement>('[data-toasts=close]')?.click()
+    document.querySelector<HTMLButtonElement>('[data-notices=close]')?.click()
     flushSync()
 })
 
 // 50.41, 50.42 — A NOTICE CARRIES THE ATTRIBUTES IT WAS GIVEN, and its action tells `onclose` it was
-// the action that took it. THE REVERTS: drop the `...toast.attributes` spread from `toasts.host`'s
-// `toast` part — the notice carries no `data-track`; take the action through `dismiss` again —
+// the action that took it. THE REVERTS: drop the `...notice.attributes` spread from the `notices` host's
+// `notice` part — the notice carries no `data-track`; take the action through `dismiss` again —
 // `dismissed` where `action` is due.
 test('a notice carries its attributes, and its action tells onclose why it left', async () => {
     using _phone = await mount(SavePhone({}))
     await save('555 0100')
     expect(
         document
-            .querySelector('[data-toasts=toast]')
+            .querySelector('[data-notices=notice]')
             ?.getAttribute('data-track'),
     ).toBe('phone-saved')
-    document.querySelector<HTMLButtonElement>('[data-toasts=close]')?.click()
+    document.querySelector<HTMLButtonElement>('[data-notices=close]')?.click()
     flushSync()
 
     using _toasts = await mount(Toasts({}))
@@ -90,7 +90,7 @@ test('a notice carries its attributes, and its action tells onclose why it left'
         onclose: (reason) => reasons.push(reason),
     })
     flushSync()
-    document.querySelector<HTMLButtonElement>('[data-toasts=action]')?.click()
+    document.querySelector<HTMLButtonElement>('[data-notices=action]')?.click()
     flushSync()
     expect(reasons).toEqual(['action'])
 })

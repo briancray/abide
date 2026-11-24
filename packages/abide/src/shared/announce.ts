@@ -2,7 +2,7 @@
 // read out from its live region as it lands. A message replaces the last rather than joining a log, and each
 // lands as an element of its own, so the same words said twice are read twice.
 //
-// `toasts.host` keeps its own region rather than announcing through this one: a notice is seen, and the
+// A `notices` host keeps its own region rather than announcing through this one: a notice is seen, and the
 // region a screen reader reads it from is the element the reader can also see and act on, its action
 // button inside it. Said here as well, its words would be read twice.
 

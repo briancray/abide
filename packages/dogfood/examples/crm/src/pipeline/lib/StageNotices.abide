@@ -21,12 +21,12 @@ function advance() {
 
 <ol {...shown.region} class="flex flex-col gap-tight">
     {#for toast of shown.notices by toast.id}
-        <li {...shown.toast(toast).toast} class="row data-[tone=success]:text-good">
+        <li {...shown.notice(toast).notice} class="row data-[tone=success]:text-good">
             <span>{toast.text}</span>
             {#if toast.action}
-                <button {...shown.toast(toast).action}>{toast.action.label}</button>
+                <button {...shown.notice(toast).action}>{toast.action.label}</button>
             {/if}
-            <button {...shown.toast(toast).close}>Close</button>
+            <button {...shown.notice(toast).close}>Close</button>
         </li>
     {/for}
 </ol>

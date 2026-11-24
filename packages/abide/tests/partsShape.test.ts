@@ -57,11 +57,14 @@ import {
     type VirtualListSections,
 } from '#shared'
 import { announce, type AnnouncerHost } from '#shared/announce.ts'
+import {
+    type NoticeParts,
+    notices as noticesList,
+    type NoticesHost,
+} from '#shared/notices.ts'
 import { host as promptsHost } from '#shared/prompts/host.ts'
 import type { PromptsHost } from '#shared/prompts/host.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
-import { host as toastsHost } from '#shared/toasts/host.ts'
-import type { ToastParts, ToastsHost } from '#shared/toasts/host.ts'
 import { host as tooltipHost } from '#shared/tooltip/host.ts'
 import type { TooltipHost } from '#shared/tooltip/host.ts'
 
@@ -129,8 +132,8 @@ test('every part is a member, a function of its item, or an action — 49.9', ()
     shaped<DialogParts>()
     shaped<TimeParts>()
     shaped<TimeAt>()
-    shaped<ToastsHost>()
-    shaped<ToastParts>()
+    shaped<NoticesHost>()
+    shaped<NoticeParts>()
     shaped<PromptsHost>()
     shaped<TooltipHost>()
     shaped<ChartParts>()
@@ -162,7 +165,7 @@ function elementParts(): Record<string, unknown> {
     })
     const modal = dialog()
     const seen = time()
-    const notices = standing(() => toastsHost())
+    const notices = standing(() => noticesList().host())
     const asked = standing(() => promptsHost())
     const hints = standing(() => tooltipHost())
     const plot = chart({
@@ -183,12 +186,12 @@ function elementParts(): Record<string, unknown> {
         (input.oninput as (event: Event) => void)({
             currentTarget: { value: 'O' },
         } as unknown as Event)
-    const toast = {
+    const notice = {
         id: 1,
         text: 'Saved',
         tone: 'info',
         attributes: {},
-    } as unknown as Parameters<ToastsHost['toast']>[0]
+    } as unknown as Parameters<NoticesHost['notice']>[0]
     return {
         'listbox.listbox': keys.listbox,
         'listbox.option': keys.option('a'),
@@ -240,11 +243,11 @@ function elementParts(): Record<string, unknown> {
         'sortableTable.selectAll.checkbox': table.selectAll.checkbox,
         'dialog.dialog': modal.dialog,
         'time.at.time': seen.at(0).time,
-        'toasts.host.region': notices.region,
-        'toasts.host.toast.toast': notices.toast(toast).toast,
-        'toasts.host.toast.text': notices.toast(toast).text,
-        'toasts.host.toast.action': notices.toast(toast).action,
-        'toasts.host.toast.close': notices.toast(toast).close,
+        'notices.host.region': notices.region,
+        'notices.host.notice.notice': notices.notice(notice).notice,
+        'notices.host.notice.text': notices.notice(notice).text,
+        'notices.host.notice.action': notices.notice(notice).action,
+        'notices.host.notice.close': notices.notice(notice).close,
         'prompts.host.dialog': asked.dialog,
         'prompts.host.form': asked.form,
         'prompts.host.title': asked.title,
