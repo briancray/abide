@@ -288,13 +288,6 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
-                route: '/reactive/abort-signal',
-                title: '`abortSignal`',
-                description:
-                    "Read the signal that says stop, so a memo's superseded run, a caller who hung up or a stopping app ends its fetch early.",
-                where: 'anywhere',
-            },
-            {
                 route: '/reactive/is-reactive',
                 title: '`isReactive`',
                 description:
@@ -910,9 +903,9 @@ const WRITTEN: readonly {
         ],
     },
     {
-        group: 'Request context',
+        group: 'Ambients',
         description:
-            'What is true of the request being answered — the request, the response, the cookies, the person — read without passing it in.',
+            'What is true of the work being done — the request, the response, the cookies, the person, the signal that says stop — read without passing it in.',
         pages: [
             {
                 route: '/request/request',
@@ -968,6 +961,13 @@ const WRITTEN: readonly {
                 title: '`isServer`',
                 description:
                     "Tell whether code is running in a server's request or render or in the browser, to guard browser-only APIs.",
+                where: 'anywhere',
+            },
+            {
+                route: '/request/abort-signal',
+                title: '`abortSignal`',
+                description:
+                    "Read the signal that says stop, so a memo's superseded run, a caller who hung up or a stopping app ends its fetch early.",
                 where: 'anywhere',
             },
         ],
