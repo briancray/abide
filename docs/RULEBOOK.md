@@ -5047,6 +5047,11 @@ MUST be lowercase.
 warn once on `abide:parts` where that popover is drawn while it is closed, and a build MUST NOT carry
 the check.
 
+49.15 A click on a button among a parts function's parts that leaves that button disabled MUST, where
+it held focus, move focus on: `carousel`'s and `pages`' `previous` and `next` to the other, `wizard`'s
+`next` to its `previous` and its `previous` to its `next`, and `stepper`'s `increment` and `decrement`
+to its `input`.
+
 # 50. Dialogs, toasts and popovers
 
 50.1 `dialog`'s part MUST hold the `<dialog>` it is spread on open while `open` is true, with
@@ -6337,9 +6342,6 @@ magnification.
 each side, centered, its magnification kept from `min` to `max`.
 
 53.90 A double click on `panZoom`'s `surface` MUST magnify it twice about the pointer.
-
-53.91 A click on `carousel`'s `previous` or `next` that leaves the button it was made on disabled MUST,
-where that button held focus, move focus to the other.
 
 # 54. Guards, fetches and jobs
 

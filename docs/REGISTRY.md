@@ -581,7 +581,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `stepper` | `(options?: StepperOptions) => Stepper` | WAI-ARIA's spin button as parts an app spreads onto a field and the buttons either side of it. | 56.29, 56.30, 56.31, 56.32, 49.2, 49.4, 49.5, 49.6 |
+| `stepper` | `(options?: StepperOptions) => Stepper` | WAI-ARIA's spin button as parts an app spreads onto a field and the buttons either side of it. | 56.29, 56.30, 56.31, 56.32, 49.2, 49.4, 49.5, 49.6, 49.15 |
 | `StepperOptions` | `{ id?: string; value?: Reactive<number>; min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); label?: string \| (() => string) }` | The base of its id, the number, its bounds, how far a step moves it, and its accessible name. | 56.29, 56.30, 56.32, 49.8, 49.10, 49.11 |
 | `Stepper` | `{ readonly input: Record<string, unknown>; readonly decrement: Record<string, unknown>; readonly increment: Record<string, unknown>; readonly value: Reactive<number> }` | The field's part, the buttons stepping it down and up, and the number. | 32.11, 56.29, 56.31, 49.3, 49.8, 49.9 |
 
@@ -649,7 +649,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `pages` | `(options: PagesOptions) => Pages` | Pagination as parts an app spreads onto a nav and links or buttons of its own: a link per page listed, and one to the page before and after. | 51.125, 51.126, 51.127, 51.128, 51.129, 49.2, 49.4, 49.5, 49.6 |
+| `pages` | `(options: PagesOptions) => Pages` | Pagination as parts an app spreads onto a nav and links or buttons of its own: a link per page listed, and one to the page before and after. | 51.125, 51.126, 51.127, 51.128, 51.129, 49.2, 49.4, 49.5, 49.6, 49.15 |
 | `PagesOptions` | `{ count: number \| (() => number); page?: Reactive<number>; around?: number \| (() => number); href?: (page: number) => string; label?: string \| (() => string) }` | How many pages there are, the one on, how many around it are listed, each page's address, and the nav's accessible name. | 51.125, 51.126, 51.129, 49.8, 49.10, 49.11 |
 | `Pages` | `{ readonly nav: Record<string, unknown>; get items(): readonly (number \| 'gap')[]; link(page: number): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; readonly page: Reactive<number> }` | The nav's part, the pages listed, a page's link, the links before and after, and the page on. | 32.11, 51.125, 51.127, 51.128, 49.3, 49.8, 49.9 |
 
@@ -673,7 +673,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `wizard` | `(options: WizardOptions) => Wizard` | A task taken in steps as parts an app spreads onto markup of its own: a marker per step, a button on and back, and a `meter` of progress. | 51.141, 51.142, 51.143, 51.144, 49.2, 49.4, 49.5, 49.6 |
+| `wizard` | `(options: WizardOptions) => Wizard` | A task taken in steps as parts an app spreads onto markup of its own: a marker per step, a button on and back, and a `meter` of progress. | 51.141, 51.142, 51.143, 51.144, 49.2, 49.4, 49.5, 49.6, 49.15 |
 | `WizardOptions` | `{ steps: readonly string[] \| (() => readonly string[]); current?: Reactive<string \| undefined>; valid?: (step: string) => boolean }` | The steps in order, the one on, and whether one may be left forward. | 51.141, 51.142, 49.8, 49.10 |
 | `Wizard` | `{ step(key: string): Record<string, unknown>; readonly next: Record<string, unknown>; readonly previous: Record<string, unknown>; readonly progress: Meter; readonly current: Reactive<string \| undefined>; get last(): boolean }` | A step's marker, the buttons on and back, the meter of progress, the step on, and whether it is the last. | 32.11, 51.141, 51.142, 51.143, 51.144, 49.3, 49.8, 49.9 |
 
@@ -728,7 +728,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `carousel` | `<Item>(options: CarouselOptions<Item>) => Carousel<Item>` | A scroll-snap carousel resting on a selection and following the item a scroll centers, as parts an app spreads onto a scroller, its items and a button either side. | 53.61, 53.62, 53.63, 53.64, 53.65, 53.66, 53.67, 53.68, 53.69, 53.70, 32.99, 49.3, 49.7, 49.2, 49.4, 49.5, 49.6, 53.91 |
+| `carousel` | `<Item>(options: CarouselOptions<Item>) => Carousel<Item>` | A scroll-snap carousel resting on a selection and following the item a scroll centers, as parts an app spreads onto a scroller, its items and a button either side. | 53.61, 53.62, 53.63, 53.64, 53.65, 53.66, 53.67, 53.68, 53.69, 53.70, 32.99, 49.3, 49.7, 49.2, 49.4, 49.5, 49.6, 49.15 |
 | `CarouselOptions` | `<Item>{ id?: string; items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; label?: (item: Item) => string; selected?: Reactive<string \| undefined>; behavior?: 'auto' \| 'smooth' \| (() => 'auto' \| 'smooth') }` | The items, how each is told apart and named, the key of the one the carousel rests on, and how a scroll to an item moves. | 53.61, 53.62, 53.68, 49.8, 49.10, 49.11 |
 | `Carousel` | `<Item>{ readonly id: string; readonly host: Record<string, unknown>; item(item: Item): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; get centered(): string \| undefined; readonly selected: Reactive<string \| undefined>; scrollTo(key: string): void; reset(): void }` | The scroller's part, an item's part, the two buttons' parts, the key of the item centered, the key it rests on, and what scrolls to an item and back. | 53.63, 53.67, 53.68, 53.69, 49.3, 49.8, 49.9 |
 

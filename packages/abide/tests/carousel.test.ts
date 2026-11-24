@@ -161,7 +161,7 @@ test('previous and next step from the centered item, and are disabled at the end
 
 // THE REVERT: drop the hand-off from the stepping button's click, and the button its click disables
 // leaves focus on the page, where the keys of a lightbox around it go unheard.
-test('a button its own click disables hands focus to the other — 53.91', () => {
+test('a button its own click disables hands focus to the other — 49.15', () => {
     const view = carousel({ id: 'stages', items: STAGES, behavior: 'auto' })
     const buttons = (['previous', 'next'] as const).map((part) => {
         const button = document.createElement('button')

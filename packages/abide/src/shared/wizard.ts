@@ -2,6 +2,7 @@
 // go on and one to go back and a `meter` of how far it has come, as parts an app spreads onto markup of
 // its own. Going on waits on `valid`; going back is always open, to any step done.
 
+import { handFocus, nearest } from './handFocus.ts'
 import { type Live, live } from './live.ts'
 import { type Meter, meter } from './meter.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
@@ -69,8 +70,19 @@ export function wizard(options: WizardOptions): Wizard {
             get disabled() {
                 return at() >= steps().length - 1 || !valid(key(at()))
             },
-            onclick: () => {
-                if (at() < steps().length - 1 && valid(key(at()))) go(at() + 1)
+            // 49.15 — on the last step, focus goes to `previous`.
+            onclick: (event?: MouseEvent) => {
+                if (at() >= steps().length - 1 || !valid(key(at()))) return
+                go(at() + 1)
+                handFocus(
+                    event?.currentTarget,
+                    at() >= steps().length - 1,
+                    () =>
+                        nearest(
+                            event?.currentTarget,
+                            '[data-wizard="previous"]',
+                        ),
+                )
             },
         },
         previous: {
@@ -79,7 +91,13 @@ export function wizard(options: WizardOptions): Wizard {
             get disabled() {
                 return at() === 0
             },
-            onclick: () => go(at() - 1),
+            // 49.15 — on the first step, focus goes to `next`.
+            onclick: (event?: MouseEvent) => {
+                go(at() - 1)
+                handFocus(event?.currentTarget, at() === 0, () =>
+                    nearest(event?.currentTarget, '[data-wizard="next"]'),
+                )
+            },
         },
         // 51.144
         progress: meter({

@@ -4,6 +4,7 @@
 // server writes the item it rests on as centered, since a page arrives resting.
 
 import { checkParts } from './checkParts.ts'
+import { handFocus } from './handFocus.ts'
 import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
@@ -235,21 +236,13 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
             const key = beside(step)
             if (key === undefined) return
             scrollTo(key)
-            // 53.91 — a button its own click disables would drop focus to the page: it goes to the
-            // button stepping the other way, so the keys of what holds the carousel still reach it.
-            const pressed = event?.currentTarget as
-                HTMLElement | null | undefined
-            if (
-                beside(step) !== undefined ||
-                pressed !== globalThis.document?.activeElement
-            )
-                return
+            // 49.15 — at the end, focus goes to the button stepping the other way.
             const other = step < 0 ? 'next' : 'previous'
-            globalThis.document
-                ?.querySelector<HTMLElement>(
+            handFocus(event?.currentTarget, beside(step) === undefined, () =>
+                globalThis.document?.querySelector<HTMLElement>(
                     `[data-carousel="${other}"][aria-controls="${CSS.escape(base)}"]`,
-                )
-                ?.focus()
+                ),
+            )
         },
     })
 

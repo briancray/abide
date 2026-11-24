@@ -2,6 +2,7 @@
 // field and the buttons either side of it. The keys step it; typing a number takes it, kept to its
 // bounds and its step; the buttons stand outside the tab order, as the field holds the keys.
 
+import { handFocus } from './handFocus.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
@@ -67,7 +68,16 @@ export function stepper(options: StepperOptions = {}): Stepper {
             const at = value()
             return steps < 0 ? at <= min() : at >= max()
         },
-        onclick: by(steps),
+        // 49.15 — at its bound, focus goes to the field, which holds the keys.
+        onclick: (event?: MouseEvent) => {
+            by(steps)()
+            const at = now()
+            handFocus(
+                event?.currentTarget,
+                steps < 0 ? at <= min() : at >= max(),
+                () => globalThis.document?.getElementById(id),
+            )
+        },
     })
     return {
         // 56.29

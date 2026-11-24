@@ -3,6 +3,7 @@
 // spreads onto a nav, links or buttons of its own. Given `href`, each is a link to its page's
 // address, so it works before the page hydrates; without, a button that writes `page`.
 
+import { handFocus } from './handFocus.ts'
 import { type Live, live } from './live.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
@@ -69,8 +70,10 @@ export function pages(options: PagesOptions): Pages {
                   get disabled() {
                       return part !== 'page' && disabled()
                   },
-                  onclick: () => {
-                      if (!disabled()) page.set(to())
+                  onclick: (event?: MouseEvent) => {
+                      if (disabled()) return
+                      page.set(to())
+                      handOn(event, part)
                   },
               }
             : {
@@ -83,12 +86,27 @@ export function pages(options: PagesOptions): Pages {
                   get 'aria-disabled'() {
                       return part !== 'page' && disabled() ? 'true' : undefined
                   },
-                  onclick: () => {
-                      if (!disabled()) page.set(to())
+                  onclick: (event?: MouseEvent) => {
+                      if (disabled()) return
+                      page.set(to())
+                      handOn(event, part)
                   },
               }
     }
 
+    // 49.15 — `previous` or `next` stepping to its end hands focus to the other.
+    const handOn = (event: MouseEvent | undefined, part: string): void => {
+        if (part === 'page') return
+        const pressed = event?.currentTarget as HTMLElement | null | undefined
+        const atEnd = part === 'next' ? on() >= count() : on() <= 1
+        handFocus(pressed, atEnd, () =>
+            pressed
+                ?.closest('[data-pages="nav"]')
+                ?.querySelector<HTMLElement>(
+                    `[data-pages="${part === 'next' ? 'previous' : 'next'}"]`,
+                ),
+        )
+    }
     const links = new Map<number, Record<string, unknown>>()
     const link = (at: number): Record<string, unknown> => {
         let made = links.get(at)
