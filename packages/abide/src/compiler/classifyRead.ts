@@ -289,7 +289,7 @@ export function classifyPropRead(node: Node): Read | undefined {
  */
 export function classifyRead(
     node: Node,
-    valueMember = false,
+    reachesReactive?: boolean,
     mutator = false,
 ): Read | undefined {
     const parent = node.parent
@@ -337,14 +337,17 @@ export function classifyRead(
         if (isPropertyAccessExpression(up) && up.expression === top) {
             // 31.5 — the `Reactive`'s own member is the API, and no path. Called, it stays as
             // written; REFERENCED, it is handed over bound, so `promise.then(n.set)` writes `n`.
-            // `valueMember` where the value's own type declares one of that name (31.5).
+            // `reachesReactive` where the name's type declares the member and the value's does
+            // not (31.5, `reactiveMembers`); a caller with no types to ask has the `Reactive`'s own.
             if (
                 top === node &&
-                !valueMember &&
-                REACTIVE_MEMBERS.has(up.name.text)
+                (reachesReactive ?? REACTIVE_MEMBERS.has(up.name.text))
             ) {
                 const outer = up.parent
+                // A member the name's own type adds — a ledger's `append`, a pipe's `status` — is
+                // its object's, read as written: only the `Reactive`'s own are bound methods.
                 if (
+                    !REACTIVE_MEMBERS.has(up.name.text) ||
                     (isCallExpression(outer) && outer.expression === up) ||
                     isAssigned(outer, up)
                 ) {

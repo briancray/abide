@@ -240,7 +240,7 @@ export async function readsIn(
         reactive.map((symbol) => referencesIn(checker, shadowPath, symbol)),
     )
     const occurrences = [...nodes.flat(), ...memberNodes]
-    const owned = await ownMembers(checker, occurrences, (node) =>
+    const reaching = await reactiveMembers(checker, occurrences, (node) =>
         valueTypeOf(checker, node),
     )
     const lifted = await liftedMutators(checker, occurrences, (node) =>
@@ -252,7 +252,11 @@ export async function readsIn(
     for (let index = 0; index < nodes.length; index += 1)
         for (const node of nodes[index] as (Node | undefined)[]) {
             if (node === undefined) continue
-            const read = classifyRead(node, owned.has(node), lifted.has(node))
+            const read = classifyRead(
+                node,
+                reaching.has(node),
+                lifted.has(node),
+            )
             if (read === undefined) continue
             read.byValue = byValue[index] as boolean
             read.local = index >= topLevel
@@ -263,7 +267,7 @@ export async function readsIn(
                 holding.push(holdIn(checker, abide, node, read))
         }
     for (const node of memberNodes) {
-        const read = classifyRead(node, owned.has(node), lifted.has(node))
+        const read = classifyRead(node, reaching.has(node), lifted.has(node))
         if (read === undefined) continue
         read.member = true
         read.local = true
@@ -972,12 +976,33 @@ async function memberAccesses(
             const receiver = receiverTypes[index]
             if (
                 receiver === undefined ||
-                !(await isReactiveType(checker, abide, receiver, false))
+                !(await isReactiveType(checker, abide, receiver, false)) ||
+                (await addedMember(checker, accesses[at] as Node, receiver))
             )
                 found.push(accesses[at] as Node)
         }),
     )
     return found
+}
+
+/**
+ * 31.5, 31.15 — whether `access` asks a `Reactive` receiver for a member its own type adds beside the
+ * `Reactive`'s — a pipe's `status` — which is that object's property, so a `Reactive` there is read
+ * as any member typed one is. Its type's own properties, never `getPropertyOfType`'s `Function`
+ * augment (`reactiveMembers`).
+ */
+async function addedMember(
+    checker: Checker,
+    access: Node,
+    receiver: Type,
+): Promise<boolean> {
+    if (!isPropertyAccessExpression(access) || !isIdentifier(access.name))
+        return false
+    const member = access.name.text
+    if (REACTIVE_MEMBERS.has(member)) return false
+    for (const property of await checker.getPropertiesOfType(receiver))
+        if (property.name === member) return true
+    return false
 }
 
 function receiverOf(access: Node): Node {
@@ -1378,7 +1403,7 @@ async function propsReads(
     const found = await Promise.all(
         symbols.map((symbol) => referencesIn(checker, shadowPath, symbol)),
     )
-    const owned = await ownMembers(checker, found.flat(), (node) =>
+    const reaching = await reactiveMembers(checker, found.flat(), (node) =>
         checker.getTypeAtLocation(node),
     )
     const lifted = await liftedMutators(checker, found.flat(), (node) =>
@@ -1401,14 +1426,18 @@ async function propsReads(
                 node.parent?.kind === SyntaxKind.BindingElement
             )
                 continue
-            const read = classifyRead(node, owned.has(node), lifted.has(node))
+            const read = classifyRead(
+                node,
+                reaching.has(node),
+                lifted.has(node),
+            )
             if (read === undefined) continue
             if (
                 read.shape === 'write' ||
                 read.shape === 'update' ||
                 read.shape === 'mutate' ||
                 isBindOperand(positions, node) ||
-                writesThrough(node, owned)
+                writesThrough(node, reaching)
             )
                 written = true
             uses.push({ node, read })
@@ -1426,7 +1455,7 @@ async function propsReads(
                     continue
                 }
                 holding.push(
-                    holdsProp(checker, abide, node, owned.has(node)).then(
+                    holdsProp(checker, abide, node, reaching.has(node)).then(
                         (held) => {
                             if (!held) return void reads.push(read)
                             // Classified as a page's own name is, reaching a cell over the accessor.
@@ -1460,54 +1489,78 @@ async function propsReads(
 }
 
 /**
- * 31.5 — the `Reactive`'s member a property access reaches by name, or `undefined` where the name
- * is not one — `n.ready`, `n.set`. Whether it is the `Reactive`'s is the value's type's to say
- * (`ownMembers`).
+ * 31.5 — the member a property access on the name asks for — `n.ready`, `calls.append` — or
+ * `undefined` where the name is not the receiver of one. Whether it reaches the `Reactive` is the
+ * types' to say (`reactiveMembers`).
  */
 function memberNamed(node: Node): string | undefined {
     const parent = node.parent
     return isPropertyAccessExpression(parent) &&
         parent.expression === node &&
-        isIdentifier(parent.name) &&
-        REACTIVE_MEMBERS.has(parent.name.text)
+        isIdentifier(parent.name)
         ? parent.name.text
         : undefined
 }
 
 /**
- * 31.5 — the occurrences among `nodes` reaching a member the VALUE's own type declares, where the
- * access is the value's rather than the `Reactive`'s — a `Map`'s `set` is the map's. Asked before
- * any is classified, so each is classified once.
+ * 31.5 — the occurrences among `nodes` whose property access reaches the `Reactive` rather than its
+ * value: a member the `Reactive` declares (`REACTIVE_MEMBERS`) or one the NAME's own type adds —
+ * a ledger's `append`, a pipe's `status` — where the VALUE's type declares no member of that name.
+ * A `Map`'s `set` is the map's. Asked before any is classified, so each is classified once.
+ *
+ * THE NAME'S OWN MEMBERS ARE ITS TYPE'S PROPERTIES, never what `getPropertyOfType` answers: that
+ * augments a callable with `Function`'s members, and every `Reactive` is callable — `deal.name`
+ * would reach `Function.prototype.name`.
  *
  * Per union member, because a union's properties are only those every member shares, and
  * `undefined` shares none — so `HTMLVideoElement | undefined` would declare no `error`. A value
  * typed `any` or `unknown` declares none: its type says nothing of what it holds.
  */
-async function ownMembers(
+async function reactiveMembers(
     checker: Checker,
     nodes: readonly (Node | undefined)[],
     valueOf: (node: Node) => Promise<Type | undefined>,
 ): Promise<Set<Node>> {
-    const owned = new Set<Node>()
+    const reaching = new Set<Node>()
+    // One properties walk per name type, however many accesses share it.
+    const declaredBy = new Map<number, Promise<Set<string>>>()
+    const declares = async (node: Node, member: string): Promise<boolean> => {
+        if (REACTIVE_MEMBERS.has(member)) return true
+        const named = await checker.getTypeAtLocation(node)
+        if (named === undefined) return false
+        let names = declaredBy.get(named.id)
+        if (names === undefined) {
+            names = checker.getPropertiesOfType(named).then((properties) => {
+                const found = new Set<string>()
+                for (const property of properties) found.add(property.name)
+                return found
+            })
+            declaredBy.set(named.id, names)
+        }
+        return (await names).has(member)
+    }
     const asked: Promise<void>[] = []
     for (const node of nodes) {
         if (node === undefined) continue
         const member = memberNamed(node)
         if (member === undefined) continue
         asked.push(
-            valueOf(node).then(async (value) => {
-                if (value === undefined) return
-                for (const held of await presentMembers(value))
-                    if (
-                        (await checker.getPropertyOfType(held, member)) !==
-                        undefined
-                    )
-                        return void owned.add(node)
-            }),
+            (async () => {
+                if (!(await declares(node, member))) return
+                const value = await valueOf(node)
+                if (value !== undefined)
+                    for (const held of await presentMembers(value))
+                        if (
+                            (await checker.getPropertyOfType(held, member)) !==
+                            undefined
+                        )
+                            return
+                reaching.add(node)
+            })(),
         )
     }
     await Promise.all(asked)
-    return owned
+    return reaching
 }
 
 /**
@@ -1614,9 +1667,9 @@ async function stepTypes(
  * 31.7, 33.6, 33.7 — `n.set(v)` and `n.patch(…)` are writes by name, called or handed on, where the
  * value's own type declares no member of that name — a `Map`'s `set` writes the map, not the prop.
  */
-function writesThrough(node: Node, owned: ReadonlySet<Node>): boolean {
+function writesThrough(node: Node, reaching: ReadonlySet<Node>): boolean {
     const member = memberNamed(node)
-    return (member === 'set' || member === 'patch') && !owned.has(node)
+    return (member === 'set' || member === 'patch') && reaching.has(node)
 }
 
 /**
@@ -1628,10 +1681,12 @@ async function holdsProp(
     checker: Checker,
     abide: Abide,
     node: Node,
-    ownsMember: boolean,
+    reachesReactive: boolean,
 ): Promise<boolean> {
     if (node.parent.kind === SyntaxKind.AwaitExpression) return true
-    if (memberNamed(node) !== undefined) return !ownsMember
+    if (reachesReactive) return true
+    const member = memberNamed(node)
+    if (member !== undefined && REACTIVE_MEMBERS.has(member)) return false
     return typedReactive(checker, abide, node)
 }
 

@@ -2305,9 +2305,10 @@ holds it.
 31.4 Assignment to such a name MUST be a write, and the assigned value MAY be settled, a load, or a
 `Reactive`.
 
-31.5 A property access on such a name MUST reach the value, except a member declared on the
-`Reactive` type that the value's type does not declare, which MUST reach that member bound to the
-`Reactive`.
+31.5 A property access on such a name MUST reach the value, except a member the name's type
+declares that the value's type does not — one the `Reactive` type declares, which MUST reach that
+member bound to the `Reactive`, or one a type built on the `Reactive` adds, which MUST reach that
+member as written.
 
 31.6 A call on such a name MUST reach the `Reactive` API where 31.5 reaches the `Reactive`'s
 member, and the value's method otherwise.

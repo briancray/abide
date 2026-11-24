@@ -62,7 +62,7 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `const [a, b] = foo` / `...foo` | one read of the value | 31.12 |
 | `const { a, b: c } = bar()` where a member is a `Reactive` | a name bound to that `Reactive` | 31.17 |
 | `bar.a` / `bar[k]` where the member is a `Reactive` | read and written as `foo` is | 31.15 |
-| `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where it declares one the value does not | 31.5 |
+| `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where its type declares one the value does not | 31.5 |
 | `foo.bar(…)` | a call of the value's `bar`, or of the `Reactive`'s own `bar` where it declares one the value does not | 31.6 |
 | `foo()` / `foo.set(v)` | the explicit forms | 31.7, 31.11 |
 
