@@ -5,16 +5,15 @@ import { STAGES } from '#src/pipeline/lib/STAGES.ts'
 
 let name = reactive('')
 let stage = reactive('lead')
+const STEPS = ['name', 'stage', 'review']
 const setup = wizard({
-    steps: ['name', 'stage', 'review'],
+    steps: STEPS,
     valid: (step) => step !== 'name' || name.trim() !== '',
 })
 </script>
 
-<ol class="row">
-    <li {...setup.step('name')}>Name</li>
-    <li {...setup.step('stage')}>Stage</li>
-    <li {...setup.step('review')}>Review</li>
+<ol class="row capitalize">
+    {#for step of STEPS key step}<li {...setup.step(step)}>{step}</li>{/for}
 </ol>
 {#if setup.current() === 'name'}
     <input aria-label="Deal name" bind:value={name} />

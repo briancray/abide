@@ -1,16 +1,15 @@
 <script>
 import { wizard } from '@abide/abide'
 
-const steps = wizard({ steps: ['name', 'stage', 'review'] })
+const STEPS = ['name', 'stage', 'review']
+const setup = wizard({ steps: STEPS })
 </script>
 
 <ol
-    class="row text-muted [&_[aria-current]]:text-ink
+    class="row capitalize text-muted [&_[aria-current]]:text-ink
     [&_[data-done]]:text-signal"
 >
-    <li {...steps.step('name')}>Name</li>
-    <li {...steps.step('stage')}>Stage</li>
-    <li {...steps.step('review')}>Review</li>
+    {#for step of STEPS key step}<li {...setup.step(step)}>{step}</li>{/for}
 </ol>
-<button {...steps.previous}>Back</button>
-<button {...steps.next}>Next</button>
+<button {...setup.previous}>Back</button>
+<button {...setup.next}>Next</button>

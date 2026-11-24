@@ -11,7 +11,7 @@ const current = () => document.querySelector('[aria-current=step]')?.textContent
 
 test('the setup goes on once a step is done, and back to any step done', async () => {
     using _setup = await mount(DealSetup({}))
-    expect([current(), next().disabled]).toEqual(['Name', true])
+    expect([current(), next().disabled]).toEqual(['name', true])
     const name = document.querySelector('input') as HTMLInputElement
     name.value = 'Engine renewal'
     name.dispatchEvent(new Event('input', { bubbles: true }))
@@ -21,12 +21,12 @@ test('the setup goes on once a step is done, and back to any step done', async (
     flushSync()
     next().click()
     flushSync()
-    expect(current()).toBe('Review')
+    expect(current()).toBe('review')
     expect(document.querySelector('.status')?.textContent).toBe(
         'Engine renewal — lead',
     )
     expect(document.querySelectorAll('[data-done]')).toHaveLength(2)
     ;(document.querySelector('[data-done]') as HTMLElement).click()
     flushSync()
-    expect(current()).toBe('Name')
+    expect(current()).toBe('name')
 })
