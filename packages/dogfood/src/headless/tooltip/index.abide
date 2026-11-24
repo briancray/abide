@@ -4,6 +4,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import MarkHinted from './lib/MarkHinted.abide'
+import markHinted from './lib/MarkHinted.abide' with { type: 'text' }
 import StageHint from './lib/StageHint.abide'
 import stageHint from './lib/StageHint.abide' with { type: 'text' }
 import StarHint from './lib/StarHint.abide'
@@ -90,5 +92,11 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
                 data-[side=bottom]:before:-top-1"
             >{hints.text}</span>
         `} />
+    </Section>
+
+    <Section level={3} title="Underline every term that has a hint">
+        <p>Every element a <code>tooltip.tip</code> is spread on carries
+            <code>data-tooltip="anchor"</code>, so one rule on the paragraph marks them all.</p>
+        <Example code={markHinted}><MarkHinted /></Example>
     </Section>
 </Doc>

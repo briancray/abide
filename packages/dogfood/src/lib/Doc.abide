@@ -1,8 +1,10 @@
 <script>
 // A docs page: its header from `SITE` — the group it is in, its title and what it is for — then,
-// for a page documenting a REGISTRY section, the parts every such page has in one order (40.9): its
-// Syntax and the headings under it, the examples the page writes, its Types, its See also, its Tests
-// and its Rules. Then the thread to the pages either side, and the rail: the page's own headings, and its two
+// for a page documenting a REGISTRY section, its parts in the order its group's form gives them
+// (40.9): its Syntax and the headings under it, the examples the page writes, its Types, its See
+// also, its Tests and its Rules — the examples first in an `authoring` group, where what a reader
+// came for is how the construct is written (40.40). A guide documents no section, so it is its own
+// prose and its See also (40.39). Then the thread to the pages either side, and the rail: the page's own headings, and its two
 // markdown downloads.
 //
 // WHICH PAGE COMES FROM THE ROUTE, so a page names nothing about itself: its words are `SITE`'s,
@@ -36,7 +38,7 @@ const {
     seeAlso = [],
     tests = [],
 } = props<{
-    documentPage?: Omit<SitePage, 'where' | 'subgroup'>
+    documentPage?: Omit<SitePage, 'where' | 'subgroup' | 'guide'>
     /** The routes of the pages a reader of this one goes to next (40.19). */
     seeAlso?: readonly string[]
     /** The test cases that exercise what the page documents, each a file and its anchors (40.15). */
@@ -45,7 +47,9 @@ const {
 const page = documentPage ?? pageAt(route.name())
 // Where the name is reached for (40.36): a page of a group says it, the home page and a document do not.
 const where =
-    documentPage === undefined && groupOf(page.route) !== undefined
+    documentPage === undefined &&
+    groupOf(page.route) !== undefined &&
+    !pageAt(page.route).guide
         ? WHERE[pageAt(page.route).where]
         : undefined
 const documents = documentPage === undefined && page.registry !== ''
@@ -54,6 +58,8 @@ const { previous, next } =
         ? neighborsOf(page.route)
         : { previous: undefined, next: undefined }
 const group = groupOf(page.route)
+const examplesFirst = group?.form === 'authoring'
+const guide = documentPage === undefined && pageAt(page.route).guide
 const plain = page.title.replaceAll('`', '')
 const markdown =
     documentPage === undefined
@@ -69,7 +75,7 @@ const rules = documents ? clausesOf(page.registry) : []
 const trailing: Heading[] = []
 if (documents && hasTypes(page.registry))
     trailing.push({ id: 'types', title: 'Types', level: 2 })
-if (documents && seeAlso.length > 0)
+if ((documents || guide) && seeAlso.length > 0)
     trailing.push({ id: 'see-also', title: 'See also', level: 2 })
 if (documents && tests.length > 0)
     trailing.push({ id: 'tests', title: 'Tests', level: 2 })
@@ -97,16 +103,26 @@ if (rules.length > 0) trailing.push({ id: 'rules', title: 'Rules', level: 2 })
         {/if}
     </header>
     {#if documents}
-        <Registry />
-        <Section title="Examples">
-            <slot />
-        </Section>
+        {#if examplesFirst}
+            <Section title="Examples">
+                <slot />
+            </Section>
+            <Registry />
+        {:else}
+            <Registry />
+            <Section title="Examples">
+                <slot />
+            </Section>
+        {/if}
         {#if hasTypes(page.registry)}
             <Registry types={true} />
         {/if}
         <SeeAlso routes={seeAlso} />
         <Tests tests={tests} />
         <Rules ids={rules} />
+    {:else if guide}
+        <slot />
+        <SeeAlso routes={seeAlso} />
     {:else}
         <div class="flow">
             <slot />

@@ -1,6 +1,7 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Exchange from '#src/lib/Exchange.abide'
 import Section from '#src/lib/Section.abide'
 </script>
 
@@ -42,6 +43,8 @@ import Section from '#src/lib/Section.abide'
                 return response.page(await render(CompanySheet({ company })))
             })
         `} />
+        <p>The CRM's handler, asked for one company's sheet when this page loaded:</p>
+        <Exchange path="/companies/previewCompany?id=hopper-and-co" />
     </Section>
 
     <Section level={3} title="Write the whole document, styles and all, from the component">

@@ -1675,7 +1675,23 @@ function emitList(
             row.defersSetup,
             block.setup !== null,
         ),
-        rowUpdate(name, row, block, valued, at, lowering),
+        rowUpdate(
+            `${name}_update`,
+            row,
+            (holder) => lowering.readsItem(holder, block),
+            valued,
+            at,
+            lowering,
+        ),
+        // 32.111 — the same slots for the row's index, written where a reconcile moved the row.
+        rowUpdate(
+            `${name}_reindex`,
+            row,
+            (holder) => lowering.readsIndex(holder, block),
+            valued,
+            at,
+            lowering,
+        ),
     ].join('\n')
     // THE LIST CALLS `_setUp` ONCE PER ROW (`List.setUp`). 14.8 — a row with a branch-local
     // `<script>` runs it there, and the row's `make` and `mount` are declared after it, so both close
@@ -1698,7 +1714,7 @@ function emitList(
                       builders,
                       lowering,
                   )
-                : `${builders}\nconst ${name}_builders = { make: ${name}_make, mount: ${name}_mount, update: ${name}_update }\nconst ${name}_setUp = () => ${name}_builders`,
+                : `${builders}\nconst ${name}_builders = { make: ${name}_make, mount: ${name}_mount, update: ${name}_update, reindex: ${name}_reindex }\nconst ${name}_setUp = () => ${name}_builders`,
         ].join('\n'),
     )
 
@@ -1742,19 +1758,20 @@ function itemBinding(
 }
 
 /**
- * A row's `update` (32.67): the walk to each text and attribute slot of the row's own top level that
- * reads the item and nothing that moves, and one write of each from the record's value.
+ * A row's `update` (32.67) or its `reindex` (32.111), declared as `name`: the walk to each text and
+ * attribute slot of the row's own top level that `reads` says reads the item — or the index — and
+ * nothing that moves, and one write of each from the record's value and the index handed in.
  *
  * WHAT `make` WROTE FROM THE ITEM, written again — and nothing a binding keeps written. A bound
  * slot is its watch's alone (`Scope.itemWatch`), rerun when the row takes a new item (`updateRow`):
  * a run's node can change kind under a write (32.26), and what the slot reads can change with the
  * item, so the node and the subscriptions are each held by one writer. A region of the row binds
- * its own. A row with no such slot shares one `update` that does nothing.
+ * its own. A row with no such slot shares one function that does nothing.
  */
 function rowUpdate(
     name: string,
     row: Cursor,
-    block: object,
+    reads: (holder: object) => boolean,
     valued: string,
     at: string,
     lowering: Lowering,
@@ -1765,11 +1782,10 @@ function rowUpdate(
         if (position.kind === 'region') continue
         const slot = position.name.slice('__c'.length)
         if (position.kind === 'text') {
-            let reads = false
+            let written = false
             for (const piece of position.run)
-                if (piece.kind === 'expression')
-                    reads ||= lowering.readsItem(piece, block)
-            if (!reads || lowering.isLiveRun(position.run)) continue
+                if (piece.kind === 'expression') written ||= reads(piece)
+            if (!written || lowering.isLiveRun(position.run)) continue
             live.add(position)
             writes.push(textUnit(position, slot, lowering, null))
             continue
@@ -1793,7 +1809,7 @@ function rowUpdate(
                     if (
                         member.expression &&
                         !lowering.isLive(member) &&
-                        lowering.readsItem(member, block)
+                        reads(member)
                     ) {
                         own.push(
                             writeCall(
@@ -1815,7 +1831,7 @@ function rowUpdate(
                 continue
             }
             if (!one.attribute.expression || one.live) continue
-            if (!lowering.readsItem(one.attribute, block)) continue
+            if (!reads(one.attribute)) continue
             const toggles =
                 one.kind === 'merged'
                     ? one.toggles
@@ -1841,8 +1857,8 @@ function rowUpdate(
         writes.push(`{\nconst __a${slot} = ${element}\n${own.join('\n')}\n}`)
     }
     if (writes.length === 0)
-        return `const ${name}_update = ${lowering.use('noUpdate')}`
-    return `const ${name}_update = (${ROW_ROOT}, ${at}) => {
+        return `const ${name} = ${lowering.use('noUpdate')}`
+    return `const ${name} = (${ROW_ROOT}, ${at}) => {
     ${valued}
 ${[...walkTo(row.positions, live, lowering), ...writes].join('\n')}
 }`
@@ -1869,6 +1885,6 @@ function rowSetUp(
 ${bound}
 ${owning.opened}${local}
 ${owning.handed}${builders}
-return { make: ${name}_make, mount: ${name}_mount, update: ${name}_update }${owning.closed}
+return { make: ${name}_make, mount: ${name}_mount, update: ${name}_update, reindex: ${name}_reindex }${owning.closed}
 }`
 }

@@ -1,6 +1,7 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Exchange from '#src/lib/Exchange.abide'
 import Section from '#src/lib/Section.abide'
 </script>
 
@@ -68,7 +69,7 @@ import Section from '#src/lib/Section.abide'
             <script server>
             import { GET } from '@abide/abide/server'
 
-            const NOTES: Record<string, string[]> = { d1: ['Wants a 3-year term.'] }
+            const NOTES: Record<string, string[]> = { d1: ['Wants a three-year term.'] }
             const getNotes = GET(({ id }: { id: string }) => NOTES[id] ?? [])
             </script>
 
@@ -79,5 +80,8 @@ import Section from '#src/lib/Section.abide'
 
             {#for note of notes}<p>{note}</p>{/for}
         `} />
+        <p>The CRM's deal notes card declares it. Here is its address, asked when this page
+            loaded:</p>
+        <Exchange path="/__abide/handlers/deals/lib/DealNotes/getNotes?id=d1" />
     </Section>
 </Doc>

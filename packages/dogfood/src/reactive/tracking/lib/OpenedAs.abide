@@ -1,0 +1,9 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let stage = reactive('lead')
+const openedAs = stage
+</script>
+
+<p>{stage}, opened as {openedAs}</p>
+<button onclick={() => (stage = 'won')}>Win</button>

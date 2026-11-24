@@ -1,0 +1,14 @@
+<script>
+import { memo, reactive } from '@abide/abide'
+
+let seats = reactive(5)
+let price = reactive(40)
+let note = reactive('')
+const total = memo(() => seats * price)
+</script>
+
+<p>{seats} seats at ${price} each: ${total}</p>
+<div class="row">
+    <button onclick={() => (seats += 1)}>Add a seat</button>
+    <input bind:value={note} placeholder="A note the total never reads">
+</div>

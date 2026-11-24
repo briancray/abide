@@ -9,6 +9,8 @@ import ArrowInset from './lib/ArrowInset.abide'
 import arrowInset from './lib/ArrowInset.abide' with { type: 'text' }
 import FilterPanel from './lib/FilterPanel.abide'
 import filterPanel from './lib/FilterPanel.abide' with { type: 'text' }
+import LitTrigger from './lib/LitTrigger.abide'
+import litTrigger from './lib/LitTrigger.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -52,10 +54,17 @@ import filterPanel from './lib/FilterPanel.abide' with { type: 'text' }
             anchor's width, kept current as it resizes.</p>
         <Example code={anchorWidth}><AnchorWidth /></Example>
     </Section>
+
     <Section level={3} title="Point an arrow at the button, clear of the rounded corners">
         <p>The popover writes <code>--arrow-offset</code>: how far along its facing edge the
             button's middle falls, kept <code>arrowInset</code> pixels from each end so an arrow
             drawn there clears the corners.</p>
         <Example code={arrowInset}><ArrowInset /></Example>
+    </Section>
+
+    <Section level={3} title="Keep the button lit while its panel is open">
+        <p>The trigger carries <code>aria-expanded="true"</code> while the popover shows, and the
+            popover carries <code>data-open</code>.</p>
+        <Example code={litTrigger}><LitTrigger /></Example>
     </Section>
 </Doc>

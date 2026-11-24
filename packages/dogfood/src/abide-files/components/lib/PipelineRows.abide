@@ -1,0 +1,16 @@
+<script>
+import DealList from './DealList.abide'
+
+type Deal = { id: string; name: string; stage: string }
+
+const deals: Deal[] = [
+    { id: 'd1', name: 'Acme renewal', stage: 'proposal' },
+    { id: 'd2', name: 'Hopper onboarding', stage: 'won' },
+]
+</script>
+
+<DealList deals={deals}>
+    {#component Row({ deal }: { deal: Deal })}
+        <strong>{deal.name}</strong> {deal.stage}
+    {/component}
+</DealList>

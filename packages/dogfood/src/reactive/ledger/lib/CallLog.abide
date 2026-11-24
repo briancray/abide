@@ -1,0 +1,12 @@
+<script>
+import { ledger } from '@abide/abide'
+
+const calls = ledger<{ contact: string; minutes: number }>()
+</script>
+
+<button onclick={() => calls.append({ contact: 'Ada', minutes: 12 })}>
+    Log a call
+</button>
+{#for call of calls key call.seq}
+    <p>{call.entry.contact}: {call.entry.minutes} min</p>
+{/for}

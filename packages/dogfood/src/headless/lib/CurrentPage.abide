@@ -1,0 +1,18 @@
+<script>
+import { pages } from '@abide/abide'
+
+const list = pages({ count: 5 })
+</script>
+
+<nav class="row" {...list.nav}>
+    {#for item of list.items}
+        {#if item !== 'gap'}<button {...list.link(item)}>{item}</button>{/if}
+    {/for}
+</nav>
+
+<style>
+[data-pages=page][aria-current=page] {
+    color: var(--color-paper);
+    background: var(--color-signal);
+}
+</style>

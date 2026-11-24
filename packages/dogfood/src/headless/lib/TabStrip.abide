@@ -1,0 +1,12 @@
+<script>
+import { tabs } from '@abide/abide'
+
+const view = tabs({ items: ['details', 'stage', 'notes'] })
+</script>
+
+<div class="tabs" {...view.list}>
+    <button {...view.tab('details').button}>Details</button>
+    <button {...view.tab('stage').button}>Stage</button>
+    <button {...view.tab('notes').button}>Notes</button>
+</div>
+<p {...view.panel}>The {view.selected} of the deal.</p>

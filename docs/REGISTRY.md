@@ -101,7 +101,7 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | Spelling | Branches | Meaning | Rules |
 | --- | --- | --- | --- |
 | `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 12.18, 32.12, 32.21, 32.63, 32.64, 32.65, 32.70, 41.24 |
-| `{#for item, index of list key expression}` | — | Repeats markup over a list, or over a cursor as it produces. | 12.18, 32.13, 32.14, 32.15, 32.22, 32.97, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 32.70, 41.8, 41.14, 41.15 |
+| `{#for item, index of list key expression}` | — | Repeats markup over a list, or over a cursor as it produces. | 12.18, 32.13, 32.14, 32.15, 32.22, 32.97, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 32.70, 32.111, 41.8, 41.14, 41.15 |
 | `{#try}` | `{:pending}`, `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.16, 32.56, 32.63, 32.64, 32.96 |
 
 ## Components and slots
@@ -536,7 +536,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as parts an app spreads onto elements of its own: a trigger and the menu it opens in a `popover`. | 50.28, 50.29, 50.30, 50.31, 50.32, 50.37, 50.38, 50.39, 50.40, 50.55, 50.56, 50.57, 50.58, 49.2, 49.4, 49.5, 49.6 |
 | `MenuOptions` | `PopoverOptions & { openOnHover?: number \| false \| (() => number \| false); closeOnLeave?: number \| false \| (() => number \| false); group?: string \| (() => string \| undefined) }` | Where the menu opens and what closes it, as a `popover` takes them, whether a resting pointer opens it and a leaving one closes it, and the group it switches within. | 50.37, 49.8, 49.10, 49.11, 50.55, 50.56, 50.57 |
-| `Menu` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the menu's, and whether the menu is open. | 32.11, 50.37, 50.38, 49.3, 49.8, 49.9 |
+| `Menu` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the menu's, and whether the menu is open. | 32.11, 50.37, 50.38, 49.3, 49.8, 49.9, 49.17 |
 
 ## `popover`
 
@@ -544,7 +544,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `popover` | `(options?: PopoverOptions) => PopoverParts` | An app's own overlay as parts it spreads onto a trigger or an anchor and a popover of its own, shown in the top layer against the one while `open` holds. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.48, 50.59, 50.60, 32.99, 49.7, 49.12, 49.14, 49.2, 49.4, 49.5, 49.6 |
 | `PopoverOptions` | `{ side?: Side \| (() => Side); align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); margin?: number \| (() => number); arrowInset?: number \| (() => number); id?: string; open?: Reactive<boolean>; escape?: boolean; outside?: boolean }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners, the base of its ids, whether it is open, and whether Escape and a press outside close it. | 50.19, 50.20, 50.21, 50.35, 50.60, 49.8, 49.10, 49.11 |
-| `PopoverParts` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly popover: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the popover's, and whether it is open. | 50.48, 50.59, 32.11, 49.3, 49.8, 49.9 |
+| `PopoverParts` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly popover: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the popover's, and whether it is open. | 50.48, 50.59, 32.11, 49.3, 49.8, 49.9, 49.17 |
 | `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
 
 ## `drawer`
@@ -569,7 +569,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `commandPalette` | `(options: CommandPaletteOptions) => CommandPaletteParts` | WAI-ARIA's combobox in a modal dialog over the commands an app can run, as parts an app spreads onto elements of its own. | 51.65, 51.66, 51.67, 51.68, 51.69, 51.70, 51.71, 51.107, 49.7, 50.1, 50.2, 50.3, 50.4, 49.2, 49.4, 49.5, 49.6 |
 | `CommandPaletteOptions` | `{ commands: readonly Command[] \| (() => readonly Command[]); open?: Reactive<boolean>; hotkey?: string \| (() => string); id?: string; label?: string \| (() => string) }` | What the palette lists, what opens it, and what it is called. | 51.65, 51.66, 49.10, 49.11 |
-| `CommandPaletteParts` | `{ readonly id: string; readonly dialog: Record<string, unknown>; readonly input: Record<string, unknown>; readonly listbox: Record<string, unknown>; command(command: Command): CommandParts; readonly empty: Record<string, unknown>; get results(): readonly Command[]; readonly open: Reactive<boolean> }` | The dialog's part, the input's, the list's, a command's parts, the empty status, the commands listed and whether it shows. | 32.11, 51.66, 51.67, 49.3, 49.8, 49.9 |
+| `CommandPaletteParts` | `{ readonly id: string; readonly dialog: Record<string, unknown>; readonly input: Record<string, unknown>; readonly listbox: Record<string, unknown>; command(command: Command): CommandParts; readonly empty: Record<string, unknown>; get results(): readonly Command[]; readonly open: Reactive<boolean> }` | The dialog's part, the input's, the list's, a command's parts, the empty status, the commands listed and whether it shows. | 32.11, 51.66, 51.67, 49.3, 49.8, 49.9, 49.17 |
 | `CommandParts` | `{ readonly option: Record<string, unknown>; readonly label: Record<string, unknown>; readonly key: Record<string, unknown>; readonly runs: readonly LabelRun[] }` | A command's option, the label and the key written in it, and the label in runs. | 51.67, 51.107, 49.3 |
 | `Command` | `{ label: string; keywords?: readonly string[]; key?: string; run: () => void }` | One thing the palette can do: what it is called, the further words typing matches, the key shown beside it and what choosing it does. | 51.66, 51.68, 51.70 |
 
@@ -611,7 +611,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `combobox` | `<Item>(options: ComboboxOptions<Item>) => ComboboxParts<Item>` | WAI-ARIA's combobox with a list popup as parts an app spreads onto an input, a popup and options of its own. | 51.13, 51.14, 51.15, 51.16, 51.17, 51.18, 51.19, 51.20, 51.21, 51.22, 51.23, 51.24, 51.25, 51.26, 51.27, 51.28, 51.29, 51.30, 51.31, 51.32, 51.33, 51.55, 51.56, 51.57, 51.92, 51.93, 51.106, 49.7, 49.14, 49.2, 49.4, 49.5, 49.6 |
 | `ComboboxOptions` | `<Item, Multiple extends boolean = false>{ id?: string; options?: readonly Item[] \| (() => readonly Item[]); search?(query: string): readonly Item[] \| PromiseLike<readonly Item[]> \| Reactive<readonly Item[], unknown, unknown, unknown>; debounce?: number; key?(item: Item): string; label?(item: Item): string; multiple?: Multiple; value?: Reactive<Picked<Item, Multiple>> }` | What a combobox lists, how an item is told apart and written, and the pick it holds. | 51.15, 51.16, 51.18, 51.24, 51.55, 49.8, 49.10, 49.11, 49.16 |
-| `ComboboxParts` | `<Item, Multiple extends boolean = false>{ readonly id: string; readonly root: Record<string, unknown>; readonly input: Record<string, unknown>; readonly open: Reactive<boolean>; readonly popup: Record<string, unknown>; readonly listbox: Record<string, unknown>; get items(): readonly Item[]; option(item: Item): Record<string, unknown>; runs(item: Item): readonly LabelRun[]; get nothingFound(): boolean; readonly empty: Record<string, unknown>; readonly value: Reactive<Picked<Item, Multiple>>; readonly chips: Record<string, unknown>; chip(item: Item): ComboboxChip }` | The parts `combobox` hands back: its id, the field's wrapper, the input, whether it is open, the popup, the list, an option, an item's label in runs, the empty status, the pick, the element holding the chips and a picked item's chip. | 51.26, 51.30, 51.31, 51.56, 51.57, 51.106, 32.99, 49.3, 49.8, 49.9 |
+| `ComboboxParts` | `<Item, Multiple extends boolean = false>{ readonly id: string; readonly root: Record<string, unknown>; readonly input: Record<string, unknown>; readonly open: Reactive<boolean>; readonly popup: Record<string, unknown>; readonly listbox: Record<string, unknown>; get items(): readonly Item[]; option(item: Item): Record<string, unknown>; runs(item: Item): readonly LabelRun[]; get nothingFound(): boolean; readonly empty: Record<string, unknown>; readonly value: Reactive<Picked<Item, Multiple>>; readonly chips: Record<string, unknown>; chip(item: Item): ComboboxChip }` | The parts `combobox` hands back: its id, the field's wrapper, the input, whether it is open, the popup, the list, an option, an item's label in runs, the empty status, the pick, the element holding the chips and a picked item's chip. | 51.26, 51.30, 51.31, 51.56, 51.57, 51.106, 32.99, 49.3, 49.8, 49.9, 49.17 |
 | `ComboboxChip` | `{ readonly chip: Record<string, unknown>; readonly remove: Record<string, unknown> }` | A picked item's chip, and the button taking it out. | 51.56, 49.3 |
 | `Picked` | `Picked<Item, Multiple extends boolean> = Multiple extends true ? readonly Item[] : Item \| undefined` | What a pick holds: every one picked where it picks many, else the one picked or none. | 51.55, 51.98 |
 | `LabelRun` | `{ readonly text: string; readonly match: Record<string, unknown> \| undefined }` | A stretch of a label, and the `match` part of the element marking it where it is what was typed. | 51.106, 51.107, 49.3 |
@@ -679,7 +679,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `pages` | `(options: PagesOptions) => Pages` | Pagination as parts an app spreads onto a nav and links or buttons of its own: a link per page listed, and one to the page before and after. | 51.125, 51.126, 51.127, 51.128, 51.129, 49.2, 49.4, 49.5, 49.6, 49.15 |
 | `PagesOptions` | `{ count: number \| (() => number); page?: Reactive<number>; around?: number \| (() => number); href?: (page: number) => string; label?: string \| (() => string) }` | How many pages there are, the one on, how many around it are listed, each page's address, and the nav's accessible name. | 51.125, 51.126, 51.129, 49.8, 49.10, 49.11 |
-| `Pages` | `{ readonly nav: Record<string, unknown>; get items(): readonly (number \| 'gap')[]; link(page: number): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; readonly page: Reactive<number> }` | The nav's part, the pages listed, a page's link, the links before and after, and the page on. | 32.11, 51.125, 51.127, 51.128, 49.3, 49.8, 49.9 |
+| `Pages` | `{ readonly nav: Record<string, unknown>; get items(): readonly (number \| 'gap')[]; link(page: number): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; readonly page: Reactive<number> }` | The nav's part, the pages listed, a page's link, the links before and after, and the page on. | 32.11, 51.125, 51.127, 51.128, 49.3, 49.8, 49.9, 49.17 |
 
 ## `playback`
 
@@ -695,7 +695,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `breadcrumbs` | `<Crumb>(options: BreadcrumbsOptions<Crumb>) => Breadcrumbs<Crumb>` | A trail of links to the page as parts an app spreads onto a nav and links of its own, its middle folded into a `menu` past `max`. | 51.136, 51.137, 51.138, 51.139, 51.140, 49.2, 49.4, 49.5, 49.6 |
 | `BreadcrumbsOptions` | `<Crumb>{ trail: readonly Crumb[] \| (() => readonly Crumb[]); href: (crumb: Crumb) => string; max?: number \| (() => number); label?: string \| (() => string) }` | The crumbs from the top down, where each leads, how many show before the middle folds, and the nav's accessible name. | 51.136, 51.138, 51.140, 49.10, 49.11 |
-| `Breadcrumbs` | `<Crumb>{ readonly nav: Record<string, unknown>; get items(): readonly (Crumb \| 'overflow')[]; get folded(): readonly Crumb[]; link(crumb: Crumb): Record<string, unknown>; readonly overflow: Menu; menuItem(crumb: Crumb): Record<string, unknown> }` | The nav's part, the crumbs shown, the crumbs folded, a crumb's link, the overflow's menu, and a folded crumb's menu item. | 32.11, 51.136, 51.137, 51.138, 51.139, 49.3, 49.9 |
+| `Breadcrumbs` | `<Crumb>{ readonly nav: Record<string, unknown>; get items(): readonly (Crumb \| 'overflow')[]; get folded(): readonly Crumb[]; link(crumb: Crumb): Record<string, unknown>; readonly overflow: Menu; menuItem(crumb: Crumb): Record<string, unknown> }` | The nav's part, the crumbs shown, the crumbs folded, a crumb's link, the overflow's menu, and a folded crumb's menu item. | 32.11, 51.136, 51.137, 51.138, 51.139, 49.3, 49.9, 49.17 |
 
 ## `wizard`
 
@@ -703,7 +703,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `wizard` | `<Step>(options: WizardOptions<Step>) => Wizard<Step>` | A task taken in steps as parts an app spreads onto markup of its own: a marker per step, a button on and back, and a `meter` of progress. | 51.141, 51.142, 51.143, 51.144, 49.2, 49.4, 49.5, 49.6, 49.15 |
 | `WizardOptions` | `<Step>{ steps: readonly Step[] \| (() => readonly Step[]); key?: (step: Step) => string; current?: Reactive<string \| undefined>; valid?: (step: Step) => boolean }` | The steps in order, how each is told apart, the key of the one on, and whether one may be left forward. | 51.141, 51.142, 49.8, 49.10, 49.16 |
-| `Wizard` | `<Step>{ step(step: Step): Record<string, unknown>; readonly next: Record<string, unknown>; readonly previous: Record<string, unknown>; readonly progress: Meter; readonly current: Reactive<string \| undefined>; get last(): boolean }` | A step's marker, the buttons on and back, the meter of progress, the step on, and whether it is the last. | 32.11, 51.141, 51.142, 51.143, 51.144, 49.3, 49.8, 49.9 |
+| `Wizard` | `<Step>{ step(step: Step): Record<string, unknown>; readonly next: Record<string, unknown>; readonly previous: Record<string, unknown>; readonly progress: Meter; readonly current: Reactive<string \| undefined>; get last(): boolean }` | A step's marker, the buttons on and back, the meter of progress, the step on, and whether it is the last. | 32.11, 51.141, 51.142, 51.143, 51.144, 49.3, 49.8, 49.9, 49.17 |
 
 ## `sortableList`
 
@@ -721,7 +721,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `tree` | `<Node, Multiple extends boolean = false>(options: TreeOptions<Node, Multiple>) => Tree<Node, Multiple>` | WAI-ARIA's tree as parts an app spreads onto elements of its own: the tree, an item per node, and the group holding a node's children. | 51.77, 51.78, 51.79, 51.80, 51.81, 51.82, 51.83, 51.84, 51.98, 51.99, 51.100, 51.101, 51.102, 51.103, 49.7, 49.2, 49.4, 49.5, 49.6 |
 | `TreeOptions` | `<Node, Multiple extends boolean = false>{ id?: string; roots: readonly Node[] \| (() => readonly Node[]); children(node: Node): readonly Node[] \| undefined; key?(node: Node): string; label?(node: Node): string; expanded?: Reactive<readonly string[]>; multiple?: Multiple; selected?: Reactive<Picked<string, Multiple>> }` | The nodes, how each is told apart and named, which are expanded, and whether one or many are selected and which. | 51.77, 51.79, 51.82, 51.83, 51.98, 49.8, 49.11, 49.16 |
 | `Tree` | `<Node, Multiple extends boolean = false>{ readonly id: string; readonly tree: Record<string, unknown>; node(node: Node): TreeNode; get shown(): readonly Node[]; readonly expanded: Reactive<readonly string[]>; readonly selected: Reactive<Picked<string, Multiple>> }` | The tree's part, a node's parts, the nodes that show, and which nodes are expanded and which are selected. | 51.77, 51.78, 51.84, 51.98, 51.156, 49.3, 49.8, 49.9 |
-| `TreeNode` | `{ readonly item: Record<string, unknown>; readonly group: Record<string, unknown>; get expanded(): boolean; toggle(): void }` | A node's item and group, whether it is expanded, and what expands or collapses it. | 51.77, 51.78, 51.84, 49.3 |
+| `TreeNode` | `{ readonly item: Record<string, unknown>; readonly group: Record<string, unknown>; get expanded(): boolean; toggle(): void }` | A node's item and group, whether it is expanded, and what expands or collapses it. | 51.77, 51.78, 51.84, 49.3, 49.17 |
 
 ## `jsonInspector`
 
@@ -761,7 +761,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `CalendarPick` | `CalendarPick<Range extends boolean> = Range extends true ? readonly [start: string, end: string \| undefined] \| undefined : string \| undefined` | What a calendar picks: a range's start and end where it picks a range, else a day or none. | 52.97 |
 | `CalendarMonth` | `{ readonly month: string; readonly label: string; readonly heading: Record<string, unknown>; readonly grid: Record<string, unknown>; readonly weeks: readonly (readonly CalendarDay[])[] }` | A month shown as `YYYY-MM`, its name in words, its heading's part, its grid's, and its weeks. | 52.82, 52.94, 52.96, 49.3 |
 | `CalendarWeekday` | `{ readonly day: number; readonly name: string; readonly short: string; readonly header: Record<string, unknown> }` | A weekday's number from Monday's `1`, its name in full and shortened, and its header cell. | 52.87, 49.3 |
-| `CalendarDay` | `{ readonly date: string; readonly day: number; readonly cell: Record<string, unknown> }` | A day of a grid as `YYYY-MM-DD`, its number in its month, and its cell. | 52.82, 52.84, 52.86, 52.95, 52.96, 52.98, 52.99, 49.3 |
+| `CalendarDay` | `{ readonly date: string; readonly day: number; readonly cell: Record<string, unknown> }` | A day of a grid as `YYYY-MM-DD`, its number in its month, and its cell. | 52.82, 52.84, 52.86, 52.95, 52.96, 52.98, 52.99, 49.3, 49.17 |
 
 ## `carousel`
 
@@ -792,7 +792,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `VirtualList` | `<Item>{ readonly host: Record<string, unknown>; item(entry: VirtualListEntry<Item>): Record<string, unknown>; get shown(): readonly VirtualListEntry<Item>[]; readonly sections: VirtualListSections; scrollTo(index: number): void }` | The host's part, an item's part, the items to render, the sections and their jumps, and what scrolls to an item. | 51.58, 51.62, 51.63, 49.9 |
 | `VirtualListEntry` | `<Item>{ item: Item; index: number; key: string }` | One item `shown` renders: the item, where it stands in `items`, and its key. | 51.58 |
 | `VirtualListSection` | `{ label: string; index: number }` | One section: its label, and the index of its first item, or `-1` where it has none. | 51.64 |
-| `VirtualListSections` | `{ readonly host: Record<string, unknown>; get all(): readonly VirtualListSection[]; get current(): string \| undefined; jump(section: VirtualListSection): Record<string, unknown> }` | The jump index: its host, every section, the one in view, and a section's jump. | 51.64, 51.95, 51.96, 49.9 |
+| `VirtualListSections` | `{ readonly host: Record<string, unknown>; get all(): readonly VirtualListSection[]; get current(): string \| undefined; jump(section: VirtualListSection): Record<string, unknown> }` | The jump index: its host, every section, the one in view, and a section's jump. | 51.64, 51.95, 51.96, 49.9, 49.17 |
 
 ## `time`
 
@@ -1859,7 +1859,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94, 38.123, 38.139 |
 | `abide start [--port <n>] [--hostname <host>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97, 38.110, 38.123, 38.136, 38.139 |
 | `abide [--url <origin>] [--port <n>] [--hostname <host>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.7, 38.53, 38.54, 38.55, 38.58, 38.59, 38.60, 38.62, 38.123, 38.136 |
-| `abide call <address> [args]` | One call to one handler. | 38.8, 38.61, 38.110 |
+| `abide call <address> [args]` | One call to one handler. | 38.8, 38.61, 38.110, 38.216 |
 | `abide openapi [--url <origin>]` | The OpenAPI document printed rather than served. | 38.9, 38.25, 38.110, 38.111, 38.123 |
 | `abide mcp [--url <origin>]` | The app's MCP server over stdio. | 38.9, 38.13, 38.25, 38.110, 38.123 |
 | `abide watch <address> [args]` | A live subscription to one of the app's followed `GET`s. | 38.69 |

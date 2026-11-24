@@ -3,6 +3,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import CurrentCrumb from './lib/CurrentCrumb.abide'
+import currentCrumb from './lib/CurrentCrumb.abide' with { type: 'text' }
 import DealTrail from './lib/DealTrail.abide'
 import dealTrail from './lib/DealTrail.abide' with { type: 'text' }
 </script>
@@ -27,5 +29,10 @@ import dealTrail from './lib/DealTrail.abide' with { type: 'text' }
             <code>trigger</code> there and its <code>menu</code> around the
             <code>folded</code> crumbs, each a <code>menuItem</code>.</p>
         <Example code={dealTrail}><DealTrail /></Example>
+    </Section>
+
+    <Section level={3} title="Set the current page apart from the trail of links">
+        <p>The last crumb carries <code>aria-current="page"</code>.</p>
+        <Example code={currentCrumb}><CurrentCrumb /></Example>
     </Section>
 </Doc>

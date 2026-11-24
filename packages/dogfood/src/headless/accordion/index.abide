@@ -3,6 +3,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import LightOpen from './lib/LightOpen.abide'
+import lightOpen from './lib/LightOpen.abide' with { type: 'text' }
 import ManyOpen from './lib/ManyOpen.abide'
 import manyOpen from './lib/ManyOpen.abide' with { type: 'text' }
 import OneOpen from './lib/OneOpen.abide'
@@ -32,5 +34,10 @@ import oneOpen from './lib/OneOpen.abide' with { type: 'text' }
     <Section level={3} title="Let several sections stay open">
         <p>Give <code>multiple: true</code>, and <code>open</code> holds every key open.</p>
         <Example code={manyOpen}><ManyOpen /></Example>
+    </Section>
+
+    <Section level={3} title="Light the heading of the open section">
+        <p>Each section's button carries <code>data-open</code> while its region shows.</p>
+        <Example code={lightOpen}><LightOpen /></Example>
     </Section>
 </Doc>

@@ -3,6 +3,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import RedWhileLow from './lib/RedWhileLow.abide'
+import redWhileLow from './lib/RedWhileLow.abide' with { type: 'text' }
 import TeamQuota from './lib/TeamQuota.abide'
 import teamQuota from './lib/TeamQuota.abide' with { type: 'text' }
 import UploadProgress from './lib/UploadProgress.abide'
@@ -37,5 +39,11 @@ import uploadProgress from './lib/UploadProgress.abide' with { type: 'text' }
             <code>value</code> is <code>undefined</code> it is indeterminate: no fill, and
             <code>data-indeterminate</code> on the track.</p>
         <Example code={uploadProgress}><UploadProgress /></Example>
+    </Section>
+
+    <Section level={3} title="Turn the quota red while it is low">
+        <p>The track carries <code>data-level="low"</code> while the value is under
+            <code>low</code>.</p>
+        <Example code={redWhileLow}><RedWhileLow /></Example>
     </Section>
 </Doc>

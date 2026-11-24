@@ -1,0 +1,71 @@
+<script server>
+// `node:fs` for its synchronous read, which bun has no api for: an async read here would stream in
+// after the first byte, and miss the page's markdown twin (see `Tests.abide`).
+import { existsSync, readFileSync } from 'node:fs'
+
+import { GET } from '@abide/abide/server'
+
+let stylesheet: string | undefined
+
+/** The CRM's stylesheet, found by walking up from this module to the docs app's `examples`. */
+function crmStylesheet(): string {
+    if (stylesheet !== undefined) return stylesheet
+    let directory = import.meta.dir
+    while (!existsSync(`${directory}/examples/crm/src/lib/crm.css`)) {
+        const parent = directory.slice(0, directory.lastIndexOf('/'))
+        if (parent === '' || parent === directory)
+            throw new Error('docs: no CRM stylesheet above the docs app')
+        directory = parent
+    }
+    stylesheet = readFileSync(
+        `${directory}/examples/crm/src/lib/crm.css`,
+        'utf8',
+    )
+    return stylesheet
+}
+
+// The `@utility` blocks of the CRM's stylesheet for the classes an example's markup writes, each
+// as written there with its comments dropped — the rules that style the example and nothing else.
+const utilitiesFor = GET(({ code }: { code: string }) => {
+    const written = new Set<string>()
+    for (const [, classes] of code.matchAll(/\bclass="([^"]*)"/g))
+        for (const name of (classes as string).split(/\s+/)) written.add(name)
+    const css = crmStylesheet()
+    const blocks: string[] = []
+    for (const match of css.matchAll(/^@utility ([\w-]+) \{$/gm)) {
+        if (!written.has(match[1] as string)) continue
+        const start = match.index
+        const end = css.indexOf('\n}\n', start)
+        blocks.push(
+            css
+                .slice(start, end + 2)
+                .replace(/\n?[ \t]*\/\*[\s\S]*?\*\//g, '')
+                .replace(/\n{3,}/g, '\n\n'),
+        )
+    }
+    return blocks
+})
+</script>
+
+<script>
+// THE CSS THAT REACHES AN EXAMPLE (40.41): the selectors the markup it made carries, read live, so
+// a state the reader causes joins them; and the rules of the CRM's stylesheet for the classes the
+// file writes. Tailwind's utilities on an element are in its fence already.
+import { memo, props } from '@abide/abide'
+
+import Code from './Code.abide'
+
+const { code, hooks } = props<{ code: string; hooks: readonly string[] }>()
+
+const utilities = memo(() => utilitiesFor({ code }))
+const selectors = memo(() =>
+    hooks.length === 0
+        ? '/* the selectors appear once the example runs */'
+        : hooks.map((hook) => `${hook} { }`).join('\n'),
+)
+</script>
+
+<Code language="css" caption=".css · the selectors its parts and states carry" code={selectors} />
+{#if utilities && utilities.length > 0}
+    <Code language="css" caption="crm.css · the rules for the classes it writes" code={utilities.join('\n\n')} />
+{/if}

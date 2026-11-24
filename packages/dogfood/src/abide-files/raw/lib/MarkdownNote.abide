@@ -1,0 +1,7 @@
+<script>
+import { markdown, raw } from '@abide/abide'
+
+const note = '**Renewal** is due _Friday_.'
+</script>
+
+<article>{raw(markdown(note))}</article>

@@ -1,0 +1,11 @@
+<script>
+import { spoiler } from '@abide/abide'
+
+const floor = spoiler()
+</script>
+
+<p class="has-data-open:text-warm">
+    Walk-away price:
+    <button {...floor.cover}>Show</button>
+    <span {...floor.content}>$42,000</span>
+</p>

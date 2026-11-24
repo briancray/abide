@@ -1,0 +1,35 @@
+<script server>
+import { GET, POST } from '@abide/abide/server'
+
+const ACME = { stage: 'lead', amount: 12_000 }
+const DEALS = [ACME, { stage: 'won', amount: 30_000 }]
+
+const getStage = GET(async ({ stage }: { stage: string }) => {
+    await Bun.sleep(400)
+    let value = 0
+    for (const deal of DEALS) if (deal.stage === stage) value += deal.amount
+    return { value }
+})
+
+const moveAcme = POST(() => {
+    ACME.stage = ACME.stage === 'lead' ? 'won' : 'lead'
+})
+</script>
+
+<script>
+import { busy, memo, refresh } from '@abide/abide'
+
+const leads = memo(() => getStage({ stage: 'lead' }))
+const won = memo(() => getStage({ stage: 'won' }))
+
+async function move() {
+    await moveAcme()
+    refresh(getStage)
+}
+</script>
+
+<div class={busy(getStage) ? 'tiles opacity-40' : 'tiles'}>
+    <p>lead: ${leads.value}</p>
+    <p>won: ${won.value}</p>
+</div>
+<button onclick={move}>Move Acme</button>

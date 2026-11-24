@@ -1,17 +1,131 @@
 <script>
 // AN EXAMPLE THAT RUNS: a `.abide` file's text shown as its fence, and the same file mounted under it,
 // so what a reader reads is what the frame below it is running. The page imports the file twice —
-// once as its text (34.21), once as the component — and the frame holds the component.
-import { props } from '@abide/abide'
+// once as its text (34.21), once as the component — and the frame holds the component. Everything
+// under the fence is `data-result`, drawn from the running file, so the page's twin is the fence alone.
+//
+// WHAT ELSE IT SHOWS IS ITS GROUP'S FORM'S (40.41, 40.42). In an `anatomy` group the frame is one of
+// three tabs: the markup the example made, read off the live DOM, and the CSS that reaches it — the
+// selectors its parts and states carry, and the CRM's own rules for the classes the file writes. In
+// a `work` group a readout under the frame counts what the reader's last interaction woke, read off
+// the counters the runtime publishes for the harness (43.21), so a value that does less work shows it.
+import { memo, props, raw, reactive, route, tabs } from '@abide/abide'
 
 import Code from './Code.abide'
+import ExampleStyles from './ExampleStyles.abide'
+import { highlight } from './highlight.ts'
+import { hooksOf, markupOf } from './markupOf.ts'
+import { groupOf } from './sitePages.ts'
+import { type Work, workNow, workSince } from './work.ts'
 
 const { code } = props<{ code: string }>()
+const form = groupOf(route.name())?.form
+
+const view = tabs({ items: ['result', 'html', 'css'] })
+let markup = reactive('')
+let hooks = reactive<readonly string[]>([])
+const seen = new Set<string>()
+
+// The frame's markup and the selectors it carries, kept current as the reader works it.
+function watchMarkup(frame: Element): () => void {
+    const update = () => {
+        markup = markupOf(frame)
+        hooksOf(frame, seen)
+        if (seen.size !== hooks.length) hooks = [...seen].sort()
+    }
+    update()
+    const observer = new MutationObserver(update)
+    observer.observe(frame, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        characterData: true,
+    })
+    return () => observer.disconnect()
+}
+
+let work = reactive<Work | undefined>(undefined)
+
+// An interaction opens on its first event and stays open while the counters keep moving — a load
+// that lands, a debounced write that fires — closing once they have been still for `QUIET`
+// milliseconds. Another event while it is open is part of the same interaction, so a burst of
+// typing reads as one. THE READOUT IS WRITTEN ONCE, AS IT CLOSES: written as it accrued, its own
+// text binding moved the counters it was waiting on, and the window never closed.
+function watchWork(frame: Element): () => void {
+    let opened: Work | undefined
+    let moved = 0
+    let total = -1
+    const settle = () => {
+        if (opened === undefined) return
+        const since = workSince(opened)
+        const now = since.bindingRuns + since.wakes + since.descents
+        if (now !== total) {
+            total = now
+            moved = performance.now()
+        }
+        if (performance.now() - moved <= QUIET) {
+            requestAnimationFrame(settle)
+            return
+        }
+        opened = undefined
+        work = since
+    }
+    const open = () => {
+        moved = performance.now()
+        if (opened !== undefined) return
+        opened = workNow()
+        total = -1
+        requestAnimationFrame(settle)
+    }
+    for (const type of EVENTS) frame.addEventListener(type, open, true)
+    return () => {
+        opened = undefined
+        for (const type of EVENTS) frame.removeEventListener(type, open, true)
+    }
+}
+
+const QUIET = 1000
+const EVENTS = ['pointerdown', 'keydown', 'input', 'change'] as const
+
+const shownMarkup = memo(() => highlight(markup))
+
+function counted(count: number, one: string, many: string): string {
+    return `${count} ${count === 1 ? one : many}`
+}
 </script>
 
 <div class="example">
     <Code language="abide" caption="abide" code={code} />
-    <div class="result" data-result>
-        <slot />
-    </div>
+    {#if form === 'anatomy'}
+        <div class="example-tabs" data-result {...view.list}>
+            <button {...view.tab('result').button}>Result</button>
+            <button {...view.tab('html').button}>HTML</button>
+            <button {...view.tab('css').button}>CSS</button>
+        </div>
+        <div class="result" data-result {...view.tab('result').panel} bind:element={watchMarkup}>
+            <slot />
+        </div>
+        <figure class="snippet example-view" data-result {...view.tab('html').panel}>
+            <figcaption>.html · the markup it made, live</figcaption>
+            <pre><code>{raw(shownMarkup)}</code></pre>
+        </figure>
+        <div class="example-view" data-result {...view.tab('css').panel}>
+            <ExampleStyles code={code} hooks={hooks} />
+        </div>
+    {:else if form === 'work'}
+        <div class="result" data-result bind:element={watchWork}>
+            <slot />
+        </div>
+        <p class="example-work" data-result aria-live="polite">
+            {#if work}
+                Your last interaction: {counted(work.bindingRuns, 'binding', 'bindings')} ran, {counted(work.wakes, 'effect', 'effects')} woke, {counted(work.descents, 'value', 'values')} visited.
+            {:else}
+                Use the example to count the work it does.
+            {/if}
+        </p>
+    {:else}
+        <div class="result" data-result>
+            <slot />
+        </div>
+    {/if}
 </div>

@@ -888,7 +888,7 @@ test('a second call with the same source does not restart the pump', async () =>
     const text = (): string[] =>
         [...host.querySelectorAll('li')].map((node) => node.textContent ?? '')
 
-    const builders = { make, mount, update: noUpdate }
+    const builders = { make, mount, update: noUpdate, reindex: noUpdate }
     const list = new List(region, false, key, () => builders)
     updateList(list, source)
     await Bun.sleep(0)
@@ -954,6 +954,7 @@ function reorder(permute: (order: number[]) => number[]): {
             make: () => [document.createElement('li')],
             mount: () => new Scope(),
             update: noUpdate,
+            reindex: noUpdate,
         }),
     )
     updateList(list, data)
@@ -1018,6 +1019,7 @@ test('emptying a list clears its region in one write', () => {
             make: () => [document.createElement('li')],
             mount: () => new Scope(),
             update: noUpdate,
+            reindex: noUpdate,
         }),
     )
     updateList(list, data)
@@ -1068,6 +1070,7 @@ test('a new async source empties the rows the last one appended in one write', a
             },
             mount: () => new Scope(),
             update: noUpdate,
+            reindex: noUpdate,
         }),
     )
     updateList(list, count('a', 50))
@@ -1120,6 +1123,7 @@ test('emptying a list out of the document stops its rows', () => {
                 return scope
             },
             update: noUpdate,
+            reindex: noUpdate,
         }),
     )
     list.hydrating = false
@@ -1206,7 +1210,12 @@ test('a list arriving in place of a stream stops the stream', async () => {
         { open, close },
         false,
         (item) => item,
-        () => ({ make, mount: () => new Scope(), update: noUpdate }),
+        () => ({
+            make,
+            mount: () => new Scope(),
+            update: noUpdate,
+            reindex: noUpdate,
+        }),
     )
     const text = (): string[] =>
         [...host.querySelectorAll('li')].map((node) => node.textContent ?? '')
@@ -1258,7 +1267,12 @@ test('a list stopped while its source is quiet returns the source at once — 12
         { open, close },
         false,
         (item) => item,
-        () => ({ make, mount: () => new Scope(), update: noUpdate }),
+        () => ({
+            make,
+            mount: () => new Scope(),
+            update: noUpdate,
+            reindex: noUpdate,
+        }),
     )
     updateList(list, quiet)
     await Bun.sleep(0)
@@ -1291,7 +1305,12 @@ test('a value a row read while it was built does not rerun the list', () => {
         { open, close },
         false,
         (item) => item,
-        () => ({ make, mount: () => new Scope(), update: noUpdate }),
+        () => ({
+            make,
+            mount: () => new Scope(),
+            update: noUpdate,
+            reindex: noUpdate,
+        }),
     )
     let listRuns = 0
     const scope = new Scope()
@@ -1682,6 +1701,7 @@ test('a row that throws while made leaves no row unrecorded — 41.14', () => {
         make,
         mount: (): Scope => new Scope(),
         update: noUpdate,
+        reindex: noUpdate,
     }
     const list = new List(
         { open, close },
@@ -1894,5 +1914,148 @@ const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
         adopted: true,
         warnings: [],
         landed: true,
+    })
+})
+
+// 32.111 — A ROW'S INDEX IS WHERE THE ROW STANDS NOW. A kept row is moved, not remade (32.29), so
+// an index handed to the row once, when it was made, goes on reading where it was made: remove the
+// second of three and the last row still reads "3.". Every way a row's index is read is here — a
+// run beside the item, a run alone, an attribute, a live binding, a listener and a region of the
+// row — because each is lowered by a different path.
+//
+// THE REVERT, run: write `existing.at = at` in the reconcile's placement walk where it calls
+// `reindexRow`. The rows behind a removal read "3. Core22|2" where "2. Core11|1" is due, and only the
+// listener, which reads the record's `at` when it runs, is right.
+const INDEXED = `<script>
+import { reactive } from '@abide/abide'
+
+let deals = reactive([
+    { id: 'a', name: 'Acme' },
+    { id: 'b', name: 'Bolt' },
+    { id: 'c', name: 'Core' },
+    { id: 'd', name: 'Dyne' },
+])
+let picked = reactive(1)
+let heard = reactive('')
+
+function removeSecond() { deals = deals.filter((deal) => deal.id !== 'b') }
+function removeLast() { deals = deals.slice(0, -1) }
+function insertFirst() { deals = [{ id: 'z', name: 'Zeta' }, ...deals] }
+function reverse() { deals = [...deals].reverse() }
+</script>
+
+<ol id="deals">{#for deal, index of deals key deal.id}<li data-at={index} class:picked={index === picked} onclick={() => { heard = deal.id + '@' + index }}>{index + 1}. {deal.name}<b>{index}</b>{#if deal.name}<i>{index}</i>{/if}</li>{/for}</ol>
+<p id="heard">{heard}</p>
+<button id="remove-second" onclick={removeSecond}>remove second</button>
+<button id="remove-last" onclick={removeLast}>remove last</button>
+<button id="insert-first" onclick={insertFirst}>insert first</button>
+<button id="reverse" onclick={reverse}>reverse</button>`
+
+/** Each row as `text|data-at|picked|what its listener hears`. */
+function indexed(): string[] {
+    const rows: string[] = []
+    for (const row of document.querySelectorAll('#deals li')) {
+        ;(row as HTMLElement).click()
+        flushSync()
+        rows.push(
+            `${row.textContent}|${row.getAttribute('data-at')}|${row.classList.contains('picked')}|${document.querySelector('#heard')?.textContent}`,
+        )
+    }
+    return rows
+}
+
+test('a row behind a removed one reads its new index — 32.111', async () => {
+    await mountPage(INDEXED)
+    click('#remove-second')
+    expect(indexed()).toEqual([
+        '1. Acme00|0|false|a@0',
+        '2. Core11|1|true|c@1',
+        '3. Dyne22|2|false|d@2',
+    ])
+})
+
+test('a row behind an inserted one reads its new index — 32.111', async () => {
+    await mountPage(INDEXED)
+    click('#insert-first')
+    expect(indexed()).toEqual([
+        '1. Zeta00|0|false|z@0',
+        '2. Acme11|1|true|a@1',
+        '3. Bolt22|2|false|b@2',
+        '4. Core33|3|false|c@3',
+        '5. Dyne44|4|false|d@4',
+    ])
+})
+
+test('a reordered row reads its new index — 32.111', async () => {
+    await mountPage(INDEXED)
+    click('#reverse')
+    expect(indexed()).toEqual([
+        '1. Dyne00|0|false|d@0',
+        '2. Core11|1|true|c@1',
+        '3. Bolt22|2|false|b@2',
+        '4. Acme33|3|false|a@3',
+    ])
+})
+
+// THE WORK: a row whose position did not change runs nothing. Removing the last row moves no row,
+// and removing the second moves the two behind it — each of those writes its four index readers
+// (two runs, one attribute, one class) and its region's run, and the row in front writes nothing.
+//
+// THE REVERT, run: call `reindexRow` for every survivor rather than for one whose position
+// changed — "7 wakes, 15 slot writes" where 1 wake and 0 writes are due.
+test('a row whose index did not change runs nothing — 32.111', async () => {
+    await mountPage(INDEXED)
+    const unmoved = measure(() => {
+        click('#remove-last')
+    })
+    expect(
+        `${unmoved.wakes} wakes, ${unmoved.bindingRuns} slot writes, ${unmoved.dataWrites} text written`,
+    ).toBe('1 wakes, 0 slot writes, 0 text written')
+})
+
+// AND A ROW THAT MOVED WRITES ITS INDEX'S READERS AND NOTHING ELSE. Removing the second of four
+// moves the two behind it. Each writes its two runs and its attribute from the row's `reindex`,
+// and wakes its two watches reading the index cell — the class and the region's run — so 5 slot
+// writes and 3 text writes a row, beside the list's own wake; the row in front writes nothing.
+//
+// THE REVERTS, run: with no `reindexRow` at all, "1 wakes, 0 slot writes, 0 text written, 0
+// attributes set"; called for every survivor, "7 wakes, 15 slot writes"; and with the static proof
+// treating an index read as reactive (`proveSlots`), "11 wakes" — every run becomes a watch.
+test('a row a removal moved writes only what reads its index — 32.111', async () => {
+    await mountPage(INDEXED)
+    const moved = measure(() => {
+        click('#remove-second')
+    })
+    expect(
+        `${moved.wakes} wakes, ${moved.bindingRuns} slot writes, ${moved.dataWrites} text written, ${moved.attributesSet} attributes set`,
+    ).toBe('5 wakes, 10 slot writes, 6 text written, 2 attributes set')
+})
+
+// AN INDEX NOTHING BINDS ALLOCATES NOTHING A ROW: a run reading it is written by the row's
+// `reindex` from the position the reconcile hands it, and no row makes an index cell.
+//
+// THE REVERT, run: drop the `one.index === -1` exemption from `proveSlots`. The run is then a watch
+// reading the cell — "2 of 2 rows hold an index cell" where 0 are due.
+test('a row whose index only a run reads holds no index cell — 32.111', async () => {
+    const { scope } = await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let deals = reactive([{ id: 'a', name: 'Acme' }, { id: 'b', name: 'Bolt' }, { id: 'c', name: 'Core' }])
+</script>
+
+<ol id="deals">{#for deal, index of deals key deal.id}<li>{index + 1}. {deal.name}</li>{/for}</ol>
+<button id="remove-first" onclick={() => { deals = deals.slice(1) }}>remove first</button>`)
+    const list = (scope.children ?? []).find(
+        (child) => child instanceof List,
+    ) as List
+    click('#remove-first')
+    expect({
+        rows: [...document.querySelectorAll('#deals li')].map(
+            (row) => row.textContent,
+        ),
+        cells: `${list.rows.filter((row) => row.index !== null).length} of ${list.rows.length} rows hold an index cell`,
+    }).toEqual({
+        rows: ['1. Bolt', '2. Core'],
+        cells: '0 of 2 rows hold an index cell',
     })
 })

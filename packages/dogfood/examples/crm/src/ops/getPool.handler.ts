@@ -1,4 +1,4 @@
-import { GET, onStart } from '@abide/abide/server'
+import { GET, onStart, onStop } from '@abide/abide/server'
 
 import { pool } from './lib/pool.server.ts'
 
@@ -7,6 +7,12 @@ onStart(async (start) => {
     await pool.connect()
     await start()
     pool.upAt = new Date().toISOString()
+})
+
+// Close it once the last request in flight has been answered.
+onStop(async (stop) => {
+    await stop()
+    await pool.close()
 })
 
 /** Answers at /ops/getPool: when the pool connected, and the app came up. */

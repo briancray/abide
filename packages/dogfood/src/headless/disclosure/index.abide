@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import ShowHistory from './lib/ShowHistory.abide'
 import showHistory from './lib/ShowHistory.abide' with { type: 'text' }
+import TurnChevron from './lib/TurnChevron.abide'
+import turnChevron from './lib/TurnChevron.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -27,5 +29,11 @@ import showHistory from './lib/ShowHistory.abide' with { type: 'text' }
             shut region is hidden <code>until-found</code>, so the browser's find in page still
             reaches what it holds, and finding it opens the region.</p>
         <Example code={showHistory}><ShowHistory /></Example>
+    </Section>
+
+    <Section level={3} title="Turn a chevron while the history shows">
+        <p>The button carries <code>data-open</code> while the region shows. Mark it
+            <code>group</code>, and a chevron inside it turns with <code>group-data-open:</code>.</p>
+        <Example code={turnChevron}><TurnChevron /></Example>
     </Section>
 </Doc>

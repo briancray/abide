@@ -247,6 +247,73 @@
         @apply rounded-b-none;
     }
 
+    /* AN ANATOMY EXAMPLE'S VIEWS: the running frame, the markup it made and the CSS that reaches it,
+       as tabs on the strip between the fence and the frame, the selected one underlined. */
+    .example-tabs {
+        @apply flex gap-tight border-x border-rule bg-raised px-4;
+    }
+
+    .example-tabs button {
+        @apply border-0 border-b-2 border-transparent bg-transparent px-1 py-2 font-mono text-chrome font-medium text-muted;
+    }
+
+    .example-tabs button[data-selected] {
+        @apply border-signal text-ink;
+    }
+
+    .example-view {
+        @apply rounded-t-none border-t-0;
+    }
+
+    /* THE FRAME STAYS LAID OUT WHILE ANOTHER VIEW SHOWS: hidden by `display: none`, a chart sized by
+       what it measures would read 0x0 and redraw empty, and the live markup would show that. */
+    .example {
+        @apply relative;
+    }
+
+    .example .result[hidden] {
+        @apply pointer-events-none invisible absolute inset-x-0 block;
+    }
+
+    div.example-view {
+        @apply flex flex-col gap-snug rounded-b-lg border border-t-0 border-rule p-4;
+    }
+
+    div.example-view .snippet + .snippet {
+        @apply mt-0;
+    }
+
+    .example-view pre {
+        @apply max-h-96 overflow-auto;
+    }
+
+    /* AN EXCHANGE: the request, then the answer under it, one block. */
+    .exchange {
+        @apply flex flex-col gap-tight;
+    }
+
+    /* A DIRECTORY OF THE CRM AS ITS ADDRESSES: the file, what it is, where it answers. */
+    .site-tree caption {
+        @apply pb-tight text-left font-mono text-chrome font-medium text-muted;
+    }
+
+    .site-tree td {
+        @apply py-1 pr-flow align-baseline text-chrome;
+    }
+
+    /* A REACTIVE EXAMPLE'S WORK, under its frame: what the reader's last interaction woke. */
+    .example-work {
+        @apply rounded-b-lg border border-t-0 border-rule bg-raised px-4 py-2 font-mono text-chrome text-muted;
+    }
+
+    .example-work strong {
+        @apply text-ink;
+    }
+
+    .example:has(.example-work) .result {
+        @apply rounded-b-none;
+    }
+
     /* THE FRAME IS A CANVAS, not a caption: the example's own type at the body's size and in ink,
        over a dot grid that says "this is running" before anything in it moves.
        IT STAYS BLOCK FLOW and spaces by SIBLING instead: as a flex row it parted every run of

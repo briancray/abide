@@ -10,6 +10,7 @@ const HOME: SitePage = {
     registry: '',
     where: 'anywhere',
     subgroup: undefined,
+    guide: false,
 }
 
 // THE SITE MAP READ BY ROUTE, walked once: every page in reading order, and the group each is in.

@@ -260,6 +260,10 @@ export function combobox<Item, Multiple extends boolean = false>(
             get 'aria-expanded'() {
                 return open() ? 'true' : 'false'
             },
+            // 49.17
+            get 'data-open'() {
+                return open() ? '' : undefined
+            },
             get 'aria-controls'() {
                 return open() ? `${id}-listbox` : undefined
             },

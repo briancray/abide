@@ -1,0 +1,8 @@
+<script>
+import { memo, props } from '@abide/abide'
+
+const { name } = props<{ name: string }>()
+let draft = memo(() => name)
+</script>
+
+<input bind:value={draft}>

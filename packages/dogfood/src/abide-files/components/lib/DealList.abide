@@ -1,0 +1,16 @@
+<script>
+import { props } from '@abide/abide'
+
+type Deal = { id: string; name: string; stage: string }
+
+const { deals, Row } = props<{
+    deals: Deal[]
+    Row(props: { deal: Deal }): unknown
+}>()
+</script>
+
+<ul>
+    {#for deal of deals key deal.id}
+        <li><Row deal={deal} /></li>
+    {/for}
+</ul>

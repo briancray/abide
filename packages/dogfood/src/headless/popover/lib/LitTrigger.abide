@@ -1,0 +1,18 @@
+<script>
+import { popover } from '@abide/abide'
+
+const filters = popover({ align: 'start' })
+</script>
+
+<button
+    class="aria-expanded:bg-ink aria-expanded:text-paper"
+    {...filters.trigger}
+>
+    Filters
+</button>
+<div
+    class="m-0 rounded-md border border-rule bg-raised p-3"
+    {...filters.popover}
+>
+    <label><input type="checkbox" /> Only my deals</label>
+</div>

@@ -1,0 +1,16 @@
+<script>
+import { isServer, memo, reactive, watch } from '@abide/abide'
+
+let seats = reactive(5)
+const total = memo(() => seats * 40)
+
+watch(() => {
+    if (isServer()) return
+    const before = document.title
+    document.title = `$${total} · ${before}`
+    return () => (document.title = before)
+})
+</script>
+
+<p>{seats} seats: ${total}</p>
+<button onclick={() => (seats += 1)}>Add a seat</button>

@@ -1,0 +1,11 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let open = reactive('Ada Lovelace')
+</script>
+
+<button onclick={() => (open = 'Ada Lovelace')}>Ada</button>
+<button onclick={() => (open = 'Grace Hopper')}>Grace</button>
+{#for shown of [open] key shown}
+    <p class="transition-opacity duration-500 starting:opacity-0">{shown}</p>
+{/for}

@@ -201,6 +201,10 @@ function dayOf(
             get 'aria-current'() {
                 return shared.today() === date ? 'date' : undefined
             },
+            // 49.17
+            get 'data-current'() {
+                return shared.today() === date ? '' : undefined
+            },
             get 'data-selected'() {
                 return isPicked(shared, date) ? '' : undefined
             },

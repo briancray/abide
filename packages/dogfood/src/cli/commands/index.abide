@@ -2,6 +2,7 @@
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Section from '#src/lib/Section.abide'
+import Terminal from '#src/lib/Terminal.abide'
 </script>
 
 <Doc
@@ -51,6 +52,8 @@ import Section from '#src/lib/Section.abide'
             abide check && abide format --check && abide build && bun test
             abide start --port 8080
         `} />
+        <p>The CRM's check, run when this page loaded:</p>
+        <Terminal command="abide check" />
     </Section>
 
     <Section level={3} title="Call a handler from the terminal">
@@ -60,6 +63,10 @@ import Section from '#src/lib/Section.abide'
         <Code code={`
             abide call assistant/searchContacts name=Ada
         `} />
+        <p>Run in the CRM against this site, which <code>ABIDE_APP_URL</code> names, when this
+            page loaded. The answer, then a refusal of the same call without its argument:</p>
+        <Terminal command="abide call assistant/searchContacts name=Ada" />
+        <Terminal command="abide call assistant/searchContacts" />
     </Section>
 
     <Section level={3} title="Follow the activity feed from the terminal">
@@ -85,5 +92,7 @@ import Section from '#src/lib/Section.abide'
             abide upgrade --check --from 0.139.0
             abide upgrade --from 0.139.0
         `} />
+        <p>The check, run in the CRM when this page loaded:</p>
+        <Terminal command="abide upgrade --check --from 0.139.0" />
     </Section>
 </Doc>

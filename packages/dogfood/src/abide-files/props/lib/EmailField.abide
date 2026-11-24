@@ -1,0 +1,10 @@
+<script>
+import { props } from '@abide/abide'
+
+const { value } = props<{ value: string }>()
+</script>
+
+<p>{value}</p>
+<button onclick={() => (value = value.trim().toLowerCase())}>
+    Tidy
+</button>

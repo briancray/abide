@@ -69,6 +69,10 @@ export function wizard<Step>(options: WizardOptions<Step>): Wizard<Step> {
                 get 'aria-current'() {
                     return key(at()) === step ? 'step' : undefined
                 },
+                // 49.17
+                get 'data-current'() {
+                    return key(at()) === step ? '' : undefined
+                },
                 get 'data-done'() {
                     const index = steps().indexOf(step)
                     return index !== -1 && index < at() ? '' : undefined

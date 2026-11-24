@@ -1,7 +1,23 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Exchange from '#src/lib/Exchange.abide'
 import Section from '#src/lib/Section.abide'
+
+// The JSON-RPC body a model's client posts.
+const searchHopper = JSON.stringify(
+    {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+            name: 'get_assistant_searchContacts',
+            arguments: { name: 'Hopper' },
+        },
+    },
+    null,
+    2,
+)
 </script>
 
 <Doc
@@ -57,6 +73,8 @@ import Section from '#src/lib/Section.abide'
                 }),
             })
         `} />
+        <p>The CRM's search, posted when this page loaded:</p>
+        <Exchange method="POST" path="/__abide/mcp" body={searchHopper} />
     </Section>
 
     <Section level={3} title="Connect a desktop MCP client over stdio">

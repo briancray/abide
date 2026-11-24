@@ -1,0 +1,158 @@
+<script server>
+// `node:fs` for the CRM's directory, found synchronously on the walk up as `SiteTree` finds it.
+import { existsSync } from 'node:fs'
+
+import { GET, refuse, request, server } from '@abide/abide/server'
+
+import { folded } from './folded.ts'
+
+// THE ONLY COMMANDS THIS RUNS (40.46), each as a page writes it: its program, then its words, split
+// on spaces into argv and run with no shell — so nothing a browser sends reaches an argument. None
+// writes a file, and a `call` reaches only a `GET`, or a refusal that runs nothing.
+const COMMANDS = new Set([
+    'abide check',
+    'abide call assistant/searchContacts name=Ada',
+    'abide call assistant/searchContacts',
+    'abide upgrade --check --from 0.139.0',
+    'abide-bridge',
+])
+// The package that declares each program as its `bin`.
+const PACKAGES: Record<string, string> = {
+    abide: '@abide/abide',
+    'abide-bridge': '@abide/bridge',
+}
+const DEADLINE = 30_000
+const LONGEST = 40
+
+let crm: string | undefined
+
+/** The CRM, found by walking up from this module to the docs app's `examples`. */
+function crmDirectory(): string {
+    if (crm !== undefined) return crm
+    let directory = import.meta.dir
+    while (!existsSync(`${directory}/examples/crm/package.json`)) {
+        const parent = directory.slice(0, directory.lastIndexOf('/'))
+        if (parent === '' || parent === directory)
+            throw new Error('docs: no CRM above the docs app')
+        directory = parent
+    }
+    crm = `${directory}/examples/crm`
+    return crm
+}
+
+// The file a program is, read off the `bin` its package declares as the CRM resolves the package.
+async function programFile(program: string): Promise<string> {
+    const manifest = Bun.resolveSync(
+        `${PACKAGES[program]}/package.json`,
+        crmDirectory(),
+    )
+    const { bin } = (await Bun.file(manifest).json()) as {
+        bin: Record<string, string>
+    }
+    return `${manifest.slice(0, manifest.lastIndexOf('/'))}/${bin[program]}`
+}
+
+// Run once per process and origin: an answer is the same on every load, and a check takes seconds.
+const RAN = new Map<string, Promise<{ output: string; code: number }>>()
+
+// The origin a command is aimed at: the socket this app listens on, never the origin a request
+// names, which a `Host` header makes anyone's — save under `abide dev`, which binds none (42.9).
+function aimedAt(): string {
+    try {
+        return server().url.origin
+    } catch {
+        return new URL(request().url).origin
+    }
+}
+
+async function ran(
+    command: string,
+    origin: string,
+): Promise<{ output: string; code: number }> {
+    const [program, ...args] = command.split(' ') as [string, ...string[]]
+    const child = Bun.spawn(
+        [process.execPath, await programFile(program), ...args],
+        {
+            cwd: crmDirectory(),
+            env: {
+                PATH: process.env.PATH ?? '',
+                HOME: process.env.HOME ?? '',
+                TMPDIR: process.env.TMPDIR ?? '',
+                NO_COLOR: '1',
+                ABIDE_APP_URL: origin,
+            },
+            stdin: 'ignore',
+            stdout: 'pipe',
+            stderr: 'pipe',
+            timeout: DEADLINE,
+            killSignal: 'SIGKILL',
+        },
+    )
+    const [stdout, stderr, code] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+    ])
+    if (child.signalCode !== null)
+        throw new Error(`docs: ${command} was stopped by ${child.signalCode}`)
+    // What says where this ran rather than what the command did: the CRM's directory, the home
+    // directory and the origin it was aimed at, each shown as what it is.
+    let output = `${stdout}${stderr}`
+        .replaceAll(crmDirectory(), '.')
+        .replaceAll(origin, '$ABIDE_APP_URL')
+    if (process.env.HOME) output = output.replaceAll(process.env.HOME, '~')
+    let lines = folded(output.trimEnd()).split('\n')
+    if (lines.length > LONGEST) lines = [...lines.slice(0, LONGEST), '…']
+    return { output: lines.join('\n'), code }
+}
+
+// A REAL COMMAND, RUN IN THE CRM AS ITS PAGE WRITES IT, and what it printed and exited with (40.45),
+// aimed by `ABIDE_APP_URL` at this server, where the CRM's handlers answer at their addresses (40.24).
+const transcript = GET(async ({ command }: { command: string }) => {
+    if (!COMMANDS.has(command))
+        refuse(404, `docs: ${command} is not a command the docs run`)
+    const origin = aimedAt()
+    const key = `${origin} ${command}`
+    let running = RAN.get(key)
+    if (running === undefined) {
+        running = ran(command, origin)
+        RAN.set(key, running)
+        running.catch(() => RAN.delete(key))
+    }
+    return running
+})
+</script>
+
+<script>
+// A TERMINAL: a command a page names, as typed, and what it printed and the code it exited with when
+// the CRM ran it — read rather than written, so the output on the page is the command's own.
+import { memo, props } from '@abide/abide'
+
+import Code from './Code.abide'
+
+const { command } = props<{ command: string }>()
+
+const answer = memo(() => transcript({ command }))
+const printed = memo(() =>
+    answer
+        ? [
+              ...(answer.output === '' ? [] : [answer.output]),
+              '$ echo $?',
+              `${answer.code}`,
+          ].join('\n')
+        : '',
+)
+</script>
+
+<div class="exchange">
+    <Code code={`$ ${command}`} />
+    <!-- What it printed is the browser's own call (41.5), so it is drawn like an example's result:
+         a page's twin carries the command alone, and never a copy that depends on timing. -->
+    <div class="exchange" data-result>
+        {#if answer.error()}
+            <p class="shown-missing">The CRM did not run <code>{command}</code>.</p>
+        {:else if answer}
+            <Code code={printed} />
+        {/if}
+    </div>
+</div>

@@ -1,0 +1,19 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const NAMES = ['Acme renewal', 'Babbage audit', 'Hopper & Co', 'Lovelace pilot']
+
+const searchDeals = GET(({ q }: { q: string }) =>
+    NAMES.filter((name) => name.toLowerCase().includes(q.toLowerCase())),
+)
+</script>
+
+<script>
+import { memo, reactive } from '@abide/abide'
+
+let q = reactive('', { debounce: 300 })
+const found = memo(() => searchDeals({ q }))
+</script>
+
+<input bind:value={q}>
+{#for name of found}<p>{name}</p>{/for}

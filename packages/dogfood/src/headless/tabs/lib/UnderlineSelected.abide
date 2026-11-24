@@ -8,3 +8,4 @@ const view = tabs({ items: ['details', 'stage'] })
     <button {...view.tab('details').button}>Details</button>
     <button {...view.tab('stage').button}>Stage</button>
 </div>
+<div {...view.panel}></div>

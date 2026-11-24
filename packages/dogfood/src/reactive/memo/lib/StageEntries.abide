@@ -1,0 +1,24 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const COUNTS: Record<string, number> = { lead: 3, won: 2 }
+
+const getStage = GET(async ({ stage }: { stage: string }) => {
+    await Bun.sleep(400)
+    return COUNTS[stage] ?? 0
+})
+</script>
+
+<script>
+import { memo, reactive } from '@abide/abide'
+
+const stageCounts = memo(({ stage }: { stage: string }) => getStage({ stage }))
+let stage = reactive('lead')
+const count = memo(() => stageCounts({ stage }))
+</script>
+
+<div class="row">
+    <button onclick={() => (stage = 'lead')}>lead</button>
+    <button onclick={() => (stage = 'won')}>won</button>
+</div>
+<p>{stage}: {count.ready() ? `${count} deals` : 'loading…'}</p>

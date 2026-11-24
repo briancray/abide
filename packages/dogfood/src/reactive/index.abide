@@ -1,0 +1,79 @@
+<script>
+import { url } from '@abide/abide'
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import DealCount from './lib/DealCount.abide'
+import dealCount from './lib/DealCount.abide' with { type: 'text' }
+import LoadedTotal from './lib/LoadedTotal.abide'
+import loadedTotal from './lib/LoadedTotal.abide' with { type: 'text' }
+import SameTotal from './lib/SameTotal.abide'
+import sameTotal from './lib/SameTotal.abide' with { type: 'text' }
+import StageTotal from './lib/StageTotal.abide'
+import stageTotal from './lib/StageTotal.abide' with { type: 'text' }
+import TabTitle from './lib/TabTitle.abide'
+import tabTitle from './lib/TabTitle.abide' with { type: 'text' }
+import WinLead from './lib/WinLead.abide'
+import winLead from './lib/WinLead.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/reactive/reactive',
+        '/reactive/memo',
+        '/reactive/watch',
+        '/reactive/busy',
+        '/reactive/ready',
+        '/reactive/refresh',
+        '/reactive/invalidate',
+        '/reactive/tracking',
+        '/handlers/get',
+    ]}
+>
+    <Section title="A read by name subscribes the binding doing the reading">
+        <p>Hold the pipeline's deals with <a href={url('/reactive/reactive')}><code>reactive</code></a>
+            and read them by name. A read in the template subscribes that one binding, so adding a
+            deal runs one binding and leaves the heading beside it alone.</p>
+        <Example code={dealCount}><DealCount /></Example>
+    </Section>
+
+    <Section title="A derived total reruns only when what it read changes">
+        <p>A <a href={url('/reactive/memo')}><code>memo</code></a> body subscribes to what it reads,
+            the way a template does. Pick a stage and the total reruns, and one binding with it. Type
+            a note and nothing the total reads has changed, so no binding runs.</p>
+        <Example code={stageTotal}><StageTotal /></Example>
+    </Section>
+
+    <Section title="A total that comes out the same wakes nothing">
+        <p>Renaming a deal changes <code>deals</code>, so the total reruns. It lands on the same
+            figure, so nothing that reads the total runs: no binding, no effect.</p>
+        <Example code={sameTotal}><SameTotal /></Example>
+    </Section>
+
+    <Section title="A load from the server is a value">
+        <p>A body that calls a handler declared with <a href={url('/handlers/get')}><code>GET</code></a> loads. The total is still read
+            by name and still follows <code>stage</code>, and
+            <a href={url('/reactive/ready')}><code>ready()</code></a> says when it first has a figure to
+            show.</p>
+        <Example code={loadedTotal}><LoadedTotal /></Example>
+    </Section>
+
+    <Section title="Reload the totals after a write, and keep them on screen">
+        <p>A write on the server changes nothing the page holds, so say what it touched.
+            <a href={url('/reactive/refresh')}><code>refresh</code></a> reloads every entry of the handler
+            while the old figures stay, and <a href={url('/reactive/busy')}><code>busy</code></a> dims
+            them meanwhile. To reload on the next read instead,
+            <a href={url('/reactive/invalidate')}><code>invalidate</code></a> marks them stale and starts
+            nothing.</p>
+        <Example code={winLead}><WinLead /></Example>
+    </Section>
+
+    <Section title="An effect is the edge where a value leaves the page">
+        <p>Everything inside the page is a read. <a href={url('/reactive/watch')}><code>watch</code></a>
+            is for what is not: the tab's title, a timer, a call. It reruns when the total
+            changes, and its disposer undoes the run before.</p>
+        <Example code={tabTitle}><TabTitle /></Example>
+    </Section>
+</Doc>

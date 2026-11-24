@@ -103,6 +103,9 @@ export function listbox<Option, Multiple extends boolean = false>(
         return first
     })
 
+    const isSelected = (each: string): boolean =>
+        many ? selection.has(each) : chosen() === each
+
     function activeOption(): Option | undefined {
         const wanted = active()
         for (const option of options())
@@ -204,15 +207,13 @@ export function listbox<Option, Multiple extends boolean = false>(
                 'data-listbox': 'option',
                 // 51.98, 51.94 — where it selects one, the selection is the key moved to (51.104).
                 get 'aria-selected'() {
-                    return (many ? selection.has(each) : chosen() === each)
-                        ? 'true'
-                        : 'false'
+                    return isSelected(each) ? 'true' : 'false'
                 },
                 get 'data-active'() {
                     return active() === each ? '' : undefined
                 },
                 get 'data-selected'() {
-                    return many && selection.has(each) ? '' : undefined
+                    return isSelected(each) ? '' : undefined
                 },
                 onpointermove: () => {
                     const over = chosen.peek()

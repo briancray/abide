@@ -2743,6 +2743,9 @@ field of what it writes read by name — `visible`'s boolean as `visible` — ea
 until the first write 32.79, 32.80 or 32.84 makes, and each a value of its own, so a write that
 changes one field MUST NOT wake a reader of only another.
 
+32.111 A `{#for}` row's index MUST read the position the row stands at now, in a row a reconcile
+moved as in one it made.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
@@ -3883,6 +3886,10 @@ disposed.
 38.215 The migration keyed to 0.143.0 MUST rename to `memo` every `reactive` handed a function its
 file writes in place or binds to the name it is handed, and MUST import `memo` where it does.
 
+38.216 `abide call` given no `--method`, for a handler no build where it runs names, MUST call again
+with the one method a `405` answer's `Allow` names besides `HEAD` and `OPTIONS`, and MUST NOT call
+again where `--method` was given.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -3982,9 +3989,10 @@ label, description and `registry` MUST be its `SITE` entry's alone.
 
 40.8 A page documenting an export MUST carry the export's name as its `SITE` entry's `title`.
 
-40.9 A page MUST render, in this order, its Syntax, being the rows directly under its section; a
-heading per `###` of its section, holding that heading's rows; its Examples; its Types; its See also;
-its Tests; and its Rules.
+40.9 A page documenting a section MUST render its Syntax, being the rows directly under its
+section; a heading per `###` of its section, holding that heading's rows; its Examples; its Types;
+its See also; its Tests; and its Rules — in that order, save that a page of an `authoring` group MUST
+render its Examples first.
 
 40.10 A page's rows MUST be read from REGISTRY as the page renders.
 
@@ -4082,6 +4090,36 @@ their `subgroup`, and the pages of one run MUST be adjacent in the group.
 49.8: a name carrying a WAI-ARIA pattern or binding a value is a headless component, filed under
 `Headless components`, and `Element behaviors` is one behavior added to an element the app already
 has.
+
+40.39 A group MAY open with a guide: a page of `SITE` documenting no REGISTRY section, which MUST say how its
+group's names work together, and MUST render its own sections and its See also alone.
+
+40.40 Every group MUST name a form in its `SITE` entry — `reference`, `authoring`, `anatomy`, `work`,
+`exchange` or `transcript` — and a group whose pages document a construct an app writes MUST be
+`authoring`.
+
+40.41 An example of an `anatomy` group MUST show, beside its running frame, the markup the mounted
+file made, read from the live document as the reader works it, and the CSS reaching that markup:
+each part and state its `data-` attributes carry as a selector, and the example app's stylesheet's
+rule for each class the file writes.
+
+40.42 An example of a `work` group MUST show, under its running frame, the bindings, the effects and
+the values the reader's last interaction with it ran, read from the counters 43.21 publishes.
+
+40.43 An exchange MUST show a request a page names and the answer the example app gives it when the
+page is loaded, sent to the site's own origin, with no header that changes between two answers.
+
+40.44 A directory of the example app a page shows MUST list each file in it, what its place and its
+name make that file, and the address it answers at, read from the example app's files as the page
+renders, and MUST link each page whose address has no dynamic segment and answers a reader with
+nothing more than the site gives them.
+
+40.45 An example of a `transcript` group MUST show, after its fence, a command its page names and what
+it printed and the code it exited with when the example app's directory ran it, aimed at the site's
+own app, with no path or origin that changes between two sites.
+
+40.46 The documentation site MUST run only the commands it lists, each as its argv with no shell, and
+MUST list none that writes a file or calls a handler that changes what the example app holds.
 
 # 41. Rendering and hydration
 
@@ -5115,6 +5153,9 @@ to its `input`.
 49.16 A headless component over a list MUST take the list's items, telling them apart by its `key` (49.8),
 and MUST NOT take a list of their keys in their place; and a part it hands back for one item MUST be
 a function of the item (49.9), not of its key.
+
+49.17 A part a headless component hands back MUST carry `data-current` while it carries
+`aria-current`, and `data-open` while it carries `aria-expanded="true"`.
 
 # 50. Dialogs, toasts and popovers
 

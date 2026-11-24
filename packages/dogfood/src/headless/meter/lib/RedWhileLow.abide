@@ -1,0 +1,20 @@
+<script>
+import { meter, reactive } from '@abide/abide'
+
+const TARGET = 500_000
+let won = reactive(410_000)
+const quota = meter({
+    value: () => won,
+    max: TARGET,
+    low: TARGET / 2,
+    label: 'Quota',
+})
+</script>
+
+<div class="group h-2 rounded-full bg-rule" {...quota.meter}>
+    <div
+        class="h-full rounded-full bg-signal group-data-[level=low]:bg-bad"
+        {...quota.fill}
+    ></div>
+</div>
+<button onclick={() => (won = won - 200_000)}>Lose the renewal</button>

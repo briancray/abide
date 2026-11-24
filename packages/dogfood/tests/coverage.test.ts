@@ -340,10 +340,12 @@ test('every registry section is carried by exactly one page', async () => {
     const carriedBy = new Map<string, string[]>()
     for (const group of SITE)
         for (const page of group.pages)
-            carriedBy.set(page.registry, [
-                ...(carriedBy.get(page.registry) ?? []),
-                page.route,
-            ])
+            // 40.39 — a guide documents no section.
+            if (!page.guide)
+                carriedBy.set(page.registry, [
+                    ...(carriedBy.get(page.registry) ?? []),
+                    page.route,
+                ])
     const sections = new Set<string>()
     for (const row of registryRows(registry)) sections.add(row.section)
     const wrong: string[] = []
@@ -368,6 +370,7 @@ test("every page is listed under its section's REGISTRY group", () => {
     const misfiled: string[] = []
     for (const group of SITE)
         for (const page of group.pages) {
+            if (page.guide) continue
             const filed = groupOfSection.get(page.registry)
             if (filed !== group.group)
                 misfiled.push(`${page.route}: ${group.group}, not ${filed}`)
@@ -595,6 +598,17 @@ test('every registry row is on exactly one page', async () => {
     expect(misplaced).toEqual([])
 })
 
+/**
+ * What a page shows above its Types, its Examples cut out: the Syntax and the headings under it,
+ * wherever its form puts the Examples (40.9).
+ */
+function syntaxOf(body: string): string {
+    const above = body.split('\n## Types\n')[0] ?? ''
+    const [before = '', after = ''] = above.split('\n## Examples\n')
+    const rest = after.indexOf('\n## ')
+    return rest === -1 ? before : before + after.slice(rest)
+}
+
 /** A page's `##` headings, in the order its markdown writes them. */
 function partsOf(body: string): string[] {
     const parts: string[] = []
@@ -648,21 +662,35 @@ test('a page documenting an export is titled with its name', () => {
     expect(mistitled).toEqual([])
 })
 
-// 40.9 — EVERY PAGE IN THE ONE ORDER, read off its markdown: a reader who has found Tests on one
-// page finds it in the same place on the next. THE REVERT: render `<SeeAlso>` after `<Tests>` in
-// `Doc`, and every page with both is named.
+// 40.9 — EVERY PAGE IN ITS GROUP'S ORDER, read off its markdown: a reader who has found Tests on one
+// page finds it in the same place on the next, and a construct's page opens on how it is written.
+// THE REVERT: render `<SeeAlso>` after `<Tests>` in `Doc`, and every page with both is named; render
+// the Examples after the Syntax on every form, and every page of an `authoring` group is named.
 const ORDER = ['Syntax', 'Examples', 'Types', 'See also', 'Tests', 'Rules']
+const AUTHORING_ORDER = [
+    'Examples',
+    'Syntax',
+    'Types',
+    'See also',
+    'Tests',
+    'Rules',
+]
 
-test('every page renders its parts in the one order', async () => {
+test("every page renders its parts in its group's order", async () => {
+    const formOf = new Map<string, string>()
+    for (const group of SITE)
+        for (const page of group.pages) formOf.set(page.route, group.form)
     const disordered: string[] = []
     for (const [route, body] of await renderedMarkdown()) {
         if (route === '/') continue
+        const order =
+            formOf.get(route) === 'authoring' ? AUTHORING_ORDER : ORDER
         const fixed: string[] = []
         for (const part of partsOf(body))
-            if (ORDER.includes(part)) fixed.push(part)
+            if (order.includes(part)) fixed.push(part)
         let last = -1
         for (const part of fixed) {
-            const at = ORDER.indexOf(part)
+            const at = order.indexOf(part)
             if (at <= last) disordered.push(`${route}: ${fixed.join(', ')}`)
             last = at
         }
@@ -704,7 +732,7 @@ test('a signature is short above the examples and whole in Types', async () => {
     for (const [route, body] of await renderedMarkdown()) {
         const signatures = full.get(registryOf.get(route) ?? '')
         if (signatures === undefined) continue
-        const above = body.split('\n## Examples\n')[0] ?? ''
+        const above = syntaxOf(body)
         const types = body.split('\n## Types\n')[1]?.split('\n## ')[0] ?? ''
         for (const signature of signatures) {
             const written = signature.replaceAll('|', '\\|')
@@ -725,7 +753,7 @@ test('a signature is short above the examples and whole in Types', async () => {
 test('no two overloads of a name read the same in a short form', async () => {
     const same: string[] = []
     for (const [route, body] of await renderedMarkdown()) {
-        const above = body.split('\n## Examples\n')[0] ?? ''
+        const above = syntaxOf(body)
         for (const table of above.split(/\n(?!\|)/)) {
             const seen = new Set<string>()
             for (const line of table.split('\n')) {
@@ -792,7 +820,7 @@ test("an object a page's call takes is spelled out beneath its syntax", async ()
     const pages = await renderedMarkdown()
     const wrong: string[] = []
     for (const [route, heading, members] of expected) {
-        const above = pages.get(route)?.split('\n## Examples\n')[0] ?? ''
+        const above = syntaxOf(pages.get(route) ?? '')
         const part = above.split(`\n### ${heading}\n`)[1] ?? ''
         for (const member of members)
             if (!part.includes(`\n| ${member} | `))
@@ -804,9 +832,13 @@ test("an object a page's call takes is spelled out beneath its syntax", async ()
 // 40.12 — EVERY PAGE SHOWS ITS SUBJECT IN USE: an Examples part with at least one example under a
 // heading of its own. THE REVERT: empty `/reactive/watch`'s slot, and it is named.
 test('every page carries at least one example', async () => {
+    const guides = new Set<string>()
+    for (const group of SITE)
+        for (const page of group.pages) if (page.guide) guides.add(page.route)
     const bare: string[] = []
     for (const [route, body] of await renderedMarkdown()) {
-        if (route === '/') continue
+        // 40.39 — a guide is its own sections, with no Examples part of its own.
+        if (route === '/' || guides.has(route)) continue
         const examples =
             body.split('\n## Examples\n')[1]?.split('\n## ')[0] ?? ''
         if (!/^### /m.test(examples) || !/^```/m.test(examples))

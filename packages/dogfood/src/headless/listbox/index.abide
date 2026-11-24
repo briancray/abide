@@ -60,8 +60,8 @@ import leadBatch from './lib/LeadBatch.abide' with { type: 'text' }
 
     <Section level={3} title="Mark the active lead, and call one on a click">
         <p>Spread <code>listbox</code> on the list and <code>option(option)</code> on each option:
-            the option carries its id, its role, <code>aria-selected</code> and
-            <code>data-active</code>, a pointer resting on it makes it active, and a click calls
+            the option carries its id, its role, <code>aria-selected</code>,
+            <code>data-selected</code> and <code>data-active</code>, a pointer resting on it makes it active, and a click calls
             <code>onpick</code> with it. <code>idOf(key)</code> and <code>active</code> are there
             for anything else the markup needs.</p>
         <Code language="abide" caption="abide" code={`

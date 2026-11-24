@@ -1,7 +1,11 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import SaveNote from './lib/SaveNote.abide'
+import saveNote from './lib/SaveNote.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -29,21 +33,7 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Save a note a beat after the typing stops">
         <p>The effect reads <code>note</code>, so each keystroke reruns it. The disposer clears the
             timer the run before started, so a burst of typing is one save.</p>
-        <Code language="abide" caption="browser" code={`
-            <script>
-            import { reactive, watch } from '@abide/abide'
-            import saveNote from './saveNote.handler.ts'
-
-            let note = reactive('')
-            watch(() => {
-                const text = note
-                const timer = setTimeout(() => saveNote({ id: 'd2', note: text }), 500)
-                return () => clearTimeout(timer)
-            })
-            </script>
-
-            <textarea bind:value={note}></textarea>
-        `} />
+        <Example code={saveNote}><SaveNote /></Example>
     </Section>
 
     <Section level={3} title="Wake only on the sources named">

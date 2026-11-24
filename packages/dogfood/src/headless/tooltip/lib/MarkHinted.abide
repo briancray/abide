@@ -1,0 +1,14 @@
+<script>
+import { tooltip } from '@abide/abide'
+
+const proposal = tooltip.tip('A quote is out, waiting on an answer.')
+const won = tooltip.tip('Signed, and counted toward quota.')
+</script>
+
+<p
+    class="[&_[data-tooltip=anchor]]:underline
+    [&_[data-tooltip=anchor]]:decoration-dotted"
+>
+    Two deals moved from <span tabindex="0" {...proposal}>proposal</span> to
+    <span tabindex="0" {...won}>won</span> this week.
+</p>

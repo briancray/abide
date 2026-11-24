@@ -72,6 +72,10 @@ export function breadcrumbs<Crumb>(
             get 'aria-current'() {
                 return trail().at(-1) === crumb ? 'page' : undefined
             },
+            // 49.17
+            get 'data-current'() {
+                return trail().at(-1) === crumb ? '' : undefined
+            },
         }),
         // 51.139
         overflow,

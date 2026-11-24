@@ -244,6 +244,12 @@ export function tree<Node, Multiple extends boolean = false>(
                 if (place()?.branch !== true) return undefined
                 return walked().open.has(each) ? 'true' : 'false'
             },
+            // 49.17 — a leaf is never open.
+            get 'data-open'() {
+                return walked().open.has(each) && place()?.branch === true
+                    ? ''
+                    : undefined
+            },
             get 'aria-selected'() {
                 return selection.has(each) ? 'true' : 'false'
             },

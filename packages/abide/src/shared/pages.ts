@@ -120,9 +120,16 @@ export function pages(options: PagesOptions): Pages {
         if (made === undefined) {
             made = go(() => at, 'page')
             // 51.127
-            Object.defineProperty(made, 'aria-current', {
-                enumerable: true,
-                get: () => (on() === at ? 'page' : undefined),
+            Object.defineProperties(made, {
+                'aria-current': {
+                    enumerable: true,
+                    get: () => (on() === at ? 'page' : undefined),
+                },
+                // 49.17
+                'data-current': {
+                    enumerable: true,
+                    get: () => (on() === at ? '' : undefined),
+                },
             })
             links.set(at, made)
         }

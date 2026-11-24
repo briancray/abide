@@ -1,0 +1,24 @@
+<script>
+import { toasts } from '@abide/abide'
+
+const shown = toasts.host()
+const saved = () => toasts.notify('Phone saved', { tone: 'success' })
+const refused = () => toasts.notify('A phone is digits', { tone: 'error' })
+</script>
+
+<div class="row">
+    <button onclick={saved}>Save</button>
+    <button onclick={refused}>Save letters</button>
+</div>
+<ol {...shown.region} class="flex flex-col gap-tight">
+    {#for toast of shown.notices key toast.id}
+        <li
+            {...shown.notice(toast).notice}
+            class="rounded-lg border border-rule px-4 py-2
+                data-[tone=error]:border-bad data-[tone=success]:border-good"
+        >
+            <span {...shown.notice(toast).text}>{toast.text}</span>
+            <button {...shown.notice(toast).close}>Close</button>
+        </li>
+    {/for}
+</ol>

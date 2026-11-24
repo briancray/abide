@@ -69,6 +69,8 @@ export type Projection = {
     keys: Map<object, Position>
     /** 32.67 — per `{#for}` block, where its row's item binding starts. */
     items: Map<object, number>
+    /** 32.111 — where each `{#for}` row's index binding starts, for a block that names one. */
+    indexes: Set<number>
     /**
      * 32.34 — per invocation, the position of its tag: a read there is a component chosen by a value.
      */
@@ -244,6 +246,7 @@ function project(file: AbideFile): Projection {
     const slots = new Map<object, Position>()
     const keys = new Map<object, Position>()
     const items = new Map<object, number>()
+    const indexes = new Set<number>()
     const tags = new Map<object, Position>()
     let inlineProps = false
     // Spans are written in ascending order, so the table is sorted as it is pushed.
@@ -559,7 +562,7 @@ function project(file: AbideFile): Projection {
             text += ` of ${ROWS_OF}(${subject})) {\n`
             if (node.index !== '') {
                 text += 'const '
-                copied(node.index, bound?.index)
+                indexes.add(copied(node.index, bound?.index).start)
                 text += ': number = 0\n'
             }
             // `inBody` but for the key, which stands after the row's setup and before its nodes.
@@ -620,6 +623,7 @@ function project(file: AbideFile): Projection {
         slots,
         keys,
         items,
+        indexes,
         tags,
         origins,
     }

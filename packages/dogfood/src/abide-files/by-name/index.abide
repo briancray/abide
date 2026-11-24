@@ -1,7 +1,13 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import MoveContact from './lib/MoveContact.abide'
+import moveContact from './lib/MoveContact.abide' with { type: 'text' }
+import StarContact from './lib/StarContact.abide'
+import starContact from './lib/StarContact.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -29,36 +35,16 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Star a contact by reading and assigning its name">
         <p>Name <code>starred</code> to read it and follow it. Assign to it to write it and wake
             every reader.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive } from '@abide/abide'
-            let starred = reactive(false)
-            </script>
-
-            <button onclick={() => (starred = !starred)}>
-                {starred ? '★ Starred' : '☆ Star'}
-            </button>
-        `} />
+        <Example code={starContact}><StarContact /></Example>
     </Section>
 
     <Section level={3} title="Change a city inside a contact's address">
         <p>A write through a path copies <code>contact</code> and its <code>address</code>, then
             writes the copy back. An array's <code>push</code> is the same write, on a copy.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive } from '@abide/abide'
-            let contact = reactive({
-                address: { city: 'London' },
-                tags: ['investor'],
-            })
-            </script>
-
-            <button onclick={() => (contact.address.city = 'Paris')}>Move</button>
-            <button onclick={() => contact.tags.push('vip')}>Tag</button>
-        `} />
+        <Example code={moveContact}><MoveContact /></Example>
     </Section>
 
-    <Section level={3} title="Pass the reactive value where a Reactive is expected">
+    <Section level={3} title="Hand the deals themselves to `refresh`, not what they hold">
         <p>Where the position is typed <code>Reactive</code>, or takes a selection, the name is the
             value itself rather than a read of it.</p>
         <Code language="abide" caption="abide" code={`

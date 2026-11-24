@@ -1,0 +1,16 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const NOTES: Record<string, string[]> = {
+    d1: ['Wants a two-year term.', 'Legal reviews on Friday.'],
+}
+const getNotes = GET(({ id }: { id: string }) => NOTES[id] ?? [])
+</script>
+
+<script>
+import { memo } from '@abide/abide'
+
+const notes = memo(() => getNotes({ id: 'd1' }))
+</script>
+
+{#for note of notes}<p>{note}</p>{/for}

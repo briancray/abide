@@ -431,7 +431,8 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
             )
 
             // A HANDLER FILE IS FOUND BY WHERE ITS IMPORT RESOLVES, however the import spells it — the
-            // app's own, or a mounted package's own page importing a handler file of its (23.19).
+            // app's own, a mounted package's own page importing a handler file of its (23.19), or the
+            // app importing a mounted one by its package's name: relative, `#` and bare alike.
             // THE FILTER IS THE HANDLER FILES' NAMES: a hook matching every relative import costs the
             // bundle abide's own `sideEffects`, and the barrel's rest — the validator, the csp — moved
             // into the chunk every page loads (38.94); and since only an import ending in one of those
@@ -452,8 +453,7 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
                         ),
                     },
                     (args) => {
-                        if (resolving || !RELATIVE_OR_SUBPATH.test(args.path))
-                            return undefined
+                        if (resolving) return undefined
                         let file: string
                         try {
                             file = resolved(args.path, args.importer)

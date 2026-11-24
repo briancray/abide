@@ -1,0 +1,24 @@
+<script>
+import { breadcrumbs } from '@abide/abide'
+
+const crumbs = breadcrumbs({
+    trail: [
+        { name: 'Companies', path: '#companies' },
+        { name: 'Analytical Engines', path: '#analytical' },
+        { name: 'Engine renewal', path: '#engine-renewal' },
+    ],
+    href: (crumb) => crumb.path,
+})
+</script>
+
+<nav class="row" {...crumbs.nav}>
+    {#for item of crumbs.items}
+        {#if item !== 'overflow'}
+            <a
+                class="aria-[current=page]:font-semibold
+                aria-[current=page]:text-ink"
+                {...crumbs.link(item)}
+            >{item.name}</a>
+        {/if}
+    {/for}
+</nav>

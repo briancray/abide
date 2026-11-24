@@ -1,0 +1,16 @@
+<script>
+const deals = [
+    { id: 'd1', name: 'Acme renewal', stage: 'proposal' },
+    { id: 'd2', name: 'Hopper onboarding', stage: 'won' },
+]
+</script>
+
+{#component Stage({ stage }: { stage: string })}
+    <small>{stage}</small>
+{/component}
+
+<ul>
+    {#for deal of deals key deal.id}
+        <li>{deal.name} <Stage stage={deal.stage} /></li>
+    {/for}
+</ul>

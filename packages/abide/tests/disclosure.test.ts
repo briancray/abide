@@ -60,7 +60,8 @@ test('find in page reaching a shut region opens it — 51.118', () => {
 })
 
 // THE REVERT: close a key only where many may be open, and closing the one key open writes an
-// array where `undefined` is due.
+// array where `undefined` is due; hand back the disclosure's parts bare, and no part carries
+// `data-accordion`.
 test('an accordion opens one key at a time, and closing it leaves none — 51.120, 51.121', () => {
     const faq = accordion()
     click(faq.item('pricing').button)
@@ -72,6 +73,13 @@ test('an accordion opens one key at a time, and closing it leaves none — 51.12
     expect(faq.open()).toBeUndefined()
     // A key's parts are built once: a render asking again gets the same ones.
     expect(faq.item('pricing')).toBe(faq.item('pricing'))
+    // 49.3 — a key's parts are named for the accordion, beside the disclosure's they are.
+    const pricing = faq.item('pricing')
+    expect([
+        pricing.button['data-accordion'],
+        pricing.region['data-accordion'],
+        pricing.button['data-disclosure'],
+    ]).toEqual(['button', 'region', 'button'])
     const many = accordion({
         multiple: true,
         open: reactive<readonly string[]>([]),

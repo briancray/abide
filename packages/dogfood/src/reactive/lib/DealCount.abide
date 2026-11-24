@@ -1,0 +1,11 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let deals = reactive(['Acme renewal', 'Hopper & Co'])
+</script>
+
+<h4>Your pipeline</h4>
+<p>{deals.length} open deals</p>
+<button onclick={() => (deals = [...deals, 'Babbage audit'])}>
+    Add a deal
+</button>

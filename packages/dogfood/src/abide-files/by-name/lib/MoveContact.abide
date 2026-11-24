@@ -1,0 +1,12 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let contact = reactive({
+    address: { city: 'London' },
+    tags: ['investor'],
+})
+</script>
+
+<p>{contact.address.city} · {contact.tags.join(', ')}</p>
+<button onclick={() => (contact.address.city = 'Paris')}>Move</button>
+<button onclick={() => contact.tags.push('vip')}>Tag</button>

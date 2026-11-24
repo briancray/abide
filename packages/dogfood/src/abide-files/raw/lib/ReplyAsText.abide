@@ -1,0 +1,5 @@
+<script>
+const reply = '<b>Signed</b>, see the contract'
+</script>
+
+<p class="reply">{reply}</p>

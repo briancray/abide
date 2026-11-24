@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import ShowFloor from './lib/ShowFloor.abide'
 import showFloor from './lib/ShowFloor.abide' with { type: 'text' }
+import WarmShown from './lib/WarmShown.abide'
+import warmShown from './lib/WarmShown.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -30,5 +32,10 @@ import showFloor from './lib/ShowFloor.abide' with { type: 'text' }
             screen reader reaches it, and pressing the cover puts it in the cover's place with
             focus on it.</p>
         <Example code={showFloor}><ShowFloor /></Example>
+    </Section>
+
+    <Section level={3} title="Warm the line once the walk-away price shows">
+        <p>The content carries <code>data-open</code> once its cover is pressed.</p>
+        <Example code={warmShown}><WarmShown /></Example>
     </Section>
 </Doc>

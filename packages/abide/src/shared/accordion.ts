@@ -1,12 +1,13 @@
 // 51.120, 51.121 — A STACK OF DISCLOSURES, at most one open or any number, as parts an app spreads
 // onto a button and a region per key of its own: WAI-ARIA's accordion. Each key's parts are a
-// `disclosure`, open while `open` holds the key.
+// `disclosure`, open while `open` holds the key, carrying `data-accordion` beside `data-disclosure`.
 
 import { type Disclosure, disclosure } from './disclosure.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import type { Picked } from './Selection.ts'
+import { withPart } from './withPart.ts'
 
 /** Which keys are open, and whether many may be at once. */
 export type AccordionOptions<Multiple extends boolean = false> = {
@@ -65,6 +66,9 @@ export function accordion<Multiple extends boolean = false>(
                     (on: boolean) => write(key, on),
                 ),
             })
+            // 49.3 — a disclosure's parts, named for the accordion beside the disclosure.
+            withPart(made.button, { 'data-accordion': 'button' })
+            withPart(made.region, { 'data-accordion': 'region' })
             items.set(key, made)
         }
         return made

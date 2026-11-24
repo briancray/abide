@@ -1,0 +1,172 @@
+<script>
+import { url } from '@abide/abide'
+
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Exchange from '#src/lib/Exchange.abide'
+import Section from '#src/lib/Section.abide'
+
+// A model's client calling one tool, as the JSON-RPC body it posts.
+const callTool = (name: string, args: Record<string, string>) =>
+    JSON.stringify(
+        {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: { name, arguments: args },
+        },
+        null,
+        2,
+    )
+</script>
+
+<Doc
+    seeAlso={[
+        '/handlers/get',
+        '/handlers/openapi',
+        '/handlers/mcp',
+        '/handlers/clients',
+        '/cli/commands',
+    ]}
+>
+    <Section title="Write the read once, in a handler file">
+        <p>Declare it with <a href={url('/handlers/get')}><code>GET</code></a> in
+            <code>src/deals/getDeal.handler.ts</code>. The parameter's annotation is the schema
+            every surface checks, and <code>description</code> is the sentence every surface
+            shows. A missing deal is a <a href={url('/reactive/refuse')}><code>refuse</code></a>,
+            not a thrown error.</p>
+        <Code language="ts" caption="server" code={`
+            import { refuse } from '@abide/abide'
+            import { GET } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
+
+            export default GET(
+                ({ id }: { id: string }) =>
+                    DEALS.find((deal) => deal.id === id) ?? refuse(404),
+                { description: 'One deal, by id.' },
+            )
+        `} />
+    </Section>
+
+    <Section title="Call it from a page by its name">
+        <p>Import the file and call it. In the browser the call fetches the handler's address,
+            and in the server render it runs the function. Either way it hands back a reactive
+            value the page reads by name.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { memo } from '@abide/abide'
+            import getDeal from './getDeal.handler.ts'
+
+            const deal = memo(() => getDeal({ id: 'd1' }))
+            </script>
+
+            <h2>{deal.name}</h2>
+        `} />
+    </Section>
+
+    <Section title="Ask for it over HTTP at the file's address">
+        <p>The file's path is its address, and the args ride the query. See
+            <a href={url('/handlers/mount-paths')}>Mount paths</a>. Here is the CRM's, asked
+            when this page loaded:</p>
+        <Exchange path="/deals/getDeal?id=d1" />
+    </Section>
+
+    <Section title="Hand a partner the operation it became">
+        <p>The app serves its <a href={url('/handlers/openapi')}>OpenAPI</a> document at
+            <code>/__abide/openapi.json</code>. The handler is an operation there: its id is the
+            method and the route, its parameter the annotation, its description the
+            sentence.</p>
+        <Code code={`
+            $ curl -s localhost:3000/__abide/openapi.json \\
+                | jq '.paths["/deals/getDeal"].get
+                    | {operationId, description, parameters}'
+            {
+              "operationId": "get_deals_getDeal",
+              "description": "One deal, by id.",
+              "parameters": [
+                { "name": "id", "in": "query", "required": true,
+                  "schema": { "type": "string" } }
+              ]
+            }
+        `} />
+        <p>The CRM's document, asked when this page loaded, with the same three fields picked
+            out:</p>
+        <Exchange
+            path="/__abide/openapi.json"
+            pick={[
+                '/paths/~1deals~1getDeal/get/operationId',
+                '/paths/~1deals~1getDeal/get/description',
+                '/paths/~1deals~1getDeal/get/parameters',
+            ]} />
+    </Section>
+
+    <Section title="Let an assistant call it as a tool">
+        <p>The same operation is a tool on <code>/__abide/mcp</code>, named as the operation is.
+            A model's client posts a JSON-RPC <code>tools/call</code> and reads the deal back as
+            structured content. See <a href={url('/handlers/mcp')}>MCP</a>.</p>
+        <Exchange
+            method="POST"
+            path="/__abide/mcp"
+            body={callTool('get_deals_getDeal', { id: 'd1' })}
+         />
+    </Section>
+
+    <Section title="Run it from the terminal">
+        <p><code>abide call</code> takes the route without its leading <code>/</code> and each
+            arg as <code>name=value</code>, and prints the answer. See
+            <a href={url('/cli/commands')}>Commands</a>.</p>
+        <Code code={`
+            $ abide call deals/getDeal id=d1 | jq .name
+            "Engine renewal"
+        `} />
+    </Section>
+
+    <Section title="A refusal answers as Problem Details on every surface">
+        <p>Ask for a deal that is not there and <code>refuse(404)</code> answers as
+            <code>application/problem+json</code>. A page's value holds the same refusal as its
+            error, a tool call answers it with <code>isError</code>, and <code>abide call</code>
+            prints it and exits 7.</p>
+        <Exchange path="/deals/getDeal?id=nope" />
+    </Section>
+
+    <Section title="Guard a handler once, and every surface is guarded">
+        <p>A handler's <a href={url('/middleware/middleware')}><code>middleware</code></a> runs
+            on every call, whichever surface it came in by. The CRM's commission takes
+            <a href={url('/middleware/signed-in')}><code>signedIn</code></a>, so a model calling
+            it signed out is refused as a page would be.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, signedIn } from '@abide/abide/server'
+
+            export default GET(() => ({ amount: '$6,200' }), {
+                middleware: [signedIn],
+                description: "The signed-in member's commission this quarter.",
+            })
+        `} />
+        <Exchange
+            method="POST"
+            path="/__abide/mcp"
+            body={callTool('get_account_getCommission', {})}
+         />
+    </Section>
+
+    <Section title="Keep a handler off one surface">
+        <p>Set the surface to <code>false</code> in
+            <a href={url('/handlers/clients')}><code>clients</code></a>. The contacts export
+            answers the page's button and is no tool, so a model asking for it is told there is
+            none. <code>clients</code> withholds a surface, and guards nothing.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET } from '@abide/abide/server'
+            import { CONTACTS } from '../contacts/lib/CONTACTS.server.ts'
+
+            export default GET(() => CONTACTS, {
+                description: 'Every contact, for the export button.',
+                clients: { mcp: false },
+            })
+        `} />
+        <Exchange
+            method="POST"
+            path="/__abide/mcp"
+            body={callTool('get_assistant_exportContacts', {})}
+         />
+    </Section>
+</Doc>

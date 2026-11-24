@@ -1,0 +1,26 @@
+<script>
+import { memo, reactive } from '@abide/abide'
+
+const DEALS = [
+    { name: 'Acme renewal', stage: 'lead', amount: 12_000 },
+    { name: 'Hopper & Co', stage: 'won', amount: 30_000 },
+    { name: 'Babbage audit', stage: 'lead', amount: 8_000 },
+]
+
+let stage = reactive('lead')
+let note = reactive('')
+const total = memo(() => {
+    let sum = 0
+    for (const deal of DEALS) if (deal.stage === stage) sum += deal.amount
+    return sum
+})
+</script>
+
+<div class="row">
+    <select bind:value={stage}>
+        <option>lead</option>
+        <option>won</option>
+    </select>
+    <input bind:value={note} placeholder="A note on the board">
+</div>
+<p>{stage}: ${total}</p>

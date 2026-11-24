@@ -64,15 +64,32 @@ export async function callHandler(
     const asked = method?.toUpperCase()
     const handler = handlerAt(handlers, address, asked)
     const args = callArgs(given)
-    const chosen = (asked ??
-        (handler?.method as Method | undefined) ??
-        (args === undefined ? 'GET' : 'POST')) as Method
-    const request = requestFor(chosen, address, args)
-    const answer = await fetch(`${url}${request.url}`, {
-        ...request.init,
-        headers: { ...remoteHeaders(), ...request.init.headers },
-        signal: signal ?? null,
-    })
+    const guessed = asked === undefined && handler === undefined
+    const send = (method: Method): Promise<Response> => {
+        const request = requestFor(method, address, args)
+        return fetch(`${url}${request.url}`, {
+            ...request.init,
+            headers: { ...remoteHeaders(), ...request.init.headers },
+            signal: signal ?? null,
+        })
+    }
+    let answer = await send(
+        (asked ??
+            (handler?.method as Method | undefined) ??
+            (args === undefined ? 'GET' : 'POST')) as Method,
+    )
+    // 38.216 — a guess the app refuses as the wrong method is sent again as the one method its
+    // `Allow` names, HEAD and OPTIONS aside: a 405 ran nothing, so the resend is the only call made.
+    if (guessed && answer.status === 405) {
+        const allowed: string[] = []
+        for (const method of (answer.headers.get('allow') ?? '').split(','))
+            if (!['', 'HEAD', 'OPTIONS'].includes(method.trim()))
+                allowed.push(method.trim())
+        if (allowed.length === 1) {
+            await answer.body?.cancel()
+            answer = await send(allowed[0] as Method)
+        }
+    }
     const text = await answer.text()
     const code =
         answer.status >= 400

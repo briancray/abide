@@ -207,7 +207,7 @@ test('Space toggles, Shift with an arrow extends, and `mod+a` selects all — 51
 })
 
 // THE REVERT: hold the key moved to apart from `selected`, and the key written there makes nothing
-// active.
+// active; write `data-selected` only where it selects many, and the option picked carries none.
 test('selecting one, the selection is the key last moved to, and a click picks it — 51.104, 51.105', () => {
     const picked: string[] = []
     const selected = reactive<string | undefined>('c')
@@ -226,5 +226,9 @@ test('selecting one, the selection is the key last moved to, and a click picks i
     // Space and `mod+a` are left alone: a list picking one is often a field's, where they type.
     expect(press(list.onkeydown, ' ').defaultPrevented).toBe(false)
     expect(press(list.onkeydown, 'a', MOD).defaultPrevented).toBe(false)
-    expect(list.option('a')['data-selected']).toBe(undefined)
+    // 49.1 — the selection is styled by `data-selected`, as where it selects many.
+    expect([
+        list.option('a')['data-selected'],
+        list.option('c')['data-selected'],
+    ]).toEqual(['', undefined])
 })

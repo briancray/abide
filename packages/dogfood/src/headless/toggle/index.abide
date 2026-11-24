@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import DealAlerts from './lib/DealAlerts.abide'
 import dealAlerts from './lib/DealAlerts.abide' with { type: 'text' }
+import FillPressed from './lib/FillPressed.abide'
+import fillPressed from './lib/FillPressed.abide' with { type: 'text' }
 import PinDeal from './lib/PinDeal.abide'
 import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
 </script>
@@ -30,5 +32,10 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
             with <code>aria-checked</code>, and a <code>Reactive</code> handed in as
             <code>pressed</code> is the one it flips.</p>
         <Example code={dealAlerts}><DealAlerts /></Example>
+    </Section>
+
+    <Section level={3} title="Fill the pin button while the deal is pinned">
+        <p>The button carries <code>data-pressed</code> while it is pressed.</p>
+        <Example code={fillPressed}><FillPressed /></Example>
     </Section>
 </Doc>

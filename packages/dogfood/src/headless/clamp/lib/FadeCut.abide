@@ -1,0 +1,12 @@
+<script>
+import { clamp } from '@abide/abide'
+
+const bio = clamp({ lines: 2 })
+</script>
+
+<p class="data-clamped:mask-b-from-50%" {...bio.text}>
+    Ada leads procurement at Analytical Engines, and has run the renewal of
+    every engine contract since the first pilot. She wants a written proposal
+    before any call, reads every clause, and answers within a day.
+</p>
+<button {...bio.button}>{bio.open() ? 'Show less' : 'Show more'}</button>

@@ -1,0 +1,16 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let deals = reactive([
+    { id: 'd1', name: 'Acme renewal' },
+    { id: 'd2', name: 'Hopper onboarding' },
+    { id: 'd3', name: 'Lovelace pilot' },
+])
+</script>
+
+{#for deal, index of deals key deal.id}
+    <p>{index + 1}. {deal.name}
+        <button onclick={() => (deals = deals.filter((d) => d !== deal))}>
+            Remove
+        </button></p>
+{/for}

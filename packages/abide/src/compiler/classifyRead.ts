@@ -141,6 +141,12 @@ export type Read = {
      * projection, or -1 for every other read.
      */
     item: number
+    /**
+     * 32.111 — a read of a `{#for}` row's index: where that row's ITEM binding starts in the
+     * projection, so a row's item and its index are asked about by one key, or -1 for every other
+     * read.
+     */
+    index: number
 }
 
 /**
@@ -179,6 +185,7 @@ export function newRead(
         optional: false,
         fills: false,
         item: -1,
+        index: -1,
     }
 }
 

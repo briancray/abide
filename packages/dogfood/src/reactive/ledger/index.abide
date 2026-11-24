@@ -1,7 +1,11 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import CallLog from './lib/CallLog.abide'
+import callLog from './lib/CallLog.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -47,17 +51,9 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="List the calls in a page">
         <p>A ledger is a <code>Reactive</code> of every entry it keeps, oldest first: read it by
-            name, and the list grows as each call is appended. Only <code>append</code> writes
-            it.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { calls } from './calls.ts'
-            </script>
-
-            {#each calls as call (call.seq)}
-                <p>{call.entry.contact}: {call.entry.minutes} min</p>
-            {/each}
-        `} />
+            name, and each call appended adds its one row without rebuilding the others. Only
+            <code>append</code> writes it.</p>
+        <Example code={callLog}><CallLog /></Example>
     </Section>
 
     <Section level={3} title="Log a resent call once">

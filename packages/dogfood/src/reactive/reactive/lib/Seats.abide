@@ -1,0 +1,7 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let seats = reactive(5)
+</script>
+
+<button onclick={() => (seats += 1)}>{seats} seats</button>

@@ -2,6 +2,7 @@
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Section from '#src/lib/Section.abide'
+import SiteTree from '#src/lib/SiteTree.abide'
 </script>
 
 <Doc
@@ -49,6 +50,9 @@ import Section from '#src/lib/Section.abide'
                 error.abide                a refusal below /companies
               public/icon.png              /icon.png
         `} />
+        <p>The CRM's own <code>companies</code> directory, read as this page rendered. Each page
+            links to where it answers.</p>
+        <SiteTree directory="companies" />
     </Section>
 
     <Section level={3} title="Keep the database out of every browser bundle">

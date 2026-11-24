@@ -149,6 +149,7 @@ function listCase(
                 },
                 mount: (): Scope => new Scope(),
                 update: noUpdate,
+                reindex: noUpdate,
             }
             // HYDRATED from the rows `host` rendered, the way a served page's list is.
             const list = new List(

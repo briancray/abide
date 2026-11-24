@@ -2,6 +2,7 @@
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Section from '#src/lib/Section.abide'
+import Terminal from '#src/lib/Terminal.abide'
 </script>
 
 <Doc
@@ -35,6 +36,9 @@ import Section from '#src/lib/Section.abide'
               --claude ~/.local/bin/claude --env ANTHROPIC_BASE_URL=$PROXY \\
               -- --model sonnet
         `} />
+        <p>The bridge's usage, which it prints where a site or its code is missing, run when
+            this page loaded:</p>
+        <Terminal command="abide-bridge" />
     </Section>
 
     <Section level={3} title="Open pairing links from the browser with one click">

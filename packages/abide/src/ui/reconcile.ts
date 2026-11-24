@@ -5,7 +5,14 @@ import type { List } from './List.ts'
 import { beginLayer, endLayer } from './measureLayer.ts'
 import { HYDRATE_LOG } from './Mismatch.ts'
 import { emptyRegion } from './regions.ts'
-import { dropRow, makeRow, moveRow, type Row, updateRow } from './rows.ts'
+import {
+    dropRow,
+    makeRow,
+    moveRow,
+    reindexRow,
+    type Row,
+    updateRow,
+} from './rows.ts'
 
 // 41.8, 32.67 — a KEYED list, reconciled by moving the nodes that are already there rather than by
 // rebuilding them. A rebuild produces the right screen and the wrong document: focus, selection,
@@ -157,7 +164,8 @@ export function reconcile(list: List, data: unknown[]): void {
             // still counts as one. 32.29 — a survivor is moved without leaving the document (`moveNode`).
             if (keep !== null && keep[at] !== 1)
                 moveRow(parent, existing.node, anchor)
-            existing.at = at
+            // 32.111 — a row standing somewhere new reads its new index; one that stayed runs nothing.
+            if (existing.at !== at) reindexRow(existing, at)
             next[at] = existing
             anchor = existing.node
         }

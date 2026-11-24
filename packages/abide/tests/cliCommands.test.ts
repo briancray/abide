@@ -309,6 +309,21 @@ test('call answers with the value, and exits 7 on a refusal and 8 on a fault —
     )
 })
 
+// 38.216 — A METHOD NOBODY ASKED FOR IS THE ONE THE APP ALLOWS: run where no build names the handler,
+// args make the guess a POST, and the GET it reaches answers 405 with its `Allow`. An asked method is
+// sent as asked. THE REVERT: drop the resend in `callHandler`; the call exits 7 on "Method Not Allowed".
+test('call sends the method the app allows where it guessed one — 38.216', async () => {
+    const call = (...args: string[]) =>
+        spawned(['bun', BIN, 'call', '--url', base, ...args])
+    const echoed = await call('things/echo', 'id=4310')
+    expect(echoed.stderr).toBe('')
+    expect(echoed.exitCode).toBe(0)
+    expect(JSON.parse(echoed.stdout)).toEqual({ id: '4310' })
+    const asked = await call('things/echo', 'id=4310', '--method', 'POST')
+    expect(asked.exitCode).toBe(7)
+    expect(asked.stderr).toContain('Method Not Allowed')
+})
+
 // 38.61 — A WORD IS COERCED BY THE APP IT REACHES, against the schema the app holds the call to: the
 // handler's `args` gate where it declares one, not the annotation the build read. THE REVERT: coerce
 // in the CLI against the build's annotation schema and send JSON; `n` stays text and the gate answers

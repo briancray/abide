@@ -38,6 +38,8 @@ export const WHERE: Readonly<
 
 export type SitePage = {
     route: string
+    /** A guide: how the group's names fit together, documenting no REGISTRY section (40.39). */
+    guide: boolean
     /** The name it documents, or the construct it is. */
     title: string
     /** What the nav calls it. */
@@ -51,30 +53,53 @@ export type SitePage = {
     subgroup: string | undefined
 }
 
+/**
+ * What a group's examples prove, which decides what a page shows beside each example and the order
+ * of its parts (40.9, 40.40-40.45): a pure function by its call, a construct by being written, a
+ * headless component by the markup it makes and the rules that style it, a reactive value by the
+ * work it wakes, a server name by a real request and its answer, and a command by what it printed.
+ */
+export type Form =
+    'reference' | 'authoring' | 'anatomy' | 'work' | 'exchange' | 'transcript'
+
 export type SiteGroup = {
     group: string
     /** One sentence: what the pages in it have in common. */
     description: string
+    form: Form
     pages: readonly SitePage[]
 }
 
 // A page as written: `nav` and `registry` are its `title` unless it says otherwise.
-type WrittenPage = Omit<SitePage, 'nav' | 'registry' | 'subgroup'> & {
+// A guide documents no section, so its `registry` is `''`.
+type WrittenPage = Omit<SitePage, 'nav' | 'registry' | 'subgroup' | 'guide'> & {
     nav?: string
     registry?: string
     subgroup?: string
+    guide?: true
 }
 
 const WRITTEN: readonly {
     group: string
     description: string
+    form: Form
     pages: readonly WrittenPage[]
 }[] = [
     {
         group: '`.abide` files',
         description:
             'A component is a `.abide` file: script blocks, markup, and the reactive values it reads by name.',
+        form: 'authoring',
         pages: [
+            {
+                route: '/abide-files',
+                title: 'Writing a component',
+                nav: 'Writing a component',
+                description:
+                    'Build one component of the CRM a step at a time: markup, values read by name, a list, a prop, a server read and scoped styles.',
+                where: 'component',
+                guide: true,
+            },
             {
                 route: '/abide-files/by-name',
                 title: 'Reading and writing by name',
@@ -137,7 +162,17 @@ const WRITTEN: readonly {
         group: 'Pages and routing',
         description:
             'A file under `src` is a page at the address its path spells, inside the layouts above it, and a page reads where it is and goes elsewhere.',
+        form: 'authoring',
         pages: [
+            {
+                route: '/pages',
+                title: 'Organizing a site by its files',
+                nav: 'Organizing a site',
+                description:
+                    "Lay out an app's directories so its pages, layouts, handlers and private code each land where a reader of the tree expects them.",
+                where: 'component',
+                guide: true,
+            },
             {
                 route: '/pages/pages',
                 title: 'Pages',
@@ -195,7 +230,17 @@ const WRITTEN: readonly {
         group: 'Reactive primitives',
         description:
             'One value that loads, reloads, streams and fails, and the effects and selections over it.',
+        form: 'work',
         pages: [
+            {
+                route: '/reactive',
+                title: 'How reactive values work together',
+                nav: 'Reactive values together',
+                description:
+                    'Follow one figure from a value you hold through a derived total, a load from the server and an effect, and count the work each change does.',
+                where: 'anywhere',
+                guide: true,
+            },
             {
                 route: '/reactive/reactive',
                 title: '`reactive`',
@@ -307,7 +352,17 @@ const WRITTEN: readonly {
         group: 'Headless components',
         description:
             'Dialogs, pickers, tables and charts as parts a component spreads onto markup of its own, with the keyboard, the ARIA and the state handled and the look left to the app.',
+        form: 'anatomy',
         pages: [
+            {
+                route: '/headless',
+                title: 'Styling a headless component',
+                nav: 'Styling headless parts',
+                description:
+                    "Style the parts a headless component spreads by the `data-` attributes they carry, with Tailwind's variants or plain CSS.",
+                where: 'component',
+                guide: true,
+            },
             {
                 route: '/headless/dialog',
                 title: '`dialog`',
@@ -682,6 +737,7 @@ const WRITTEN: readonly {
         group: 'Element behaviors',
         description:
             'One behavior added to an element the app already has: dismissing, copying, keys, scroll edges and observing.',
+        form: 'anatomy',
         pages: [
             {
                 route: '/behaviors/dismissible',
@@ -731,6 +787,7 @@ const WRITTEN: readonly {
         group: 'Helpers',
         description:
             'Plain functions over data: formatting, sorting, markdown, wall-clock times, key labels and JSON Schema validation.',
+        form: 'reference',
         pages: [
             {
                 route: '/helpers/format',
@@ -815,7 +872,17 @@ const WRITTEN: readonly {
         group: 'Handlers',
         description:
             'A handler file is a server function a page calls by name, with its type the same on both sides, and the same handler is an OpenAPI operation, an MCP tool and a CLI command.',
+        form: 'exchange',
         pages: [
+            {
+                route: '/handlers',
+                title: 'One handler, every surface',
+                nav: 'Handler surfaces',
+                description:
+                    "Write a read once and call it from a page, over HTTP, from an OpenAPI client and from an assistant's tools.",
+                where: 'server',
+                guide: true,
+            },
             {
                 route: '/handlers/get',
                 title: '`GET`',
@@ -873,6 +940,7 @@ const WRITTEN: readonly {
         group: 'Middleware and guards',
         description:
             'Rungs run around the requests a route answers: who is signed in, the role they hold, the identities a server trusts, and what a page may write and load.',
+        form: 'exchange',
         pages: [
             {
                 route: '/middleware/middleware',
@@ -922,6 +990,7 @@ const WRITTEN: readonly {
         group: 'Ambients',
         description:
             'What is true of the work being done — the request, the response, the cookies, the person, the signal that says stop — read without passing it in.',
+        form: 'exchange',
         pages: [
             {
                 route: '/ambients/request',
@@ -992,6 +1061,7 @@ const WRITTEN: readonly {
         group: 'Browser context',
         description:
             'What is true of the browser a page stands in: whether it is online, what the screen matches, and the calls it has not delivered yet.',
+        form: 'reference',
         pages: [
             {
                 route: '/browser/online',
@@ -1020,7 +1090,17 @@ const WRITTEN: readonly {
         group: 'App and lifecycle',
         description:
             'The app object, its environment, and the functions it registers to run around its boot, its errors, its config and its people.',
+        form: 'reference',
         pages: [
+            {
+                route: '/app',
+                title: 'An app from start to stop',
+                nav: 'App lifecycle',
+                description:
+                    'Follow the CRM from the process starting, through a request it answers, refuses or fails, to the process stopping, and see which hook runs at each point.',
+                where: 'server',
+                guide: true,
+            },
             {
                 route: '/app/create-app',
                 title: '`createApp`',
@@ -1112,6 +1192,7 @@ const WRITTEN: readonly {
         group: 'Data and I/O',
         description:
             'The database, background jobs, and fetches of other services read as their content type says.',
+        form: 'reference',
         pages: [
             {
                 route: '/data/database',
@@ -1161,6 +1242,7 @@ const WRITTEN: readonly {
         group: 'Assistant',
         description:
             'A conversation with a model that calls your handlers as tools, as the same person who asked.',
+        form: 'reference',
         pages: [
             {
                 route: '/ai/assistant',
@@ -1217,6 +1299,7 @@ const WRITTEN: readonly {
         group: 'The native app',
         description:
             'The desktop app an abide app compiles to: its window, its menu bar and its updates.',
+        form: 'reference',
         pages: [
             {
                 route: '/native-app/native',
@@ -1252,6 +1335,7 @@ const WRITTEN: readonly {
         group: 'Operating',
         description:
             'Logs, problem reports, traces and health checks for an app that is running.',
+        form: 'exchange',
         pages: [
             {
                 route: '/operating/log',
@@ -1287,6 +1371,7 @@ const WRITTEN: readonly {
         group: 'Testing and measurement',
         description:
             'Mount a component in `bun test`, wait for what it loads, and count, time and gate what it does with the harness abide is measured with.',
+        form: 'reference',
         pages: [
             {
                 route: '/testing/mount',
@@ -1564,6 +1649,7 @@ const WRITTEN: readonly {
         group: 'CLI',
         description:
             'The `abide` command and the bridge that connects Claude Code to a site.',
+        form: 'transcript',
         pages: [
             {
                 route: '/cli/commands',
@@ -1591,7 +1677,8 @@ export const SITE: readonly SiteGroup[] = WRITTEN.map((written) => ({
     pages: written.pages.map((page) => ({
         ...page,
         nav: page.nav ?? page.title,
-        registry: page.registry ?? page.title,
+        registry: page.guide ? '' : (page.registry ?? page.title),
         subgroup: page.subgroup,
+        guide: page.guide === true,
     })),
 }))

@@ -1,7 +1,15 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import CallRow from './lib/CallRow.abide'
+import callRow from './lib/CallRow.abide' with { type: 'text' }
+import DealNotes from './lib/DealNotes.abide'
+import dealNotes from './lib/DealNotes.abide' with { type: 'text' }
+import LeadBadge from './lib/LeadBadge.abide'
+import leadBadge from './lib/LeadBadge.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -32,54 +40,25 @@ import Section from '#src/lib/Section.abide'
         <p>A <code>&lt;script&gt;</code> runs for each instance, so each row has its own
             <code>calls</code>. A <code>&lt;script module&gt;</code> runs once for the file, and
             what it exports is a named export of the <code>.abide</code>.</p>
-        <Code language="abide" caption="abide" code={`
-            <script module>
-            import { reactive } from '@abide/abide'
-            export let opened = reactive(0)
-            </script>
-
-            <script>
-            opened += 1
-            const position = opened
-            let calls = reactive(0)
-            </script>
-
-            <li>#{position} · {calls} logged
-                <button onclick={() => (calls += 1)}>Log a call</button></li>
-        `} />
+        <Example code={callRow}>
+            <ul>
+                <CallRow />
+                <CallRow />
+                <CallRow />
+            </ul>
+        </Example>
     </Section>
 
     <Section level={3} title="Keep a deal's notes on the server beside the markup">
         <p>A <code>&lt;script server&gt;</code> never reaches the browser. A handler it declares
             is private to the file, and the browser gets a call in its place.</p>
-        <Code language="abide" caption="abide" code={`
-            <script server>
-            import { GET } from '@abide/abide/server'
-            import { NOTES } from './lib/NOTES.server.ts'
-
-            const getNotes = GET(({ id }: { id: string }) => NOTES[id] ?? [])
-            </script>
-
-            <script>
-            import { memo } from '@abide/abide'
-            const notes = memo(() => getNotes({ id: 'd1' }))
-            </script>
-
-            {#for note of notes}<p>{note}</p>{/for}
-        `} />
+        <Example code={dealNotes}><DealNotes /></Example>
     </Section>
 
     <Section level={3} title="Style a badge without the class leaking to other components">
-        <p>A <code>&lt;style&gt;</code> block reaches only its own component's markup.
-            <code>:global(…)</code> exempts the part of a selector it wraps.</p>
-        <Code language="abide" caption="abide" code={`
-            <span class="badge">lead</span>
-
-            <style>
-            .badge { background: var(--lead); }
-            :global(.dark) .badge { background: var(--lead-dim); }
-            </style>
-        `} />
+        <p>A <code>&lt;style&gt;</code> block reaches only its own component's markup, so
+            another component's <code>.badge</code> keeps its own look.</p>
+        <Example code={leadBadge}><LeadBadge /></Example>
     </Section>
 
     <Section level={3} title="Load the app's stylesheet with the layout">

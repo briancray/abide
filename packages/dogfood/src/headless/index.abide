@@ -1,0 +1,86 @@
+<script>
+import { url } from '@abide/abide'
+
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import CurrentPage from './lib/CurrentPage.abide'
+import currentPage from './lib/CurrentPage.abide' with { type: 'text' }
+import DimDisabled from './lib/DimDisabled.abide'
+import dimDisabled from './lib/DimDisabled.abide' with { type: 'text' }
+import LitTrigger from './lib/LitTrigger.abide'
+import litTrigger from './lib/LitTrigger.abide' with { type: 'text' }
+import OptionsFromList from './lib/OptionsFromList.abide'
+import optionsFromList from './lib/OptionsFromList.abide' with { type: 'text' }
+import PressedPin from './lib/PressedPin.abide'
+import pressedPin from './lib/PressedPin.abide' with { type: 'text' }
+import TabStrip from './lib/TabStrip.abide'
+import tabStrip from './lib/TabStrip.abide' with { type: 'text' }
+import TurnChevron from './lib/TurnChevron.abide'
+import turnChevron from './lib/TurnChevron.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/headless/tabs',
+        '/headless/dialog',
+        '/headless/menu',
+        '/headless/combobox',
+    ]}
+>
+    <Section title="Every state is an attribute you can select">
+        <p>A headless component writes no class and ships no stylesheet. It hands you parts
+            to spread on your elements, and each state it holds is a <code>data-</code>
+            attribute on the element the state is about, present while it holds. A
+            <a href={url('/headless/toggle')}><code>toggle</code></a>'s button carries
+            <code>data-pressed</code>, so Tailwind's <code>data-pressed:</code> variant styles it.
+            Press it, then open the HTML tab to see the attribute arrive.</p>
+        <Example code={pressedPin}><PressedPin /></Example>
+    </Section>
+
+    <Section title="Turn a chevron inside a button while its section is open">
+        <p>A <a href={url('/headless/disclosure')}><code>disclosure</code></a>'s button and region carry
+            <code>data-open</code> while it shows. Mark the button <code>group</code>, and a chevron
+            inside it turns with <code>group-data-open:</code>.</p>
+        <Example code={turnChevron}><TurnChevron /></Example>
+    </Section>
+
+    <Section title="Style a button by the ARIA state it already carries">
+        <p>A part carries the roles and states WAI-ARIA names for its pattern, and Tailwind's
+            <code>aria-*</code> variants reach them. A
+            <a href={url('/headless/popover')}><code>popover</code></a>'s trigger is
+            <code>aria-expanded</code> while its panel shows, and the panel itself carries
+            <code>data-open</code> and the <code>data-side</code> it took.</p>
+        <Example code={litTrigger}><LitTrigger /></Example>
+    </Section>
+
+    <Section title="Dim a button with nothing left to do">
+        <p>A button that cannot act is <code>disabled</code>, so the <code>disabled:</code> variant
+            styles it. A <a href={url('/headless/stepper')}><code>stepper</code></a>'s
+            <code>+</code> is disabled at its <code>max</code>.</p>
+        <Example code={dimDisabled}><DimDisabled /></Example>
+    </Section>
+
+    <Section title="Style every option from its listbox">
+        <p>Every part names its component and its piece: an option of a
+            <a href={url('/headless/listbox')}><code>listbox</code></a> carries
+            <code>data-listbox="option"</code>. Select it with an arbitrary variant on the list, and
+            each option written in the loop is styled from one place.</p>
+        <Example code={optionsFromList}><OptionsFromList /></Example>
+    </Section>
+
+    <Section title="Style every tab strip with one class from your stylesheet">
+        <p>Name the look once with <code>@utility</code>, and write the name wherever the component
+            goes. The CRM's <code>tabs</code> lights the tab whose
+            <code>aria-selected</code> is true. See it in the CSS tab.</p>
+        <Example code={tabStrip}><TabStrip /></Example>
+    </Section>
+
+    <Section title="Write the rule in plain CSS">
+        <p>An attribute selector is all a rule needs. A <code>&lt;style&gt;</code> block of the file
+            is scoped to it, and the <a href={url('/headless/pages')}><code>pages</code></a> link for the page
+            showing carries <code>aria-current="page"</code>.</p>
+        <Example code={currentPage}><CurrentPage /></Example>
+    </Section>
+</Doc>

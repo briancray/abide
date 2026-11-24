@@ -1,0 +1,14 @@
+<script>
+import { accordion } from '@abide/abide'
+
+const sections = accordion()
+</script>
+
+<button class="data-open:text-signal" {...sections.item('details').button}>
+    Details
+</button>
+<p {...sections.item('details').region}>Engine renewal, $12,000</p>
+<button class="data-open:text-signal" {...sections.item('owner').button}>
+    Owner
+</button>
+<p {...sections.item('owner').region}>Ada Lovelace</p>

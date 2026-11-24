@@ -9,8 +9,11 @@ import { afterEach, expect, test } from 'bun:test'
 import { POST } from '#server'
 import { addressed } from '#server/addressed.ts'
 import {
+    accordion,
     type Autoscroll,
     autoscroll,
+    breadcrumbs,
+    calendar,
     type Carousel,
     carousel,
     chart,
@@ -23,6 +26,7 @@ import {
     type CommandParts,
     dialog,
     type DialogParts,
+    disclosure,
     dropzone,
     type DropzoneParts,
     type Form,
@@ -32,11 +36,14 @@ import {
     listbox,
     type Menu,
     menu,
+    pages,
     pie,
     type PieParts,
+    popover,
     range,
     type RangeEnd,
     type RangeParts,
+    reactive,
     sortableTable,
     type SortableTableColumn,
     type SortableTableParts,
@@ -55,6 +62,7 @@ import {
     type VirtualList,
     virtualList,
     type VirtualListSections,
+    wizard,
 } from '#shared'
 import { announce, type AnnouncerHost } from '#shared/announce.ts'
 import {
@@ -193,6 +201,8 @@ function elementParts(): Record<string, unknown> {
         attributes: {},
     } as unknown as Parameters<NoticesHost['notice']>[0]
     return {
+        'accordion.item.button': accordion().item('a').button,
+        'accordion.item.region': accordion().item('a').region,
         'listbox.listbox': keys.listbox,
         'listbox.option': keys.option('a'),
         'tabs.list': view.list,
@@ -476,4 +486,95 @@ test('an option answering undefined takes its default, as one left out does — 
         slider.end(1).thumb['aria-valuemax'],
         palette.listbox['aria-label'],
     ]).toEqual(['Minimum', 0, 100, 'Commands'])
+})
+
+// 49.17 — WHAT A PART SAYS IN ARIA IT SAYS IN A `data-` ATTRIBUTE TOO: `data-current` beside an
+// `aria-current`, and `data-open` beside an `aria-expanded` of `true`. Each part is read in both states.
+// THE REVERT: drop `data-open` from `tree`'s item, and `tree.node.item open` is named.
+test('a part carrying aria-current or aria-expanded carries data-current or data-open with it — 49.17', () => {
+    const named = (crumb: string) => `/${crumb}`
+    const crumbs = breadcrumbs({ trail: ['home', 'deals'], href: named })
+    const list = pages({ count: 3 })
+    const steps = wizard({ steps: ['plan', 'pay'] })
+    // With no month written it shows today's, so today is among its cells.
+    const days = calendar()
+    const cells = days.months[0]?.weeks.flat() ?? []
+    const today = cells.find((day) => day.cell['aria-current'] !== undefined)
+    const other = cells.find((day) => day !== today)
+    const nodes = tree<string>({
+        roots: ['a', 'b'],
+        children: (node) => (node === 'a' ? ['a1'] : undefined),
+        expanded: reactive<readonly string[]>(['a']),
+    })
+    const long = virtualList({ items: [1, 2], section: (item) => `s${item}` })
+    const shown = popover()
+    const box = combobox({ options: () => ['a'] })
+    const palette = commandPalette({ commands: [COMMAND] })
+    const more = disclosure({ open: reactive(true) })
+    const opener = menu()
+    const parts: Record<string, unknown> = {
+        'breadcrumbs.link current': crumbs.link('deals'),
+        'breadcrumbs.link': crumbs.link('home'),
+        'pages.link current': list.link(1),
+        'pages.link': list.link(2),
+        'wizard.step current': steps.step('plan'),
+        'wizard.step': steps.step('pay'),
+        'calendar.day today': today?.cell,
+        'calendar.day': other?.cell,
+        'virtualList.sections.jump current': long.sections.jump({
+            label: 's1',
+            index: 0,
+        }),
+        'virtualList.sections.jump': long.sections.jump({
+            label: 's2',
+            index: 1,
+        }),
+        'tree.node.item open': nodes.node('a').item,
+        'tree.node.item leaf': nodes.node('b').item,
+        'popover.trigger': shown.trigger,
+        'popover.anchor': shown.anchor,
+        'menu.trigger': opener.trigger,
+        'combobox.input': box.input,
+        'commandPalette.input': palette.input,
+        'disclosure.button open': more.button,
+    }
+    const unpaired: string[] = []
+    const check = (name: string, part: Record<string, unknown>): void => {
+        if (
+            'aria-current' in part &&
+            (part['aria-current'] !== undefined) !==
+                (part['data-current'] === '')
+        )
+            unpaired.push(`${name}: data-current`)
+        if (
+            'aria-expanded' in part &&
+            (part['aria-expanded'] === 'true') !== (part['data-open'] === '')
+        )
+            unpaired.push(`${name}: data-open`)
+    }
+    for (const [name, part] of Object.entries(parts))
+        check(name, part as Record<string, unknown>)
+    // Closed, then: what was open reads closed, and what was shut reads open.
+    shown.open.set(true)
+    more.open.set(false)
+    nodes.expanded.set([])
+    check('popover.trigger opened', shown.trigger)
+    check('popover.anchor opened', shown.anchor)
+    check('disclosure.button shut', more.button)
+    check('tree.node.item shut', nodes.node('a').item)
+    ;(box.input.oninput as (event: Event) => void)({
+        currentTarget: { value: 'a' },
+    } as unknown as Event)
+    check('combobox.input opened', box.input)
+    expect(unpaired).toEqual([])
+    // Each state read here holds in one of the two, so the check above is not vacuous.
+    expect([
+        crumbs.link('deals')['aria-current'],
+        list.link(1)['aria-current'],
+        steps.step('plan')['aria-current'],
+        today?.date !== undefined,
+        long.sections.jump({ label: 's1', index: 0 })['aria-current'],
+        shown.trigger['aria-expanded'],
+        box.input['aria-expanded'],
+    ]).toEqual(['page', 'page', 'step', true, 'true', 'true', 'true'])
 })

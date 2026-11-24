@@ -1,0 +1,10 @@
+<script>
+import { reactive, store } from '@abide/abide'
+
+let stage = reactive('lead', { store: store.web<string>('stage') })
+</script>
+
+<select bind:value={stage}>
+    <option>lead</option>
+    <option>won</option>
+</select>

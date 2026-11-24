@@ -1,7 +1,22 @@
 <script>
-import Code from '#src/lib/Code.abide'
+import { reactive } from '@abide/abide'
+
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import ActionButton from './lib/ActionButton.abide'
+import actionButton from './lib/ActionButton.abide' with { type: 'text' }
+import Amount from './lib/Amount.abide'
+import amount from './lib/Amount.abide' with { type: 'text' }
+import DraftName from './lib/DraftName.abide'
+import draftName from './lib/DraftName.abide' with { type: 'text' }
+import EmailField from './lib/EmailField.abide'
+import emailField from './lib/EmailField.abide' with { type: 'text' }
+
+// What the frames' callers hold, so a bound write and a changed prop show in them.
+let email = reactive('  Ada@Example.com ')
+let contactName = reactive('Ada Lovelace')
 </script>
 
 <Doc
@@ -31,64 +46,36 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Show an amount in the currency the caller picks">
         <p>Destructure <code>props</code> with a type. Each name is a live read of what the caller
             passed, and a default stands where the caller passed none.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { props } from '@abide/abide'
-
-            const { amount, currency = 'USD' } = props<{
-                amount: number
-                currency?: string
-            }>()
-            </script>
-
-            <strong>{currency} {amount.toFixed(2)}</strong>
-        `} />
+        <Example code={amount}>
+            <Amount amount={4200} />
+            <Amount amount={4200} currency="EUR" />
+        </Example>
     </Section>
 
     <Section level={3} title="Let a child tidy the email its caller holds">
         <p>Pass a prop with <code>bind:</code> and a write to it in the child reaches the
             caller's value, as in <code>&lt;EmailField bind:value=&#123;email&#125; /&gt;</code>.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { props } from '@abide/abide'
-            const { value } = props<{ value: string }>()
-            </script>
-
-            <p>{value}</p>
-            <button onclick={() => (value = value.trim().toLowerCase())}>
-                Tidy
-            </button>
-        `} />
+        <Example code={emailField}>
+            <EmailField bind:value={email} />
+            <p>The caller holds: {email}</p>
+        </Example>
     </Section>
 
     <Section level={3} title="Edit a draft that starts over when the contact changes">
         <p>A derived value over a prop takes writes, and each write stands until the prop
             changes.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { memo, props } from '@abide/abide'
-
-            const { name } = props<{ name: string }>()
-            let draft = memo(() => name)
-            </script>
-
-            <input bind:value={draft}>
-        `} />
+        <Example code={draftName}>
+            <button onclick={() => (contactName = 'Ada Lovelace')}>Ada</button>
+            <button onclick={() => (contactName = 'Grace Hopper')}>Grace</button>
+            <DraftName name={contactName} />
+        </Example>
     </Section>
 
     <Section level={3} title="Pass a button's own attributes through a wrapper">
         <p><code>Attributes&lt;Tag&gt;</code> types the element's attributes as props, and a rest
             element spreads them on.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { type Attributes, props } from '@abide/abide'
-
-            const { label, ...rest } = props<
-                { label: string } & Attributes<'button'>
-            >()
-            </script>
-
-            <button class="action" {...rest}>{label}</button>
-        `} />
+        <Example code={actionButton}>
+            <ActionButton label="Log a call" title="Logs a call against Ada" />
+        </Example>
     </Section>
 </Doc>

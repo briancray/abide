@@ -1,0 +1,142 @@
+<script>
+import { url } from '@abide/abide'
+
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Exchange from '#src/lib/Exchange.abide'
+import Section from '#src/lib/Section.abide'
+import SiteTree from '#src/lib/SiteTree.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/pages/files',
+        '/pages/pages',
+        '/handlers/get',
+        '/middleware/middleware',
+    ]}
+>
+    <Section title="Give each feature of the app one directory">
+        <p>The CRM keeps a directory per thing a rep works on: contacts, companies, deals, the
+            pipeline. A feature's page, the handlers it calls, its components and its tests sit
+            together, so a feature is one directory to read and one to delete.</p>
+        <Code code={`
+            src/
+              layout.abide     the document around every page
+              index.abide      /
+              contacts/        /contacts, and what its page calls
+              companies/       /companies, and a page per company
+              deals/
+              pipeline/
+              account/
+              lib/             shared by every feature, no address
+              public/          files answered as they are
+        `} />
+        <p>Each file's path is its address, and its name says what it is.
+            <a href={url('/pages/files')}>Files</a> lists every name abide reads.</p>
+    </Section>
+
+    <Section title="Start a feature with its page, its handlers and a lib">
+        <p><code>index.abide</code> answers at the directory's address. Each
+            <code>.handler.ts</code> answers at its own name below it, and <code>lib/</code> holds
+            what the page mounts but nobody visits. The CRM's <code>contacts</code>, read as this
+            page rendered:</p>
+        <SiteTree directory="contacts" />
+    </Section>
+
+    <Section title="Keep a page and the handlers it calls in one directory">
+        <p>A component imports its handler by a relative path and calls it like a function. On the
+            server the call runs the handler, and in the browser it fetches the address the file
+            answers at. <a href={url('/handlers/get')}><code>GET</code></a> declares one.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { memo } from '@abide/abide'
+            import listContacts from '../listContacts.handler.ts'
+
+            const contacts = memo(() => listContacts())
+            </script>
+        `} />
+        <p>The same handler, asked at its address when this page loaded:</p>
+        <Exchange path="/contacts/listContacts" />
+    </Section>
+
+    <Section title="Answer every company with one file">
+        <p>A segment in brackets is a value the page reads from
+            <a href={url('/pages/route')}><code>route.params</code></a>. A matcher named after
+            <code>=</code> turns away an id that cannot be a company before the page runs.
+            <a href={url('/pages/pages')}>Pages</a> has every kind of segment.</p>
+        <SiteTree directory="companies" />
+        <Code language="ts" caption="shared" code={`
+            // A company's id: lowercase words and digits, joined by hyphens.
+            export const SLUG = /[a-z0-9-]+/
+        `} />
+    </Section>
+
+    <Section title="Wrap one corner of the site in a layout of its own">
+        <p>A <code>layout.abide</code> wraps every page at its directory and below, inside the
+            layouts above it. The CRM's admin page sits in <code>account/admin</code>, so the
+            admins-only rung in that layout reaches it alone. The <code>error.abide</code> beside
+            it paints the refusal.</p>
+        <SiteTree directory="account/admin" />
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { middleware } from '@abide/abide/server'
+            import { adminsOnly } from '../lib/adminsOnly.ts'
+
+            middleware(adminsOnly)
+            </script>
+
+            <slot />
+        `} />
+        <p>A rung is a <a href={url('/middleware/middleware')}><code>middleware</code></a>, and a
+            layout runs it for everything under its directory.</p>
+    </Section>
+
+    <Section title="Guard the handlers under a directory with its layout">
+        <p>A layout's rung runs for the handlers below it as well as the pages. The CRM's
+            <code>pipeline/archive</code> has no page at all: its layout makes every handler under
+            it read-only, so a write there is refused.</p>
+        <SiteTree directory="pipeline/archive" />
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { middleware, readOnly } from '@abide/abide/server'
+
+            middleware(readOnly({ message: 'Last year’s pipeline is archived.' }))
+            </script>
+
+            <slot />
+        `} />
+        <Exchange method="POST" path="/pipeline/archive/reopenDeal" />
+    </Section>
+
+    <Section title="Keep the records under lib, out of every browser's reach">
+        <p>Anything under a <code>lib</code> directory is imported and never visited. A
+            <code>.server.ts</code> file there runs on the server alone, and a page importing one
+            fails the build. The CRM's companies live in
+            <code>companies/lib/COMPANIES.server.ts</code>, and a handler reads them.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, refuse } from '@abide/abide/server'
+            import { COMPANIES } from './lib/COMPANIES.server.ts'
+
+            export default GET(async ({ id }: { id: string }) => {
+                const company = COMPANIES.find((one) => one.id === id)
+                if (company === undefined) return refuse.notFound()
+                return company
+            })
+        `} />
+    </Section>
+
+    <Section title="Serve the app's icon as a file from public">
+        <p>A file under <code>public</code> answers at its path below that directory, as
+            written, with no handler in front of it.</p>
+        <Code code={`
+            src/public/icon.png    /icon.png
+        `} />
+    </Section>
+
+    <Section title="Read the whole CRM as the addresses it answers at">
+        <p>Every file of the CRM outside a <code>lib</code>, read as this page rendered. Each page
+            with no dynamic segment links to where it answers.</p>
+        <SiteTree directory="" />
+    </Section>
+</Doc>

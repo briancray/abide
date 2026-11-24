@@ -1,0 +1,22 @@
+<script>
+import { memo, reactive } from '@abide/abide'
+
+let deals = reactive([
+    { name: 'Acme renewal', amount: 12_000 },
+    { name: 'Babbage audit', amount: 8_000 },
+])
+const total = memo(() => {
+    let sum = 0
+    for (const deal of deals) sum += deal.amount
+    return sum
+})
+
+function rename() {
+    deals = deals.map((deal, at) =>
+        at === 0 ? { ...deal, name: 'Acme' } : deal,
+    )
+}
+</script>
+
+<p>Total: ${total}</p>
+<button onclick={rename}>Rename Acme renewal</button>

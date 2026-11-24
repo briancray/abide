@@ -1,0 +1,7 @@
+<script>
+import { props } from '@abide/abide'
+
+const { name, stage } = props<{ name: string; stage: string }>()
+</script>
+
+<li>{name} <small>{stage}</small> <slot /></li>

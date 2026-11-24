@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import CornerGrip from './lib/CornerGrip.abide'
 import cornerGrip from './lib/CornerGrip.abide' with { type: 'text' }
+import EdgeDragged from './lib/EdgeDragged.abide'
+import edgeDragged from './lib/EdgeDragged.abide' with { type: 'text' }
 import RightPanel from './lib/RightPanel.abide'
 import rightPanel from './lib/RightPanel.abide' with { type: 'text' }
 import Sidebar from './lib/Sidebar.abide'
@@ -50,5 +52,10 @@ import sidebar from './lib/Sidebar.abide' with { type: 'text' }
             <code>keep</code>, the box its height sizes grows with it rather than bounding
             it.</p>
         <Example code={cornerGrip}><CornerGrip /></Example>
+    </Section>
+
+    <Section level={3} title="Color the edge while it is dragged">
+        <p>The handle carries <code>data-dragging</code> from the press to the release.</p>
+        <Example code={edgeDragged}><EdgeDragged /></Example>
     </Section>
 </Doc>

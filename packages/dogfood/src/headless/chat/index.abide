@@ -1,7 +1,11 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import AskTheAssistant from './lib/AskTheAssistant.abide'
+import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -56,33 +60,7 @@ import Section from '#src/lib/Section.abide'
             events, as <code>ask</code>, and spread the parts onto markup: the
             transcript's turns, and a composer whose input sends on Enter and breaks the line on
             Shift+Enter.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { chat } from '@abide/abide'
-            import askAssistant from '../askAssistant.handler.ts'
-
-            const talk = chat({ ask: askAssistant })
-            </script>
-
-            <section {...talk.root}>
-                <ol {...talk.transcript}>
-                    {#for turn, index of talk.turns key turn}
-                        <li {...talk.turn(turn, index).turn}>
-                            {#for part of turn.parts key part}
-                                {#if part.type === 'text'}
-                                    <p {...talk.text}>{part.text}</p>
-                                {/if}
-                            {/for}
-                        </li>
-                    {/for}
-                </ol>
-                <form {...talk.composer}>
-                    <textarea {...talk.input}
-                        placeholder="Which company is Ada at?"></textarea>
-                    <button {...talk.send}>Send</button>
-                </form>
-            </section>
-        `} />
+        <Example code={askTheAssistant}><AskTheAssistant /></Example>
     </Section>
 
     <Section level={3} title="Stop an answer and keep what arrived">

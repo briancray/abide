@@ -1,0 +1,95 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import DealItem from './lib/DealItem.abide'
+import dealItem from './lib/DealItem.abide' with { type: 'text' }
+import DealsAttribute from './lib/DealsAttribute.abide'
+import dealsAttribute from './lib/DealsAttribute.abide' with { type: 'text' }
+import DealsByName from './lib/DealsByName.abide'
+import dealsByName from './lib/DealsByName.abide' with { type: 'text' }
+import DealsChild from './lib/DealsChild.abide'
+import dealsChild from './lib/DealsChild.abide' with { type: 'text' }
+import DealsList from './lib/DealsList.abide'
+import dealsList from './lib/DealsList.abide' with { type: 'text' }
+import DealsMarkup from './lib/DealsMarkup.abide'
+import dealsMarkup from './lib/DealsMarkup.abide' with { type: 'text' }
+import DealsServer from './lib/DealsServer.abide'
+import dealsServer from './lib/DealsServer.abide' with { type: 'text' }
+import DealsStyled from './lib/DealsStyled.abide'
+import dealsStyled from './lib/DealsStyled.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/abide-files/by-name',
+        '/abide-files/expressions',
+        '/abide-files/control-flow',
+        '/abide-files/components',
+        '/abide-files/props',
+        '/abide-files/blocks',
+    ]}
+>
+    <Section title="Start with markup">
+        <p>A <code>.abide</code> file is a component, and the markup in it is what it renders.
+            This one is the CRM's list of open deals, and each section of this guide adds one
+            thing to it.</p>
+        <Example code={dealsMarkup}><DealsMarkup /></Example>
+    </Section>
+
+    <Section title="Hold a value and write it from a button">
+        <p>Declare a value with <a href="/reactive/reactive"><code>reactive</code></a>, read it
+            by naming it in braces, and write it by assigning to it. Every place that reads it
+            follows the write. See <a href="/abide-files/by-name">Values by name</a>.</p>
+        <Example code={dealsByName}><DealsByName /></Example>
+    </Section>
+
+    <Section title="Hide a won deal with an attribute">
+        <p>An expression in braces fills an attribute as well as text, and follows what it reads,
+            so the won deal stays hidden until you press the button. See
+            <a href="/abide-files/expressions">Expressions</a>.</p>
+        <Example code={dealsAttribute}><DealsAttribute /></Example>
+    </Section>
+
+    <Section title="Render the deals from a list">
+        <p>The deals become data. <code>&#123;#for&#125;</code> renders a row per deal, keyed by
+            its id, and <code>&#123;#if&#125;</code> leaves a won deal out while the button is
+            off. See <a href="/abide-files/control-flow">Control flow</a>.</p>
+        <Example code={dealsList}><DealsList /></Example>
+    </Section>
+
+    <Section title="Move a row into a component of its own">
+        <p>A row gets a file. <code>props</code> takes what the list passes it, and
+            <code>&lt;slot /&gt;</code> places the markup the list writes between its tags. See
+            <a href="/abide-files/props"><code>props</code></a> and
+            <a href="/abide-files/components">Components and slots</a>.</p>
+        <Example code={dealItem}>
+            <ul>
+                <DealItem name="Acme renewal" stage="proposal"><strong>$42K</strong></DealItem>
+            </ul>
+        </Example>
+    </Section>
+
+    <Section level={3} title="Write the row as a tag in the list">
+        <p>Import the file and write it as a tag. The amount between its tags lands in its
+            slot.</p>
+        <Example code={dealsChild}><DealsChild /></Example>
+    </Section>
+
+    <Section title="Load the deals from the server">
+        <p>The deals move into a <code>&lt;script server&gt;</code>, which never reaches the
+            browser. The <a href="/handlers/get"><code>GET</code></a> declared there is called by
+            name from the component's <code>&lt;script&gt;</code>, and
+            <a href="/reactive/memo"><code>memo</code></a> holds what it answers. See
+            <a href="/abide-files/blocks">Script and style</a>.</p>
+        <Example code={dealsServer}><DealsServer /></Example>
+    </Section>
+
+    <Section title="Style the list without touching the page">
+        <p>A <code>&lt;style&gt;</code> block reaches only the markup of its own file, so a bare
+            <code>ul</code> selector drops this list's bullets and no other list's on this
+            page.</p>
+        <Example code={dealsStyled}><DealsStyled /></Example>
+    </Section>
+</Doc>

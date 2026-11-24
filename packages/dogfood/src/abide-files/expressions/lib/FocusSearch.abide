@@ -1,0 +1,8 @@
+<script>
+import { reactive } from '@abide/abide'
+
+const search = reactive<HTMLInputElement | undefined>(undefined)
+</script>
+
+<input type="search" bind:element={search}>
+<button onclick={() => search?.focus()}>Find a contact</button>

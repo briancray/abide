@@ -1,0 +1,13 @@
+<script>
+import { memo, reactive } from '@abide/abide'
+
+let stage = reactive('lead')
+let owner = reactive('ada')
+const label = memo(() => `${stage} (${owner.peek()})`)
+</script>
+
+<p>{label}</p>
+<div class="row">
+    <button onclick={() => (owner = 'grace')}>Hand to Grace</button>
+    <button onclick={() => (stage = 'won')}>Win</button>
+</div>

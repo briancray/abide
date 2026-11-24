@@ -1,0 +1,21 @@
+<script>
+import { scrollEdges } from '@abide/abide'
+
+const DEALS = [
+    'Engine renewal',
+    'Loom retrofit',
+    'Difference engine',
+    'Punch card supply',
+    'Mill expansion',
+    'Store upgrade',
+    'Printer pilot',
+]
+</script>
+
+<ol
+    class="h-24 overflow-y-auto data-[scrollable~=top]:mask-t-from-70%
+        data-[scrollable~=bottom]:mask-b-from-70%"
+    {...scrollEdges()}
+>
+    {#for deal of DEALS key deal}<li>{deal}</li>{/for}
+</ol>

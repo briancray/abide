@@ -1,0 +1,9 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let name = reactive('Ada Lovelace')
+</script>
+
+<h4>{name}</h4>
+<a href="mailto:ada@example.com" title="Email {name}">ada@example.com</a>
+<button onclick={() => (name = 'Ada King')}>Rename</button>

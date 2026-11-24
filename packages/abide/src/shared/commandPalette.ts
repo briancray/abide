@@ -165,6 +165,8 @@ export function commandPalette(
             },
             'aria-autocomplete': 'list',
             'aria-expanded': 'true',
+            // 49.17 — the list shows while the palette does.
+            'data-open': '',
             'aria-controls': listId,
             get 'aria-activedescendant'() {
                 return list.activeId

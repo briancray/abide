@@ -6,6 +6,8 @@ import Section from '#src/lib/Section.abide'
 
 import SavePhone from './lib/SavePhone.abide'
 import savePhone from './lib/SavePhone.abide' with { type: 'text' }
+import ToneEdges from './lib/ToneEdges.abide'
+import toneEdges from './lib/ToneEdges.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -159,5 +161,11 @@ import savePhone from './lib/SavePhone.abide' with { type: 'text' }
                 {/for}
             </div>
         `} />
+    </Section>
+
+    <Section level={3} title="Edge an error's notice in red">
+        <p>Each notice carries its tone as <code>data-tone</code>: <code>info</code>,
+            <code>success</code> or <code>error</code>.</p>
+        <Example code={toneEdges}><ToneEdges /></Example>
     </Section>
 </Doc>

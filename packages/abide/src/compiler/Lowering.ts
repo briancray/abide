@@ -249,6 +249,12 @@ export class Lowering {
         return this.holdsRead(holder, (read) => read.item === item)
     }
 
+    /** 32.111 — whether a position reads `block`'s index. */
+    readsIndex(holder: object, block: object): boolean {
+        const item = this.itemOf(block)
+        return this.holdsRead(holder, (read) => read.index === item)
+    }
+
     /**
      * 32.67 — the names a row reads its item through, in the `{#for}`'s scope: its pattern's names,
      * or the one name.
@@ -499,9 +505,8 @@ export class Lowering {
     }
 
     private isNested(read: Read): boolean {
-        return (
-            read.item !== -1 && this.itemModes.get(read.item)?.mode === 'nested'
-        )
+        const item = read.item !== -1 ? read.item : read.index
+        return item !== -1 && this.itemModes.get(item)?.mode === 'nested'
     }
 
     /**
@@ -626,8 +631,9 @@ export class Lowering {
             const current = reads[read] as Read
             if (current.start >= to) break
             if (current.start < at || current === skip) continue
-            // 32.67 — a row's item is the value wherever its row is not being mounted.
-            if (current.item !== -1) {
+            // 32.67 — a row's item is the value wherever its row is not being mounted. 32.111 —
+            // and so is its index.
+            if (current.item !== -1 || current.index !== -1) {
                 const rewritten = this.itemRead(current)
                 if (rewritten === undefined) continue
                 copy(current.from)
@@ -769,10 +775,23 @@ export class Lowering {
      * cell's read everywhere else in it.
      */
     private itemRead(read: Read): string | undefined {
-        const reading = this.itemModes.get(read.item)
+        const reading = this.itemModes.get(
+            read.item !== -1 ? read.item : read.index,
+        )
         if (reading === undefined) return undefined
         const { mode, record, uses } = reading
         const spelled = this.projection.text.slice(read.start, read.end)
+        // 32.111 — THE INDEX IS WHERE THE ROW STANDS NOW, which the record's `at` holds: a listener
+        // reads it there when it runs, and everything that binds reads it through the row's index
+        // cell, which a reconcile writes only for a row it moved.
+        if (read.index !== -1) {
+            uses.record += 1
+            const value =
+                this.recording === 'listener'
+                    ? `${record}.at`
+                    : `${this.use('rowIndex')}(${record})()`
+            return read.shape === 'shorthand' ? `${spelled}: ${value}` : value
+        }
         let value = `${spelled}()`
         if (
             this.recording === 'listener' ||

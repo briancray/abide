@@ -199,6 +199,7 @@ export async function readsIn(
         shadowPath,
         positions,
         new Set(projection.items.values()),
+        projection.indexes,
     )
     const configs = configReads(checker, abide, sourceFile, projection.servers)
     // No name is no round trip to ask about none.
@@ -618,12 +619,14 @@ async function proveSlots(
 ): Promise<void> {
     // Reads are unsorted here; a position holding one is not asked about. A `raw` callee is the
     // framework's name rather than a read of the page's, and `provePosition` exempts its call. A
-    // row's item (32.67) is the value on the server, and the client's `Lowering.isLive` binds it.
+    // row's item (32.67) and its index (32.111) are values on the server, and the client's
+    // `Lowering.isLive` binds them.
     const read = (span: Span): boolean => {
         for (const one of reads)
             if (
                 one.shape !== 'raw' &&
                 one.item === -1 &&
+                one.index === -1 &&
                 one.start >= span.start &&
                 one.start < span.end
             )
@@ -1138,18 +1141,33 @@ async function rowReads(
     positions: PositionTable,
     /** Where each `{#for}` row's item binding starts. */
     items: Set<number>,
+    /** 32.111 — where each `{#for}` row's index binding starts. */
+    indexes: Set<number>,
 ): Promise<Read[]> {
     const reads: Read[] = []
     if (items.size === 0) return reads
     const bound: Node[] = []
     const loops: Node[] = []
+    /** Per bound name, whether it is the row's index rather than a name of its item. */
+    const indexNames: boolean[] = []
     const visit = (node: Node): void => {
         const declared = rowItemOf(node, items)
         if (declared !== undefined)
             patternNames(declared, (name) => {
                 bound.push(name)
                 loops.push(node)
+                indexNames.push(false)
             })
+        // The index is the loop body's first declaration, which `projectShadow` writes for a
+        // block that names one.
+        if (isVariableDeclaration(node) && indexes.has(node.name.getStart())) {
+            const loop = rowLoopOf(node, items)
+            if (loop !== undefined) {
+                bound.push(node.name)
+                loops.push(loop)
+                indexNames.push(true)
+            }
+        }
         node.forEachChild(visit)
     }
     sourceFile.forEachChild(visit)
@@ -1171,7 +1189,8 @@ async function rowReads(
                 continue
             const read = classifyPropRead(node)
             if (read === undefined) continue
-            read.item = item
+            if (indexNames[at] === true) read.index = item
+            else read.item = item
             reads.push(read)
         }
     }

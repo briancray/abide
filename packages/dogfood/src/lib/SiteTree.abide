@@ -1,0 +1,189 @@
+<script server>
+// `node:fs` for a handler file's text, read synchronously inside the walk.
+import { existsSync, readFileSync } from 'node:fs'
+
+import { GET, request } from '@abide/abide/server'
+
+let crm: string | undefined
+
+/** The CRM's `src`, found by walking up from this module to the docs app's `examples`. */
+function crmSource(): string {
+    if (crm !== undefined) return crm
+    let directory = import.meta.dir
+    while (!existsSync(`${directory}/examples/crm/src/index.abide`)) {
+        const parent = directory.slice(0, directory.lastIndexOf('/'))
+        if (parent === '' || parent === directory)
+            throw new Error('docs: no CRM above the docs app')
+        directory = parent
+    }
+    crm = `${directory}/examples/crm/src`
+    return crm
+}
+
+const DIRECTORY = /^(?:[\w-]+\/)*[\w-]*$/
+const METHOD = /export default (GET|POST|PUT|PATCH|DELETE)\b/
+
+type Entry = {
+    path: string
+    role: string
+    address: string
+    link: boolean
+    /** Where it is listed: what wraps a route, then what answers at it, then what is no address. */
+    rank: number
+}
+
+// The address a file's path spells (23.14): its directories, then its name without the extension,
+// an `index`, a `layout` or an `error` standing for its directory.
+function addressOf(path: string): string {
+    const parts = path.split('/')
+    const file = parts.pop() as string
+    if (!['index.abide', 'layout.abide', 'error.abide'].includes(file))
+        parts.push(file.replace(/\.(?:abide|handler\.ts)$/, ''))
+    return `/${parts.join('/')}`
+}
+
+// EACH FILE OF ONE DIRECTORY OF THE CRM, and what its place and its name make it: a page, a layout or
+// an error page at its address, a handler answering a method there, a matcher, a test — and a `lib`
+// directory, which is no address, as one line.
+const filesUnder = GET(async ({ directory }: { directory: string }) => {
+    if (!DIRECTORY.test(directory))
+        throw new Error(`docs: ${directory} is not a directory of the CRM`)
+    const root = crmSource()
+    const entries: Entry[] = []
+    const fenced = new Map<string, number>()
+    const glob = new Bun.Glob(directory === '' ? '*/**' : `${directory}/**`)
+    const paths = [...glob.scanSync({ cwd: root, onlyFiles: true })].sort()
+    if (directory === '')
+        paths.unshift(
+            ...[
+                ...new Bun.Glob('*').scanSync({ cwd: root, onlyFiles: true }),
+            ].sort(),
+        )
+    for (const path of paths) {
+        const fence = /^(.*?\b(?:lib|public))\//.exec(path)?.[1]
+        if (fence !== undefined && fence.endsWith('lib')) {
+            fenced.set(fence, (fenced.get(fence) ?? 0) + 1)
+            continue
+        }
+        const name = path.slice(path.lastIndexOf('/') + 1)
+        if (fence !== undefined)
+            entries.push({
+                path,
+                role: 'a public file',
+                rank: 5,
+                address: path.slice(fence.length),
+                link: false,
+            })
+        else if (name === 'layout.abide')
+            entries.push({
+                path,
+                role: 'a layout around',
+                rank: 0,
+                address: addressOf(path),
+                link: false,
+            })
+        else if (name === 'error.abide')
+            entries.push({
+                path,
+                role: 'the error page for',
+                rank: 2,
+                address: addressOf(path),
+                link: false,
+            })
+        else if (name.endsWith('.abide'))
+            entries.push({
+                path,
+                role: 'a page at',
+                rank: 1,
+                address: addressOf(path),
+                link: !path.includes('['),
+            })
+        else if (name.endsWith('.handler.ts')) {
+            const method =
+                METHOD.exec(readFileSync(`${root}/${path}`, 'utf8'))?.[1] ??
+                'GET'
+            entries.push({
+                path,
+                role: method,
+                rank: 3,
+                address: addressOf(path),
+                link: false,
+            })
+        } else if (name.endsWith('.param.ts'))
+            entries.push({
+                path,
+                role: 'the matcher',
+                rank: 4,
+                address: name.replace('.param.ts', ''),
+                link: false,
+            })
+        else if (name.endsWith('.test.ts'))
+            entries.push({
+                path,
+                role: 'a test',
+                rank: 7,
+                address: '',
+                link: false,
+            })
+    }
+    // A page is linked where it answers: one a rung refuses (an admin page to a reader signed out)
+    // or one this site does not serve is listed, and not offered as a link nobody could follow.
+    await Promise.all(
+        entries.map(async (entry) => {
+            if (!entry.link) return
+            const answer = await fetch(new URL(entry.address, request().url), {
+                method: 'HEAD',
+                redirect: 'manual',
+            })
+            entry.link = answer.ok
+        }),
+    )
+    for (const [fence, count] of fenced)
+        entries.push({
+            path: `${fence}/`,
+            role: `no address — ${count} files`,
+            rank: 6,
+            address: '',
+            link: false,
+        })
+    entries.sort((left, right) =>
+        left.rank !== right.rank
+            ? left.rank - right.rank
+            : left.path < right.path
+              ? -1
+              : 1,
+    )
+    return entries
+})
+</script>
+
+<script>
+// A DIRECTORY OF THE CRM AS ITS ADDRESSES (40.44): each file, what its place and name make it, and
+// the address it answers at, read off the CRM's own files as the page renders — and every page at
+// an address that answers, served here as the CRM serves it (40.24), a link a reader can follow.
+import { memo, props, type RouteLiteral, url } from '@abide/abide'
+
+const { directory } = props<{ directory: string }>()
+const entries = memo(() => filesUnder({ directory }))
+</script>
+
+{#if entries}
+    <table class="site-tree">
+        <caption>src/{directory}{directory === '' ? '' : '/'}</caption>
+        <tbody>
+            {#for entry of entries}
+                <tr>
+                    <td><code>{entry.path.slice(directory === '' ? 0 : directory.length + 1)}</code></td>
+                    <td>{entry.role}</td>
+                    <td>
+                        {#if entry.link}
+                            <a href={url(entry.address as RouteLiteral)}><code>{entry.address}</code></a>
+                        {:else if entry.address}
+                            <code>{entry.address}</code>
+                        {/if}
+                    </td>
+                </tr>
+            {/for}
+        </tbody>
+    </table>
+{/if}

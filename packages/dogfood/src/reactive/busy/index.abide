@@ -1,7 +1,11 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import DimBoard from './lib/DimBoard.abide'
+import dimBoard from './lib/DimBoard.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -28,18 +32,8 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Dim the board while any stage reloads">
         <p>Pass a handler, and <code>busy</code> answers for every entry the tiles called it
-            with.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { busy } from '@abide/abide'
-            import getStage from './getStage.handler.ts'
-            import StageTile from './StageTile.abide'
-            </script>
-
-            <ul class={busy(getStage) ? 'opacity-40' : ''}>
-                {#for stage of ['lead', 'won']}<StageTile stage={stage} />{/for}
-            </ul>
-        `} />
+            with, so reloading one stage dims the whole board.</p>
+        <Example code={dimBoard}><DimBoard /></Example>
     </Section>
 
     <Section level={3} title="Ask about one stage, or one tag">

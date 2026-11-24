@@ -1,0 +1,15 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let email = reactive('ada@example.com')
+let subscribed = reactive(true)
+let stage = reactive('lead')
+</script>
+
+<div class="row">
+    <input type="email" bind:value={email}>
+    <label><input type="checkbox" bind:checked={subscribed}> subscribed</label>
+    <label><input type="radio" value="lead" bind:group={stage}> lead</label>
+    <label><input type="radio" value="won" bind:group={stage}> won</label>
+</div>
+<p>{email} · {subscribed ? 'subscribed' : 'unsubscribed'} · {stage}</p>

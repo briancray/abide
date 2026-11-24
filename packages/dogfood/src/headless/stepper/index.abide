@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import DealSeats from './lib/DealSeats.abide'
 import dealSeats from './lib/DealSeats.abide' with { type: 'text' }
+import DimAtLimit from './lib/DimAtLimit.abide'
+import dimAtLimit from './lib/DimAtLimit.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -33,5 +35,11 @@ import dealSeats from './lib/DealSeats.abide' with { type: 'text' }
             field is left. The buttons stand outside the tab order, since the
             field holds the keys.</p>
         <Example code={dealSeats}><DealSeats /></Example>
+    </Section>
+
+    <Section level={3} title="Dim a button at the end of the range">
+        <p><code>increment</code> is disabled at <code>max</code> and <code>decrement</code> at
+            <code>min</code>.</p>
+        <Example code={dimAtLimit}><DimAtLimit /></Example>
     </Section>
 </Doc>

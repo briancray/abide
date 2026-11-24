@@ -1,0 +1,9 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let phone = reactive('', {
+    transform: (typed) => typed.replace(/\D/g, ''),
+})
+</script>
+
+<input bind:value={phone} placeholder="(415) 555-0132">

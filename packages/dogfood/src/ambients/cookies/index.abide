@@ -1,6 +1,7 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Exchange from '#src/lib/Exchange.abide'
 import Section from '#src/lib/Section.abide'
 </script>
 
@@ -54,6 +55,13 @@ import Section from '#src/lib/Section.abide'
                 })
             })
         `} />
+        <p>The CRM's, posted when this page loaded. The answer has no body, and carries the
+            cookie:</p>
+        <Exchange
+            method="POST"
+            path="/account/rememberPipeline"
+            body={'{ "pipeline": "enterprise" }'}
+         />
     </Section>
 
     <Section level={3} title="Forget a cookie">

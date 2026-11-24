@@ -1,0 +1,21 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const getForecast = GET(async () => {
+    await Bun.sleep(500)
+    return Math.round(42_000 * (0.9 + Math.random() * 0.2))
+})
+</script>
+
+<script>
+import { memo } from '@abide/abide'
+
+const forecast = memo(() => getForecast())
+</script>
+
+{#if forecast.ready()}
+    <strong>${forecast}</strong>
+{:else}
+    <p>Adding up the pipeline…</p>
+{/if}
+<button onclick={() => forecast.refresh()}>Reload</button>

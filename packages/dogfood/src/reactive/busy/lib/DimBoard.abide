@@ -1,0 +1,23 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const COUNTS: Record<string, number> = { lead: 3, won: 2 }
+
+const getStage = GET(async ({ stage }: { stage: string }) => {
+    await Bun.sleep(600)
+    return COUNTS[stage] ?? 0
+})
+</script>
+
+<script>
+import { busy, memo, refresh } from '@abide/abide'
+
+const lead = memo(() => getStage({ stage: 'lead' }))
+const won = memo(() => getStage({ stage: 'won' }))
+</script>
+
+<ul class={busy(getStage) ? 'tiles opacity-40' : 'tiles'}>
+    <li>lead: {lead}</li>
+    <li>won: {won}</li>
+</ul>
+<button onclick={() => refresh(getStage, { stage: 'won' })}>Reload won</button>

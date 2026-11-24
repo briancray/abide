@@ -1,0 +1,14 @@
+<script module>
+import { reactive } from '@abide/abide'
+
+export let opened = reactive(0)
+</script>
+
+<script>
+opened += 1
+const position = opened
+let calls = reactive(0)
+</script>
+
+<li>#{position} · {calls} logged
+    <button onclick={() => (calls += 1)}>Log a call</button></li>

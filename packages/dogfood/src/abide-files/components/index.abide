@@ -1,7 +1,18 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import Card from './lib/Card.abide'
+import card from './lib/Card.abide' with { type: 'text' }
+import dealList from './lib/DealList.abide' with { type: 'text' }
+import DealNotes from './lib/DealNotes.abide'
+import dealNotes from './lib/DealNotes.abide' with { type: 'text' }
+import PipelineRows from './lib/PipelineRows.abide'
+import pipelineRows from './lib/PipelineRows.abide' with { type: 'text' }
+import StageBadges from './lib/StageBadges.abide'
+import stageBadges from './lib/StageBadges.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -32,68 +43,28 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Wrap a contact's details in a shared card">
         <p>Write <code>&lt;Card title="Ada"&gt;…&lt;/Card&gt;</code> and the markup between the
             tags renders where the card puts <code>&lt;slot/&gt;</code>.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { props } from '@abide/abide'
-            const { title } = props<{ title: string }>()
-            </script>
-
-            <section class="card">
-                <h2>{title}</h2>
-                <slot />
-            </section>
-        `} />
+        <Example code={card}>
+            <Card title="Ada Lovelace"><p>ada@example.com</p></Card>
+        </Example>
     </Section>
 
     <Section level={3} title="Show a fallback when a caller passes no children">
         <p>The markup inside <code>&lt;slot&gt;</code> renders only where the caller wrote nothing
             between the tags.</p>
-        <Code language="abide" caption="abide" code={`
-            <aside class="notes">
-                <slot>No notes on this deal yet.</slot>
-            </aside>
-        `} />
+        <Example code={dealNotes}><DealNotes /></Example>
     </Section>
 
     <Section level={3} title="Name a row's markup inside the file that renders the list">
         <p><code>&#123;#component&#125;</code> declares a component inline, closed over the file's
             values, for markup worth naming but not worth a file.</p>
-        <Code language="abide" caption="abide" code={`
-            {#component Stage({ deal }: { deal: Deal })}
-                <span class="badge">{deal.stage}</span>
-            {/component}
-
-            {#for deal of deals key deal.id}
-                <li>{deal.name} <Stage deal={deal} /></li>
-            {/for}
-        `} />
+        <Example code={stageBadges}><StageBadges /></Example>
     </Section>
 
     <Section level={3} title="Hand a list component the markup of each row">
         <p>An inline component written between a component's tags is passed to it as the prop its
             name spells. Here <code>DealList.abide</code> takes a <code>Row</code> and renders it
-            for each deal, and the page using it writes what a row holds.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { props } from '@abide/abide'
-            const { deals, Row } = props<{
-                deals: Deal[]
-                Row(props: { deal: Deal }): unknown
-            }>()
-            </script>
-
-            <ul>
-                {#for deal of deals key deal.id}
-                    <li><Row deal={deal} /></li>
-                {/for}
-            </ul>
-        `} />
-        <Code language="abide" caption="abide" code={`
-            <DealList deals={deals}>
-                {#component Row({ deal }: { deal: Deal })}
-                    <strong>{deal.name}</strong> {deal.stage}
-                {/component}
-            </DealList>
-        `} />
+            for each deal, and the file using it writes what a row holds.</p>
+        <Code language="abide" caption="abide" code={dealList} />
+        <Example code={pipelineRows}><PipelineRows /></Example>
     </Section>
 </Doc>

@@ -1,7 +1,11 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
+
+import MarkStale from './lib/MarkStale.abide'
+import markStale from './lib/MarkStale.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -22,16 +26,10 @@ import Section from '#src/lib/Section.abide'
     ]}
 >
     <Section level={3} title="Mark the forecast stale without reloading it now">
-        <p><code>invalidate</code> starts nothing. The next read of the forecast loads it again,
-            so a page nobody has open costs no request.</p>
-        <Code language="ts" caption="browser" code={`
-            import { invalidate } from '@abide/abide'
-            import getForecast from './getForecast.handler.ts'
-            import winDeal from './winDeal.handler.ts'
-
-            await winDeal()
-            invalidate(getForecast)
-        `} />
+        <p><code>invalidate</code> starts nothing, so marking the forecast stale does no work at
+            all. The next read loads it again: hide the forecast and show it, and a new figure
+            arrives.</p>
+        <Example code={markStale}><MarkStale /></Example>
     </Section>
 
     <Section level={3} title="Mark every value about one stage stale">

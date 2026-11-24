@@ -1,7 +1,20 @@
 <script>
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
+import Exchange from '#src/lib/Exchange.abide'
 import Section from '#src/lib/Section.abide'
+
+// The JSON-RPC body a model's client posts.
+const callExport = JSON.stringify(
+    {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'get_assistant_exportContacts', arguments: {} },
+    },
+    null,
+    2,
+)
 </script>
 
 <Doc
@@ -37,6 +50,8 @@ import Section from '#src/lib/Section.abide'
                 clients: { mcp: false },
             })
         `} />
+        <p>A model calling the CRM's export as a tool, and the CRM's answer:</p>
+        <Exchange method="POST" path="/__abide/mcp" body={callExport} />
     </Section>
 
     <Section level={3} title="Keep a partner webhook out of every page">

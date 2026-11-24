@@ -3,6 +3,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import MarkSteps from './lib/MarkSteps.abide'
+import markSteps from './lib/MarkSteps.abide' with { type: 'text' }
 import NewDeal from './lib/NewDeal.abide'
 import newDeal from './lib/NewDeal.abide' with { type: 'text' }
 </script>
@@ -30,5 +32,11 @@ import newDeal from './lib/NewDeal.abide' with { type: 'text' }
             going back to it. <code>next</code> waits on <code>valid</code> for the step on, and
             <code>progress</code> is a <code>meter</code> of how far it has come.</p>
         <Example code={newDeal}><NewDeal /></Example>
+    </Section>
+
+    <Section level={3} title="Mark the steps behind you and the one you are on">
+        <p>A step behind the current one carries <code>data-done</code>, and the current one
+            <code>aria-current="step"</code>.</p>
+        <Example code={markSteps}><MarkSteps /></Example>
     </Section>
 </Doc>

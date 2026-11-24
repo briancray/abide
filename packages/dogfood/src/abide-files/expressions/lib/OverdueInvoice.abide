@@ -1,0 +1,11 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let paid = reactive(false)
+const share = 0.6
+</script>
+
+<p class:text-bad={!paid} style:width="{share * 100}%">
+    Invoice 1042 · $4,200 {paid ? 'paid' : 'overdue'}
+</p>
+<button onclick={() => (paid = !paid)}>Toggle paid</button>

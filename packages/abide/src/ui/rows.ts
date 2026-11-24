@@ -39,6 +39,15 @@ export type Row = {
     /** Rewrites the row's slots that read its item alone (`RowBuilders.update`). */
     update: (row: Row, at: number) => void
     /**
+     * The row's index as a cell (`rowIndex`), or null where nothing the row binds reads it.
+     *
+     * 32.111 — made by the first binding that reads it, so a row whose index nothing binds
+     * allocates nothing for it.
+     */
+    index: (() => unknown) | null
+    /** Rewrites the row's slots that read its index alone (`RowBuilders.reindex`). */
+    reindex: (row: Row, at: number) => void
+    /**
      * The row's first node: its element, or its `ROW_OPEN` anchor where the body has several —
      * the start of a range, not the nodes `make` handed back.
      */
@@ -78,6 +87,8 @@ export type RowBuilders = {
     mount: (row: Row, at: number) => Scope
     /** 32.67 — rewrites, from `row.data`, the slots `make` wrote from the item alone. */
     update: (row: Row, at: number) => void
+    /** 32.111 — rewrites, from `at`, the slots `make` wrote from the index alone. */
+    reindex: (row: Row, at: number) => void
 }
 
 /** Answers the builders a row is made and mounted by; called once per row (14.8). */
@@ -207,6 +218,7 @@ export function makeRow(
     // 14.8 — set up ONCE for the row, and the same builders make it and mount it.
     const builders = setUp(row, at)
     row.update = builders.update
+    row.reindex = builders.reindex
     const nodes = builders.make(parent, row, at)
     for (const node of nodes) parent.insertBefore(node, before)
     row.node = nodes[0] as ChildNode
@@ -229,6 +241,7 @@ export function paintedRow(
     const row = newRow(key, data, node, at)
     const builders = setUp(row, at)
     row.update = builders.update
+    row.reindex = builders.reindex
     row.scope = builders.mount(row, at)
     return row
 }
@@ -254,6 +267,30 @@ export function rowCell(row: Row): () => unknown {
 export function itemOf(row: Row): unknown {
     const item = row.item
     return item === null ? row.data : item()
+}
+
+/**
+ * The row's index as a cell its bindings read, made on the first ask (32.111).
+ */
+export function rowIndex(row: Row): () => unknown {
+    let index = row.index
+    if (index === null) {
+        index = rowItem(row.at)
+        row.index = index
+    }
+    return index
+}
+
+/**
+ * Moves a kept row to `at` in the list (32.111): its slots reading the index are rewritten, and
+ * what binds the index wakes.
+ *
+ * Called only for a row whose position changed, so a row that stayed where it was runs nothing.
+ */
+export function reindexRow(row: Row, at: number): void {
+    row.at = at
+    row.reindex(row, at)
+    if (row.index !== null) moveItem(row.index, at)
 }
 
 /**
@@ -286,6 +323,8 @@ function newRow(key: unknown, data: unknown, node: ChildNode, at: number): Row {
         data,
         item: null,
         update: noUpdate,
+        index: null,
+        reindex: noUpdate,
         node,
         // A `Scope` rather than `undefined` until the mount returns, so the field holds one class
         // for the record's whole life.

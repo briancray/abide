@@ -1,0 +1,32 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const DEALS = [
+    { id: 'd1', name: 'Acme renewal', stage: 'proposal', value: 42 },
+    { id: 'd2', name: 'Hopper onboarding', stage: 'won', value: 18 },
+    { id: 'd3', name: 'Lovelace pilot', stage: 'lead', value: 7 },
+]
+const listDeals = GET(() => DEALS)
+</script>
+
+<script>
+import { memo, reactive } from '@abide/abide'
+
+import DealItem from './DealItem.abide'
+
+const deals = memo(() => listDeals())
+let showWon = reactive(false)
+</script>
+
+<button onclick={() => (showWon = !showWon)}>
+    {showWon ? 'Hide won deals' : 'Show won deals'}
+</button>
+<ul>
+    {#for deal of deals key deal.id}
+        {#if showWon || deal.stage !== 'won'}
+            <DealItem name={deal.name} stage={deal.stage}>
+                <strong>${deal.value}K</strong>
+            </DealItem>
+        {/if}
+    {/for}
+</ul>

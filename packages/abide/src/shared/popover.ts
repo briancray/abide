@@ -63,6 +63,10 @@ export function popover(options: PopoverOptions = {}): PopoverParts {
         get 'aria-expanded'() {
             return open() ? 'true' : 'false'
         },
+        // 49.17
+        get 'data-open'() {
+            return open() ? '' : undefined
+        },
     }
     return {
         id,
@@ -72,6 +76,10 @@ export function popover(options: PopoverOptions = {}): PopoverParts {
             'aria-controls': id,
             get 'aria-expanded'() {
                 return open() ? 'true' : 'false'
+            },
+            // 49.17
+            get 'data-open'() {
+                return open() ? '' : undefined
             },
             onpointerdown: () => {
                 openAtPress = open.peek() === true

@@ -13,7 +13,8 @@ number rather than restating it, because a second copy drifts and only one of th
 * `docs/BRAND.md` — positioning, voice, vocabulary, visual identity.
 
 BEFORE WRITING A DOCUMENTATION PAGE, read RULEBOOK 40 and BRAND. 40 is the docs system — a page
-per export or construct, in one order (RULEBOOK 40.2, 40.9), one example per BEHAVIOR TAUGHT
+per export or construct, in its group's order (RULEBOOK 40.2, 40.9), proved in its group's form
+(RULEBOOK 40.40), a guide where a group's names work together (RULEBOOK 40.39), one example per BEHAVIOR TAUGHT
 (RULEBOOK 40.12), and what a page's sliced Tests guarantee (RULEBOOK 40.15-40.18) —
 and BRAND is the voice, the vocabulary, and the register of a title against a nav label.
 

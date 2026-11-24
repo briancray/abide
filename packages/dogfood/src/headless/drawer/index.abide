@@ -7,6 +7,8 @@ import DealSheet from './lib/DealSheet.abide'
 import dealSheet from './lib/DealSheet.abide' with { type: 'text' }
 import FilterDrawer from './lib/FilterDrawer.abide'
 import filterDrawer from './lib/FilterDrawer.abide' with { type: 'text' }
+import GrabberDragged from './lib/GrabberDragged.abide'
+import grabberDragged from './lib/GrabberDragged.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -42,5 +44,10 @@ import filterDrawer from './lib/FilterDrawer.abide' with { type: 'text' }
             Dragged below every stop, it closes. Without <code>stops</code> it rests where it
             is dropped. Give <code>modal: false</code> to keep the page behind it usable.</p>
         <Example code={dealSheet}><DealSheet /></Example>
+    </Section>
+
+    <Section level={3} title="Widen the grabber while the sheet is dragged">
+        <p>The handle carries <code>data-dragging</code> from the press to the release.</p>
+        <Example code={grabberDragged}><GrabberDragged /></Example>
     </Section>
 </Doc>

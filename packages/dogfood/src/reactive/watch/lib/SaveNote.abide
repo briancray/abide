@@ -1,0 +1,22 @@
+<script server>
+import { POST } from '@abide/abide/server'
+
+const saveNote = POST(({ note }: { id: string; note: string }) => note)
+</script>
+
+<script>
+import { reactive, watch } from '@abide/abide'
+
+let note = reactive('')
+let saved = reactive('')
+watch(() => {
+    const text = note
+    const timer = setTimeout(async () => {
+        saved = await saveNote({ id: 'd2', note: text })
+    }, 500)
+    return () => clearTimeout(timer)
+})
+</script>
+
+<textarea bind:value={note}></textarea>
+<p>Saved: {saved}</p>

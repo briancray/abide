@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import ContractPages from './lib/ContractPages.abide'
 import contractPages from './lib/ContractPages.abide' with { type: 'text' }
+import DimLastArrow from './lib/DimLastArrow.abide'
+import dimLastArrow from './lib/DimLastArrow.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -29,5 +31,10 @@ import contractPages from './lib/ContractPages.abide' with { type: 'text' }
             the carousel's parts inside it, and call <code>show(key)</code> to open it resting on
             that item. Escape and the backdrop close it, as they do any dialog.</p>
         <Example code={contractPages}><ContractPages /></Example>
+    </Section>
+
+    <Section level={3} title="Dim the arrow that has no page beyond">
+        <p><code>previous</code> is disabled on the first page and <code>next</code> on the last.</p>
+        <Example code={dimLastArrow}><DimLastArrow /></Example>
     </Section>
 </Doc>

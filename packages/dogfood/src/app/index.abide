@@ -1,0 +1,238 @@
+<script>
+import { url } from '@abide/abide'
+
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Exchange from '#src/lib/Exchange.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/app/create-app',
+        '/app/environment',
+        '/app/on-config',
+        '/app/on-start',
+        '/middleware/middleware',
+        '/app/on-principal',
+        '/app/on-refusal',
+        '/app/on-error',
+        '/app/on-health',
+        '/app/on-report',
+        '/app/on-stop',
+    ]}
+>
+    <Section title="A hook is a call in a handler file or a server script">
+        <p>Booting the CRM imports every handler file and every
+            <code>&lt;script server&gt;</code>, and each hook they call is filed at that
+            file's route. <code>abide start</code> then boots the app and binds the port.
+            <a href={url('/app/create-app')}><code>createApp</code></a> boots the same app with
+            no port, so a test asks it through <code>app.fetch</code>.</p>
+        <Code language="ts" caption="server" code={`
+            import { expect, test } from 'bun:test'
+            import { createApp } from '@abide/abide/server'
+
+            test('the pool is connected before the first request', async () => {
+                await using app = await createApp()
+                const answer = await app.fetch(
+                    new Request('http://crm.invalid/ops/getPool'),
+                )
+                const { connectedAt, upAt } = await answer.json()
+                expect(connectedAt <= upAt).toBe(true)
+            })
+        `} />
+    </Section>
+
+    <Section title="Settings resolve during the boot, and the environment wins">
+        <p><a href={url('/app/on-config')}><code>onConfig</code></a> gives a default, and a
+            deployment's environment overrides it.
+            <a href={url('/ambients/config')}><code>config()</code></a> reads the result. It is
+            resolved as the app boots rather than on the first request, so a setting a schema
+            refuses keeps the app from starting. See
+            <a href={url('/app/environment')}>Environment</a>.</p>
+        <Code language="ts" caption="server" code={`
+            import { config, GET, onConfig } from '@abide/abide/server'
+
+            onConfig(() => ({ RETRIES: 3 }))
+
+            export default GET(() => ({ retries: config().RETRIES }))
+        `} />
+        <p>The CRM's <code>.env</code> sets <code>RETRIES=5</code>. Its retry count, asked when
+            this page loaded:</p>
+        <Exchange path="/ops/getRetries" />
+    </Section>
+
+    <Section title="Connect the database before the first request, once per process">
+        <p><a href={url('/app/on-start')}><code>onStart</code></a> wraps the boot. Work before
+            <code>await start()</code> runs before the config is read and the routes are built,
+            and work after it once they are. It runs once per process, not per request, and
+            the port stays closed until it returns.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, onStart } from '@abide/abide/server'
+            import { pool } from './lib/pool.server.ts'
+
+            onStart(async (start) => {
+                await pool.connect()
+                await start()
+                pool.upAt = new Date().toISOString()
+            })
+
+            export default GET(() => ({
+                connectedAt: pool.connectedAt,
+                upAt: pool.upAt,
+            }))
+        `} />
+        <p>The CRM's pool, asked when this page loaded. It connected before the app came up,
+            and both times are the boot's, not this request's:</p>
+        <Exchange path="/ops/getPool" />
+    </Section>
+
+    <Section title="A request passes the middleware before the handler runs">
+        <p>The root layout's <a href={url('/middleware/middleware')}><code>middleware</code></a>
+            runs over every request before routing, and a handler's own runs after. A rung
+            that refuses answers in the handler's place, so the handler never runs. The CRM's
+            commission takes <a href={url('/middleware/signed-in')}><code>signedIn</code></a>.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, signedIn } from '@abide/abide/server'
+
+            export default GET(() => ({ amount: '$6,200' }), {
+                middleware: [signedIn],
+            })
+        `} />
+        <p>Asked by nobody signed in, the rung answers <code>401</code> as Problem
+            Details:</p>
+        <Exchange path="/account/getCommission" />
+    </Section>
+
+    <Section title="Look up who is calling at most once per request">
+        <p>The CRM's cookie holds only the member's id.
+            <a href={url('/app/on-principal')}><code>onPrincipal</code></a> turns the id into the
+            member the first time a request reads <code>principal</code>, and never again in
+            that request. A caller with no cookie is anonymous and the hook does not run.</p>
+        <Code language="ts" caption="server" code={`
+            import { onPrincipal } from '@abide/abide/server'
+            import { TEAM } from './lib/TEAM.server.ts'
+
+            onPrincipal((claims) => {
+                const { id } = claims as { id: string }
+                const member = TEAM.find((one) => one.id === id)
+                return member && { name: member.name, role: member.role }
+            })
+        `} />
+        <p>The CRM's contact shows its deal value to an admin. Asked signed out, no role was
+            resolved and the value is left out:</p>
+        <Exchange path="/account/getContact" />
+    </Section>
+
+    <Section title="A refusal is an answer, so no error hook hears the refusal">
+        <p>A handler that returns <a href={url('/reactive/refuse')}><code>refuse</code></a>
+            answers with that status as Problem Details. Nothing threw, so
+            <code>onError</code> stays quiet. The CRM's mailer is down, and its statement
+            refuses <code>502</code>.</p>
+        <Code language="ts" caption="server" code={`
+            import { POST, refuse } from '@abide/abide/server'
+
+            export default POST(({ id }: { id: string }) =>
+                refuse(502, 'the mailer refused the statement'),
+            )
+        `} />
+        <Exchange
+            method="POST"
+            path="/ops/sendStatement"
+            body={'{ "id": "c2" }'}
+         />
+    </Section>
+
+    <Section title="The browser hears every refusal through `onRefusal`">
+        <p><a href={url('/app/on-refusal')}><code>onRefusal</code></a> runs in the browser, not
+            on the server. It stays filed while the component that called it stands, and hears
+            the refusal any call on the page gets. The CRM asks for a sign-in again on a
+            <code>401</code>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { onRefusal, reactive } from '@abide/abide'
+
+            let signedOut = reactive(false)
+
+            onRefusal((refusal) => {
+                if (refusal.status === 401) signedOut = true
+            })
+            </script>
+
+            {#if signedOut}
+                <p class="status">Your session ended. Sign in again.</p>
+            {/if}
+        `} />
+    </Section>
+
+    <Section title="An unexpected throw reaches `onError`, and the caller gets a bare 500">
+        <p><a href={url('/app/on-error')}><code>onError</code></a> in the companies layout's
+            server script hears what a request under <code>/companies</code> throws, nearest
+            route first. The caller learns nothing of the cause.</p>
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { onError } from '@abide/abide/server'
+            import { tracker } from './lib/tracker.server.ts'
+
+            onError((error) => tracker.capture(error))
+            </script>
+
+            <slot />
+        `} />
+        <p>The CRM's export throws. The tracker got the message, and the caller got
+            this:</p>
+        <Exchange method="POST" path="/companies/exportCompanies" body={'{}'} />
+    </Section>
+
+    <Section title="The health check runs `onHealth` on every poll">
+        <p><a href={url('/app/on-health')}><code>onHealth</code></a> runs each time
+            <code>/__abide/health</code> is asked, so it reports the pool as it is now. Its
+            fields are merged over abide's baseline. See
+            <a href={url('/operating/health')}><code>health</code></a>.</p>
+        <Code language="abide" caption="abide" code={`
+            <script server>
+            import { onHealth } from '@abide/abide/server'
+            import { pool } from './pool.server.ts'
+
+            onHealth(() => ({ database: pool.connected ? 'connected' : 'closed' }))
+            </script>
+        `} />
+        <Exchange path="/__abide/health" />
+    </Section>
+
+    <Section title="A problem report a person sends reaches `onReport`">
+        <p>A person sends a report from the browser with
+            <a href={url('/operating/report')}><code>report</code></a>, and the server hands it
+            to <a href={url('/app/on-report')}><code>onReport</code></a>, its secrets taken out.
+            With no hook filed, the send is refused <code>501</code>. The CRM keeps each
+            summary for the browser that sent it.</p>
+        <Code language="ts" caption="server" code={`
+            import { onReport, principal } from '@abide/abide/server'
+
+            const received = new Map<string, string[]>()
+
+            onReport((report) => {
+                const caller = principal.caller()
+                const sent = received.get(caller) ?? []
+                received.set(caller, [...sent, report.summary])
+            })
+        `} />
+    </Section>
+
+    <Section title="Close the database pool after the last request drains">
+        <p><a href={url('/app/on-stop')}><code>onStop</code></a> runs once, on
+            <code>SIGTERM</code>, <code>Ctrl-C</code> or <code>App.stop</code>, after the app
+            stops taking requests and those in flight are answered. It mirrors
+            <code>onStart</code>: <code>await stop()</code> runs the hooks filed after yours
+            first.</p>
+        <Code language="ts" caption="server" code={`
+            import { onStop } from '@abide/abide/server'
+            import { pool } from './lib/pool.server.ts'
+
+            onStop(async (stop) => {
+                await stop()
+                await pool.close()
+            })
+        `} />
+    </Section>
+</Doc>

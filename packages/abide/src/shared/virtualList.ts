@@ -366,6 +366,10 @@ export function virtualList<Item>(
                 get 'aria-current'() {
                     return current() === section.label ? 'true' : undefined
                 },
+                // 49.17
+                get 'data-current'() {
+                    return current() === section.label ? '' : undefined
+                },
                 disabled: section.index === -1,
                 onclick: () => scrollTo(section.index),
             }),

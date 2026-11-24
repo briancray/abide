@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import ContactBio from './lib/ContactBio.abide'
 import contactBio from './lib/ContactBio.abide' with { type: 'text' }
+import FadeCut from './lib/FadeCut.abide'
+import fadeCut from './lib/FadeCut.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -29,5 +31,10 @@ import contactBio from './lib/ContactBio.abide' with { type: 'text' }
             <code>disclosure</code>'s, and the text is its region, cut short rather than
             hidden.</p>
         <Example code={contactBio}><ContactBio /></Example>
+    </Section>
+
+    <Section level={3} title="Fade the last line of a bio while it is cut">
+        <p>The text carries <code>data-clamped</code> while it is held to its lines.</p>
+        <Example code={fadeCut}><FadeCut /></Example>
     </Section>
 </Doc>

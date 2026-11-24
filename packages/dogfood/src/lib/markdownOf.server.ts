@@ -5,7 +5,7 @@
 // A READER FOR THE MARKUP `Doc` AND ITS PARTS WRITE, not for HTML at large: headings, prose, lists,
 // tables, and code under a caption.
 
-import { markdownAddressOf } from './sitePages.ts'
+import { isFramed, markdownAddressOf } from './sitePages.ts'
 import { VOID_ELEMENTS } from './VOID_ELEMENTS.ts'
 
 const ENTITIES: Record<string, string> = {
@@ -127,8 +127,20 @@ function inline(node: Node): string {
             return `**${inner()}**`
         case 'em':
             return `*${inner()}*`
-        case 'a':
-            return `[${inner()}](${twinOf(node.attributes.href ?? '')})`
+        case 'a': {
+            // A page of the CRM is served by the site alone (40.24), so a twin read where it lies
+            // keeps its words and drops a link nobody could follow.
+            const href = node.attributes.href ?? ''
+            const path = href.split(/[?#]/)[0] as string
+            if (
+                href.startsWith('/') &&
+                !href.startsWith('//') &&
+                !/\.\w+$/.test(path) &&
+                isFramed(path)
+            )
+                return inner()
+            return `[${inner()}](${twinOf(href)})`
+        }
         case 'br':
             return '\n'
         default:

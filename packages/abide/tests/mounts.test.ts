@@ -215,3 +215,34 @@ const names = list()
     expect(bundle).toContain('tools/users/list')
     expect(bundle.split('handler-body-marker').length - 1).toBe(0)
 }, 30_000)
+
+// 16.74, 23.19 — AND THE APP'S OWN PAGE IMPORTING A MOUNTED HANDLER FILE BY ITS PACKAGE'S NAME is handed
+// the wrapper too: the hook finds a handler file by where the import resolves, and a bare specifier
+// resolves as a relative one does. THE REVERT: pass over a specifier that is neither relative nor `#`
+// in `abideModules`' handler hook, as it once did; the bundle takes the file raw, abide's server
+// barrel with it, and the build exits 1 on `bun:sqlite` where 0 is due.
+test("the app's import of a mounted handler file by its package's name is the browser's wrapper — 16.74, 23.19", async () => {
+    const app = appFixture({
+        ...APP,
+        ...KIT,
+        'node_modules/admin-kit/admin/users/list.handler.ts': `import { GET } from '@abide/abide/server'
+
+export default GET(() => ['handler-body-marker'])
+`,
+        'index.abide': `<script>
+import list from 'admin-kit/admin/users/list.handler.ts'
+
+const names = list()
+</script>
+
+<p>{names}</p>`,
+    })
+    const built = await buildApp(app)
+    expect(built.exitCode, built.stderr).toBe(0)
+    const client = buildFiles(`${app}/.abide`).client
+    let bundle = ''
+    for (const chunk of new Bun.Glob('**/*.js').scanSync({ cwd: client }))
+        bundle += await Bun.file(`${client}/${chunk}`).text()
+    expect(bundle).toContain('tools/users/list')
+    expect(bundle.split('handler-body-marker').length - 1).toBe(0)
+}, 30_000)

@@ -1,0 +1,13 @@
+<script>
+import { reactive } from '@abide/abide'
+
+let showWon = reactive(false)
+</script>
+
+<button onclick={() => (showWon = !showWon)}>
+    {showWon ? 'Hide won deals' : 'Show won deals'}
+</button>
+<ul>
+    <li>Acme renewal</li>
+    <li>Hopper onboarding</li>
+</ul>

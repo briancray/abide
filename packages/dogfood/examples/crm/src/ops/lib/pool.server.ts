@@ -8,4 +8,7 @@ export const pool = {
         pool.connected = true
         pool.connectedAt = new Date().toISOString()
     },
+    async close(): Promise<void> {
+        pool.connected = false
+    },
 }

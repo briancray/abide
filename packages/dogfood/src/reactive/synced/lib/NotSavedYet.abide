@@ -1,0 +1,22 @@
+<script server>
+import { GET } from '@abide/abide/server'
+
+const getDeal = GET(({ id }: { id: string }) => ({
+    id,
+    name: 'Acme renewal',
+    stage: 'lead',
+}))
+</script>
+
+<script>
+import { memo, synced } from '@abide/abide'
+
+let deal = memo(() => getDeal({ id: 'd2' }))
+</script>
+
+<p>{deal.name}: {deal.stage}</p>
+<div class="row">
+    <button onclick={() => (deal = { ...deal, stage: 'won' })}>Win</button>
+    <button onclick={() => deal.refresh()}>Reload</button>
+</div>
+{#if !synced(deal)}<p class="status">Not saved yet</p>{/if}

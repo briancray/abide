@@ -1,0 +1,10 @@
+<script>
+const field = {
+    name: 'email',
+    type: 'email',
+    placeholder: 'ada@example.com',
+    required: true,
+}
+</script>
+
+<input {...field}>
