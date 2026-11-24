@@ -458,12 +458,6 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `invalidate` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Marks the selection stale. | 13.4, 13.6, 13.10, 13.12, 13.15, 13.17 |
 
-## `abortSignal`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `abortSignal` | `() => AbortSignal` | The signal that says stop to the work it is called in, from the innermost owner that work runs under. | 7.38, 7.39, 7.45, 7.46, 7.47, 7.48, 7.49 |
-
 ## `isReactive`
 
 | Name | Signature | Meaning | Rules |
@@ -1173,7 +1167,7 @@ type Reached = { readonly [REACHED]: true }
 | `csp` | `(sources?: Record<string, string[]>) => (next: (ctx?: { request: Request }) => Promise<Response>, ctx: { request: Request }) => Response \| Promise<Response>` | The rung that sets `content-security-policy`. | 29.1, 29.2, 29.5, 29.6, 29.7, 29.8 |
 | `csp.nonce` | `() => string` | This response's nonce, for the app's own inline script. | 29.3, 29.4, 29.9, 29.11 |
 
-# Request context
+# Ambients
 
 ## `request`
 
@@ -1254,6 +1248,12 @@ type Reached = { readonly [REACHED]: true }
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `isServer` | `() => boolean` | Whether the work running is a server's. | 22.11, 12.7, 23.7, 23.8 |
+
+## `abortSignal`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `abortSignal` | `() => AbortSignal` | The signal that says stop to the work it is called in, from the innermost owner that work runs under. | 7.38, 7.39, 7.45, 7.46, 7.47, 7.48, 7.49 |
 
 # Browser context
 
