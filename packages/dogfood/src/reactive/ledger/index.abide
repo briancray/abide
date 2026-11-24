@@ -116,6 +116,30 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
+    <Section level={3} title="Keep a day of presence pings">
+        <p><code>ttl</code> is an entry's life from its append, in milliseconds: past it the entry
+            is let go, and no read hands it on.</p>
+        <Code language="ts" caption="shared" code={`
+            import { ledger } from '@abide/abide'
+
+            const pings = ledger<string>('pings', { ttl: 86_400_000 })
+        `} />
+    </Section>
+
+    <Section level={3} title="Hear that a slow reader missed entries">
+        <p>A read whose next entry was let go before it got there errors with a refusal at status
+            410 naming what it missed, rather than stepping over it. A read from 0 starts at the
+            oldest entry kept.</p>
+        <Code language="ts" caption="shared" code={`
+            import { ledger } from '@abide/abide'
+
+            const pings = ledger<string>('pings', { retain: 1_000 })
+            const seen: string[] = []
+            // Errors with a 410 where the read fell behind what was kept.
+            for await (const ping of pings.read(seen.length)) seen.push(ping.entry)
+        `} />
+    </Section>
+
     <Section level={3} title="Keep only the last thousand events">
         <p><code>retain</code> lets go of every entry but the last ones as each is appended.</p>
         <Code language="ts" caption="shared" code={`

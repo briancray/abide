@@ -100,7 +100,10 @@ function logFace(table: string, log: () => string): LogStore {
                 if (seen !== undefined) return seen
             }
             const seq = (await lastIn(kept)) + 1
-            kept.put({ seq, at, entry: JSON.stringify(entry) }, [log(), seq])
+            kept.put({ seq, at, key, entry: JSON.stringify(entry) }, [
+                log(),
+                seq,
+            ])
             if (key !== undefined) keyed.put(seq, [log(), key])
             await new Promise<void>((done, failed) => {
                 transaction.oncomplete = () => done()
@@ -156,12 +159,21 @@ function logFace(table: string, log: () => string): LogStore {
         trim: async (through) => {
             if (typeof globalThis.indexedDB === 'undefined') return
             const db = await databaseWith(tables)
-            await requested(
-                db
-                    .transaction(entries, 'readwrite')
-                    .objectStore(entries)
-                    .delete(range(0, through)),
-            )
+            const transaction = db.transaction([entries, keys], 'readwrite')
+            const kept = transaction.objectStore(entries)
+            const keyed = transaction.objectStore(keys)
+            // 58.4 — the keys go with their entries.
+            const going = (await requested(kept.getAll(range(0, through)))) as {
+                key?: string
+            }[]
+            for (const record of going)
+                if (record.key !== undefined) keyed.delete([log(), record.key])
+            kept.delete(range(0, through))
+            await new Promise<void>((done, failed) => {
+                transaction.oncomplete = () => done()
+                transaction.onerror = () => failed(transaction.error)
+                transaction.onabort = () => failed(transaction.error)
+            })
         },
     }
 }

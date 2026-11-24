@@ -111,12 +111,30 @@ if ARGV[1] ~= '' then
   if seen then return tonumber(seen) end
 end
 local seq = redis.call('INCR', KEYS[1])
-redis.call('XADD', KEYS[2], '0-' .. seq, 'at', ARGV[2], 'entry', ARGV[3])
+redis.call('XADD', KEYS[2], '0-' .. seq, 'at', ARGV[2], 'key', ARGV[1], 'entry', ARGV[3])
 if ARGV[1] ~= '' then redis.call('HSET', KEYS[3], ARGV[1], seq) end
 return seq
 `
 
 /** 58.9 — the append face over the Stream at `<log()>:log` and its three keys beside it. */
+/**
+ * 58.4, 58.10 — a trim on the server as one step: the keys of every entry through `ARGV[1]` let go
+ * with their entries, so a key outlives no entry. KEYS: the log, the keys.
+ */
+const TRIM = `
+local going = redis.call('XRANGE', KEYS[1], '-', '0-' .. ARGV[1])
+for _, item in ipairs(going) do
+  local fields = item[2]
+  for index = 1, #fields, 2 do
+    if fields[index] == 'key' and fields[index + 1] ~= '' then
+      redis.call('HDEL', KEYS[2], fields[index + 1])
+    end
+  end
+end
+redis.call('XTRIM', KEYS[1], 'MINID', '0-' .. (tonumber(ARGV[1]) + 1))
+return #going
+`
+
 function logFace(redis: RedisClient, log: () => string): LogStore {
     return {
         append: async (entry, key, at) => {
@@ -168,10 +186,13 @@ function logFace(redis: RedisClient, log: () => string): LogStore {
             return Number((await redis.send('HGET', [cursors, cursor])) ?? 0)
         },
         trim: async (through) => {
-            await redis.send('XTRIM', [
-                `${log()}:log`,
-                'MINID',
-                `0-${through + 1}`,
+            const base = log()
+            await redis.send('EVAL', [
+                TRIM,
+                '2',
+                `${base}:log`,
+                `${base}:keys`,
+                String(through),
             ])
         },
     }

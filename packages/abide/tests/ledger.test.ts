@@ -140,3 +140,49 @@ test('retain keeps the last entries, and under one is refused — 58.10, 58.11',
     }
     expect(said).toBe('refused')
 })
+
+// 58.14 — `ttl` IS AN ENTRY'S LIFE FROM ITS APPEND: past it the entry goes, and a read hands on none
+// it let go. THE REVERT: drop `expire` from `append` and the read's pull, and `kept: a, b, c`.
+test('ttl lets an entry go once its life from the append has passed — 58.14', async () => {
+    const recent = ledger<string>(fresh(), { ttl: 30 })
+    await recent.append('a')
+    await recent.append('b')
+    await Bun.sleep(60)
+    await recent.append('c')
+    const kept = await taken(recent.read(0), 1)
+    expect(`kept: ${kept.map((logged) => logged.entry).join(', ')}`).toBe(
+        'kept: c',
+    )
+})
+
+// 58.15 — A READ PAST WHICH ENTRIES WERE LET GO SAYS SO rather than stepping over them, and a read
+// from 0 starts at the oldest kept. THE REVERT: drop the jump check in `read`, and the read from 1
+// hands on 4 as if nothing was missed.
+test('a read behind entries let go is refused, and a read from 0 is not — 58.15', async () => {
+    const recent = ledger<number>(fresh(), { retain: 2 })
+    for (let n = 1; n <= 5; n += 1) await recent.append(n)
+    let refusal: { status?: number; message?: string } | undefined
+    try {
+        await taken(recent.read(1), 1)
+    } catch (thrown) {
+        refusal = thrown as { status: number; message: string }
+    }
+    const fromStart = await taken(recent.read(0), 1)
+    expect(
+        `status: ${refusal?.status}, names 2 to 3: ${refusal?.message?.includes('2 to 3')}, from 0: ${fromStart[0]?.seq}`,
+    ).toBe('status: 410, names 2 to 3: true, from 0: 4')
+})
+
+// 58.16 — A KEY GOES WITH ITS ENTRY: once the entry kept under it is let go, an append under the key
+// is a new entry. THE REVERT: keep `keyed` through a trim, and `again: 1`.
+test('a key is forgotten with the entry kept under it — 58.16, 58.10', async () => {
+    const recent = ledger<string>(fresh(), { retain: 1 })
+    const first = await recent.append('save d2', { key: 'k1' })
+    await recent.append('save d3')
+    const again = await recent.append('save d2', { key: 'k1' })
+    // While entry 3 is kept, a resend under its key is that entry.
+    const resent = await recent.append('save d2', { key: 'k1' })
+    expect(`first: ${first}, again: ${again}, resent: ${resent}`).toBe(
+        'first: 1, again: 3, resent: 3',
+    )
+})

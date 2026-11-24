@@ -51,6 +51,13 @@ const visits = ledger<string>('visits', { store: store.indexedDB('visits') })
 </script>
 
 <main id="visits"><p id="head">{visits.head()}</p><button id="visit" onclick={() => visits.append('visit')}>visit</button></main>`,
+        'drafts/index.abide': `<script>
+import { ledger, store } from '@abide/abide'
+
+const drafts = ledger<string>('drafts', { store: store.indexedDB('drafts'), retain: 1 })
+</script>
+
+<main id="drafts"><p id="last">{drafts.head()}</p><button id="save" onclick={() => drafts.append('save', { key: 'k1' })}>save</button><button id="other" onclick={() => drafts.append('other')}>other</button></main>`,
     }))
 })
 
@@ -162,4 +169,19 @@ test('a ledger in store.indexedDB is kept, and another tab’s append is heard �
     await second.locator('#visit').click()
     await expect(second.locator('#head')).toHaveText('3')
     await expect(first.locator('#head')).toHaveText('3')
+})
+
+// 58.10, 58.16: IN INDEXEDDB A TRIM TAKES AN ENTRY'S KEY WITH IT. Saved under `k1`, then trimmed by
+// the next entry under `retain: 1`, a save under `k1` again is a new entry. THE REVERT: drop the key
+// deletes from the IndexedDB `trim`, and the third click answers the first entry — `last` stays 2.
+test('a trimmed IndexedDB ledger lets a key go with its entry — 58.10, 58.16', async ({
+    page,
+}) => {
+    await page.goto(`${base}/drafts`)
+    await page.locator('#save').click()
+    await expect(page.locator('#last')).toHaveText('1')
+    await page.locator('#other').click()
+    await expect(page.locator('#last')).toHaveText('2')
+    await page.locator('#save').click()
+    await expect(page.locator('#last')).toHaveText('3')
 })

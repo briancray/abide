@@ -6706,8 +6706,8 @@ settle to that number.
 
 58.3 An entry a `ledger`'s `schema` refuses MUST be kept nowhere, and `append` MUST reject.
 
-58.4 `append` given a `key` an entry was kept under MUST keep nothing, and settle to that entry's
-number.
+58.4 `append` given a `key` an entry still kept was appended under MUST keep nothing, and settle to
+that entry's number.
 
 58.5 `read` MUST hand on, in order, every entry numbered past `from`, 0 where none is given, and
 past the last entry MUST wait for the next rather than end.
@@ -6732,3 +6732,12 @@ number again, and MUST hand its waiting reads what the change appended.
 
 58.13 `store.redis` MUST look up an append's key, number its entry and keep it as one step on the
 server.
+
+58.14 Where `ttl` is given, an entry MUST be let go once `ttl` milliseconds have passed since it was
+appended, and `read` MUST NOT hand on an entry let go.
+
+58.15 A read that would hand on an entry numbered more than one past the last it handed on MUST
+error with a refusal at status 410 naming the entries it missed; a read from 0, or from a cursor
+never moved, MUST start at the oldest entry kept.
+
+58.16 An entry a `ledger` lets go MUST take the key it was appended under with it.

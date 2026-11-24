@@ -11,6 +11,7 @@
 // stops mid-entry finds that entry again — at least once, never skipped.
 
 import { type Reactive, reactive } from './reactive/index.ts'
+import { refuse } from './refuse.ts'
 import { runSchema, type Schema } from './Schema.ts'
 
 /** One entry of a ledger: its number in order from 1, when it was appended, and what it holds. */
@@ -34,6 +35,7 @@ export type LogStore = {
 export type LedgerOptions<Entry> = {
     store?: LogStore
     retain?: number
+    ttl?: number
     schema?: Schema<Entry>
 }
 
@@ -62,8 +64,36 @@ export function ledger<Entry>(
         throw new RangeError(
             `abide: ledger ${JSON.stringify(name)} retains at least one entry. RULEBOOK 58.11.`,
         )
+    const ttl = options?.ttl
     const schema = options?.schema as Schema<unknown> | undefined
     const head = reactive(0, { global: true })
+    // 58.14 — when the oldest entry kept was appended, where a scan has found it: no scan is made
+    // while it is inside `ttl`, so an append into a ledger whose head is fresh reads nothing.
+    let oldestAt: number | undefined
+    const expire = async (): Promise<void> => {
+        if (ttl === undefined) return
+        const cutoff = Date.now() - ttl
+        if (oldestAt !== undefined && oldestAt >= cutoff) return
+        let through = 0
+        oldestAt = Number.POSITIVE_INFINITY
+        for (;;) {
+            const page = await log.since(through)
+            if (page.length === 0) break
+            let kept: Logged<unknown> | undefined
+            for (const entry of page) {
+                if (entry.at >= cutoff) {
+                    kept = entry
+                    break
+                }
+                through = entry.seq
+            }
+            if (kept !== undefined) {
+                oldestAt = kept.at
+                break
+            }
+        }
+        if (through > 0) await log.trim(through)
+    }
     // Readers waiting on an entry past the last: woken by the next append in this process.
     const waiting = new Set<() => void>()
     let known: number | Promise<number> = log.last()
@@ -104,6 +134,8 @@ export function ledger<Entry>(
             // 58.10 — the oldest entries past `retain` go as the next is kept.
             if (retain !== undefined && seq > retain)
                 await log.trim(seq - retain)
+            if (oldestAt === Number.POSITIVE_INFINITY) oldestAt = Date.now()
+            await expire()
             for (const wake of [...waiting]) wake()
         }
         return seq
@@ -133,10 +165,23 @@ export function ledger<Entry>(
                         position = await log.position(cursor as string)
                     for (;;) {
                         if (cancelled) return
-                        if (buffered.length === 0)
+                        if (buffered.length === 0) {
+                            await expire()
                             buffered = await log.since(position)
+                        }
                         const next = buffered.shift()
                         if (next !== undefined) {
+                            // 58.15 — numbers have no gap (58.2), so a jump is entries let go: said,
+                            // not stepped over. A read from 0 starts at the oldest kept, whatever it is.
+                            if (position > 0 && next.seq > position + 1) {
+                                controller.error(
+                                    refuse(
+                                        410,
+                                        `ledger ${JSON.stringify(name)} let entries ${position + 1} to ${next.seq - 1} go before this read reached them. RULEBOOK 58.15.`,
+                                    ),
+                                )
+                                return
+                            }
                             position = next.seq
                             delivered = next.seq
                             controller.enqueue(next as Logged<Entry>)
@@ -188,6 +233,8 @@ export function ledger<Entry>(
  */
 function memoryLog(): LogStore {
     let entries: Logged<unknown>[] = []
+    // The key each entry was appended under, beside it, so a trim forgets its keys (58.4).
+    let keys: (string | undefined)[] = []
     // Where in `entries` the first entry still kept sits, and that entry's number.
     let offset = 0
     let first = 1
@@ -202,22 +249,31 @@ function memoryLog(): LogStore {
             }
             last += 1
             entries.push({ seq: last, at, entry })
+            keys.push(key)
             if (key !== undefined) keyed.set(key, last)
             return last
         },
-        since: (seq) => entries.slice(offset + Math.max(0, seq + 1 - first)),
+        since: (seq) => {
+            const from = offset + Math.max(0, seq + 1 - first)
+            return entries.slice(from, from + 256)
+        },
         last: () => last,
         position: (cursor, seq) => {
             if (seq !== undefined) cursors.set(cursor, seq)
             return cursors.get(cursor) ?? 0
         },
         trim: (through) => {
-            const drop = through + 1 - first
+            const drop = Math.min(through + 1 - first, entries.length - offset)
             if (drop <= 0) return
+            for (let index = offset; index < offset + drop; index += 1) {
+                const key = keys[index]
+                if (key !== undefined) keyed.delete(key)
+            }
             offset += drop
-            first = through + 1
+            first += drop
             if (offset * 2 > entries.length) {
                 entries = entries.slice(offset)
+                keys = keys.slice(offset)
                 offset = 0
             }
         },

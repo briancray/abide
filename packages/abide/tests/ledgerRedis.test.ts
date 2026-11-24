@@ -76,3 +76,24 @@ test.skipIf(URL === undefined)(
         two.close()
     },
 )
+
+test.skipIf(URL === undefined)(
+    'a trim lets a key go with its entry, on the server — 58.16, 58.10, 58.13',
+    async () => {
+        const name = `ledger-redis-trim-${Date.now()}`
+        const client = new RedisClient(URL as string)
+        const recent = ledger<string>(name, {
+            store: store.redis(client, name),
+            retain: 1,
+        })
+        const first = await recent.append('save d2', { key: 'k1' })
+        await recent.append('save d3')
+        const again = await recent.append('save d2', { key: 'k1' })
+        // While entry 3 is kept, a resend under its key is that entry.
+        const resent = await recent.append('save d2', { key: 'k1' })
+        expect(`first: ${first}, again: ${again}, resent: ${resent}`).toBe(
+            'first: 1, again: 3, resent: 3',
+        )
+        client.close()
+    },
+)
