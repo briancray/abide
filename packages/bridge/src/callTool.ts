@@ -42,18 +42,18 @@ type Session = {
 }
 
 /**
- * What `tool` of `server` answered `input`, its server named `name` in what it says.
+ * What `tool` of the server named `name`, run as `configured`, answered `input`.
  *
  * Throws where the server cannot be started or reached, or fails the protocol before the call.
  */
 export async function callTool(
     name: string,
-    server: unknown,
+    configured: unknown,
     tool: string,
     input: unknown,
     signal: AbortSignal,
 ): Promise<ToolAnswer> {
-    const configuration = server as ServerConfiguration
+    const configuration = configured as ServerConfiguration
     const type =
         configuration.type ??
         (configuration.command === undefined ? undefined : 'stdio')
@@ -252,7 +252,7 @@ async function helpedHeaders(
     if (configuration.headersHelper === undefined) return {}
     const child = Bun.spawn(['sh', '-c', configuration.headersHelper], {
         env: {
-            ...process.env,
+            ...Bun.env,
             CLAUDE_CODE_MCP_SERVER_NAME: name,
             CLAUDE_CODE_MCP_SERVER_URL: configuration.url as string,
         },

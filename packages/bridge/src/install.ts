@@ -54,11 +54,11 @@ process.exit(await open(process.argv[2] ?? '', import.meta.dir))
 `
 }
 
-/** Where `XDG_DATA_HOME` points, or its default under the visitor's home. */
-function dataHome(): string {
-    const declared = Bun.env.XDG_DATA_HOME
+/** Where the XDG `variable` points, or its default `underHome` the visitor's home. */
+function xdgDirectory(variable: string, underHome: string): string {
+    const declared = Bun.env[variable]
     return declared === undefined || declared === ''
-        ? `${Bun.env.HOME ?? ''}/.local/share`
+        ? `${Bun.env.HOME ?? ''}${underHome}`
         : declared
 }
 
@@ -87,9 +87,8 @@ export function withoutDefault(list: string): string {
 
 /** Unregisters the Linux desktop entry: no longer the scheme's default, and gone. */
 async function uninstallLinux(directory: string): Promise<void> {
-    const declared = Bun.env.XDG_CONFIG_HOME
     const list = Bun.file(
-        `${declared === undefined || declared === '' ? `${Bun.env.HOME ?? ''}/.config` : declared}/mimeapps.list`,
+        `${xdgDirectory('XDG_CONFIG_HOME', '/.config')}/mimeapps.list`,
     )
     if (await list.exists()) {
         const written = await list.text()
@@ -104,7 +103,8 @@ export function installDirectory(): string {
     const platform = process.platform
     if (platform === 'win32')
         return `${Bun.env.LOCALAPPDATA ?? `${Bun.env.USERPROFILE ?? ''}\\AppData\\Local`}\\abide-bridge`
-    if (platform === 'linux') return `${dataHome()}/abide-bridge`
+    if (platform === 'linux')
+        return `${xdgDirectory('XDG_DATA_HOME', '/.local/share')}/abide-bridge`
     return `${Bun.env.HOME ?? ''}/Library/Application Support/abide-bridge`
 }
 
@@ -230,7 +230,7 @@ async function installMac(
 /** The desktop entry's path: in `directory` where install is not registering, else the visitor's applications. */
 function entryPath(directory: string, register: boolean): string {
     return register
-        ? `${dataHome()}/applications/${DESKTOP_ENTRY}`
+        ? `${xdgDirectory('XDG_DATA_HOME', '/.local/share')}/applications/${DESKTOP_ENTRY}`
         : `${directory}/${DESKTOP_ENTRY}`
 }
 
