@@ -5805,6 +5805,17 @@ item's `item` part MUST be that listbox's `option` part.
 
 51.151 An item's `handle` part MUST carry `aria-hidden="true"` and MUST NOT stand in the tab order.
 
+51.152 A click on `spoiler`'s `cover` part MUST write `true` to `open`, and MUST move focus to its
+`content` part.
+
+51.153 `spoiler`'s `content` part MUST carry `hidden` while `open` does not hold, and no `hidden`
+while it does.
+
+51.154 `spoiler`'s `cover` part MUST carry `hidden` while `open` holds, and no `hidden` while it does
+not.
+
+51.155 `spoiler`'s `content` part MUST carry `data-open` while `open` holds.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.

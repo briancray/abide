@@ -226,6 +226,7 @@ export {
     accordion,
 } from './accordion.ts'
 export { type Clamp, type ClampOptions, clamp } from './clamp.ts'
+export { type Spoiler, type SpoilerOptions, spoiler } from './spoiler.ts'
 export {
     type Breadcrumbs,
     type BreadcrumbsOptions,

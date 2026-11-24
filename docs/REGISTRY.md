@@ -672,6 +672,14 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `ClampOptions` | `{ lines?: number \| (() => number); open?: Reactive<boolean>; id?: string }` | The lines shown while it is shut, whether all of it shows, and the base of its ids. | 51.122, 49.8, 49.10, 49.11 |
 | `Clamp` | `{ readonly text: Record<string, unknown>; readonly button: Record<string, unknown>; readonly open: Reactive<boolean>; get overflowing(): boolean }` | The text's part, the button's, whether all of it shows, and whether there is more than the lines show. | 32.11, 51.122, 51.123, 49.3, 49.8, 49.9 |
 
+## `spoiler`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `spoiler` | `(options?: SpoilerOptions) => Spoiler` | Content covered by a button of the app's own in its place until the button is pressed, as parts an app spreads onto both. | 51.152, 51.153, 51.154, 51.155, 32.99, 49.2, 49.4, 49.5 |
+| `SpoilerOptions` | `{ open?: Reactive<boolean> }` | Whether the content shows. | 51.152, 49.8 |
+| `Spoiler` | `{ readonly cover: Record<string, unknown>; readonly content: Record<string, unknown>; readonly open: Reactive<boolean> }` | The cover's part, the content's, and whether the content shows. | 32.11, 51.152, 51.153, 49.3, 49.8, 49.9 |
+
 ## `pages`
 
 | Name | Signature | Meaning | Rules |
