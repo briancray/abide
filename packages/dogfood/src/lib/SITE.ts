@@ -557,6 +557,14 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/json-inspector',
+                title: '`jsonInspector`',
+                description:
+                    'Search a JSON value and open it row by row in a tree of your own, each row told apart by its pointer.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/range',
                 title: '`range`',
                 description:

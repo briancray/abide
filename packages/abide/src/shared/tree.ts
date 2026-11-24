@@ -1,4 +1,4 @@
-// 51.77-51.84, 51.98-51.103 — WAI-ARIA's tree, as parts an app spreads onto elements of its own: the tree, an item per
+// 51.77-51.84, 51.98-51.103, 51.156 — WAI-ARIA's tree, as parts an app spreads onto elements of its own: the tree, an item per
 // node, and the group holding a node's children. The keys rove the items that show — a collapsed
 // node's children are not among them — and the server writes every attribute, so the page is the
 // tree as it stands before it hydrates.
@@ -54,6 +54,8 @@ export type Tree<Node, Multiple extends boolean = false> = {
     readonly tree: Record<string, unknown>
     /** One node's parts. */
     node(node: Node): TreeNode
+    /** The nodes that show, in order: each root, and the children of every expanded node that shows. */
+    get shown(): readonly Node[]
     /** The keys of the nodes expanded, read and set. */
     readonly expanded: Reactive<readonly string[]>
     /** The key of the node picked, or every key picked where it selects many, read and set. */
@@ -93,6 +95,7 @@ export function tree<Node, Multiple extends boolean = false>(
         const open = new Set(expanded())
         const placed = new Map<string, Placed>()
         const shown: string[] = []
+        const shownNodes: Node[] = []
         const labels: string[] = []
         const walk = (
             nodes: readonly Node[],
@@ -113,13 +116,14 @@ export function tree<Node, Multiple extends boolean = false>(
                 })
                 if (showing) {
                     shown.push(each)
+                    shownNodes.push(node)
                     labels.push(label(node))
                 }
                 walk(below, level + 1, each, showing && open.has(each))
             }
         }
         walk(rootsOf(), 1, undefined, true)
-        return { placed, shown, labels, open }
+        return { placed, shown, shownNodes, labels, open }
     })
 
     // 51.79 — the item in the page's tab order: the one focused last, else the first one picked, else
@@ -294,6 +298,9 @@ export function tree<Node, Multiple extends boolean = false>(
                 toggle: () =>
                     setOpen(each, !(expanded.peek() ?? []).includes(each)),
             }
+        },
+        get shown() {
+            return walked().shownNodes
         },
         expanded,
         selected: selection.selected as Reactive<Picked<string, Multiple>>,
