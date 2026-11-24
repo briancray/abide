@@ -1,4 +1,5 @@
 import { ASCII_WHITESPACE } from '#shared/ASCII_WHITESPACE.ts'
+import { BIND_ELEMENT } from '#shared/BIND_ELEMENT.ts'
 import { escapeAttribute, escapeQuote } from '#shared/escapeText.ts'
 import { isEventName } from '#shared/isEventName.ts'
 import { safeUrl } from '#shared/safeUrl.ts'
@@ -372,13 +373,12 @@ export function refuseBinds(node: ElementNode): void {
             throw new Error(
                 `abide: <${node.tag}> has ${attribute.name}, and an element is measured by a part spread on it — ${measured}. RULEBOOK 32.91.`,
             )
-        if (!lower.startsWith('bind:') || lower === 'bind:element') continue
+        if (!lower.startsWith('bind:') || isElementBind(lower)) continue
         if (valueBindOf(lower) === undefined)
             throw new Error(
                 `abide: <${node.tag}> has ${attribute.name}, which binds nothing — an element binds ${VALUE_BINDS.join(', ')} or element. RULEBOOK 32.74.`,
             )
-        const owned =
-            lower === 'bind:group' ? 'checked' : lower.slice('bind:'.length)
+        const owned = boundProperty(lower)
         const beside = attributeOf(node, owned)
         if (beside !== undefined)
             throw new Error(
@@ -468,7 +468,14 @@ export function holdsSetup(node: TemplateNode): boolean {
  * answering twice.
  */
 function isElementBind(lowerName: string): boolean {
-    return lowerName === 'bind:element'
+    return lowerName === BIND_ELEMENT
+}
+
+/** 32.11, 32.72 — the property a `bind:` writes: `checked` for `bind:group`, its own name for the rest. */
+function boundProperty(lowerName: string): string {
+    return lowerName === 'bind:group'
+        ? 'checked'
+        : lowerName.slice('bind:'.length)
 }
 
 /**
@@ -610,11 +617,9 @@ function explicitNames(node: ElementNode): string[] {
             ? 'class'
             : lower.startsWith('style:')
               ? 'style'
-              : lower === 'bind:group'
-                ? 'checked'
-                : lower.startsWith('bind:')
-                  ? lower.slice('bind:'.length)
-                  : lower
+              : lower.startsWith('bind:')
+                ? boundProperty(lower)
+                : lower
         if (!names.includes(name)) names.push(name)
     }
     return names

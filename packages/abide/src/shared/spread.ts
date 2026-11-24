@@ -13,6 +13,7 @@
 // function, is ever markup.
 
 import { attributeText, writtenMarkup } from './attributeText.ts'
+import { BIND_ELEMENT } from './BIND_ELEMENT.ts'
 import { isEventName } from './isEventName.ts'
 
 /** A `{...expr}` on a component, as one live prop accessor per key the value carries. */
@@ -26,9 +27,6 @@ export function spreadProps(
         props[key] = () => (read() as Record<string, unknown> | null)?.[key]
     return props
 }
-
-/** 32.99 — the key a spread value carries an element binding under: a headless component's `bind:element`. */
-export const BIND_ELEMENT = 'bind:element'
 
 // An attribute name the markup can carry: anything but space, quotes, `>`, `/` and `=`.
 const ATTRIBUTE_NAME = /^[^\s"'>/=]+$/

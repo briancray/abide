@@ -10,7 +10,6 @@ import {
     closeTagAt,
     ELSE_IF,
     forSeparators,
-    leadingSpace,
     parseAbide,
 } from './parseAbide.ts'
 import { sameTemplate } from './sameTemplate.ts'
@@ -18,6 +17,7 @@ import {
     isBlank,
     isIndented,
     isSpace,
+    leadingSpace,
     NEWLINE_RUN,
     slotEnd,
     tokenize,

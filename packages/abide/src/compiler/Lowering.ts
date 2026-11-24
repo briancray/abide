@@ -6,7 +6,7 @@ import { isSlot } from './classifyTemplate.ts'
 import type { Finding } from './Diagnostics.ts'
 import { abideBindings } from './hookCalls.ts'
 import { IDENTIFIER_PART, isNamedAlone } from './isNamedAlone.ts'
-import { type AbideFile, leadingSpace, scriptBodies } from './parseAbide.ts'
+import { type AbideFile, scriptBodies } from './parseAbide.ts'
 import {
     type Origin,
     type Projection,
@@ -19,7 +19,13 @@ import {
     type Setup,
     type TemplateNode,
 } from './TemplateNode.ts'
-import { closerOf, nesting, type Token, tokenize } from './tokenize.ts'
+import {
+    closerOf,
+    leadingSpace,
+    nesting,
+    type Token,
+    tokenize,
+} from './tokenize.ts'
 
 // 31.1 and 31.4 — inside a `.abide` a name bound to a `Reactive` is READ where it stands and
 // WRITTEN where it is assigned.

@@ -31,6 +31,7 @@ import {
     isBlank,
     isIndented,
     isSpace,
+    leadingSpace,
     nesting,
     skipQuoted,
     slotEnd,
@@ -1388,10 +1389,6 @@ function forBlock(
                 : header.at + comma.end + leadingSpace(source.slice(comma.end)),
     })
     return block
-}
-
-export function leadingSpace(text: string): number {
-    return text.length - text.trimStart().length
 }
 
 function readTag(

@@ -345,6 +345,11 @@ export function isBlank(text: string): boolean {
     return true
 }
 
+/** How many characters of whitespace `text` opens with. */
+export function leadingSpace(text: string): number {
+    return text.length - text.trimStart().length
+}
+
 /**
  * Whether a blank run is INDENTED — holds a space or a tab — or is newlines alone: the two kinds
  * 33.17 and 33.18 tell apart, which the parser drops by and the formatter keeps.

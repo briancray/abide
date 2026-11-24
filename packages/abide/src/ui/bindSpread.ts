@@ -2,8 +2,9 @@
 // watch keeps writing it, removing an attribute the value no longer carries, and an `on<event>`
 // listener becomes the element's, with its options (32.4), replaced when the value hands over another.
 
+import { BIND_ELEMENT } from '#shared/BIND_ELEMENT.ts'
 import type { Disposer } from '#shared/reactive/watch.ts'
-import { BIND_ELEMENT, spreadEntries } from '#shared/spread.ts'
+import { spreadEntries } from '#shared/spread.ts'
 
 import { bindElement } from './bindElement.ts'
 import { listen, unlisten } from './listen.ts'
