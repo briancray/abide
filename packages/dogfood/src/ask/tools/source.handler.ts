@@ -7,7 +7,7 @@ const CRM_FILE = /^src\/(?:[\w-]+\/)*[\w.-]+\.(?:ts|abide|css|json)$/
 
 export default GET(
     async ({ path }: { path: string }) => {
-        const crm = await exampleDirectory('crm')
+        const crm = exampleDirectory('crm')
         const file = crm && CRM_FILE.test(path) && Bun.file(`${crm}/${path}`)
         if (!file || !(await file.exists()))
             throw refuse.notFound({ path, method: 'GET' })

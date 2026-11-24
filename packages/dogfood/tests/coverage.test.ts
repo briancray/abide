@@ -730,8 +730,7 @@ test('a signature is short above the examples and whole in Types', async () => {
     const full = new Map<string, Set<string>>()
     // Each signature's short form as its page shows it: an overload's keeps the type telling it apart.
     const overloads = new Map<string, string[]>()
-    const rows = REGISTRY_ROWS
-    for (const row of rows) {
+    for (const row of REGISTRY_ROWS) {
         const at = row.header.indexOf('Signature')
         const signature = row.cells[at]
         if (at < 0 || signature === undefined) continue

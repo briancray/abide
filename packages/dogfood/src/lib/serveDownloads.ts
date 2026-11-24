@@ -7,7 +7,6 @@ import { isFailed, type Middleware } from '@abide/abide'
 import type { FetchFailed } from '@abide/abide/server'
 
 import { exampleArchive } from './exampleArchive.server.ts'
-import { ownOrigin } from './ownOrigin.server.ts'
 import { pageMarkdown } from './pageMarkdown.server.ts'
 import { SITE } from './SITE.ts'
 import { markdownAddressOf, PAGES } from './sitePages.ts'
@@ -26,7 +25,7 @@ function markdownAnswer(
 // Built once per process: the pages do not change while it runs.
 let bundled: Promise<string | FetchFailed> | undefined
 
-async function bundle(origin: string): Promise<string | FetchFailed> {
+async function bundle(): Promise<string | FetchFailed> {
     let contents = ''
     for (const group of SITE) {
         contents += `\n**${group.group}**\n\n`
@@ -35,7 +34,7 @@ async function bundle(origin: string): Promise<string | FetchFailed> {
     }
     let body = ''
     for (const page of PAGES) {
-        const markdown = await pageMarkdown(page.route, origin)
+        const markdown = await pageMarkdown(page.route)
         if (isFailed(markdown)) return markdown
         body += `\n---\n\n<!-- ${markdownAddressOf(page.route).slice(1)} -->\n\n${markdown}`
     }
@@ -55,7 +54,6 @@ export const serveDownloads: Middleware<Response> = async (
     { request },
 ) => {
     const { pathname } = new URL(request.url)
-    const origin = ownOrigin()
     const archived = /^\/examples\/([^/]+)\.tar\.gz$/.exec(pathname)
     if (archived) {
         const archive = await exampleArchive(archived[1] as string)
@@ -73,7 +71,7 @@ export const serveDownloads: Middleware<Response> = async (
     if (pathname === '/llms.txt')
         return new Response('# abide\n\nEvery page, as markdown: abide.md\n')
     if (pathname === '/abide.md') {
-        bundled ??= bundle(origin)
+        bundled ??= bundle()
         const contents = await bundled
         // A page that could not be read is not kept: the next ask builds the bundle again.
         if (isFailed(contents)) bundled = undefined
@@ -81,6 +79,6 @@ export const serveDownloads: Middleware<Response> = async (
     }
     for (const page of PAGES)
         if (pathname === markdownAddressOf(page.route))
-            return markdownAnswer(await pageMarkdown(page.route, origin))
+            return markdownAnswer(await pageMarkdown(page.route))
     return next()
 }

@@ -26,7 +26,7 @@ function published(dependencies: Record<string, string> | undefined): void {
 
 /** The app as a gzipped tarball, or `undefined` for a name that is not the CRM. */
 export async function exampleArchive(app: string): Promise<Blob | undefined> {
-    const directory = await exampleDirectory(app)
+    const directory = exampleDirectory(app)
     if (directory === undefined) return undefined
     const entries: Record<string, Blob | string> = {}
     for (const path of new Bun.Glob('**').scanSync({

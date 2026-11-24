@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 import { GET } from '@abide/abide/server'
 
-import { directoryAbove } from './directoryAbove.ts'
+import { exampleDirectory } from './exampleDirectory.server.ts'
 import { ownOrigin } from './ownOrigin.server.ts'
 
 let crm: string | undefined
@@ -12,9 +12,10 @@ let crm: string | undefined
 /** The CRM's `src`, found by walking up from this module to the docs app's `examples`. */
 function crmSource(): string {
     if (crm !== undefined) return crm
-    const above = directoryAbove('examples/crm/src/index.abide')
-    if (above === undefined) throw new Error('docs: no CRM above the docs app')
-    crm = `${above}/examples/crm/src`
+    const directory = exampleDirectory('crm')
+    if (directory === undefined)
+        throw new Error('docs: no CRM above the docs app')
+    crm = `${directory}/src`
     return crm
 }
 
