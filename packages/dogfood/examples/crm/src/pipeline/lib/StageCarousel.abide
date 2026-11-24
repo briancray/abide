@@ -13,7 +13,7 @@ const stages = carousel({ items: STAGES, selected: stage })
     <ul {...stages.host} aria-label="Stages"
         class="flex snap-x snap-mandatory gap-snug overflow-x-auto px-[12.5%]">
         {#for name of STAGES key name}
-            <li {...stages.item(name)} class="shrink-0 basis-3/4 snap-center
+            <li {...stages.item(name)} class="shrink-0 basis-full snap-center
                 rounded-md border border-rule p-snug data-current:border-signal">
                 <button onclick={() => (stage = name)}>Move to {name}</button>
             </li>

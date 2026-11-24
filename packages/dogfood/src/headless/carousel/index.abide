@@ -96,9 +96,11 @@ import stepStages from './lib/StepStages.abide' with { type: 'text' }
         <p>Spread <code>host</code> on the scroller and <code>item</code> on each stage. The
             page arrives scrolled to the stage <code>selected</code> names, and
             <code>current</code> follows the stage a swipe lands on. The snapping is your CSS:
-            give the scroller <code>snap-x</code> and each item <code>snap-center</code>, and pad
-            the scroller by half of what an item leaves (<code>px-[12.5%]</code> beside
-            <code>basis-3/4</code>) so the first and last stages can reach the center too.</p>
+            give the scroller <code>snap-x</code> and each item <code>snap-center</code>, pad the
+            scroller where its neighbours peek (<code>px-[12.5%]</code>) and fill what the padding
+            leaves with each item (<code>basis-full</code>), so the first and last stages can
+            reach the center too. A percent basis is of the space inside the padding, so
+            <code>basis-3/4</code> there would leave the last stage short of it.</p>
         <Example code={restOnStage}><RestOnStage /></Example>
     </Section>
 
