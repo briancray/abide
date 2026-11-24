@@ -18,7 +18,7 @@ import { type Listed, surfaceOf } from './surfaceOf.ts'
  * A shell line's words: split on whitespace, a quoted run kept whole and its quotes dropped — so
  * `note="two words"` is one word, as a POSIX shell reads it.
  */
-function wordsOf(text: string): string[] {
+function lineWords(text: string): string[] {
     const words: string[] = []
     let word = ''
     let quote = ''
@@ -45,7 +45,7 @@ function wordsOf(text: string): string[] {
 
 /** A `call` or `watch` line's args: a JSON object as typed, `name=value` words as a shell reads them. */
 function argWords(restOfLine: string): string[] {
-    return restOfLine.startsWith('{') ? [restOfLine] : wordsOf(restOfLine)
+    return restOfLine.startsWith('{') ? [restOfLine] : lineWords(restOfLine)
 }
 
 /**

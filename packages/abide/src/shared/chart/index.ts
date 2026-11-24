@@ -179,7 +179,7 @@ export function path(
     const length = Math.min(xs.length, ys.length)
     for (let index = 0; index <= length; index += 1) {
         const y = index < length ? ys[index] : undefined
-        if (y !== null && y !== undefined && Number.isFinite(y)) {
+        if (present(y) !== undefined) {
             if (runStart === -1) runStart = index
             continue
         }

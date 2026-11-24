@@ -14,6 +14,7 @@ import {
 import { hydrated } from './hydrating.ts'
 import { KEPT_HEADER } from './KEPT_HEADER.ts'
 import { refused, type RefusedCall } from './onRefusal.ts'
+import { parsedJson } from './parsedJson.ts'
 import { principalRotated } from './principalRotated.ts'
 import { answeredAtOnce } from './reactive/producer.ts'
 import { refuse } from './refuse.ts'
@@ -219,12 +220,7 @@ export function answered(
         if (answer.framing !== null)
             return framedChunks(answer.text ?? '', answer.framing)
     }
-    let body: unknown
-    try {
-        body = answer.text === '' ? undefined : JSON.parse(answer.text ?? '')
-    } catch {
-        body = undefined
-    }
+    const body = parsedJson(answer.text ?? '')
     if (answer.ok) return body
     const refusal = isProblem(body)
         ? failedFrom(body)

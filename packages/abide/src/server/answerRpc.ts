@@ -11,6 +11,7 @@ import { type Failed, isFailed } from '#shared/Failed.ts'
 import { framingOf } from '#shared/framing.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { mounted as underMount } from '#shared/mount.ts'
+import { parsedJson } from '#shared/parsedJson.ts'
 import { deadlineOf } from '#shared/reactive/producer.ts'
 import { refuse } from '#shared/refuse.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
@@ -253,12 +254,9 @@ async function argsOf(
     const text = await body.text()
     if (text === '') return undefined
     // 16.20 — a body that is not an `Args` is the caller's fault.
-    let parsed: unknown
-    try {
-        parsed = JSON.parse(text)
-    } catch {
+    const parsed = parsedJson(text)
+    if (parsed === undefined)
         return refuse(400, 'The request body is not JSON.')
-    }
     if (!isRecord(parsed))
         return refuse(400, 'The request body is not an object of args.')
     return parsed

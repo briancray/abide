@@ -124,3 +124,19 @@ test('a list of labels sets one timer mounting and one leaving — 52.73', async
     leave[99]?.()
     expect(standing()).toHaveLength(0)
 })
+
+// 52.73 ON A TICK — ONE TIMER HOWEVER THE LABELS WERE FOLLOWED. A list followed oldest-first has
+// each label change sooner than the last; the clock still finds the soonest and arms once. THE REVERT,
+// run: weighing each followed time against the timer in turn reports `set on tick: 3` — labels hours
+// apart share their next change, so it counts the distinct ones sooner than the last.
+test('a tick sets one timer for a list followed oldest-first — 52.73', () => {
+    const now = Date.now()
+    const leave: (() => void)[] = []
+    for (let index = 0; index < 100; index += 1)
+        leave.push(follow(now - (100 - index) * HOUR - 20 * MINUTE))
+    const before = timers.length
+    document.dispatchEvent(new Event('visibilitychange'))
+    expect(`set on tick: ${timers.length - before}`).toBe('set on tick: 1')
+    expect(standing()).toHaveLength(1)
+    for (const each of leave) each()
+})

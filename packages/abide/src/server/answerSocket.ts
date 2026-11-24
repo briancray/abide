@@ -14,6 +14,7 @@ import { problemOf } from '#shared/Failed.ts'
 import { namedLogger } from '#shared/log.ts'
 import { unmounted } from '#shared/mount.ts'
 import type { BrowserFrame } from '#shared/muxFrames.ts'
+import { parsedJson } from '#shared/parsedJson.ts'
 import { isThenable } from '#shared/reactive/isThenable.ts'
 import { refuse } from '#shared/refuse.ts'
 
@@ -191,12 +192,9 @@ export class MuxConnection {
 
     private async answerFrame(raw: string | Buffer): Promise<void> {
         // Partial: it is whatever the browser sent.
-        let frame: Partial<BrowserFrame>
-        try {
-            frame = JSON.parse(String(raw))
-        } catch {
-            return
-        }
+        const frame = parsedJson(String(raw)) as
+            Partial<BrowserFrame> | undefined
+        if (frame === undefined) return
         const id = frame.id ?? 0
         // THE ADDRESS BELOW THE MOUNT, which is what the handlers are keyed by: a browser names it
         // as its wrapper resolved it, which is a whole URL, or a path under the app's mount.

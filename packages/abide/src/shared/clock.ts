@@ -61,17 +61,31 @@ function schedule(): void {
     dueFor = undefined
     if (followed.size === 0 || document.visibilityState === 'hidden') return
     const now = Date.now()
-    for (const time of followed.keys()) soonest(time, now)
+    // The soonest found first and armed once: weighed one at a time, a list followed oldest-first
+    // re-armed for each newer label, a timer per label per tick.
+    let first: number | undefined
+    let wait = Number.POSITIVE_INFINITY
+    for (const time of followed.keys()) {
+        const next = nextChange(time, now)
+        if (next < wait) {
+            wait = next
+            first = time
+        }
+    }
+    arm(first as number, now, wait)
 }
 
 /** The timer moved to `time`'s next change, where that comes before the one standing. */
 function soonest(time: number, now: number): void {
-    const at = now + nextChange(time, now)
-    if (at >= due) return
+    const wait = nextChange(time, now)
+    if (now + wait < due) arm(time, now, wait)
+}
+
+function arm(time: number, now: number, wait: number): void {
     clearTimeout(timer)
-    due = at
+    due = now + wait
     dueFor = time
-    timer = setTimeout(tick, at - now)
+    timer = setTimeout(tick, wait)
 }
 
 function tick(): void {
