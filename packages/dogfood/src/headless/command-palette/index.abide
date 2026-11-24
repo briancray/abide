@@ -55,7 +55,7 @@ import showKeywords from './lib/ShowKeywords.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Show each command beside the keywords typing matches">
-        <p>Spread the parts onto a <code>&lt;dialog&gt;</code> of your own, opened modal by the
+        <p>Spread the parts onto a <code>&lt;dialog&gt;</code>, opened modal by the
             <code>open</code> you hand <code>commandPalette</code>: the input, the list, and each command's
             <code>command(command).option</code> in <code>results</code>, which can hold anything. The parts carry the combobox, the keys,
             the filtering and the hotkey, here ⌘⇧Y.</p>

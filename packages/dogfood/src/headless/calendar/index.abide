@@ -72,7 +72,7 @@ import twoMonths from './lib/TwoMonths.abide' with { type: 'text' }
 >
     <Section level={3} title="Pick a deal's close date from a month of days">
         <p>Hand <code>calendar</code> the date you hold as <code>selected</code>, and spread its
-            parts on markup of your own: a grid per month, a row per week, a cell per day. A click or Enter
+            parts on markup: a grid per month, a row per week, a cell per day. A click or Enter
             picks a day; the arrows, Page Up and Page Down move through the days and the months.</p>
         <Example code={pickCloseDate}><PickCloseDate /></Example>
     </Section>

@@ -124,7 +124,7 @@ import sortedByClose from './lib/SortedByClose.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Show each company's contact in a row under the company">
-        <p>Spread <code>row(row).detail</code> onto a row of your own under each row, and it moves
+        <p>Spread <code>row(row).detail</code> onto a row under each row, and it moves
             with its row when the table sorts.</p>
         <Example code={contactUnder}><ContactUnder /></Example>
     </Section>

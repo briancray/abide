@@ -53,7 +53,7 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Put the CRM's assistant on a page">
         <p>Pass your assistant handler, a <code>POST</code> yielding <code>assistant</code>'s
-            events, as <code>ask</code>, and spread the parts onto markup of your own: the
+            events, as <code>ask</code>, and spread the parts onto markup: the
             transcript's turns, and a composer whose input sends on Enter and breaks the line on
             Shift+Enter.</p>
         <Code language="abide" caption="abide" code={`
@@ -98,7 +98,7 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Render the assistant's answers as markdown">
         <p>A text part is the words as they grow. Render the assistant's with
-            <code>markdown.incremental</code> in a component of your own, handed the turn's
+            <code>markdown.incremental</code> in a component, handed the turn's
             <code>streaming</code>, so a chunk renders only the section still growing.</p>
         <Code language="abide" caption="abide" code={`
             <script>
@@ -171,7 +171,7 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Keep a conversation across visits">
-        <p>Hand <code>turns</code> a <code>reactive</code> of your own. A conversation it holds is
+        <p>Hand <code>turns</code> a <code>reactive</code>. A conversation it holds is
             shown and asked about, and every turn the chat adds is written to it, for you to
             store.</p>
         <Code language="abide" caption="abide" code={`

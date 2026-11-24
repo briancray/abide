@@ -49,7 +49,7 @@ import submitBothEnds from './lib/SubmitBothEnds.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Pick a band of prices with two thumbs">
-        <p>Spread the parts onto markup of your own: <code>root</code> onto the group, then the
+        <p>Spread the parts onto markup: <code>root</code> onto the group, then the
             track, the span between the thumbs, and each end's thumb, <code>end(0).thumb</code> and
             <code>end(1).thumb</code>. Drag either thumb, or focus one and step it with the arrow
             keys; neither passes the other.</p>

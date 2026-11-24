@@ -2,7 +2,7 @@
 "@abide/abide": minor
 ---
 
-Every parts function now has one shape (RULEBOOK 49.3, 49.8, 49.9): each element's part writes its own `data-part`, so a shipped component writes none and CSS written against a component matches markup of your own over its parts; every option an app binds is optional and handed back as a `Reactive` of the same name, ids are made where none is given, and a string or a number is its own `key` and `label`; and the parts are a member per element there is one of, a function per item, and an accessor for whatever changes — never a function taking nothing, or an optional argument, to read a value.
+Every parts function now has one shape (RULEBOOK 49.3, 49.8, 49.9): each element's part writes its own `data-part`, so a shipped component writes none and CSS written against a component matches an app's markup over its parts; every option an app binds is optional and handed back as a `Reactive` of the same name, ids are made where none is given, and a string or a number is its own `key` and `label`; and the parts are a member per element there is one of, a function per item, and an accessor for whatever changes — never a function taking nothing, or an optional argument, to read a value.
 
 Migration:
 

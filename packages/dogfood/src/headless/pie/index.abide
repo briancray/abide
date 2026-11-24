@@ -58,7 +58,7 @@ import stageMix from './lib/StageMix.abide' with { type: 'text' }
         <Example code={donut}><Donut /></Example>
     </Section>
 
-    <Section level={3} title="Draw a donut with a legend of your own">
+    <Section level={3} title="Draw a donut with a legend">
         <p>Each slice carries its label, value and share beside the part its circle spreads, so
             the legend beside the ring is markup of yours.</p>
         <Example code={ownLegend}><OwnLegend /></Example>

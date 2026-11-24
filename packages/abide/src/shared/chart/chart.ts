@@ -160,7 +160,7 @@ export type ChartReadout = {
     }[]
 }
 
-/** The parts `chart` hands back. Each list is read live; each part is spread onto an element of your own. */
+/** The parts `chart` hands back. Each list is read live; each part is spread onto an element. */
 export type ChartParts = {
     /** The base its parts' ids are derived from. */
     readonly id: string

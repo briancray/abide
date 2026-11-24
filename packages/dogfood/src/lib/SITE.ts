@@ -312,7 +312,7 @@ const WRITTEN: readonly {
                 route: '/headless/dialog',
                 title: '`dialog`',
                 description:
-                    'Spread a native modal onto a `<dialog>` of your own, opened and closed by a value you hold.',
+                    'Spread a native modal onto a `<dialog>`, opened and closed by a value you hold.',
                 where: 'component',
                 subgroup: 'Overlays',
             },
@@ -328,7 +328,7 @@ const WRITTEN: readonly {
                 route: '/headless/notices',
                 title: '`notices`',
                 description:
-                    'Build a list of notices of your own: a banner seeded on the server, its dismissals remembered for as long as you say.',
+                    'Build a list of notices: a banner seeded on the server, its dismissals remembered for as long as you say.',
                 where: 'component',
                 subgroup: 'Overlays',
             },
@@ -360,7 +360,7 @@ const WRITTEN: readonly {
                 route: '/headless/menu',
                 title: '`menu`',
                 description:
-                    'Open a list of actions from a button of your own, walked by the arrow keys and closed by a pick.',
+                    'Open a list of actions from a button, walked by the arrow keys and closed by a pick.',
                 where: 'component',
                 subgroup: 'Overlays',
             },
@@ -368,7 +368,7 @@ const WRITTEN: readonly {
                 route: '/headless/popover',
                 title: '`popover`',
                 description:
-                    'Open a panel of your own in the top layer against the button or field it belongs to, and keep it there as the page moves.',
+                    'Open a panel in the top layer against the button or field it belongs to, and keep it there as the page moves.',
                 where: 'component',
                 subgroup: 'Overlays',
             },
@@ -376,7 +376,7 @@ const WRITTEN: readonly {
                 route: '/headless/drawer',
                 title: '`drawer`',
                 description:
-                    'Open a dialog of your own from an edge of the page, sized from a handle on its inner edge and settling at the sizes you give.',
+                    'Open a dialog from an edge of the page, sized from a handle on its inner edge and settling at the sizes you give.',
                 where: 'component',
                 subgroup: 'Overlays',
             },
@@ -384,7 +384,7 @@ const WRITTEN: readonly {
                 route: '/headless/lightbox',
                 title: '`lightbox`',
                 description:
-                    'Open a set of pictures of your own full-screen, resting on the one picked, stepped with the arrow keys.',
+                    'Open a set of pictures full-screen, resting on the one picked, stepped with the arrow keys.',
                 where: 'component',
                 subgroup: 'Overlays',
             },
@@ -392,7 +392,7 @@ const WRITTEN: readonly {
                 route: '/headless/command-palette',
                 title: '`commandPalette`',
                 description:
-                    'Spread a search over commands onto a dialog and a list of your own, opened on one key.',
+                    'Spread a search over commands onto a dialog and a list, opened on one key.',
                 where: 'component',
                 subgroup: 'Overlays',
             },
@@ -424,7 +424,7 @@ const WRITTEN: readonly {
                 route: '/headless/inline-edit',
                 title: '`inlineEdit`',
                 description:
-                    'Edit a value where it stands: text of your own that a press turns into a field, saved on Enter and undone by Escape.',
+                    'Edit a value where it stands: text that a press turns into a field, saved on Enter and undone by Escape.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -432,7 +432,7 @@ const WRITTEN: readonly {
                 route: '/headless/stepper',
                 title: '`stepper`',
                 description:
-                    'Step a number up and down from a field and two buttons of your own, kept to its bounds and its step.',
+                    'Step a number up and down from a field and two buttons, kept to its bounds and its step.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -440,7 +440,7 @@ const WRITTEN: readonly {
                 route: '/headless/combobox',
                 title: '`combobox`',
                 description:
-                    'Spread a field that lists what matches onto markup of your own, each option and chip written by you.',
+                    'Spread a field that lists what matches onto markup, each option and chip written by you.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -448,7 +448,7 @@ const WRITTEN: readonly {
                 route: '/headless/tabs',
                 title: '`tabs`',
                 description:
-                    'Switch between views from a row of tabs of your own that the arrow keys move along.',
+                    'Switch between views from a row of tabs that the arrow keys move along.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -456,7 +456,7 @@ const WRITTEN: readonly {
                 route: '/headless/toggle',
                 title: '`toggle`',
                 description:
-                    'Spread a button that stays pressed, or an on/off switch, onto a button of your own.',
+                    'Spread a button that stays pressed, or an on/off switch, onto a button.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -464,7 +464,7 @@ const WRITTEN: readonly {
                 route: '/headless/toggle-group',
                 title: '`toggleGroup`',
                 description:
-                    'Pick one key from a segmented control, or many from a row of chips, spread onto buttons of your own.',
+                    'Pick one key from a segmented control, or many from a row of chips, spread onto buttons.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -472,7 +472,7 @@ const WRITTEN: readonly {
                 route: '/headless/disclosure',
                 title: '`disclosure`',
                 description:
-                    'Show and hide a region of your own from a button, the region still found by find in page.',
+                    'Show and hide a region from a button, the region still found by find in page.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -480,7 +480,7 @@ const WRITTEN: readonly {
                 route: '/headless/accordion',
                 title: '`accordion`',
                 description:
-                    'Stack sections of your own that open one at a time, or several at once, each a disclosure.',
+                    'Stack sections that open one at a time, or several at once, each a disclosure.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -488,7 +488,7 @@ const WRITTEN: readonly {
                 route: '/headless/clamp',
                 title: '`clamp`',
                 description:
-                    'Cut text of your own to a few lines, and show the rest from a button only where there is more.',
+                    'Cut text to a few lines, and show the rest from a button only where there is more.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -496,7 +496,7 @@ const WRITTEN: readonly {
                 route: '/headless/spoiler',
                 title: '`spoiler`',
                 description:
-                    'Cover content of your own with a button in its place, hidden from find in page and screen readers until pressed.',
+                    'Cover content with a button in its place, hidden from find in page and screen readers until pressed.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -504,7 +504,7 @@ const WRITTEN: readonly {
                 route: '/headless/pages',
                 title: '`pages`',
                 description:
-                    'Page through a long list with numbered links or buttons of your own, the far pages folded into gaps.',
+                    'Page through a long list with numbered links or buttons, the far pages folded into gaps.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -512,7 +512,7 @@ const WRITTEN: readonly {
                 route: '/headless/playback',
                 title: '`playback`',
                 description:
-                    'Replay anything over time from a play button, a scrubber and speeds of your own, driven by one clock.',
+                    'Replay anything over time from a play button, a scrubber and speeds, driven by one clock.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -520,7 +520,7 @@ const WRITTEN: readonly {
                 route: '/headless/breadcrumbs',
                 title: '`breadcrumbs`',
                 description:
-                    'Show where a page stands as a trail of links of your own, the middle folded into a menu when it runs long.',
+                    'Show where a page stands as a trail of links, the middle folded into a menu when it runs long.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -528,7 +528,7 @@ const WRITTEN: readonly {
                 route: '/headless/wizard',
                 title: '`wizard`',
                 description:
-                    'Take a task in steps of your own, going on only once each is done, with a meter of how far it has come.',
+                    'Take a task in steps, going on only once each is done, with a meter of how far it has come.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -536,7 +536,7 @@ const WRITTEN: readonly {
                 route: '/headless/sortable-list',
                 title: '`sortableList`',
                 description:
-                    'Put a list of your own in order by dragging a handle or with the keys, each move read out to a screen reader.',
+                    'Put a list in order by dragging a handle or with the keys, each move read out to a screen reader.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -544,7 +544,7 @@ const WRITTEN: readonly {
                 route: '/headless/tree',
                 title: '`tree`',
                 description:
-                    'Show nested records as a tree of your own that the arrow keys open, close and move through.',
+                    'Show nested records as a tree that the arrow keys open, close and move through.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -552,7 +552,7 @@ const WRITTEN: readonly {
                 route: '/headless/json-inspector',
                 title: '`jsonInspector`',
                 description:
-                    'Search a JSON value and open it row by row in a tree of your own, each row told apart by its pointer.',
+                    'Search a JSON value and open it row by row in a tree, each row told apart by its pointer.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -560,7 +560,7 @@ const WRITTEN: readonly {
                 route: '/headless/range',
                 title: '`range`',
                 description:
-                    'Spread a two-thumb range onto markup of your own: the group, the track, the span and each thumb.',
+                    'Spread a two-thumb range onto markup: the group, the track, the span and each thumb.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -568,7 +568,7 @@ const WRITTEN: readonly {
                 route: '/headless/resizable',
                 title: '`resizable`',
                 description:
-                    'Size a panel of your own by dragging its edge or with the arrow keys, kept within the room its parent leaves.',
+                    'Size a panel by dragging its edge or with the arrow keys, kept within the room its parent leaves.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -576,7 +576,7 @@ const WRITTEN: readonly {
                 route: '/headless/pan-zoom',
                 title: '`panZoom`',
                 description:
-                    'Move and magnify a map, a plan or a drawing of your own with the wheel, a drag, a pinch or the keys.',
+                    'Move and magnify a map, a plan or a drawing with the wheel, a drag, a pinch or the keys.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -592,7 +592,7 @@ const WRITTEN: readonly {
                 route: '/headless/calendar',
                 title: '`calendar`',
                 description:
-                    'Spread months of days onto grids of your own, a day or a range picked by click or by the arrow keys.',
+                    'Spread months of days onto grids, a day or a range picked by click or by the arrow keys.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -608,7 +608,7 @@ const WRITTEN: readonly {
                 route: '/headless/sortable-table',
                 title: '`sortableTable`',
                 description:
-                    'Spread a sortable table onto markup of your own, writing every cell, with rows picked by checkbox.',
+                    'Spread a sortable table onto markup, writing every cell, with rows picked by checkbox.',
                 where: 'component',
                 subgroup: 'Data',
             },
@@ -624,7 +624,7 @@ const WRITTEN: readonly {
                 route: '/headless/time',
                 title: '`time`',
                 description:
-                    'Spread a time kept current onto a `<time>` of your own, one per row of a list.',
+                    'Spread a time kept current onto a `<time>`, one per row of a list.',
                 where: 'component',
                 subgroup: 'Data',
             },
@@ -632,7 +632,7 @@ const WRITTEN: readonly {
                 route: '/headless/chat',
                 title: '`chat`',
                 description:
-                    'Spread a streaming conversation with your assistant handler onto markup of your own: turns, a composer, Stop and tool permissions.',
+                    'Spread a streaming conversation with your assistant handler onto markup: turns, a composer, Stop and tool permissions.',
                 where: 'component',
                 subgroup: 'Data',
             },
@@ -648,7 +648,7 @@ const WRITTEN: readonly {
                 route: '/headless/chart',
                 title: '`chart`',
                 description:
-                    'Draw a chart in markup of your own from the geometry and parts it hands back, or compute its ticks, scales and paths yourself.',
+                    'Draw a chart in markup from the geometry and parts it hands back, or compute its ticks, scales and paths yourself.',
                 where: 'component',
                 subgroup: 'Charts',
             },
@@ -656,7 +656,7 @@ const WRITTEN: readonly {
                 route: '/headless/pie',
                 title: '`pie`',
                 description:
-                    'Draw shares of a whole in markup of your own from the slices and parts it hands back.',
+                    'Draw shares of a whole in markup from the slices and parts it hands back.',
                 where: 'component',
                 subgroup: 'Charts',
             },
@@ -664,7 +664,7 @@ const WRITTEN: readonly {
                 route: '/headless/sparkline',
                 title: '`sparkline`',
                 description:
-                    'Draw a trend with no axes in markup of your own from the parts it hands back.',
+                    'Draw a trend with no axes in markup from the parts it hands back.',
                 where: 'component',
                 subgroup: 'Charts',
             },
@@ -672,7 +672,7 @@ const WRITTEN: readonly {
                 route: '/headless/meter',
                 title: '`meter`',
                 description:
-                    'Show a value within its range, or progress toward an end, as a track and a fill of your own.',
+                    'Show a value within its range, or progress toward an end, as a track and a fill.',
                 where: 'component',
                 subgroup: 'Charts',
             },
@@ -743,7 +743,7 @@ const WRITTEN: readonly {
                 route: '/helpers/highlight',
                 title: '`highlight`',
                 description:
-                    'Mark where a search is in a text of your own, as runs you render, each match carrying a part to style.',
+                    'Mark where a search is in a text, as runs you render, each match carrying a part to style.',
                 where: 'anywhere',
             },
             {

@@ -110,7 +110,7 @@ import searchCompanies from './lib/SearchCompanies.abide' with { type: 'text' }
         <Example code={searchCompanies}><SearchCompanies /></Example>
     </Section>
 
-    <Section level={3} title="Pick several stages, each a chip of your own">
+    <Section level={3} title="Pick several stages, each a chip">
         <p><code>multiple</code> picks many. Strings are their own key and label.
             <code>value</code> is then every item picked, and <code>chip(item)</code> is a chip and the
             button taking it out, as Backspace in the empty field takes the last.</p>

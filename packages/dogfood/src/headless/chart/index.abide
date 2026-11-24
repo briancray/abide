@@ -165,7 +165,7 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
 >
     <Section level={3} title="Plot won revenue against target by month">
         <p><code>chart</code> takes the series over one pair of axes and hands back parts to
-            spread on markup of your own. A pointer over the <code>svg</code> moves a crosshair to
+            spread on markup. A pointer over the <code>svg</code> moves a crosshair to
             the nearest month and opens every series' value there in the <code>tip</code>.</p>
         <Example code={wonAgainstTarget}><WonAgainstTarget /></Example>
     </Section>
@@ -184,20 +184,20 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
         <Example code={fillTheBox}><FillTheBox /></Example>
     </Section>
 
-    <Section level={3} title="Mark every point of a line with a dot of your own">
+    <Section level={3} title="Mark every point of a line with a dot">
         <p><code>chart</code> hands back each mark as data with a part to spread, so the markup is
             yours: here a circle at every value <code>points</code> answers, over the lines.</p>
         <Example code={pointsOverLines}><PointsOverLines /></Example>
     </Section>
 
     <Section level={3} title="Write each column's value above the column">
-        <p>A bar carries where it is drawn, so a label of your own stands at its top.</p>
+        <p>A bar carries where it is drawn, so a label stands at its top.</p>
         <Example code={barLabels}><BarLabels /></Example>
     </Section>
 
     <Section level={3} title="Shade a target band behind the line">
         <p><code>y</code> maps a value onto the plot and <code>frame</code> answers its edges, so a
-            drawing of your own lines up with the marks the parts draw.</p>
+            drawing lines up with the marks the parts draw.</p>
         <Example code={targetBand}><TargetBand /></Example>
     </Section>
 
