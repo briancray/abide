@@ -328,7 +328,7 @@ export class McpSurface {
             logCall(String(name), 404, undefined)
             return Promise.resolve({
                 content: [{ type: 'text', text: `No tool named ${name}.` }],
-                failed: true,
+                isError: true,
             })
         }
         return this.#called(tool, args as Record<string, unknown>, asker)
@@ -371,7 +371,7 @@ export class McpSurface {
                             text: `${one.name} declares a result schema but answered an image, ${mimeType}.`,
                         },
                     ],
-                    failed: true,
+                    isError: true,
                 }
             }
             // 20.21 — AN IMAGE A MODEL IS SHOWN IS THE IMAGE, handed on as one rather than its bytes
@@ -381,7 +381,7 @@ export class McpSurface {
                 logCall(one.name, answer.status, started)
                 return {
                     content: [{ type: 'image', data, mimeType }],
-                    failed: false,
+                    isError: false,
                 }
             }
         }
@@ -390,7 +390,7 @@ export class McpSurface {
         logCall(one.name, answer.status, started)
         return {
             content: [{ type: 'text', text }],
-            failed: answer.status >= 400,
+            isError: answer.status >= 400,
         }
     }
 
@@ -422,7 +422,7 @@ export class McpSurface {
                         `No tool named ${String(params?.name)}.`,
                     )
                 }
-                const { content, failed } = await this.#called(
+                const { content, isError } = await this.#called(
                     tool,
                     params?.arguments as Record<string, unknown> | undefined,
                     asker,
@@ -436,12 +436,12 @@ export class McpSurface {
                         // its shape; a refusal is not that value. A tool declaring one answers no
                         // image (20.22), so its one piece is its text.
                         structuredContent:
-                            failed ||
+                            isError ||
                             !structured(tool) ||
                             piece?.type !== 'text'
                                 ? undefined
                                 : JSON.parse(piece.text),
-                        isError: failed,
+                        isError,
                     },
                 }
             }

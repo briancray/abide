@@ -2,7 +2,12 @@
 // THE DOCS' CONVERSATION, its markup over `chat`'s parts: an answer as `AnswerText` renders it, a
 // docs tool as `AnswerTool`'s one line, and a prompt Claude Code asks permission with. Styled by the
 // `data-chat` parts under `.conversation`, in `app.css`.
-import { type AssistantTurn, chat, type ChatOptions, props } from '@abide/abide'
+import {
+    type AssistantMessage,
+    chat,
+    type ChatOptions,
+    props,
+} from '@abide/abide'
 
 import AnswerText from './AnswerText.abide'
 import AnswerTool from './AnswerTool.abide'
@@ -10,13 +15,13 @@ import AnswerTool from './AnswerTool.abide'
 const {
     ask,
     permit,
-    turns = [],
+    messages = [],
     placeholder = 'Ask anything',
     label = 'Message',
 } = props<{
     ask: ChatOptions['ask']
     permit?: ChatOptions['permit']
-    turns?: AssistantTurn[]
+    messages?: AssistantMessage[]
     placeholder?: string
     label?: string
 }>()
@@ -24,43 +29,47 @@ const {
 const talk = chat({
     ask,
     permit,
-    turns,
+    messages,
     label: () => label,
 })
 </script>
 
 <section {...talk.root} class="conversation">
     <ol {...talk.transcript}>
-        {#for turn, index of talk.turns key turn}
-            <li {...talk.turn(turn, index).turn}>
-                <span {...talk.turn(turn, index).speaker}>{talk.turn(turn, index).role}</span>
-                {#for part of turn.parts key part}
-                    {#if part.type === 'text' && turn.role === 'assistant'}
-                        <div {...talk.text}><AnswerText text={part.text}
-                                streaming={talk.turn(turn, index).streaming} /></div>
-                    {:else if part.type === 'text'}
-                        <p {...talk.text}>{part.text}</p>
-                    {:else if part.type === 'image'}
-                        <img {...talk.image(part)} alt="an image you sent">
-                    {:else if part.type === 'document'}
-                        <span {...talk.document(part)}>{part.title ?? 'a document'}</span>
-                    {:else if part.type === 'tool'}
-                        <div {...talk.tool(part).tool}><AnswerTool part={part} /></div>
-                    {:else if part.type === 'permission'}
-                        <div {...talk.permission(part).permission}>
-                            <span {...talk.permission(part).name}>{part.name}</span>
-                            <pre {...talk.permission(part).input}>{JSON.stringify(part.input, null, 2) ?? ''}</pre>
-                            <button {...talk.permission(part).allow}>Allow</button>
-                            <button {...talk.permission(part).deny}>Deny</button>
-                        </div>
-                    {/if}
-                {/for}
-                {#if turn.failed !== undefined}
-                    <p {...talk.turn(turn, index).failure}>{turn.failed}</p>
-                {/if}
+        {#for message, index of talk.messages key message}
+            {#if talk.message(message, index).shown}
+                <li {...talk.message(message, index).message}>
+                    <span {...talk.message(message, index).speaker}>{talk.message(message, index).role}</span>
+                    {#for block of talk.message(message, index).blocks key block}
+                        {#if block.type === 'text' && message.role === 'assistant'}
+                            <div {...talk.text}><AnswerText text={block.text}
+                                    streaming={talk.message(message, index).streaming} /></div>
+                        {:else if block.type === 'text'}
+                            <p {...talk.text}>{block.text}</p>
+                        {:else if block.type === 'image'}
+                            <img {...talk.image(block)} alt="an image you sent">
+                        {:else if block.type === 'document'}
+                            <span {...talk.document(block)}>{block.title ?? 'a document'}</span>
+                        {:else if block.type === 'tool_use'}
+                            <div {...talk.tool(block).tool}><AnswerTool call={block}
+                                    answered={talk.tool(block).status !== 'running'} /></div>
+                        {/if}
+                    {/for}
+                </li>
+            {/if}
+        {/for}
+        {#for prompt of talk.permissions key prompt}
+            <li {...talk.permission(prompt).permission}>
+                <span {...talk.permission(prompt).name}>{prompt.name}</span>
+                <pre {...talk.permission(prompt).input}>{JSON.stringify(prompt.input, null, 2) ?? ''}</pre>
+                <button {...talk.permission(prompt).allow}>Allow</button>
+                <button {...talk.permission(prompt).deny}>Deny</button>
             </li>
         {/for}
     </ol>
+    {#if talk.failed !== undefined}
+        <p {...talk.failure}>{talk.failed}</p>
+    {/if}
     <button {...talk.jump}>↓ Latest</button>
 
     <form {...talk.composer}>
@@ -81,7 +90,9 @@ const talk = chat({
         {#if talk.pending}
             <div {...talk.queued}>
                 <span>{talk.pending
-                    .map((part) => (part.type === 'text' ? part.text : `a ${part.type}`))
+                    .map((block) =>
+                        block.type === 'text' ? block.text : `a ${block.type}`,
+                    )
                     .join(' ')}</span>
                 <button {...talk.cancel}>Cancel</button>
             </div>

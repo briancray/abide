@@ -29,6 +29,7 @@ export type {
     AssistantContent,
     AssistantEvent,
     AssistantMessage,
+    AssistantUsage,
 } from '#shared/AssistantEvent.ts'
 export {
     type AssistantOptions,

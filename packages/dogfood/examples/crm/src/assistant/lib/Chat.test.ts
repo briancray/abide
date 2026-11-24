@@ -21,15 +21,45 @@ function fed() {
         if (reader) reader(result)
         else queued.push(result)
     }
+    const push = (event: AssistantEvent) =>
+        settle({ value: event, done: false })
     return {
         asked,
-        push: (event: AssistantEvent) => settle({ value: event, done: false }),
+        push,
+        /** A run opening with a text block, as the Messages API starts one. */
+        start: () => {
+            push({
+                type: 'message_start',
+                message: {
+                    id: 'msg_1',
+                    type: 'message',
+                    role: 'assistant',
+                    model: 'claude-opus-5-5',
+                    content: [],
+                    stop_reason: null,
+                    stop_sequence: null,
+                    usage: { input_tokens: 0, output_tokens: 0 },
+                },
+            })
+            push({
+                type: 'content_block_start',
+                index: 0,
+                content_block: { type: 'text', text: '' },
+            })
+        },
+        /** Words the open text block grows by. */
+        say: (text: string) =>
+            push({
+                type: 'content_block_delta',
+                index: 0,
+                delta: { type: 'text_delta', text },
+            }),
         end: () => settle({ value: undefined, done: true }),
         ask(
             { messages }: { messages: AssistantMessage[] },
             options: { signal: AbortSignal },
         ): AsyncIterable<AssistantEvent> {
-            asked.push(messages)
+            asked.push(structuredClone(messages))
             signal = options.signal
             return {
                 [Symbol.asyncIterator]: () => ({
@@ -50,6 +80,12 @@ function fed() {
     }
 }
 
+/** What the person wrote, as `chat` sends it. */
+const asking = (text: string): AssistantMessage => ({
+    role: 'user',
+    content: [{ type: 'text', text }],
+})
+
 function type(words: string) {
     const field = document.querySelector('textarea') as HTMLTextAreaElement
     field.value = words
@@ -69,9 +105,14 @@ function press(init: KeyboardEventInit): KeyboardEvent {
     return event
 }
 
-const turns = () =>
-    [...document.querySelectorAll('[data-chat=turn]')].map((turn) =>
-        turn.getAttribute('data-speaker'),
+async function arrived() {
+    await Bun.sleep(0)
+    flushSync()
+}
+
+const speakers = () =>
+    [...document.querySelectorAll('[data-chat=message]')].map((message) =>
+        message.getAttribute('data-speaker'),
     )
 
 // THE REVERT: drop the `isComposing` check in `hotkeys`, which reads the composer's Enter, and the
@@ -82,40 +123,38 @@ test('Enter sends; Shift+Enter and an input method composing do not', async () =
     type('Which company is Ada at?')
     expect(press({ shiftKey: true }).defaultPrevented).toBe(false)
     expect(press({ isComposing: true }).defaultPrevented).toBe(false)
-    expect(turns()).toEqual([])
+    expect(speakers()).toEqual([])
     expect(press({}).defaultPrevented).toBe(true)
-    expect(turns()).toEqual(['you', 'assistant'])
-    expect(stream.asked).toEqual([
-        [{ role: 'user', content: 'Which company is Ada at?' }],
-    ])
+    expect(speakers()).toEqual(['you'])
+    expect(stream.asked).toEqual([[asking('Which company is Ada at?')]])
     stream.end()
     await settled()
 })
 
-// THE REVERT: hold the events in an array and fold all of them again per chunk (`answering.parts =
-// []; for (const each of seen) transcript.fold(answering, each)`), and the answer reads 1,275 events
-// for 50 chunks where folding each once reads 50.
+// THE REVERT: fold every event seen again per chunk in `chat`, the answer rebuilt from them each
+// time, and it reads 1,325 event types for 50 chunks where folding each once reads 100.
 test('a streamed answer reads each event once, and a chunk rewrites its answer alone', async () => {
     const stream = fed()
     using _chat = await mount(Chat({ ask: stream.ask }))
     type('Summarize the Ledger audit deal.')
     press({})
+    stream.start()
     let reads = 0
     const chunk = (text: string): AssistantEvent => {
-        const event = { text } as { type: 'text'; text: string }
+        const event = { index: 0, delta: { type: 'text_delta', text } }
         Object.defineProperty(event, 'type', {
             get: () => {
                 reads += 1
-                return 'text'
+                return 'content_block_delta'
             },
         })
-        return event
+        return event as AssistantEvent
     }
     const CHUNKS = 50
     const written: MutationRecord[] = []
     const watching = new MutationObserver((records) => written.push(...records))
     for (let at = 0; at < CHUNKS; at++) {
-        // The second chunk on: the text part exists, and each chunk only grows it.
+        // The second chunk on: the text block exists, and each chunk only grows it.
         if (at === 1)
             watching.observe(document.body, {
                 subtree: true,
@@ -124,12 +163,12 @@ test('a streamed answer reads each event once, and a chunk rewrites its answer a
                 attributes: true,
             })
         stream.push(chunk(at === CHUNKS - 1 ? 'end.' : 'word '))
-        await Bun.sleep(0)
-        flushSync()
+        await arrived()
     }
     written.push(...watching.takeRecords())
     watching.disconnect()
-    expect(reads).toBeLessThanOrEqual(CHUNKS)
+    // Once to route it and once to fold it.
+    expect(reads).toBeLessThanOrEqual(2 * CHUNKS)
     // Each chunk rewrites the answer's markdown alone: nothing outside it is built, moved or
     // reattributed.
     const answer = document.querySelectorAll('[data-chat=text]')[1]
@@ -154,23 +193,20 @@ test('Stop ends the answer and keeps what arrived', async () => {
     using _chat = await mount(Chat({ ask: stream.ask }))
     type('Draft a follow-up to Grace.')
     press({})
-    stream.push({ type: 'text', text: 'Hi Grace,' })
-    await Bun.sleep(0)
-    flushSync()
-    expect(
-        document.querySelector('section')?.hasAttribute('data-streaming'),
-    ).toBe(true)
+    stream.start()
+    stream.say('Hi Grace,')
+    await arrived()
+    const section = document.querySelector('section')
+    expect(section?.hasAttribute('data-streaming')).toBe(true)
     ;(document.querySelector('[data-chat=stop]') as HTMLButtonElement).click()
     await settled()
     flushSync()
-    const answer = document.querySelectorAll('[data-chat=turn]')[1]
-    expect(answer?.getAttribute('data-stop')).toBe('stopped')
+    expect(section?.getAttribute('data-stop')).toBe('stopped')
+    const answer = document.querySelectorAll('[data-chat=message]')[1]
     expect(answer?.querySelector('[data-chat=text]')?.textContent).toBe(
         'Hi Grace,',
     )
-    expect(
-        document.querySelector('section')?.hasAttribute('data-streaming'),
-    ).toBe(false)
+    expect(section?.hasAttribute('data-streaming')).toBe(false)
     expect(document.querySelector('[data-chat=send]')).not.toBeNull()
 })
 
@@ -193,14 +229,17 @@ test('a permission prompt is answered through permit', async () => {
         name: 'Bash',
         input: { command: 'ls' },
     })
-    await Bun.sleep(0)
-    flushSync()
+    await arrived()
     const prompt = document.querySelector('[data-chat=permission]')
     expect(prompt?.getAttribute('data-answer')).toBe('waiting')
     ;(prompt?.querySelector('[data-chat=allow]') as HTMLButtonElement).click()
     flushSync()
     expect(answers).toEqual([{ id: 'p1', allow: true }])
-    expect(prompt?.getAttribute('data-answer')).toBe('allowed')
+    expect(
+        document
+            .querySelector('[data-chat=permission]')
+            ?.getAttribute('data-answer'),
+    ).toBe('allowed')
     stream.end()
     await settled()
 })
@@ -292,9 +331,10 @@ test('an answer that fails says why, and the composer sends again', async () => 
     press({})
     await settled()
     flushSync()
-    const answer = document.querySelectorAll('[data-chat=turn]')[1]
-    expect(answer?.hasAttribute('data-failed')).toBe(true)
-    expect(answer?.querySelector('[data-chat=failure]')?.textContent).toBe(
+    expect(document.querySelector('section')?.hasAttribute('data-failed')).toBe(
+        true,
+    )
+    expect(document.querySelector('[data-chat=failure]')?.textContent).toBe(
         'The CRM is offline.',
     )
     expect(document.querySelector('[data-chat=send]')).not.toBeNull()
@@ -314,13 +354,13 @@ test('the transcript follows its bottom until the reader scrolls up', async () =
     Object.defineProperty(log, 'scrollHeight', { get: () => height })
     const chunk = async (text: string) => {
         height += 40
-        stream.push({ type: 'text', text })
-        await Bun.sleep(0)
-        flushSync()
+        stream.say(text)
+        await arrived()
         await Bun.sleep(0)
     }
     type('Summarize the Ledger audit deal.')
     press({})
+    stream.start()
     await chunk('Three-year term, ')
     expect(log.scrollTop).toBe(height)
     log.scrollTop = 0
@@ -339,19 +379,17 @@ test('a question sent while an answer streams is queued, and asked once the answ
     press({})
     type('And Grace?')
     press({})
-    expect(turns()).toEqual(['you', 'assistant'])
+    expect(speakers()).toEqual(['you'])
     expect(document.querySelector('[data-chat=queued]')?.textContent).toContain(
         'And Grace?',
     )
-    stream.push({ type: 'text', text: 'Analytical Engines.' })
+    stream.start()
+    stream.say('Analytical Engines.')
     stream.end()
     await settled()
     flushSync()
-    expect(turns()).toEqual(['you', 'assistant', 'you', 'assistant'])
-    expect(stream.asked[1]?.at(-1)).toEqual({
-        role: 'user',
-        content: 'And Grace?',
-    })
+    expect(speakers()).toEqual(['you', 'assistant', 'you'])
+    expect(stream.asked[1]?.at(-1)).toEqual(asking('And Grace?'))
     expect(document.querySelector('[data-chat=queued]')).toBeNull()
     stream.end()
     await settled()
@@ -370,35 +408,23 @@ test('a queued question cancelled is never asked', async () => {
     stream.end()
     await settled()
     flushSync()
-    expect(turns()).toEqual(['you', 'assistant'])
+    expect(speakers()).toEqual(['you'])
     expect(stream.asked).toHaveLength(1)
 })
 
-test('a conversation handed in as turns is shown, and asked about with what follows', async () => {
+test('a conversation handed in as messages is shown, and asked about with what follows', async () => {
     const stream = fed()
-    const saved = reactive([
-        {
-            role: 'user' as const,
-            parts: [
-                { type: 'text' as const, text: 'Which company is Ada at?' },
-            ],
-            stop_reason: undefined,
-            failed: undefined,
-        },
-        {
-            role: 'assistant' as const,
-            parts: [{ type: 'text' as const, text: 'Analytical Engines.' }],
-            stop_reason: 'end' as const,
-            failed: undefined,
-        },
+    const saved = reactive<AssistantMessage[]>([
+        { role: 'user', content: 'Which company is Ada at?' },
+        { role: 'assistant', content: 'Analytical Engines.' },
     ])
-    using _chat = await mount(Chat({ ask: stream.ask, turns: saved }))
-    expect(turns()).toEqual(['you', 'assistant'])
+    using _chat = await mount(Chat({ ask: stream.ask, messages: saved }))
+    expect(speakers()).toEqual(['you', 'assistant'])
     type('And Grace?')
     press({})
     expect(stream.asked[0]).toHaveLength(3)
     // Bound, the conversation it grows is the caller's.
-    expect(saved.peek()).toHaveLength(4)
+    expect(saved.peek()).toHaveLength(3)
     stream.end()
     await settled()
 })

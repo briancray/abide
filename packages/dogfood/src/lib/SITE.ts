@@ -695,7 +695,7 @@ const WRITTEN: readonly {
                 route: '/headless/chat',
                 title: '`chat`',
                 description:
-                    'Spread a streaming conversation with your assistant handler onto markup: turns, a composer, Stop and tool permissions.',
+                    'Spread a streaming conversation with your assistant handler onto markup: its messages, a composer, Stop and tool permissions.',
                 where: 'component',
                 subgroup: 'Data',
             },
@@ -1301,10 +1301,10 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
-                route: '/ai/user-message',
-                title: '`userMessage`',
+                route: '/ai/assistant-message',
+                title: '`assistantMessage`',
                 description:
-                    "Turn a question and the files attached to it — photos, PDFs, text — into the person's turn, as the model reads it.",
+                    "Turn a question and the files attached to it into the person's message, or a streamed answer into the messages it amounts to, as the Messages API holds them.",
                 where: 'anywhere',
             },
             {
@@ -1320,13 +1320,6 @@ const WRITTEN: readonly {
                 description:
                     "Pair this browser with the visitor's Claude Code with a click, and follow the pairing's status.",
                 where: 'browser',
-            },
-            {
-                route: '/ai/transcript',
-                title: '`transcript`',
-                description:
-                    'Fold a streamed answer into the turns a chat shows, and send them back as messages.',
-                where: 'component',
             },
         ],
     },

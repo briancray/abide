@@ -2,11 +2,11 @@
 // THE PROMPT AT THE TOP OF EVERY PAGE: a question to the visitor's own Claude Code, answered from the
 // docs' tools and rendered as it is written — prose, code, and the live things a `show` block names.
 // The bar opens the answers, `pairing`'s step says what pairing still needs, and `Conversation` is
-// the conversation: its composer, its turns, its prompts.
+// the conversation: its composer, its messages, its prompts.
 //
 // THE CONVERSATION OUTLIVES A NAVIGATION: the bar is the layout's, and a layout outlives the page it
 // wraps (41.11), so a `show open` block can move the page under an answer without ending it. The
-// panel is hidden rather than unmounted, so closing it ends no answer, and the turns are bound here.
+// panel is hidden rather than unmounted, so closing it ends no answer, and the messages are bound here.
 //
 // THE PANEL IS A `popover` OF THE BAR: the bar is its trigger, so it says whether the answers are
 // open (`aria-expanded`), and Escape or a press outside closes them as the Close button does.
@@ -14,7 +14,7 @@
 // THE TRANSCRIPT IS THE WORDS, the rendering is not: each turn sends every earlier question and the
 // text Claude wrote for it (44.4), and what was rendered from that text stays here.
 import {
-    type AssistantTurn,
+    type AssistantMessage,
     copy,
     keyLabel,
     navigate,
@@ -52,21 +52,23 @@ const WORDS = {
 }
 
 let open = reactive(false)
-let turns = reactive<AssistantTurn[]>([])
+let messages = reactive<AssistantMessage[]>([])
 const answers = popover({ open, align: 'start' })
 
 // A `show open` block moves the page under the answer once, as its fence closes: counted per answer,
-// so the same answer read again moves nothing.
-let opened = { turn: -1, count: 0 }
+// so the same answer read again moves nothing — by the message its words are in.
+let opened = { message: -1, count: 0 }
 watch(() => {
-    const at = turns.length - 1
-    const turn = turns[at]
-    if (turn?.role !== 'assistant') return
+    const at = messages.length - 1
+    const message = messages[at]
+    if (message?.role !== 'assistant') return
     let text = ''
-    for (const part of turn.parts)
-        if (part.type === 'text') text += `${part.text}\n`
+    for (const block of typeof message.content === 'string'
+        ? []
+        : message.content)
+        if (block.type === 'text') text += `${block.text}\n`
     const routes = openedIn(text)
-    if (opened.turn !== at) opened = { turn: at, count: 0 }
+    if (opened.message !== at) opened = { message: at, count: 0 }
     for (; opened.count < routes.length; opened.count += 1)
         navigate(url(routes[opened.count] as RouteLiteral))
 })
@@ -82,8 +84,8 @@ function focusComposer(event: ToggleEvent) {
 }
 
 function clear() {
-    turns = []
-    opened = { turn: -1, count: 0 }
+    messages = []
+    opened = { message: -1, count: 0 }
 }
 
 // ⌘K (Ctrl+K off a Mac) opens the answers: the native app's Ask menu item, whose key a page in a
@@ -103,7 +105,7 @@ ASK_ITEM.on(() => {
 <section class="answers" aria-label="Answers" {...answers.popover} ontoggle={focusComposer}>
     <header>
         <span class="eyebrow">Claude Code · answers from these docs</span>
-        {#if turns.length > 0}<button class="quiet" onclick={clear}>New conversation</button>{/if}
+        {#if messages.length > 0}<button class="quiet" onclick={clear}>New conversation</button>{/if}
         <button class="quiet" aria-label="Close" onclick={() => (open = false)}>Close</button>
     </header>
 
@@ -137,7 +139,7 @@ ASK_ITEM.on(() => {
                 <p data-pairing="missing">Claude Code here cannot use
                     {status.missing.join(', ')}.</p>
             {/if}
-            <Conversation ask={answer} permit={permit} bind:turns={turns}
+            <Conversation ask={answer} permit={permit} bind:messages={messages}
                 placeholder="Ask how to do anything in abide…"
                 label="Ask Claude about abide" />
             <button type="button" data-pairing="pair" onclick={start}>Reconnect</button>

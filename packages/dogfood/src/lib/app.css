@@ -552,7 +552,7 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply relative m-0 flex min-h-0 list-none flex-col gap-section overflow-y-auto p-0;
     }
 
-    .conversation [data-chat="turn"] {
+    .conversation [data-chat="message"] {
         @apply flex flex-col gap-flow;
     }
 
@@ -569,7 +569,7 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply self-end rounded-lg bg-signal/10 px-3 py-2 font-medium;
     }
 
-    .conversation [data-chat="turn"][data-streaming]::after {
+    .conversation [data-chat="message"][data-streaming]::after {
         @apply animate-board-pulse text-chrome text-muted;
         content: "Thinking…";
     }

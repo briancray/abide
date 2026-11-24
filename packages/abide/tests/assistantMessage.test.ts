@@ -5,7 +5,7 @@
 import { afterEach, expect, test } from 'bun:test'
 
 import type { AssistantContent } from '#shared/AssistantEvent.ts'
-import { userMessage } from '#shared/userMessage.ts'
+import { assistantMessage } from '#shared/assistantMessage.ts'
 
 const held = globalThis as unknown as Record<string, unknown>
 const BEFORE = {
@@ -45,9 +45,9 @@ const decoded = (data: string): string => atob(data)
 
 type Image = Extract<AssistantContent, { type: 'image' }>
 
-/** `file` as the one block `userMessage` makes of it. */
+/** `file` as the one block `assistantMessage` makes of it. */
 async function blockOf(file: Blob): Promise<AssistantContent> {
-    const { content } = await userMessage([file])
+    const { content } = await assistantMessage('user', [file])
     expect(content).toHaveLength(1)
     return content[0] as AssistantContent
 }
@@ -102,7 +102,7 @@ test('an image nothing can draw goes as it is, or throws where a model is not sh
         imageBlock('image/png', btoa('png')),
     )
     await expect(
-        userMessage([new Blob(['heic'], { type: 'image/heic' })]),
+        assistantMessage('user', [new Blob(['heic'], { type: 'image/heic' })]),
     ).rejects.toThrow('RULEBOOK 44.54')
     // Where nothing draws at all — a server — an image of a type a model is shown goes as it is.
     held.createImageBitmap = undefined
@@ -123,7 +123,12 @@ test('a PDF is a document, and a file of text a text document, each titled with 
         type: 'application/json',
     })
     expect(
-        await userMessage([statement, trades, notes, 'What did I hold?']),
+        await assistantMessage('user', [
+            statement,
+            trades,
+            notes,
+            'What did I hold?',
+        ]),
     ).toEqual({
         role: 'user',
         content: [
@@ -172,7 +177,7 @@ test('words and files are blocks in the order given — 44.55', async () => {
     held.createImageBitmap = undefined
     const receipt = new Blob(['png'], { type: 'image/png' })
     const invoice = new Blob(['gif'], { type: 'image/gif' })
-    const { content } = await userMessage([
+    const { content } = await assistantMessage('user', [
         'Compare this receipt',
         receipt,
         'with this one',
@@ -188,13 +193,15 @@ test('words and files are blocks in the order given — 44.55', async () => {
 test('words of whitespace alone are left out, and a file no model reads throws naming it — 44.55', async () => {
     held.createImageBitmap = undefined
     const shot = new Blob(['png'], { type: 'image/png' })
-    expect((await userMessage(['  \n ', shot])).content).toHaveLength(1)
-    expect(await userMessage(['Hello'])).toEqual({
+    expect(
+        (await assistantMessage('user', ['  \n ', shot])).content,
+    ).toHaveLength(1)
+    expect(await assistantMessage('user', ['Hello'])).toEqual({
         role: 'user',
         content: [{ type: 'text', text: 'Hello' }],
     })
     await expect(
-        userMessage([
+        assistantMessage('user', [
             new File(['zip'], 'archive.zip', { type: 'application/zip' }),
         ]),
     ).rejects.toThrow('archive.zip')
@@ -211,7 +218,7 @@ test('a URL is the block the API fetches it into, and a block built by hand goes
         content: [{ type: 'text', text: 'The Q3 fee was $731.' }],
     }
     expect(
-        await userMessage([
+        await assistantMessage('user', [
             'Does this statement',
             new URL('https://bank.example/statements/q3.pdf'),
             'match the fee on this receipt?',
@@ -241,6 +248,24 @@ test('a URL is the block the API fetches it into, and a block built by hand goes
         ],
     })
     await expect(
-        userMessage([new URL('https://bank.example/statements/q3.html')]),
+        assistantMessage('user', [
+            new URL('https://bank.example/statements/q3.html'),
+        ]),
     ).rejects.toThrow('https://bank.example/statements/q3.html')
+})
+
+// 44.37 — A FILE IS THE PERSON'S TO ATTACH: an assistant turn takes words and blocks, as a seeded
+// conversation writes one, and refuses a file by name. THE REVERT: drop the role check in
+// `assistantMessage`, and the photo is drawn into the assistant's turn — a turn the API refuses.
+test('an assistant turn takes words and blocks, and refuses a file — 44.37', async () => {
+    held.createImageBitmap = undefined
+    expect(await assistantMessage('assistant', ['About $412.'])).toEqual({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'About $412.' }],
+    })
+    await expect(
+        assistantMessage('assistant', [
+            new File(['png'], 'receipt.png', { type: 'image/png' }),
+        ]),
+    ).rejects.toThrow('receipt.png')
 })

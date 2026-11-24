@@ -10,42 +10,66 @@ import Section from '#src/lib/Section.abide'
     seeAlso={['/ai/assistant', '/headless/dropzone', '/headless/chat']}
     tests={[
         {
-            path: 'packages/abide/tests/userMessage.test.ts',
+            path: 'packages/abide/tests/assistantMessage.test.ts',
             from: [
                 "test('a PDF is a document, and a file of text a text document, each titled with its name — 44.55'",
             ],
         },
         {
-            path: 'packages/abide/tests/userMessage.test.ts',
+            path: 'packages/abide/tests/assistantMessage.test.ts',
             from: ["test('words and files are blocks in the order given — 44.55'"],
         },
         {
-            path: 'packages/abide/tests/userMessage.test.ts',
+            path: 'packages/abide/tests/assistantMessage.test.ts',
             from: [
                 "test('a URL is the block the API fetches it into, and a block built by hand goes as written, in order — 44.55'",
             ],
         },
         {
-            path: 'packages/abide/tests/userMessage.test.ts',
+            path: 'packages/abide/tests/assistantMessage.test.ts',
             from: [
                 "test('an image is drawn down to 1568 on its long side, a photo as a JPEG — 44.52, 44.53'",
             ],
         },
         {
-            path: 'packages/abide/tests/userMessage.test.ts',
+            path: 'packages/abide/tests/assistantMessage.test.ts',
             from: [
                 "test('an image nothing can draw goes as it is, or throws where a model is not shown its type — 44.54'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/assistantMessage.test.ts',
+            from: [
+                "test('an assistant turn takes words and blocks, and refuses a file — 44.37'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/assistantBlocks.test.ts',
+            from: [
+                "test('an answer’s events amount to the messages the API holds, a call’s input its JSON and a cited run its citations — 44.105'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/assistantBlocks.test.ts',
+            from: [
+                "test('a call that never answered is left out of what an answer amounts to — 44.105'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/assistantBlocks.test.ts',
+            from: [
+                "test('a conversation held as its messages goes back to the API exactly as it was — 44.38, 53.28'",
             ],
         },
     ]}
 >
     <Section level={3} title="Ask about a statement dropped on the question">
         <p>Keep the files a <a href={url('/headless/dropzone')}><code>dropzone</code></a> takes,
-            and hand them to <code>userMessage</code> with the question when it is sent. A PDF
+            and hand them to <code>assistantMessage</code> with the question when it is sent. A PDF
             goes as a document, titled with its file's name.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { dropzone, reactive, userMessage } from '@abide/abide'
+            import { assistantMessage, dropzone, reactive } from '@abide/abide'
             import askAssistant from './askAssistant.handler.ts'
 
             let question = reactive('')
@@ -56,7 +80,7 @@ import Section from '#src/lib/Section.abide'
             })
 
             async function send() {
-                const message = await userMessage([...files, question])
+                const message = await assistantMessage('user', [...files, question])
                 askAssistant({ messages: [message] })
                 files = []
             }
@@ -74,13 +98,13 @@ import Section from '#src/lib/Section.abide'
             behind.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { userMessage } from '@abide/abide'
+            import { assistantMessage } from '@abide/abide'
             import askAssistant from './askAssistant.handler.ts'
 
             async function ask(event: Event) {
                 const [card] = (event.target as HTMLInputElement).files ?? []
                 if (card === undefined) return
-                const message = await userMessage([card, 'Add this contact.'])
+                const message = await assistantMessage('user', [card, 'Add this contact.'])
                 askAssistant({ messages: [message] })
             }
             </script>
@@ -93,10 +117,10 @@ import Section from '#src/lib/Section.abide'
         <p>Words and files are blocks in the order given, so the question can point at each file
             where it mentions it.</p>
         <Code language="ts" caption="browser" code={`
-            import { userMessage } from '@abide/abide'
+            import { assistantMessage } from '@abide/abide'
             import askAssistant from './askAssistant.handler.ts'
 
-            const message = await userMessage([
+            const message = await assistantMessage('user', [
                 'Was this receipt',
                 receipt,
                 'paid by this invoice?',
@@ -111,11 +135,11 @@ import Section from '#src/lib/Section.abide'
             image's extension as an image. The API fetches it, so nothing is downloaded
             first.</p>
         <Code language="ts" caption="browser" code={`
-            import { userMessage } from '@abide/abide'
+            import { assistantMessage } from '@abide/abide'
             import askAssistant from './askAssistant.handler.ts'
 
             const statement = new URL('https://bank.example/statements/q3.pdf')
-            const message = await userMessage([statement, 'What did I hold?'])
+            const message = await assistantMessage('user', [statement, 'What did I hold?'])
             askAssistant({ messages: [message] })
         `} />
     </Section>
@@ -125,10 +149,10 @@ import Section from '#src/lib/Section.abide'
             API takes in a user turn. A search result rides in the turn and the transcript with
             no part of its own in <a href={url('/headless/chat')}><code>chat</code></a>.</p>
         <Code language="ts" caption="browser" code={`
-            import { userMessage } from '@abide/abide'
+            import { assistantMessage } from '@abide/abide'
             import askAssistant from './askAssistant.handler.ts'
 
-            const message = await userMessage([
+            const message = await assistantMessage('user', [
                 {
                     type: 'search_result',
                     source: 'https://bank.example/fees',
@@ -145,14 +169,61 @@ import Section from '#src/lib/Section.abide'
         <p>A file no model reads, or a phone's HEIC this browser cannot redraw, throws, naming
             the file.</p>
         <Code language="ts" caption="browser" code={`
-            import { userMessage } from '@abide/abide'
+            import { assistantMessage } from '@abide/abide'
             import askAssistant from './askAssistant.handler.ts'
 
             try {
-                askAssistant({ messages: [await userMessage([...files, question])] })
+                const message = await assistantMessage('user', [...files, question])
+                askAssistant({ messages: [message] })
             } catch (error) {
                 failure = (error as Error).message
             }
+        `} />
+    </Section>
+
+    <Section level={3} title="Seed a conversation with an earlier answer">
+        <p>Pass <code>'assistant'</code> and the words it said. A file goes only in the
+            person's message, so one handed to an assistant message throws.</p>
+        <Code language="ts" caption="browser" code={`
+            import { assistantMessage } from '@abide/abide'
+
+            const history = [
+                await assistantMessage('user', ['What did I spend on fees?']),
+                await assistantMessage('assistant', ['About $412, mostly wire fees.']),
+            ]
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep an answer as the messages it amounts to">
+        <p>Hand <code>assistantMessage</code> the events an answer streamed. It joins each run's
+            words, writes each tool call's input, and puts each call's result in the person's
+            message after it, as the Messages API holds them. A call that never answered is left
+            out, so the conversation goes back to the API as it is.</p>
+        <Code language="ts" caption="browser" code={`
+            import { assistantMessage, type AssistantMessage } from '@abide/abide'
+            import askAssistant from './askAssistant.handler.ts'
+
+            const history: AssistantMessage[] = [
+                await assistantMessage('user', ['Which company is Ada at?']),
+            ]
+            const events = await askAssistant({ messages: history })
+            history.push(...assistantMessage('assistant', events))
+        `} />
+    </Section>
+
+    <Section level={3} title="Show the page of the statement an answer cites">
+        <p>Words the model cited keep the Messages API's <code>citations</code>, and go back to
+            it with them.</p>
+        <Code language="abide" caption="abide" code={`
+            {#for block of message.content}
+                {#if block.type === 'text'}
+                    <p>{block.text}
+                        {#for citation of block.citations ?? []}
+                            <cite>{String(citation.document_title)}</cite>
+                        {/for}
+                    </p>
+                {/if}
+            {/for}
         `} />
     </Section>
 </Doc>

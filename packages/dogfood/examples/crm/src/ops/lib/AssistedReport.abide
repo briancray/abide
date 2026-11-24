@@ -1,5 +1,6 @@
 <script>
 import {
+    assistantMessage,
     onRefusal,
     reactive,
     report,
@@ -22,7 +23,8 @@ onRefusal((_refusal, call) => {
 async function ask(current: ReportDraft) {
     asked = true
     const events = await askReport({ draft: current.markdown() })
-    for (const written of resultsOf(events, draftReport)) {
+    const messages = assistantMessage('assistant', events)
+    for (const written of resultsOf(messages, draftReport)) {
         current.summary.set(written.summary)
         current.description.set(written.description)
     }

@@ -5,6 +5,8 @@ import {
     type Provider,
 } from '@abide/abide/server'
 
+import { recordedRun } from '#src/lib/recordedRun.ts'
+
 // A recorded model: its lines are fixed, and the tool call it makes is real.
 const recorded: Provider = {
     async *run(_messages, tools) {
@@ -13,24 +15,28 @@ const recorded: Provider = {
         )
         const name = tool?.name ?? ''
         const input = { name: 'Ada' }
-        yield { type: 'tool', id: 'toolu_1', name }
-        yield { type: 'input', id: 'toolu_1', input }
-        const { content, failed } = await tools.call(name, input)
+        yield* recordedRun(
+            [{ type: 'tool_use', id: 'toolu_1', name, input }],
+            'tool_use',
+        )
+        const { content, isError } = await tools.call(name, input)
         // A search answers words, so its one piece is text.
         const [words] = content
-        const text = words?.type === 'text' ? words.text : ''
         yield {
-            type: 'result',
+            type: 'tool_result',
             tool_use_id: 'toolu_1',
-            content: text,
-            is_error: failed,
+            content: [
+                {
+                    type: 'text',
+                    text: words?.type === 'text' ? words.text : '',
+                },
+            ],
+            is_error: isError,
         }
-        yield { type: 'text', text: 'Ada Lovelace is at Analytical Engines.' }
-        yield {
-            type: 'done',
-            stop_reason: 'end_turn',
-            usage: { input_tokens: 0, output_tokens: 0 },
-        }
+        yield* recordedRun(
+            [{ type: 'text', text: 'Ada Lovelace is at Analytical Engines.' }],
+            'end_turn',
+        )
     },
 }
 

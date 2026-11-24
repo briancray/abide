@@ -100,7 +100,7 @@ export async function callTool(
                 content: [
                     { type: 'text', text: called.error.message ?? 'failed' },
                 ],
-                failed: true,
+                isError: true,
             }
         return answerOf(called?.result)
     } finally {
@@ -142,7 +142,7 @@ function answerOf(result: unknown): ToolAnswer {
             })
     if (pieces.length === 0 && structuredContent !== undefined)
         pieces.push({ type: 'text', text: JSON.stringify(structuredContent) })
-    return { content: pieces, failed: isError === true }
+    return { content: pieces, isError: isError === true }
 }
 
 /**

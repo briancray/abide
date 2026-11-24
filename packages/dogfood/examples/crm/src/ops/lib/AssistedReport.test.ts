@@ -20,11 +20,10 @@ test('the assistant fills the draft through draftReport', async () => {
         .trim()
         .split('\n')
         .map((line) => JSON.parse(line))
-    const result = events.find((event) => event.type === 'result')
+    const result = events.find((event) => event.type === 'tool_result')
     // What the page puts in the draft, read off the tool's own answer.
     expect(result.value).toEqual({
         summary: 'Statements do not send',
         description: "Grace's statement was refused. Trace 4bf9.",
     })
-    expect(result.handler.address).toEndWith('/ops/draftReport')
 })

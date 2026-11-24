@@ -28,7 +28,8 @@ test('the body is sent as written, with the transcript', async () => {
         .trim()
         .split('\n')
         .map((line) => JSON.parse(line))
-    const sent = JSON.parse(events[0].text)
+    const written = events.find((event) => event.type === 'content_block_delta')
+    const sent = JSON.parse(written.delta.text)
     expect(sent).toMatchObject({
         model: 'claude-opus-5',
         max_tokens: 1024,

@@ -39,46 +39,38 @@ export type TurnRequest = {
     maxTurns: number
 }
 
-type Usage = Record<string, unknown>
-
-type McpContent = { type: string; text?: string }
+/** What a tool answered, as a `user` line carries it: its words, or blocks — an image as the API's or as MCP's. */
+type Answered = {
+    type: string
+    text?: string
+    source?: unknown
+    data?: string
+    mimeType?: string
+}
 
 type CodeLine = {
     type: string
     subtype?: string
+    // The Messages API's own event, as Claude Code streamed it.
     event?: {
         type: string
-        index?: number
-        delta?: {
-            type: string
-            text?: string
-            citation?: Record<string, unknown>
-        }
-        content_block?: {
-            type: string
-            id?: string
-            name?: string
-            citations?: Record<string, unknown>[] | null
-        }
+        content_block?: { type: string; name?: string }
     }
     message?: {
         content:
             | string
             | {
                   type: string
-                  id?: string
-                  name?: string
-                  input?: unknown
                   tool_use_id?: string
-                  content?: McpContent[] | string
+                  content?: Answered[] | string
                   is_error?: boolean
               }[]
     }
-    stop_reason?: string | null
     is_error?: boolean
     result?: string
-    usage?: Usage
 }
+
+type ResultContent = Extract<ProviderEvent, { type: 'tool_result' }>['content']
 
 // 44.16 — the options a site may set: each only shapes the answer, and reaches nothing of this machine.
 // Keyed by `ClaudeCodeConfig`'s own keys, so a key added on abide's side is a compile error here
@@ -161,21 +153,43 @@ async function launchFlags(
     return { flags, grant }
 }
 
-function textOf(content: McpContent[] | string | undefined): string {
-    if (typeof content === 'string') return content
-    let text = ''
-    for (const part of content ?? [])
-        if (part.text !== undefined) text += part.text
-    return text
+/** What a tool answered, as the Messages API's blocks for a `tool_result`: its words, and its images. */
+function blocksOf(content: Answered[] | string | undefined): ResultContent {
+    if (typeof content === 'string') return [{ type: 'text', text: content }]
+    const blocks: ResultContent = []
+    for (const piece of content ?? [])
+        if (piece.type === 'text' && piece.text !== undefined)
+            blocks.push({ type: 'text', text: piece.text })
+        else if (piece.type === 'image' && piece.source !== undefined)
+            blocks.push(piece as ResultContent[number])
+        else if (piece.type === 'image' && piece.data !== undefined)
+            blocks.push({
+                type: 'image',
+                source: {
+                    type: 'base64',
+                    media_type: piece.mimeType as 'image/png',
+                    data: piece.data,
+                },
+            })
+    return blocks
 }
 
-/** The end of the turn: why, and Claude Code's usage for the whole of it, under the API's names. 44.11. */
-function done(stopReason: string, usage: Usage | undefined): ProviderEvent {
+/**
+ * The API's event as Claude Code streamed it, a call to one of the site's tools named as the site
+ * lists it rather than as Claude Code's MCP server prefixes it. 44.2, 44.50.
+ */
+function siteNamed(event: NonNullable<CodeLine['event']>): ProviderEvent {
+    const block = event.content_block
+    if (
+        event.type !== 'content_block_start' ||
+        block?.type !== 'tool_use' ||
+        block.name?.startsWith(TOOL_PREFIX) !== true
+    )
+        return event as ProviderEvent
     return {
-        type: 'done',
-        stop_reason: stopReason,
-        usage: { input_tokens: 0, output_tokens: 0, ...usage },
-    }
+        ...event,
+        content_block: { ...block, name: block.name.slice(TOOL_PREFIX.length) },
+    } as ProviderEvent
 }
 
 /**
@@ -254,92 +268,32 @@ export async function claudeTurn(
     )
     child.stdin.end()
     const stderr = new Response(child.stderr).text()
-    // 44.104 — each cited text block of the message streaming, by its index, held until it ends.
-    const cited = new Map<
-        number,
-        { text: string; citations: Record<string, unknown>[] }
-    >()
     try {
         for await (const text of readLines(child.stdout)) {
             if (text === '') continue
             const line = JSON.parse(text) as CodeLine
-            if (line.type === 'stream_event') {
-                const delta = line.event?.delta
-                const started = line.event?.content_block
-                const index = line.event?.index ?? 0
-                const held = cited.get(index)
-                if (line.event?.type === 'message_start') cited.clear()
-                else if (
-                    line.event?.type === 'content_block_start' &&
-                    started?.type === 'text' &&
-                    Array.isArray(started.citations)
-                )
-                    cited.set(index, { text: '', citations: [] })
-                else if (
-                    line.event?.type === 'content_block_delta' &&
-                    delta?.type === 'citations_delta' &&
-                    delta.citation !== undefined
-                ) {
-                    if (held === undefined)
-                        cited.set(index, {
-                            text: '',
-                            citations: [delta.citation],
-                        })
-                    else held.citations.push(delta.citation)
-                } else if (
-                    line.event?.type === 'content_block_delta' &&
-                    delta?.type === 'text_delta'
-                ) {
-                    if (held !== undefined) held.text += delta.text as string
-                    else
-                        options.report({
-                            type: 'text',
-                            text: delta.text as string,
-                        })
-                } else if (
-                    line.event?.type === 'content_block_stop' &&
-                    held !== undefined
-                ) {
-                    cited.delete(index)
-                    options.report({ type: 'text', ...held })
-                }
-                // 44.28 — the call is announced as the model starts writing it, its input once written.
-                else if (
-                    line.event?.type === 'content_block_start' &&
-                    started?.type === 'tool_use'
-                )
-                    options.report({
-                        type: 'tool',
-                        id: started.id as string,
-                        name: (started.name as string).replace(TOOL_PREFIX, ''),
-                    })
-            } else if (
-                (line.type === 'assistant' || line.type === 'user') &&
+            // 44.2 — each run as the API streamed it, event for event: Claude Code's partial
+            // messages are the API's own events, and nothing is reshaped but a site tool's name.
+            if (line.type === 'stream_event' && line.event !== undefined)
+                options.report(siteNamed(line.event))
+            // What a call answered, which Claude Code reports in the user message it sends back.
+            else if (
+                line.type === 'user' &&
                 Array.isArray(line.message?.content)
             ) {
                 for (const block of line.message.content)
-                    if (block.type === 'tool_use')
+                    if (block.type === 'tool_result')
                         options.report({
-                            type: 'input',
-                            id: block.id as string,
-                            input: block.input,
-                        })
-                    else if (block.type === 'tool_result')
-                        options.report({
-                            type: 'result',
+                            type: 'tool_result',
                             tool_use_id: block.tool_use_id as string,
-                            content: textOf(block.content),
+                            content: blocksOf(block.content),
                             is_error: block.is_error === true,
                         })
             } else if (line.type === 'result') {
-                // The turn cap is one stop, whichever provider reached it.
-                if (line.subtype === 'error_max_turns') {
-                    options.report(done('max_turns', line.usage))
-                    return
-                }
+                // The turn cap ends the answer as `provider.claudeApi`'s does: a call left unanswered.
+                if (line.subtype === 'error_max_turns') return
                 if (line.is_error === true)
                     throw new Error(line.result ?? line.subtype ?? 'failed')
-                options.report(done(line.stop_reason ?? 'end_turn', line.usage))
                 return
             }
         }

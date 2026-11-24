@@ -1,11 +1,16 @@
-// 44.52-44.55 — WHAT A VISITOR WRITES AND ATTACHES, as the user turn a transcript carries it in, each
-// file as the Messages API's block for it. An image is drawn down to what a model looks at in the
-// browser, so a full-size screenshot is not sent whole with every turn of the transcript, and a photo
-// is always drawn, so where it was taken does not go with it; where nothing can draw (a server) it
-// goes as it is.
+// 44.52-44.55, 44.105 — A MESSAGE OF A CONVERSATION, as the Messages API holds it: one written — what
+// a visitor writes and attaches, each file as the API's block for it — or the ones an answer's events
+// amount to. An image is drawn down to what a model looks at in the browser, so a full-size
+// screenshot is not sent whole with every turn, and a photo is always drawn, so where it was taken
+// does not go with it; where nothing can draw (a server) it goes as it is.
 
-import type { AssistantContent } from './AssistantEvent.ts'
+import type {
+    AssistantContent,
+    AssistantEvent,
+    AssistantMessage,
+} from './AssistantEvent.ts'
 import { IMAGE_TYPES } from './IMAGE_TYPES.ts'
+import { MessageAccumulator } from './MessageAccumulator.ts'
 
 // The longest side, in pixels, a model looks at before it scales an image down itself.
 const LONG_EDGE = 1568
@@ -19,7 +24,7 @@ const TEXT_TYPES = ['application/json']
 const TEXT_EXTENSIONS = ['.csv', '.json', '.md', '.txt']
 
 /**
- * Every file `userMessage` carries, as an `<input accept>` writes it: what `chat`'s composer takes.
+ * Every file `assistantMessage` carries, as an `<input accept>` writes it: what `chat`'s composer takes.
  * 44.55.
  */
 export const ATTACHABLE = [
@@ -39,25 +44,99 @@ type Shown = Extract<Image['source'], { type: 'base64' }>['media_type']
 // 44.55 — what a URL's path names, which the API fetches itself.
 const URL_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp']
 
+// The events only a stream carries, which no block shares a type with — and the two abide adds.
+const EVENT_TYPES = new Set([
+    'message_start',
+    'content_block_start',
+    'content_block_delta',
+    'content_block_stop',
+    'message_delta',
+    'message_stop',
+    'ping',
+    'tool_result',
+    'permission',
+])
+
 /**
- * The user turn of `parts` in order: words as a text block where they hold any, each file as its
- * block, a URL as the block the API fetches it into, and a block as it is written — so
+ * The messages an answer's events amount to, accumulated as the Messages API's clients accumulate its
+ * stream: each run an assistant message, each tool result in the user message after it, a call that
+ * never answered left out. 44.105.
+ *
+ * @param role `'assistant'`: events are what the model said
+ * @param events an answer's events, as `assistant` streamed them
+ */
+export function assistantMessage(
+    role: 'assistant',
+    events: readonly AssistantEvent[],
+): AssistantMessage[]
+/**
+ * A turn of `parts` in order: words as a text block where they hold any, each file as its block, a
+ * URL as the block the API fetches it into, and a block as it is written — so
  * `['Compare', receipt, 'with', invoice]` reads as written. 44.52-44.55.
  *
+ * @param role who says it: the person asking, or the assistant, as when a conversation is seeded
  * @param parts what was written and attached: words, images, PDFs or files of text, URLs of an image
- * or a PDF, and blocks built by hand
+ * or a PDF, and blocks built by hand — a file only in the person's turn (44.37)
  */
-export async function userMessage(
+export function assistantMessage(
+    role: AssistantMessage['role'],
     parts: readonly (string | Blob | URL | AssistantContent)[],
-): Promise<{ role: 'user'; content: AssistantContent[] }> {
+): Promise<AssistantMessage & { content: AssistantContent[] }>
+export function assistantMessage(
+    role: AssistantMessage['role'],
+    parts: readonly (string | Blob | URL | AssistantContent | AssistantEvent)[],
+):
+    | AssistantMessage[]
+    | Promise<AssistantMessage & { content: AssistantContent[] }> {
+    if (role === 'assistant' && isEvents(parts)) {
+        const messages: AssistantMessage[] = []
+        const accumulator = new MessageAccumulator(0)
+        for (const event of parts) accumulator.add(messages, event)
+        accumulator.settle(messages)
+        return messages
+    }
+    return turnOf(
+        role,
+        parts as readonly (string | Blob | URL | AssistantContent)[],
+    )
+}
+
+/**
+ * Whether `parts` is an answer's events: every one an event no block shares a type with — none at all
+ * included, an answer not yet begun, as the events overload types an empty list.
+ */
+function isEvents(
+    parts: readonly (string | Blob | URL | AssistantContent | AssistantEvent)[],
+): parts is readonly AssistantEvent[] {
+    for (const part of parts)
+        if (
+            typeof part !== 'object' ||
+            part instanceof Blob ||
+            part instanceof URL ||
+            !EVENT_TYPES.has(part.type)
+        )
+            return false
+    return true
+}
+
+async function turnOf(
+    role: AssistantMessage['role'],
+    parts: readonly (string | Blob | URL | AssistantContent)[],
+): Promise<AssistantMessage & { content: AssistantContent[] }> {
     const content: AssistantContent[] = []
     for (const part of parts)
         if (typeof part === 'string') {
             if (/\S/.test(part)) content.push({ type: 'text', text: part })
-        } else if (part instanceof Blob) content.push(await blockOf(part))
-        else if (part instanceof URL) content.push(urlBlockOf(part))
+        } else if (part instanceof Blob) {
+            // 44.37 — an attachment is the asker's to show, never a turn the model answered.
+            if (role !== 'user')
+                throw new Error(
+                    `abide: ${(part as Partial<File>).name || 'a file'} was attached to an assistant turn, and a file stands only in the person's. RULEBOOK 44.37.`,
+                )
+            content.push(await blockOf(part))
+        } else if (part instanceof URL) content.push(urlBlockOf(part))
         else content.push(part)
-    return { role: 'user', content }
+    return { role, content }
 }
 
 function urlBlockOf(url: URL): AssistantContent {

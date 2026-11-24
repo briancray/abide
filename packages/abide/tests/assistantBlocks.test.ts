@@ -1,6 +1,6 @@
-// 44.11, 44.38, 44.104, 53.28 — WHAT THE MODEL SAID IS HELD AS THE MESSAGES API HOLDS IT: an answer's
-// end under the API's own names, a cited run with its citations, and a conversation folded from its
-// events going back to the API as the blocks it was.
+// 44.2, 44.38, 44.51, 44.105, 53.28, 53.32 — WHAT THE MODEL SAID IS HELD AS THE MESSAGES API HOLDS IT:
+// its events as the API streamed them, the messages they amount to accumulated as the API's own clients
+// accumulate them, and a conversation so held going back to the API exactly as it was.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
@@ -9,16 +9,18 @@ import type {
     AssistantEvent,
     AssistantMessage,
 } from '#shared/AssistantEvent.ts'
-import { fold } from '#shared/transcript/fold.ts'
-import { messages } from '#shared/transcript/messages.ts'
-import { turn } from '#shared/transcript/turn.ts'
+import { assistantMessage } from '#shared/assistantMessage.ts'
+import { chat } from '#shared/chat.ts'
+import { resultsOf } from '#shared/resultsOf.ts'
+import { POST, type Rpc } from '#shared/rpc.ts'
 
 import { CITATION } from './fixtures/assistant/CITATION.ts'
+import { CITED_EVENTS } from './fixtures/assistant/CITED_EVENTS.ts'
 
 const FIXTURES = `${import.meta.dir}/fixtures/assistant/`
 const NO_TOOLS = {
     list: [],
-    call: () => Promise.resolve({ content: [], failed: false }),
+    call: () => Promise.resolve({ content: [], isError: false }),
 }
 
 let api: Bun.Subprocess | undefined
@@ -66,113 +68,246 @@ function blocked(sent: AssistantMessage[]) {
     }))
 }
 
-// THE REVERTS: stream every text delta as it arrives in `provider.claudeApi` (`cited` answering
-// false), and the cited run arrives as two runs with no citations — `is 4217`, `.` — where one carrying
-// the page is due; sum only `input_tokens` and `output_tokens`, and the cache counts are gone —
-// `cache_read_input_tokens` undefined where 7 is due.
-test('an answer ends on the API’s stop_reason and usage, its cache counts with it, and a cited run arrives whole with its citations — 44.11, 44.104', async () => {
-    expect(await answered([{ role: 'user', content: 'my balance?' }])).toEqual([
-        { type: 'text', text: 'Your balance ' },
-        { type: 'text', text: 'is 4217.', citations: [CITATION] },
-        {
-            type: 'done',
-            stop_reason: 'end_turn',
-            usage: {
-                input_tokens: 4,
-                output_tokens: 6,
-                cache_creation_input_tokens: 2,
-                cache_read_input_tokens: 7,
-            },
-        },
-    ])
+// THE REVERT: yield only the events that write a block in `provider.claudeApi` (`message_start`,
+// `message_delta` and `message_stop` left out), and the usage — cache counts and all — and why the run
+// ended never reach a page: 8 events where 11 are due.
+test('provider.claudeApi yields every event the API streams, unchanged — 44.2, 44.11', async () => {
+    expect(await answered([{ role: 'user', content: 'my balance?' }])).toEqual(
+        CITED_EVENTS,
+    )
 })
 
-// THE REVERT: send an answer back as its words alone, its tool calls the server's to remember (the
-// `messages` before this change), and the API is handed `checking` and the cited run as two plain
-// strings — no `tool_use`, no `tool_result`, no citations.
-test('a conversation folded from its events goes back to the API as the blocks it was — 53.28, 44.38', async () => {
-    const answering = turn('assistant')
-    const events: AssistantEvent[] = [
-        { type: 'text', text: 'checking' },
-        { type: 'tool', id: 't1', name: 'lookup', handler: undefined },
-        { type: 'input', id: 't1', input: { account: 'checking' } },
-        {
-            type: 'result',
-            tool_use_id: 't1',
-            content: '[4217]',
-            is_error: false,
-            handler: undefined,
-            value: undefined,
-        },
-        { type: 'text', text: 'is 4217.', citations: [CITATION] },
-        { type: 'text', text: ' Anything else?' },
-        {
-            type: 'done',
-            stop_reason: 'end_turn',
+// An answer that called a tool: a run that writes words and a call whose input streams as JSON, what
+// the call answered, and a run that cites.
+const ANSWER: AssistantEvent[] = [
+    {
+        type: 'message_start',
+        message: {
+            id: 'msg_1',
+            type: 'message',
+            role: 'assistant',
+            model: 'claude-opus-5-5',
+            content: [],
+            stop_reason: null,
+            stop_sequence: null,
             usage: { input_tokens: 1, output_tokens: 1 },
         },
+    },
+    {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'text', text: '' },
+    },
+    {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'check' },
+    },
+    {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'ing' },
+    },
+    { type: 'content_block_stop', index: 0 },
+    {
+        type: 'content_block_start',
+        index: 1,
+        content_block: {
+            type: 'tool_use',
+            id: 't1',
+            name: 'lookup',
+            input: {},
+        },
+    },
+    {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '{"account":' },
+    },
+    {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '"checking"}' },
+    },
+    { type: 'content_block_stop', index: 1 },
+    {
+        type: 'message_delta',
+        delta: { stop_reason: 'tool_use', stop_sequence: null },
+        usage: { input_tokens: 1, output_tokens: 3 },
+    },
+    { type: 'message_stop' },
+    {
+        type: 'tool_result',
+        tool_use_id: 't1',
+        content: [{ type: 'text', text: '[4217]' }],
+        is_error: false,
+        value: [4217],
+    },
+    {
+        type: 'message_start',
+        message: {
+            id: 'msg_2',
+            type: 'message',
+            role: 'assistant',
+            model: 'claude-opus-5-5',
+            content: [],
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 2, output_tokens: 1 },
+        },
+    },
+    {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'text', text: '', citations: [] },
+    },
+    {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'citations_delta', citation: CITATION },
+    },
+    {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'is 4217.' },
+    },
+    { type: 'content_block_stop', index: 0 },
+    {
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { input_tokens: 2, output_tokens: 4 },
+    },
+    { type: 'message_stop' },
+]
+
+// What `ANSWER` amounts to, as the Messages API holds it.
+const ANSWERED: AssistantMessage[] = [
+    {
+        role: 'assistant',
+        content: [
+            { type: 'text', text: 'checking' },
+            {
+                type: 'tool_use',
+                id: 't1',
+                name: 'lookup',
+                input: { account: 'checking' },
+            },
+        ],
+    },
+    {
+        role: 'user',
+        content: [
+            {
+                type: 'tool_result',
+                tool_use_id: 't1',
+                content: [{ type: 'text', text: '[4217]' }],
+                is_error: false,
+            },
+        ],
+    },
+    {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'is 4217.', citations: [CITATION] }],
+    },
+]
+
+// THE REVERTS: read a call's input at `content_block_start` and leave its JSON unread in
+// `MessageAccumulator`, and the call goes back with `input: {}` where `{ account: 'checking' }` is due;
+// start a citation list of the event's own at a block's start rather than a copy, and the citation is
+// written into `ANSWER`'s event too — the next fold of it holds the citation twice.
+test('an answer’s events amount to the messages the API holds, a call’s input its JSON and a cited run its citations — 44.105', () => {
+    expect(assistantMessage('assistant', ANSWER)).toEqual(ANSWERED)
+    expect(assistantMessage('assistant', ANSWER)).toEqual(ANSWERED)
+})
+
+// THE REVERT: keep a turn's words alone in `blocksOf`, and the API is handed `checking` and
+// `is 4217.` as plain words: no `tool_use`, no `tool_result`, no citations.
+test('a conversation held as its messages goes back to the API exactly as it was — 44.38, 53.28', async () => {
+    const conversation: AssistantMessage[] = [
+        await assistantMessage('user', ['my balance?']),
+        ...assistantMessage('assistant', ANSWER),
+        await assistantMessage('user', ['and savings?']),
     ]
-    for (const event of events) fold(answering, event)
-    const conversation = messages([
-        turn('user', [{ type: 'text', text: 'my balance?' }]),
-        answering,
-        turn('user', [{ type: 'text', text: 'and savings?' }]),
-    ])
-    expect(conversation).toEqual([
-        { role: 'user', content: 'my balance?' },
-        {
-            role: 'assistant',
-            content: [
-                { type: 'text', text: 'checking' },
-                {
-                    type: 'tool_use',
-                    id: 't1',
-                    name: 'lookup',
-                    input: { account: 'checking' },
-                },
-            ],
-        },
-        {
-            role: 'user',
-            content: [
-                {
-                    type: 'tool_result',
-                    tool_use_id: 't1',
-                    content: '[4217]',
-                    is_error: false,
-                },
-            ],
-        },
-        {
-            role: 'assistant',
-            content: [
-                { type: 'text', text: 'is 4217.', citations: [CITATION] },
-                { type: 'text', text: ' Anything else?' },
-            ],
-        },
-        { role: 'user', content: 'and savings?' },
-    ])
     await answered(conversation)
-    const sent = (await (await fetch(base)).json()) as {
-        messages: unknown
-    }
+    const sent = (await (await fetch(base)).json()) as { messages: unknown }
     expect(sent.messages).toEqual(blocked(conversation))
 })
 
-// A call the answer never heard back from — stopped while it ran — goes back with neither its
-// `tool_use` nor a `tool_result`, which the API refuses one without the other. THE REVERT: send every
-// tool part as a `tool_use` whether it answered or not, and the turn carries a call with no result.
-test('a call that never answered goes back as neither its call nor its result — 53.28', () => {
-    const answering = turn('assistant')
-    fold(answering, { type: 'text', text: 'looking' })
-    fold(answering, {
-        type: 'tool',
-        id: 't1',
-        name: 'lookup',
-        handler: undefined,
-    })
-    answering.stop_reason = 'stopped'
-    expect(messages([answering])).toEqual([
-        { role: 'assistant', content: 'looking' },
+// A call the answer never heard back from — the turn cap reached, or stopped while it ran — goes back
+// with neither its `tool_use` nor a `tool_result`, which the API refuses one without the other. THE
+// REVERT: leave `settle` out of `assistantMessage`, and the turn carries a call with no result.
+test('a call that never answered is left out of what an answer amounts to — 44.105', () => {
+    const unanswered = ANSWER.slice(0, 11)
+    expect(assistantMessage('assistant', unanswered)).toEqual([
+        { role: 'assistant', content: [{ type: 'text', text: 'checking' }] },
     ])
+})
+
+// 53.32 — A DELTA EXTENDS THE BLOCK IT LANDS IN, and leaves it the block it was: a page keyed by its
+// blocks redraws one block a chunk, not the answer. THE REVERT: copy the answering message's blocks
+// after each event `chat` folds, and the block a later delta lands in is a new one — the first
+// delta's block, the same words, is no longer the one held.
+test('chat folds an answer in place, a block keeping its identity from its first delta to its last — 53.32', async () => {
+    let release: () => void = () => {}
+    const paused = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    const talk = chat({
+        async *ask() {
+            yield* ANSWER.slice(0, 3)
+            await paused
+            yield* ANSWER.slice(3)
+        },
+    })
+    talk.draft.set('my balance?')
+    ;(talk.composer.onsubmit as (event: Event) => void)(new Event('submit'))
+    while (talk.messages().length < 2) await Bun.sleep(1)
+    const first = (talk.messages()[1]?.content as { text: string }[])[0]
+    expect(first?.text).toBe('check')
+    release()
+    while (talk.streaming) await Bun.sleep(1)
+    const held = talk.messages()[1]?.content as { text: string }[]
+    expect(held[0]).toBe(first)
+    expect(first?.text).toBe('checking')
+    expect(talk.messages().slice(1)).toEqual(ANSWERED)
+})
+
+// 44.51 — WHAT A HANDLER'S CALLS ANSWERED, read off the messages by the tool its surface names it: a
+// failed call's left out. THE REVERT: drop `block.is_error !== true` from `resultsOf`, and the refused
+// call's words are a value too — `["ada", "refused"]` where `["ada"]` is due.
+test('resultsOf reads what a handler’s calls answered off the messages — 44.51', () => {
+    const whoami = POST(() => 'ada') as Rpc<string, never>
+    whoami.address = '/invoices/whoami'
+    const call = (id: string, name: string): AssistantMessage => ({
+        role: 'assistant',
+        content: [{ type: 'tool_use', id, name, input: {} }],
+    })
+    const answer = (
+        id: string,
+        text: string,
+        is_error = false,
+    ): AssistantMessage => ({
+        role: 'user',
+        content: [
+            {
+                type: 'tool_result',
+                tool_use_id: id,
+                content: [{ type: 'text', text }],
+                is_error,
+            },
+        ],
+    })
+    expect(
+        resultsOf(
+            [
+                call('a', 'post_invoices_whoami'),
+                answer('a', '"ada"'),
+                call('b', 'web_search'),
+                answer('b', '"elsewhere"'),
+                call('c', 'post_invoices_whoami'),
+                answer('c', '"refused"', true),
+            ],
+            whoami,
+        ),
+    ).toEqual(['ada'])
 })

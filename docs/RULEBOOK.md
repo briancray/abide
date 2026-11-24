@@ -4437,8 +4437,9 @@ their own.
 44.1 `assistant` MUST answer only through a handler that yields it, and MUST NOT mount an address
 of its own.
 
-44.2 `assistant` MUST yield the same `AssistantEvent` sequence for one conversation whichever
-`Provider` ran it.
+44.2 `assistant` MUST yield each run of the model as the Messages API streams it, event for event
+and unchanged save the tool name 44.50 names, and between runs a `tool_result` event for each call
+that run made, the same sequence for one conversation whichever `Provider` ran it.
 
 44.3 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript whose last
 `AssistantMessage` is not the user's.
@@ -4464,10 +4465,9 @@ stops for `tool_use`, and MUST send each assistant turn's blocks back as they ar
 44.10 `provider.claudeApi` MUST throw where no `apiKey` is given, and MUST NOT read a key from the
 environment.
 
-44.11 A conversation MUST end on a `done` carrying the Messages API's `stop_reason` and the `usage`
-of the whole conversation under the API's names — each count summed over every request it made —
-and one reaching `maxTurns` with a tool call pending MUST end on a `done` whose `stop_reason` is
-`max_turns`, and MUST NOT run that call.
+44.11 A run's usage and why it stopped MUST reach a page as its `message_start` and its
+`message_delta` carry them under the Messages API's names, and a conversation reaching `maxTurns` with a
+tool call pending MUST end after the run that called it, and MUST NOT run that call.
 
 44.12 `provider.claudeApi` MUST send the results of one turn's tool calls back in one message.
 
@@ -4519,8 +4519,8 @@ its token within them MUST resume the stream with every frame the dropped one ha
 44.27 A bridge whose stream from `/__abide/bridge` carries no line for 45 seconds MUST end it and
 redial it as 44.25 says.
 
-44.28 A `Provider` MUST yield a tool call's `tool` event when the model starts writing the call,
-and its `input` event, with the same `id`, once the call is written.
+44.28 A `Provider` MUST yield each event as it arrives: a tool call's `content_block_start` before
+its input is written, and its `input_json_delta` events as they are.
 
 44.29 A tool of the visitor's machine — built-in by its name, or an MCP tool as `mcp__<server>__<tool>`
 — MUST be available to a turn only where the site's `tools` names it and the visitor's `--tools`
@@ -4533,10 +4533,11 @@ available.
 before it exits.
 
 44.31 A conversation MUST write one `debug` line on `abide:assistant` when its events end, naming
-its stop reason, the transcript's length, the tool calls it made, its usage and how long it took,
-and naming it `unfinished` where it ended without a `done`, followed by why — `aborted` where the
-signal 44.57 hands its provider aborted, else `failed` where its provider threw, with the throw's message ending the
-line, else `stopped` where its caller stopped reading.
+its last run's stop reason, the transcript's length, the tool calls it made, the input and output
+tokens of every run it finished and how long it took, and naming it `unfinished` where its events
+ended before they did, followed by why — `aborted` where the signal 44.57 hands its provider
+aborted, else `failed` where its provider threw, with the throw's message ending the line, else
+`stopped` where its caller stopped reading.
 
 44.32 A command `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge` mints with
 `tools` MUST grant those tools after its `--` as `--tools`, and one minted without `tools` MUST
@@ -4552,7 +4553,7 @@ and the command it yields MUST pair that one.
 
 44.35 A `Toolbox` call MUST hand as its `ToolAnswer`'s `content` the pieces `/__abide/mcp` carries
 for the same call, `provider.claudeApi` MUST show the model those pieces as the call's result, and
-the `result` `AssistantEvent` MUST carry their words as its `content` and none of their images.
+the `tool_result` `AssistantEvent` MUST carry as its `content` the blocks the model was shown.
 
 44.36 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript holding an
 `AssistantContent` image or document with no `source`, an image whose base64 `source` is not of
@@ -4561,7 +4562,8 @@ the `result` `AssistantEvent` MUST carry their words as its `content` and none o
 other source and any search result.
 
 44.37 `assistant` MUST refuse 400, before any `Provider` is reached, a transcript holding an
-`AssistantContent` image, document or search result in a turn that is not the user's.
+`AssistantContent` image, document or search result in a turn that is not the user's, and
+`assistantMessage` MUST throw, naming it, on a file it is handed for a turn that is not the user's.
 
 44.38 `provider.claudeApi` MUST send each `AssistantContent` block that is not words to the model
 as it is, the Messages API's block, in its place in its turn — a `tool_use` and a `tool_result`
@@ -4602,33 +4604,36 @@ report that turn failed.
 44.47 A bridge MUST reach `/__abide/bridge` over a certificate that either bun's own authorities or
 the authorities its machine trusts sign, however the bridge was started.
 
-44.48 `assistant` MUST carry on each `tool` and `result` `AssistantEvent` of a call to a tool its
-`Toolbox` lists the `method` and the `address` the called handler's `Rpc` reads, and MUST carry
-`undefined` for a call to any other tool.
+44.48 An `AssistantEvent` MUST name the handler a call reached by nothing but its `tool_use` block's
+`name`, the tool name 20.13 lists the handler under.
 
-44.49 A `result` `AssistantEvent` MUST carry as its `value` its `content` read as JSON where its
-call did not fail and its handler has a schema 19.21 derives, and MUST carry `undefined` otherwise.
+44.49 A `tool_result` `AssistantEvent` MUST carry as its `value` its `content`'s words read as
+JSON where its call did not fail and its handler has a schema 19.21 derives, and MUST carry
+`undefined` otherwise.
 
-44.50 A `Provider` MUST name the tool of each `tool` event it yields as its `Toolbox` lists it.
+44.50 A `Provider` MUST name the tool of each `tool_use` block it streams as its `Toolbox` lists it.
 
-44.51 `resultsOf` MUST hand back, in order, the `value` of each `result` `AssistantEvent` whose
-handler is the `Rpc` it is given, and none of a call that failed.
+44.51 `resultsOf` MUST hand back, in order, the words of each `tool_result` block in the messages
+it is given read as JSON, whose `tool_use` names the tool 20.13 lists the `Rpc` it is given under, and
+none of a call that failed or whose words spell no JSON.
 
-44.52 `userMessage` MUST draw an image longer than 1568 pixels on its long side down to 1568, and a
-JPEG and an image of a type 44.36 does not name at their own size, so a photo's metadata — where it
-was taken — does not go with it, and MUST NOT draw a GIF.
+44.52 `assistantMessage` MUST draw an image longer than 1568 pixels on its long side down to 1568,
+and a JPEG and an image of a type 44.36 does not name at their own size, so a photo's metadata —
+where it was taken — does not go with it, and MUST NOT draw a GIF.
 
-44.53 An image `userMessage` draws MUST be a PNG where it was a PNG or a WebP, and a JPEG otherwise.
+44.53 An image `assistantMessage` draws MUST be a PNG where it was a PNG or a WebP, and a JPEG
+otherwise.
 
-44.54 `userMessage` MUST hand on as it is an image it does not draw or cannot, and MUST throw where
-that image is of a type 44.36 does not name.
+44.54 `assistantMessage` MUST hand on as it is an image it does not draw or cannot, and MUST throw
+where that image is of a type 44.36 does not name.
 
-44.55 `userMessage` MUST make a user turn of a block per part, in the order given: words where they
-hold more than whitespace as a text block, an image or a HEIC or HEIF as an image 44.52 draws, a PDF
-as a base64 document, a file of `text/*`, of JSON or named `.csv`, `.json`, `.md` or `.txt` as a text
-document, a document titled with its file's name where it has one, a URL whose path ends `.pdf` as a
-document and one ending `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp` as an image, each of that URL, and
-a block as it is written — and MUST throw, naming the file or the URL, on any other.
+44.55 `assistantMessage` given a role and parts MUST make a message of that role, of a block per
+part, in the order given: words where they hold more than whitespace as a text block, an image or a
+HEIC or HEIF as an image 44.52 draws, a PDF as a base64 document, a file of `text/*`, of JSON or
+named `.csv`, `.json`, `.md` or `.txt` as a text document, a document titled with its file's name
+where it has one, a URL whose path ends `.pdf` as a document and one ending `.png`, `.jpg`, `.jpeg`,
+`.gif` or `.webp` as an image, each of that URL, and a block as it is written — and MUST throw,
+naming the file or the URL, on any other.
 
 44.56 The `install` of a pairing `provider.claudeCode.bridgeCommand` or `provider.claudeCode.bridge`
 mints MUST run `abide-bridge install` at the bridge release its command runs.
@@ -4818,9 +4823,18 @@ run it, MUST run its conversation carrying no asker's credentials, and MUST thro
 44.103 `provider.claudeCode` MUST refuse 400, before the bridge is asked, a transcript holding an
 `AssistantContent` block, or a block inside one, whose `cache_control` is not of `ttl` `'1h'`.
 
-44.104 A `Provider` MUST yield a cited run of words — a text block the model cites from — as one
-`text` event once the block ends, carrying the block's `citations`, and MUST yield every other run
-of words as it arrives.
+44.104 A `Provider` MUST NOT hold back a cited run of words: its citations reach a page as the
+`citations_delta` events the Messages API streams them as, among its words.
+
+44.105 `assistantMessage` given `'assistant'` and an answer's events MUST make the messages
+they amount to as the Messages API's clients accumulate its stream: a `message_start` opens an
+assistant message, a `content_block_start` puts its block at its index, a `text_delta` extends that
+block's words, a `citations_delta` adds to its `citations`, a `thinking_delta` and a
+`signature_delta` fill a thinking block, and a block's `input_json_delta` events, read as JSON at its
+`content_block_stop`, are its `input` — or the words written, where they are not JSON. A `tool_result`
+event MUST go into the user message after the run, every result of one run in one message. A
+`tool_use` no `tool_result` answers, and an assistant message left with nothing in it, MUST be left
+out.
 
 # 45. Offline
 
@@ -6379,32 +6393,31 @@ is absent or refuses, laying every string its value holds on the `copy` event un
 53.23 `copy` MUST write `data-copied` on its element once a copy lands, and MUST remove it
 `copiedFor` milliseconds after the last.
 
-53.24 `transcript.fold` MUST join a `text` event carrying no `citations` to an uncited text part
-ending the turn, in place, MUST otherwise add a text part holding it, and MUST add a `text` event
-carrying `citations` as a text part of its own holding them.
+53.24 `chat` MUST show a message's blocks in order — words a message holds as a string as one
+text block — and MUST NOT show its `tool_result` blocks among them.
 
-53.25 `transcript.fold` MUST set a tool part's `input` from the `input` event naming its id, and its
-`content`, `is_error` and `value` from the `result` event whose `tool_use_id` names it.
+53.25 `chat`'s `tool` part for a `tool_use` block MUST read its status from the `tool_result`
+block naming its id: `running` before there is one, `failed` where it is an error, `done` otherwise.
 
-53.26 `transcript.fold` MUST add a `permission` event as a permission part whose `allowed` is
-`undefined`.
+53.26 `chat` MUST hold a `permission` event as one of its `permissions`, its `allowed`
+`undefined`, until the next answer starts.
 
-53.27 `transcript.fold` MUST set a turn's `stop_reason` from a `done` event.
+53.27 `chat`'s `stop_reason` MUST be the `stop_reason` of the latest answer's last `message_delta`.
 
-53.28 `transcript.messages` MUST send a user turn's text, image, document and search result parts
-in order, and an assistant turn as the Messages API holds it: its text parts with their citations
-and each answered tool part as a `tool_use`, with a user turn after them holding each such call's
-`tool_result`, the assistant's words after its calls in a turn of their own — and MUST leave out a
-tool part that holds no `content`, its call and its result alike.
+53.28 `chat` MUST NOT show as the person's a user message holding only `tool_result` blocks, and
+MUST leave out of its messages, once an answer ends, what 44.105 leaves out.
 
-53.29 `transcript.messages` MUST leave out a turn with nothing to send.
+53.29 A `chat` message's `ends` MUST be true where it is an assistant message followed by nothing,
+or by a message the person wrote.
 
-53.30 `transcript.turn` MUST set every field an `AssistantTurn` declares.
+53.30 `chat`'s `permissions`, `stop_reason` and `failed` MUST be the parts' own, and none of them
+written to its messages.
 
-53.31 `chat` MUST call `ask` with what `transcript.messages` makes of the conversation, the new
-question included, and with a `signal` of its own.
+53.31 `chat` MUST call `ask` with its messages, the new question among them as a user message of
+what was attached and what was written, and with a `signal` of its own.
 
-53.32 `chat` MUST fold each event `ask` streams into the answering turn once, as it arrives.
+53.32 `chat` MUST fold each event `ask` streams into its messages once, as it arrives, as 44.105
+accumulates it, extending the block it lands in in place.
 
 53.33 `chat`'s `input` part MUST send on Enter, and MUST NOT on Shift+Enter or on an Enter an input
 method is composing.
@@ -6413,18 +6426,19 @@ method is composing.
 and what it is sent while an answer streams MUST be queued, shown in its composer until it is
 cancelled or the answer ends, and asked once the answer ends.
 
-53.35 `chat`'s `stop` part MUST abort the `signal` it handed `ask`, keeping what arrived and setting
-the answer's `stop_reason` to `stopped`.
+53.35 `chat`'s `stop` part MUST abort the `signal` it handed `ask`, keeping what arrived and
+setting `stop_reason` to `stopped`.
 
-53.36 `chat` MUST set an answer's `failed` to the message of what `ask` threw, save where its `stop`
-part aborted it.
+53.36 `chat` MUST set `failed` to the message of what `ask` threw, save where its `stop` part
+aborted it.
 
 53.37 `chat` MUST take a file 44.55 makes a block of, pasted into or dropped on the element carrying
-its `composer` part, as the image or document part `userMessage` makes of it, and MUST leave out one
-`userMessage` throws on.
+its `composer` part, as the image or document block `assistantMessage` makes of it, and MUST leave
+out one `assistantMessage` throws on.
 
-53.38 `chat` MUST answer a permission part through `permit` with the part's id and the visitor's
-answer, and MUST disable the part's buttons where `permit` is absent or the part is answered.
+53.38 `chat` MUST answer a permission prompt through `permit` with the prompt's id and the
+visitor's answer, and MUST disable the prompt's buttons where `permit` is absent or the prompt is
+answered.
 
 53.39 `chat`'s `transcript` part MUST be `autoscroll`'s `host`, and its `jump` part `autoscroll`'s
 `jump`.
@@ -6450,11 +6464,11 @@ carries that it does not take,
 transfer whose `files` hold none carries the files in its `items`, for what it takes and turns away
 alike.
 
-53.46 A `chat` turn's `retry` MUST drop the turn and every one after it and ask again for an answer
-to what is left.
+53.46 A `chat` message's `retry` MUST drop every message after the last one the person wrote at or
+before it, and ask again for an answer to what is left.
 
-53.47 `chat` MUST show the turns `turns` holds, and MUST write every turn it adds and every part it
-folds to `turns`.
+53.47 `chat` MUST show the messages `messages` holds, and MUST write every message it adds and
+every event it folds to `messages`.
 
 53.48 `pairing`'s `step` MUST be `slow` once it has been connecting for `slowAfter` milliseconds, and
 `pairing`'s `retry` MUST take it back to `connecting`.

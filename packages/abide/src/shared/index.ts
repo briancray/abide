@@ -20,9 +20,10 @@ export type {
     AssistantContent,
     AssistantEvent,
     AssistantMessage,
+    AssistantUsage,
 } from './AssistantEvent.ts'
-// 53.24-53.30 — a conversation as a chat holds it, and the namespace folding an answer into one.
-export type { AssistantTurn, AssistantTurnPart } from './AssistantTurn.ts'
+// 44.52-44.55, 44.105 — a message as a visitor writes it, or as an answer's events amount to it.
+export { assistantMessage } from './assistantMessage.ts'
 // 33.23 — an element's attributes, typed as a component's props.
 export type { Attributes } from './Attributes.ts'
 // 53.61-53.78, 53.99-53.101 — a scroll-snap carousel resting on a selection, as parts.
@@ -55,7 +56,8 @@ export {
 export {
     type ChatOptions,
     type ChatParts,
-    type ChatTurnParts,
+    type ChatMessageParts,
+    type ChatPermission,
     chat,
 } from './chat.ts'
 export { type Cookies, cookies } from './cookies.ts'
@@ -294,9 +296,6 @@ export {
 } from './calendar.ts'
 // 52.102, 52.103 — the instant a day and a time name in a zone.
 export { instantAt } from './instantAt.ts'
-export * as transcript from './transcript/index.ts'
-// 44.52-44.55 — what a visitor writes and attaches, as the user turn a transcript carries.
-export { userMessage } from './userMessage.ts'
 export * as outlet from './outlet.ts'
 export * as tooltip from './tooltip/index.ts'
 // 50.5 — the queued questions, shown where `prompts.host` is spread.

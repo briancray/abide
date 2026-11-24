@@ -14,7 +14,7 @@ import {
 
 const NEVER = new Promise<never>(() => {})
 
-/** A provider that says one thing and then waits forever, and the signal it was handed. */
+/** A provider that streams one event and then waits forever, and the signal it was handed. */
 function stuckProvider(): { provider: Provider; handed: AbortSignal[] } {
     const handed: AbortSignal[] = []
     return {
@@ -22,7 +22,7 @@ function stuckProvider(): { provider: Provider; handed: AbortSignal[] } {
         provider: {
             async *run(_messages, _tools, { signal }) {
                 handed.push(signal)
-                yield { type: 'text', text: 'thinking' }
+                yield { type: 'ping' }
                 await NEVER
             },
         },
@@ -41,7 +41,7 @@ test('a caller aborting its signal ends a conversation whose provider is stuck â
         const events = assistant(ASKED, provider, { signal: caller.signal })
         expect(await events.next()).toEqual({
             done: false,
-            value: { type: 'text', text: 'thinking' },
+            value: { type: 'ping' },
         })
         const pending = events.next()
         caller.abort()
@@ -125,7 +125,7 @@ test('a global handler streams a conversation its first reader leaving does not 
         },
     )
     reader.abort()
-    expect(said).toEqual([{ type: 'text', text: 'thinking' }])
+    expect(said).toEqual([{ type: 'ping' }])
     expect(handed[0]?.aborted).toBe(false)
     const drained = stopUnownedPolls()
     expect(handed[0]?.aborted).toBe(true)

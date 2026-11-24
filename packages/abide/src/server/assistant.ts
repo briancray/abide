@@ -27,7 +27,6 @@ import type {
 import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
-import { mounted } from '#shared/mount.ts'
 import { randomToken } from '#shared/randomToken.ts'
 import { abortSignal } from '#shared/reactive/poll.ts'
 import { refuse } from '#shared/refuse.ts'
@@ -48,21 +47,14 @@ import {
     scopeFor,
     within,
 } from './requestScope.ts'
-import type { Listed } from './surfaceOf.ts'
 
 /**
- * An `AssistantEvent` as a `Provider` yields it: a tool call named, and its result in words, with what
- * `assistant` reads off the app's own surface for both — the handler, and the value — still to come.
+ * An `AssistantEvent` as a `Provider` yields it: a tool call's result with the value `assistant` reads
+ * off the app's own surface still to come.
  */
 export type ProviderEvent =
-    | Exclude<AssistantEvent, { type: 'tool' | 'result' }>
-    | { type: 'tool'; id: string; name: string }
-    | {
-          type: 'result'
-          tool_use_id: string
-          content: string
-          is_error: boolean
-      }
+    | Exclude<AssistantEvent, { type: 'tool_result' }>
+    | Omit<Extract<AssistantEvent, { type: 'tool_result' }>, 'value'>
 
 /** A tool as the app's MCP surface lists it. */
 export type ToolDefinition = {
@@ -77,13 +69,13 @@ export type ToolDefinition = {
     outputSchema: unknown
 }
 
-/** What a tool call answered: its pieces, and whether it failed. 20.21, 44.35. */
+/** What a tool call answered, as MCP's result has it: its content, and whether it failed. 20.21, 44.35. */
 export type ToolAnswer = {
     content: (
         | { type: 'text'; text: string }
         | { type: 'image'; data: string; mimeType: string }
     )[]
-    failed: boolean
+    isError: boolean
 }
 
 /** The app's MCP tools, called as the asker. */
@@ -285,60 +277,40 @@ async function* endedBy(
     }
 }
 
-/** A called tool's handler, and whether its answer is a value read as JSON (19.21). */
-type Called = {
-    handler: { method: Listed['method']; address: string } | undefined
-    valued: boolean
-}
-
-const NOT_THE_APPS: Called = { handler: undefined, valued: false }
-
 /**
- * `events` with each call's handler, and each answer's value, read off `surface`. 44.48, 44.49.
+ * `events` with each answer's value read off `surface`: a call to a handler of the app that answers
+ * a value, read as JSON (19.21). 44.49.
  *
  * READ HERE RATHER THAN BY EACH PROVIDER, so a provider the app wrote yields the same events abide's
  * do (44.2): a provider names the tool as the `Toolbox` lists it (44.50), and the rest is the surface's.
+ * The handler a call reached is its tool's name, which a page resolves itself (44.48, 44.51).
  */
 async function* read(
     events: AsyncGenerator<ProviderEvent>,
     surface: McpSurface,
 ): AsyncGenerator<AssistantEvent> {
-    const calls = new Map<string, Called>()
+    // Whether each call, by id, reached a handler answering a value.
+    const valued = new Map<string, boolean>()
     for await (const event of events) {
-        if (event.type === 'tool') {
-            const tool = surface.tool(event.name)
-            const called: Called =
-                tool === undefined
-                    ? NOT_THE_APPS
-                    : {
-                          // 16.10 — the address an `Rpc` carries, under the mount.
-                          handler: {
-                              method: tool.method,
-                              address: mounted(tool.address),
-                          },
-                          valued: tool.result !== undefined,
-                      }
-            calls.set(event.id, called)
+        if (
+            event.type === 'content_block_start' &&
+            event.content_block.type === 'tool_use'
+        ) {
+            const tool = surface.tool(event.content_block.name)
+            valued.set(
+                event.content_block.id,
+                tool !== undefined && tool.result !== undefined,
+            )
+            yield event
+        } else if (event.type === 'tool_result')
             yield {
-                type: 'tool',
-                id: event.id,
-                name: event.name,
-                handler: called.handler,
-            }
-        } else if (event.type === 'result') {
-            const called = calls.get(event.tool_use_id) ?? NOT_THE_APPS
-            yield {
-                type: 'result',
-                tool_use_id: event.tool_use_id,
-                content: event.content,
-                is_error: event.is_error,
-                handler: called.handler,
+                ...event,
                 value:
-                    called.valued && !event.is_error
-                        ? valueOf(event.content)
+                    valued.get(event.tool_use_id) === true && !event.is_error
+                        ? valueOf(textOf(event.content))
                         : undefined,
             }
-        } else yield event
+        else yield event
     }
 }
 
@@ -364,32 +336,49 @@ async function* traced(
 ): AsyncGenerator<AssistantEvent> {
     const started = performance.now()
     let calls = 0
-    let done: Extract<AssistantEvent, { type: 'done' }> | undefined
+    // Each run's usage is its `message_start`'s, overwritten by its `message_delta`'s.
+    let run: Record<string, unknown> = {}
+    let input = 0
+    let output = 0
+    let stop: string | null = null
+    let ended = false
     let failure: string | undefined
     try {
         for await (const event of events) {
-            if (event.type === 'tool') calls += 1
-            else if (event.type === 'done') done = event
+            if (
+                event.type === 'content_block_start' &&
+                event.content_block.type === 'tool_use'
+            )
+                calls += 1
+            else if (event.type === 'message_start')
+                run = { ...event.message.usage }
+            else if (event.type === 'message_delta') {
+                Object.assign(run, event.usage)
+                stop = event.delta.stop_reason
+            } else if (event.type === 'message_stop') {
+                input += Number(run.input_tokens ?? 0)
+                output += Number(run.output_tokens ?? 0)
+            }
             yield event
         }
+        ended = true
     } catch (thrown) {
         failure = messageOf(thrown)
         throw thrown
     } finally {
         const ending =
-            done?.stop_reason ??
-            (signal.aborted
-                ? 'unfinished aborted'
-                : failure === undefined
-                  ? 'unfinished stopped'
-                  : 'unfinished failed')
+            ended && stop !== null
+                ? stop
+                : signal.aborted
+                  ? 'unfinished aborted'
+                  : failure === undefined
+                    ? 'unfinished stopped'
+                    : 'unfinished failed'
         ASSISTANT_LOG.debug(
             ending,
             `${messageCount} messages`,
             `${calls} tool calls`,
-            done === undefined
-                ? 'no usage'
-                : `${done.usage.input_tokens}/${done.usage.output_tokens} tokens`,
+            `${input}/${output} tokens`,
             `${(performance.now() - started).toFixed(1)}ms`,
             ...(ending === 'unfinished failed' ? [failure] : []),
         )
@@ -425,11 +414,7 @@ export function forwardOf(tools: Toolbox): McpForward {
         let listed = false
         for (const tool of tools.list) if (tool.name === name) listed = true
         if (!listed) return mcpFailure(-32602, `No tool named ${String(name)}.`)
-        const { content, failed } = await tools.call(
-            name as string,
-            input ?? {},
-        )
-        return { result: { content, isError: failed } }
+        return { result: await tools.call(name as string, input ?? {}) }
     }
 }
 
@@ -522,7 +507,7 @@ function toolboxOver(surface: McpSurface, asker: Request): Toolbox {
                             text: messageOf(thrown),
                         },
                     ],
-                    failed: true,
+                    isError: true,
                 }
             }
         },
@@ -581,15 +566,19 @@ export function blocksOf(content: AssistantContent[]): AssistantContent[] {
  * A tool's answer as the Messages API's blocks for a `tool_result`: text as text, save whitespace
  * alone, and an MCP image as an image block. 44.35.
  */
-export function toolBlocksOf(content: ToolAnswer['content']): unknown[] {
-    const blocks: unknown[] = []
+export function toolBlocksOf(
+    content: ToolAnswer['content'],
+): Extract<AssistantEvent, { type: 'tool_result' }>['content'] {
+    const blocks: Extract<AssistantEvent, { type: 'tool_result' }>['content'] =
+        []
     for (const piece of content)
         if (piece.type === 'image')
             blocks.push({
                 type: 'image',
                 source: {
                     type: 'base64',
-                    media_type: piece.mimeType,
+                    // 20.21 — an MCP image the app's surface answers is one a model is shown.
+                    media_type: piece.mimeType as 'image/png',
                     data: piece.data,
                 },
             })

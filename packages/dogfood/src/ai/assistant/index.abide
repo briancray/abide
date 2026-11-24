@@ -5,13 +5,7 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={[
-        '/ai/provider',
-        '/ai/results-of',
-        '/ai/transcript',
-        '/headless/chat',
-        '/handlers/mcp',
-    ]}
+    seeAlso={['/ai/provider', '/ai/results-of', '/headless/chat', '/handlers/mcp']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/assistant/lib/AssistantChat.test.ts',
@@ -20,13 +14,19 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/assistant.test.ts',
             from: [
-                "test('a tool call is announced before its input is written — 44.28'",
+                "test('a tool call is seen before its input is written — 44.28'",
             ],
         },
         {
             path: 'packages/abide/tests/assistantBlocks.test.ts',
             from: [
-                "test('an answer ends on the API’s stop_reason and usage, its cache counts with it, and a cited run arrives whole with its citations — 44.11, 44.104'",
+                "test('provider.claudeApi yields every event the API streams, unchanged — 44.2, 44.11'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/assistant.test.ts',
+            from: [
+                "test('both providers play one conversation as one event sequence, tools called as the asker — 44.2, 44.7, 44.17'",
             ],
         },
     ]}
@@ -59,8 +59,8 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Show the answer as its words arrive">
-        <p>Call the handler like any stream. Each <code>text</code> event is a piece of the
-            reply, so join them in a derived value.</p>
+        <p>Call the handler like any stream. Each run streams as the Messages API streams it, so
+            a <code>text_delta</code> is a piece of the reply: join them in a derived value.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import { memo } from '@abide/abide'
@@ -72,7 +72,11 @@ import Section from '#src/lib/Section.abide'
             const answer = memo(() => {
                 let text = ''
                 for (const event of events)
-                    if (event.type === 'text') text += event.text
+                    if (
+                        event.type === 'content_block_delta' &&
+                        event.delta.type === 'text_delta'
+                    )
+                        text += event.delta.text
                 return text
             })
             </script>
@@ -82,45 +86,47 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Log what an answer read from the cache">
-        <p>The <code>done</code> event carries the Messages API's <code>stop_reason</code> and
-            the <code>usage</code> of the whole conversation under the API's names, its cache
-            counts included.</p>
+        <p>Each run's <code>message_start</code> and <code>message_delta</code> carry the
+            Messages API's <code>usage</code> as it counts it, cache counts included, and the
+            <code>message_delta</code> its <code>stop_reason</code>.</p>
         <Code language="ts" caption="server" code={`
             import { type AssistantEvent, log } from '@abide/abide/server'
 
             export function logUsage(event: AssistantEvent) {
-                if (event.type !== 'done') return
-                const { cache_read_input_tokens } = event.usage
-                log.info(event.stop_reason, cache_read_input_tokens)
+                if (event.type !== 'message_start') return
+                const { cache_read_input_tokens } = event.message.usage
+                log.info('read from the cache', cache_read_input_tokens)
             }
         `} />
     </Section>
 
     <Section level={3} title="Test the assistant against a recorded model">
-        <p>A <code>Provider</code> is one method, <code>run</code>, yielding events. Write one
-            with fixed lines, and the tool call it makes still runs the real handler.</p>
+        <p>A <code>Provider</code> is one method, <code>run</code>, yielding each run as the
+            Messages API streams it, and what each tool call answered between runs. Write one with
+            fixed lines, and the tool call it makes still runs the real handler.</p>
         <Code language="ts" caption="server" code={`
             import type { Provider } from '@abide/abide/server'
+            import { recordedRun } from '#src/lib/recordedRun.ts'
 
             const recorded: Provider = {
                 async *run(_messages, tools) {
                     const name = 'get_assistant_searchContacts'
                     const input = { name: 'Ada' }
-                    yield { type: 'tool', id: 't1', name }
-                    yield { type: 'input', id: 't1', input }
-                    const { failed } = await tools.call(name, input)
+                    yield* recordedRun(
+                        [{ type: 'tool_use', id: 't1', name, input }],
+                        'tool_use',
+                    )
+                    const { isError } = await tools.call(name, input)
                     yield {
-                        type: 'result',
+                        type: 'tool_result',
                         tool_use_id: 't1',
-                        content: '',
-                        is_error: failed,
+                        content: [],
+                        is_error: isError,
                     }
-                    yield { type: 'text', text: 'Ada is at Analytical Engines.' }
-                    yield {
-                        type: 'done',
-                        stop_reason: 'end_turn',
-                        usage: { input_tokens: 0, output_tokens: 0 },
-                    }
+                    yield* recordedRun(
+                        [{ type: 'text', text: 'Ada is at Analytical Engines.' }],
+                        'end_turn',
+                    )
                 },
             }
         `} />

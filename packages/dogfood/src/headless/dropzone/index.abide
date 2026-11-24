@@ -17,7 +17,7 @@ import pickOrDrop from './lib/PickOrDrop.abide' with { type: 'text' }
 <Doc
     seeAlso={[
         '/behaviors/element-visible',
-        '/ai/user-message',
+        '/ai/assistant-message',
         '/behaviors/dismissible',
     ]}
     tests={[

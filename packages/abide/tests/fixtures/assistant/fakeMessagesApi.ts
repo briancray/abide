@@ -1,16 +1,19 @@
-// A MESSAGES API THAT PLAYS ONE CONVERSATION: a first turn that thinks and asks for `post_invoices_whoami`,
-// and a second that answers with what the tool said. The second turn is refused 400 unless the first
-// turn's thinking block came back with its signature, as the real API refuses a tool loop without it.
+// A MESSAGES API THAT PLAYS ONE CONVERSATION: a first run that thinks and asks for
+// `post_invoices_whoami`, and a second that answers with what the tool said. The second run is refused
+// 400 unless the first run's thinking block came back with its signature, as the real API refuses a
+// tool loop without it. Each run is one of `runs.ts`, which the fake Claude Code plays too.
 //
 // A last turn holding an image is answered at once with that turn's content as it came, blocks and all.
 //
-// A prompt holding `show me` asks for `get_pictures_drawn` instead. The second turn answers with the
+// A prompt holding `show me` asks for `get_pictures_drawn` instead. The second run answers with the
 // result's content as it came back: its text blocks' words, and any other block as its JSON.
 //
 // A prompt holding `writing` starts the tool call and never finishes it: the stream stays open after the
-// call's `content_block_start`, the way a model still writing the call's input holds it.
+// call's first input, the way a model still writing the call's input holds it.
 //
 // Spawned rather than served in the test's process: the DOM preload replaces `Response`.
+
+import { calling, said, writing } from './runs.ts'
 
 /** `events` as an event stream, which stays open after them where `held`. */
 function sse(events: unknown[], held = false): Response {
@@ -29,33 +32,6 @@ function sse(events: unknown[], held = false): Response {
     )
 }
 
-/** A turn that says `text` and ends, having used `input` and `output` tokens. */
-function said(text: string, input: number, output: number): Response {
-    return sse([
-        {
-            type: 'message_start',
-            message: { usage: { input_tokens: input, output_tokens: 1 } },
-        },
-        {
-            type: 'content_block_start',
-            index: 0,
-            content_block: { type: 'text', text: '' },
-        },
-        {
-            type: 'content_block_delta',
-            index: 0,
-            delta: { type: 'text_delta', text },
-        },
-        { type: 'content_block_stop', index: 0 },
-        {
-            type: 'message_delta',
-            delta: { stop_reason: 'end_turn' },
-            usage: { output_tokens: output },
-        },
-        { type: 'message_stop' },
-    ])
-}
-
 type Turn = { role: string; content: unknown }
 
 const server = Bun.serve({
@@ -66,87 +42,17 @@ const server = Bun.serve({
         const blocks = last.content as { type: string; text?: string }[]
         const words = blocks.map((block) => block.text ?? '').join('')
         if (blocks.some((block) => block.type === 'image'))
-            return said(`saw ${JSON.stringify(last.content)}`, 1, 1)
+            return sse(said(`saw ${JSON.stringify(last.content)}`, 1, 1))
         if (words === 'writing')
-            return sse(
-                [
-                    {
-                        type: 'message_start',
-                        message: {
-                            usage: { input_tokens: 1, output_tokens: 1 },
-                        },
-                    },
-                    {
-                        type: 'content_block_start',
-                        index: 0,
-                        content_block: {
-                            type: 'tool_use',
-                            id: 'toolu_1',
-                            name: 'post_invoices_whoami',
-                            input: {},
-                        },
-                    },
-                    {
-                        type: 'content_block_delta',
-                        index: 0,
-                        delta: { type: 'input_json_delta', partial_json: '{' },
-                    },
-                ],
-                true,
-            )
+            return sse(writing('post_invoices_whoami'), true)
         if (!blocks.some((block) => block.type === 'tool_result'))
-            return sse([
-                {
-                    type: 'message_start',
-                    message: { usage: { input_tokens: 1, output_tokens: 1 } },
-                },
-                {
-                    type: 'content_block_start',
-                    index: 0,
-                    content_block: {
-                        type: 'thinking',
-                        thinking: '',
-                        signature: '',
-                    },
-                },
-                {
-                    type: 'content_block_delta',
-                    index: 0,
-                    delta: { type: 'signature_delta', signature: 'SIGNED' },
-                },
-                { type: 'content_block_stop', index: 0 },
-                {
-                    type: 'content_block_start',
-                    index: 1,
-                    content_block: { type: 'text', text: '' },
-                },
-                {
-                    type: 'content_block_delta',
-                    index: 1,
-                    delta: { type: 'text_delta', text: 'checking' },
-                },
-                { type: 'content_block_stop', index: 1 },
-                {
-                    type: 'content_block_start',
-                    index: 2,
-                    content_block: {
-                        type: 'tool_use',
-                        id: 'toolu_1',
-                        name:
-                            words === 'show me'
-                                ? 'get_pictures_drawn'
-                                : 'post_invoices_whoami',
-                        input: {},
-                    },
-                },
-                { type: 'content_block_stop', index: 2 },
-                {
-                    type: 'message_delta',
-                    delta: { stop_reason: 'tool_use' },
-                    usage: { output_tokens: 2 },
-                },
-                { type: 'message_stop' },
-            ])
+            return sse(
+                calling(
+                    words === 'show me'
+                        ? 'get_pictures_drawn'
+                        : 'post_invoices_whoami',
+                ),
+            )
         const asked = body.messages.at(-2) as {
             content: { type: string; signature?: string }[]
         }
@@ -155,10 +61,12 @@ const server = Bun.serve({
         const result = (
             last.content as { type: string; content: unknown }[]
         )[0] as { content: unknown }
-        return said(
-            `saw ${(result.content as { type: string; text?: string }[]).map((block) => (block.type === 'text' ? block.text : JSON.stringify(block))).join('')}`,
-            2,
-            3,
+        return sse(
+            said(
+                `saw ${(result.content as { type: string; text?: string }[]).map((block) => (block.type === 'text' ? block.text : JSON.stringify(block))).join('')}`,
+                2,
+                3,
+            ),
         )
     },
 })

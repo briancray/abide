@@ -3,21 +3,24 @@ import { chat } from '@abide/abide'
 import askAssistant from 'crm/src/assistant/askAssistant.handler.ts'
 
 const talk = chat({ ask: askAssistant })
+const parts = talk.message
 </script>
 
 <section {...talk.root} class="flex flex-col gap-snug">
     <ol {...talk.transcript} class="chat">
-        {#for turn, index of talk.turns key turn}
-            <li {...talk.turn(turn, index).turn}>
-                <span {...talk.turn(turn, index).speaker}>
-                    {talk.turn(turn, index).role}
-                </span>
-                {#for part of turn.parts key part}
-                    {#if part.type === 'text'}
-                        <p {...talk.text}>{part.text}</p>
-                    {/if}
-                {/for}
-            </li>
+        {#for message, index of talk.messages key message}
+            {#if parts(message, index).shown}
+                <li {...parts(message, index).message}>
+                    <span {...parts(message, index).speaker}>
+                        {parts(message, index).role}
+                    </span>
+                    {#for block of parts(message, index).blocks key block}
+                        {#if block.type === 'text'}
+                            <p {...talk.text}>{block.text}</p>
+                        {/if}
+                    {/for}
+                </li>
+            {/if}
         {/for}
     </ol>
     <form {...talk.composer} class="row">

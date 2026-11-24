@@ -175,14 +175,14 @@ test('the MCP surface lists and calls in process, as the asker — 20.9, 20.10, 
     })
     expect(await surface.call('post_asked_whoami', {}, asker)).toEqual({
         content: [{ type: 'text', text: '"Bearer ada"' }],
-        failed: false,
+        isError: false,
     })
-    expect((await surface.call('post_asked_guarded', {}, asker)).failed).toBe(
+    expect((await surface.call('post_asked_guarded', {}, asker)).isError).toBe(
         true,
     )
     expect(await surface.call('post_asked_missing', {}, asker)).toEqual({
         content: [{ type: 'text', text: 'No tool named post_asked_missing.' }],
-        failed: true,
+        isError: true,
     })
 })
 

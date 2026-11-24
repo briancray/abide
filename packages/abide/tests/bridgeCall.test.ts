@@ -146,11 +146,11 @@ async function meetingsAnswer(answer: Response): Promise<{
 }> {
     const text = await answer.text()
     if (answer.status !== 200) throw new Error(`${answer.status}: ${text}`)
-    const { content, failed } = JSON.parse(text) as {
+    const { content, isError } = JSON.parse(text) as {
         content: { type: string; text: string }[]
-        failed: boolean
+        isError: boolean
     }
-    expect(failed).toBe(false)
+    expect(isError).toBe(false)
     return JSON.parse(content[0]?.text as string)
 }
 
@@ -399,7 +399,7 @@ test('a call reaches an http server with its own headers alone — 44.95', async
         expect(answer.status).toBe(200)
         expect(await answer.json()).toEqual({
             content: [{ type: 'text', text: '{"lane":2}' }],
-            failed: false,
+            isError: false,
         })
         expect(seen.map((one) => one.method)).toEqual([
             'POST',
@@ -418,14 +418,14 @@ test('a call reaches an http server with its own headers alone — 44.95', async
         expect(locked.status).toBe(200)
         expect(await locked.json()).toEqual({
             content: [{ type: 'text', text: 'called {}' }],
-            failed: false,
+            isError: false,
         })
         // What its `headersHelper` writes is sent over what its `headers` name, so the call is
         // made rather than refused 401 and handed to a turn.
         const helped = await call('http', 'mcp__helped__cards', { lane: 3 })
         expect(await helped.json()).toEqual({
             content: [{ type: 'text', text: '{"lane":3}' }],
-            failed: false,
+            isError: false,
         })
     } finally {
         server.stop(true)
@@ -498,7 +498,7 @@ test('a call the bridge could not make is made by a turn, ended at its answer �
     expect(answer.status).toBe(200)
     expect(await answer.json()).toEqual({
         content: [{ type: 'text', text: 'called {"day":"monday"}' }],
-        failed: false,
+        isError: false,
     })
     const { args, pid } = (await Bun.file(RECORD).json()) as {
         args: string[]

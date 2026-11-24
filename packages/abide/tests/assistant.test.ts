@@ -26,11 +26,13 @@ import { HEARTBEAT_MILLISECONDS } from '../src/server/HEARTBEAT_MILLISECONDS.ts'
 import { RESUME_MILLISECONDS } from '../src/server/RESUME_MILLISECONDS.ts'
 import { BRIDGE_ADDRESS } from '../src/shared/ADDRESSES.ts'
 import type { AssistantEvent } from '../src/shared/AssistantEvent.ts'
+import { assistantMessage } from '../src/shared/assistantMessage.ts'
 import { BRIDGE_SCHEME } from '../src/shared/BRIDGE_SCHEME.ts'
 import { resultsOf } from '../src/shared/resultsOf.ts'
 import type { Rpc } from '../src/shared/rpc.ts'
 import { handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
-import { CITATION } from './fixtures/assistant/CITATION.ts'
+import { CITED_EVENTS } from './fixtures/assistant/CITED_EVENTS.ts'
+import { calling, said, writing } from './fixtures/assistant/runs.ts'
 import { inMemoryApp } from './inMemoryApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
@@ -90,21 +92,26 @@ const ASK = `import { assistant, type AssistantMessage, type ClaudeCodeConfig, G
 
 const HIDDEN = { clients: { mcp: false } }
 
-// A provider an app wrote: one call to the app's tool, one to a tool of its own, a failed call, and a
-// call to a handler that answers no value — each named as the Toolbox lists it (44.50).
+// A provider an app wrote: one run calling the app's tool, a tool of its own, the app's tool again to be
+// refused, and a handler that answers no value — each named as the Toolbox lists it (44.50) — and
+// what each answered.
+const call = (index: number, id: string, name: string) => ({ type: 'content_block_start' as const, index, content_block: { type: 'tool_use' as const, id, name, input: {} } })
+const words = (text: string) => [{ type: 'text' as const, text }]
 const own: Provider = {
     async *run(_messages, tools) {
-        yield { type: 'tool', id: 'a', name: 'post_invoices_whoami' }
+        yield { type: 'message_start', message: { id: 'msg_own', type: 'message', role: 'assistant', model: 'own', content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } } }
+        yield call(0, 'a', 'post_invoices_whoami')
+        yield call(1, 'b', 'web_search')
+        yield call(2, 'c', 'post_invoices_whoami')
+        yield call(3, 'd', 'get_pictures_drawn')
+        yield { type: 'message_delta', delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { input_tokens: 0, output_tokens: 0 } }
+        yield { type: 'message_stop' }
         const answer = await tools.call('post_invoices_whoami', {})
         const [piece] = answer.content
-        yield { type: 'result', tool_use_id: 'a', content: piece?.type === 'text' ? piece.text : '', is_error: answer.failed }
-        yield { type: 'tool', id: 'b', name: 'web_search' }
-        yield { type: 'result', tool_use_id: 'b', content: '{"hits":[]}', is_error: false }
-        yield { type: 'tool', id: 'c', name: 'post_invoices_whoami' }
-        yield { type: 'result', tool_use_id: 'c', content: '"refused"', is_error: true }
-        yield { type: 'tool', id: 'd', name: 'get_pictures_drawn' }
-        yield { type: 'result', tool_use_id: 'd', content: '[1]', is_error: false }
-        yield { type: 'done', stop_reason: 'end_turn', usage: { input_tokens: 0, output_tokens: 0 } }
+        yield { type: 'tool_result', tool_use_id: 'a', content: words(piece?.type === 'text' ? piece.text : ''), is_error: answer.isError }
+        yield { type: 'tool_result', tool_use_id: 'b', content: words('{"hits":[]}'), is_error: false }
+        yield { type: 'tool_result', tool_use_id: 'c', content: words('"refused"'), is_error: true }
+        yield { type: 'tool_result', tool_use_id: 'd', content: words('[1]'), is_error: false }
     },
 }
 
@@ -368,36 +375,24 @@ test('the relay answers 404 until the app mints a pairing code — 44.19, 36.7',
     await after.text()
 })
 
-// 44.2, 44.7, 44.17 — ONE CONVERSATION, ONE EVENT SEQUENCE, WHICHEVER PROVIDER PLAYED IT, and the tool
+// 44.2, 44.7, 44.17 — ONE CONVERSATION, ONE EVENT SEQUENCE, WHICHEVER PROVIDER PLAYED IT: each run as
+// the Messages API streamed it, event for event, and what the call answered between them — the tool
 // called as the person asking: `whoami` reads the cookie on the ASK request, which for Claude Code is a
 // request the bridge never sees. THE REVERTS: carry no headers (`CARRIED_HEADERS = []`), and both read
-// `"nobody"`; send the API turn's blocks back without the thinking block's signature, and the fake API
-// refuses the second turn 400; answer the bridge's `tools/call` with no result, and Claude Code's
+// `"nobody"`; send the API run's blocks back without the thinking block's signature, and the fake API
+// refuses the second run 400; answer the bridge's `tools/call` with no result, and Claude Code's
 // sequence loses its `"ada"`.
 test('both providers play one conversation as one event sequence, tools called as the asker — 44.2, 44.7, 44.17', async () => {
     const expected = [
-        { type: 'text', text: 'checking' },
+        ...calling('post_invoices_whoami'),
         {
-            type: 'tool',
-            id: 'toolu_1',
-            name: 'post_invoices_whoami',
-            handler: WHOAMI,
-        },
-        { type: 'input', id: 'toolu_1', input: {} },
-        {
-            type: 'result',
+            type: 'tool_result',
             tool_use_id: 'toolu_1',
-            content: '"ada"',
+            content: [{ type: 'text', text: '"ada"' }],
             is_error: false,
-            handler: WHOAMI,
             value: 'ada',
         },
-        { type: 'text', text: 'saw "ada"' },
-        {
-            type: 'done',
-            stop_reason: 'end_turn',
-            usage: { input_tokens: 3, output_tokens: 5 },
-        },
+        ...said('saw "ada"', 2, 3),
     ]
     expect(await events(await ask('one', 'api', 'who am I?'))).toEqual(expected)
     await pairBridge('one')
@@ -406,95 +401,67 @@ test('both providers play one conversation as one event sequence, tools called a
     )
 }, 30_000)
 
-// 44.11, 44.104 — CLAUDE CODE'S ANSWER ENDS AND CITES AS THE API'S DOES, through the bridge: the cited
-// run whole with its citation, and the usage of the whole turn under the API's names, cache counts and
-// all. THE REVERTS: report every text delta as it arrives in the bridge's `claudeTurn`, and the cited
-// run arrives as `is 4217`, `.` with no citation; fold the usage into `input` and `output` as the
-// bridge did, and `cache_read_input_tokens` is undefined where 7 is due.
-test('Claude Code ends on the API’s stop_reason and usage and cites as the API does, through the bridge — 44.11, 44.104', async () => {
+// 44.2, 44.11 — CLAUDE CODE'S ANSWER IS THE API'S EVENTS, through the bridge: its partial messages
+// forwarded as they came, the usage of each run — cache counts and all — and a cited run's citation
+// with them. THE REVERT: report each `stream_event` from the bridge's `claudeTurn` as only its type
+// and its index, and the run's usage and the cited run's citation never reach the page.
+test('Claude Code’s answer is the API’s own events, usage and citations with them, through the bridge — 44.2, 44.11', async () => {
     await pairBridge('one')
-    expect(await events(await ask('one', 'code', 'cite it'))).toEqual([
-        { type: 'text', text: 'Your balance ' },
-        { type: 'text', text: 'is 4217.', citations: [CITATION] },
-        {
-            type: 'done',
-            stop_reason: 'end_turn',
-            usage: {
-                input_tokens: 4,
-                output_tokens: 6,
-                cache_creation_input_tokens: 2,
-                cache_read_input_tokens: 7,
-            },
-        },
-    ])
+    expect(await events(await ask('one', 'code', 'cite it'))).toEqual(
+        CITED_EVENTS,
+    )
 }, 30_000)
 
 // 44.35 — AN IMAGE A TOOL ANSWERS IS SHOWN THE MODEL AS ONE: the call's `tool_result` carries it as an
-// image block, base64 with its type, which the scripted API answers back; the `result` event carries the
-// answer's words, which an image has none of. THE REVERTS: drop the image arm of `toolBlocksOf` and the model
-// is handed nothing; spread the whole answer into the event and it carries the image's bytes.
-test('provider.claudeApi shows a tool answered image to the model as one, and the event carries no bytes — 44.35', async () => {
-    const said = await events(await ask('one', 'api', 'show me'))
-    expect(said).toContainEqual({
-        type: 'result',
+// image block, base64 with its type, which the scripted API answers back, and the event carries the
+// same blocks the model was handed. THE REVERT: drop the image arm of `toolBlocksOf`, and the model is
+// handed nothing — `saw ` where the image's block is due.
+test('provider.claudeApi shows a tool answered image to the model as one — 44.35', async () => {
+    const image = {
+        type: 'image',
+        source: { type: 'base64', media_type: 'image/png', data: 'iVBORw==' },
+    }
+    const seen = await events(await ask('one', 'api', 'show me'))
+    expect(seen).toContainEqual({
+        type: 'tool_result',
         tool_use_id: 'toolu_1',
-        content: '',
+        content: [image],
         is_error: false,
-        handler: { method: 'GET', address: '/pictures/drawn' },
+        value: undefined,
     })
-    expect(said).toContainEqual({
-        type: 'text',
-        text: `saw ${JSON.stringify({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw==' } })}`,
+    expect(seen).toContainEqual({
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: `saw ${JSON.stringify(image)}` },
     })
 }, 30_000)
 
-// 44.48, 44.49, 44.50, 44.51 — A CALL CARRIES THE HANDLER IT REACHED, AND ITS ANSWER THE VALUE IT
-// SPELLS, read off the app's own surface whichever provider ran it — here one the app wrote. A tool
-// that is not the app's carries no handler, and a failed call or one to a handler answering no value
-// (a picture, 19.21) carries no value, whatever its words spell. THE REVERTS: carry no handler in
-// `read`, and `resultsOf` finds none of the two calls rather than one; read every answer's words as
-// JSON, and `web_search`'s value is `{ hits: [] }` and the picture's `[1]`; drop `!event.is_error` from
-// `resultsOf`, and it hands back `["ada", undefined]`.
-test('a call carries its handler and its answer its value, whoever ran it — 44.48, 44.49, 44.50, 44.51', async () => {
-    const said = (await events(
+// 44.49, 44.50, 44.51 — AN ANSWER CARRIES THE VALUE IT SPELLS, read off the app's own surface whichever
+// provider ran it — here one the app wrote — and `resultsOf` finds the handler's calls by the tool name
+// its surface lists it under. A tool that is not the app's, a failed call, and one to a handler
+// answering no value (a picture, 19.21) carry no value, whatever their words spell. THE REVERTS: read
+// every answer's words as JSON in `read`, and `web_search`'s value is `{ hits: [] }` and the picture's
+// `[1]`; name a call's handler by its address alone in `resultsOf`, and it finds neither — `[]` where
+// `["ada"]` is due.
+test('an answer carries its value, and resultsOf finds a handler’s calls by its tool, whoever ran it — 44.49, 44.50, 44.51', async () => {
+    const seen = (await events(
         await ask('one', 'own', 'who am I?'),
     )) as AssistantEvent[]
-    expect(said.filter((event) => event.type === 'result')).toEqual([
-        {
-            type: 'result',
-            tool_use_id: 'a',
-            content: '"ada"',
-            is_error: false,
-            handler: WHOAMI,
-            value: 'ada',
-        },
-        {
-            type: 'result',
-            tool_use_id: 'b',
-            content: '{"hits":[]}',
-            is_error: false,
-            handler: undefined,
-            value: undefined,
-        },
-        {
-            type: 'result',
-            tool_use_id: 'c',
-            content: '"refused"',
-            is_error: true,
-            handler: WHOAMI,
-            value: undefined,
-        },
-        {
-            type: 'result',
-            tool_use_id: 'd',
-            content: '[1]',
-            is_error: false,
-            handler: { method: 'GET', address: '/pictures/drawn' },
-            value: undefined,
-        },
-    ])
+    const values: Record<string, unknown> = {}
+    for (const event of seen)
+        if (event.type === 'tool_result')
+            values[event.tool_use_id] = event.value
+    expect(values).toEqual({
+        a: 'ada',
+        b: undefined,
+        c: undefined,
+        d: undefined,
+    })
     expect(
-        resultsOf(said, WHOAMI as unknown as Rpc<string, never>),
+        resultsOf(
+            assistantMessage('assistant', seen),
+            WHOAMI as unknown as Rpc<string, never>,
+        ),
     ).toStrictEqual(['ada'])
 }, 30_000)
 
@@ -508,12 +475,26 @@ test('a handler that takes args is one resultsOf reads — 44.51', () => {
     const homes: string[] = resultsOf(
         [
             {
-                type: 'result',
-                tool_use_id: 'a',
-                content: '"north"',
-                is_error: false,
-                handler: { method: 'POST', address: '/homes/setHome' },
-                value: 'north',
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'tool_use',
+                        id: 'a',
+                        name: 'post_homes_setHome',
+                        input: { home: 'north' },
+                    },
+                ],
+            },
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'tool_result',
+                        tool_use_id: 'a',
+                        content: [{ type: 'text', text: '"north"' }],
+                        is_error: false,
+                    },
+                ],
             },
         ],
         setHome,
@@ -521,35 +502,38 @@ test('a handler that takes args is one resultsOf reads — 44.51', () => {
     expect(homes).toEqual(['north'])
 })
 
-// 44.11 — THE LAST TURN'S TOOL CALL IS NEVER RUN. With one turn allowed, the model's call to
-// `post_invoices_whoami` is announced as it streams, but no `result` follows and the conversation ends on
-// `max_turns` rather than the `tool_use` the turn stopped for. THE REVERTS: yield `stop` as it arrived
-// in `provider.claudeApi`'s `done`, and this reads `tool_use`; drop `turn >= maxTurns`, and the call runs and a
-// second turn answers `saw "ada"`.
-test('a conversation out of turns ends on max_turns without running the pending call — 44.11', async () => {
-    expect(await events(await ask('one', 'api', 'who am I?', 1))).toEqual([
-        { type: 'text', text: 'checking' },
+// 44.9, 44.105 — THE LAST RUN'S TOOL CALL IS NEVER RUN. With one turn allowed, the model's call to
+// `post_invoices_whoami` streams, but no `tool_result` follows: the run that stopped for it is the
+// answer's last, and what the answer amounts to leaves the unanswered call out. THE REVERT: drop
+// `turn >= maxTurns` in `provider.claudeApi`, and the call runs and a second run answers `saw "ada"`.
+test('a conversation out of turns ends without running the pending call — 44.9, 44.105', async () => {
+    const seen = (await events(
+        await ask('one', 'api', 'who am I?', 1),
+    )) as AssistantEvent[]
+    expect(seen as unknown[]).toEqual(calling('post_invoices_whoami'))
+    expect(assistantMessage('assistant', seen)).toEqual([
         {
-            type: 'tool',
-            id: 'toolu_1',
-            name: 'post_invoices_whoami',
-            handler: WHOAMI,
-        },
-        { type: 'input', id: 'toolu_1', input: {} },
-        {
-            type: 'done',
-            stop_reason: 'max_turns',
-            usage: { input_tokens: 1, output_tokens: 2 },
+            role: 'assistant',
+            content: [
+                { type: 'thinking', thinking: '', signature: 'SIGNED' },
+                { type: 'text', text: 'checking' },
+            ],
         },
     ])
 })
 
-/** The events `answer` yields until one is a `tool`, or until two seconds pass with none. */
+/** The events `answer` yields until one starts a tool call, or until two seconds pass with none. */
 async function eventsUntilTool(answer: Response): Promise<unknown[]> {
     const lines = readLines(answer.body as ReadableStream<Uint8Array>)
     const deadline = Bun.sleep(2_000).then(() => undefined)
-    const found: { type: string }[] = []
-    while (found.at(-1)?.type !== 'tool') {
+    const found: AssistantEvent[] = []
+    for (;;) {
+        const last = found.at(-1)
+        if (
+            last?.type === 'content_block_start' &&
+            last.content_block.type === 'tool_use'
+        )
+            break
         const read = await Promise.race([lines.next(), deadline])
         if (read === undefined || read.done) break
         if (read.value !== '') found.push(JSON.parse(read.value))
@@ -558,27 +542,19 @@ async function eventsUntilTool(answer: Response): Promise<unknown[]> {
     return found
 }
 
-// 44.28 — A CALL IS ANNOUNCED AS THE MODEL STARTS WRITING IT. Both models start `post_invoices_whoami`
-// and never finish writing it, so the `tool` is all a page can have seen, and no `input` follows. THE
-// REVERTS: yield `tool` at `content_block_stop` in `provider.claudeApi`, or report it from the finished
-// `assistant` line in the bridge, and that provider yields nothing for two seconds.
-test('a tool call is announced before its input is written — 44.28', async () => {
-    const started = [
-        {
-            type: 'tool',
-            id: 'toolu_1',
-            name: 'post_invoices_whoami',
-            handler: WHOAMI,
-        },
-    ]
+// 44.28 — A CALL IS SEEN AS THE MODEL STARTS WRITING IT: each event is yielded as it arrives. Both
+// models start `post_invoices_whoami` and never finish writing it, so its start is all a page can have
+// seen. THE REVERT: hold `provider.claudeApi`'s events until their run stops, and it yields nothing for
+// two seconds.
+test('a tool call is seen before its input is written — 44.28', async () => {
+    const started = writing('post_invoices_whoami').slice(0, 2)
     expect(await eventsUntilTool(await ask('one', 'api', 'writing'))).toEqual(
         started,
     )
     await pairBridge('one')
-    expect(await eventsUntilTool(await ask('one', 'code', 'writing'))).toEqual([
-        { type: 'text', text: 'checking' },
-        ...started,
-    ])
+    expect(await eventsUntilTool(await ask('one', 'code', 'writing'))).toEqual(
+        started,
+    )
 }, 30_000)
 
 // 44.20 — THE PAGE SEES THE PAIRING LAND. The status stream says not ready, with the command, and then
@@ -639,7 +615,7 @@ test('a pairing answers only the sign-in that minted its code, and an open statu
     await pairBridge('switch', unpaired.command?.split(' ').at(-1))
     expect(await nextStatus(lines)).toMatchObject({ paired: true })
     expect(await done(await ask('switch', 'code', 'who am I?'))).toMatchObject({
-        type: 'done',
+        type: 'message_stop',
     })
 
     await signIn('switch', 'bo')
@@ -653,11 +629,11 @@ test('a pairing answers only the sign-in that minted its code, and an open statu
     expect(await nextStatus(lines)).toMatchObject({ paired: true })
     await lines.return(undefined)
     expect(await done(await ask('switch', 'code', 'who am I?'))).toMatchObject({
-        type: 'done',
+        type: 'message_stop',
     })
     SIGNED_IN.set('switch', adas)
     expect(await done(await ask('switch', 'code', 'who am I?'))).toMatchObject({
-        type: 'done',
+        type: 'message_stop',
     })
 }, 30_000)
 
@@ -689,7 +665,7 @@ test('an open status follows a sign-out to the caller it rotates to — 44.34, 2
     await lines.return(undefined)
     expect(
         (await events(await ask(rotated, 'code', 'who am I?'))).at(-1),
-    ).toMatchObject({ type: 'done' })
+    ).toMatchObject({ type: 'message_stop' })
 }, 30_000)
 
 // 44.33 — A CODE MINTED IN THE REQUEST THAT SIGNS IN is filed under the claims a later request opens
@@ -706,7 +682,7 @@ test('a code minted where the sign-in is made pairs the sign-in its cookie carri
     SIGNED_IN.set('minted', (sealed as string).split(';')[0] as string)
     await pairBridge('minted', command.split(' ').at(-1))
     const asked = await events(await ask('minted', 'code', 'who am I?'))
-    expect(asked.at(-1)).toMatchObject({ type: 'done' })
+    expect(asked.at(-1)).toMatchObject({ type: 'message_stop' })
 }, 30_000)
 
 // 44.5, 44.15, 44.16, 44.81 — CLAUDE CODE RUNS ALONE on the visitor's machine where they gave it nothing:
@@ -1073,13 +1049,17 @@ test('a permission prompt is answered by the paired page alone — 44.81, 44.83'
     const said = (events: AssistantEvent[]): string => {
         let text = ''
         for (const event of events)
-            if (event.type === 'text') text += event.text
+            if (
+                event.type === 'content_block_delta' &&
+                event.delta.type === 'text_delta'
+            )
+                text += event.delta.text
         return text
     }
     expect(said(allowed.events)).toContain(
         'permission {"behavior":"allow","updatedInput":{"command":"ls"}}',
     )
-    expect(allowed.events.at(-1)).toMatchObject({ type: 'done' })
+    expect(allowed.events.at(-1)).toMatchObject({ type: 'message_stop' })
     const denied = await answeringPrompt('prompted', false)
     expect(said(denied.events)).toContain('permission {"behavior":"deny"')
 }, 30_000)
@@ -1191,7 +1171,7 @@ test('a paired status carries a command that replaces the paired bridge — 44.5
     ).toBe(0)
     expect(
         (await events(await ask('again', 'code', 'who am I?'))).at(-1),
-    ).toMatchObject({ type: 'done' })
+    ).toMatchObject({ type: 'message_stop' })
     await lines.return(undefined)
 }, 30_000)
 
@@ -1450,8 +1430,9 @@ test('an image at a URL, an uploaded document and a search result reach the mode
     const answer = await askWith('one', 'api', [{ role: 'user', content }])
     expect(answer.status).toBe(200)
     expect(await events(answer)).toContainEqual({
-        type: 'text',
-        text: `saw ${JSON.stringify(content)}`,
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: `saw ${JSON.stringify(content)}` },
     })
 }, 30_000)
 
@@ -1488,14 +1469,18 @@ test('provider.claudeCode refuses a block cached for less than an hour, a search
 // place in its turn: the scripted API answers the last turn's content back as it came. THE REVERT:
 // keep text alone in `blocksOf` and the model sees the question alone.
 test('provider.claudeApi shows a transcript image and document to the model in their place — 44.38', async () => {
-    const said = await events(await askWith('one', 'api', LOOKED_AT))
-    expect(said).toContainEqual({
-        type: 'text',
-        text: `saw ${JSON.stringify([
-            { type: 'text', text: 'what is this?' },
-            SNAPSHOT,
-            STATEMENT,
-        ])}`,
+    const seen = await events(await askWith('one', 'api', LOOKED_AT))
+    expect(seen).toContainEqual({
+        type: 'content_block_delta',
+        index: 0,
+        delta: {
+            type: 'text_delta',
+            text: `saw ${JSON.stringify([
+                { type: 'text', text: 'what is this?' },
+                SNAPSHOT,
+                STATEMENT,
+            ])}`,
+        },
     })
 }, 30_000)
 
@@ -1681,7 +1666,7 @@ const talk = async () => {
     try {
         let text = ''
         for await (const event of assistant([{ role: 'user', content: 'who am I?' }], provider.claudeCode(), { mcp: true }))
-            if (event.type === 'text') text += event.text
+            if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') text += event.delta.text
         return text
     } catch (thrown) {
         return 'threw ' + ((thrown as { status?: number }).status ?? 'outside')

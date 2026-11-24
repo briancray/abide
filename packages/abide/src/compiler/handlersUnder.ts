@@ -12,9 +12,9 @@
 import { handlerFileMount } from '#server/handlerFileMount.ts'
 import type { Mount } from '#server/mountHandlers.ts'
 import { PRIVATE_EXPORT } from '#server/PRIVATE_EXPORT.ts'
-import { surfaceName } from '#server/surfaceOf.ts'
 import { PRIVATE_HANDLERS_ADDRESS } from '#shared/ADDRESSES.ts'
 import { parseRoutePattern } from '#shared/routePattern.ts'
+import { surfaceName } from '#shared/surfaceName.ts'
 
 import { frameworkRouteRefusal } from './appFiles.ts'
 import type { PlacedHandler, PlacedSource } from './appLayout.ts'

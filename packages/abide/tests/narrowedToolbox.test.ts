@@ -25,7 +25,7 @@ const narrowed: Toolbox = {
     ],
     async call(name, input) {
         called.push({ name, input })
-        return { content: [{ type: 'text', text: 'found' }], failed: false }
+        return { content: [{ type: 'text', text: 'found' }], isError: false }
     },
 }
 

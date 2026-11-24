@@ -1,5 +1,5 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { assistantMessage, memo, reactive } from '@abide/abide'
 
 import askAssistant from '../askAssistant.handler.ts'
 
@@ -11,25 +11,29 @@ const events = memo(() =>
         ? askAssistant({ messages: [{ role: 'user', content: QUESTION }] })
         : [],
 )
+// The messages the answer amounts to, rebuilt as its events arrive: a short answer's to rebuild.
+const answer = () => assistantMessage('assistant', events)
 </script>
 
 <ul class="chat">
     <li data-speaker="you"><span>you</span><p>{QUESTION}</p></li>
-{#for event of events}
-        {#if event.type === 'tool'}
-            <li><span>tool call</span>
-                <p class="font-mono text-chrome">{event.name}</p></li>
-        {:else if event.type === 'input'}
-            <li><span>with input</span>
-                <p class="font-mono text-chrome">
-                    {JSON.stringify(event.input)}
-                </p></li>
-        {:else if event.type === 'result'}
-            <li><span>your handler answered</span>
-                <p class="font-mono text-chrome">{event.content}</p></li>
-        {:else if event.type === 'text'}
-            <li><span>assistant</span><p>{event.text}</p></li>
-        {/if}
+    {#for message of answer()}
+        {#for block of typeof message.content === 'string' ? [] : message.content}
+            {#if block.type === 'tool_use'}
+                <li><span>tool call</span>
+                    <p class="font-mono text-chrome">{block.name}
+                        {JSON.stringify(block.input)}</p></li>
+            {:else if block.type === 'tool_result'}
+                <li><span>your handler answered</span>
+                    <p class="font-mono text-chrome">{typeof block.content === 'string'
+                        ? block.content
+                        : block.content
+                              ?.map((piece) => (piece.type === 'text' ? piece.text : ''))
+                              .join('')}</p></li>
+            {:else if block.type === 'text'}
+                <li><span>assistant</span><p>{block.text}</p></li>
+            {/if}
+        {/for}
     {/for}
 </ul>
 

@@ -35,6 +35,7 @@ import {
     blocksOf,
     forwardOf,
     type Provider,
+    type ProviderEvent,
     type ToolAnswer,
 } from './assistant.ts'
 import {
@@ -117,7 +118,11 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
  * five-minute breakpoint ahead of an hour's.
  */
 function cachedAnHour(piece: AssistantContent): boolean {
-    if (piece.cache_control !== undefined && piece.cache_control.ttl !== '1h')
+    if (
+        'cache_control' in piece &&
+        piece.cache_control !== undefined &&
+        piece.cache_control.ttl !== '1h'
+    )
         return false
     const inner =
         piece.type === 'search_result'
@@ -173,6 +178,9 @@ function foldedContent(
                 words += '</tool_result>'
                 continue
             }
+            // Reasoning another run wrote is that run's, and none a prompt carries.
+            if (piece.type === 'thinking' || piece.type === 'redacted_thinking')
+                continue
             pieces.push({ type: 'text', text: words }, piece)
             words = ''
         }
@@ -344,24 +352,25 @@ async function calledByTurn(
         signal,
     })) {
         if (
-            event.type === 'tool' &&
-            event.name === tool &&
+            event.type === 'content_block_start' &&
+            event.content_block.type === 'tool_use' &&
+            event.content_block.name === tool &&
             callId === undefined
         )
-            callId = event.id
+            callId = event.content_block.id
         else if (event.type === 'permission')
             permitPrompt({
                 ...asking,
                 id: event.id,
                 allow: event.name === tool,
             })
-        else if (event.type === 'result' && event.tool_use_id === callId) {
+        else if (event.type === 'tool_result' && event.tool_use_id === callId) {
             // 44.18 — ended while the turn still listens, so the bridge stops the run before the
             // model writes a word about the answer.
             ending.abort()
             return {
-                content: [{ type: 'text', text: event.content }],
-                failed: event.is_error,
+                content: mcpContentOf(event.content),
+                isError: event.is_error,
             }
         }
     }
@@ -369,6 +378,23 @@ async function calledByTurn(
         502,
         `The call failed: the bridge could not reach ${tool}, and Claude Code did not call it.`,
     )
+}
+
+/** A tool result's blocks as the MCP content a `ToolAnswer` holds: words, and an image as its bytes. */
+function mcpContentOf(
+    content: Extract<ProviderEvent, { type: 'tool_result' }>['content'],
+): ToolAnswer['content'] {
+    const pieces: ToolAnswer['content'] = []
+    for (const block of content)
+        if (block.type === 'text')
+            pieces.push({ type: 'text', text: block.text })
+        else if (block.source.type === 'base64')
+            pieces.push({
+                type: 'image',
+                data: block.source.data,
+                mimeType: block.source.media_type,
+            })
+    return pieces
 }
 
 /** The visitor's own Claude Code as a provider, with the pairing that reaches it. */

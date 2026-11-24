@@ -1,28 +1,39 @@
-// 53.31-53.40 — A CONVERSATION OVER AN ASSISTANT HANDLER, as parts: the transcript as it streams, and
-// a composer that sends on Enter. 53.32 — every event is folded into the answering turn once, through
-// `patch`, so a chunk rewrites the part it lands in and nothing before it. The markup — how a turn,
-// a tool call or a permission reads — is the app's; what a conversation DOES is here.
+// 53.31-53.40 — A CONVERSATION OVER AN ASSISTANT HANDLER, as parts: the messages as they stream, and a
+// composer that sends on Enter. The conversation is the Messages API's own messages (44.105), and an
+// answer's events are folded into them one at a time, in place — 53.32 — so a delta extends the
+// block it lands in and nothing before it. What the API has no place for — a permission prompt
+// waiting, why the latest answer ended or failed — is the parts' own, never the history's. The markup
+// — how a message, a tool call or a prompt reads — is the app's; what a conversation DOES is here.
 
-import type { AssistantEvent, AssistantMessage } from './AssistantEvent.ts'
-import type { AssistantTurn, AssistantTurnPart } from './AssistantTurn.ts'
+import type {
+    AssistantContent,
+    AssistantEvent,
+    AssistantMessage,
+} from './AssistantEvent.ts'
+import { assistantMessage, ATTACHABLE } from './assistantMessage.ts'
 import { autoscroll } from './autoscroll.ts'
 import { dropzone } from './dropzone.ts'
 import { hotkeys } from './hotkeys.ts'
 import { type Live, live } from './live.ts'
+import { MessageAccumulator } from './MessageAccumulator.ts'
 import { messageOf } from './messageOf.ts'
 import { reactive } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
-import { fold } from './transcript/fold.ts'
-import { messages } from './transcript/messages.ts'
-import { turn as turnOf } from './transcript/turn.ts'
-import { ATTACHABLE, userMessage } from './userMessage.ts'
 import { withPart } from './withPart.ts'
 
-type Image = Extract<AssistantTurnPart, { type: 'image' }>
-type Document = Extract<AssistantTurnPart, { type: 'document' }>
+type Image = Extract<AssistantContent, { type: 'image' }>
+type Document = Extract<AssistantContent, { type: 'document' }>
 type Attached = Image | Document
-type ToolPart = Extract<AssistantTurnPart, { type: 'tool' }>
-type Permission = Extract<AssistantTurnPart, { type: 'permission' }>
+type ToolUse = Extract<AssistantContent, { type: 'tool_use' }>
+type ToolResult = Extract<AssistantContent, { type: 'tool_result' }>
+
+/** A permission prompt Claude Code asks the page, and the visitor's answer, `undefined` while it waits. */
+export type ChatPermission = {
+    id: string
+    name: string
+    input: unknown
+    allowed: boolean | undefined
+}
 
 export type ChatOptions = {
     /**
@@ -39,25 +50,29 @@ export type ChatOptions = {
      */
     permit?: ((answer: { id: string; allow: boolean }) => unknown) | undefined
     /** 49.8, 53.47 — the conversation: bind it to load one and to keep it as it grows. Held by the parts, empty, where none is given. */
-    turns?: Reactive<AssistantTurn[]>
+    messages?: Reactive<AssistantMessage[]>
     /** The input's accessible name. `'Message'` by default. */
     label?: Live<string | undefined>
     /** Whether the composer refuses to send: a provider not yet paired, say. */
     disabled?: Live<boolean | undefined>
 }
 
-/** A turn's parts: the turn's element, its speaker, and what is shown under it once it has ended. */
-export type ChatTurnParts = {
-    /** The turn's element: `data-speaker`, `data-streaming`, `data-stop` and `data-failed`. */
-    readonly turn: Record<string, unknown>
+/** A message's parts: its element, its speaker, its blocks, and what is shown under an answer. */
+export type ChatMessageParts = {
+    /** The message's element: `data-speaker` and `data-streaming`. */
+    readonly message: Record<string, unknown>
     /** The element naming who spoke. */
     readonly speaker: Record<string, unknown>
     /** Who spoke: `'you'` or `'assistant'`. */
     readonly role: 'you' | 'assistant'
-    /** Whether this is the answer still streaming. */
+    /** 53.28 — whether it is shown: a user message holding only what tools answered is not. */
+    readonly shown: boolean
+    /** Its blocks in order — its words as one where they are a string — each tool's result left to its call. */
+    get blocks(): readonly AssistantContent[]
+    /** Whether it belongs to the answer still streaming. */
     get streaming(): boolean
-    /** 53.36 — the element saying why the answer failed, `role="alert"`. */
-    readonly failure: Record<string, unknown>
+    /** 53.46 — whether it is an answer's last message: what follows it, if anything, the person wrote. */
+    get ends(): boolean
     /** 53.46 — the element holding what is shown under an answer that has ended. */
     readonly actions: Record<string, unknown>
     /** 53.46 — asks the question this answer answered again, in its place. */
@@ -66,34 +81,44 @@ export type ChatTurnParts = {
 
 /** The parts `chat` hands back: `<ol {...talk.transcript}>`, `<form {...talk.composer}>`. */
 export type ChatParts = {
-    /** The conversation: the `turns` handed in, or one of the parts' own. */
-    readonly turns: Reactive<AssistantTurn[]>
+    /** The conversation: the `messages` handed in, or one of the parts' own. */
+    readonly messages: Reactive<AssistantMessage[]>
     /** Whether an answer is streaming. */
     get streaming(): boolean
-    /** The root's attributes: `data-chat="root"` and `data-streaming`. */
+    /** 53.35 — why the latest answer ended, as its last run said (`end_turn`), or `stopped`; `undefined` while it runs. */
+    get stop_reason(): string | undefined
+    /** 53.36 — the message the latest answer failed with, or `undefined`. */
+    get failed(): string | undefined
+    /** The root's attributes: `data-chat="root"`, `data-streaming`, `data-stop` and `data-failed`. */
     readonly root: Record<string, unknown>
     /** 53.39, 53.40 — the transcript: `role="log"`, kept at its bottom as `autoscroll`'s host. */
     readonly transcript: Record<string, unknown>
     /** 53.39 — the button taking a reader who scrolled up back down. */
     readonly jump: Record<string, unknown>
-    /** A turn's parts, keyed by the turn and its place in `turns`. */
-    turn(turn: AssistantTurn, index: number): ChatTurnParts
-    /** A text piece's element. */
+    /** A message's parts, keyed by the message and its place in `messages`. */
+    message(message: AssistantMessage, index: number): ChatMessageParts
+    /** A text block's element. */
     readonly text: Record<string, unknown>
-    /** An image piece's element: its `src`. */
+    /** An image block's element: its `src`. */
     image(image: Image): Record<string, unknown>
-    /** A document piece's element: `data-chat="document"`, its `title` the file's name. */
+    /** A document block's element: `data-chat="document"`, its `title` the file's name. */
     document(document: Document): Record<string, unknown>
-    /** A tool call's elements: the call, with `data-status`, and its name, input and result. */
-    tool(part: ToolPart): {
+    /** 53.25 — a tool call's elements, with `data-status`, and the result its call was answered with. */
+    tool(call: ToolUse): {
         readonly tool: Record<string, unknown>
         readonly name: Record<string, unknown>
         readonly input: Record<string, unknown>
         readonly result: Record<string, unknown>
         readonly status: 'running' | 'done' | 'failed'
+        /** The `tool_result` block answering the call, `undefined` while it runs. */
+        readonly toolResult: ToolResult | undefined
+        /** What it answered, in words, `undefined` while it runs. */
+        readonly answer: string | undefined
     }
+    /** 53.26 — the permission prompts the answer streaming asks, each with the visitor's answer. */
+    get permissions(): readonly ChatPermission[]
     /** A permission prompt's elements: the prompt, with `data-answer`, its name, its input, and the two buttons answering it. */
-    permission(part: Permission): {
+    permission(prompt: ChatPermission): {
         readonly permission: Record<string, unknown>
         readonly name: Record<string, unknown>
         readonly input: Record<string, unknown>
@@ -101,6 +126,8 @@ export type ChatParts = {
         readonly deny: Record<string, unknown>
         readonly answer: 'waiting' | 'allowed' | 'denied'
     }
+    /** 53.36 — the element saying why the latest answer failed, `role="alert"`. */
+    readonly failure: Record<string, unknown>
     /** 53.17-53.20 — the composer: a `<form>` that sends, and takes files dropped on it or pasted into it. */
     readonly composer: Record<string, unknown>
     /** 53.33 — the text input: Enter sends, Shift+Enter breaks the line. */
@@ -118,7 +145,7 @@ export type ChatParts = {
         readonly remove: Record<string, unknown>
     }
     /** 53.34 — what was sent while an answer streamed, sent once it ends: `undefined` where nothing is. */
-    get pending(): readonly AssistantTurnPart[] | undefined
+    get pending(): readonly AssistantContent[] | undefined
     /** 53.34 — the element showing what is queued. */
     readonly queued: Record<string, unknown>
     /** 53.34 — the button dropping what is queued. */
@@ -137,15 +164,55 @@ const sourceOf = (image: Image) =>
           ? image.source.url
           : undefined
 
+// The events that write a block or a message; the rest change nothing a page renders.
+const WRITES = new Set<AssistantEvent['type']>([
+    'message_start',
+    'content_block_start',
+    'content_block_delta',
+    'content_block_stop',
+    'tool_result',
+])
+
+/** A message's content as blocks: words written as a string are one text block. */
+function blocksOf(message: AssistantMessage): AssistantContent[] {
+    return typeof message.content === 'string'
+        ? [{ type: 'text', text: message.content }]
+        : message.content
+}
+
+/** Whether `message` is what the person wrote, rather than what tools answered in their turn. */
+function written(message: AssistantMessage): boolean {
+    if (message.role !== 'user') return false
+    for (const block of blocksOf(message))
+        if (block.type !== 'tool_result') return true
+    return false
+}
+
+/** A tool result's words: its string, or its text blocks joined. */
+function wordsOf(result: ToolResult): string {
+    if (typeof result.content === 'string') return result.content
+    let text = ''
+    for (const block of result.content ?? [])
+        if (block.type === 'text') text += block.text
+    return text
+}
+
 /** A conversation over an assistant handler, as parts: the transcript and the composer. */
 export function chat(options: ChatOptions): ChatParts {
-    const turns = options.turns ?? reactive<AssistantTurn[]>([])
+    const messages = options.messages ?? reactive<AssistantMessage[]>([])
     const disabled = () => live(options.disabled) === true
     const draft = reactive('')
     // 53.34 — what was sent while an answer streamed, sent once it ends unless it is cancelled.
-    const queued = reactive<AssistantTurnPart[] | undefined>(undefined)
+    const queued = reactive<AssistantContent[] | undefined>(undefined)
     const attached = reactive<Attached[]>([])
     const streaming = reactive(false)
+    const permissions = reactive<ChatPermission[]>([])
+    const outcome = reactive<{
+        stop_reason: string | undefined
+        failed: string | undefined
+    }>({ stop_reason: undefined, failed: undefined })
+    // Where the answer streaming begins in `messages`.
+    let answerStart = 0
     // The answer in flight, which `stop` aborts.
     let asking: AbortController | undefined
 
@@ -154,84 +221,109 @@ export function chat(options: ChatOptions): ChatParts {
     function send() {
         const text = draft().trim()
         if (disabled() || empty()) return
-        const pieces: AssistantTurnPart[] = [...attached()]
-        if (text !== '') pieces.push({ type: 'text', text })
+        const content: AssistantContent[] = [...attached()]
+        if (text !== '') content.push({ type: 'text', text })
         draft.set('')
         attached.set([])
         if (streaming()) {
-            queued.set([...(queued() ?? []), ...pieces])
+            queued.set([...(queued() ?? []), ...content])
             return
         }
-        turns.patch((all) => {
-            all.push(turnOf('user', pieces))
+        messages.patch((all) => {
+            all.push({ role: 'user', content })
         })
         answerFrom()
     }
 
-    // 53.46 — the question an answer answered, asked again in its place.
+    // 53.46 — the question an answer answered, asked again in its place: everything after the last
+    // message the person wrote before it goes.
     function retry(index: number) {
         if (streaming()) return
-        turns.patch((all) => {
-            all.splice(index)
+        const all = messages()
+        let asked = index
+        while (asked > 0 && !written(all[asked] as AssistantMessage)) asked--
+        messages.patch((held) => {
+            held.splice(asked + 1)
         })
         answerFrom()
     }
 
     // Asks for an answer to the conversation as it stands, and sends what was queued once it ends.
     async function answerFrom() {
-        turns.patch((all) => {
-            all.push(turnOf('assistant'))
-        })
         const controller = new AbortController()
         asking = controller
+        answerStart = messages().length
+        const accumulator = new MessageAccumulator(answerStart)
+        permissions.set([])
+        outcome.set({ stop_reason: undefined, failed: undefined })
         streaming.set(true)
+        let stop: string | undefined
         try {
             const events = options.ask(
-                { messages: messages(turns()) },
+                { messages: messages() },
                 { signal: controller.signal },
             )
             for await (const event of events) {
                 if (controller.signal.aborted) break
-                turns.patch((all) => {
-                    const answering = all[all.length - 1]
-                    if (answering !== undefined) fold(answering, event)
-                })
+                if (WRITES.has(event.type))
+                    messages.patch((all) => {
+                        accumulator.add(all, event)
+                    })
+                else if (event.type === 'permission')
+                    permissions.patch((all) => {
+                        all.push({
+                            id: event.id,
+                            name: event.name,
+                            input: event.input,
+                            allowed: undefined,
+                        })
+                    })
+                else if (event.type === 'message_delta')
+                    stop = event.delta.stop_reason ?? undefined
+                // A run's end changes nothing a page renders, so nothing is told it did.
+                else
+                    accumulator.add(
+                        messages.peek() as AssistantMessage[],
+                        event,
+                    )
             }
-            if (controller.signal.aborted) ended(controller, undefined)
+            outcome.set({
+                stop_reason: controller.signal.aborted ? 'stopped' : stop,
+                failed: undefined,
+            })
         } catch (error) {
-            ended(controller, error)
+            // 53.35, 53.36 — an answer `stop` ended is `stopped`; one that threw carries the failure's message.
+            outcome.set(
+                controller.signal.aborted
+                    ? { stop_reason: 'stopped', failed: undefined }
+                    : { stop_reason: undefined, failed: messageOf(error) },
+            )
         } finally {
+            // 53.28 — a call left unanswered goes, so the conversation is one the API takes back.
+            messages.patch((all) => {
+                accumulator.settle(all)
+            })
             streaming.set(false)
             asking = undefined
         }
         const next = queued.peek()
         if (next === undefined) return
         queued.set(undefined)
-        turns.patch((all) => {
-            all.push(turnOf('user', next))
+        messages.patch((all) => {
+            all.push({ role: 'user', content: next })
         })
         answerFrom()
     }
 
-    // 53.35, 53.36 — an answer `stop` ended is `stopped`; one that threw carries the failure's message.
-    function ended(controller: AbortController, error: unknown) {
-        turns.patch((all) => {
-            const answering = all[all.length - 1]
-            if (answering === undefined) return
-            if (controller.signal.aborted) answering.stop_reason = 'stopped'
-            else answering.failed = messageOf(error)
-        })
-    }
-
-    // 53.37 — each file as `userMessage` makes it, taken when it lands so its image shows at once.
+    // 53.37 — each file as `assistantMessage` makes it, taken when it lands so its image shows at once.
     async function attach(files: File[]) {
         for (const file of files)
             try {
-                const { content } = await userMessage([file])
+                const { content } = await assistantMessage('user', [file])
                 attached.patch((all) => {
-                    for (const piece of content)
-                        if (piece.type === 'image' || piece.type === 'document')
-                            all.push(piece)
+                    for (const block of content)
+                        if (block.type === 'image' || block.type === 'document')
+                            all.push(block)
                 })
             } catch {
                 // A file this browser cannot draw, or none a model reads, is left out.
@@ -239,13 +331,24 @@ export function chat(options: ChatOptions): ChatParts {
     }
 
     async function answer(id: string, allow: boolean) {
-        turns.patch((all) => {
-            for (const each of all)
-                for (const part of each.parts)
-                    if (part.type === 'permission' && part.id === id)
-                        part.allowed = allow
+        permissions.patch((all) => {
+            for (const prompt of all)
+                if (prompt.id === id) prompt.allowed = allow
         })
         await options.permit?.({ id, allow })
+    }
+
+    // The result answering the call `id`, read from the messages after it.
+    function resultOf(id: string): ToolResult | undefined {
+        for (const message of messages())
+            if (message.role === 'user' && typeof message.content !== 'string')
+                for (const block of message.content)
+                    if (
+                        block.type === 'tool_result' &&
+                        block.tool_use_id === id
+                    )
+                        return block
+        return undefined
     }
 
     // 53.33 — Enter sends and Shift+Enter breaks the line; `hotkeys` leaves an input method's Enter be.
@@ -255,18 +358,29 @@ export function chat(options: ChatOptions): ChatParts {
     // 53.39 — the transcript kept at its bottom.
     const follow = autoscroll()
 
-    const answering = (index: number) =>
-        streaming() && index === turns().length - 1
+    const answering = (index: number) => streaming() && index >= answerStart
 
     return {
-        turns,
+        messages,
         get streaming() {
             return streaming()
+        },
+        get stop_reason() {
+            return outcome().stop_reason
+        },
+        get failed() {
+            return outcome().failed
         },
         root: {
             'data-chat': 'root',
             get 'data-streaming'() {
                 return streaming() ? '' : undefined
+            },
+            get 'data-stop'() {
+                return outcome().stop_reason
+            },
+            get 'data-failed'() {
+                return outcome().failed === undefined ? undefined : ''
             },
         },
         transcript: withPart(
@@ -274,24 +388,35 @@ export function chat(options: ChatOptions): ChatParts {
             follow.host,
         ),
         jump: follow.jump,
-        turn(turn, index) {
-            const role = turn.role === 'user' ? 'you' : 'assistant'
+        message(message, index) {
+            const role = message.role === 'user' ? 'you' : 'assistant'
             return {
-                turn: {
-                    'data-chat': 'turn',
+                message: {
+                    'data-chat': 'message',
                     'data-speaker': role,
                     get 'data-streaming'() {
                         return answering(index) ? '' : undefined
                     },
-                    'data-stop': turn.stop_reason,
-                    'data-failed': turn.failed === undefined ? undefined : '',
                 },
                 speaker: { 'data-chat': 'speaker' },
                 role,
+                shown: message.role === 'assistant' || written(message),
+                // Read as the answer grows: a block streaming in is shown the moment it starts.
+                get blocks() {
+                    const shownBlocks: AssistantContent[] = []
+                    for (const block of blocksOf(message))
+                        if (block.type !== 'tool_result')
+                            shownBlocks.push(block)
+                    return shownBlocks
+                },
                 get streaming() {
                     return answering(index)
                 },
-                failure: { 'data-chat': 'failure', role: 'alert' },
+                get ends() {
+                    if (message.role !== 'assistant') return false
+                    const next = messages()[index + 1]
+                    return next === undefined || written(next)
+                },
                 actions: { 'data-chat': 'actions' },
                 retry: () => retry(index),
             }
@@ -302,11 +427,12 @@ export function chat(options: ChatOptions): ChatParts {
             'data-chat': 'document',
             title: document.title,
         }),
-        tool(part) {
+        tool(call) {
+            const toolResult = resultOf(call.id)
             const status =
-                part.content === undefined
+                toolResult === undefined
                     ? 'running'
-                    : part.is_error
+                    : toolResult.is_error === true
                       ? 'failed'
                       : 'done'
             return {
@@ -315,13 +441,19 @@ export function chat(options: ChatOptions): ChatParts {
                 input: { 'data-chat': 'tool-input' },
                 result: { 'data-chat': 'tool-result' },
                 status,
+                toolResult,
+                answer:
+                    toolResult === undefined ? undefined : wordsOf(toolResult),
             }
         },
-        permission(part) {
+        get permissions() {
+            return permissions()
+        },
+        permission(prompt) {
             const answered =
-                part.allowed === undefined
+                prompt.allowed === undefined
                     ? 'waiting'
-                    : part.allowed
+                    : prompt.allowed
                       ? 'allowed'
                       : 'denied'
             const button = (allow: boolean) => ({
@@ -329,7 +461,7 @@ export function chat(options: ChatOptions): ChatParts {
                 'data-chat': allow ? 'allow' : 'deny',
                 disabled:
                     options.permit === undefined || answered !== 'waiting',
-                onclick: () => answer(part.id, allow),
+                onclick: () => answer(prompt.id, allow),
             })
             return {
                 permission: {
@@ -343,6 +475,7 @@ export function chat(options: ChatOptions): ChatParts {
                 answer: answered,
             }
         },
+        failure: { 'data-chat': 'failure', role: 'alert' },
         composer: withPart(
             {
                 'data-chat': 'composer',

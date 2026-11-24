@@ -25,14 +25,16 @@ test('Enter asks, and the answer streams in with its tool call', async () => {
             using _thread = await mount(AssistantThread({}))
             ask('Which company is Ada at?')
             await settled()
-            const turns = [...document.querySelectorAll('[data-chat=turn]')]
+            const messages = [
+                ...document.querySelectorAll('[data-chat=message]'),
+            ]
             expect(
-                turns.map((turn) => turn.getAttribute('data-speaker')),
-            ).toEqual(['you', 'assistant'])
+                messages.map((message) => message.getAttribute('data-speaker')),
+            ).toEqual(['you', 'assistant', 'assistant'])
             expect(
                 document.querySelector('[data-chat=tool]')?.textContent,
             ).toBe('used searchContacts')
-            expect(turns[1]?.querySelector('p')?.textContent).toBe(
+            expect(messages[2]?.querySelector('p')?.textContent).toBe(
                 'Ada Lovelace is at Analytical Engines.',
             )
         },
@@ -40,7 +42,7 @@ test('Enter asks, and the answer streams in with its tool call', async () => {
     )
 })
 
-// THE REVERT: keep the old answer on a retry, and the conversation reads you, assistant, assistant.
+// THE REVERT: keep the old answer on a retry, and the conversation reads you, assistant, assistant, assistant, assistant.
 test('Ask again replaces the answer with a fresh one to the same question', async () => {
     await using app = await createApp()
     await app.run(
@@ -54,11 +56,13 @@ test('Ask again replaces the answer with a fresh one to the same question', asyn
                 ) as HTMLButtonElement
             ).click()
             await settled()
-            const turns = [...document.querySelectorAll('[data-chat=turn]')]
+            const messages = [
+                ...document.querySelectorAll('[data-chat=message]'),
+            ]
             expect(
-                turns.map((turn) => turn.getAttribute('data-speaker')),
-            ).toEqual(['you', 'assistant'])
-            expect(turns[1]?.querySelector('p')?.textContent).toBe(
+                messages.map((message) => message.getAttribute('data-speaker')),
+            ).toEqual(['you', 'assistant', 'assistant'])
+            expect(messages[2]?.querySelector('p')?.textContent).toBe(
                 'Ada Lovelace is at Analytical Engines.',
             )
         },

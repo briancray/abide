@@ -1,8 +1,6 @@
-// SECTION 44 — WHAT A CONVERSATION IS MADE OF, on both sides: the transcript a page sends and the
-// events `assistant` yields back to it. Types alone, so the browser names what `ask()` hands it
-// without reaching for the server's entry.
-
-import type { Method } from './rpc.ts'
+// SECTION 44 — WHAT A CONVERSATION IS MADE OF, on both sides: the messages a page holds and sends,
+// and the events `assistant` streams back to it — each as the Messages API has it. Types alone, so
+// the browser names what `ask()` hands it without reaching for the server's entry.
 
 /** Where the API caches the prompt up to a block: the Messages API's `cache_control`. */
 type CacheControl = { type: 'ephemeral'; ttl?: '5m' | '1h' }
@@ -60,8 +58,8 @@ type SearchResultBlock = {
  * A piece of a turn, as the Messages API's content block for it: words, with the citations an
  * answer's carry; an image as base64, at a URL, or an uploaded file; a document — a PDF as base64 or
  * at a URL, text, content of its own, or an uploaded file — with its title, its context and whether
- * answers cite it; a search result whose text an answer may cite; a tool call the model made, in its
- * own turn; and what that call answered, in the user turn after it.
+ * answers cite it; a search result whose text an answer may cite; a tool call the model made, and
+ * what it reasoned, in its own turn; and what a call answered, in the user turn after it.
  */
 export type AssistantContent =
     | TextBlock
@@ -84,44 +82,79 @@ export type AssistantContent =
           is_error?: boolean
           cache_control?: CacheControl
       }
+    | { type: 'thinking'; thinking: string; signature: string }
+    | { type: 'redacted_thinking'; data: string }
 
-/** One turn of the transcript, as the Messages API takes it: its words, or its blocks in order. */
+/** One turn of a conversation, as the Messages API takes it: its words, or its blocks in order. */
 export type AssistantMessage = {
     role: 'user' | 'assistant'
     content: string | AssistantContent[]
 }
 
+/** What a request used, as the Messages API counts it, and whatever else the provider reports. */
+export type AssistantUsage = {
+    input_tokens: number
+    output_tokens: number
+    cache_creation_input_tokens?: number | null
+    cache_read_input_tokens?: number | null
+    [field: string]: unknown
+}
+
 /**
- * What a conversation yields, the same from every provider, each field under the Messages API's name
- * for it where it has one: words, a cited run of them whole; a tool call as it starts, its input once
- * written, and its result; a permission prompt; and the end, with why and what it used.
+ * What a conversation yields, the same from every provider: each run of the model as the Messages
+ * API streams it, event for event, and between runs what abide alone knows — what a tool call
+ * answered, with its value read as JSON where the app's handler answers one, and a permission prompt
+ * Claude Code asks the page. 44.2, 44.11.
  */
 export type AssistantEvent =
-    | { type: 'text'; text: string; citations?: Record<string, unknown>[] }
     | {
-          type: 'tool'
-          id: string
-          name: string
-          handler: { method: Method; address: string } | undefined
+          type: 'message_start'
+          message: {
+              id: string
+              type: 'message'
+              role: 'assistant'
+              model: string
+              content: AssistantContent[]
+              stop_reason: string | null
+              stop_sequence: string | null
+              usage: AssistantUsage
+          }
       }
-    | { type: 'input'; id: string; input: unknown }
     | {
-          type: 'result'
-          tool_use_id: string
-          content: string
-          is_error: boolean
-          handler: { method: Method; address: string } | undefined
-          value: unknown
+          type: 'content_block_start'
+          index: number
+          content_block: AssistantContent
       }
-    | { type: 'permission'; id: string; name: string; input: unknown }
     | {
-          type: 'done'
-          stop_reason: string
+          type: 'content_block_delta'
+          index: number
+          delta:
+              | { type: 'text_delta'; text: string }
+              | { type: 'input_json_delta'; partial_json: string }
+              | { type: 'citations_delta'; citation: Record<string, unknown> }
+              | { type: 'thinking_delta'; thinking: string }
+              | { type: 'signature_delta'; signature: string }
+      }
+    | { type: 'content_block_stop'; index: number }
+    | {
+          type: 'message_delta'
+          delta: { stop_reason: string | null; stop_sequence: string | null }
+          // The run's usage so far, which names its output and may name the rest.
           usage: {
-              input_tokens: number
               output_tokens: number
-              cache_creation_input_tokens?: number
-              cache_read_input_tokens?: number
+              input_tokens?: number | null
+              cache_creation_input_tokens?: number | null
+              cache_read_input_tokens?: number | null
               [field: string]: unknown
           }
       }
+    | { type: 'message_stop' }
+    | { type: 'ping' }
+    | {
+          type: 'tool_result'
+          tool_use_id: string
+          content: (TextBlock | ImageBlock)[]
+          is_error: boolean
+          value: unknown
+      }
+    | { type: 'permission'; id: string; name: string; input: unknown }

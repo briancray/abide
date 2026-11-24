@@ -11,16 +11,22 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
 <Doc
     seeAlso={[
         '/ai/assistant',
+        '/ai/assistant-message',
         '/ai/pairing',
         '/ai/provider',
         '/helpers/markdown',
-        '/ai/transcript',
     ]}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/assistant/lib/AssistantThread.test.ts',
             from: [
                 "test('Enter asks, and the answer streams in with its tool call'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/assistantBlocks.test.ts',
+            from: [
+                "test('chat folds an answer in place, a block keeping its identity from its first delta to its last — 53.32'",
             ],
         },
         {
@@ -50,22 +56,22 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
         {
             path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
             from: [
-                "test('a conversation handed in as turns is shown, and asked about with what follows'",
+                "test('a conversation handed in as messages is shown, and asked about with what follows'",
             ],
         },
     ]}
 >
     <Section level={3} title="Put the CRM's assistant on a page">
         <p>Pass your assistant handler, a <code>POST</code> yielding <code>assistant</code>'s
-            events, as <code>ask</code>, and spread the parts onto markup: the
-            transcript's turns, and a composer whose input sends on Enter and breaks the line on
-            Shift+Enter.</p>
+            events, as <code>ask</code>, and spread the parts onto markup: the conversation's
+            messages, each as the Messages API's blocks, and a composer whose input sends on
+            Enter and breaks the line on Shift+Enter.</p>
         <Example code={askTheAssistant}><AskTheAssistant /></Example>
     </Section>
 
     <Section level={3} title="Stop an answer and keep what arrived">
         <p>While an answer streams, <code>streaming</code> is true and <code>stop</code> is the
-            button that aborts it. The answer keeps what arrived, its turn
+            button that aborts it. The answer keeps what arrived, and the root carries
             <code>data-stop="stopped"</code>.</p>
         <Code language="abide" caption="abide" code={`
             {#if talk.streaming}
@@ -75,8 +81,8 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Render the assistant's answers as markdown">
-        <p>A text part is the words as they grow. Render the assistant's with
-            <code>markdown.incremental</code> in a component, handed the turn's
+        <p>A text block is the words as they grow. Render the assistant's with
+            <code>markdown.incremental</code> in a component, handed the message's
             <code>streaming</code>, so a chunk renders only the section still growing.</p>
         <Code language="abide" caption="abide" code={`
             <script>
@@ -84,17 +90,18 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
             import Markdown from '#src/lib/Markdown.abide'
             </script>
 
-            {#if part.type === 'text' && turn.role === 'assistant'}
-                <Markdown {...talk.text} source={part.text}
-                    streaming={talk.turn(turn, index).streaming} />
+            {#if block.type === 'text' && message.role === 'assistant'}
+                <Markdown {...talk.text} source={block.text}
+                    streaming={talk.message(message, index).streaming} />
             {/if}
         `} />
     </Section>
 
     <Section level={3} title="Let a person allow or deny a tool Claude Code asks for">
         <p>Pass <code>permit</code> a handler calling <code>provider.claudeCode.permit</code>.
-            A permission part's <code>allow</code> and <code>deny</code> are the buttons answering
-            it; without <code>permit</code> they are disabled.</p>
+            The answer's <code>permissions</code> are the prompts it asks, and a prompt's
+            <code>allow</code> and <code>deny</code> are the buttons answering it; without
+            <code>permit</code> they are disabled.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import { chat } from '@abide/abide'
@@ -104,33 +111,35 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
             const talk = chat({ ask: askClaudeCode, permit: permitClaudeCode })
             </script>
 
-            {#if part.type === 'permission'}
-                <div {...talk.permission(part).permission}>
-                    <span {...talk.permission(part).name}>{part.name}</span>
-                    <button {...talk.permission(part).allow}>Allow</button>
-                    <button {...talk.permission(part).deny}>Deny</button>
+            {#for prompt of talk.permissions key prompt}
+                <div {...talk.permission(prompt).permission}>
+                    <span {...talk.permission(prompt).name}>{prompt.name}</span>
+                    <button {...talk.permission(prompt).allow}>Allow</button>
+                    <button {...talk.permission(prompt).deny}>Deny</button>
                 </div>
-            {/if}
+            {/for}
         `} />
     </Section>
 
     <Section level={3} title="Show a tool call as a line of its own">
-        <p>A tool part's element carries <code>data-status</code>: <code>running</code>,
-            <code>done</code> or <code>failed</code>. What it says is yours.</p>
+        <p>A <code>tool_use</code> block's element carries <code>data-status</code>:
+            <code>running</code> until its result arrives, then <code>done</code> or
+            <code>failed</code>. What it says is yours.</p>
         <Code language="abide" caption="abide" code={`
-            {#if part.type === 'tool'}
-                <span {...talk.tool(part).tool}>used {part.name}</span>
+            {#if block.type === 'tool_use'}
+                <span {...talk.tool(block).tool}>used {block.name}</span>
             {/if}
         `} />
     </Section>
 
     <Section level={3} title="Offer to ask again under each answer">
-        <p>A turn's <code>retry</code> asks the question its answer answered again, in the
-            answer's place. Show it once the answer has ended.</p>
+        <p>A message's <code>retry</code> asks the question its answer answered again, in the
+            answer's place. Show it under the message that <code>ends</code> an answer, once
+            the answer has ended.</p>
         <Code language="abide" caption="abide" code={`
-            {#if turn.role === 'assistant' && !talk.turn(turn, index).streaming}
-                <div {...talk.turn(turn, index).actions}>
-                    <button onclick={talk.turn(turn, index).retry}>Ask again</button>
+            {#if !talk.streaming && talk.message(message, index).ends}
+                <div {...talk.message(message, index).actions}>
+                    <button onclick={talk.message(message, index).retry}>Ask again</button>
                 </div>
             {/if}
         `} />
@@ -149,30 +158,26 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Keep a conversation across visits">
-        <p>Hand <code>turns</code> a <code>reactive</code>. A conversation it holds is
-            shown and asked about, and every turn the chat adds is written to it, for you to
-            store.</p>
+        <p>Hand <code>messages</code> a <code>reactive</code>. The conversation it holds is the
+            Messages API's own messages: shown, asked about, and grown by every message the
+            chat adds, for you to store as they are.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { chat, reactive } from '@abide/abide'
+            import { type AssistantMessage, chat, reactive } from '@abide/abide'
             import askAssistant from '../askAssistant.handler.ts'
 
             // Last visit's conversation, as you stored it.
-            let thread = reactive([
-                {
-                    role: 'user',
-                    parts: [{ type: 'text', text: 'Which company is Ada at?' }],
-                    stop: undefined,
-                    failed: undefined,
-                },
+            let thread = reactive<AssistantMessage[]>([
+                { role: 'user', content: 'Which company is Ada at?' },
+                { role: 'assistant', content: 'Analytical Engines.' },
             ])
-            const talk = chat({ ask: askAssistant, turns: thread })
+            const talk = chat({ ask: askAssistant, messages: thread })
             </script>
         `} />
     </Section>
 
-    <Section level={3} title="Tell the rep's turns from the assistant's">
-        <p>Each turn carries <code>data-speaker</code>, <code>you</code> or
+    <Section level={3} title="Tell the rep's messages from the assistant's">
+        <p>Each message carries <code>data-speaker</code>, <code>you</code> or
             <code>assistant</code>, and the root <code>data-streaming</code> while an answer
             arrives.</p>
         <Code language="abide" caption="abide" code={`

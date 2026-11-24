@@ -24,9 +24,8 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
         '/ai/assistant',
         '/ai/provider',
         '/ai/pairing',
-        '/ai/transcript',
         '/ai/results-of',
-        '/ai/user-message',
+        '/ai/assistant-message',
         '/headless/chat',
         '/handlers/mcp',
         '/handlers/clients',
@@ -206,26 +205,20 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
     </Section>
 
     <Section title="The browser keeps the conversation and sends it whole">
-        <p>The server holds no conversation between calls, so each question sends every turn
-            before it. <a href={url('/ai/transcript')}><code>transcript</code></a> folds the
-            streamed events into turns and turns them back into messages, and
-            <code>chat</code> does both for you.</p>
+        <p>The server holds no conversation between calls, so each question sends every message
+            before it. The conversation is the Messages API's own messages, and
+            <a href={url('/ai/assistant-message')}><code>assistantMessage</code></a> turns an
+            answer's events into the messages they amount to. <code>chat</code> folds them in as
+            they stream.</p>
         <Code language="ts" caption="browser" code={`
-            import { type AssistantTurn, reactive, transcript } from '@abide/abide'
+            import { assistantMessage, type AssistantMessage } from '@abide/abide'
             import askAssistant from './askAssistant.handler.ts'
 
-            const turns = reactive<AssistantTurn[]>([])
-            async function ask(text: string) {
-                turns.patch((all) => {
-                    all.push(transcript.turn('user', [{ type: 'text', text }]))
-                    all.push(transcript.turn('assistant'))
-                })
-                const messages = transcript.messages(turns())
-                for await (const event of askAssistant({ messages }))
-                    turns.patch((all) => {
-                        const answering = all[all.length - 1]
-                        if (answering) transcript.fold(answering, event)
-                    })
+            const messages: AssistantMessage[] = []
+            async function ask(question: string) {
+                messages.push(await assistantMessage('user', [question]))
+                const events = await askAssistant({ messages })
+                messages.push(...assistantMessage('assistant', events))
             }
         `} />
         <p>A transcript ending on the assistant's turn has nothing to answer, and is refused
@@ -246,11 +239,11 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
             out.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { type AssistantEvent, props, resultsOf } from '@abide/abide'
+            import { type AssistantMessage, props, resultsOf } from '@abide/abide'
             import searchContacts from './searchContacts.handler.ts'
 
-            const { events } = props<{ events: AssistantEvent[] }>()
-            const found = resultsOf(events, searchContacts).flat()
+            const { messages } = props<{ messages: AssistantMessage[] }>()
+            const found = resultsOf(messages, searchContacts).flat()
             </script>
 
             {#for contact of found}<p>{contact.name}</p>{/for}
@@ -260,12 +253,12 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
     <Section title="Send a picture or a statement in the question">
         <p>A turn is the Messages API's own blocks. A
             <a href={url('/headless/dropzone')}><code>dropzone</code></a> takes the files pasted
-            or dropped, and <a href={url('/ai/user-message')}><code>userMessage</code></a> makes
-            the person's turn of the question and them: a photo drawn down to what a model looks
-            at, a PDF as a document.</p>
+            or dropped, and <a href={url('/ai/assistant-message')}><code>assistantMessage</code></a>
+            makes the person's message of the question and them: a photo drawn down to what a
+            model looks at, a PDF as a document.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { dropzone, reactive, userMessage } from '@abide/abide'
+            import { assistantMessage, dropzone, reactive } from '@abide/abide'
 
             let files = reactive<File[]>([])
             const drop = dropzone({
@@ -273,13 +266,14 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
                 paste: true,
                 onfiles: (taken) => files.patch((all) => all.push(...taken)),
             })
-            const turn = (question: string) => userMessage([...files, question])
+            const asked = (question: string) =>
+                assistantMessage('user', [...files, question])
             </script>
 
             <textarea {...drop.host}></textarea>
         `} />
         <p>Send a phone's HEIC as it is, and the assistant refuses it before any model is
-            asked. <code>userMessage</code> redraws one the browser can draw as a JPEG.</p>
+            asked. <code>assistantMessage</code> redraws one the browser can draw as a JPEG.</p>
         <Exchange
             method="POST"
             path="/assistant/askAssistant"

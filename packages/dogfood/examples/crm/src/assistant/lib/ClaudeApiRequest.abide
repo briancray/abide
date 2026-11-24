@@ -19,8 +19,8 @@ const events = memo(() =>
 </div>
 
 {#for event of events}
-    {#if event.type === 'text'}
+    {#if event.type === 'content_block_delta' && event.delta.type === 'text_delta'}
         <pre class="rounded-md border border-rule bg-raised p-snug
-            text-chrome">{event.text}</pre>
+            text-chrome">{event.delta.text}</pre>
     {/if}
 {/for}

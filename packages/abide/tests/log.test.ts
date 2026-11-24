@@ -193,21 +193,45 @@ test("a browser's log.named prefixes the app name the document carries — 28.4"
     expect(log.records().at(-1)?.namespace).toBe('ledger:billing')
 })
 
-// 44.31 — A CONVERSATION WRITES ONE LINE ON `abide:assistant` WHEN ITS EVENTS END, and one that ended
-// without a `done` reads `unfinished` and why: its caller stopped reading, its provider threw, or its
-// request aborted. THE REVERT: yield the provider's events untraced in `assistant` and no conversation
-// writes a line; log `unfinished` alone and the three read the same.
+// 44.31 — A CONVERSATION WRITES ONE LINE ON `abide:assistant` WHEN ITS EVENTS END: why its last run
+// stopped and the tokens its runs used, or, ended before a run stopped, `unfinished` and why — its
+// caller stopped reading, its provider threw, or its request aborted. THE REVERT: yield the provider's
+// events untraced in `assistant` and no conversation writes a line; log `unfinished` alone and the
+// three read the same.
 test('a conversation writes one debug line on abide:assistant when it ends — 44.31', async () => {
     process.env.DEBUG = 'abide:assistant'
-    const played: ProviderEvent[] = [
-        { type: 'tool', id: 't1', name: 'get_contacts' },
-        { type: 'input', id: 't1', input: {} },
-        { type: 'result', tool_use_id: 't1', content: '[]', is_error: false },
-        {
-            type: 'done',
-            stop_reason: 'end_turn',
-            usage: { input_tokens: 12, output_tokens: 3 },
+    const call: ProviderEvent = {
+        type: 'content_block_start',
+        index: 0,
+        content_block: {
+            type: 'tool_use',
+            id: 't1',
+            name: 'get_contacts',
+            input: {},
         },
+    }
+    const played: ProviderEvent[] = [
+        {
+            type: 'message_start',
+            message: {
+                id: 'msg_1',
+                type: 'message',
+                role: 'assistant',
+                model: 'claude-opus-5-5',
+                content: [],
+                stop_reason: null,
+                stop_sequence: null,
+                usage: { input_tokens: 12, output_tokens: 1 },
+            },
+        },
+        call,
+        { type: 'content_block_stop', index: 0 },
+        {
+            type: 'message_delta',
+            delta: { stop_reason: 'end_turn', stop_sequence: null },
+            usage: { output_tokens: 3 },
+        },
+        { type: 'message_stop' },
     ]
     const provider = {
         async *run() {
@@ -227,7 +251,8 @@ test('a conversation writes one debug line on abide:assistant when it ends — 4
     })
     const failing = {
         async *run(): AsyncGenerator<ProviderEvent> {
-            yield { type: 'tool', id: 't1', name: 'get_contacts' }
+            yield played[0] as ProviderEvent
+            yield call
             throw new Error('claude exited 1 with no result')
         },
     }
@@ -260,12 +285,12 @@ test('a conversation writes one debug line on abide:assistant when it ends — 4
         /^end_turn 1 messages 1 tool calls 12\/3 tokens \d+\.\dms$/,
     )
     expect(written[1]).toMatch(
-        /^unfinished stopped 1 messages 1 tool calls no usage \d+\.\dms$/,
+        /^unfinished stopped 1 messages 0 tool calls 0\/0 tokens \d+\.\dms$/,
     )
     expect(written[2]).toMatch(
-        /^unfinished failed 1 messages 1 tool calls no usage \d+\.\dms claude exited 1 with no result$/,
+        /^unfinished failed 1 messages 1 tool calls 0\/0 tokens \d+\.\dms claude exited 1 with no result$/,
     )
     expect(written[3]).toMatch(
-        /^unfinished aborted 1 messages 0 tool calls no usage \d+\.\dms$/,
+        /^unfinished aborted 1 messages 0 tool calls 0\/0 tokens \d+\.\dms$/,
     )
 })
