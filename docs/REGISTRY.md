@@ -386,11 +386,11 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `ledger` | `<Entry>(name: string, options?: LedgerOptions<Entry>) => Ledger<Entry>` | Entries appended and never coalesced, read in order from a position or a named cursor. | 58.1, 58.9, 58.10, 58.11 |
+| `ledger` | `<Entry>(name: string, options?: LedgerOptions<Entry>) => Ledger<Entry>` | Entries appended and never coalesced, read in order from a position or a named cursor. | 58.1, 58.9, 58.10, 58.11, 58.12 |
 | `Ledger` | `<Entry>{ append: (entry: Entry, options?: { key?: string }) => Promise<number>; read: (from?: number \| { cursor: string }) => ReadableStream<Logged<Entry>>; readonly writable: WritableStream<Entry>; readonly head: Reactive<number> }` | What `ledger` hands back: the append, the read, the stream an entry is written to, and the last entry's number. | 58.2, 58.4, 58.5, 58.6, 58.7, 58.8 |
 | `LedgerOptions` | `<Entry>{ store?: LogStore; retain?: number; schema?: Schema<Entry> }` | Where the entries are kept, how many are, and what an entry must be. | 58.3, 58.9, 58.10 |
 | `Logged` | `<Entry>{ seq: number; at: number; entry: Entry }` | One entry as a ledger keeps it: its number, when it was appended, and what it holds. | 58.2 |
-| `LogStore` | `{ append: (entry: unknown, key: string \| undefined, at: number) => number \| Promise<number>; since: (seq: number) => Logged<unknown>[] \| Promise<Logged<unknown>[]>; last: () => number \| Promise<number>; position: (cursor: string, seq?: number) => number \| Promise<number>; trim: (through: number) => void \| Promise<void> }` | The append face of a `store` a ledger keeps its entries and cursors in. | 58.9 |
+| `LogStore` | `{ append: (entry: unknown, key: string \| undefined, at: number) => number \| Promise<number>; since: (seq: number) => Logged<unknown>[] \| Promise<Logged<unknown>[]>; last: () => number \| Promise<number>; position: (cursor: string, seq?: number) => number \| Promise<number>; trim: (through: number) => void \| Promise<void>; watch?: (changed: () => void) => () => void }` | The append face of a `store` a ledger keeps its entries and cursors in. | 58.9, 58.12 |
 
 ## `watch`
 
@@ -410,7 +410,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `store.web` | `<Stored>(key: string, options?: { area?: 'local' \| 'session'; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in the browser's Web Storage. | 8.22, 8.23, 8.24, 8.26, 8.27, 8.28, 8.29, 8.30 |
 | `store.sqlite` | `<Stored>(database: Database \| (() => Database) \| string, key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored> & LogStore` | A `Store` kept in a `bun:sqlite` table, a member of `@abide/abide/server`'s `store` alone. | 8.25, 8.26, 8.27, 8.28, 8.29, 8.41, 8.42, 58.9 |
 | `store.redis` | `<Stored>(client: RedisClient \| string, key: string, options?: { schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a Redis key through `bun`'s `RedisClient`, a member of `@abide/abide/server`'s `store` alone. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33 |
-| `store.indexedDB` | `<Stored>(key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in the browser's IndexedDB. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.34, 8.35, 8.36 |
+| `store.indexedDB` | `<Stored>(key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored> & LogStore` | A `Store` kept in the browser's IndexedDB. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.34, 8.35, 8.36, 58.9, 58.12 |
 | `store.cookies` | `<Stored>(name: string, options?: { path?: string; domain?: string; sameSite?: 'strict' \| 'lax' \| 'none'; secure?: boolean; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a cookie. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.37, 8.38, 8.39, 8.40 |
 | `store` | `Store<Stored> \| ((args: Args) => Store<Stored>)` | The option that keeps a value in a `Store`, or a keyed value's entries one `Store` each. | 8.1, 8.2, 8.3, 8.14, 9.5, 11.42, 11.71 |
 

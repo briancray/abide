@@ -404,3 +404,39 @@ test('status counts what waits, runs, is done and failed — 57.21', async () =>
         '2 done, 1 failed',
     )
 })
+
+// 57.6, 57.18 — A LONG QUEUE ADDS NO LISTENER PER ITEM. Items called outside a body with no signal
+// of their own end on one signal, and a listener per waiting item on it made each admission scan
+// every other: 20,000 queued items took 41 µs apiece where 0.8 is due. Counted, not timed. THE
+// REVERT: mark every waiter `shared: false` in `slot`, and `abort listeners under 10: false`.
+test('a queue of waiting items adds no abort listener per item — 57.6, 57.18', async () => {
+    let added = 0
+    // The prototype a combined signal really answers `addEventListener` from: under the DOM preload
+    // that is not the global `EventTarget`.
+    let owner: object | null = AbortSignal.any([new AbortController().signal])
+    while (owner !== null && !Object.hasOwn(owner, 'addEventListener'))
+        owner = Object.getPrototypeOf(owner)
+    const target = owner as {
+        addEventListener: EventTarget['addEventListener']
+    }
+    const add = target.addEventListener
+    target.addEventListener = function (
+        this: EventTarget,
+        type: string,
+        ...rest: unknown[]
+    ) {
+        if (type === 'abort') added += 1
+        return (add as (...given: unknown[]) => void).call(this, type, ...rest)
+    } as typeof add
+    try {
+        const one = pipe([async (n: number) => n])
+        const runs: Promise<unknown>[] = []
+        for (let n = 0; n < 1_000; n += 1) runs.push(one(n))
+        await Promise.all(runs)
+    } finally {
+        target.addEventListener = add
+    }
+    expect(`abort listeners under 10: ${added < 10}`).toBe(
+        'abort listeners under 10: true',
+    )
+})

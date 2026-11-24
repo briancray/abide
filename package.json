@@ -24,6 +24,7 @@
         "bench": "bun packages/abide/bench/bench.ts",
         "test:gates": "bun run build && HARNESS_VERIFY_GATES=1 bun test packages/abide/tests packages/harness/tests packages/dogfood/tests",
         "bench:reactive": "bun packages/abide/bench/benchReactive.ts",
+        "bench:family": "bun packages/abide/bench/familyShare.ts",
         "bench:component": "bun packages/abide/bench/benchComponent.ts",
         "bench:grid": "bun packages/abide/bench/benchGrid.ts",
         "bench:render": "bun packages/abide/bench/benchRender.ts",

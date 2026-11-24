@@ -65,6 +65,23 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
+    <Section level={3} title="Follow the call log from a page">
+        <p>A ledger crosses the wire as a streaming <code>GET</code>: a page reading it is handed
+            every entry past <code>after</code>, then each one appended after. An append is a
+            <code>POST</code> whose <code>key</code> the page makes, so an outbox resend keeps one
+            entry.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, ledger, POST } from '@abide/abide/server'
+
+            const calls = ledger<{ contact: string; minutes: number }>('calls')
+
+            export const getCalls = GET(async function* ({ after }: { after: number }) {
+                yield* calls.read(after)
+            })
+            export const logCall = POST(({ call, key }) => calls.append(call, { key }))
+        `} />
+    </Section>
+
     <Section level={3} title="Keep the call log in SQLite">
         <p>Hand it <code>store.sqlite</code>, and each entry is one row, and each cursor another:
             an append costs one row however long the log grows.</p>
@@ -73,6 +90,16 @@ import Section from '#src/lib/Section.abide'
 
             const crm = database('crm')
             const calls = ledger('calls', { store: store.sqlite(crm, 'calls') })
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep a rep's offline notes in the browser">
+        <p>Hand it <code>store.indexedDB</code>, and the entries outlive a reload. An append in
+            another tab moves this tab's <code>head</code> and wakes its reads.</p>
+        <Code language="ts" caption="browser" code={`
+            import { ledger, store } from '@abide/abide'
+
+            const notes = ledger<string>('notes', { store: store.indexedDB('notes') })
         `} />
     </Section>
 

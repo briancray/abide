@@ -27,6 +27,7 @@ export type LogStore = {
     last: () => number | Promise<number>
     position: (cursor: string, seq?: number) => number | Promise<number>
     trim: (through: number) => void | Promise<void>
+    watch?: (changed: () => void) => () => void
 }
 
 /** What `ledger` takes beside its name. */
@@ -73,6 +74,13 @@ export function ledger<Entry>(
         return last
     }
     void lastSeq()
+    // 58.12 — an append another document or process made, heard where the store reports one.
+    log.watch?.(() => {
+        known = log.last()
+        void lastSeq().then(() => {
+            for (const wake of [...waiting]) wake()
+        })
+    })
 
     const append = async (
         entry: Entry,

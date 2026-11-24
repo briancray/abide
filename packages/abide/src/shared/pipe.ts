@@ -18,6 +18,7 @@ import {
     watch,
 } from './reactive/index.ts'
 import { isThenable } from './reactive/isThenable.ts'
+import { appStopSignal } from './reactive/poll.ts'
 import { refuse } from './refuse.ts'
 import { type Backoff, backoffWait } from './retryWait.ts'
 
@@ -139,7 +140,13 @@ export function pipe<const Steps extends readonly [Step, ...Step[]]>(
 }
 
 /** One key's slots: how many items run, and the items waiting for one in the order they came. */
-type Lane = { running: number; waiting: (() => void)[] }
+/** An item waiting for a slot: let in, or turned away — and whether it ends on the pipe's shared signal. */
+type Waiter = {
+    admit: () => void
+    refuse: (reason: unknown) => void
+    shared: boolean
+}
+type Lane = { running: number; waiting: Waiter[] }
 
 /** What one item's walk answered: its answers in order, whether a step fanned out, or a refusal. */
 type Walked = {
@@ -185,6 +192,9 @@ class Runner {
           }
         | undefined
     unwatch: (() => void) | undefined
+    publishing: boolean
+    shared: AbortSignal | undefined
+    sharedFor: AbortSignal | undefined
 
     constructor(steps: readonly Step[], options: PipeOptions<unknown>) {
         this.steps = steps
@@ -215,6 +225,9 @@ class Runner {
         this.status = reactive<PipeStatus>({ ...this.counts }, { global: true })
         this.pair = undefined
         this.unwatch = undefined
+        this.publishing = false
+        this.shared = undefined
+        this.sharedFor = undefined
         // 57.17 — a pause read as state: its turning false is what lets the held attempts start.
         if (this.pausedBy !== undefined) {
             const read = this.pausedBy
@@ -228,8 +241,18 @@ class Runner {
         }
     }
 
+    /**
+     * 57.21 — the counts written to `status` once per turn, however many items moved in it: an item
+     * moves them three times (waiting, running, done), and a write per move was most of a no-op
+     * item's cost against a hand-written lane.
+     */
     publish(): void {
-        this.status.set({ ...this.counts })
+        if (this.publishing) return
+        this.publishing = true
+        queueMicrotask(() => {
+            this.publishing = false
+            this.status.set({ ...this.counts })
+        })
     }
 
     resume(): void {
@@ -253,11 +276,7 @@ class Runner {
     ): Promise<Walked> {
         // 57.18 — a stopped pipe takes nothing.
         if (this.stopping.signal.aborted) throw this.stopping.signal.reason
-        const ended = AbortSignal.any(
-            signal === undefined
-                ? [this.stopping.signal, told]
-                : [this.stopping.signal, told, signal],
-        )
+        const ended = this.endedBy(told, signal)
         const lane = this.laneOf(input)
         await this.slot(lane, ended)
         const walk = this.walk(input, ended)
@@ -276,6 +295,42 @@ class Runner {
             this.publish()
             this.release(lane)
         }
+    }
+
+    /**
+     * 57.13 — the signal an item ends on: the pipe's stop, the stop it was called under, and the
+     * caller's. ONE SIGNAL FOR EVERY ITEM in the common case — called outside a body with no signal
+     * of its own — made again only where the app's stop has been renewed (7.39): a combined signal
+     * per item was a third of a no-op item's cost against a hand-written lane.
+     */
+    endedBy(told: AbortSignal, signal: AbortSignal | undefined): AbortSignal {
+        if (signal === undefined && told === appStopSignal()) {
+            if (this.sharedFor !== told) {
+                this.sharedFor = told
+                const shared = AbortSignal.any([this.stopping.signal, told])
+                this.shared = shared
+                // 57.18 — every item waiting on it turned away by one listener.
+                shared.addEventListener(
+                    'abort',
+                    () => {
+                        for (const lane of this.lanes.values()) {
+                            const kept: Waiter[] = []
+                            for (const waiter of lane.waiting)
+                                if (waiter.shared) waiter.refuse(shared.reason)
+                                else kept.push(waiter)
+                            lane.waiting = kept
+                        }
+                    },
+                    { once: true },
+                )
+            }
+            return this.shared as AbortSignal
+        }
+        return AbortSignal.any(
+            signal === undefined
+                ? [this.stopping.signal, told]
+                : [this.stopping.signal, told, signal],
+        )
     }
 
     laneOf(input: unknown): Lane {
@@ -300,23 +355,35 @@ class Runner {
         this.counts.waiting += 1
         this.publish()
         await new Promise<void>((admitted, refused) => {
-            const admit = (): void => {
+            const waiter: Waiter = {
+                admit: admitted,
+                refuse: (reason) => {
+                    this.counts.waiting -= 1
+                    this.publish()
+                    refused(reason)
+                },
+                shared: ended === this.shared,
+            }
+            if (ended.aborted) {
+                waiter.refuse(ended.reason)
+                return
+            }
+            lane.waiting.push(waiter)
+            // ITS OWN LISTENER ONLY ON ITS OWN SIGNAL. An item ending on the shared one is turned
+            // away by that signal's one listener (`endedBy`): a listener per waiting item on one
+            // signal made each removal a scan of every other, and a long queue quadratic.
+            if (waiter.shared) return
+            const leave = (): void => {
+                const at = lane.waiting.indexOf(waiter)
+                if (at === -1) return
+                lane.waiting.splice(at, 1)
+                waiter.refuse(ended.reason)
+            }
+            ended.addEventListener('abort', leave, { once: true })
+            waiter.admit = () => {
                 ended.removeEventListener('abort', leave)
                 admitted()
             }
-            const leave = (): void => {
-                const at = lane.waiting.indexOf(admit)
-                if (at !== -1) lane.waiting.splice(at, 1)
-                this.counts.waiting -= 1
-                this.publish()
-                refused(ended.reason)
-            }
-            if (ended.aborted) {
-                leave()
-                return
-            }
-            ended.addEventListener('abort', leave, { once: true })
-            lane.waiting.push(admit)
         })
         // The slot was handed over by `release` with `running` left where it was.
         this.counts.waiting -= 1
@@ -326,7 +393,7 @@ class Runner {
 
     release(lane: Lane): void {
         const next = lane.waiting.shift()
-        if (next !== undefined) next()
+        if (next !== undefined) next.admit()
         else lane.running -= 1
     }
 
@@ -381,7 +448,13 @@ class Runner {
         ended: AbortSignal,
     ): Promise<unknown> {
         for (let attempt = 0; ; attempt += 1) {
-            await this.ready(index, ended)
+            // The common attempt is neither held nor paused, and waits on nothing.
+            if (
+                ended.aborted ||
+                (this.heldUntil[index] as number) > Date.now() ||
+                this.pausedBy?.() === true
+            )
+                await this.ready(index, ended)
             const deadline =
                 this.timeout === undefined
                     ? undefined
@@ -520,7 +593,7 @@ class Runner {
                 const sequence = written
                 written += 1
                 const lane = this.laneOf(input)
-                const ended = AbortSignal.any([this.stopping.signal, told])
+                const ended = this.endedBy(told, undefined)
                 // 57.20 — the write waits for the slot the item runs in.
                 await this.slot(lane, ended)
                 const walk = this.walk(input, ended)
