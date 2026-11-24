@@ -72,14 +72,10 @@ export type ComboboxParts<Item, Multiple extends boolean = false> = {
     readonly empty: Record<string, unknown>
     /** The pick, read and set: the item, or every item where it picks many. */
     readonly value: Reactive<Picked<Item, Multiple>>
-    /** The items picked, where it picks many; `undefined` where it picks one. */
-    get picks(): readonly Item[] | undefined
     /** The element holding the chips, where it picks many. */
     readonly chips: Record<string, unknown>
     /** A picked item's chip and the button taking it out (51.56). */
     chip(item: Item): ComboboxChip
-    /** Takes a picked item out, for a chip of one's own. */
-    unpick(item: Item): void
 }
 
 const NOTHING: readonly never[] = []
@@ -328,9 +324,6 @@ export function combobox<Item, Multiple extends boolean = false>(
         },
         empty: { role: 'status', 'data-combobox': 'empty' },
         value: value as Reactive<Picked<Item, Multiple>>,
-        get picks() {
-            return picks()
-        },
         chips: { 'data-combobox': 'chips' },
         chip: (item) => ({
             chip: { 'data-combobox': 'chip' },
@@ -341,6 +334,5 @@ export function combobox<Item, Multiple extends boolean = false>(
                 onclick: () => unpick(item),
             },
         }),
-        unpick,
     }
 }

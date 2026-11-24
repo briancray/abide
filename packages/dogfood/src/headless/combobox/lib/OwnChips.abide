@@ -8,7 +8,7 @@ const box = combobox({ options: () => STAGES, multiple: true })
 <div class="picker">
     <label for={box.id}>Stages</label>
     <div {...box.root} class="flex flex-wrap gap-1">
-        {#for stage of box.picks ?? [] by stage}
+        {#for stage of box.value by stage}
             <span
                 {...box.chip(stage).chip}
                 class="rounded-full border px-2 [&_button]:bg-transparent"
