@@ -59,7 +59,7 @@ export {
     chat,
 } from './chat.ts'
 export { type Cookies, cookies } from './cookies.ts'
-// 53.21-53.23, 53.54, 53.71 — the part copying on a click.
+// 53.21-53.23, 53.54, 53.79 — the part copying on a click.
 export { copy } from './copy.ts'
 export { csp } from './csp.ts'
 // 50.1-50.4 — a native modal as a part on a `<dialog>` of the app's own.

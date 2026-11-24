@@ -1,4 +1,4 @@
-// 52.110, 52.111 and 53.79-53.83 — `highlight`, `shrinkImage` on a server's `Bun.Image` (a browser's
+// 52.110, 52.111 and 53.87-53.91 — `highlight`, `shrinkImage` on a server's `Bun.Image` (a browser's
 // canvas is the e2e's), and `download` with the link it clicks caught here.
 
 import { afterEach, expect, spyOn, test } from 'bun:test'
@@ -34,7 +34,7 @@ const edges = async (file: Blob) =>
     new Bun.Image(new Uint8Array(await file.arrayBuffer())).metadata()
 
 // THE REVERT: write it at its own size, and a 1024px icon stays 1024px.
-test('a picture is made no larger than maxEdge, as JPEG where its own type is neither — 53.79', async () => {
+test('a picture is made no larger than maxEdge, as JPEG where its own type is neither — 53.87', async () => {
     const small = await shrinkImage(await icon(), { maxEdge: 64 })
     expect([small.name, small.type]).toEqual(['icon.jpg', 'image/jpeg'])
     expect(await edges(small)).toMatchObject({
@@ -45,7 +45,7 @@ test('a picture is made no larger than maxEdge, as JPEG where its own type is ne
 })
 
 // THE REVERT: write it once at its quality, and a byte budget below that is overrun.
-test('a picture over maxBytes is lowered in quality, then in size, until it fits — 53.80', async () => {
+test('a picture over maxBytes is lowered in quality, then in size, until it fits — 53.88', async () => {
     const roomy = await shrinkImage(await icon(), {
         maxEdge: 512,
         quality: 0.95,
@@ -60,7 +60,7 @@ test('a picture over maxBytes is lowered in quality, then in size, until it fits
 })
 
 // THE REVERT: write every picture again, and one already small enough comes back changed.
-test('a picture already within every bound is handed back as it is — 53.81', async () => {
+test('a picture already within every bound is handed back as it is — 53.89', async () => {
     const written = await shrinkImage(await icon(), {
         maxEdge: 128,
         type: 'image/webp',
@@ -76,7 +76,7 @@ afterEach(() => document.body.replaceChildren())
 
 // THE REVERT: drop the `download` attribute from the link, and the browser opens the file rather than
 // saving it.
-test('download saves text or bytes under a name, through a link clicked — 53.82', () => {
+test('download saves text or bytes under a name, through a link clicked — 53.90', () => {
     const clicked: { href: string; download: string }[] = []
     const click = spyOn(
         HTMLAnchorElement.prototype,

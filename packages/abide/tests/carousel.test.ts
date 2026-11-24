@@ -1,10 +1,11 @@
-// 53.61-53.70 — `carousel`'s parts, spread by hand as 32.11 spreads them, with every element's rect
+// 53.61-53.78 — `carousel`'s parts, spread by hand as 32.11 spreads them, with every element's rect
 // stubbed: the emulator lays nothing out, so a row of 100px items is written down rather than drawn.
 // Whether a real scroller snaps, and what a browser's snap events say, is `e2e/carousel.spec.ts`'s.
 
 import { afterEach, expect, test } from 'bun:test'
 
 import { carousel, flushSync, reactive, watch } from '#shared'
+import { media } from '#shared/media.ts'
 
 // The shared resize observer is made by the first bind (32.81), so the stand-in is installed at load,
 // and every bind is released after its test so the next bind makes it again.
@@ -292,4 +293,152 @@ test('the scroller is a carousel region, and each item a slide named by its labe
         item['aria-roledescription'],
         item['aria-label'],
     ]).toEqual(['group', 'slide', 'Acme renewal'])
+})
+
+// 53.71's timer, run by hand: `setTimeout` written down rather than waited on, so a step is the test's
+// to take and a loaded machine cannot take two. A timer of no delay (49.7's check, while developing)
+// still runs.
+const AUTOPLAY = 4000
+type Timer = { id: number; run: () => void; delay: number }
+const timers: Timer[] = []
+let timerIds = 0
+const realTimers = { setTimeout, clearTimeout }
+function handTimers(): void {
+    Object.assign(globalThis, {
+        setTimeout: (run: () => void, delay = 0) => {
+            if (delay === 0) return realTimers.setTimeout(run, 0)
+            timers.push({ id: ++timerIds, run, delay })
+            return timerIds
+        },
+        clearTimeout: (id: number) => {
+            const at = timers.findIndex((timer) => timer.id === id)
+            if (at !== -1) timers.splice(at, 1)
+        },
+    })
+    bound.push(() => {
+        Object.assign(globalThis, realTimers)
+        timers.length = 0
+    })
+}
+// The one timer pending, run as its time coming would run it.
+function elapse(): void {
+    const timer = timers.shift()
+    if (timer === undefined) throw new Error('no timer pending')
+    timer.run()
+    flushSync()
+}
+
+// THE REVERT: drop `centered()` from the timer's watch, and the step it takes arms no next one.
+test('playing steps on its own every autoplay, counted afresh after a step by hand, and stops at the end — 53.71, 53.72', () => {
+    handTimers()
+    const view = carousel({
+        items: STAGES,
+        behavior: 'auto',
+        autoplay: AUTOPLAY,
+    })
+    laidOut(view)
+    flushSync()
+    expect(view.playing()).toBe(true)
+    expect(timers.map((timer) => timer.delay)).toEqual([AUTOPLAY])
+    elapse()
+    expect(view.centered).toBe('qualified')
+    const armed = timers[0]?.id
+    ;(view.next.onclick as () => void)()
+    flushSync()
+    expect(view.centered).toBe('proposal')
+    expect(timers.length).toBe(1)
+    expect(timers[0]?.id).not.toBe(armed)
+    elapse()
+    expect(view.centered).toBe('won')
+    elapse()
+    expect([view.centered, view.playing(), timers.length]).toEqual([
+        'won',
+        false,
+        0,
+    ])
+})
+
+// THE REVERT: drop `!held()` from `rotating`, and the pointer over the scroller leaves a timer armed.
+test('it rotates only while playing, bound with a box, and nothing holds it — 53.73, 53.74, 53.78', () => {
+    handTimers()
+    const view = carousel({
+        items: STAGES,
+        behavior: 'auto',
+        autoplay: AUTOPLAY,
+    })
+    expect(timers.length).toBe(0)
+    const row = laidOut(view, true)
+    expect(timers.length).toBe(0)
+    expect(view.host['aria-live']).toBe(undefined)
+    row.show(true)
+    expect(timers.length).toBe(1)
+    expect(view.host['aria-live']).toBe('off')
+    row.host.dispatchEvent(new Event('pointerenter'))
+    flushSync()
+    expect(timers.length).toBe(0)
+    expect(view.host['aria-live']).toBe(undefined)
+    row.host.dispatchEvent(new Event('pointerleave'))
+    flushSync()
+    expect(timers.length).toBe(1)
+    view.playing.set(false)
+    flushSync()
+    expect(timers.length).toBe(0)
+})
+
+// THE REVERT: drop the focus holders from `previous` and `next`, and focus on a button leaves it rotating.
+test('focus on a stepping button holds it still, until focus leaves the carousel — 53.74', () => {
+    handTimers()
+    const view = carousel({
+        items: STAGES,
+        behavior: 'auto',
+        autoplay: AUTOPLAY,
+    })
+    laidOut(view)
+    const next = document.createElement('button')
+    spread(next, view.next)
+    document.body.append(next)
+    next.dispatchEvent(new FocusEvent('focusin'))
+    flushSync()
+    expect(timers.length).toBe(0)
+    next.dispatchEvent(new FocusEvent('focusout', { relatedTarget: null }))
+    flushSync()
+    expect(timers.length).toBe(1)
+})
+
+// THE REVERT: hold `playing` as `false` whatever `autoplay` says, and the carousel given one waits.
+test('playing starts as whether autoplay is given, and reduced motion pauses it — 53.75, 53.76', () => {
+    expect(carousel({ items: STAGES }).playing()).toBe(false)
+    const view = carousel({ items: STAGES, autoplay: 1000 })
+    expect(view.playing()).toBe(true)
+    const reduced = media('(prefers-reduced-motion: reduce)')
+    reduced.set(true)
+    flushSync()
+    try {
+        expect(view.playing()).toBe(false)
+        expect(carousel({ items: STAGES, autoplay: 1000 }).playing()).toBe(
+            false,
+        )
+    } finally {
+        reduced.set(false)
+        flushSync()
+    }
+})
+
+// THE REVERT: drop the start-over from `pressed`, and play at the last item stops again at once.
+test('play is a toggle over playing, and playing from the last item starts at the first — 53.77', () => {
+    const view = carousel({ id: 'deck', items: STAGES, behavior: 'auto' })
+    laidOut(view)
+    expect([view.play['aria-pressed'], view.play['aria-label']]).toEqual([
+        'false',
+        'Play',
+    ])
+    view.scrollTo('won')
+    ;(view.play.onclick as () => void)()
+    flushSync()
+    expect([view.playing(), view.centered]).toEqual([true, 'lead'])
+    expect([view.play['aria-pressed'], view.play['aria-label']]).toEqual([
+        'true',
+        'Pause',
+    ])
+    expect(view.play['aria-controls']).toBe('deck')
 })

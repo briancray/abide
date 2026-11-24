@@ -1,4 +1,4 @@
-// 53.84-53.90 — `panZoom`: its surface driven by a wheel, pointers and keys as a browser would, the
+// 53.92-53.98 — `panZoom`: its surface driven by a wheel, pointers and keys as a browser would, the
 // emulator's missing layout answered with a surface 400 by 300 at the page's corner.
 
 import { afterEach, expect, test } from 'bun:test'
@@ -33,7 +33,7 @@ function standing(options: PanZoomOptions = {}) {
 }
 
 // THE REVERT: magnify about the surface's corner, and the point under the pointer slides away.
-test('a wheel with Ctrl zooms about the pointer, and without pans — 53.84, 53.85', () => {
+test('a wheel with Ctrl zooms about the pointer, and without pans — 53.92, 53.93', () => {
     const { map, send } = standing()
     // The emulator's `WheelEvent` drops `ctrlKey` and the pointer's place from its init, so they are
     // set on the event.
@@ -59,7 +59,7 @@ test('a wheel with Ctrl zooms about the pointer, and without pans — 53.84, 53.
 })
 
 // THE REVERT: pan by the second pointer's move alone, and a pinch drags rather than magnifies.
-test('one pointer drags it, two pinch it, and its bounds hold — 53.86, 53.87', () => {
+test('one pointer drags it, two pinch it, and its bounds hold — 53.94, 53.95', () => {
     const { map, send } = standing({ max: 3 })
     send(
         new PointerEvent('pointerdown', {
@@ -106,7 +106,7 @@ test('one pointer drags it, two pinch it, and its bounds hold — 53.86, 53.87',
 })
 
 // THE REVERT: drop the arrows from the keys, and a keyboard cannot move it.
-test('the keys zoom about the middle, pan and go home, and a double click zooms in — 53.88, 53.90', () => {
+test('the keys zoom about the middle, pan and go home, and a double click zooms in — 53.96, 53.98', () => {
     const { map, send } = standing()
     const key = (name: string) =>
         send(new KeyboardEvent('keydown', { key: name, cancelable: true }))
@@ -122,7 +122,7 @@ test('the keys zoom about the middle, pan and go home, and a double click zooms 
 })
 
 // THE REVERT: fit without the margin, and the box runs to the surface's edge.
-test('fit frames a box of the content in the surface, clear of its edges — 53.89', () => {
+test('fit frames a box of the content in the surface, clear of its edges — 53.97', () => {
     const view = reactive({ x: 0, y: 0, k: 1 })
     const { map } = standing({ view })
     map.fit({ x: 1000, y: 500, width: 200, height: 100 }, 50)

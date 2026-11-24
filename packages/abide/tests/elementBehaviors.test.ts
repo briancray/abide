@@ -1,4 +1,4 @@
-// 53.12-53.23, 53.50, 53.54, 53.55, 53.71 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
+// 53.12-53.23, 53.50, 53.54, 53.55, 53.79 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
 // element the way `bind:element` binds one: called with the node, and stopped by what it hands back.
 
 import { afterEach, expect, test } from 'bun:test'
@@ -578,7 +578,7 @@ test('a value holding no string reports not copied where there is no clipboard �
 
 // THE REVERT: default `value` to the element's `textContent` alone — this reports
 // `[["text/plain: Grace Hopper, engines"]]`, and the markup never reaches the clipboard.
-test('with no value, a click copies the element clicked as its text and its markup — 53.71', async () => {
+test('with no value, a click copies the element clicked as its text and its markup — 53.79', async () => {
     const written = clipboardWrites()
     const card = element()
     card.innerHTML = '<strong>Grace Hopper</strong>, <em>engines</em>'

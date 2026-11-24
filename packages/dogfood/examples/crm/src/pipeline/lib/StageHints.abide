@@ -3,20 +3,14 @@ import { tooltip } from '@abide/abide'
 
 import Tooltips from '#src/lib/Tooltips.abide'
 
+import { STAGE_MEANINGS } from './STAGE_MEANINGS.ts'
 import { STAGES } from './STAGES.ts'
-
-const MEANING: Record<string, string> = {
-    lead: 'Someone showed interest. Nobody has talked to them yet.',
-    qualified: 'They have a budget and a reason to buy.',
-    proposal: 'A quote is out, waiting on an answer.',
-    won: 'Signed. It counts toward the target.',
-}
 </script>
 
 <ul class="row list-none p-0">
     {#for stage of STAGES}
         <li>
-            <span tabindex="0" class="font-mono uppercase" {...tooltip.tip(MEANING[stage] ?? '')}>{stage}</span>
+            <span tabindex="0" class="font-mono uppercase" {...tooltip.tip(STAGE_MEANINGS[stage] ?? '')}>{stage}</span>
         </li>
     {/for}
 </ul>

@@ -6347,68 +6347,90 @@ on.
 53.70 `carousel`'s `host` MUST carry `role="region"` and `aria-roledescription="carousel"`, and its
 `item` MUST carry `role="group"`, `aria-roledescription="slide"` and its label as `aria-label`.
 
-53.71 `copy` given no `value` MUST copy the element clicked as one item holding its `textContent` as
+53.71 While `carousel` rotates, it MUST step to the item `next` steps to every `autoplay`
+milliseconds, counted afresh whenever `centered` changes.
+
+53.72 Where `next` is disabled when 53.71's time comes, `carousel` MUST write `false` to `playing`
+rather than step.
+
+53.73 `carousel` MUST rotate only while `playing` holds, `autoplay` is given, and its `host` is bound
+and has a box, save where 53.74 holds it still.
+
+53.74 `carousel` MUST NOT rotate while a pointer is over, or focus is inside, its `host`, `previous`
+or `next`.
+
+53.75 `Carousel`'s `playing`, where none is given, MUST start as whether `autoplay` is given.
+
+53.76 `carousel` MUST write `false` to `playing` whenever `media('(prefers-reduced-motion: reduce)')`
+comes to hold, and at once where it holds already.
+
+53.77 `carousel`'s `play` part MUST be a `toggle`'s `button` over `playing`, and pressing it to play
+where `next` is disabled MUST scroll to the first item first.
+
+53.78 `carousel`'s `host` MUST carry `aria-live="off"` while it rotates, and no `aria-live` otherwise.
+
+53.79 `copy` given no `value` MUST copy the element clicked as one item holding its `textContent` as
 `text/plain` and its `innerHTML` as `text/html`.
 
-53.72 `resizable`'s `panel` part MUST be `size` pixels along `axis` where `size` is a number, and MUST
+53.80 `resizable`'s `panel` part MUST be `size` pixels along `axis` where `size` is a number, and MUST
 write no size where it is `undefined`.
 
-53.73 A pointer pressed on `resizable`'s `handle` and moved MUST move `size` by as far as the pointer
+53.81 A pointer pressed on `resizable`'s `handle` and moved MUST move `size` by as far as the pointer
 moved along `axis`, growing the panel as the handle moves away from it toward `edge`.
 
-53.74 `resizable` MUST keep `size` no less than `min`, no more than `max`, and, where `keep` is
+53.82 `resizable` MUST keep `size` no less than `min`, no more than `max`, and, where `keep` is
 given, no more than the panel's parent holds along `axis` less `keep`, measured as a drag or a key
 begins.
 
-53.75 On `resizable`'s `handle`, the arrow keys along `axis` MUST move `size` by `step` as the handle
-would move, Home and End MUST set it to the least and the most 53.74 allows, and the arrow keys
+53.83 On `resizable`'s `handle`, the arrow keys along `axis` MUST move `size` by `step` as the handle
+would move, Home and End MUST set it to the least and the most 53.82 allows, and the arrow keys
 across `axis` MUST NOT move it.
 
-53.76 Enter on `resizable`'s `handle` MUST set `size` to `min`, and the next Enter MUST set it back to
+53.84 Enter on `resizable`'s `handle` MUST set `size` to `min`, and the next Enter MUST set it back to
 what it was.
 
-53.77 A double click on `resizable`'s `handle` MUST write `undefined` to `size`.
+53.85 A double click on `resizable`'s `handle` MUST write `undefined` to `size`.
 
-53.78 `resizable`'s `handle` part MUST carry `role="separator"`, `aria-orientation` across `axis`,
+53.86 `resizable`'s `handle` part MUST carry `role="separator"`, `aria-orientation` across `axis`,
 `aria-controls` naming the panel's id, `aria-valuenow`, `aria-valuemin` and `aria-valuemax` naming
 `size`, `min` and `max`, `tabindex="0"`, and `data-dragging` while a pointer drags it.
 
-53.79 `shrinkImage` MUST answer a `File` no larger than `maxEdge` on its longer edge, turned as its
+53.87 `shrinkImage` MUST answer a `File` no larger than `maxEdge` on its longer edge, turned as its
 EXIF says, written as `type`, or as the file's own type where that is JPEG or WebP and as JPEG where
 it is not, under the file's name with that type's extension, alike where Bun runs and in a browser.
 
-53.80 `shrinkImage` given `maxBytes` MUST lower the quality it writes at and then its size until it
+53.88 `shrinkImage` given `maxBytes` MUST lower the quality it writes at and then its size until it
 takes no more than `maxBytes`, save for PNG, whose size it MUST NOT lower for bytes.
 
-53.81 `shrinkImage` MUST answer a file already within `maxEdge` and `maxBytes` and of `type` as it is,
+53.89 `shrinkImage` MUST answer a file already within `maxEdge` and `maxBytes` and of `type` as it is,
 written again by nothing.
 
-53.82 `download` MUST save `data` as a file named `name`, as a click on a link to it with that
+53.90 `download` MUST save `data` as a file named `name`, as a click on a link to it with that
 `download` would, text written as `type`.
 
-53.83 `download` MUST throw where `isServer` is true.
+53.91 `download` MUST throw where `isServer` is true.
 
-53.84 `panZoom`'s `content` part MUST move its element by `view`'s `x` and `y` and magnify it by its
+53.92 `panZoom`'s `content` part MUST move its element by `view`'s `x` and `y` and magnify it by its
 `k`, about its top left corner.
 
-53.85 A wheel on `panZoom`'s `surface` with Ctrl or ⌘ held MUST magnify by the wheel about the
+53.93 A wheel on `panZoom`'s `surface` with Ctrl or ⌘ held MUST magnify by the wheel about the
 pointer, the content under the pointer staying under it, and a wheel without MUST move it by the
 wheel's deltas; each MUST prevent the wheel's default.
 
-53.86 One pointer pressed on `panZoom`'s `surface` and moved MUST move it as far as the pointer moved,
+53.94 One pointer pressed on `panZoom`'s `surface` and moved MUST move it as far as the pointer moved,
 and two MUST magnify it by the change in the distance between them about their middle, and move it as
 their middle moved.
 
-53.87 `panZoom` MUST keep `view`'s `k` from `min` to `max`.
+53.95 `panZoom` MUST keep `view`'s `k` from `min` to `max`.
 
-53.88 On `panZoom`'s `surface`, `+` and `=` MUST magnify it a step and `-` shrink it a step about the
+53.96 On `panZoom`'s `surface`, `+` and `=` MUST magnify it a step and `-` shrink it a step about the
 surface's middle, the arrow keys MUST move it, and `0` MUST set `view` to no move and no
 magnification.
 
-53.89 `panZoom`'s `fit` MUST set `view` so the box it is handed fills the surface less `margin` on
+53.97 `panZoom`'s `fit` MUST set `view` so the box it is handed fills the surface less `margin` on
 each side, centered, its magnification kept from `min` to `max`.
 
-53.90 A double click on `panZoom`'s `surface` MUST magnify it twice about the pointer.
+53.98 A double click on `panZoom`'s `surface` MUST magnify it twice about the pointer.
 
 # 54. Guards, fetches and jobs
 

@@ -1,4 +1,4 @@
-// 53.61-53.68 IN A REAL BROWSER, against `abide start`. The emulator lays nothing out and snaps
+// 53.61-53.78 IN A REAL BROWSER, against `abide start`. The emulator lays nothing out and snaps
 // nothing, so where the scroller rests, and which item a scroll centers, is only a browser's to say —
 // in both engines, since chromium reports its snaps (53.66) and webkit is measured once a frame (53.64).
 
@@ -74,6 +74,30 @@ const viewer = lightbox({ items: STAGES })
 #host li { flex: 0 0 200px; height: 50px; scroll-snap-align: center; }
 </style>`
 
+// The same scroller stepping by itself, round and round, with a button to pause it.
+const TOUR = `<script>
+import { carousel } from '@abide/abide'
+
+const STAGES = ['lead', 'qualified', 'proposal', 'negotiation', 'won']
+const tour = carousel({ items: STAGES, loop: true, autoplay: 300 })
+</script>
+
+<main>
+    <p id="centered">{tour.centered}</p>
+    <button id="play" {...tour.play}>play</button>
+    <ul id="host" {...tour.host}>
+        {#for stage of STAGES by stage}
+            <li id={stage} {...tour.item(stage)}>{stage}</li>
+        {/for}
+    </ul>
+    <p id="away">away</p>
+</main>
+
+<style>
+#host { display: flex; box-sizing: border-box; width: 300px; margin: 0; padding: 0 50px; overflow-x: auto; scroll-snap-type: x mandatory; list-style: none; }
+#host li { flex: 0 0 200px; height: 50px; scroll-snap-align: center; }
+</style>`
+
 let server: Subprocess | undefined
 let base = ''
 
@@ -85,6 +109,7 @@ test.beforeAll(async ({}, testInfo) => {
             'layout.abide': LAYOUT,
             'index.abide': PAGE,
             'viewer.abide': VIEWER,
+            'tour.abide': TOUR,
         },
     ))
 })
@@ -196,4 +221,38 @@ test('a carousel in a dialog opens resting on the item picked, each time — 53.
     await page.click('#open-won')
     await expect.poll(() => offCenter(page, 'won')).toBe(0)
     await expect(page.locator('#centered')).toHaveText('won')
+})
+
+// 53.71, 53.74, 53.78 — IT STEPS BY ITSELF, AND HOLDS STILL UNDER THE POINTER. THE REVERT: drop
+// `!held()` from `rotating`; the hovered scroller moves on to the next stage.
+test('an autoplaying carousel steps by itself, and holds still under the pointer — 53.71, 53.74, 53.78', async ({
+    page,
+}) => {
+    await page.goto(`${base}/tour`)
+    await expect(page.locator('#host')).toHaveAttribute('aria-live', 'off')
+    await expect(page.locator('#centered')).not.toHaveText('lead')
+    await page.locator('#host').hover()
+    await expect(page.locator('#host')).not.toHaveAttribute('aria-live', /.*/)
+    const held = await page.locator('#centered').textContent()
+    // Three of its steps' worth, under the pointer.
+    await page.waitForTimeout(900)
+    await expect(page.locator('#centered')).toHaveText(held ?? '')
+    await page.locator('#away').hover()
+    await expect(page.locator('#centered')).not.toHaveText(held ?? '')
+})
+
+// 53.76, 53.77 — A READER WHO PREFERS REDUCED MOTION ARRIVES PAUSED, AND PLAY STARTS IT. THE REVERT:
+// drop the reduced-motion `watch`; the page hydrates playing and moves off `lead`.
+test('reduced motion arrives paused, and play starts it — 53.76, 53.77', async ({
+    page,
+}) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto(`${base}/tour`)
+    await expect(page.locator('#play')).toHaveAttribute('aria-pressed', 'false')
+    await page.waitForTimeout(900)
+    await expect(page.locator('#centered')).toHaveText('lead')
+    await page.click('#play')
+    await expect(page.locator('#play')).toHaveAttribute('aria-pressed', 'true')
+    await page.locator('#away').hover()
+    await expect(page.locator('#centered')).not.toHaveText('lead')
 })

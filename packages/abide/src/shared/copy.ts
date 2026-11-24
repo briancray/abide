@@ -1,9 +1,9 @@
-// 53.21-53.23, 53.43, 53.44, 53.54, 53.55, 53.71 — A CLICK THAT COPIES, and the element marked once the copy lands.
+// 53.21-53.23, 53.43, 53.44, 53.54, 53.55, 53.79 — A CLICK THAT COPIES, and the element marked once the copy lands.
 
 import type { Disposer } from './reactive/watch.ts'
 import { type Copyable, writeClipboard } from './writeClipboard.ts'
 
-/** 53.71 — the element clicked, as the text it reads and the markup it holds. */
+/** 53.79 — the element clicked, as the text it reads and the markup it holds. */
 const contentOf = (clicked: Element): Copyable => ({
     'text/plain': clicked.textContent ?? '',
     'text/html': clicked.innerHTML,

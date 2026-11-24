@@ -1,4 +1,4 @@
-// 53.84-53.90 — A SURFACE MOVED AND MAGNIFIED: what a map, a plan or a large drawing sits in, as parts an
+// 53.92-53.98 — A SURFACE MOVED AND MAGNIFIED: what a map, a plan or a large drawing sits in, as parts an
 // app spreads onto a surface and the content inside it. A wheel pans and, with Ctrl or ⌘ — a trackpad's
 // pinch arrives so — zooms about the pointer; a pointer drags it, two pinch it; the keys step it. The
 // view is one `{ x, y, k }`, and the content's one style is the transform it computes (49.5).
@@ -64,7 +64,7 @@ export function panZoom(options: PanZoomOptions = {}): PanZoom {
         }
     }
 
-    // 53.87 — kept from `min` to `max`, the point `at` held still as it magnifies.
+    // 53.95 — kept from `min` to `max`, the point `at` held still as it magnifies.
     const zoomBy = (factor: number, at?: { x: number; y: number }): void => {
         const { x, y, k } = now()
         const bounds = size()
@@ -89,7 +89,7 @@ export function panZoom(options: PanZoomOptions = {}): PanZoom {
         return { x: event.clientX - left, y: event.clientY - top }
     }
 
-    // 53.86 — the pointers down, so one pans and two pinch.
+    // 53.94 — the pointers down, so one pans and two pinch.
     const pointers = new Map<number, { x: number; y: number }>()
     const spread = ():
         { middle: { x: number; y: number }; distance: number } | undefined => {
@@ -117,7 +117,7 @@ export function panZoom(options: PanZoomOptions = {}): PanZoom {
                     if (surface === element) surface = undefined
                 }
             },
-            // 53.85
+            // 53.93
             onwheel: (event: WheelEvent) => {
                 event.preventDefault()
                 if (event.ctrlKey || event.metaKey)
@@ -155,9 +155,9 @@ export function panZoom(options: PanZoomOptions = {}): PanZoom {
                 pointers.delete(event.pointerId),
             onpointercancel: (event: PointerEvent) =>
                 pointers.delete(event.pointerId),
-            // 53.90
+            // 53.98
             ondblclick: (event: MouseEvent) => zoomBy(2, local(event)),
-            // 53.88
+            // 53.96
             onkeydown: (event: KeyboardEvent) => {
                 const moves: Record<string, () => void> = {
                     '+': () => zoomBy(STEP),
@@ -175,7 +175,7 @@ export function panZoom(options: PanZoomOptions = {}): PanZoom {
                 move()
             },
         },
-        // 53.84
+        // 53.92
         content: {
             'data-pan-zoom': 'content',
             get style() {
@@ -187,7 +187,7 @@ export function panZoom(options: PanZoomOptions = {}): PanZoom {
         },
         view,
         zoomBy,
-        // 53.89
+        // 53.97
         fit: (box, margin = 0) => {
             const { width, height } = size()
             const k = Math.min(
