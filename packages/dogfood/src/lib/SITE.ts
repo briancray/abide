@@ -225,6 +225,13 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
+                route: '/reactive/ledger',
+                title: '`ledger`',
+                description:
+                    'Append events that are never coalesced, and read them in order from a position or a named cursor that resumes.',
+                where: 'anywhere',
+            },
+            {
                 route: '/reactive/watch',
                 title: '`watch`',
                 description:
@@ -1096,6 +1103,13 @@ const WRITTEN: readonly {
                 title: '`database`',
                 description:
                     "Open the app's SQLite file where the deployment keeps its data, and run each migration once, in order.",
+                where: 'server',
+            },
+            {
+                route: '/data/table',
+                title: '`table`',
+                description:
+                    'Read every change committed to a SQLite table as a stream, refresh what is tagged with it, and upsert rows in batches.',
                 where: 'server',
             },
             {

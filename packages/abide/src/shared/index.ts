@@ -155,6 +155,14 @@ export { onMenu } from './onMenu.ts'
 export { type PairingStep, pairing } from './pairing.ts'
 // 37.22 — the browser's `onRefusal`, which has no server's.
 export { onRefusal } from './onRefusal.ts'
+// 58 — events appended and read in order, from a position or a named cursor.
+export {
+    type Ledger,
+    type LedgerOptions,
+    type Logged,
+    type LogStore,
+    ledger,
+} from './ledger.ts'
 // 57 — steps an item runs through, under a budget, with retries.
 export { type Pipe, type PipeOptions, type PipeStatus, pipe } from './pipe.ts'
 // 50.19 — where a floating element sits beside its anchor.

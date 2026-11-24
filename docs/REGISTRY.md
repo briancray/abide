@@ -382,6 +382,16 @@ type LastOut<Steps> = Steps extends readonly [...unknown[], infer Last] ? StepOu
 type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepIn<First> : never
 ```
 
+## `ledger`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `ledger` | `<Entry>(name: string, options?: LedgerOptions<Entry>) => Ledger<Entry>` | Entries appended and never coalesced, read in order from a position or a named cursor. | 58.1, 58.9, 58.10, 58.11 |
+| `Ledger` | `<Entry>{ append: (entry: Entry, options?: { key?: string }) => Promise<number>; read: (from?: number \| { cursor: string }) => ReadableStream<Logged<Entry>>; readonly writable: WritableStream<Entry>; readonly head: Reactive<number> }` | What `ledger` hands back: the append, the read, the stream an entry is written to, and the last entry's number. | 58.2, 58.4, 58.5, 58.6, 58.7, 58.8 |
+| `LedgerOptions` | `<Entry>{ store?: LogStore; retain?: number; schema?: Schema<Entry> }` | Where the entries are kept, how many are, and what an entry must be. | 58.3, 58.9, 58.10 |
+| `Logged` | `<Entry>{ seq: number; at: number; entry: Entry }` | One entry as a ledger keeps it: its number, when it was appended, and what it holds. | 58.2 |
+| `LogStore` | `{ append: (entry: unknown, key: string \| undefined, at: number) => number \| Promise<number>; since: (seq: number) => Logged<unknown>[] \| Promise<Logged<unknown>[]>; last: () => number \| Promise<number>; position: (cursor: string, seq?: number) => number \| Promise<number>; trim: (through: number) => void \| Promise<void> }` | The append face of a `store` a ledger keeps its entries and cursors in. | 58.9 |
+
 ## `watch`
 
 | Name | Signature | Meaning | Rules |
@@ -398,7 +408,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `Store` | `{ get: () => Stored \| undefined \| Promise<Stored \| undefined>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void>; watch?: (changed: () => void) => () => void }` | Where a value lives when this process does not. | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21 |
 | `store` | `{ web; indexedDB; cookies }`, and `sqlite` and `redis` beside them from `@abide/abide/server` | The `Store`s abide ships, as one namespace. | 8.22, 8.25, 8.31, 8.34, 8.37, 8.43 |
 | `store.web` | `<Stored>(key: string, options?: { area?: 'local' \| 'session'; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in the browser's Web Storage. | 8.22, 8.23, 8.24, 8.26, 8.27, 8.28, 8.29, 8.30 |
-| `store.sqlite` | `<Stored>(database: Database \| (() => Database) \| string, key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a `bun:sqlite` table, a member of `@abide/abide/server`'s `store` alone. | 8.25, 8.26, 8.27, 8.28, 8.29, 8.41, 8.42 |
+| `store.sqlite` | `<Stored>(database: Database \| (() => Database) \| string, key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored> & LogStore` | A `Store` kept in a `bun:sqlite` table, a member of `@abide/abide/server`'s `store` alone. | 8.25, 8.26, 8.27, 8.28, 8.29, 8.41, 8.42, 58.9 |
 | `store.redis` | `<Stored>(client: RedisClient \| string, key: string, options?: { schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a Redis key through `bun`'s `RedisClient`, a member of `@abide/abide/server`'s `store` alone. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33 |
 | `store.indexedDB` | `<Stored>(key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in the browser's IndexedDB. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.34, 8.35, 8.36 |
 | `store.cookies` | `<Stored>(name: string, options?: { path?: string; domain?: string; sameSite?: 'strict' \| 'lax' \| 'none'; secure?: boolean; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a cookie. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.37, 8.38, 8.39, 8.40 |
@@ -1392,6 +1402,13 @@ type Reached = { readonly [REACHED]: true }
 | `database` | `(file: string \| (() => string), options?: { migrations?: (string \| ((database: Database) => void))[]; openNewer?: boolean; open?: (database: Database) => void; strict?: boolean; readonly?: boolean; safeIntegers?: boolean }) => (() => Database) & { close: (options?: { remove?: boolean }) => void; changed: Reactive<number> }` | The opener of the app's `bun:sqlite` database `file`, from `@abide/abide/server`. | 36.4, 47.1, 47.2, 47.3, 47.4, 47.5, 47.6, 47.7, 47.8, 47.9, 47.10, 47.11, 47.12, 47.13, 47.14, 47.15, 47.16, 47.18, 47.19, 47.20, 47.21 |
 | `opener.close` | `(options?: { remove?: boolean }) => void` | Closes the `Database` an opener holds, and with `remove` deletes the file it last opened. | 47.11, 47.16, 47.17 |
 | `opener.changed` | `Reactive<number>` | How many times the opener has found another connection's commits to its file. | 47.22, 47.23, 47.24 |
+
+## `table`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `table` | `<Row extends Record<string, unknown>>(database: Database \| (() => Database), name: string, options?: { key?: keyof Row & string }) => { readable: ReadableStream<Change<Row>>; writable: WritableStream<Row> }` | A table of the app's `bun:sqlite` database as a stream pair, its changes read out and rows upserted in, from `@abide/abide/server`. | 47.25, 47.26, 47.27, 47.28, 47.29, 47.30, 47.31 |
+| `Change` | `<Row>{ op: 'insert' \| 'update' \| 'delete'; row: Row \| undefined; previous: Row \| undefined }` | One change to a row: what it is now and what it was. | 47.27 |
 
 ## `job`
 

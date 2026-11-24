@@ -96,6 +96,7 @@ These are immutable. A change to them is a change to what this document is.
 - [55. Worker files](#55)
 - [56. Forms](#56)
 - [57. Pipes](#57)
+- [58. Ledgers](#58)
 
 ## Terms
 
@@ -4967,6 +4968,26 @@ milliseconds, and MUST NOT increase for a write made through that `Database`.
 
 47.24 Checking an opener's `changed` MUST NOT open its `Database`.
 
+47.25 A `table`'s `readable` and `writable`, reached, MUST throw where the database holds no table
+of that name.
+
+47.26 `table` MUST record each insert, update and delete made to the table, by any statement and any
+connection, in the transaction that made it, naming every column the table held when `table` first
+reached it through that `Database`.
+
+47.27 A `table`'s `readable` MUST hand on, in order, every change committed after it was first
+reached, each as the row after and the row before.
+
+47.28 A write rolled back MUST hand on no change.
+
+47.29 A change to a table `table` was called for MUST refresh every value whose `tags` name the
+table, as `invalidate` over those tags does.
+
+47.30 Rows written to a `table`'s `writable` MUST be upserted by `key`, `id` where none is given,
+and the rows written in one turn MUST be committed in one transaction.
+
+47.31 `table` MUST keep no more than the last 10000 changes of a table its watch has passed.
+
 # 48. Problem reports
 
 48.1 `report` MUST answer a `ReportDraft` holding the trace it was given among its `traces`, and
@@ -6674,3 +6695,33 @@ and settle once the attempts in flight have ended.
 
 57.21 `status` MUST be one `global` value counting the items waiting, running, done and failed, and
 whether `paused` reads true.
+
+# 58. Ledgers
+
+58.1 `ledger` called with a name it was called with before in the process MUST answer the `Ledger`
+that call answered.
+
+58.2 `append` MUST keep its entry after every entry kept before it, numbered one past the last, and
+settle to that number.
+
+58.3 An entry a `ledger`'s `schema` refuses MUST be kept nowhere, and `append` MUST reject.
+
+58.4 `append` given a `key` an entry was kept under MUST keep nothing, and settle to that entry's
+number.
+
+58.5 `read` MUST hand on, in order, every entry numbered past `from`, 0 where none is given, and
+past the last entry MUST wait for the next rather than end.
+
+58.6 `read` given a `cursor` MUST start past the entry the cursor was last moved past, and MUST move
+the cursor past an entry once its reader asks for the next.
+
+58.7 An entry written to a `Ledger`'s `writable` MUST be appended as `append` appends it.
+
+58.8 `head` MUST be the number of the last entry a `ledger` kept, 0 where it has kept none.
+
+58.9 A `ledger` given a `store` MUST keep its entries and its cursors there, and `store.sqlite` MUST
+keep one row per entry.
+
+58.10 Where `retain` is given, an append MUST let go of every entry but the last `retain`.
+
+58.11 `ledger` given a `retain` under 1 MUST throw at construction.
