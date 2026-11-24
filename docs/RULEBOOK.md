@@ -5323,11 +5323,13 @@ none is given.
 50.62 `drawer`'s `handle` part MUST be that `resizable`'s `handle`, sizing the drawer across `side`
 and growing it as the handle moves away from the edge `side` names.
 
-50.63 `sheet`'s parts MUST be a `drawer`'s whose `side` is `bottom`, given every option the sheet was.
+50.63 A pointer let go of `drawer`'s `handle`, where `stops` is given, MUST set `size` to the one of
+`stops`, as shares of the viewport's extent across `side`, nearest the size the drag would rest at
+carried on by its speed for 150 milliseconds, and MUST write `false` to `open` where no stop is nearer
+that size than none.
 
-50.64 A pointer let go of `sheet`'s `handle` MUST set `size` to the one of `stops`, as shares of the
-viewport's height, nearest the height the drag would rest at carried on by its speed for 150
-milliseconds, and MUST write `false` to `open` where no stop is nearer that height than none.
+50.64 A pointer let go of `drawer`'s `handle`, where no `stops` is given, MUST leave `size` where the
+drag set it and `open` as it was.
 
 50.65 `lightbox`'s parts MUST be a `carousel`'s, given every option the lightbox was, beside a
 `dialog`'s `dialog` part opened and closed by `open`.

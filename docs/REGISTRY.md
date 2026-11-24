@@ -551,16 +551,9 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `drawer` | `(options?: DrawerOptions) => Drawer` | A `dialog` standing on an edge of the page, sized from a `resizable`'s handle on its inner edge, as parts an app spreads onto a `<dialog>` and a handle of its own. | 50.61, 50.62, 49.2, 49.4, 49.5, 49.6 |
-| `DrawerOptions` | `DialogOptions & { side?: 'start' \| 'end' \| 'top' \| 'bottom'; size?: Reactive<number \| undefined>; min?: number \| (() => number); max?: number \| (() => number); label?: string \| (() => string) }` | How it opens, the edge it stands on, its size and the bounds of it, and the handle's accessible name. | 50.61, 50.62, 49.8, 49.10, 49.11 |
+| `drawer` | `(options?: DrawerOptions) => Drawer` | A `dialog` standing on an edge of the page, sized from a `resizable`'s handle on its inner edge and settling at its stops, as parts an app spreads onto a `<dialog>` and a handle of its own. | 50.61, 50.62, 50.63, 50.64, 49.2, 49.4, 49.5, 49.6 |
+| `DrawerOptions` | `DialogOptions & { side?: 'start' \| 'end' \| 'top' \| 'bottom'; size?: Reactive<number \| undefined>; min?: number \| (() => number); max?: number \| (() => number); label?: string \| (() => string); stops?: readonly number[] \| (() => readonly number[]) }` | How it opens, the edge it stands on, its size and the bounds of it, the handle's accessible name, and the sizes it settles at as shares of the viewport's. | 50.61, 50.62, 50.63, 50.64, 49.8, 49.10, 49.11 |
 | `Drawer` | `{ readonly drawer: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly open: Reactive<boolean>; readonly size: Reactive<number \| undefined> }` | The dialog's part, the handle's, whether it is showing, and its size. | 32.11, 50.61, 50.62, 49.3, 49.8, 49.9 |
-
-## `sheet`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `sheet` | `(options?: SheetOptions) => Drawer` | A `drawer` on the bottom edge whose handle, let go, settles it at the nearest of its stops. | 50.63, 50.64, 49.2, 49.4, 49.5, 49.6 |
-| `SheetOptions` | `Omit<DrawerOptions, 'side'> & { stops?: readonly number[] \| (() => readonly number[]) }` | How it opens, its size and the bounds of it, and the heights it settles at as shares of the viewport's. | 50.63, 50.64, 49.10, 49.11 |
 
 ## `lightbox`
 

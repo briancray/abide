@@ -1,7 +1,11 @@
 <script>
-import { sheet } from '@abide/abide'
+import { drawer } from '@abide/abide'
 
-const deals = sheet({ modal: false, stops: [0.25, 0.5, 0.9] })
+const deals = drawer({
+    side: 'bottom',
+    modal: false,
+    stops: [0.25, 0.5, 0.9],
+})
 </script>
 
 <button onclick={() => (deals.open = true)}>Show deals</button>

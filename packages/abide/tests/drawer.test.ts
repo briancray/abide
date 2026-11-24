@@ -1,10 +1,9 @@
-// 50.61-50.64 — `drawer`, a `dialog` sized by a `resizable`, and `sheet`, a drawer on the bottom edge
-// settling at stops. The handle is driven as a browser would drive it; the emulator lays nothing out,
+// 50.61-50.64 — `drawer`, a `dialog` sized by a `resizable`, settling at `stops` where it is given them. The handle is driven as a browser would drive it; the emulator lays nothing out,
 // so the viewport's height and the panel's box are answered here.
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { drawer, flushSync, sheet } from '#shared'
+import { drawer, flushSync } from '#shared'
 
 import { bindPart } from './bindPart.ts'
 
@@ -65,13 +64,13 @@ test('a drawer opens as its dialog does, stands on its side, and its handle size
     expect(notes.size()).toBe(230)
 })
 
-// THE REVERT: drop `settle` from the handle's `pointerup`, and a sheet let go stays where it was dropped.
-test('a sheet let go settles at the nearest stop, a flick carries it on, and below every stop it closes — 50.63, 50.64', () => {
+// THE REVERT: drop `settle` from the handle's `pointerup`, and a drawer let go stays where it was dropped.
+test('a drawer with stops let go settles at the nearest stop, a flick carries it on, and below every stop it closes — 50.63', () => {
     Object.defineProperty(globalThis, 'innerHeight', {
         configurable: true,
         value: 800,
     })
-    const peek = sheet({ stops: [0.25, 0.5, 1], modal: false })
+    const peek = drawer({ side: 'bottom', stops: [0.25, 0.5, 1], modal: false })
     const { panel, send } = standing(peek)
     peek.open.set(true)
     flushSync()
@@ -117,4 +116,27 @@ test('a sheet let go settles at the nearest stop, a flick carries it on, and bel
     peek.size.set(200)
     drag(550, 690)
     expect(peek.open()).toBe(false)
+})
+
+// THE REVERT: default `stops` to `[0.5, 1]` as a sheet once did, and a drawer let go at 250 jumps to 400.
+test('a drawer with no stops let go rests where it was dropped — 50.64', () => {
+    Object.defineProperty(globalThis, 'innerWidth', {
+        configurable: true,
+        value: 800,
+    })
+    const filters = drawer({ side: 'start', modal: false })
+    const { panel, send } = standing(filters)
+    filters.open.set(true)
+    flushSync()
+    panel.getBoundingClientRect = () => ({ width: 200, height: 600 }) as DOMRect
+    send(
+        new PointerEvent('pointerdown', {
+            clientX: 200,
+            button: 0,
+            buttons: 1,
+        }),
+    )
+    send(new PointerEvent('pointermove', { clientX: 250, buttons: 1 }))
+    send(new PointerEvent('pointerup', { clientX: 250 }))
+    expect([filters.size(), filters.open()]).toEqual([250, true])
 })
