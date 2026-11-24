@@ -8,7 +8,7 @@ const doc = markdown.incremental({ source: note, blocks: ['sh'] })
 </script>
 
 <div>
-    {#for section of doc.sections by section}
+    {#for section of doc.sections key section}
         {#if section.block}
             <CopyableCode source={section.block.source} />
         {:else}

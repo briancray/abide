@@ -37,4 +37,4 @@ const answer = markdown.incremental({
 })
 </script>
 
-<div class="flow">{#for section of answer.sections by section}{#if section.block?.name === 'show'}<ShowBlock info={section.block.info} />{:else if section.block}<AnswerCode source={section.block.source} />{:else}{raw(section.html)}{/if}{/for}</div>
+<div class="flow">{#for section of answer.sections key section}{#if section.block?.name === 'show'}<ShowBlock info={section.block.info} />{:else if section.block}<AnswerCode source={section.block.source} />{:else}{raw(section.html)}{/if}{/for}</div>

@@ -34,7 +34,7 @@ const view = carousel({ items: STAGES, selected })
     <button id="reset" onclick={view.reset}>reset</button>
     <button id="pick" onclick={() => { selected = 'lead' }}>pick lead</button>
     <ul id="host" {...view.host}>
-        {#for stage of STAGES by stage}
+        {#for stage of STAGES key stage}
             <li id={stage} {...view.item(stage)}>{stage}</li>
         {/for}
     </ul>
@@ -54,7 +54,7 @@ const viewer = lightbox({ items: STAGES })
 </script>
 
 <main>
-    {#for stage of STAGES by stage}
+    {#for stage of STAGES key stage}
         <button id={'open-' + stage} onclick={() => viewer.show(stage)}>{stage}</button>
     {/for}
     <dialog {...viewer.dialog}>
@@ -62,7 +62,7 @@ const viewer = lightbox({ items: STAGES })
         <button id="previous" {...viewer.previous}>previous</button>
         <button id="next" {...viewer.next}>next</button>
         <ul id="host" {...viewer.host}>
-            {#for stage of STAGES by stage}
+            {#for stage of STAGES key stage}
                 <li id={stage} {...viewer.item(stage)}>{stage}</li>
             {/for}
         </ul>
@@ -86,7 +86,7 @@ const tour = carousel({ items: STAGES, loop: true, autoplay: 300 })
     <p id="centered">{tour.centered}</p>
     <button id="play" {...tour.play}>play</button>
     <ul id="host" {...tour.host}>
-        {#for stage of STAGES by stage}
+        {#for stage of STAGES key stage}
             <li id={stage} {...tour.item(stage)}>{stage}</li>
         {/for}
     </ul>
@@ -203,7 +203,7 @@ test('a new selection scrolls the carousel to it — 53.62', async ({ page }) =>
 
 // 53.62, 53.63 — A SCROLLER BOUND INSIDE A CLOSED DIALOG RESTS WHEN IT OPENS, EACH TIME IT OPENS. THE
 // REVERT: drop the host's resize listener; the dialog opens on `lead` with `next` disabled. The two
-// `previous` clicks land while the first scroll is on its way: scroll `by` the measured offset rather
+// `previous` clicks land while the first scroll is on its way: scroll `key` the measured offset rather
 // than `to` it, and webkit stops ~27px short of `proposal`.
 test('a carousel in a dialog opens resting on the item picked, each time — 53.62, 53.63', async ({
     page,

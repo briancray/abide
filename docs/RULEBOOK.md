@@ -359,7 +359,7 @@ MUST NOT be held.
 
 5.21 An entry a `Keyed` window is holding back MUST report `s.busy` true.
 
-5.22 `by` MUST key an element by the property it names, or by what the function it is returns for
+5.22 `key` MUST key an element by the property it names, or by what the function it is returns for
 that element.
 
 5.23 `throttle` and `debounce` MUST cap the wakes an `s.patch` makes as they cap a production's.
@@ -1501,9 +1501,9 @@ and MUST NOT answer 204.
 18.3 A client reading a `GET` MUST be subscribed over the socket mux to that handler's productions
 for those `Args`.
 
-18.4 A subscriber's copy of a wired `Reactive` MUST carry what that `Reactive` declares of `by` as a
+18.4 A subscriber's copy of a wired `Reactive` MUST carry what that `Reactive` declares of `key` as a
 property name, `tags` as a list of names, and `identity` as `deepEqual`, and MUST NOT carry a
-function form of `by` or `tags`, which stays the server's (13.15).
+function form of `key` or `tags`, which stays the server's (13.15).
 
 18.5 A `GET` answered from a `global` value MUST carry the version of the production it answered
 with as its `etag`.
@@ -1531,7 +1531,7 @@ the value again.
 
 18.14 A subscriber's copy of a `GET` MUST go stale when the `max-age` its answer carried runs out.
 
-18.15 The build MUST warn where a `GET`'s `Reactive` declares `by` or `tags` by a value that is not a
+18.15 The build MUST warn where a `GET`'s `Reactive` declares `key` or `tags` by a value that is not a
 function and whose type is not the one 18.4 carries.
 
 18.16 Every frame on one connection to the socket mux MUST be answered in one request scope, whose
@@ -2405,7 +2405,7 @@ string.
 
 32.12 `{#if}` MUST render one branch.
 
-32.13 `{#for}` with neither a key nor a `by` 32.32 reads MUST be positional.
+32.13 `{#for}` with neither a `key` of its own nor one 32.32 reads off its value MUST be positional.
 
 32.14 `{#for}` without a key over a stateful body and a subject that reads a `Reactive` or calls a
 function MUST warn in development.
@@ -2458,7 +2458,7 @@ and MUST NOT be bounded by one while it holds none.
 a `{#for}`, a `{#try}`, a `<slot/>` or a `<Name/>`.
 
 32.32 `{#for}` without a key over a subject that is a `Reactive` named alone MUST key its rows by
-that value's `by`, where it declares one.
+that value's `key`, where it declares one.
 
 32.33 A `{#for}` MUST take an `s.patch` written to a row's item, or to an object the patch reached
 through it, as that item changing under 32.67.

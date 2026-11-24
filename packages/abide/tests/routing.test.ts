@@ -82,7 +82,7 @@ import { reactive } from '@abide/abide'
 let rows = reactive(['one', 'two'])
 </script>
 
-<main id="invoice"><h1>Invoice</h1><ul>{#for row of rows by row}<li>{row}</li>{/for}</ul></main>`
+<main id="invoice"><h1>Invoice</h1><ul>{#for row of rows key row}<li>{row}</li>{/for}</ul></main>`
 
 async function pages(
     shell = '<!doctype html><html><head></head><body></body></html>',
@@ -1277,7 +1277,7 @@ test('a layout reads what its page set up, hydrating without a mismatch — 41.2
 import { crumbs } from './crumbs.ts'
 </script>
 
-<div id="crumbed"><nav id="crumbs">{#for crumb of crumbs() by crumb}<a>{crumb}</a>{/for}</nav><slot/></div>`,
+<div id="crumbed"><nav id="crumbs">{#for crumb of crumbs() key crumb}<a>{crumb}</a>{/for}</nav><slot/></div>`,
         Leaf: `<script>
 import { crumbs } from './crumbs.ts'
 

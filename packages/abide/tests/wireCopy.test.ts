@@ -51,23 +51,23 @@ const LIBRARY = `import { deepEqual, GET, memo, POST } from '@abide/abide/server
 
 const shelf = reactive([{ id: 'a' }], {
     global: true,
-    by: 'id',
+    key: 'id',
     tags: ['shelf', 'library'],
     identity: deepEqual,
 })
 
 const bound = GET(shelf)
-const inline = GET(memo(() => [{ isbn: '1' }], { by: 'isbn' }))
+const inline = GET(memo(() => [{ isbn: '1' }], { key: 'isbn' }))
 const computed = GET(
     memo(({ id }: { id: string }) => [{ id }], {
-        by: (row) => row.id,
+        key: (row) => row.id,
         tags: ({ id }) => [id],
         identity: (next, previous) => next === previous,
     }),
 )
 const plain = GET(() => [1])
 const optioned = GET(() => [{ isbn: '1' }], {
-    by: 'isbn',
+    key: 'isbn',
     description: 'Books.',
 })
 const change = POST(() => undefined)
@@ -92,10 +92,10 @@ ${LIBRARY}</script>
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
         ''
     expect(line('bound')).toContain(
-        '{"by":"id","tags":["shelf","library"],"identity":"deepEqual"}',
+        '{"key":"id","tags":["shelf","library"],"identity":"deepEqual"}',
     )
-    expect(line('inline')).toContain('{"by":"isbn"}')
-    expect(line('optioned')).toContain('{"by":"isbn"}')
+    expect(line('inline')).toContain('{"key":"isbn"}')
+    expect(line('optioned')).toContain('{"key":"isbn"}')
     // Functions have no serialization, a plain handler declares nothing, and a mutation walks nothing.
     for (const name of ['computed', 'plain', 'change'])
         expect(line(name)).not.toContain('{"')
@@ -103,7 +103,7 @@ ${LIBRARY}</script>
     expect(built.stderr).not.toContain('18.15')
 })
 
-// 18.4 OFF THE TYPE, 18.15 FOR THE REST. THE REVERT: read `by` and `tags` off literal syntax alone;
+// 18.4 OFF THE TYPE, 18.15 FOR THE REST. THE REVERT: read `key` and `tags` off literal syntax alone;
 // `named` and `handed` are written without a record, and nothing warns on `grown`.
 test('an option bound to a const carries its literal, and one the build cannot read is warned on', async () => {
     const app = appFixture({
@@ -113,15 +113,15 @@ import { GET, memo } from '@abide/abide/server'
 
 const KEY = 'isbn'
 const TAGS = ['shelf', 'named'] as const
-const OPTIONS = { by: KEY, tags: TAGS }
+const OPTIONS = { key: KEY, tags: TAGS }
 let grown = 'is'
 grown += 'bn'
 
 const named = GET(
-    memo(() => [{ isbn: '1' }], { by: KEY, tags: TAGS }),
+    memo(() => [{ isbn: '1' }], { key: KEY, tags: TAGS }),
 )
 const handed = GET(memo(() => [{ isbn: '1' }], OPTIONS))
-const unread = GET(memo(() => [{ isbn: '1' }], { by: grown }))
+const unread = GET(memo(() => [{ isbn: '1' }], { key: grown }))
 </script>
 `,
     })
@@ -134,9 +134,9 @@ const unread = GET(memo(() => [{ isbn: '1' }], { by: grown }))
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
         ''
     for (const name of ['named', 'handed'])
-        expect(line(name)).toContain('{"by":"isbn","tags":["shelf","named"]}')
+        expect(line(name)).toContain('{"key":"isbn","tags":["shelf","named"]}')
     expect(line('unread')).not.toContain('{"')
-    expect(built.stderr).toContain('`by: grown`')
+    expect(built.stderr).toContain('`key: grown`')
     expect(built.stderr).toContain('RULEBOOK 18.15')
 })
 
@@ -144,7 +144,7 @@ const unread = GET(memo(() => [{ isbn: '1' }], { by: grown }))
 // positional, and the key it hands back for a row is its index.
 test('a copy the wrapper keys is what a {#for} over it keys by', () => {
     const books = wire('GET', '/library/keyed', {
-        by: 'id',
+        key: 'id',
     }) as (args?: unknown) => unknown
     const key = rowKeyOf(books(), (_item, at) => at)
     expect(key({ id: 'dune' }, 3)).toBe('dune')
@@ -232,7 +232,7 @@ test("the build writes a handler's parameter defaults into its wrapper, and refu
 import { GET, memo, POST } from '@abide/abide/server'
 
 const list = GET(async ({ page = 1, q = 'all' }: { page?: number; q?: string }) => [page, q])
-const kept = GET(memo(({ size = 20 }: { size?: number }) => size, { by: 'id' }))
+const kept = GET(memo(({ size = 20 }: { size?: number }) => size, { key: 'id' }))
 const save = POST(async ({ draft = true }: { draft?: boolean }) => draft)
 const plain = GET(async ({ id }: { id: string }) => id)
 </script>
@@ -250,7 +250,7 @@ const plain = GET(async ({ id }: { id: string }) => id)
         'undefined, {"names":["page","q"],"values":[1,"all"]})',
     )
     expect(line('kept')).toContain(
-        '{"by":"id"}, {"names":["size"],"values":[20]})',
+        '{"key":"id"}, {"names":["size"],"values":[20]})',
     )
     expect(line('save')).toContain('{"names":["draft"],"values":[true]}')
     expect(line('plain')).not.toContain('"names"')

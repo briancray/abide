@@ -15,10 +15,10 @@ const plot = chart({
         <line {...tick.grid} />
         <text {...tick.text}>{tick.label}</text>
     {/for}
-    {#for line of plot.lines by line.series}
+    {#for line of plot.lines key line.series}
         <path {...line.path} />
     {/for}
-    {#for point of plot.points by point.key}
+    {#for point of plot.points key point.key}
         <circle {...point.circle} r="4" />
     {/for}
 </svg>

@@ -47,11 +47,11 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Remove one deal from a list and leave the other rows alone">
-        <p><code>by</code> says which row is which, so removing a deal removes its row. Without a
+        <p><code>key</code> says which row is which, so removing a deal removes its row. Without a
             key, rows match by position.</p>
         <Code language="abide" caption="abide" code={`
             <ol>
-                {#for deal, index of deals by deal.id}
+                {#for deal, index of deals key deal.id}
                     <li>{index + 1}. {deal.name}
                         <button onclick={() => (deals = deals.filter((d) => d !== deal))}>
                             Remove
@@ -87,7 +87,7 @@ import Section from '#src/lib/Section.abide'
         <p>A one-item list keyed by the contact makes a new row when the key changes, so a fade-in
             or an uncontrolled field starts over.</p>
         <Code language="abide" caption="abide" code={`
-            {#for shown of [open] by shown}
+            {#for shown of [open] key shown}
                 <p class="transition-opacity starting:opacity-0">{shown}</p>
             {/for}
         `} />

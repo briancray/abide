@@ -19,7 +19,7 @@ function logCall() {
 </script>
 
 <ul class="fields">
-    {#for touch of touches by touch.contact}
+    {#for touch of touches key touch.contact}
         <li><span>{touch.kind}</span>
             <strong>{touch.contact}, <time {...ago.at(touch.at).time}>{ago.at(touch.at).text}</time></strong></li>
     {/for}

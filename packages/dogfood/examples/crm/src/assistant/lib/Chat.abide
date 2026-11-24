@@ -32,10 +32,10 @@ const talk = chat({ ask, permit, turns })
 
 <section {...rest} {...talk.root} class="flex flex-col gap-snug">
     <ol {...talk.transcript} class="chat">
-        {#for turn, index of talk.turns by turn}
+        {#for turn, index of talk.turns key turn}
             <li {...talk.turn(turn, index).turn}>
                 <span {...talk.turn(turn, index).speaker}>{talk.turn(turn, index).role}</span>
-                {#for part of turn.parts by part}
+                {#for part of turn.parts key part}
                     {#if part.type === 'text' && turn.role === 'assistant'}
                         <Markdown {...talk.text} source={part.text}
                             streaming={talk.turn(turn, index).streaming} />
@@ -70,7 +70,7 @@ const talk = chat({ ask, permit, turns })
     <form {...talk.composer} class="row">
         {#if talk.attached.length > 0}
             <div {...talk.attachments}>
-                {#for image of talk.attached by image}
+                {#for image of talk.attached key image}
                     <span {...talk.attachment(image).attachment}>
                         <img {...talk.attachment(image).image} alt="an image to send">
                         <button {...talk.attachment(image).remove}>×</button>

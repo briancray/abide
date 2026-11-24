@@ -101,7 +101,7 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | Spelling | Branches | Meaning | Rules |
 | --- | --- | --- | --- |
 | `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 12.18, 32.12, 32.21, 32.63, 32.64, 32.65, 32.70, 41.24 |
-| `{#for item, index of list by key}` | — | Repeats markup over a list, or over a cursor as it produces. | 12.18, 32.13, 32.14, 32.15, 32.22, 32.97, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 32.70, 41.8, 41.14, 41.15 |
+| `{#for item, index of list key expression}` | — | Repeats markup over a list, or over a cursor as it produces. | 12.18, 32.13, 32.14, 32.15, 32.22, 32.97, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 32.70, 41.8, 41.14, 41.15 |
 | `{#try}` | `{:pending}`, `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.16, 32.56, 32.63, 32.64, 32.96 |
 
 ## Components and slots
@@ -282,7 +282,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `schema` | `Schema<Accepted>` | The gate on the way in. | 1.3, 4.3, 4.4, 4.5, 11.46, 11.47 |
 | `transform` | `(value: Accepted) => Shaped` | The shaping on the way to storage. | 4.6, 4.7, 4.8, 4.9, 11.14 |
 | `identity` | `(next: Stored, previous: Stored) => unknown` | What makes it the same value. | 5.1, 5.2, 5.3, 5.4, 5.5, 9.3, 11.17, 18.4 |
-| `by` | `(keyof Element & string) \| ((element: Element) => unknown)`, over the `Element` a `Stored` array holds | What tells one element of the value from another. | 5.22, 18.4, 18.15, 32.32 |
+| `key` | `(keyof Element & string) \| ((element: Element) => unknown)`, over the `Element` a `Stored` array holds | What tells one element of the value from another. | 5.22, 18.4, 18.15, 32.32 |
 | `ttl` | `number` | The life of a production, of a keyed entry, or of a write to a value with no producer. | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 6.12, 6.13, 6.14, 6.15, 6.16, 11.6, 11.35, 11.45, 11.48, 11.49, 11.69 |
 | `poll` | `number \| { every: number; after?: 'tick' \| 'settle'; delay?: number \| (() => number) }` | How often the value refreshes itself, in milliseconds, with the spacing between runs and a job's wait before its first. | 7.20, 7.21, 7.22, 7.23, 7.24, 7.25, 7.26, 7.27, 7.28, 7.29, 7.30, 7.31, 7.32, 7.33, 7.34, 7.35, 7.36, 7.37, 7.40, 7.41, 7.42, 7.43, 7.44 |
 | `args` | `Schema<Args>` | The gate on a keyed value's args. | 9.4, 11.28, 11.30, 11.40, 11.41, 11.56, 11.60, 11.68, 11.72 |

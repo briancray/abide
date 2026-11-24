@@ -12,7 +12,7 @@
 //   {expr}                         a slot, anywhere text or an attribute value can be (32.1, 32.3)
 //   attr={expr}  {...expr}         an expression attribute and a spread (32.11)
 //   {#if c}…{:else if c}…{:else}…{/if}
-//   {#for item, index of list by key}…{/for}
+//   {#for item, index of list key expression}…{/for}
 //   {#try}…{:pending}…{:catch error}…{:finally}…{/try}
 //   <window on…={…}/>  <document on…={…}/>   elements, as HTML reads any tag (39.21)
 //   {#component Name(pattern)}…{/component}

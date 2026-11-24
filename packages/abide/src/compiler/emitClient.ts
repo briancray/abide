@@ -1611,14 +1611,14 @@ function emitList(
     // reach a nested region's helper at all.
     const item = block.item
     const at = block.index === '' ? '__at' : block.index
-    // 41.8 — with no `by`, the key is the POSITION, which is 32.13's positional reconcile: a row
+    // 41.8 — with no `key`, the key is the POSITION, which is 32.13's positional reconcile: a row
     // is whatever is in that slot, and a reorder rewrites the rows rather than moving them.
     // 31.10 — the item and the index SHADOW the page's names for the row, and the projection is
     // what says so: they are a `for … of` binding there, so no read in the body or the key reaches
     // the page's name of the same spelling.
     const written = `(${item}, ${at}) => ${block.key === '' ? at : lowering.key(block)}`
     // 32.32 — ONLY A NAME ALONE hands the list its `Reactive`. Any other subject is a value computed
-    // from one, which declared no `by` of its own, and evaluating it a second time to ask would run
+    // from one, which declared no `key` of its own, and evaluating it a second time to ask would run
     // the computation twice. `reference` keeps the name the `Reactive` (31.3) rather than a read.
     const key =
         block.key === '' && isNamedAlone(block.subject.trim())

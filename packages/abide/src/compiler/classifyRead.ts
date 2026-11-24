@@ -108,7 +108,7 @@ export type Read = {
      * So the `Reactive` every rewrite reaches is a cell over its accessor, `heldProp(name)`.
      */
     held: boolean
-    /** 32.32 — the name is bound to a `reactive(…)` whose options declare `by`. */
+    /** 32.32 — the name is bound to a `reactive(…)` whose options declare `key`. */
     byValue: boolean
     /** 14.8 — the name is declared by a branch-local `<script>`, inside the body it scopes. */
     local: boolean

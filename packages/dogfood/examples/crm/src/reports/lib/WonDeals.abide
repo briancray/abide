@@ -11,7 +11,7 @@ function winLovelace() {
 </script>
 
 <ul class="fields">
-    {#for deal of won by deal.company}
+    {#for deal of won key deal.company}
         <li>
             <span>{deal.company}</span>
             <strong>{money.format(deal.amount)}</strong>

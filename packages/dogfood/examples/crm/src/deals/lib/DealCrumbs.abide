@@ -24,7 +24,7 @@ const crumbs = breadcrumbs({
     {/for}
 </nav>
 <div {...crumbs.overflow.menu}>
-    {#for crumb of crumbs.folded by crumb.path}
+    {#for crumb of crumbs.folded key crumb.path}
         <a {...crumbs.menuItem(crumb)}>{crumb.name}</a>
     {/for}
 </div>

@@ -48,7 +48,7 @@ function listed() {
 }
 </script>
 
-<ul id="list">{#for row of listed() by row.id}<script>
+<ul id="list">{#for row of listed() key row.id}<script>
 const setups = globalThis.__setups
 setups[row.id] = (setups[row.id] ?? 0) + 1
 const label = row.name.toUpperCase() + suffix

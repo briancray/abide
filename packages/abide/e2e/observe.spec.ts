@@ -46,7 +46,7 @@ const narrow = media('(max-width: 600px)')
     <div class="half"></div>
     <div id="placed" {...observe.rect(placed)}></div>
     <div id="box" class:wide={wide} {...observe.size(box)}></div>
-    {#for row of rows by row}<div class="row" {...observe.size((next) => { sizes = { ...sizes, [row]: next.width } })}></div>{/for}
+    {#for row of rows key row}<div class="row" {...observe.size((next) => { sizes = { ...sizes, [row]: next.width } })}></div>{/for}
     <div class="spacer"></div>
     <div id="far" {...observe.visible(seen)}>far</div>
 </main>

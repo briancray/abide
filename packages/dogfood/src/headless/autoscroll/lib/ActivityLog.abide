@@ -6,7 +6,7 @@ const follow = autoscroll()
 </script>
 
 <ol class="h-32 overflow-y-auto" {...follow.host}>
-    {#for entry of activity by entry}
+    {#for entry of activity key entry}
         <li>{entry}</li>
     {/for}
 </ol>

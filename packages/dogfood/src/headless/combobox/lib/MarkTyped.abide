@@ -13,7 +13,7 @@ const box = combobox({
     {#if box.open}
         <div {...box.popup}>
             <ul {...box.listbox}>
-                {#for company of box.items by company}
+                {#for company of box.items key company}
                     <li {...box.option(company)}>
                         {#for run of box.runs(company)}
                             {#if run.match}

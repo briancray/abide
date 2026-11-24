@@ -21,7 +21,7 @@ const box = combobox({
     {#if box.open}
         <div {...box.popup}>
             <ul {...box.listbox}>
-                {#for each of box.items by each.id}
+                {#for each of box.items key each.id}
                     <li {...box.option(each)}>
                         {#for run of box.runs(each)}
                             {#if run.match}

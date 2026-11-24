@@ -5,7 +5,7 @@ let tags = reactive(['investor', 'speaker', 'mentor'])
 </script>
 
 <div class="row">
-    {#for tag of tags by tag}
+    {#for tag of tags key tag}
         <span class="flex gap-tight rounded-full border border-rule px-3">
             <strong class="self-center font-medium">{tag}</strong>
             <button class="bg-transparent px-2 text-muted"

@@ -12,7 +12,7 @@ const REPS = [
 
 <table>
     <tbody>
-        {#for rep of REPS by rep.name}
+        {#for rep of REPS key rep.name}
             <tr>
                 <td>{rep.name}</td>
                 <td>

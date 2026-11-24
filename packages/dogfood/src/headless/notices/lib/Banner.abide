@@ -11,7 +11,7 @@ const shown = banner.host({ label: 'Announcements' })
 </script>
 
 <ul {...shown.region}>
-    {#for notice of shown.notices by notice.id}
+    {#for notice of shown.notices key notice.id}
         <li {...shown.notice(notice).notice} class="row">
             <span {...shown.notice(notice).text}>{notice.text}</span>
             <button {...shown.notice(notice).close}>Close</button>

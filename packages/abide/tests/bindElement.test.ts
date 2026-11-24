@@ -117,7 +117,7 @@ const exit = () => () => (globalThis as { __EXIT__?: () => Promise<void> }).__EX
 <button id="toggle" onclick={() => { open = !open }}>toggle</button>
 <button id="drop" onclick={() => { rows = [1, 3] }}>drop</button>
 {#if open}<p id="leaving" bind:element={exit}>arm</p>{:else}<p id="arrived">other</p>{/if}
-<ul>{#for row of rows by row}<li id={\`row\${row}\`} bind:element={exit}>{row}</li>{/for}</ul>`)
+<ul>{#for row of rows key row}<li id={\`row\${row}\`} bind:element={exit}>{row}</li>{/for}</ul>`)
 
     click('#toggle')
     expect(document.querySelector('#leaving')).not.toBeNull()
@@ -197,7 +197,7 @@ const exit = () => () => (globalThis as { __EXIT__?: () => Promise<void> }).__EX
 </script>
 
 <button id="empty" onclick={() => { rows = [] }}>empty</button>
-<ul>{#for row of rows by row}<li id={\`row\${row}\`} bind:element={exit}>{row}</li>{/for}</ul>`)
+<ul>{#for row of rows key row}<li id={\`row\${row}\`} bind:element={exit}>{row}</li>{/for}</ul>`)
 
     click('#empty')
     expect(document.querySelectorAll('ul li').length).toBe(3)
@@ -229,8 +229,8 @@ const note = (name: string) => (node: Element) => {
 {#component Child()}<i bind:element={note('component')}>child</i>{/component}
 <button id="open" onclick={() => { open = true }}>open</button>
 <button id="grow" onclick={() => { items = [...items, items.length + 1] }}>grow</button>
-{#for item of items by item}<b bind:element={note('row')}>{item}</b>{/for}
-{#if open}<input id="field" bind:element={note('arm')}>{#for item of items by item}<s bind:element={note('armed row')}>{item}</s>{/for}<Child />{/if}`)
+{#for item of items key item}<b bind:element={note('row')}>{item}</b>{/for}
+{#if open}<input id="field" bind:element={note('arm')}>{#for item of items key item}<s bind:element={note('armed row')}>{item}</s>{/for}<Child />{/if}`)
 
     seen.length = 0
     click('#open')

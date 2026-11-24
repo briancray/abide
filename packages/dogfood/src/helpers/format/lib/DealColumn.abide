@@ -9,7 +9,7 @@ const deals = [
 
 <table>
     <tbody>
-        {#for deal of deals by deal.name}
+        {#for deal of deals key deal.name}
             <tr>
                 <td>{deal.name}</td>
                 <td>{format.money(deal.amount, { digits: 0 })}</td>

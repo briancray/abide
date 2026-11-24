@@ -18,7 +18,7 @@ const batch = listbox({
     aria-label="Leads to hand over" aria-activedescendant={batch.activeId}
     class="fields select-none [&_[data-active]]:bg-signal/10
         [&_[data-selected]]:font-semibold">
-    {#for deal of leads by deal.id}
+    {#for deal of leads key deal.id}
         <li {...batch.option(deal)}>{deal.name}</li>
     {/for}
 </ul>

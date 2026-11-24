@@ -128,7 +128,7 @@ let rows = reactive([{ id: 1, title: 'one' }, { id: 2, title: 'two' }])
 <p id="a" data-size={card.size}>{label}: {label.length + 1}</p>
 <p id="b" title={\`\${card.title}!\`}>{card.size > 2 ? 'big' : 'small'}</p>
 {#if shown}<i id="c">{card.title}</i>{/if}
-<ul>{#for row of rows by row.id}<li class={row.title}>{row.title}</li>{/for}</ul>
+<ul>{#for row of rows key row.id}<li class={row.title}>{row.title}</li>{/for}</ul>
 <p id="live">{count}</p>`)
     expect(document.querySelector('#a')?.textContent).toBe('clicks: 7')
     expect(document.querySelector('#b')?.getAttribute('title')).toBe('Card!')

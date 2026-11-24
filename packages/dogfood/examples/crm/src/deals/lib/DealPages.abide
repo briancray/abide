@@ -9,7 +9,7 @@ const shown = memo(() => DEALS.slice((page - 1) * PER_PAGE, page * PER_PAGE))
 </script>
 
 <ul>
-    {#for deal of shown by deal}<li>{deal}</li>{/for}
+    {#for deal of shown key deal}<li>{deal}</li>{/for}
 </ul>
 <nav class="row" {...list.nav}>
     <button {...list.previous}>Previous</button>

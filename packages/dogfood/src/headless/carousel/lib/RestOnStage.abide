@@ -8,7 +8,7 @@ const stages = carousel({ items: STAGES, selected: stage })
 
 <ul {...stages.host} aria-label="Stages"
     class="flex snap-x snap-mandatory gap-snug overflow-x-auto px-[12.5%]">
-    {#for name of STAGES by name}
+    {#for name of STAGES key name}
         <li {...stages.item(name)} class="shrink-0 basis-3/4 snap-center
             border border-rule p-snug data-centered:border-signal">{name}</li>
     {/for}

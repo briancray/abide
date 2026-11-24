@@ -16,4 +16,4 @@ const shown = memo(() =>
 
 <button onclick={() => (largestFirst = !largestFirst)}>
     {largestFirst ? 'As entered' : 'Largest first'}</button>
-<ol>{#for deal of shown by deal.name}<li>{deal.name}</li>{/for}</ol>
+<ol>{#for deal of shown key deal.name}<li>{deal.name}</li>{/for}</ol>

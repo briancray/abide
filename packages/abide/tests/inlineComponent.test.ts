@@ -96,7 +96,7 @@ import { reactive } from '@abide/abide'
 let rows = reactive([{ id: 1, name: 'one' }, { id: 2, name: 'two' }])
 </script>
 
-<ul>{#for row of rows by row.id}{#component Cell()}<b>{row.name}</b>{/component}<li><Cell/></li>{/for}</ul>
+<ul>{#for row of rows key row.id}{#component Cell()}<b>{row.name}</b>{/component}<li><Cell/></li>{/for}</ul>
 <button onclick={() => { rows = [...rows, { id: 3, name: 'three' }] }}>+</button>`)
     expect(html).toContain(
         '<li><!--[--><b>one</b><!--]--></li><li><!--[--><b>two</b><!--]--></li>',
