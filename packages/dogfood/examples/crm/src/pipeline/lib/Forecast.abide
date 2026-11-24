@@ -11,7 +11,7 @@ const reloading = memo(() => forecast.busy() && forecast.ready())
     <p class="status">Adding up the pipeline…</p>
 {:else}
     <ul class="tiles">
-        <li><span>forecast</span><strong>{format.money(forecast, { digits: 0 })}</strong></li>
+        <li><span>forecast</span><strong>{format.money(forecast, { maximumFractionDigits: 0 })}</strong></li>
     </ul>
 {/if}
 

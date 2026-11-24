@@ -71,11 +71,11 @@ import visitorTime from './lib/VisitorTime.abide' with { type: 'text' }
         <Code language="ts" caption="shared" code={`
             import { format } from '@abide/abide'
 
-            format.money(1_250_000, { compact: true }) // '$1.3M'
+            format.money(1_250_000, { notation: 'compact' }) // '$1.3M'
             format.plural(2, 'open deal') // '2 open deals'
             format.plural(3, 'company', 'companies') // '3 companies'
             format.list(['Ada', 'Grace', 'Alan']) // 'Ada, Grace, and Alan'
-            format.percent(0.04, { signed: true }) // '+4%'
+            format.percent(0.04, { signDisplay: 'exceptZero' }) // '+4%'
             format.bytes(1_500_000) // '1.5 MB'
         `} />
     </Section>

@@ -13,9 +13,9 @@
 // is said once, in CSS, for both. At the end of a scroller the last section is current, though its top
 // never reaches where it would land: there is no room left to scroll it there.
 
+import { resized } from './element/resized.ts'
 import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
-import { resized } from './observe/resized.ts'
 import { memo, reactive } from './reactive/index.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
 import { type Scroller, scrollerOf } from './scrollerOf.ts'

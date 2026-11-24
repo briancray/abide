@@ -8,7 +8,7 @@ import fadeEdges from './lib/FadeEdges.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/behaviors/observe', '/headless/autoscroll']}
+    seeAlso={['/behaviors/element-size', '/headless/autoscroll']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/OpenDeals.test.ts',

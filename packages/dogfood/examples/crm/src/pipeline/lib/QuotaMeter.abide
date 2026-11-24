@@ -15,6 +15,6 @@ const quota = meter({
     <div class="h-full rounded-full bg-signal" {...quota.fill}></div>
 </div>
 <p class="status">
-    {format.money(won, { digits: 0 })} of {format.money(TARGET, { digits: 0 })}
+    {format.money(won, { maximumFractionDigits: 0 })} of {format.money(TARGET, { maximumFractionDigits: 0 })}
 </p>
 <button onclick={() => (won = 200_000)}>Lose the Hopper deal</button>

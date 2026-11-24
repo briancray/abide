@@ -20,7 +20,7 @@ const LAYOUT = `<html lang="en">
 </html>`
 
 const PAGE = `<script>
-import { media, observe, reactive } from '@abide/abide'
+import { elementRect, elementSize, elementVisible, media, reactive } from '@abide/abide'
 
 let box = reactive<{ width: number; height: number } | undefined>(undefined)
 let wide = reactive(false)
@@ -44,11 +44,11 @@ const narrow = media('(max-width: 600px)')
     <button id="grow" onclick={() => { tall = true }}>grow</button>
     <div class:tall={tall}></div>
     <div class="half"></div>
-    <div id="placed" {...observe.rect(placed)}></div>
-    <div id="box" class:wide={wide} {...observe.size(box)}></div>
-    {#for row of rows key row}<div class="row" {...observe.size((next) => { sizes = { ...sizes, [row]: next.width } })}></div>{/for}
+    <div id="placed" {...elementRect(placed)}></div>
+    <div id="box" class:wide={wide} {...elementSize(box)}></div>
+    {#for row of rows key row}<div class="row" {...elementSize((next) => { sizes = { ...sizes, [row]: next.width } })}></div>{/for}
     <div class="spacer"></div>
-    <div id="far" {...observe.visible(seen)}>far</div>
+    <div id="far" {...elementVisible(seen)}>far</div>
 </main>
 
 <style>
@@ -64,7 +64,7 @@ const narrow = media('(max-width: 600px)')
 // 32.89, 32.90 — A SCROLLER STANDING INSIDE THE VIEWPORT, ANOTHER BELOW THE FOLD, AND TWO BORDER
 // BOXES, one of them written vertically.
 const MEASURED_AGAINST = `<script>
-import { observe, reactive } from '@abide/abide'
+import { elementSize, elementVisible, reactive } from '@abide/abide'
 
 let scroller = reactive<HTMLElement>()
 let low = reactive<HTMLElement>()
@@ -82,17 +82,17 @@ let upright = reactive<{ width: number; height: number }>()
     <p id="inside-seen">{String(inside)} {String(insideViewport)}</p>
     <p id="bordered">{bordered === undefined ? 'unmeasured' : bordered.width + 'x' + bordered.height}</p>
     <p id="upright">{upright === undefined ? 'unmeasured' : upright.width + 'x' + upright.height}</p>
-    <div id="sized" {...observe.size(bordered, { box: 'border' })}></div>
-    <div id="sized-upright" {...observe.size(upright, { box: 'border' })}></div>
+    <div id="sized" {...elementSize(bordered, { box: 'border-box' })}></div>
+    <div id="sized-upright" {...elementSize(upright, { box: 'border-box' })}></div>
     <div id="scroller" bind:element={scroller}>
-        <p id="head" {...observe.visible(head, { in: scroller })}>head</p>
+        <p id="head" {...elementVisible(head, { root: scroller })}>head</p>
         <div class="gap"></div>
-        <p id="tail" {...observe.visible(tail, { in: scroller })}>tail</p>
+        <p id="tail" {...elementVisible(tail, { root: scroller })}>tail</p>
     </div>
     <div class="fold"></div>
     <div id="low" bind:element={low}>
-        <p {...observe.visible(inside, { in: low })}>inside</p>
-        <p {...observe.visible(insideViewport)}>inside</p>
+        <p {...elementVisible(inside, { root: low })}>inside</p>
+        <p {...elementVisible(insideViewport)}>inside</p>
     </div>
 </main>
 
@@ -127,7 +127,7 @@ test.afterAll(() => {
 // 32.79, 32.82 — THE SERVER WRITES NOTHING AND THE BROWSER MEASURES: the content box, padding
 // out, and again when the layout moves. THE REVERT: measure `borderBoxSize` in `deliverSizes`; the
 // box reads 220x120.
-test('observe.size writes the content box, and follows it — 32.79', async ({
+test('elementSize writes the content box, and follows it — 32.79', async ({
     page,
 }) => {
     const served = await (await fetch(`${base}/`)).text()
@@ -140,10 +140,10 @@ test('observe.size writes the content box, and follows it — 32.79', async ({
 })
 
 // 32.81, 32.83 — ONE OBSERVER FOR EVERY RESIZE ON THE PAGE — one `ResizeObserver` for the six
-// `observe.size`s and the `observe.rect` — and a row that leaves is unobserved. Counted by wrapping
+// `elementSize`s and the `elementRect` — and a row that leaves is unobserved. Counted by wrapping
 // the browser's own constructor and `unobserve` before the page loads. THE REVERT: `observer = new
-// ResizeObserver(…)` in place of `??=` in `observe/resized.ts`; 7 are made.
-test('every observe.size shares one ResizeObserver, and a row that leaves is unobserved — 32.81, 32.83', async ({
+// ResizeObserver(…)` in place of `??=` in `element/resized.ts`; 7 are made.
+test('every elementSize shares one ResizeObserver, and a row that leaves is unobserved — 32.81, 32.83', async ({
     page,
 }) => {
     await page.addInitScript(() => {
@@ -181,7 +181,7 @@ test('every observe.size shares one ResizeObserver, and a row that leaves is uno
 
 // 32.80 — AN ELEMENT BELOW THE FOLD IS NOT VISIBLE UNTIL IT IS SCROLLED TO. THE REVERT: write `true`
 // in `deliverIntersections` whatever `isIntersecting` says; `#seen` reads true before the scroll.
-test('observe.visible follows the element into the viewport — 32.80', async ({
+test('elementVisible follows the element into the viewport — 32.80', async ({
     page,
 }) => {
     await page.goto(`${base}/`)
@@ -203,8 +203,8 @@ test('media follows the viewport — 23.30', async ({ page }) => {
 
 // 32.84 — A SCROLL MOVES `top` AND SO DOES A WINDOW RESIZE THAT MOVES THE ELEMENT, each answered in
 // the frame after it, and the value reads what the browser reports there. THE REVERT: drop the
-// scroll listener from `observe/rect.ts`; `top` keeps its first reading after the scroll.
-test('observe.rect follows a scroll and a window resize — 32.84', async ({
+// scroll listener from `element/elementRect.ts`; `top` keeps its first reading after the scroll.
+test('elementRect follows a scroll and a window resize — 32.84', async ({
     page,
 }) => {
     const served = await (await fetch(`${base}/`)).text()
@@ -239,7 +239,7 @@ test('observe.rect follows a scroll and a window resize — 32.84', async ({
 // 32.85 — A SIBLING ABOVE GROWS, AND `#placed` MOVES WITH NO SCROLL, NO WINDOW RESIZE AND NO RESIZE
 // OF ITS OWN: its position observer sees the move. THE REVERT: skip `arm` in `measure`; `top` keeps
 // the reading from before the growth, 50px short.
-test('observe.rect follows a move nothing else reports — 32.85', async ({
+test('elementRect follows a move nothing else reports — 32.85', async ({
     page,
 }) => {
     await page.setViewportSize({ width: 1024, height: 768 })
@@ -267,7 +267,7 @@ test('observe.rect follows a move nothing else reports — 32.85', async ({
 // what sees the growth is the one made in the frame after the scroll. THE REVERT: drop
 // `if (scrolling) schedule()` in `measure`; in chromium `top` keeps the reading from the scroll, 50px
 // short (575 -> 525).
-test('observe.rect follows a move nothing else reports right after a scroll — 32.85, 32.88', async ({
+test('elementRect follows a move nothing else reports right after a scroll — 32.85, 32.88', async ({
     page,
 }) => {
     await page.setViewportSize({ width: 1024, height: 768 })
@@ -316,7 +316,7 @@ test('media hydrates the arm the server painted and swaps it without a warning �
 // 224x124, and the same box written vertically is 224x124 too — its inline size is its height. THE
 // REVERT: write `contentRect` for a bordered element in `deliverSizes`; both read 200x100.
 // Turning the axes is the unit test's (`observe.test.ts`, 124x224 without it).
-test("observe.size's box: 'border' writes the border box, in physical axes — 32.90", async ({
+test("elementSize's box: 'border-box' writes the border box, in physical axes — 32.90", async ({
     page,
 }) => {
     await page.goto(`${base}/against`)
@@ -329,7 +329,7 @@ test("observe.size's box: 'border' writes the border box, in physical axes — 3
 // stands in the viewport. Two elements in one root are one observer. THE REVERT: drop `{ root }` in
 // `Rooted`; the scroller clips its elements against the viewport too, so they read as before, and
 // what fails is the count — no observer rooted at the scroller. The next test is what tells them apart.
-test('observe.visible in a root follows a scroller, sharing one observer — 32.89, 32.81', async ({
+test('elementVisible in a root follows a scroller, sharing one observer — 32.89, 32.81', async ({
     page,
 }) => {
     await page.addInitScript(() => {
@@ -372,7 +372,7 @@ test('observe.visible in a root follows a scroller, sharing one observer — 32.
 // 32.89 — THE DISTINGUISHING CASE: a scroller below the fold holds an element in its own view, which
 // is visible in the scroller and not in the viewport. THE REVERT: drop `{ root }` in `Rooted`; it
 // reads `false false`.
-test('observe.visible in a root measures against the root, not the viewport — 32.89', async ({
+test('elementVisible in a root measures against the root, not the viewport — 32.89', async ({
     page,
 }) => {
     await page.setViewportSize({ width: 1024, height: 768 })

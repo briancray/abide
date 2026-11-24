@@ -17,7 +17,7 @@ import copyRecord from './lib/CopyRecord.abide' with { type: 'text' }
 
 <Doc
     seeAlso={[
-        '/behaviors/observe',
+        '/behaviors/element-size',
         '/behaviors/dismissible',
         '/headless/dropzone',
     ]}

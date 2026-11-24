@@ -3,8 +3,8 @@
 // more than the lines show, measured as the text resizes.
 
 import { disclosure } from './disclosure.ts'
+import { resized } from './element/resized.ts'
 import { type Live, live } from './live.ts'
-import { resized } from './observe/resized.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
 import { withPart } from './withPart.ts'

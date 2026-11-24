@@ -15,7 +15,10 @@ const { reported } = props<{
 {#if reported.kind === 'bench'}
     <ul class="ex-results" data-kind="bench">
         {#for arm of Object.keys(reported.arms)}
-            <li><span>{arm}</span>{format.number(reported.arms[arm] ?? 0, { digits: 1 })} ns per op</li>
+            <li><span>{arm}</span>{format.number(reported.arms[arm] ?? 0, {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+            })} ns per op</li>
         {/for}
         <li><small>{reported.claim} · {format.number(reported.n)} ops a sample</small></li>
     </ul>
@@ -25,7 +28,7 @@ const { reported } = props<{
             <li data-passed={String(one.failure === null)}>
                 <span>{one.failure === null ? 'pass' : 'fail'}</span>
                 {one.name}
-                <small>{format.number(one.milliseconds, { digits: 0 })} ms</small>
+                <small>{format.number(one.milliseconds, { maximumFractionDigits: 0 })} ms</small>
             </li>
         {/for}
     </ul>

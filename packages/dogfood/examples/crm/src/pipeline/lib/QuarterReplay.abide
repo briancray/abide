@@ -20,5 +20,5 @@ const week = () => Math.min(WON.length - 1, Math.floor(replay.at() / 1000))
             {/for}
         </div>
     </div>
-    <p class="status">Week {week() + 1}: {format.money(WON[week()] ?? 0, { digits: 0 })} won</p>
+    <p class="status">Week {week() + 1}: {format.money(WON[week()] ?? 0, { maximumFractionDigits: 0 })} won</p>
 </div>

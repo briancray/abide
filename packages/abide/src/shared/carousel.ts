@@ -5,6 +5,7 @@
 // it rests on as current, since a page arrives resting.
 
 import { checkParts } from './checkParts.ts'
+import { resized } from './element/resized.ts'
 import { handFocus } from './handFocus.ts'
 import {
     keyOfItem,
@@ -14,7 +15,6 @@ import {
 } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { media } from './media.ts'
-import { resized } from './observe/resized.ts'
 import { randomToken } from './randomToken.ts'
 import { memo, type Reactive, reactive, watch } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'

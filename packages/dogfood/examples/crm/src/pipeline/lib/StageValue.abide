@@ -17,5 +17,7 @@ const totals = memo(() => getStage({ stage }))
             {/for}
         </select></li>
     <li><span>value</span>
-        <strong>{totals.ready() ? format.money(totals.value, { digits: 0 }) : '—'}</strong></li>
+        <strong>{totals.ready()
+            ? format.money(totals.value, { maximumFractionDigits: 0 })
+            : '—'}</strong></li>
 </ul>

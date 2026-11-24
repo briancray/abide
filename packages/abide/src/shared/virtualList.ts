@@ -10,10 +10,10 @@
 // laid things out, the scroller is found at the first of them, and a scroll is read once a frame. Until
 // the first measurement, `shown` is the first `initial` items, on a server as in a browser.
 
+import { resized } from './element/resized.ts'
 import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { lastAtOrBefore } from './lastAtOrBefore.ts'
 import { type Live, live } from './live.ts'
-import { resized } from './observe/resized.ts'
 import { memo, reactive } from './reactive/index.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
 import { type Scroller, scrollerOf } from './scrollerOf.ts'
@@ -316,7 +316,7 @@ export function virtualList<Item>(
                         })
                         derive()
                     },
-                    'border',
+                    'border-box',
                 )
                 return () => {
                     stop()

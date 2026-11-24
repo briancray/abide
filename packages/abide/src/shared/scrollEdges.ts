@@ -1,7 +1,7 @@
 // 32.101-32.108 — a scrolling element marked with the edges it can still scroll toward, for a
 // stylesheet to fade or shadow.
 
-import { resized } from './observe/resized.ts'
+import { resized } from './element/resized.ts'
 import type { Disposer } from './reactive/watch.ts'
 
 // How near an edge, in pixels, still counts as at it: a fractional scroll position rounds short.

@@ -15,7 +15,7 @@ import quickEdit from './lib/QuickEdit.abide' with { type: 'text' }
 
 <Doc
     seeAlso={[
-        '/behaviors/observe',
+        '/behaviors/element-rect',
         '/behaviors/hotkeys',
         '/headless/popover',
         '/headless/dialog',

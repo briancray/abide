@@ -1,0 +1,58 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import SizeToPanel from './lib/SizeToPanel.abide'
+import sizeToPanel from './lib/SizeToPanel.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/behaviors/element-visible',
+        '/behaviors/element-rect',
+        '/headless/chart',
+        '/abide-files/by-name',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/element.test.ts',
+            from: ["test('a delivery writes the value, and nothing before it does"],
+        },
+        {
+            path: 'packages/abide/tests/element.test.ts',
+            from: [
+                "test('given no target, host is spread and each field is a value of its own",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/element.test.ts',
+            from: [
+                "test('elementSize observes the box ResizeObserver names, and writes the device pixels it asks for",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Size a chart to its panel">
+        <p>Call it with nothing and spread its <code>host</code> on the element, then read
+            <code>width</code> and <code>height</code> by name. The browser writes them after
+            each layout, and until the first one they are <code>undefined</code>.</p>
+        <Example code={sizeToPanel}><SizeToPanel /></Example>
+    </Section>
+
+    <Section level={3} title="Draw a canvas at the screen's own pixels">
+        <p><code>box</code> takes the boxes <code>ResizeObserver</code> names.
+            <code>'device-pixel-content-box'</code> writes the size in device pixels, so a
+            canvas is as sharp as the screen.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { elementSize } from '@abide/abide'
+
+            const pixels = elementSize({ box: 'device-pixel-content-box' })
+            </script>
+
+            <canvas {...pixels.host} width={pixels.width} height={pixels.height}></canvas>
+        `} />
+    </Section>
+</Doc>

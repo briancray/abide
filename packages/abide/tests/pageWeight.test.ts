@@ -115,16 +115,17 @@ let theme = reactive('system', { store: store.cookies('theme') })
     expect(light.includes(WEB_STORE)).toBe(false)
 }, 60_000)
 
-// Names each `observe` part's module reads off the platform, which survive minification: the
-// border box is `size`'s alone, `isIntersecting` `visible`'s, and `rootMargin` `rect`'s.
+// Names each part's module reads off the platform, which survive minification: the border box is
+// `elementSize`'s alone, `isIntersecting` `elementVisible`'s, and `rootMargin` `elementRect`'s and
+// `elementVisible`'s.
 const SIZE_OBSERVER = 'borderBoxSize'
 const VISIBLE_OBSERVER = 'isIntersecting'
 const RECT_OBSERVER = 'rootMargin'
 
-// THE REVERT: have `observe/index.ts` bind the three as `const`s of its own rather than re-export
-// them, and the size page loads `visible`'s and `rect`'s observers with its own — `isIntersecting`
-// and `rootMargin` both found. Re-exported, `export * as observe` keeps only the member read.
-test('a page using observe.size loads neither observe.visible nor observe.rect — 38.94', async () => {
+// THE REVERT: define the three in one module, and the size page loads `elementVisible`'s and
+// `elementRect`'s observers with its own — `isIntersecting` and `rootMargin` both found. A module
+// apiece keeps only the one read.
+test('a page using elementSize loads neither elementVisible nor elementRect — 38.94', async () => {
     const app = appFixture({
         'index.abide': `<script>
 import { reactive } from '@abide/abide'
@@ -134,20 +135,20 @@ let count = reactive(0)
 
 <button onclick={() => { count = count + 1 }}>{count}</button>`,
         'sized/index.abide': `<script>
-import { observe, reactive } from '@abide/abide'
+import { elementSize, reactive } from '@abide/abide'
 
 let box = reactive({ width: 0, height: 0 })
 </script>
 
-<div {...observe.size(box, { box: 'border' })}>{box.width}</div>`,
+<div {...elementSize(box, { box: 'border-box' })}>{box.width}</div>`,
         'all/index.abide': `<script>
-import { observe, reactive } from '@abide/abide'
+import { elementRect, elementVisible, reactive } from '@abide/abide'
 
 let seen = reactive(false)
 let placed = reactive<{ x: number }>()
 </script>
 
-<div {...observe.visible(seen)} {...observe.rect(placed)}>{seen}</div>`,
+<div {...elementVisible(seen)} {...elementRect(placed)}>{seen}</div>`,
     })
     const out = `${app}/.abide`
     const built = await buildApp(app)

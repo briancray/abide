@@ -25,7 +25,7 @@ function applyNextUpdate() {
 
 <ul class="fields">
     {#for deal of deals key deal.id}
-        <li><span>{deal.stage}</span><strong>{format.money(deal.amount, { digits: 0 })}</strong>
+        <li><span>{deal.stage}</span><strong>{format.money(deal.amount, { maximumFractionDigits: 0 })}</strong>
             {deal.name}</li>
     {/for}
 </ul>

@@ -24,98 +24,128 @@ function numeric(value: unknown): number | bigint | undefined {
     return typeof value === 'bigint' ? value : undefined
 }
 
-/** An amount of money: `format.money(12500)` is `$12,500.00`. */
-export function money(
-    value: unknown,
-    options: {
-        /** The ISO 4217 code of the currency the amount is in. `'USD'` by default. */
-        currency?: string
-        /** Whether to shorten a large amount: `$1.2M` rather than `$1,200,000.00`. */
-        compact?: boolean
-        /** Whether a positive amount carries a `+`, and a negative one `−`, for a change rather than a balance. */
-        signed?: boolean
-        /** The digits after the point, fixed. The currency's own (2 for USD) by default. */
-        digits?: number
-        /** The BCP 47 locale the amount is written in. `'en-US'` by default. */
-        locale?: string
-    } = {},
-): string {
-    const amount = numeric(value)
-    if (amount === undefined) return MISSING
-    const {
-        currency = 'USD',
-        compact = false,
-        signed = false,
-        digits,
-        locale = LOCALE,
-    } = options
-    const written = cached(
-        `money ${locale} ${currency} ${compact} ${signed} ${digits}`,
-        () =>
-            new Intl.NumberFormat(locale, {
-                style: 'currency',
-                currency,
-                notation: compact ? 'compact' : 'standard',
-                signDisplay: signed ? 'exceptZero' : 'auto',
-                minimumFractionDigits: digits,
-                maximumFractionDigits: digits,
-            }),
-    ).format(amount)
-    return signed ? written.replace('-', MINUS) : written
+/**
+ * What `format.money`, `format.percent` and `format.number` take: `Intl.NumberFormat`'s own options
+ * under its own names, less the `style` each formatter fixes, and the locale.
+ */
+type NumberOptions = Omit<Intl.NumberFormatOptions, 'style'> & {
+    /** The BCP 47 locale it is written in. `'en-US'` by default. */
+    locale?: string
 }
 
-/** A fraction as a percent: `format.percent(0.4)` is `40%`, and `format.percent(0.125)` is `12.5%`. */
-export function percent(
-    value: unknown,
-    options: {
-        /** The digits after the point, fixed. Up to 1, as needed, by default. */
-        digits?: number
-        /** Whether a positive fraction carries a `+`, and a negative one `−`, for a change rather than a share. */
-        signed?: boolean
-        /** The BCP 47 locale the percent is written in. `'en-US'` by default. */
-        locale?: string
-    } = {},
-): string {
+// 52.6 — every option a formatter is keyed by, in a fixed order, so one set of options given in any
+// order is one formatter.
+const NUMBER_OPTIONS = [
+    'localeMatcher',
+    'currency',
+    'currencyDisplay',
+    'currencySign',
+    'unit',
+    'unitDisplay',
+    'minimumIntegerDigits',
+    'minimumFractionDigits',
+    'maximumFractionDigits',
+    'minimumSignificantDigits',
+    'maximumSignificantDigits',
+    'useGrouping',
+    'notation',
+    'compactDisplay',
+    'signDisplay',
+    'numberingSystem',
+    'roundingMode',
+    'roundingIncrement',
+    'roundingPriority',
+    'trailingZeroDisplay',
+] as const
+
+/**
+ * The `Intl.NumberFormat` for `kind` over `options`, abide's `defaults` beneath the caller's. A
+ * caller naming one bound of the fraction digits keeps the default of the other only where the two
+ * agree, since `Intl` refuses a minimum above the maximum.
+ */
+function numberFormat(
+    kind: string,
+    style: Intl.NumberFormatOptions['style'],
+    options: NumberOptions,
+    defaults: Intl.NumberFormatOptions,
+): Intl.NumberFormat {
+    const locale = options.locale ?? LOCALE
+    let key = `${kind} ${locale}`
+    for (const name of NUMBER_OPTIONS) {
+        const given = (options as Record<string, unknown>)[name]
+        if (given !== undefined) key += ` ${name}=${String(given)}`
+    }
+    return cached(key, () => {
+        const { locale: _locale, ...given } = options
+        const asked: Intl.NumberFormatOptions = { ...defaults, ...given, style }
+        const least = given.minimumFractionDigits
+        const most = given.maximumFractionDigits
+        if (
+            least !== undefined &&
+            most === undefined &&
+            defaults.maximumFractionDigits !== undefined
+        )
+            asked.maximumFractionDigits = Math.max(
+                least,
+                defaults.maximumFractionDigits,
+            )
+        if (
+            most !== undefined &&
+            least === undefined &&
+            defaults.minimumFractionDigits !== undefined
+        )
+            asked.minimumFractionDigits = Math.min(
+                most,
+                defaults.minimumFractionDigits,
+            )
+        return new Intl.NumberFormat(locale, asked)
+    })
+}
+
+// 52.35 — a sign written beside a `+` is written as the `−` the width of it.
+function signedWith(written: string, options: NumberOptions): string {
+    const sign = options.signDisplay
+    return sign === 'always' || sign === 'exceptZero'
+        ? written.replace('-', MINUS)
+        : written
+}
+
+/**
+ * An amount of money: `format.money(12500)` is `$12,500.00`. Takes `Intl.NumberFormat`'s options —
+ * `notation: 'compact'` for `$1.2M`, `signDisplay: 'exceptZero'` for a change,
+ * `maximumFractionDigits` — with the currency `'USD'` by default.
+ */
+export function money(value: unknown, options: NumberOptions = {}): string {
+    const amount = numeric(value)
+    if (amount === undefined) return MISSING
+    const written = numberFormat('money', 'currency', options, {
+        currency: 'USD',
+    }).format(amount)
+    return signedWith(written, options)
+}
+
+/**
+ * A fraction as a percent: `format.percent(0.4)` is `40%`, and `format.percent(0.125)` is `12.5%` —
+ * up to one digit after the point, as needed, by default. Takes `Intl.NumberFormat`'s options.
+ */
+export function percent(value: unknown, options: NumberOptions = {}): string {
     const fraction = numeric(value)
     if (fraction === undefined) return MISSING
-    const { digits, signed = false, locale = LOCALE } = options
-    const written = cached(
-        `percent ${locale} ${digits} ${signed}`,
-        () =>
-            new Intl.NumberFormat(locale, {
-                style: 'percent',
-                minimumFractionDigits: digits ?? 0,
-                maximumFractionDigits: digits ?? 1,
-                signDisplay: signed ? 'exceptZero' : 'auto',
-            }),
-    ).format(fraction)
-    return signed ? written.replace('-', MINUS) : written
+    const written = numberFormat('percent', 'percent', options, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 1,
+    }).format(fraction)
+    return signedWith(written, options)
 }
 
-/** A number with its thousands grouped: `format.number(1200)` is `1,200`. */
-export function number(
-    value: unknown,
-    options: {
-        /** Whether to shorten a large number: `1.2K` rather than `1,200`. */
-        compact?: boolean
-        /** The digits after the point, fixed. Up to 3, or 1 compact, as needed, by default. */
-        digits?: number
-        /** The BCP 47 locale the number is written in. `'en-US'` by default. */
-        locale?: string
-    } = {},
-): string {
+/**
+ * A number with its thousands grouped: `format.number(1200)` is `1,200`. Takes `Intl.NumberFormat`'s
+ * options — `notation: 'compact'` for `1.2K`.
+ */
+export function number(value: unknown, options: NumberOptions = {}): string {
     const amount = numeric(value)
     if (amount === undefined) return MISSING
-    const { compact = false, digits, locale = LOCALE } = options
-    return cached(
-        `number ${locale} ${compact} ${digits}`,
-        () =>
-            new Intl.NumberFormat(locale, {
-                notation: compact ? 'compact' : 'standard',
-                minimumFractionDigits: digits,
-                maximumFractionDigits: digits,
-            }),
-    ).format(amount)
+    return numberFormat('number', 'decimal', options, {}).format(amount)
 }
 
 /** A count and the word for what it counts: `format.plural(3, 'deal')` is `3 deals`. */
@@ -138,12 +168,13 @@ export function plural(
     return `${number(amount, { locale })} ${word}`
 }
 
-/** A list as a sentence says it: `format.list(['Ada', 'Grace', 'Alan'])` is `Ada, Grace, and Alan`. */
+/**
+ * A list as a sentence says it: `format.list(['Ada', 'Grace', 'Alan'])` is `Ada, Grace, and Alan`.
+ * Takes `Intl.ListFormat`'s options — `type: 'disjunction'` for a choice.
+ */
 export function list(
     value: unknown,
-    options: {
-        /** The word before the last item: `'and'`, or `'or'` for a choice. `'and'` by default. */
-        conjunction?: 'and' | 'or'
+    options: Intl.ListFormatOptions & {
         /** The BCP 47 locale the list is written in. `'en-US'` by default. */
         locale?: string
     } = {},
@@ -153,13 +184,15 @@ export function list(
     for (const item of value)
         if (item !== null && item !== undefined) items.push(String(item))
     if (items.length === 0) return MISSING
-    const { conjunction = 'and', locale = LOCALE } = options
+    const {
+        type = 'conjunction',
+        style = 'long',
+        localeMatcher,
+        locale = LOCALE,
+    } = options
     return cached(
-        `list ${locale} ${conjunction}`,
-        () =>
-            new Intl.ListFormat(locale, {
-                type: conjunction === 'or' ? 'disjunction' : 'conjunction',
-            }),
+        `list ${locale} ${type} ${style} ${localeMatcher}`,
+        () => new Intl.ListFormat(locale, { type, style, localeMatcher }),
     ).format(items)
 }
 
@@ -303,14 +336,21 @@ export function relative(
         locale?: string
         /** `'long'` (`12 minutes ago`), `'short'` (`12 min. ago`) or `'narrow'` (`12m ago`). `'long'` by default. */
         style?: Intl.RelativeTimeFormatStyle
+        /** `'auto'` (`yesterday`) or `'always'` (`1 day ago`). `'auto'` by default. */
+        numeric?: Intl.RelativeTimeFormatNumeric
     } = {},
 ): string {
     const time = instant(value)
     if (time === undefined) return MISSING
-    const { now = Date.now(), locale = LOCALE, style = 'long' } = options
+    const {
+        now = Date.now(),
+        locale = LOCALE,
+        style = 'long',
+        numeric: words = 'auto',
+    } = options
     const formatter = cached(
-        `relative ${locale} ${style}`,
-        () => new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style }),
+        `relative ${locale} ${style} ${words}`,
+        () => new Intl.RelativeTimeFormat(locale, { numeric: words, style }),
     )
     const gap = time - now
     for (const [unit, size] of RELATIVE_UNITS)
@@ -334,16 +374,16 @@ const BYTE_UNITS = [
  */
 export function bytes(
     value: unknown,
-    options: {
-        /** The digits after the point, fixed. Up to 1, as needed, by default. */
-        digits?: number
+    options: Pick<
+        Intl.NumberFormatOptions,
+        'minimumFractionDigits' | 'maximumFractionDigits'
+    > & {
         /** The BCP 47 locale the size is written in. `'en-US'` by default. */
         locale?: string
     } = {},
 ): string {
     const size = numeric(value)
     if (size === undefined) return MISSING
-    const { digits, locale = LOCALE } = options
     let scaled = Number(size)
     let unit = 0
     while (Math.abs(scaled) >= 1000 && unit < BYTE_UNITS.length - 1) {
@@ -351,16 +391,11 @@ export function bytes(
         unit += 1
     }
     const name = BYTE_UNITS[unit] as (typeof BYTE_UNITS)[number]
-    return cached(
-        `bytes ${locale} ${name} ${digits}`,
-        () =>
-            new Intl.NumberFormat(locale, {
-                style: 'unit',
-                unit: name,
-                // `512 bytes`: the short form of the byte is `512 byte`.
-                unitDisplay: name === 'byte' ? 'long' : 'short',
-                minimumFractionDigits: digits ?? 0,
-                maximumFractionDigits: digits ?? 1,
-            }),
-    ).format(scaled)
+    return numberFormat(`bytes ${name}`, 'unit', options, {
+        unit: name,
+        // `512 bytes`: the short form of the byte is `512 byte`.
+        unitDisplay: name === 'byte' ? 'long' : 'short',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 1,
+    }).format(scaled)
 }

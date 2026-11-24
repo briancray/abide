@@ -2624,60 +2624,63 @@ those strings, and a `<select multiple>` a list of the strings its value's items
 string where they hold none. A `type` or a `multiple` written as an expression, or absent beside a
 spread, MUST be held to the union of what each value of it writes.
 
-32.79 `observe.size` MUST write the element's content-box `width` and `height`, or its border box's
-where 32.90 asks for it, as one record, at each observation of a size its target does not already
-hold.
+32.79 `elementSize` MUST write the `width` and `height` of the element's box 32.90 names, as one
+record, at each observation of a size its target does not already hold.
 
-32.80 `observe.visible` MUST write whether the element intersects the viewport, or the root 32.89
-names, at each observation.
+32.80 `elementVisible` MUST write whether the element is in view, as 32.112 reads it, of the viewport
+or of the root 32.89 names, at each observation.
 
-32.81 Every `observe.size` and every `observe.rect` in a document, and the anchor and the popover
+32.81 Every `elementSize` and every `elementRect` in a document, and the anchor and the popover
 50.26 places again when either changes size, MUST be observed for resizes by one shared observer,
-and every `observe.visible` measured against one root by one other per root, the viewport being
-one.
+and every `elementVisible` measured against one root with one `rootMargin` and one `threshold` by
+one other per root, margin and threshold, the viewport being one root.
 
-32.82 An `observe.size` or an `observe.visible` MUST NOT write its target before the first
+32.82 An `elementSize` or an `elementVisible` MUST NOT write its target before the first
 observation of its element, and MUST NOT read the element's layout to write it.
 
-32.83 The `Disposer` an `observe` part's element binding hands back MUST stop observing its element.
+32.83 The `Disposer` the element binding of an `elementSize`, an `elementVisible` or an
+`elementRect` hands back MUST stop observing its element.
 
-32.84 `observe.rect` MUST write the element's rectangle in the viewport — `x`, `y`, `top`, `left`,
+32.84 `elementRect` MUST write the element's rectangle in the viewport — `x`, `y`, `top`, `left`,
 `right`, `bottom`, `width` and `height`, as `getBoundingClientRect` reports them — as one record,
 after a resize of the element, a scroll of the document or of any element in it, or a resize of the
 window, where its target does not already hold that rectangle.
 
-32.85 `observe.rect` MUST be written for a move of its element that no resize of the element, scroll
+32.85 `elementRect` MUST be written for a move of its element that no resize of the element, scroll
 or resize of the window accompanies, in the frame after the move.
 
-32.86 Every `observe.rect` in a document MUST share one scroll listener and one window resize
-listener, added with the first `observe.rect` and removed with the last.
+32.86 Every `elementRect` in a document MUST share one scroll listener and one window resize
+listener, added with the first `elementRect` and removed with the last.
 
 32.87 The triggers 32.84 names that arrive before the next animation frame MUST be answered by one
-read of every `observe.rect` element's rectangle in that frame, every read before any write, and
-`observe.rect` MUST NOT read an element's rectangle outside such a frame.
+read of every `elementRect` element's rectangle in that frame, every read before any write, and
+`elementRect` MUST NOT read an element's rectangle outside such a frame.
 
-32.88 What observes an `observe.rect` element for 32.85 MUST NOT be made in a frame a scroll event
+32.88 What observes an `elementRect` element for 32.85 MUST NOT be made in a frame a scroll event
 preceded, and MUST be made again only in a frame whose read found the element moved or the viewport
 resized since it was made. A frame a scroll preceded MUST ask for the frame after it, which answers
 that scroll under 32.87, so the observers stand again once the scroll is over. It MUST cost no work
 while neither moves.
 
-32.89 The `in` option of `observe.visible` MUST name the root it measures against, the viewport where
-it is absent. A `Reactive` there MUST be watched, so a change of what it holds observes the element
+32.89 The `root` option of `elementVisible` MUST name the root it measures against, the viewport
+where it is absent, and its `rootMargin` and `threshold` MUST be handed to the observer as
+`IntersectionObserver` takes them. A `Reactive` there MUST be watched, so a change of what it holds observes the element
 against the new root, and while it holds no root the element MUST NOT be observed and the target
 holds what it last held. A root's observer MUST be disconnected when the last element measured
 against it stops being observed.
 
-32.90 The `box` option of `observe.size` MUST make it write the element's border-box `width` and
-`height` where it is `"border"`, and its content box where it is `"content"` or absent. Both MUST be
-the physical axes whatever the element's writing mode, and a `Reactive` there MUST be watched, so a
-change of the box observes the element again.
+32.90 The `box` option of `elementSize` MUST observe the element in the box `ResizeObserver` names
+by it — `"content-box"`, where it is absent, `"border-box"` or `"device-pixel-content-box"` — and
+write that box's `width` and `height`, the last in device pixels. Each MUST be the physical axes
+whatever the element's writing mode, and a `Reactive` there MUST be watched, so a change of the box
+observes the element again.
 
 32.91 A `bind:size`, a `bind:visible` or a `bind:rect` on an element, or a `visibleIn` or a `sizeBox`
-attribute, MUST be a build error naming the `observe` spelling that measures it.
+attribute, MUST be a build error naming the `elementSize`, `elementVisible` or `elementRect` that
+measures it.
 
-32.92 An `observe` part bound to an element that another part of the same kind is observing MUST
-throw.
+32.92 An `elementSize`, an `elementVisible` or an `elementRect` bound to an element that another of
+the same name is observing MUST throw.
 
 32.93 In a browser, a slot rendering a value branded by `raw` into the document the runtime loaded in
 MUST create no node but those its markup parses to, whatever was parsed before it.
@@ -2696,7 +2699,7 @@ NOT begin again.
 read in it has not landed — `x.ready() ? x : []`, `x || []`, or `x ?? []` where 14.17 does not warn —
 naming 32.22.
 
-32.98 The observers 32.81 shares for resizes and for `observe.visible` against the viewport MUST
+32.98 The observers 32.81 shares for resizes and for `elementVisible` against the viewport MUST
 each be made by the first of its kind bound while it observes no element,
 from the `ResizeObserver` or `IntersectionObserver` the document holds then.
 
@@ -2706,8 +2709,8 @@ the value carries another, and MUST NOT be written as an attribute; and every `b
 element carries, written or spread, MUST be handed the element, in source order, none replacing
 another.
 
-32.100 Where the `once` option of `observe.visible` is `true`, the part MUST stop observing the
-element, and stop watching a `Reactive` its `in` holds, in the delivery that writes `true`, and
+32.100 Where the `once` option of `elementVisible` is `true`, the part MUST stop observing the
+element, and stop watching a `Reactive` its `root` holds, in the delivery that writes `true`, and
 MUST NOT write its target again.
 
 32.101 `scrollEdges` MUST write on the element it is bound to a `data-scrollable` attribute holding,
@@ -2740,13 +2743,16 @@ remove its `data-scrollable`.
 32.109 Every `on<event>` listener an element carries, written or spread, MUST be added to it, none
 replacing another of its event: the written ones first, then each spread's in source order.
 
-32.110 An `observe` part called with no target MUST hand back `host`, the part to spread, beside each
+32.110 An `elementSize`, an `elementVisible` or an `elementRect` called with no target MUST hand back `host`, the part to spread, beside each
 field of what it writes read by name — `visible`'s boolean as `visible` — each field `undefined`
 until the first write 32.79, 32.80 or 32.84 makes, and each a value of its own, so a write that
 changes one field MUST NOT wake a reader of only another.
 
 32.111 A `{#for}` row's index MUST read the position the row stands at now, in a row a reconcile
 moved as in one it made.
+
+32.112 An element `elementVisible` measures MUST be in view where it intersects its root by at least
+the smallest share its `threshold` names, and where it intersects at all where none is named.
 
 # 33. Props
 
@@ -6030,8 +6036,8 @@ band of equal width, with zero on its scale, and MUST draw no line, area or dot.
 52.34 `chart` and `sparkline` declaring `zero` MUST take zero into the range of their values, and
 MUST draw a series whose every present value is zero along the bottom of that range.
 
-52.35 `format.money` and `format.percent` declaring `signed` MUST write a negative value's sign as
-`−` (U+2212), and MUST NOT otherwise.
+52.35 `format.money` and `format.percent` given a `signDisplay` of `always` or `exceptZero` MUST write
+a negative value's sign as `−` (U+2212), and MUST NOT otherwise.
 
 52.36 `format.dateParts` MUST answer the pieces whose values joined in order are what `format.date`
 writes for the same value and options.
@@ -6284,6 +6290,11 @@ found ignoring case, carrying the `match` part — or, where `words` is set, the
 each word of `query` — stretches that overlap or touch carrying it as one run.
 
 52.111 `highlight` given a `query` that is blank MUST answer `text` as one run carrying no `match`.
+
+52.112 `format.money`, `format.percent`, `format.number` and `format.bytes` MUST hand
+`Intl.NumberFormat`, and `format.list` `Intl.ListFormat`, every option their caller names, under its
+own name, over the defaults each formatter keeps, and MUST NOT refuse a caller naming one bound of
+the fraction digits for the default of the other.
 
 # 53. Keys, element behaviors and chat
 

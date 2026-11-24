@@ -1,0 +1,35 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import CardRect from './lib/CardRect.abide'
+import cardRect from './lib/CardRect.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/behaviors/element-size',
+        '/behaviors/element-visible',
+        '/headless/popover',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/elementRect.test.ts',
+            from: ["test('given no target, each of the eight is read by name"],
+        },
+        {
+            path: 'packages/abide/tests/elementRect.test.ts',
+            from: [
+                "test('twenty elementRects share one listener set, and a burst of scrolls is one frame of reads",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Measure the size and the position of one card">
+        <p>It reads the rectangle <code>getBoundingClientRect</code> reports, again at most
+            once a frame as the page scrolls or the card moves. Spread it beside
+            <code>elementSize</code> and each measures the element.</p>
+        <Example code={cardRect}><CardRect /></Example>
+    </Section>
+</Doc>

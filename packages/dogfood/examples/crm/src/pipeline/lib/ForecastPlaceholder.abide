@@ -8,7 +8,7 @@ const forecast = memo(() => getForecast())
 
 {#try}
     <ul class="tiles">
-        <li><span>forecast</span><strong>{format.money(forecast, { digits: 0 })}</strong></li>
+        <li><span>forecast</span><strong>{format.money(forecast, { maximumFractionDigits: 0 })}</strong></li>
     </ul>
 {:pending}
     <p class="status">Adding up the pipeline…</p>

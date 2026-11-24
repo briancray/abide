@@ -5,6 +5,7 @@ const deals = [
     { name: 'Acme renewal', amount: 42_000, probability: 0.6 },
     { name: 'Engines upgrade', amount: 18_500, probability: 0.25 },
 ]
+const whole = { maximumFractionDigits: 0 }
 </script>
 
 <table>
@@ -12,7 +13,7 @@ const deals = [
         {#for deal of deals key deal.name}
             <tr>
                 <td>{deal.name}</td>
-                <td>{format.money(deal.amount, { digits: 0 })}</td>
+                <td>{format.money(deal.amount, whole)}</td>
                 <td>{format.percent(deal.probability)}</td>
             </tr>
         {/for}

@@ -1,10 +1,10 @@
-// 32.84-32.87 — AN ELEMENT'S RECTANGLE IN THE VIEWPORT, WRITTEN INTO A VALUE BY `observe.rect`. A rectangle moves on
+// 32.84-32.87 — AN ELEMENT'S RECTANGLE IN THE VIEWPORT, WRITTEN INTO A VALUE BY `elementRect`. A rectangle moves on
 // a scroll, a window resize and a resize of the element, and the hand-written version reads it in
 // the listener of each — a forced layout per element per scroll event.
 //
 // THE WORK IS COUNTED, NOT TIMED: listeners added and removed on the window, frames asked for, and
 // rectangles read. The emulator lays nothing out, so `getBoundingClientRect` is answered here, and
-// frames run when a test says so. Whether a real browser moves `top` is `e2e/observe.spec.ts`'s.
+// frames run when a test says so. Whether a real browser moves `top` is `e2e/element.spec.ts`'s.
 
 import { afterAll, afterEach, beforeEach, expect, test } from 'bun:test'
 
@@ -159,13 +159,13 @@ function runFrame(): void {
 }
 
 const ROWS = `<script>
-import { observe, reactive } from '@abide/abide'
+import { elementRect, reactive } from '@abide/abide'
 
 let rows = reactive(Array.from({ length: 20 }, (_, index) => ({ id: index, rect: reactive() })))
 </script>
 
 <button id="clear" onclick={() => { rows = [] }}>clear</button>
-{#for row of rows key row.id}<div class="row" {...observe.rect((rect) => { (globalThis as { __RECTS__?: { log: string } }).__RECTS__!.log += 'w'; row.rect = rect })}>{row.id}</div>{/for}`
+{#for row of rows key row.id}<div class="row" {...elementRect((rect) => { (globalThis as { __RECTS__?: { log: string } }).__RECTS__!.log += 'w'; row.rect = rect })}>{row.id}</div>{/for}`
 
 // 32.86, 32.87 — TWENTY ELEMENTS, ONE LISTENER OF EACH KIND, AND A BURST OF TEN SCROLLS IS ONE FRAME
 // OF TWENTY READS, every read before any write. THE REVERTS, each run: add the listeners per bind
@@ -173,7 +173,7 @@ let rows = reactive(Array.from({ length: 20 }, (_, index) => ({ id: index, rect:
 // 20 frames for the mount alone; read in the listener (`schedule` calling `measure`) — 0 frames and
 // 210 reads; write each rectangle as it is read — `rwrw…`. The second frame counted is the one the
 // scroll's frame asks for, where its position observers are made (32.88), and is not run here.
-test('twenty observe.rects share one listener set, and a burst of scrolls is one frame of reads — 32.86, 32.87', async () => {
+test('twenty elementRects share one listener set, and a burst of scrolls is one frame of reads — 32.86, 32.87', async () => {
     ;(globalThis as { __RECTS__?: typeof counts }).__RECTS__ = counts
     await mount(ROWS)
     expect(counts.added).toEqual({ scroll: 1, resize: 1 })
@@ -197,14 +197,14 @@ test('twenty observe.rects share one listener set, and a burst of scrolls is one
     ).toBe(`2 frames, 20 reads, ${'r'.repeat(20)}${'w'.repeat(20)}`)
 })
 
-// 32.110 — GIVEN NO TARGET, THE RECTANGLE IS READ BY NAME OFF WHAT `observe.rect()` HANDS BACK, and
+// 32.110 — GIVEN NO TARGET, THE RECTANGLE IS READ BY NAME OFF WHAT `elementRect()` HANDS BACK, and
 // nothing before the first frame's read. A move down the page wakes no reader of the width.
 test('given no target, each of the eight is read by name — 32.110', async () => {
     ;(globalThis as { __WIDE__?: number }).__WIDE__ = 0
     const html = await mount(`<script>
-import { memo, observe } from '@abide/abide'
+import { elementRect, memo } from '@abide/abide'
 
-const placed = observe.rect()
+const placed = elementRect()
 const wide = memo(() => {
     ;(globalThis as { __WIDE__?: number }).__WIDE__ = ((globalThis as { __WIDE__?: number }).__WIDE__ ?? 0) + 1
     return placed.width ?? 'none'
@@ -228,7 +228,7 @@ const wide = memo(() => {
 
 // 32.86 — THE LAST ELEMENT TO LEAVE TAKES THE LISTENERS WITH IT. THE REVERT: drop the removal in the
 // `Disposer`; 0 of each are removed, and a scroll after the clear still asks for a frame.
-test('the last observe.rect to leave removes the listeners — 32.86', async () => {
+test('the last elementRect to leave removes the listeners — 32.86', async () => {
     ;(globalThis as { __RECTS__?: typeof counts }).__RECTS__ = counts
     await mount(ROWS)
     runFrame()
@@ -248,7 +248,7 @@ test('the last observe.rect to leave removes the listeners — 32.86', async () 
 test('a frame reading the rectangle already held wakes nobody — 32.84', async () => {
     ;(globalThis as { __TOPS__?: number }).__TOPS__ = 0
     await mount(`<script>
-import { memo, observe, reactive } from '@abide/abide'
+import { elementRect, memo, reactive } from '@abide/abide'
 
 let rect = reactive<{ top: number } | undefined>(undefined)
 const shown = memo(() => {
@@ -257,7 +257,7 @@ const shown = memo(() => {
 })
 </script>
 
-<div id="placed" {...observe.rect(rect)}></div>
+<div id="placed" {...elementRect(rect)}></div>
 <p id="top">{shown}</p>`)
     runFrame()
     expect(document.getElementById('top')?.textContent).toBe('10')
@@ -322,7 +322,7 @@ test('a move with no scroll or resize asks for one frame, and a still frame arms
 
 // 32.83 — AN ELEMENT THAT LEAVES TAKES ITS POSITION OBSERVER WITH IT. THE REVERT: drop the
 // `disconnect` in the `Disposer`; 0 of the 20 are disconnected.
-test('an observe.rect that leaves disconnects its position observer — 32.83', async () => {
+test('an elementRect that leaves disconnects its position observer — 32.83', async () => {
     ;(globalThis as { __RECTS__?: typeof counts }).__RECTS__ = counts
     await mount(ROWS)
     runFrame()

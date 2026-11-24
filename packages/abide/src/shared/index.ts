@@ -144,7 +144,9 @@ export {
 export { media } from './media.ts'
 export { navigate } from './navigate.ts'
 // 32.79-32.92 — the parts measuring the element they are spread on.
-export * as observe from './observe/index.ts'
+export { elementRect } from './element/elementRect.ts'
+export { elementSize } from './element/elementSize.ts'
+export { elementVisible } from './element/elementVisible.ts'
 export { online } from './online.ts'
 export { outbox, type QueuedCall } from './outbox.ts'
 // 37.16 — the browser's `onError`. `@abide/abide/server` exports the server's over it.

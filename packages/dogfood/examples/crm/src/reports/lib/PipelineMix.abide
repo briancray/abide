@@ -17,7 +17,7 @@ const ring = pie({
     slices: STAGES,
     label: 'Open pipeline by stage',
     inner: 0.6,
-    valueFormat: (amount) => format.money(amount, { compact: true }),
+    valueFormat: (amount) => format.money(amount, { notation: 'compact' }),
     onpick: (index) => (picked = STAGES[index]?.label),
     disabled: (index) => STAGES[index]?.label === 'Verbal',
 })

@@ -33,7 +33,7 @@ const shown = memo(() =>
     <ul class="fields">
         {#for deal of shown key deal.id}
             <li><span>{deal.stage}</span><strong>{deal.name}</strong>
-                {format.money(deal.amount, { digits: 0 })}</li>
+                {format.money(deal.amount, { maximumFractionDigits: 0 })}</li>
         {/for}
     </ul>
 </div>

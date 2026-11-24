@@ -1,5 +1,5 @@
 <script>
-import { observe, reactive } from '@abide/abide'
+import { elementVisible, reactive } from '@abide/abide'
 
 let activity = reactive(
     Array.from({ length: 8 }, (_, id) => ({ id, text: `Entry ${id + 1}` })),
@@ -16,5 +16,5 @@ const loadMore = () =>
 
 <div class="h-40 overflow-y-auto">
     <ol>{#for item of activity key item.id}<li>{item.text}</li>{/for}</ol>
-    <div {...observe.visible((seen) => seen && loadMore())}></div>
+    <div {...elementVisible((seen) => seen && loadMore())}></div>
 </div>

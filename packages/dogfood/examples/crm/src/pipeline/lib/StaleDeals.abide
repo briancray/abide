@@ -73,7 +73,7 @@ function markLost() {
                 <td {...table.row(deal).select}><input {...table.row(deal).checkbox}></td>
                 <td>{deal.name}</td>
                 <td>{deal.stage}</td>
-                <td class="text-right">{format.money(deal.amount, { digits: 0 })}</td>
+                <td class="text-right">{format.money(deal.amount, { maximumFractionDigits: 0 })}</td>
             </tr>
         {/for}
     </tbody>

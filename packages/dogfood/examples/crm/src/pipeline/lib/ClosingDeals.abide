@@ -27,7 +27,8 @@ const COLUMNS: Column<Deal>[] = [
         align: 'end',
         // The largest deal first, on the first press.
         firstDirection: 'descending',
-        format: (amount) => format.money(Number(amount), { digits: 0 }),
+        format: (amount) =>
+            format.money(Number(amount), { maximumFractionDigits: 0 }),
     },
     { key: 'closes', label: 'Closes', format: (date) => String(date ?? '—') },
 ]

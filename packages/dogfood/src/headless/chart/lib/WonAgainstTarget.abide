@@ -11,7 +11,7 @@ const plot = chart({
     ],
     x: MONTHS,
     xFormat: (month) => format.date(month, { style: 'month' }),
-    yFormat: (amount) => format.money(amount, { compact: true }),
+    yFormat: (amount) => format.money(amount, { notation: 'compact' }),
     zero: true,
 })
 </script>

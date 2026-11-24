@@ -10,7 +10,7 @@ const sections = accordion({ open })
     <ul class="fields" {...sections.item('details').region}>
         <li><span>deal</span><strong>Engine renewal</strong></li>
         <li><span>amount</span>
-            <strong>{format.money(12_000, { digits: 0 })}</strong></li>
+            <strong>{format.money(12_000, { maximumFractionDigits: 0 })}</strong></li>
     </ul>
     <button {...sections.item('contacts').button}>Contacts</button>
     <ul class="fields" {...sections.item('contacts').region}>

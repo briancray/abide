@@ -1,9 +1,9 @@
 <script>
-import { observe } from '@abide/abide'
+import { elementSize } from '@abide/abide'
 
 import PipelineChart from './PipelineChart.abide'
 
-const box = observe.size()
+const box = elementSize()
 </script>
 
 <section class="h-24 resize overflow-hidden" {...box.host}>

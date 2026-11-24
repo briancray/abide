@@ -8,7 +8,7 @@ const ring = pie({
         { label: 'Qualified', value: 34_000 },
         { label: 'Proposal', value: 30_000 },
     ],
-    valueFormat: (amount) => format.money(amount, { compact: true }),
+    valueFormat: (amount) => format.money(amount, { notation: 'compact' }),
 })
 </script>
 

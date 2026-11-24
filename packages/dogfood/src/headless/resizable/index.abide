@@ -14,7 +14,7 @@ import sidebar from './lib/Sidebar.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/behaviors/observe', '/headless/dialog']}
+    seeAlso={['/behaviors/element-size', '/headless/dialog']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/DealSplit.test.ts',

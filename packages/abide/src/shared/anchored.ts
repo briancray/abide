@@ -2,7 +2,7 @@
 // and placed again whenever anything could have moved it, until it is let go. What `tooltip`, `chart`'s
 // readout and `popover` are built on; an app reaches it through `popover`.
 
-import { resized } from './observe/resized.ts'
+import { resized } from './element/resized.ts'
 import { place, type Placement, type PlaceOptions } from './place.ts'
 
 /** Where an anchored popover sits, and whether it takes the pointer. */

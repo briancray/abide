@@ -15,7 +15,11 @@ import pickOrDrop from './lib/PickOrDrop.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/behaviors/observe', '/ai/user-message', '/behaviors/dismissible']}
+    seeAlso={[
+        '/behaviors/element-visible',
+        '/ai/user-message',
+        '/behaviors/dismissible',
+    ]}
     tests={[
         {
             path: 'packages/abide/tests/elementBehaviors.test.ts',

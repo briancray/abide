@@ -9,6 +9,6 @@ const panel = drawer({ min: 280, max: 640, label: 'Deal panel width' })
     <div class="absolute inset-y-0 left-0 w-1 cursor-col-resize bg-rule" {...panel.handle}></div>
     <ul class="fields">
         <li><span>deal</span><strong>Engine renewal</strong></li>
-        <li><span>amount</span><strong>{format.money(12_000, { digits: 0 })}</strong></li>
+        <li><span>amount</span><strong>{format.money(12_000, { maximumFractionDigits: 0 })}</strong></li>
     </ul>
 </dialog>

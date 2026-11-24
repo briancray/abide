@@ -26,7 +26,7 @@ const deal = memo(() => getDeal({ id: 'd1' }))
             <li><span>company</span><strong>{deal.company}</strong></li>
         {:else if tab === 'value'}
             <li><span>amount</span>
-                <strong>{format.money(deal.amount, { digits: 0 })}</strong></li>
+                <strong>{format.money(deal.amount, { maximumFractionDigits: 0 })}</strong></li>
         {:else}
             <li><span>stage</span><strong>{deal.stage}</strong></li>
         {/if}

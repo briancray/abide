@@ -370,7 +370,7 @@ export function refuseBinds(node: ElementNode): void {
         const measured = MEASURED.get(lower)
         if (measured !== undefined)
             throw new Error(
-                `abide: <${node.tag}> has ${attribute.name}, and an element is measured by an observe part spread on it — ${measured}. RULEBOOK 32.91.`,
+                `abide: <${node.tag}> has ${attribute.name}, and an element is measured by a part spread on it — ${measured}. RULEBOOK 32.91.`,
             )
         if (!lower.startsWith('bind:') || lower === 'bind:element') continue
         if (valueBindOf(lower) === undefined)
@@ -481,15 +481,18 @@ const VALUE_BINDS = ['value', 'checked', 'open', 'group', 'files'] as const
 type ValueBind = (typeof VALUE_BINDS)[number]
 
 /**
- * 32.91 — THE ATTRIBUTES THAT READ AS A MEASUREMENT, by folded name, and the `observe` spelling that
+ * 32.91 — THE ATTRIBUTES THAT READ AS A MEASUREMENT, by folded name, and the part that
  * is one: refused with it rather than written as an attribute nothing reads.
  */
 const MEASURED = new Map<string, string>([
-    ['bind:size', '`bind:size={x}` is `{...observe.size(x)}`'],
-    ['bind:visible', '`bind:visible={x}` is `{...observe.visible(x)}`'],
-    ['bind:rect', '`bind:rect={x}` is `{...observe.rect(x)}`'],
-    ['visiblein', '`visibleIn={root}` is `observe.visible(x, { in: root })`'],
-    ['sizebox', '`sizeBox="border"` is `observe.size(x, { box: \'border\' })`'],
+    ['bind:size', '`bind:size={x}` is `{...elementSize(x)}`'],
+    ['bind:visible', '`bind:visible={x}` is `{...elementVisible(x)}`'],
+    ['bind:rect', '`bind:rect={x}` is `{...elementRect(x)}`'],
+    ['visiblein', '`visibleIn={root}` is `elementVisible(x, { root })`'],
+    [
+        'sizebox',
+        '`sizeBox="border-box"` is `elementSize(x, { box: \'border-box\' })`',
+    ],
 ])
 
 /** The value bind a folded attribute name is, or `undefined` for any other attribute. */

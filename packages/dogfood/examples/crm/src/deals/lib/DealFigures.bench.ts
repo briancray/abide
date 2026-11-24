@@ -8,7 +8,7 @@ function formatting(count: number): () => void {
         deals.push({ amount: 1000 + at * 250, probability: (at % 10) / 10 })
     return () => {
         for (const deal of deals) {
-            format.money(deal.amount, { digits: 0 })
+            format.money(deal.amount, { maximumFractionDigits: 0 })
             format.percent(deal.probability)
         }
     }

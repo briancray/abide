@@ -22,6 +22,6 @@ async function record() {
 
 <ul class="fields stacked">
     {#for row of targets key row.id}
-        <li><span>{row.setAt}</span><strong>{format.money(row.target, { digits: 0 })}</strong></li>
+        <li><span>{row.setAt}</span><strong>{format.money(row.target, { maximumFractionDigits: 0 })}</strong></li>
     {/for}
 </ul>

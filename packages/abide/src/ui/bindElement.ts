@@ -11,7 +11,7 @@ import { holdWhileLeaving } from './leave.ts'
  * the node as its value, and a callback takes it as its argument and may hand back a `Disposer`
  * — which is what a third-party widget wants, set up where the node arrives and torn down where
  * it goes, rather than in a pair of lifecycle hooks that have to be kept in step. A list holds
- * either form, each handed the node — what an element measured by more than one `observe` is.
+ * either form, each handed the node — what an element measured by more than one of `elementSize`, `elementVisible` and `elementRect` is.
  *
  * THE BRAND IS READ FIRST (1.6). A `Reactive` is callable and thenable, so a test for a function
  * answers true for one — and the reference would have been handed to the value instead of being

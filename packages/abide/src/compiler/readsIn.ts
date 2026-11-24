@@ -492,7 +492,7 @@ async function admitsNullish(type: Type): Promise<boolean> {
  * return. An array literal
  * passes its position through, because `watch([a, b], …)` is the parameter's own shape, and an
  * object literal's member is the member of the type the literal's own position declares —
- * `observe.size(box, { box: shape })`'s option. Anything else is `undefined` and stays a read.
+ * `elementSize(box, { box: shape })`'s option. Anything else is `undefined` and stays a read.
  *
  * THE PARAMETER IS ASKED OF THE SIGNATURE'S TARGET, the generic declaration, and never of the
  * instantiated one: `structuredClone<T>(value: T)` INFERS `T` from this very argument, and an

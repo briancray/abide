@@ -228,7 +228,7 @@ table.
   top layer, as a trigger or an anchor and the popover), `dismissible` (a panel and what counts as
   inside it), `outlet.host` and `outlet.into` (a place a layout leaves, filled by the page's own
   markup from below), and the one-element parts `copy`, `scrollEdges` and `tooltip.tip` (shown where
-  the root layout spreads `tooltip.host()`) beside `observe` — every behavior on an element is a
+  the root layout spreads `tooltip.host()`) beside `elementSize`, `elementVisible` and `elementRect` — every behavior on an element is a
   part, spread as `{...copy()}`, two elements' parts find each other with no element handed between
   them, and several parts spread on one element each bind it.
 - From `@abide/abide/server`: the rungs `signedIn`, `authorize` (a signed-in caller holding the claims it names: `authorize({ groups: ['sales'] })`) and `readOnly`, `fetchData`

@@ -17,4 +17,4 @@ const count = stepper({
     <input class="w-16 text-center" {...count.input} />
     <button {...count.increment}>+</button>
 </div>
-<p class="status">{seats} seats, {format.money(seats * PER_SEAT, { digits: 0 })}</p>
+<p class="status">{seats} seats, {format.money(seats * PER_SEAT, { maximumFractionDigits: 0 })}</p>

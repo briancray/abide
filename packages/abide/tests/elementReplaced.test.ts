@@ -4,7 +4,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 
-import { observe, reactive } from '#shared'
+import { elementSize, reactive } from '#shared'
 
 import { bindPart } from './bindPart.ts'
 
@@ -43,7 +43,7 @@ test('an observer installed after every observed element has gone is the one use
         document.createElement('div'),
         document.createElement('div'),
     ].map((element) =>
-        bindPart(observe.size(reactive({ width: 0, height: 0 })), element),
+        bindPart(elementSize(reactive({ width: 0, height: 0 })), element),
     )
     expect(first.counts.made).toBe(1)
     for (const stop of stops) stop()
@@ -52,7 +52,7 @@ test('an observer installed after every observed element has gone is the one use
     globalThis.ResizeObserver = later.StandIn
     const element = document.createElement('div')
     const stop = bindPart(
-        observe.size(reactive({ width: 0, height: 0 })),
+        elementSize(reactive({ width: 0, height: 0 })),
         element,
     )
     expect(`made: ${later.counts.made}`).toBe('made: 1')

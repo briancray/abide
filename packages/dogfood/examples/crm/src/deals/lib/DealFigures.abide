@@ -23,7 +23,7 @@ function addLead() {
         {#for deal of deals key deal.name}
             <tr>
                 <td>{deal.name}</td>
-                <td>{format.money(deal.amount, { digits: 0 })}</td>
+                <td>{format.money(deal.amount, { maximumFractionDigits: 0 })}</td>
                 <td>{format.percent(deal.probability)}</td>
             </tr>
         {/for}
@@ -31,7 +31,7 @@ function addLead() {
 </table>
 <ul class="tiles">
     <li><span>{format.plural(deals.length, 'open deal')}</span>
-        <strong>{format.money(weighted, { compact: true })}</strong></li>
+        <strong>{format.money(weighted, { notation: 'compact' })}</strong></li>
 </ul>
 <div class="row">
     <button disabled={deals.length > 2} onclick={addLead}>

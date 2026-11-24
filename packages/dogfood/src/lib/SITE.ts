@@ -783,10 +783,24 @@ const WRITTEN: readonly {
                 where: 'component',
             },
             {
-                route: '/behaviors/observe',
-                title: '`observe`',
+                route: '/behaviors/element-size',
+                title: '`elementSize`',
                 description:
-                    "Bind an element's size, visibility or position to reactive values a template reads.",
+                    "Bind an element's width and height, in the box ResizeObserver names, to values a template reads.",
+                where: 'component',
+            },
+            {
+                route: '/behaviors/element-visible',
+                title: '`elementVisible`',
+                description:
+                    'Bind whether an element is in view, as IntersectionObserver measures it, to a value a template reads.',
+                where: 'component',
+            },
+            {
+                route: '/behaviors/element-rect',
+                title: '`elementRect`',
+                description:
+                    "Bind an element's rectangle in the viewport to values a template reads, read at most once a frame.",
                 where: 'component',
             },
         ],

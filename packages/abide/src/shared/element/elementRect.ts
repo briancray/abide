@@ -27,7 +27,7 @@ type RectObserved = {
     readonly height: number | undefined
 }
 
-// 32.86 — ONE LISTENER SET FOR EVERY `observe.rect` IN THE DOCUMENT, added with the first and removed
+// 32.86 — ONE LISTENER SET FOR EVERY `elementRect` IN THE DOCUMENT, added with the first and removed
 // with the last. A scroll is listened for in CAPTURE, where a nested scroller's scroll reaches the
 // window though the event does not bubble. 32.81 — a resize of an element itself is seen by the one
 // observer every resize in the document shares.
@@ -44,7 +44,7 @@ const elements: Element[] = []
 const rects: DOMRect[] = []
 
 /**
- * One `observe.rect`: what it writes (`Measured`), and the observer watching its element's own box.
+ * One `elementRect`: what it writes (`Measured`), and the observer watching its element's own box.
  *
  * 32.85 — A MOVE IS SEEN BY OBSERVING THE ELEMENT'S OWN BOX: an `IntersectionObserver` whose root
  * is shrunk by `rootMargin` to the rectangle the last frame read, so the element fills it and any
@@ -78,18 +78,25 @@ class Placed extends Measured {
  * 32.85 — a move none of the three accompanies (a sibling above growing) is seen by the element's
  * position observer, which the frame arms.
  */
-export function rect(
+export function elementRect(
     target: Reactive<unknown, Rect, unknown, unknown>,
 ): Record<string, unknown>
-export function rect(target: (rect: Rect) => void): Record<string, unknown>
+export function elementRect(
+    target: (rect: Rect) => void,
+): Record<string, unknown>
 /**
  * 32.110 — the rectangle held for the reader: `host` to spread and each of the eight read by name,
  * a value apiece, `undefined` until the first frame reads it (32.87).
  */
-export function rect(): RectObserved
-export function rect(target?: unknown): Record<string, unknown> | RectObserved {
+export function elementRect(): RectObserved
+export function elementRect(
+    target?: unknown,
+): Record<string, unknown> | RectObserved {
     if (target !== undefined)
-        return { 'data-observe': 'host', 'bind:element': rectBinding(target) }
+        return {
+            'data-element-rect': 'host',
+            'bind:element': rectBinding(target),
+        }
     const x = reactive<number | undefined>(undefined)
     const y = reactive<number | undefined>(undefined)
     const top = reactive<number | undefined>(undefined)
@@ -109,7 +116,10 @@ export function rect(target?: unknown): Record<string, unknown> | RectObserved {
         height.set(measured.height)
     }
     return {
-        host: { 'data-observe': 'host', 'bind:element': rectBinding(write) },
+        host: {
+            'data-element-rect': 'host',
+            'bind:element': rectBinding(write),
+        },
         get x() {
             return x()
         },
@@ -140,7 +150,7 @@ export function rect(target?: unknown): Record<string, unknown> | RectObserved {
 // The binding the part carries.
 function rectBinding(target: unknown): (element: Element) => Disposer {
     return (element) => {
-        if (bound.has(element)) observedTwice('rect', element)
+        if (bound.has(element)) observedTwice('elementRect', element)
         if (bound.size === 0) {
             addEventListener('scroll', scroll, SCROLLING)
             addEventListener('resize', schedule, RESIZING)

@@ -10,7 +10,11 @@ import stickyHeader from './lib/StickyHeader.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/headless/virtual-list', '/headless/tabs', '/behaviors/observe']}
+    seeAlso={[
+        '/headless/virtual-list',
+        '/headless/tabs',
+        '/behaviors/element-visible',
+    ]}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/companies/lib/AccountRecord.test.ts',

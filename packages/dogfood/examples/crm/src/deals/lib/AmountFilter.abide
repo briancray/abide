@@ -15,7 +15,7 @@ const slider = range({
     max: 50_000,
     step: 500,
     name: 'amount',
-    format: (each) => format.money(each, { compact: true }),
+    format: (each) => format.money(each, { notation: 'compact' }),
 })
 const shown = memo(() =>
     DEALS.filter(
@@ -36,7 +36,7 @@ const shown = memo(() =>
     </div>
 </form>
 <p class="status">
-    {format.money(amount[0], { compact: true })} to {format.money(amount[1], { compact: true })}
+    {format.money(amount[0], { notation: 'compact' })} to {format.money(amount[1], { notation: 'compact' })}
 </p>
 <ul>
     {#for deal of shown key deal.id}

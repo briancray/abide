@@ -1,8 +1,8 @@
 <script>
-import { observe } from '@abide/abide'
+import { elementRect, elementSize } from '@abide/abide'
 
-const placed = observe.rect()
-const box = observe.size()
+const placed = elementRect()
+const box = elementSize()
 </script>
 
 <article {...placed.host} {...box.host}>

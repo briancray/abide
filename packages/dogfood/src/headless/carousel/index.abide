@@ -16,7 +16,11 @@ import stepStages from './lib/StepStages.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/headless/tabs', '/headless/virtual-list', '/behaviors/observe']}
+    seeAlso={[
+        '/headless/tabs',
+        '/headless/virtual-list',
+        '/behaviors/element-size',
+    ]}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageCarousel.test.ts',

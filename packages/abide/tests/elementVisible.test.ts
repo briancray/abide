@@ -4,9 +4,9 @@ import { bindPart } from './bindPart.ts'
 
 // A module instance of its own: another file's pages, bound in the same process, keep the shared
 // viewport observer of the instance they imported.
-const { visible } = (await import(
-    `${import.meta.dir}/../src/shared/observe/visible.ts?alone`
-)) as typeof import('#shared/observe/visible.ts')
+const { elementVisible } = (await import(
+    `${import.meta.dir}/../src/shared/element/elementVisible.ts?alone`
+)) as typeof import('#shared/element/elementVisible.ts')
 
 const real = globalThis.IntersectionObserver
 afterAll(() => {
@@ -28,11 +28,11 @@ test("the viewport's shared observer is dropped with its last element, and the n
         }
     } as unknown as typeof IntersectionObserver
     const seen = (_visible: boolean) => {}
-    const first = bindPart(visible(seen), document.createElement('div'))
-    const second = bindPart(visible(seen), document.createElement('div'))
+    const first = bindPart(elementVisible(seen), document.createElement('div'))
+    const second = bindPart(elementVisible(seen), document.createElement('div'))
     first()
     second()
-    bindPart(visible(seen), document.createElement('div'))()
+    bindPart(elementVisible(seen), document.createElement('div'))()
     expect(`made ${counts.made}, disconnected ${counts.disconnected}`).toBe(
         'made 2, disconnected 2',
     )

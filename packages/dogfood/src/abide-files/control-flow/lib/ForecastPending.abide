@@ -14,7 +14,7 @@ const forecast = memo(() => getForecast())
 </script>
 
 {#try}
-    <strong>{format.money(forecast, { digits: 0 })}</strong>
+    <strong>{format.money(forecast, { maximumFractionDigits: 0 })}</strong>
 {:pending}
     <p>Adding up the pipeline…</p>
 {:catch problem}

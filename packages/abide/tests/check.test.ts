@@ -1037,7 +1037,7 @@ let sizes = reactive<('s' | 'm')[]>([])
     ])
 }, 60_000)
 
-// 31.3 — AN `observe` PART IS HELD TO WHAT IT WRITES, its target and its options alike, a
+// 31.3 — AN `elementSize`, `elementVisible` OR `elementRect` PART IS HELD TO WHAT IT WRITES, its target and its options alike, a
 // `Reactive` where a form takes one and a callback's parameter typed by the measurement. The four
 // above the line check clean; the four below it are a target taking a measurement it cannot hold,
 // and a box that is neither. THE REVERT: type the target of `size`'s callback forms `unknown`; the
@@ -1057,22 +1057,22 @@ test('an observe part is held to what it writes — 31.3', async () => {
             include: ['.'],
         }),
         'index.abide': `<script>
-import { observe, reactive } from '@abide/abide'
+import { elementRect, elementSize, elementVisible, reactive } from '@abide/abide'
 
 let box = reactive<HTMLElement>()
 let seen = reactive(false)
 let name = reactive('ada')
-let border = reactive<'content' | 'border'>('border')
+let border = reactive<'content-box' | 'border-box'>('border-box')
 let placed = reactive<{ top: number; left: number }>()
 </script>
-<div bind:element={box} {...observe.size(name.length > 0 ? (next) => { placed = { top: next.height, left: next.width } } : () => {}, { box: border })}></div>
-<p {...observe.visible(seen, { in: box })}></p>
-<p {...observe.rect(placed)}></p>
-<p {...observe.size((next) => { placed = { top: next.height, left: 0 } }, { box: 'border' })}></p>
-<div {...observe.size(name)}></div>
-<div {...observe.visible(name)}></div>
-<div {...observe.rect(seen)}></div>
-<div {...observe.size(() => {}, { box: 'margin' })}></div>`,
+<div bind:element={box} {...elementSize(name.length > 0 ? (next) => { placed = { top: next.height, left: next.width } } : () => {}, { box: border })}></div>
+<p {...elementVisible(seen, { root: box })}></p>
+<p {...elementRect(placed)}></p>
+<p {...elementSize((next) => { placed = { top: next.height, left: 0 } }, { box: 'border-box' })}></p>
+<div {...elementSize(name)}></div>
+<div {...elementVisible(name)}></div>
+<div {...elementRect(seen)}></div>
+<div {...elementSize(() => {}, { box: 'margin' })}></div>`,
     })
     expect(
         (await checkApp(measured)).map(({ line, code }) => ({ line, code })),
