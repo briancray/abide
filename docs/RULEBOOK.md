@@ -2318,9 +2318,10 @@ holds it.
 31.4 Assignment to such a name MUST be a write, and the assigned value MAY be settled, a load, or a
 `Reactive`.
 
-31.5 A property access on such a name MUST reach the value, except a member declared on the
-`Reactive` type that the value's type does not declare, which MUST reach that member bound to the
-`Reactive`.
+31.5 A property access on such a name MUST reach the value, except a member the name's type
+declares that the value's type does not — one the `Reactive` type declares, which MUST reach that
+member bound to the `Reactive`, or one a type built on the `Reactive` adds, which MUST reach that
+member as written.
 
 31.6 A call on such a name MUST reach the `Reactive` API where 31.5 reaches the `Reactive`'s
 member, and the value's method otherwise.
@@ -6683,9 +6684,10 @@ answer the list of their answers in its members' order, or the first refusal one
 57.4 A `pipe` step that answers an async iterable MUST hand each value it yields to the steps after
 it as an item of its own, in the order yielded.
 
-57.5 A `Pipe` called MUST settle to its last step's answer, or where a step 57.4 reads ran, to the
-list of every answer its last step made, in order; a step answering a refusal MUST end the item with
-that refusal, and a step that threw past 57.9 MUST reject the call with what it threw.
+57.5 A `Pipe` called MUST answer a `Reactive` of its last step's answer, or where a step 57.4 reads
+ran, of the list of every answer its last step made, in order; a step answering a refusal MUST end
+the item with that refusal as the `Reactive`'s error, and a step that threw past 57.9 MUST end it with
+what it threw — save where the `Pipe` is itself a step, whose refusal MUST be its answer to 57.9.
 
 57.6 A `pipe` MUST run at most `concurrency` items at once, 1 where none is given, starting a
 waiting item in the order it came.
@@ -6733,8 +6735,8 @@ whether `paused` reads true.
 
 # 58. Ledgers
 
-58.1 `ledger` called with a name it was called with before in the process MUST answer the `Ledger`
-that call answered.
+58.1 Each call to `ledger` MUST answer a `Ledger` of its own, sharing entries with another only
+through a `store` both were given.
 
 58.2 `append` MUST keep its entry after every entry kept before it, numbered one past the last, and
 settle to that number.
@@ -6752,7 +6754,8 @@ the cursor past an entry once its reader asks for the next.
 
 58.7 An entry written to a `Ledger`'s `writable` MUST be appended as `append` appends it.
 
-58.8 `head` MUST be the number of the last entry a `ledger` kept, 0 where it has kept none.
+58.8 A `Ledger` MUST be a `Reactive` whose value is every entry it keeps, oldest first, changed in
+place as an entry is kept or let go, and MUST NOT accept a write.
 
 58.9 A `ledger` given a `store` MUST keep its entries and its cursors there, and `store.sqlite`,
 `store.indexedDB` and `store.redis` MUST each keep one record per entry.

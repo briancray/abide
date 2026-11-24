@@ -96,12 +96,11 @@ const write = async (n: number): Promise<number> => {
 const writeLane = queue(write, LANES)
 const writePipe = pipe([write], { concurrency: LANES })
 
-const all =
-    (call: (n: number) => Promise<unknown>) => async (): Promise<void> => {
-        const pending: Promise<unknown>[] = []
-        for (let n = 0; n < ITEMS; n += 1) pending.push(call(n))
-        await Promise.all(pending)
-    }
+const all = (call: (n: number) => unknown) => async (): Promise<void> => {
+    const pending: unknown[] = []
+    for (let n = 0; n < ITEMS; n += 1) pending.push(call(n))
+    await Promise.all(pending)
+}
 
 const lanes = await fastest({
     'queue.ts, no-op step': all(lane),
@@ -127,9 +126,8 @@ console.log(
 
 // LEDGER ARMS
 const APPENDS = 20_000
-let named = 0
 const appendsAt = (retain: number) => async (): Promise<void> => {
-    const log = ledger<number>(`bench-${(named += 1)}`, { retain })
+    const log = ledger<number>({ retain })
     // Filled to its cap first: what is timed is an append into a log already at `retain`.
     for (let n = 0; n < retain; n += 1) await log.append(n)
     const started = Bun.nanoseconds()
@@ -159,15 +157,17 @@ console.log(`  ratio, 100,000 / 1,000: ${(large / small).toFixed(2)}x`)
 // WHERE A LEDGER IS KEPT: one append each, awaited in turn, into memory, SQLite on disk and — where
 // `ABIDE_REDIS_URL` names a server — Redis, whose append is one script round trip.
 const STORED = 5_000
+/** A store key no earlier case's rows sit under. */
+let named = 0
 const sqliteFile = `${process.env.TMPDIR ?? '/tmp'}/abide-bench-ledger-${Date.now()}.sqlite`
 const kept: Record<string, () => Promise<void>> = {
     memory: async () => {
-        const log = ledger<number>(`bench-kept-${(named += 1)}`)
+        const log = ledger<number>()
         for (let n = 0; n < STORED; n += 1) await log.append(n)
     },
     sqlite: async () => {
-        const log = ledger<number>(`bench-kept-${(named += 1)}`, {
-            store: store.sqlite(sqliteFile, `bench-${named}`),
+        const log = ledger<number>({
+            store: store.sqlite(sqliteFile, `bench-${(named += 1)}`),
         })
         for (let n = 0; n < STORED; n += 1) await log.append(n)
     },
@@ -175,8 +175,8 @@ const kept: Record<string, () => Promise<void>> = {
 if (process.env.ABIDE_REDIS_URL !== undefined) {
     const client = new RedisClient(process.env.ABIDE_REDIS_URL)
     kept.redis = async () => {
-        const log = ledger<number>(`bench-kept-${(named += 1)}`, {
-            store: store.redis(client, `bench-${Date.now()}-${named}`),
+        const log = ledger<number>({
+            store: store.redis(client, `bench-${Date.now()}-${(named += 1)}`),
         })
         for (let n = 0; n < STORED; n += 1) await log.append(n)
     }
@@ -191,15 +191,15 @@ const atOnce =
         void name
     }
 kept['sqlite, at once'] = atOnce('sqlite', () =>
-    ledger<number>(`bench-kept-${(named += 1)}`, {
-        store: store.sqlite(sqliteFile, `bench-${named}`),
+    ledger<number>({
+        store: store.sqlite(sqliteFile, `bench-${(named += 1)}`),
     }),
 )
 if (process.env.ABIDE_REDIS_URL !== undefined) {
     const many = new RedisClient(process.env.ABIDE_REDIS_URL)
     kept['redis, at once'] = atOnce('redis', () =>
-        ledger<number>(`bench-kept-${(named += 1)}`, {
-            store: store.redis(many, `bench-${Date.now()}-${named}`),
+        ledger<number>({
+            store: store.redis(many, `bench-${Date.now()}-${(named += 1)}`),
         }),
     )
 }

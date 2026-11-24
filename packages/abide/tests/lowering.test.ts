@@ -638,6 +638,32 @@ test('a member the Reactive does not declare reaches the value', async () => {
     expect(await lower('n.entries', N)).toBe('n().entries')
 })
 
+// 31.5, 31.15 — A MEMBER THE NAME'S OWN TYPE ADDS IS THAT OBJECT'S: a ledger's `append` and a
+// pipe's `status` are the `Reactive`'s, as written — and `status`, typed a `Reactive`, is read —
+// while what neither the `Reactive` nor its type declares still reaches the value, `name` included
+// though every callable has one. THE REVERT: ask `REACTIVE_MEMBERS` alone in `reactiveMembers`, and
+// `calls.append('x')` lowers to `calls().append('x')` — the array's, which it has not got.
+test("a member the name's type adds reaches the Reactive — 31.5, 31.15", async () => {
+    const head =
+        "import { reactive, type Reactive } from '@abide/abide'\n" +
+        'const calls = reactive([] as string[]) as Reactive<string[]> & { append: (entry: string) => void; status: Reactive<{ running: number }> }\n'
+    const lowered = async (body: string): Promise<string> =>
+        (await lower(head + body)).slice(head.length)
+    expect(await lowered("calls.append('x')")).toBe("calls.append('x')")
+    expect(await lowered('const f = calls.append')).toBe(
+        'const f = calls.append',
+    )
+    expect(await lowered('const r = calls.status.running')).toBe(
+        'const r = calls.status().running',
+    )
+    expect(await lowered('const l = calls.length')).toBe(
+        'const l = calls().length',
+    )
+    expect(await lowered('const nm = calls.name')).toBe(
+        'const nm = calls().name',
+    )
+})
+
 // 31.5 — AND EVERY NAME THE `Reactive` DOES DECLARE IS THERE. The compiler may not import the
 // runtime, so the list is a copy; this is what holds the copy to the prototype `reactive()`
 // installs. THE REVERT: add a member to `MEMBERS` in `Reactive.ts` and not here; `n.thatMember`

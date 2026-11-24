@@ -62,7 +62,7 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `const [a, b] = foo` / `...foo` | one read of the value | 31.12 |
 | `const { a, b: c } = bar()` where a member is a `Reactive` | a name bound to that `Reactive` | 31.17 |
 | `bar.a` / `bar[k]` where the member is a `Reactive` | read and written as `foo` is | 31.15 |
-| `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where it declares one the value does not | 31.5 |
+| `foo.bar` | the value's `bar`, or the `Reactive`'s own `bar` where its type declares one the value does not | 31.5 |
 | `foo.bar(…)` | a call of the value's `bar`, or of the `Reactive`'s own `bar` where it declares one the value does not | 31.6 |
 | `foo()` / `foo.set(v)` | the explicit forms | 31.7, 31.11 |
 
@@ -356,7 +356,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `pipe` | `<const Steps extends readonly [Step, ...Step[]]>(steps: Steps, options?: PipeOptions<FirstIn<Steps>>) => Pipe<FirstIn<Steps>, LastOut<Steps>, AnyFans<Steps>>` | Steps an item runs through in order, at most `concurrency` items at once, as a function to call and a stream pair to pipe through. | 57.1, 57.2, 57.3, 57.4, 57.6, 57.7, 57.8, 57.9, 57.10, 57.11, 57.12, 57.13, 57.14 |
-| `Pipe` | `Pipe<In, Out, Fanned extends boolean = false> = ((input: In, signal?: AbortSignal) => Promise<(Fanned extends true ? Out[] : Out) \| Failed<string, unknown>>) & { readonly readable: ReadableStream<Out \| Failed<string, unknown>>; readonly writable: WritableStream<In>; readonly status: Reactive<PipeStatus>; stop(): Promise<void> }` | What `pipe` hands back. | 57.5, 57.13, 57.15, 57.16, 57.19, 57.20 |
+| `Pipe` | `Pipe<In, Out, Fanned extends boolean = false> = ((input: In, signal?: AbortSignal) => Reactive<Fanned extends true ? Out[] : Out, Fanned extends true ? Out[] : Out, Failed<string, unknown>>) & { readonly readable: ReadableStream<Out \| Failed<string, unknown>>; readonly writable: WritableStream<In>; readonly status: Reactive<PipeStatus>; stop(): Promise<void> }` | What `pipe` hands back: a call answering a `Reactive` of its item, and the stream pair. | 57.5, 57.13, 57.15, 57.16, 57.19, 57.20 |
 | `Pipe.status` | `Reactive<PipeStatus>` | Where the pipe's items stand, one value for every caller. | 57.21 |
 | `Pipe.stop` | `() => Promise<void>` | The end of the pipe, and of every attempt in flight. | 57.18 |
 | `PipeOptions` | `<In = unknown>{ concurrency?: number; key?: (input: In) => string; ordered?: boolean; retries?: number; backoff?: number \| ((retry: number) => number); timeout?: number; paused?: Reactive<boolean> \| (() => boolean) }` | How many items run at once and by what key, the order they leave in, each step's retries, their spacing and its deadline, and what holds the pipe. | 57.6, 57.7, 57.9, 57.10, 57.12, 57.16, 57.17 |
@@ -379,8 +379,8 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `ledger` | `<Entry>(name: string, options?: LedgerOptions<Entry>) => Ledger<Entry>` | Entries appended and never coalesced, read in order from a position or a named cursor. | 58.1, 58.9, 58.10, 58.11, 58.12 |
-| `Ledger` | `<Entry>{ append: (entry: Entry, options?: { key?: string }) => Promise<number>; read: (from?: number \| { cursor: string }) => ReadableStream<Logged<Entry>>; readonly writable: WritableStream<Entry>; readonly head: Reactive<number> }` | What `ledger` hands back: the append, the read, the stream an entry is written to, and the last entry's number. | 58.2, 58.4, 58.5, 58.6, 58.7, 58.8, 58.15, 58.16 |
+| `ledger` | `<Entry>(options?: LedgerOptions<Entry>) => Ledger<Entry>` | Entries appended and never coalesced, read in order from a position or a named cursor. | 58.1, 58.9, 58.10, 58.11, 58.12 |
+| `Ledger` | `<Entry>Reactive<Logged<Entry>[], never> & { append: (entry: Entry, options?: { key?: string }) => Promise<number>; read: (from?: number \| { cursor: string }) => ReadableStream<Logged<Entry>>; readonly writable: WritableStream<Entry> }` | What `ledger` hands back: the entries it keeps, the append, the read, and the stream an entry is written to. | 58.2, 58.4, 58.5, 58.6, 58.7, 58.8, 58.15, 58.16 |
 | `LedgerOptions` | `<Entry>{ store?: LogStore; retain?: number; ttl?: number; schema?: Schema<Entry> }` | Where the entries are kept, how many are and for how long, and what an entry must be. | 58.3, 58.9, 58.10, 58.14 |
 | `Logged` | `<Entry>{ seq: number; at: number; entry: Entry }` | One entry as a ledger keeps it: its number, when it was appended, and what it holds. | 58.2 |
 | `LogStore` | `{ append: (entry: unknown, key: string \| undefined, at: number) => number \| Promise<number>; since: (seq: number) => Logged<unknown>[] \| Promise<Logged<unknown>[]>; last: () => number \| Promise<number>; position: (cursor: string, seq?: number) => number \| Promise<number>; trim: (through: number) => void \| Promise<void>; watch?: (changed: () => void) => () => void }` | The append face of a `store` a ledger keeps its entries and cursors in. | 58.9, 58.12 |

@@ -6,6 +6,12 @@
 // log as one JSON value, so an append costs one row however long the log has grown (58.9). A ledger
 // with no store keeps its entries in memory.
 //
+// THE LEDGER IS THE `Reactive` OF WHAT IT KEEPS (58.8): one array, patched in place as an entry is
+// kept or let go, so a page reads it by name and a `GET` serving it sends each append as a JSON Patch
+// (18.11) rather than the whole log. Letting go of the oldest is a `splice(0, n)`, which JSC keeps
+// O(1) per entry — 0.05 µs per append at 100,000 kept, measured — so retention is no cost per write.
+// Nothing writes it but `append`: its `Accepted` is `never`.
+//
 // A NAMED CURSOR MOVES PAST AN ENTRY ONCE ITS READER ASKS FOR THE NEXT (58.6): the stream is pulled one
 // entry at a time, so taking the next is the reader saying it is done with the last. A reader that
 // stops mid-entry finds that entry again — at least once, never skipped.
@@ -31,7 +37,7 @@ export type LogStore = {
     watch?: (changed: () => void) => () => void
 }
 
-/** What `ledger` takes beside its name. */
+/** What `ledger` takes. */
 export type LedgerOptions<Entry> = {
     store?: LogStore
     retain?: number
@@ -39,36 +45,81 @@ export type LedgerOptions<Entry> = {
     schema?: Schema<Entry>
 }
 
-/** A ledger: appended to, read in order from a position or a named cursor, and its last entry's number. */
-export type Ledger<Entry> = {
+/** A ledger: the entries it keeps, appended to, and read in order from a position or a named cursor. */
+export type Ledger<Entry> = Reactive<Logged<Entry>[], never> & {
     append: (entry: Entry, options?: { key?: string }) => Promise<number>
     read: (from?: number | { cursor: string }) => ReadableStream<Logged<Entry>>
     readonly writable: WritableStream<Entry>
-    readonly head: Reactive<number>
 }
 
-/** 58.1 — one ledger per name in the process, so every module naming it appends to the same one. */
-const LEDGERS = new Map<string, Ledger<unknown>>()
-
 /** Entries appended and read in order, kept in `store`, or in memory where none is given (58). */
-export function ledger<Entry>(
-    name: string,
-    options?: LedgerOptions<Entry>,
-): Ledger<Entry> {
-    const standing = LEDGERS.get(name)
-    if (standing !== undefined) return standing as Ledger<Entry>
+export function ledger<Entry>(options?: LedgerOptions<Entry>): Ledger<Entry> {
     const log = options?.store ?? memoryLog()
     const retain = options?.retain
     // 58.11 — at construction: a ledger keeping nothing would lose the number it counts from.
     if (retain !== undefined && !(retain >= 1))
         throw new RangeError(
-            `abide: ledger ${JSON.stringify(name)} retains at least one entry. RULEBOOK 58.11.`,
+            `abide: a ledger retains at least one entry. RULEBOOK 58.11.`,
         )
     const ttl = options?.ttl
     const schema = options?.schema as Schema<unknown> | undefined
-    const head = reactive(0, { global: true })
+    // 58.8 — opens at every entry the store keeps; each change after waits for that to land.
+    const loaded = keptIn(log)
+    const kept = reactive<Logged<unknown>[]>(loaded, { global: true })
+    // The value brought to the store: `fresh` pushed, the entries `through` lets go dropped
+    // (58.14), and `retain` held (58.10) whoever appended.
+    const bring = (fresh: Logged<unknown>[], through: number): void => {
+        const list = kept.peek() as Logged<unknown>[]
+        let drop = 0
+        while (
+            drop < list.length &&
+            (list[drop] as Logged<unknown>).seq <= through
+        )
+            drop += 1
+        const over =
+            retain === undefined
+                ? 0
+                : list.length - drop + fresh.length - retain
+        const gone = drop + Math.max(0, over)
+        if (gone === 0 && fresh.length === 0) return
+        kept.patch((entries) => {
+            for (const entry of fresh) entries.push(entry)
+            if (gone > 0) entries.splice(0, Math.min(gone, entries.length))
+        })
+    }
+    // ONE CHANGE AT A TIME, so two never push one entry twice. An append this process made, landing
+    // right after the value's last entry with nothing queued, is pushed as it stands: asking the
+    // store for what it just answered was a second query per append (19.6 -> 27.3 µs in SQLite).
+    let mirroring: Promise<unknown> = loaded
+    let queued = 0
+    const mirror = (
+        through: number,
+        appended?: Logged<unknown>,
+    ): Promise<unknown> => {
+        const list = kept.peek()
+        if (list !== undefined && queued === 0 && appended !== undefined) {
+            if (appended.seq === (list.at(-1)?.seq ?? 0) + 1) {
+                bring([appended], through)
+                return mirroring
+            }
+        }
+        queued += 1
+        mirroring = mirroring.then(async () => {
+            const fresh: Logged<unknown>[] = []
+            let last = (kept.peek() as Logged<unknown>[]).at(-1)?.seq ?? 0
+            for (;;) {
+                const page = await log.since(last)
+                if (page.length === 0) break
+                for (const entry of page) fresh.push(entry)
+                last = (page.at(-1) as Logged<unknown>).seq
+            }
+            queued -= 1
+            bring(fresh, through)
+        })
+        return mirroring
+    }
     // 58.14 — when the oldest entry kept was appended, where a scan has found it: no scan is made
-    // while it is inside `ttl`, so an append into a ledger whose head is fresh reads nothing.
+    // while it is inside `ttl`, so an append into a ledger whose oldest entry is fresh reads nothing.
     let oldestAt: number | undefined
     const expire = async (): Promise<void> => {
         if (ttl === undefined) return
@@ -92,22 +143,19 @@ export function ledger<Entry>(
                 break
             }
         }
-        if (through > 0) await log.trim(through)
+        if (through > 0) {
+            await log.trim(through)
+            await mirror(through)
+        }
     }
     // Readers waiting on an entry past the last: woken by the next append in this process.
     const waiting = new Set<() => void>()
     let known: number | Promise<number> = log.last()
-    const lastSeq = async (): Promise<number> => {
-        const last = await known
-        known = last
-        if (head.peek() !== last) head.set(last)
-        return last
-    }
-    void lastSeq()
     // 58.12 — an append another document or process made, heard where the store reports one.
     log.watch?.(() => {
         known = log.last()
-        void lastSeq().then(() => {
+        void Promise.all([known, mirror(0)]).then(([last]) => {
+            known = last
             for (const wake of [...waiting]) wake()
         })
     })
@@ -117,23 +165,25 @@ export function ledger<Entry>(
         given?: { key?: string },
     ): Promise<number> => {
         // 58.3 — a gate that refuses is the append's failure: nothing is kept.
-        let kept: unknown = entry
+        let value: unknown = entry
         if (schema !== undefined) {
             const checked = runSchema(schema, entry)
             if (checked.issues !== null)
                 throw new TypeError(
-                    `abide: ledger ${JSON.stringify(name)} refused an entry its schema does not accept. RULEBOOK 58.3.`,
+                    'abide: a ledger refused an entry its schema does not accept. RULEBOOK 58.3.',
                 )
-            kept = checked.value
+            value = checked.value
         }
-        const seq = await log.append(kept, given?.key, Date.now())
+        const at = Date.now()
+        const seq = await log.append(value, given?.key, at)
         const last = await known
         if (seq > last) {
             known = seq
-            head.set(seq)
             // 58.10 — the oldest entries past `retain` go as the next is kept.
-            if (retain !== undefined && seq > retain)
-                await log.trim(seq - retain)
+            const through =
+                retain !== undefined && seq > retain ? seq - retain : 0
+            if (through > 0) await log.trim(through)
+            await mirror(0, { seq, at, entry: value })
             if (oldestAt === Number.POSITIVE_INFINITY) oldestAt = Date.now()
             await expire()
             for (const wake of [...waiting]) wake()
@@ -177,7 +227,7 @@ export function ledger<Entry>(
                                 controller.error(
                                     refuse(
                                         410,
-                                        `ledger ${JSON.stringify(name)} let entries ${position + 1} to ${next.seq - 1} go before this read reached them. RULEBOOK 58.15.`,
+                                        `a ledger let entries ${position + 1} to ${next.seq - 1} go before this read reached them. RULEBOOK 58.15.`,
                                     ),
                                 )
                                 return
@@ -207,21 +257,32 @@ export function ledger<Entry>(
     }
 
     let writable: WritableStream<Entry> | undefined
-    const made: Ledger<Entry> = {
-        append,
-        read,
-        get writable() {
-            writable ??= new WritableStream<Entry>({
-                write: async (entry) => {
-                    await append(entry)
-                },
-            })
-            return writable
+    return Object.defineProperties(kept, {
+        append: { value: append },
+        read: { value: read },
+        writable: {
+            get: () => {
+                writable ??= new WritableStream<Entry>({
+                    write: async (entry) => {
+                        await append(entry)
+                    },
+                })
+                return writable
+            },
         },
-        head,
+    }) as unknown as Ledger<Entry>
+}
+
+/** Every entry `log` keeps, oldest first, a page at a time. */
+async function keptIn(log: LogStore): Promise<Logged<unknown>[]> {
+    const entries: Logged<unknown>[] = []
+    let last = 0
+    for (;;) {
+        const page = await log.since(last)
+        if (page.length === 0) return entries
+        for (const entry of page) entries.push(entry)
+        last = (page.at(-1) as Logged<unknown>).seq
     }
-    LEDGERS.set(name, made as Ledger<unknown>)
-    return made
 }
 
 /**

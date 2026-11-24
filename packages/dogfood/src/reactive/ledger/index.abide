@@ -10,6 +10,12 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/ledger.test.ts',
             from: [
+                "test('appends are numbered in order, and the value is every entry kept — 58.2, 58.8'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/ledger.test.ts',
+            from: [
                 "test('a read hands on every entry past its position, and waits for the next — 58.5, 58.7'",
             ],
         },
@@ -29,13 +35,28 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Log every call a rep makes">
         <p>An entry appended is kept after every one before it and numbered one past the last.
-            Nothing is coalesced: two calls logged are two entries.</p>
+            Nothing is coalesced: two calls logged are two entries. A ledger is shared by importing
+            it, like any other binding.</p>
         <Code language="ts" caption="shared" code={`
             import { ledger } from '@abide/abide'
 
-            const calls = ledger<{ contact: string; minutes: number }>('calls')
-            await calls.append({ contact: 'c1', minutes: 12 })
-            calls.head() // 1
+            export const calls = ledger<{ contact: string; minutes: number }>()
+            await calls.append({ contact: 'c1', minutes: 12 }) // 1
+        `} />
+    </Section>
+
+    <Section level={3} title="List the calls in a page">
+        <p>A ledger is a <code>Reactive</code> of every entry it keeps, oldest first: read it by
+            name, and the list grows as each call is appended. Only <code>append</code> writes
+            it.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { calls } from './calls.ts'
+            </script>
+
+            {#each calls as call (call.seq)}
+                <p>{call.entry.contact}: {call.entry.minutes} min</p>
+            {/each}
         `} />
     </Section>
 
@@ -45,7 +66,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="shared" code={`
             import { ledger } from '@abide/abide'
 
-            const calls = ledger<{ contact: string }>('calls')
+            const calls = ledger<{ contact: string }>()
             await calls.append({ contact: 'c1' }, { key: 'call-81' })
             await calls.append({ contact: 'c1' }, { key: 'call-81' }) // the same number
         `} />
@@ -58,7 +79,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { ledger, pipe } from '@abide/abide/server'
 
-            const calls = ledger<{ minutes: number }>('calls')
+            const calls = ledger<{ minutes: number }>()
             const score = pipe([(logged) => logged.entry.minutes / 60])
 
             await calls.read({ cursor: 'scorer' }).pipeThrough(score).pipeTo(scores)
@@ -66,19 +87,31 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Follow the call log from a page">
-        <p>A ledger crosses the wire as a streaming <code>GET</code>: a page reading it is handed
-            every entry past <code>after</code>, then each one appended after. An append is a
-            <code>POST</code> whose <code>key</code> the page makes, so an outbox resend keeps one
-            entry.</p>
+        <p>Serve the ledger with <code>GET</code>, and a page reading it holds every entry kept;
+            each append reaches it as the patch that pushed the entry, not the whole log. An
+            append is a <code>POST</code> whose <code>key</code> the page makes, so an outbox
+            resend keeps one entry.</p>
         <Code language="ts" caption="server" code={`
             import { GET, ledger, POST } from '@abide/abide/server'
 
-            const calls = ledger<{ contact: string; minutes: number }>('calls')
+            const calls = ledger<{ contact: string; minutes: number }>()
 
-            export const getCalls = GET(async function* ({ after }: { after: number }) {
+            export const listCalls = GET(calls)
+            export const logCall = POST(({ call, key }) => calls.append(call, { key }))
+        `} />
+    </Section>
+
+    <Section level={3} title="Resume a reader across the wire">
+        <p>A reader that resumes from a position reads a streaming <code>GET</code>: it is handed
+            every entry past <code>after</code>, then each one appended after.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, ledger } from '@abide/abide/server'
+
+            const calls = ledger<{ contact: string; minutes: number }>()
+
+            export const callsAfter = GET(async function* ({ after }: { after: number }) {
                 yield* calls.read(after)
             })
-            export const logCall = POST(({ call, key }) => calls.append(call, { key }))
         `} />
     </Section>
 
@@ -89,7 +122,7 @@ import Section from '#src/lib/Section.abide'
             import { database, ledger, store } from '@abide/abide/server'
 
             const crm = database('crm')
-            const calls = ledger('calls', { store: store.sqlite(crm, 'calls') })
+            const calls = ledger({ store: store.sqlite(crm, 'calls') })
         `} />
     </Section>
 
@@ -102,17 +135,17 @@ import Section from '#src/lib/Section.abide'
             import { ledger, store } from '@abide/abide/server'
 
             const shared = store.redis('redis://localhost:6379', 'calls')
-            const calls = ledger('calls', { store: shared })
+            const calls = ledger({ store: shared })
         `} />
     </Section>
 
     <Section level={3} title="Keep a rep's offline notes in the browser">
         <p>Hand it <code>store.indexedDB</code>, and the entries outlive a reload. An append in
-            another tab moves this tab's <code>head</code> and wakes its reads.</p>
+            another tab reaches this tab's value and wakes its reads.</p>
         <Code language="ts" caption="browser" code={`
             import { ledger, store } from '@abide/abide'
 
-            const notes = ledger<string>('notes', { store: store.indexedDB('notes') })
+            const notes = ledger<string>({ store: store.indexedDB('notes') })
         `} />
     </Section>
 
@@ -122,7 +155,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="shared" code={`
             import { ledger } from '@abide/abide'
 
-            const pings = ledger<string>('pings', { ttl: 86_400_000 })
+            const pings = ledger<string>({ ttl: 86_400_000 })
         `} />
     </Section>
 
@@ -133,7 +166,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="shared" code={`
             import { ledger } from '@abide/abide'
 
-            const pings = ledger<string>('pings', { retain: 1_000 })
+            const pings = ledger<string>({ retain: 1_000 })
             const seen: string[] = []
             // Errors with a 410 where the read fell behind what was kept.
             for await (const ping of pings.read(seen.length)) seen.push(ping.entry)
@@ -145,7 +178,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="shared" code={`
             import { ledger } from '@abide/abide'
 
-            const presence = ledger<string>('presence', { retain: 1_000 })
+            const presence = ledger<string>({ retain: 1_000 })
         `} />
     </Section>
 </Doc>
