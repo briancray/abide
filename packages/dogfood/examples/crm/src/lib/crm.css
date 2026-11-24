@@ -838,6 +838,11 @@
 @utility calendar {
     @apply grid gap-1;
 
+    /* `grid` outranks the UA's hiding of a closed popover, as the menu's `display` does above. */
+    &[popover]:not(:popover-open) {
+        display: none;
+    }
+
     & [data-bar] {
         @apply flex items-center justify-between;
     }
