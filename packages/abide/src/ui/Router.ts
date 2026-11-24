@@ -64,7 +64,6 @@ const SUPERSEDED = 'superseded'
  * the history and the scroll.
  */
 export class Router {
-    readonly region: Region
     private readonly routes: Compiled[]
     /** The chain standing in the document, outermost layout first and the page last. */
     readonly levels: LevelChain
@@ -138,7 +137,6 @@ export class Router {
     private readonly stepping: (() => void)[]
 
     constructor(region: Region, routes: Compiled[], transitions: boolean) {
-        this.region = region
         this.routes = routes
         this.levels = new LevelChain(region)
         this.mounted = undefined

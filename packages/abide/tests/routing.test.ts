@@ -27,6 +27,7 @@ import {
     type Segment,
 } from '#shared/routePattern.ts'
 import { reconcileHead } from '#ui/reconcileHead.ts'
+import { pageRegion } from '#ui/regions.ts'
 import { listenForRoutes, type PageMount, startRouter } from '#ui/routing.ts'
 
 import { click } from './click.ts'
@@ -1985,7 +1986,9 @@ const exit = () => () => (globalThis as { __EXIT__?: () => Promise<void> }).__EX
     expect(document.querySelector('#invoice h1')?.textContent).toBe('Invoice')
     expect(document.querySelectorAll('#invoice li').length).toBe(2)
     // OUTSIDE THE ANCHORS, so the next emptiness test and the next hydration walk never see it.
-    expect(r.region.open.nextSibling).toBe(document.querySelector('#invoice'))
+    expect(pageRegion(document.body).open.nextSibling).toBe(
+        document.querySelector('#invoice'),
+    )
     for (const done of exits) done()
     await Promise.resolve()
     await Promise.resolve()
