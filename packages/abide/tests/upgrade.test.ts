@@ -1,4 +1,4 @@
-// 38.195-38.203 — AN APP'S NOTES FOR AN AGENT, AND `abide upgrade`, run as an author runs them: the
+// 38.195-38.203, 38.215 — AN APP'S NOTES FOR AN AGENT, AND `abide upgrade`, run as an author runs them: the
 // CLI spawned over a fixture app whose `AGENTS.md` an earlier scaffold wrote and the app then added
 // to. `before.md` is the scaffold's notes from before handlers were named `.handler.ts`, with the
 // app's own lines among them; `after.md` is what the upgrade leaves.
@@ -147,3 +147,48 @@ test('the AGENTS.md abide scaffold writes states nothing of abide but where ABID
     expect(opening).toHaveLength(1)
     expect(opening[0]).toContain('`node_modules/@abide/abide/ABIDE.md`')
 })
+
+// 38.215 — A BODY HANDED TO `reactive` IS HANDED TO `memo`, in a module and in a page's script, and
+// `memo` is imported beside what is still a `reactive`. A value is left, and a name bound to a body
+// is read as one. Run again it changes nothing (38.200). THE REVERT: drop the 0.143.0 migration from
+// `MIGRATIONS`, and `abide upgrade: nothing to change`.
+test('abide upgrade hands a body written for reactive to memo — 38.215, 38.200', async () => {
+    const app = temporaryModule({
+        'package.json': JSON.stringify({ name: 'ledger', type: 'module' }),
+        'src/lib/totals.ts': `import { reactive } from '@abide/abide'
+
+const score = (args: { id: string }) => args.id.length
+export const seats = reactive(5)
+export const total = reactive(() => seats() * 40)
+export const scored = reactive(score)
+`,
+        'src/index.abide': `<script>
+import { reactive } from '@abide/abide'
+
+let q = reactive('')
+const found = reactive(async () => q.toUpperCase())
+</script>
+
+<input bind:value={q}><p>{found}</p>`,
+    })
+    const upgraded = await abide(app, 'upgrade')
+    expect(upgraded.stdout).toContain('abide upgrade: 2 files changed')
+    expect(await Bun.file(`${app}/src/lib/totals.ts`).text())
+        .toBe(`import { memo, reactive } from '@abide/abide'
+
+const score = (args: { id: string }) => args.id.length
+export const seats = reactive(5)
+export const total = memo(() => seats() * 40)
+export const scored = memo(score)
+`)
+    expect(await Bun.file(`${app}/src/index.abide`).text()).toBe(`<script>
+import { memo, reactive } from '@abide/abide'
+
+let q = reactive('')
+const found = memo(async () => q.toUpperCase())
+</script>
+
+<input bind:value={q}><p>{found}</p>`)
+    const again = await abide(app, 'upgrade', '--check')
+    expect(again.stdout).toBe('abide upgrade: nothing to change\n')
+}, 30_000)

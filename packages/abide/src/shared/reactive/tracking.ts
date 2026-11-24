@@ -360,7 +360,7 @@ const SET_OVER_SCAN = 20
  * A SLOT IS NOT A SUBSCRIPTION. `sources` is POSITIONAL — one slot per read, so a body that reads
  * one value twice holds two slots for it — where `source.readers` is a SET, deduped by `track`.
  * Dropping per slot therefore unsubscribed a value a SURVIVING slot still lists, and the shorter
- * run is what did it: `reactive(() => name() ? name().toUpperCase() : 'anon')` reads `name` twice
+ * run is what did it: `memo(() => name() ? name().toUpperCase() : 'anon')` reads `name` twice
  * on the truthy run and once on the falsy one, so the falsy run's truncation took the whole
  * subscription with it and the value never recomputed again — right at the moment it looked
  * right. The kept prefix is what says whether this slot was the last of its value.

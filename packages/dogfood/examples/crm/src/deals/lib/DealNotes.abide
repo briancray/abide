@@ -10,9 +10,9 @@ const getNotes = GET(({ id }: { id: string }) => NOTES[id] ?? [])
 </script>
 
 <script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 
-const notes = reactive(() => getNotes({ id: 'd1' }))
+const notes = memo(() => getNotes({ id: 'd1' }))
 </script>
 
 <ul class="fields stacked">

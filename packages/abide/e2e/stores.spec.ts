@@ -44,6 +44,20 @@ let count = reactive(0, { store: store.indexedDB('count') })
 </script>
 
 <main id="indexed"><p id="count">{count.ready() ? count : 'loading'}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button></main>`,
+        'visits/index.abide': `<script>
+import { ledger, store } from '@abide/abide'
+
+const visits = ledger<string>('visits', { store: store.indexedDB('visits') })
+</script>
+
+<main id="visits"><p id="head">{visits.head()}</p><button id="visit" onclick={() => visits.append('visit')}>visit</button></main>`,
+        'drafts/index.abide': `<script>
+import { ledger, store } from '@abide/abide'
+
+const drafts = ledger<string>('drafts', { store: store.indexedDB('drafts'), retain: 1 })
+</script>
+
+<main id="drafts"><p id="last">{drafts.head()}</p><button id="save" onclick={() => drafts.append('save', { key: 'k1' })}>save</button><button id="other" onclick={() => drafts.append('other')}>other</button></main>`,
     }))
 })
 
@@ -132,4 +146,42 @@ test('an IndexedDB store restores, and follows another document’s write — 8.
     await first.locator('#bump').click()
     await expect(first.locator('#count')).toHaveText('3')
     await expect(second.locator('#count')).toHaveText('3')
+})
+
+// 58.9, 58.12: A LEDGER IN INDEXEDDB IS KEPT ACROSS A RELOAD, AND HEARD BY ANOTHER DOCUMENT. Two appends
+// are two entries after the page reloads, and a third appended in a second tab moves the first tab's
+// `head` with no reload. THE REVERT: drop the `watch` subscription from `ledger`, and the first tab
+// stays at 2.
+test('a ledger in store.indexedDB is kept, and another tab’s append is heard — 58.9, 58.12', async ({
+    context,
+}) => {
+    const first = await context.newPage()
+    await first.goto(`${base}/visits`)
+    await first.locator('#visit').click()
+    await expect(first.locator('#head')).toHaveText('1')
+    await first.locator('#visit').click()
+    await expect(first.locator('#head')).toHaveText('2')
+    await first.reload()
+    await expect(first.locator('#head')).toHaveText('2')
+    const second = await context.newPage()
+    await second.goto(`${base}/visits`)
+    await expect(second.locator('#head')).toHaveText('2')
+    await second.locator('#visit').click()
+    await expect(second.locator('#head')).toHaveText('3')
+    await expect(first.locator('#head')).toHaveText('3')
+})
+
+// 58.10, 58.16: IN INDEXEDDB A TRIM TAKES AN ENTRY'S KEY WITH IT. Saved under `k1`, then trimmed by
+// the next entry under `retain: 1`, a save under `k1` again is a new entry. THE REVERT: drop the key
+// deletes from the IndexedDB `trim`, and the third click answers the first entry — `last` stays 2.
+test('a trimmed IndexedDB ledger lets a key go with its entry — 58.10, 58.16', async ({
+    page,
+}) => {
+    await page.goto(`${base}/drafts`)
+    await page.locator('#save').click()
+    await expect(page.locator('#last')).toHaveText('1')
+    await page.locator('#other').click()
+    await expect(page.locator('#last')).toHaveText('2')
+    await page.locator('#save').click()
+    await expect(page.locator('#last')).toHaveText('3')
 })

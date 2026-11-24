@@ -159,13 +159,13 @@ test('an element that leaves is unobserved — 32.83', async () => {
 test('a delivery of the size already held wakes nobody — 32.79', async () => {
     ;(globalThis as { __AREAS__?: number }).__AREAS__ = 0
     await mountPage(`<script>
-import { reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 
 import { observe } from '@abide/abide'
 
 let box = reactive({ width: 10, height: 10 })
 let calls = reactive(0)
-const area = reactive(() => {
+const area = memo(() => {
     ;(globalThis as { __AREAS__?: number }).__AREAS__ = ((globalThis as { __AREAS__?: number }).__AREAS__ ?? 0) + 1
     return box.width * box.height
 })
@@ -195,11 +195,11 @@ const area = reactive(() => {
 test('given no target, host is spread and each field is a value of its own — 32.110', async () => {
     ;(globalThis as { __WIDTHS__?: number }).__WIDTHS__ = 0
     const { html } = await mountPage(`<script>
-import { observe, reactive } from '@abide/abide'
+import { memo, observe } from '@abide/abide'
 
 const size = observe.size()
 const seen = observe.visible()
-const wide = reactive(() => {
+const wide = memo(() => {
     ;(globalThis as { __WIDTHS__?: number }).__WIDTHS__ = ((globalThis as { __WIDTHS__?: number }).__WIDTHS__ ?? 0) + 1
     return size.width ?? 'none'
 })
@@ -257,11 +257,11 @@ test('a measured bind or option is refused with the observe spelling — 32.91',
 })
 
 const ROOTED = `<script>
-import { observe, reactive } from '@abide/abide'
+import { memo, observe, reactive } from '@abide/abide'
 
 let scroller = reactive<HTMLElement>()
 let rooted = reactive(true)
-const root = reactive(() => (rooted ? scroller : undefined))
+const root = memo(() => (rooted ? scroller : undefined))
 let rows = reactive(Array.from({ length: 20 }, (_, index) => ({ id: index, seen: reactive(true) })))
 </script>
 
@@ -352,12 +352,12 @@ test('every observe.visible in one root shares one observer, gone with the root 
 // the `Reactive` too: hold only a `value` read in `readsIn`, and the toggle leaves `border-box`.
 test("box: 'border' writes the border box in physical axes — 32.90", async () => {
     await mountPage(`<script>
-import { observe, reactive } from '@abide/abide'
+import { memo, observe, reactive } from '@abide/abide'
 
 let flat = reactive({ width: 0, height: 0 })
 let upright = reactive({ width: 0, height: 0 })
 let content = reactive(false)
-const box = reactive(() => (content ? 'content' : 'border') as 'content' | 'border')
+const box = memo(() => (content ? 'content' : 'border') as 'content' | 'border')
 </script>
 
 <button id="toggle" onclick={() => { content = !content }}>toggle</button>

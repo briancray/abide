@@ -95,6 +95,8 @@ These are immutable. A change to them is a change to what this document is.
 - [54. Guards, fetches and jobs](#54)
 - [55. Worker files](#55)
 - [56. Forms](#56)
+- [57. Pipes](#57)
+- [58. Ledgers](#58)
 
 ## Terms
 
@@ -121,7 +123,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | namespace | The name a log line is written under, and what `DEBUG` selects. |
 | entry | One key's slot in a `Keyed`. |
 | scope | The lifetime a value is filed under and dropped with. |
-| adoption | What a `reactive` body does with a `Reactive` it returned. |
+| adoption | What a `memo` body does with a `Reactive` it returned. |
 | forwarding | The delegation between an adopting `Reactive` and the one it adopted. |
 | propagation | The derivation of a probe from the values a body read. |
 | sink | What 35.7 defines. |
@@ -304,6 +306,9 @@ escape the write.
 4.19 `reactive` called with no argument and an `Rpc`, or a union of `Rpc`s, as its type argument
 MUST be typed as one `Reactive` over what a call of each of them hands back.
 
+4.20 `reactive` given a function that is neither a `Reactive` nor a `Keyed` MUST hold it as its
+value.
+
 # 5. Productions and identity
 
 5.1 A reader MUST be woken only when read identity changes.
@@ -472,7 +477,7 @@ requests in flight have drained, before `onStop` runs and within 42.17's deadlin
 it included, and is neither a failed revalidation nor 37.28's abort, MUST warn on `abide:reactive`
 naming the value.
 
-7.29 A `reactive` with a body declaring `poll`, built where 7.23 has no owner to stop it, MUST NOT
+7.29 A `memo` declaring `poll`, built where 7.23 has no owner to stop it, MUST NOT
 run its body where it is built.
 
 7.30 The first run of a value 7.29 holds back MUST be made by whichever comes first of a read, a
@@ -517,6 +522,12 @@ it.
 
 7.44 A `poll` that 7.43 kept from refreshing a value MUST refresh it once the document's
 `visibilityState` is no longer `hidden`, and once only however many refreshes 7.43 kept from it.
+
+7.45 `stopSignal` called while a `memo` body runs, its synchronous part or a step of its stream,
+MUST answer a signal of that run's own.
+
+7.46 The signal 7.45 answers MUST abort where a new run of that value starts, where the value or its
+entry is released, and where 7.38 aborts.
 
 # 8. Stores
 
@@ -640,7 +651,7 @@ read that asks for it.
 
 9.5 A `store` MUST round-trip the latest production.
 
-9.6 A `reactive` body declared as an async generator function MUST be a streaming producer from
+9.6 A `memo` body declared as an async generator function MUST be a streaming producer from
 construction, and a body whose run hands back an async generator, or a promise resolving to one,
 MUST be one from that run on.
 
@@ -691,53 +702,53 @@ inferred from the thunk.
 
 # 11. Derived and keyed values
 
-11.1 A `reactive` body declaring no parameter MUST produce an unkeyed, tracked `Reactive`.
+11.1 A `memo` body declaring no parameter MUST produce an unkeyed, tracked `Reactive`.
 
-11.2 A `reactive` body declaring one parameter MUST produce a keyed, untracked `Keyed`.
+11.2 A `memo` body declaring one parameter MUST produce a keyed, untracked `Keyed`.
 
-11.3 An implementation MUST NOT provide an option converting one `reactive` form into the other.
+11.3 An implementation MUST NOT provide an option converting one `memo` form into the other.
 
 11.4 A `Keyed` MUST hold one entry per `Args` key, computed when that key is reached.
 
-11.5 An unkeyed `reactive` MUST recompute on the first read that follows a change to a value its
+11.5 An unkeyed `memo` MUST recompute on the first read that follows a change to a value its
 body read.
 
 11.6 A `Keyed` MUST NOT recompute for that reason, and `ttl`, `invalidate`, `refresh` and
 eviction MUST be its only ways back.
 
-11.7 Both `reactive` body forms MUST accept a write.
+11.7 Both `memo` forms MUST accept a write.
 
-11.8 A write to a `reactive` that is not adopting MUST stand until the next recompute replaces it.
+11.8 A write to a `memo` that is not adopting MUST stand until the next recompute replaces it.
 
-11.9 An implementation MUST NOT warn on a write to a `reactive`.
+11.9 An implementation MUST NOT warn on a write to a `memo`.
 
-11.10 A write of a settled value to a `reactive` MUST move no probe.
+11.10 A write of a settled value to a `memo` MUST move no probe.
 
-11.11 A write of an unsettled value to a `reactive` MUST be a load, per 4.2 and 1.6.
+11.11 A write of an unsettled value to a `memo` MUST be a load, per 4.2 and 1.6.
 
-11.12 A `Reactive` returned from a `reactive` body MUST be adopted, and MUST NOT be stored as a
+11.12 A `Reactive` returned from a `memo` body MUST be adopted, and MUST NOT be stored as a
 value.
 
 11.13 Adoption MUST mirror the adopted productions into the adopting `Reactive`.
 
-11.14 An adopting `reactive` MUST run its own `transform` on the way in.
+11.14 An adopting `Reactive` MUST run its own `transform` on the way in.
 
 11.15 Adoption MUST forward members the adopted `Reactive` declares beyond the common face, by
 delegation to whatever is currently adopted.
 
-11.16 On re-adoption a `reactive` MUST clear where the newly adopted `Reactive` has nothing to serve.
+11.16 On re-adoption a `Reactive` MUST clear where the newly adopted `Reactive` has nothing to serve.
 
 11.17 Adoption MUST inherit the adopted `Reactive`'s `identity` where the outer declared none, for as
 long as it adopts it.
 
 11.18 A recompute landing on the same adopted `Reactive` MUST wake no reader.
 
-11.19 An adopting `reactive` MUST report `s.busy` only where the newly adopted `Reactive` reports
+11.19 An adopting `Reactive` MUST report `s.busy` only where the newly adopted `Reactive` reports
 it.
 
 11.20 `s.busy` and `s.ready` MUST be the probes that propagate.
 
-11.21 An unkeyed `reactive` MUST report `s.busy` for its own load, or for any value its body read.
+11.21 An unkeyed `memo` MUST report `s.busy` for its own load, or for any value its body read.
 
 11.22 An implementation MUST derive a propagated probe on the read that asks for it, and MUST NOT
 hold a subscription per source for it.
@@ -764,28 +775,30 @@ both sides, and the parameter's defaults MUST apply to an absent `Args` as to `{
 
 11.31 A reactive value in an argument position MUST be read, and `Args` MUST be plain args.
 
-11.32 A `reactive` without `global` MUST be request-local on a server and process-local in a browser.
+11.32 A `reactive` or a `memo` without `global` MUST be request-local on a server and process-local
+in a browser.
 
 11.33 `ttl: Infinity` without `global` MUST mean to the end of that scope.
 
 11.34 `global: true` MUST place entries in a process-wide cache that outlives every request.
 
-11.35 A `global` `reactive` MUST be bounded by its own `ttl` and by `invalidate`, and by nothing else.
+11.35 A `global` `reactive` or `memo` MUST be bounded by its own `ttl` and by `invalidate`, and by
+nothing else.
 
 11.36 An implementation MUST NOT evict a `global` entry on a size or a count limit.
 
 11.37 `global: true` MUST be a build error on a body reading `request`, `response`, `principal`,
 `cookies`, `csp.nonce` or `route`, and the error MUST name the ambient.
 
-11.38 Coalescing of a `reactive` load MUST be within a scope: two reads of one key in one scope share
+11.38 Coalescing of a `memo` load MUST be within a scope: two reads of one key in one scope share
 one load, and two scopes load twice.
 
-11.39 A reader detaching from a `global` streaming `reactive` MUST NOT cancel the producer for the
+11.39 A reader detaching from a `global` streaming `memo` MUST NOT cancel the producer for the
 readers that remain.
 
-11.40 `args` on a `reactive` MUST check `Args`.
+11.40 `args` on a `memo` MUST check `Args`.
 
-11.41 `args` MUST be unspellable on a `reactive` whose body declares no parameter, and spelling it MUST
+11.41 `args` MUST be unspellable on a `memo` whose body declares no parameter, and spelling it MUST
 be a compile error naming it.
 
 11.42 `store` on a `Keyed` MUST accept a function of the `Args`.
@@ -797,9 +810,9 @@ values.
 
 11.45 A `Keyed`'s `ttl` MUST be the life of the entry.
 
-11.46 A `reactive` MUST accept a `schema`, gating what its body produced.
+11.46 A `memo` MUST accept a `schema`, gating what its body produced.
 
-11.47 An adopting `reactive` MUST run its own `schema` on the way in, as 11.14 has it run its
+11.47 An adopting `Reactive` MUST run its own `schema` on the way in, as 11.14 has it run its
 `transform`.
 
 11.48 A `Keyed` MUST hold one expiry timer, armed at its oldest entry.
@@ -812,23 +825,23 @@ values.
 
 11.52 A provisional run MUST mint no production.
 
-11.53 A reader joining a `global` `reactive`'s stream after it began MUST NOT be answered with a
+11.53 A reader joining a `global` `memo`'s stream after it began MUST NOT be answered with a
 refusal.
 
-11.54 A `reactive` MUST NOT report `s.ready` before its body has run for the value being probed.
+11.54 A `memo` MUST NOT report `s.ready` before its body has run for the value being probed.
 
 11.55 A probe over a key a `Keyed` has not computed MUST allocate no entry.
 
 11.56 An implementation MUST NOT warn where two `Args` keys differ only in the case of a value.
 
-11.57 An unkeyed `reactive` MUST NOT recompute before a read or an `Effect` asks for its value.
+11.57 An unkeyed `memo` MUST NOT recompute before a read or an `Effect` asks for its value.
 
-11.58 An unkeyed `reactive` MUST report `s.ready` only where every value its body read reports it.
+11.58 An unkeyed `memo` MUST report `s.ready` only where every value its body read reports it.
 
 11.59 `s.set` and `s.patch` on an adopting `Reactive`, given anything but a `Reactive`, MUST reach the
 adopted `Reactive`.
 
-11.60 `args` spelled on a `reactive` whose body declares no parameter MUST refuse at construction.
+11.60 `args` spelled on a `memo` whose body declares no parameter MUST refuse at construction.
 
 11.61 `s.set` given a `Reactive`, and `reactive` opened on one, MUST adopt it per 11.12, and MUST NOT
 store it as a value — on a streaming producer, as a write that 11.59 does not reach through.
@@ -846,9 +859,9 @@ naming the cycle.
 
 11.66 `s.set` MUST throw 11.65's refusal, and a body whose answer 11.65 refuses MUST fail with it.
 
-11.67 A `reactive` without `global` MUST be built afresh in each request that reaches it or whose
-`render` builds it under 41.34, from its declaration and never from what a write outside every
-request left.
+11.67 A `reactive` or a `memo` without `global` MUST be built afresh in each request that reaches it
+or whose `render` builds it under 41.34, from its declaration and never from what a write outside
+every request left.
 
 11.68 A keyed value's body MUST be handed what its `args` gate returned.
 
@@ -857,14 +870,17 @@ start again when the load ends.
 
 11.70 `s.set` MUST take only a `Reactive` whose `Failures` are this value's.
 
-11.71 An unkeyed `reactive` with a `store`, built on a server outside every request, MUST NOT run
+11.71 An unkeyed `memo` with a `store`, built on a server outside every request, MUST NOT run
 the `store`'s `get` before it is reached.
 
 11.72 A `Keyed` MUST NOT hold an entry for an `Args` its `args` gate refuses, and the gate MUST run
 once per entry.
 
-11.73 A body's first run in a scope that reads the `reactive` it is building MUST fail with a
+11.73 A body's first run in a scope that reads the `memo` it is building MUST fail with a
 `ReferenceError`.
+
+11.74 `memo` given anything but a function, or given a `Reactive` or a `Keyed`, MUST throw at
+construction.
 
 # 12. Effects
 
@@ -901,7 +917,7 @@ woke have run.
 12.13 A `watch` registered inside a `{#if}` arm or a `{#for}` row MUST stop when the region
 holding that arm or row is removed.
 
-12.14 A `reactive` over a body, built where 12.4, 12.5 or 12.13 would own a `watch`, MUST stop
+12.14 A `memo`, built where 12.4, 12.5 or 12.13 would own a `watch`, MUST stop
 reading its sources once that owner stops and nothing else reads it, and MUST answer a later read
 with what its body computes then.
 
@@ -911,9 +927,9 @@ save where a clause orders them.
 12.16 A stream released under 12.14 MUST stop its run, and the later read MUST start it once more,
 whether or not the stopped run had closed.
 
-12.17 A `reactive` declared where 12.4, 12.5 and 12.13 would own no `watch` MUST NOT be owned by
-one current where it is first reached, save the instance a request builds of it under 11.67, which
-that request owns.
+12.17 A `reactive` or a `memo` declared where 12.4, 12.5 and 12.13 would own no `watch` MUST NOT be
+owned by one current where it is first reached, save the instance a request builds of it under
+11.67, which that request owns.
 
 12.18 Where one turn wakes an `Effect` and an `Effect` whose run opened it, directly or through
 others, the opener MUST run, or be found to read nothing that changed, before the `Effect` it opened.
@@ -945,15 +961,15 @@ only entries something subscribes to and MUST mark the rest.
 selection MUST hold exactly one.
 
 13.10 On a server a bare `invalidate` and a bare `refresh` MUST each reach every `global` `reactive`
-in the process.
+and `memo` in the process.
 
 13.11 `ready` over a `Selection` MUST answer whether EVERY entry in it is ready.
 
 13.12 A pattern given beside a `Keyed` or an `Rpc` MUST narrow it to the entries whose `Args`
 match the pattern.
 
-13.13 A `Selection` made in any scope MUST reach every `global` `reactive` it matches, and every
-entry of a `global` `Keyed` it matches.
+13.13 A `Selection` made in any scope MUST reach every `global` `reactive` and `memo` it matches,
+and every entry of a `global` `Keyed` it matches.
 
 13.14 A bare `refresh` MUST NOT rerun a synchronous derivation, which MUST recompute from the
 load it reads.
@@ -986,9 +1002,9 @@ them, which MUST recompute from the load it reads.
 
 14.2 A template expression MUST track the `Reactive` values it reads.
 
-14.3 An unkeyed `reactive` body MUST track.
+14.3 An unkeyed `memo` body MUST track.
 
-14.4 A keyed `reactive` body MUST NOT track.
+14.4 A keyed `memo` body MUST NOT track.
 
 14.5 A block body's binding MUST track, and MUST bind the value the block produced rather than a
 `Reactive`.
@@ -1014,7 +1030,7 @@ against nothing.
 the read.
 
 14.15 The compiler MUST warn on a reactive read in a condition position inside an unkeyed
-`reactive` body, where what the condition decides reads another value, naming the read.
+`memo` body, where what the condition decides reads another value, naming the read.
 
 14.16 The compiler MUST warn on a reactive read inside a function a tracked body creates and
 does not call synchronously, naming the read.
@@ -1102,7 +1118,7 @@ a wire again under 15.21.
 
 ## The handler and its `Rpc`
 
-16.1 A handler MUST be a `reactive`, a plain function, or a value.
+16.1 A handler MUST be a `Reactive`, a `Keyed`, a plain function, or a value.
 
 16.2 `GET`, `POST`, `PUT`, `PATCH` and `DELETE` MUST give the handler a handler file exports as its
 default an address over http: that file's route, per 23.14.
@@ -1114,9 +1130,9 @@ default an address over http: that file's route, per 23.14.
 16.5 Which arm `GET` takes MUST be read off a brand the factory stamped, and MUST NOT be inferred
 from the shape.
 
-16.6 `GET` over a plain function or a value MUST behave as `GET` over a `reactive` of it, built with
-the options `GET` was handed; a `reactive` or a `Keyed` handed in MUST take the address's options
-alone.
+16.6 `GET` over a plain function MUST behave as `GET` over a `memo` of it, and over a value as `GET`
+over a `reactive` of it, each built with the options `GET` was handed; a `Reactive` or a `Keyed`
+handed in MUST take the address's options alone.
 
 16.7 A mutation over a plain function or a value MUST have its value's `ttl` default to 0 unless its
 options declare one.
@@ -1674,7 +1690,7 @@ beside it.
 20.4 `ui: false` MUST generate no client wrapper, and importing that handler from the client graph
 MUST then be a compile error naming it.
 
-20.5 `/__abide/openapi.json` and `/__abide/mcp` MUST be served from a `reactive` over the route table,
+20.5 `/__abide/openapi.json` and `/__abide/mcp` MUST be served from a `memo` over the route table,
 and MUST take no `ttl`.
 
 20.6 `/__abide/openapi.json` MUST publish OpenAPI 3.1, and MUST publish a handler's `JsonSchema`
@@ -1756,10 +1772,10 @@ and `/__abide/principal` are answered as handlers (25.3) and carry 21.3's `priva
 
 21.7 An answer that depends on a request header MUST carry `vary` naming it.
 
-21.8 A `GET` over a `global` `reactive` MUST answer a `max-age` derived from that value's `ttl`, and an
+21.8 A `GET` over a `global` `Reactive` MUST answer a `max-age` derived from that value's `ttl`, and an
 app MUST NOT be required to state the duration a second time.
 
-21.9 A `GET` over a `global` `reactive` MUST answer `private`.
+21.9 A `GET` over a `global` `Reactive` MUST answer `private`.
 
 21.10 A write through `response` MUST override every header and the status the answer carries.
 
@@ -1780,7 +1796,7 @@ held answered it, `Started` where it is a stream timed to its first chunk, and `
 
 21.16 The `max-age` 21.8 derives MUST be what is left of the answered production's `ttl`.
 
-21.17 A `GET` over a `global` `reactive` whose `ttl` is `Infinity` MUST keep the `cache-control` 21.3
+21.17 A `GET` over a `global` `Reactive` whose `ttl` is `Infinity` MUST keep the `cache-control` 21.3
 or 21.22 gives it.
 
 21.18 A page MUST default to `content-security-policy: frame-ancestors 'none'`.
@@ -2061,7 +2077,7 @@ MUST be merged over the document in the order 37.7 states.
 27.8 A value out of `Env` MUST be coerced to the type of the default it overrides, and a value that
 will not coerce MUST keep that default.
 
-27.9 `config` MUST be an unkeyed `global` `reactive` over the precedence 27.2 states.
+27.9 `config` MUST be an unkeyed `global` `memo` over the precedence 27.2 states.
 
 27.10 Filing or unfiling `onConfig` MUST invalidate `config`, so a read taken before the app's
 module ran is not the one served after it.
@@ -3850,6 +3866,9 @@ function on a `keydown` in a browser page that `hotkeys` would match to that key
 38.214 A function `MenuEntry.on` filed in a component's setup MUST be unfiled once that component is
 disposed.
 
+38.215 The migration keyed to 0.143.0 MUST rename to `memo` every `reactive` handed a function its
+file writes in place or binds to the name it is handed, and MUST import `memo` where it does.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -4065,7 +4084,7 @@ inline, and the rest MUST be picked up by the client's own request.
 41.5 Data MUST reach a browser by answering that browser's own `Rpc` call from the seed buffer, and
 a document MUST NOT carry a copy of an answer.
 
-41.6 Hydration MUST re-execute setup: every `<script>` and every `reactive` body runs
+41.6 Hydration MUST re-execute setup: every `<script>` and every `memo` body runs
 again, and a serialized setup result MUST NOT be adopted.
 
 41.7 The `Rpc` calls that re-execution makes MUST be answered from the seed buffer.
@@ -4149,12 +4168,12 @@ so an arm that answer changes is swapped as an update and not under 41.24.
 41.33 An `Rpc` call answering a stream whose run had closed when `render` built the markup from it
 MUST hold every chunk of that run, its run closed, as hydration adopts the page.
 
-41.34 A `render` MUST build the instance 11.67 builds in its request of every `reactive` a module
-declared outside every request whose build there left a load in flight, before it sets up a page
-or a layout.
+41.34 A `render` MUST build the instance 11.67 builds in its request of every `reactive` and `memo`
+a module declared outside every request whose build there left a load in flight, before it sets up a
+page or a layout.
 
-41.35 A `render` MUST NOT build under 41.34 a `reactive` built in a component's setup or in another
-`render`, nor one nothing reaches.
+41.35 A `render` MUST NOT build under 41.34 a `reactive` or a `memo` built in a component's setup or
+in another `render`, nor one nothing reaches.
 
 # 42. The app object
 
@@ -4953,6 +4972,26 @@ milliseconds, and MUST NOT increase for a write made through that `Database`.
 47.23 An opener's `changed` MUST be checked only while something reads it or asks its probes.
 
 47.24 Checking an opener's `changed` MUST NOT open its `Database`.
+
+47.25 A `table`'s `readable` and `writable`, reached, MUST throw where the database holds no table
+of that name.
+
+47.26 `table` MUST record each insert, update and delete made to the table, by any statement and any
+connection, in the transaction that made it, naming every column the table held when `table` first
+reached it through that `Database`.
+
+47.27 A `table`'s `readable` MUST hand on, in order, every change committed after it was first
+reached, each as the row after and the row before.
+
+47.28 A write rolled back MUST hand on no change.
+
+47.29 A change to a table `table` was called for MUST refresh every value whose `tags` name the
+table, as `invalidate` over those tags does.
+
+47.30 Rows written to a `table`'s `writable` MUST be upserted by `key`, `id` where none is given,
+and the rows written in one turn MUST be committed in one transaction.
+
+47.31 `table` MUST keep no more than the last 10000 changes of a table its watch has passed.
 
 # 48. Problem reports
 
@@ -6387,9 +6426,10 @@ after an attempt answered at any other status.
 54.9 `retries` MUST default to 2 for a method RFC 9110 defines as idempotent, and to 0 for any
 other.
 
-54.10 A retry under 54.8 MUST wait 250 milliseconds doubled for each retry before it, or the time
-the answer's `Retry-After` names, in seconds or as an HTTP date, where that is later, and MUST NOT be
-made where that wait is longer than `timeout`.
+54.10 A retry under 54.8 MUST wait `backoff` milliseconds, 250 where none is given, doubled for each
+retry before it — or, where `backoff` is a function, what it answers given the retry's number counted
+from 1 — or the time the answer's `Retry-After` names, in seconds or as an HTTP date, where that is
+later, and MUST NOT be made where that wait is longer than `timeout`.
 
 54.11 An abort of the `signal` a caller passes `fetchJson` or `fetchText` MUST be thrown as its
 reason, and MUST NOT be asked again.
@@ -6474,6 +6514,9 @@ process.
 
 54.37 `trustedIdentity` MUST seal no cookie, and MUST pass a request whose `header` is absent or
 empty as it came.
+
+54.38 A look MUST NOT start a run of a `job` while its `paused` reads true, and `runNow` MUST run
+it all the same.
 
 # 55. Worker files
 
@@ -6605,3 +6648,110 @@ order, and MUST be disabled where `value` is at `max` and at `min`.
 56.32 A `change` of `stepper`'s `input` MUST set `value` to the number its text holds, kept from `min`
 to `max` and to a whole number of steps from `min`, or from `0` where `min` is not given, and MUST
 write `value` back as the input's text, a text that is no number leaving `value` as it was.
+
+# 57. Pipes
+
+57.1 `pipe` MUST hand an item to its first step, and each later step what the step before it
+answered.
+
+57.2 A step that is a list MUST hand each of its members the same input, run them at once, and
+answer the list of their answers in its members' order, or the first refusal one of them answered.
+
+57.3 `pipe` MUST throw at construction where a step that is a list holds a list.
+
+57.4 A `pipe` step that answers an async iterable MUST hand each value it yields to the steps after
+it as an item of its own, in the order yielded.
+
+57.5 A `Pipe` called MUST settle to its last step's answer, or where a step 57.4 reads ran, to the
+list of every answer its last step made, in order; a step answering a refusal MUST end the item with
+that refusal, and a step that threw past 57.9 MUST reject the call with what it threw.
+
+57.6 A `pipe` MUST run at most `concurrency` items at once, 1 where none is given, starting a
+waiting item in the order it came.
+
+57.7 Where `key` is given, 57.6's count MUST be kept for each key `key` answers.
+
+57.8 A `pipe` MUST count every item it runs under 57.6, whether called by an app or as a step of
+another `pipe`.
+
+57.9 An attempt of a step that throws, that answers a refusal 15.19 counts transient, or that 57.12
+aborts MUST be made again, up to `retries` times, 0 where none is given; any other answer MUST NOT
+be.
+
+57.10 A step's attempt made again under 57.9 MUST wait as 54.10 has a fetch's retry wait, from the
+step's `backoff`.
+
+57.11 A refusal with a `Retry-After` MUST keep its step from starting an attempt, for every item of
+the `pipe`, until the time it names.
+
+57.12 An attempt MUST be aborted once it runs past `timeout` milliseconds.
+
+57.13 A step MUST be handed a signal that aborts where its attempt is aborted, where the signal the
+`Pipe` was called with aborts, where `stop` is called, and where the `stopSignal` its call was made
+under aborts.
+
+57.14 A `pipe` step 57.4 reads MUST NOT be attempted again once it has yielded.
+
+57.15 On a `Pipe`'s `readable`, an item 57.5 would reject MUST leave as a refusal at status 500
+carrying the message it threw, and the stream MUST run on.
+
+57.16 Where `ordered` is true, the default, a `Pipe`'s `readable` MUST hand on each item's answers
+in the order the items were written.
+
+57.17 While `paused` reads true a `pipe` MUST start no attempt, and attempts in flight MUST run on.
+
+57.18 `stop` MUST abort every attempt in flight, refuse every item not yet run and every later call,
+and settle once the attempts in flight have ended.
+
+57.19 Closing a `Pipe`'s `writable` MUST close its `readable` once every item written has left.
+
+57.20 A write to a `Pipe`'s `writable` MUST settle only once the item has started under 57.6.
+
+57.21 `status` MUST be one `global` value counting the items waiting, running, done and failed, and
+whether `paused` reads true.
+
+# 58. Ledgers
+
+58.1 `ledger` called with a name it was called with before in the process MUST answer the `Ledger`
+that call answered.
+
+58.2 `append` MUST keep its entry after every entry kept before it, numbered one past the last, and
+settle to that number.
+
+58.3 An entry a `ledger`'s `schema` refuses MUST be kept nowhere, and `append` MUST reject.
+
+58.4 `append` given a `key` an entry still kept was appended under MUST keep nothing, and settle to
+that entry's number.
+
+58.5 `read` MUST hand on, in order, every entry numbered past `from`, 0 where none is given, and
+past the last entry MUST wait for the next rather than end.
+
+58.6 `read` given a `cursor` MUST start past the entry the cursor was last moved past, and MUST move
+the cursor past an entry once its reader asks for the next.
+
+58.7 An entry written to a `Ledger`'s `writable` MUST be appended as `append` appends it.
+
+58.8 `head` MUST be the number of the last entry a `ledger` kept, 0 where it has kept none.
+
+58.9 A `ledger` given a `store` MUST keep its entries and its cursors there, and `store.sqlite`,
+`store.indexedDB` and `store.redis` MUST each keep one record per entry.
+
+58.10 Where `retain` is given, an append MUST let go of every entry but the last `retain`.
+
+58.11 `ledger` given a `retain` under 1 MUST throw at construction.
+
+
+58.12 A `ledger` whose `store` reports a change through its `watch` MUST read its last entry's
+number again, and MUST hand its waiting reads what the change appended.
+
+58.13 `store.redis` MUST look up an append's key, number its entry and keep it as one step on the
+server.
+
+58.14 Where `ttl` is given, an entry MUST be let go once `ttl` milliseconds have passed since it was
+appended, and `read` MUST NOT hand on an entry let go.
+
+58.15 A read that would hand on an entry numbered more than one past the last it handed on MUST
+error with a refusal at status 410 naming the entries it missed; a read from 0, or from a cursor
+never moved, MUST start at the oldest entry kept.
+
+58.16 An entry a `ledger` lets go MUST take the key it was appended under with it.

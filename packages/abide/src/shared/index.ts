@@ -3,8 +3,8 @@
 // types its probes narrow to live here, and nothing in this seam may import #ui or
 // #server.
 //
-// ONE FACTORY. `state`, `memo` and `channel` are gone — `reactive` carries all three through its
-// overloads, a channel being a value whose array every caller appends to.
+// TWO FACTORIES OVER ONE TYPE. `reactive` holds a value and `memo` runs a body, and both hand back a
+// `Reactive` — a channel is a `reactive` whose array every caller appends to.
 //
 // ONE REFUSAL TYPE beside it. `Failed` is the only thing a producer answers in place of a
 // value (15.1), so it is in this seam rather than the server's: the same object crosses a
@@ -155,6 +155,16 @@ export { onMenu } from './onMenu.ts'
 export { type PairingStep, pairing } from './pairing.ts'
 // 37.22 — the browser's `onRefusal`, which has no server's.
 export { onRefusal } from './onRefusal.ts'
+// 58 — events appended and read in order, from a position or a named cursor.
+export {
+    type Ledger,
+    type LedgerOptions,
+    type Logged,
+    type LogStore,
+    ledger,
+} from './ledger.ts'
+// 57 — steps an item runs through, under a budget, with retries.
+export { type Pipe, type PipeOptions, type PipeStatus, pipe } from './pipe.ts'
 // 50.19 — where a floating element sits beside its anchor.
 export type { Side } from './place.ts'
 export { type PopoverOptions, type PopoverParts, popover } from './popover.ts'
@@ -170,6 +180,7 @@ export {
     invalidate,
     isReactive,
     type Keyed,
+    memo,
     NotLanded,
     type Reactive,
     type ReactiveOptions,

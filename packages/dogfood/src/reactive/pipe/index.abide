@@ -1,0 +1,125 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/reactive/memo', '/reactive/stop-signal', '/data/job']}
+    tests={[
+        {
+            path: 'packages/abide/tests/pipe.test.ts',
+            from: [
+                "test('a pipe used as a step of two pipes is one budget for both — 57.8'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/pipe.test.ts',
+            from: [
+                "test('a streaming step fans out, each chunk through the rest in order — 57.4, 57.5'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/pipe.test.ts',
+            from: [
+                "test('the stream face keeps the order written and closes once drained — 57.16, 57.19, 57.20'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Tidy a deal's name and save the deal">
+        <p>Each step is handed what the one before it answered. Call the pipe with a deal, and it
+            settles to what the last step answered.</p>
+        <Code language="ts" caption="shared" code={`
+            import { pipe } from '@abide/abide'
+            import getDeal from './getDeal.handler.ts'
+            import saveDeal from './saveDeal.handler.ts'
+
+            const rename = pipe([
+                (id: string) => getDeal({ id }),
+                (deal) => ({ ...deal, name: deal.name.trim() }),
+                (deal) => saveDeal(deal),
+            ])
+            await rename('d2')
+        `} />
+    </Section>
+
+    <Section level={3} title="Look a deal up three ways at once">
+        <p>A list is one step: each member is handed the same input, they run at once, and the next
+            step is handed their answers in the list's order.</p>
+        <Code language="ts" caption="shared" code={`
+            import { pipe } from '@abide/abide'
+            import getContact from './getContact.handler.ts'
+            import getCompany from './getCompany.handler.ts'
+            import getDeal from './getDeal.handler.ts'
+
+            const brief = pipe([
+                (id: string) => getDeal({ id }),
+                [
+                    (deal) => getContact({ id: deal.contactId }),
+                    (deal) => getCompany({ id: deal.companyId }),
+                ],
+                ([contact, company]) => \`\${contact.name} at \${company.name}\`,
+            ])
+        `} />
+    </Section>
+
+    <Section level={3} title="Sync one contact at a time, four contacts at once">
+        <p><code>concurrency</code> caps how many items run, one where none is given, and
+            <code>key</code> counts it per key: one contact's syncs wait on each other, and another
+            contact's do not.</p>
+        <Code language="ts" caption="shared" code={`
+            import { pipe } from '@abide/abide'
+            import syncContact from './syncContact.handler.ts'
+
+            export const syncs = pipe([syncContact], {
+                concurrency: 4,
+                key: (contact: { id: string }) => contact.id,
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Ask a rate-limited service again, later">
+        <p>A step that throws, or answers a refusal worth asking again, is retried up to
+            <code>retries</code>, waiting <code>backoff</code> doubled. A
+            <code>Retry-After</code> holds the step for every item until the time it names.</p>
+        <Code language="ts" caption="server" code={`
+            import { fetchJson, pipe } from '@abide/abide/server'
+
+            const lookup = (domain: string) =>
+                fetchJson(\`https://enrich.example/\${domain}\`, { retries: 0 })
+
+            export const enrich = pipe([lookup], {
+                concurrency: 4,
+                retries: 3,
+                backoff: 1_000,
+                timeout: 10_000,
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Pipe a stream of deals through a pipe">
+        <p>A pipe is a stream pair too. Items leave in the order they went in, and one that fails
+            leaves as a refusal while the rest run on.</p>
+        <Code language="ts" caption="shared" code={`
+            import { pipe } from '@abide/abide'
+
+            const scored = pipe([(deal: { value: number }) => deal.value / 1000], {
+                concurrency: 8,
+            })
+            await ReadableStream.from(deals).pipeThrough(scored).pipeTo(report)
+        `} />
+    </Section>
+
+    <Section level={3} title="Hold the queue while a call is on">
+        <p><code>paused</code> is read as state: while it reads true no attempt starts, and the
+            ones running finish.</p>
+        <Code language="ts" caption="shared" code={`
+            import { pipe, reactive } from '@abide/abide'
+            import logToFeed from './logToFeed.handler.ts'
+
+            const onCall = reactive(false)
+            const activity = pipe([logToFeed], { paused: onCall })
+        `} />
+    </Section>
+</Doc>

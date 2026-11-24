@@ -350,11 +350,11 @@ export default GET(async () => {
 })
 `,
         'src/things/lib/Things.abide': `<script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 
 import listThings from '../listThings.handler.ts'
 
-const things = reactive(() => listThings())
+const things = memo(() => listThings())
 </script>
 
 <ul>
@@ -472,10 +472,10 @@ const greet = GET(() => 'hi')
 </script>
 
 <script>
-import { reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 
 let out = reactive('none')
-const greeting = reactive(() => greet())
+const greeting = memo(() => greet())
 const press = async () => {
     try {
         out = String(await bump())
@@ -684,13 +684,13 @@ test('a click is settled, past the call the test above left hanging', async () =
 
 // 38.206 — NOTHING IS KEPT FOR `settled` WHERE THE TEST ENTRY NEVER LOADED: a page or a server keeps
 // no list of the values that went loading. Taken in a child, since this process loaded the entry.
-// THE REVERT: call `keepLoads()` where `Reactive.ts` declares it; this reports `["reactive"]`.
+// THE REVERT: call `keepLoads()` where `Reactive.ts` declares it; this reports `["memo"]`.
 test('a process that never loaded @abide/abide/test keeps no load — 38.206', async () => {
     const run = await inAFreshProcess(`
-import { reactive } from '${import.meta.dir}/../src/shared/reactive/index.ts'
+import { memo } from '${import.meta.dir}/../src/shared/reactive/index.ts'
 import { pendingWork } from '${import.meta.dir}/../src/shared/reactive/producer.ts'
 
-const waiting = reactive(() => new Promise(() => {}))
+const waiting = memo(() => new Promise(() => {}))
 waiting.busy()
 console.log(JSON.stringify(pendingWork().loading))
 `)

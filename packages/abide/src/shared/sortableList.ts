@@ -8,7 +8,7 @@ import { announce } from './announce.ts'
 import { type KeyOption, type LabelOption, writtenBy } from './itemKey.ts'
 import { type Listbox, listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
-import { type Reactive, reactive } from './reactive/index.ts'
+import { memo, type Reactive, reactive } from './reactive/index.ts'
 import type { Picked } from './Selection.ts'
 import { withPart } from './withPart.ts'
 
@@ -57,7 +57,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
     const many = options.multiple === true
     const grabbed = reactive<ReadonlySet<string>>(new Set())
     // 51.145 — the order put, then any item it does not name, in the order given.
-    const sorted = reactive((): Item[] => {
+    const sorted = memo((): Item[] => {
         const byKey = new Map<string, Item>()
         for (const item of live(options.items)) byKey.set(keyOf(item), item)
         const placed: Item[] = []

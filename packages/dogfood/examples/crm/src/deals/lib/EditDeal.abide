@@ -1,10 +1,10 @@
 <script>
-import { form, reactive } from '@abide/abide'
+import { form, memo } from '@abide/abide'
 
 import getDeal from '../getDeal.handler.ts'
 import saveDeal from '../saveDeal.handler.ts'
 
-const deal = reactive(() => getDeal({ id: 'd1' }))
+const deal = memo(() => getDeal({ id: 'd1' }))
 const edit = form(saveDeal)
 </script>
 

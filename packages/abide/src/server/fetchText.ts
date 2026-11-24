@@ -5,7 +5,7 @@ import { isFailed, isTransient, retryAt } from '#shared/Failed.ts'
 import { type FetchFailed, fetchFailed } from '#shared/fetchFailed.ts'
 import { refusedBy } from '#shared/handle.ts'
 import { namedLogger } from '#shared/log.ts'
-import { retryWait } from '#shared/retryWait.ts'
+import { type Backoff, backoffWait } from '#shared/retryWait.ts'
 import { runSchema, type Schema } from '#shared/Schema.ts'
 
 /** `fetch`'s own options, and the deadline, the retries, the cache and the gate beside them. */
@@ -14,6 +14,8 @@ export type FetchOptions<T> = RequestInit & {
     timeout?: number
     /** 54.8, 54.9 — how many times to ask again after a failure worth asking again; 2 for an idempotent method, 0 for any other. */
     retries?: number
+    /** 54.10 — the first wait before asking again, doubled per retry, or the wait before each retry; 250 where none is given. */
+    backoff?: Backoff
     /** 54.12, 54.13 — the milliseconds a `GET`'s answer is held for the same URL and headers. */
     ttl?: number
     /** 54.17 — what the body must be, checked before it is the answer. */
@@ -99,6 +101,7 @@ async function asked(
     const {
         timeout = DEFAULT_TIMEOUT,
         retries: retriesGiven,
+        backoff,
         ttl: _ttl,
         schema: _schema,
         ...init
@@ -132,7 +135,7 @@ async function asked(
         }
         if (attempt >= retries) return failure
         // 54.10 — bounded by `retries` rather than a ceiling: a step past `timeout` is not waited on.
-        const wait = retryWait(attempt, FIRST_BACKOFF, Infinity, notBefore)
+        const wait = backoffWait(backoff, attempt, FIRST_BACKOFF, notBefore)
         // 54.10 — a service asking for longer than one attempt may take is not waited on.
         if (wait > timeout) return failure
         FETCH_LOG.debug(

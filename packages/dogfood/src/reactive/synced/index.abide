@@ -31,10 +31,10 @@ import Section from '#src/lib/Section.abide'
             <code>synced</code> is false, so the page can say the change is only local.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { reactive, synced } from '@abide/abide'
+            import { memo, synced } from '@abide/abide'
             import getDeal from './getDeal.handler.ts'
 
-            let deal = reactive(() => getDeal({ id: 'd2' }))
+            let deal = memo(() => getDeal({ id: 'd2' }))
             </script>
 
             <button onclick={() => (deal = { ...deal, stage: 'won' })}>Win</button>

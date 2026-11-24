@@ -1,5 +1,5 @@
 <script>
-import { reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 
 import salesReport from '../salesReport.handler.ts'
 
@@ -7,7 +7,7 @@ const REGIONS = ['north', 'south']
 
 let region = reactive('north')
 
-const rows = reactive(() => salesReport({ region }))
+const rows = memo(() => salesReport({ region }))
 
 function refusal() {
     const failed = rows.error()

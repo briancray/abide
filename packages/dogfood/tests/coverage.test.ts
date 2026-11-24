@@ -280,7 +280,9 @@ function declaredTypes(): Set<string> {
         // ARGUMENT list, and reading `Reactive<Params>` as DECLARING `Params` is how
         // this test would stop testing.
         for (const part of binder(signature ?? '').split(','))
-            declared.add(/^\s*([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1] ?? '')
+            declared.add(
+                /^\s*(?:const\s+)?([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1] ?? '',
+            )
         // A GENERIC TYPE spelled as its own name over its parameters — `Keyed<Stored, Args, …>` —
         // declares them as a leading `<…>` would. Read as one, or a parameter no other row
         // happened to name reads as a type nothing declares.
@@ -288,7 +290,10 @@ function declaredTypes(): Set<string> {
             for (const part of binder(
                 `\`${signature.slice(own.length + 1)}`,
             ).split(','))
-                declared.add(/^\s*([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1] ?? '')
+                declared.add(
+                    /^\s*(?:const\s+)?([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1] ??
+                        '',
+                )
         // AND ITS BODY A GENERIC SIGNATURE — `Middleware<Answer, Extra> = <Given, Result>(…)` —
         // binds a second list, the call's, where the alias's ends.
         const body = (signature ?? '').indexOf('> = <')
@@ -296,7 +301,10 @@ function declaredTypes(): Set<string> {
             for (const part of binder(`\`${signature?.slice(body + 4)}`).split(
                 ',',
             ))
-                declared.add(/^\s*([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1] ?? '')
+                declared.add(
+                    /^\s*(?:const\s+)?([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1] ??
+                        '',
+                )
         // A MAPPED TYPE binds its key where it uses it — `[K in RequiredNames<P>]` is the
         // same declaration a leading `<…>` makes, in the other syntax. `ParamsOf<P>` is
         // three of them, and without this the key reads as a type nothing declares.

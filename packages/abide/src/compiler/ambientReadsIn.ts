@@ -56,7 +56,7 @@ export const AMBIENT_SOURCES: string[] = [
 ]
 
 /**
- * Where a `global` reactive's body reads a per-request ambient, in source order.
+ * Where a `global` memo's body reads a per-request ambient, in source order.
  *
  * `paths` maps each of `AMBIENT_SOURCES` to the path the checker names it by (`Abide` in
  * `reactiveTypes.ts` has the reason: the checker folds case on a case-insensitive disk).
@@ -116,7 +116,7 @@ export async function ambientReadsIn(
 }
 
 /**
- * Whether a call builds a `global` value over a body written in place: `reactive(() => …, { global:
+ * Whether a call builds a `global` value over a body written in place: `memo(() => …, { global:
  * true })` or `GET(() => …, { global: true })`, the option a literal `true`.
  */
 function isGlobalReactive(call: CallExpression): boolean {

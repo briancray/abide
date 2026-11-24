@@ -7,9 +7,9 @@ import {
     type Failed,
     flushSync,
     invalidate,
+    memo,
     type Middleware,
     type Reactive,
-    reactive,
     ready,
     refresh,
     refuse,
@@ -47,11 +47,11 @@ test('a plain handler is the reactive of itself, and a repeated call joins it �
 // adopting the first rather than the entry — the identity check fails with the same totals on
 // screen, which is why it is identity that is asserted.
 test('a reactive handler is reached, not wrapped — 16.3, 16.5', async () => {
-    const totals = reactive(({ region }: { region: string }) => region.length)
+    const totals = memo(({ region }: { region: string }) => region.length)
     const getTotals = GET(totals)
     expect(getTotals({ region: 'north' })).toBe(totals({ region: 'north' }))
 
-    const viewer = reactive(() => ({ readOnly: true }))
+    const viewer = memo(() => ({ readOnly: true }))
     const getViewer = GET(viewer)
     expect(getViewer()).toBe(viewer)
     expect(await getViewer()).toEqual({ readOnly: true })
@@ -150,8 +150,8 @@ test("a plain handler's options build its value too — 16.6", async () => {
     await payInvoice({ id: '42' })
     expect(`payments: ${payments}`).toBe('payments: 1')
 
-    const viewer = reactive(() => 1)
-    const byId = reactive(({ id }: { id: string }) => id)
+    const viewer = memo(() => 1)
+    const byId = memo(({ id }: { id: string }) => id)
     // @ts-expect-error a value handed in has decided its own options
     GET(viewer, { ttl: 0 })
     // @ts-expect-error and so has a keyed one
@@ -279,7 +279,7 @@ test("a helper's rungs carry their refusals, and take the handler's args — 16.
         next: (ctx?: RpcContext<Args>) => Promise<unknown>,
         ctx: RpcContext<Args>,
     ) => unknown)[] => []
-    const realms = reactive((args: { home: string }) => args.home)
+    const realms = memo((args: { home: string }) => args.home)
     const names: string[] = []
     const failure: unknown = refuse.named('NotYours', 403)()
     for (const handler of [
@@ -339,7 +339,7 @@ test("a declared args types the handler's parameter — 16.87", async () => {
 test("a handler the annotation checks carries the wire's ValidationError — 16.8, 19.9", () => {
     const double = POST(async ({ n }: { n: number }) => n * 2)
     const page = GET(({ size = 10 }: { size?: number } = {}) => size)
-    const keyed = POST(reactive(({ id }: { id: string }) => id))
+    const keyed = POST(memo(({ id }: { id: string }) => id))
     const refused: unknown = refuse.validation<{ n: number }>({
         n: ['must be number'],
     })
@@ -466,7 +466,7 @@ test('a value adopts an rpc call whose failures it carries — 11.61, 16.8', asy
     const updatePhone = POST(async ({ phone }: { phone: string }) => ({
         phone,
     }))
-    const contact = reactive(() => getContact({ id: '4021' }))
+    const contact = memo(() => getContact({ id: '4021' }))
     await contact
     contact.set(updatePhone({ phone: '2' }))
     await contact

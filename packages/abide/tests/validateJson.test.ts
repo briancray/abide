@@ -6,7 +6,7 @@ import { expect, test } from 'bun:test'
 
 import { GET, POST } from '#server'
 import type { Issues, JsonValue, StandardSchemaV1 } from '#shared'
-import { jsonSchema, reactive, validateJson } from '#shared'
+import { jsonSchema, memo, reactive, validateJson } from '#shared'
 
 // THE TYPE ARGUMENT IS NOT DECORATION. `Issues<T>` answers a bare `string[]` where `T` is
 // not an object, and `unknown` is not — so `validateJson(…)` with none types its own result
@@ -602,7 +602,7 @@ test('a schema types its ValidationError into error(), and only a schema does', 
 // below (`Property 'data' does not exist on type 'never'`, `SchemaIssuesSearch.abide`'s complaint
 // under `abide check`). Answering the refusal whatever the gate leaves the ungated line unused.
 test('an args gate types its ValidationError into a keyed error(), and only a gate does', () => {
-    const invoice = reactive((args: { id: number }) => args.id * 2, {
+    const invoice = memo((args: { id: number }) => args.id * 2, {
         args: jsonSchema<{ id: number }>({
             type: 'object',
             properties: { id: { type: 'integer', minimum: 0 } },
@@ -611,7 +611,7 @@ test('an args gate types its ValidationError into a keyed error(), and only a ga
     const ids: string[] | undefined = invoice({ id: -1 }).error()?.data.id
     expect(ids).toEqual(['must be at least 0'])
 
-    const plain = reactive((args: { id: number }) => args.id * 2)
+    const plain = memo((args: { id: number }) => args.id * 2)
     // @ts-expect-error — no gate declared, so no refusal to read.
     expect(plain({ id: -1 }).error()?.data).toBeUndefined()
 })
@@ -629,7 +629,7 @@ test('an args gate types its ValidationError into a keyed error(), and only a ga
 // promise is not).
 test('a body is typed from the body, whatever schema gates it — 19.23, 19.24', async () => {
     const invoice = GET(
-        reactive(async ({ id }: { id: number }) => ({ id, total: id * 10 }), {
+        memo(async ({ id }: { id: number }) => ({ id, total: id * 10 }), {
             args: jsonSchema({
                 type: 'object',
                 properties: { id: { type: 'integer' } },
@@ -640,7 +640,7 @@ test('a body is typed from the body, whatever schema gates it — 19.23, 19.24',
     const total: number = (await invoice({ id: 2 })).total
     expect(total).toBe(20)
 
-    const label = reactive(() => 'seats', {
+    const label = memo(() => 'seats', {
         schema: jsonSchema({ type: 'string' }),
     })
     const read: string = label()
@@ -653,7 +653,7 @@ test('a body is typed from the body, whatever schema gates it — 19.23, 19.24',
             validate: (value) => ({ value: value as { id: number } }),
         },
     }
-    const loaded = reactive(async () => ({ id: 7 }), { schema: standard })
+    const loaded = memo(async () => ({ id: 7 }), { schema: standard })
     const id: number = (await loaded).id
     expect(id).toBe(7)
 })
@@ -715,7 +715,7 @@ test('a member left undefined is absent — 19.25', async () => {
         validateJson<Anywhere>(schema, { title: 't', tags: ['a', undefined] }),
     ).not.toBeNull()
 
-    const noted = reactive(
+    const noted = memo(
         ({ title, note }: { title: string; note?: string | undefined }) =>
             `${title}:${note ?? '-'}`,
         { args: jsonSchema(schema) },

@@ -1,9 +1,9 @@
 <script>
-import { announce, reactive } from '@abide/abide'
+import { announce, memo, reactive } from '@abide/abide'
 
 const DEALS = ['Acme renewal', 'Hopper expansion', 'Initech pilot']
 let query = reactive('')
-const found = reactive(() =>
+const found = memo(() =>
     DEALS.filter((deal) => deal.toLowerCase().includes(query.toLowerCase())),
 )
 

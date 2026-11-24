@@ -41,7 +41,7 @@ The one-sentence rule is what keeps the two documents apart. A second sentence i
 Slots one and two are the two ends of the arrow the name is, the end a reader came for written
 first. `Reactive<Stored, Accepted>` is a value read and then written,
 `Rpc<Value, Args>` is a call answered and then made, `reactive<Accepted, Shaped>` is the value form
-taking and then holding what its transform hands back, and `reactive<Computed, Args>` is a keyed body returning and then taking. Slot three is the
+taking and then holding what its transform hands back, and `memo<Computed, Args>` is a keyed body returning and then taking. Slot three is the
 second value type wherever the first two did not already carry it, which on `Keyed<Stored, Args,
 Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 `Produced`.
@@ -257,20 +257,19 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `Shaped` | `unknown` | What a `transform` hands back: the value to store, or a refusal. | 4.6, 4.9 |
 | `Produced` | `unknown` | What a production carries, where that differs from what is stored. | 1.2, 9.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.4, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.64, 19.15 |
-| `reactive` | `<Value = never, Args = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>>(body: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate>) => ReactiveOf<Args, Result, Shaped, Gate, ArgsGate>` | The body form, for a value `body` produces: keyed where it declares a parameter, and a stream where it hands back a generator. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.50, 11.51, 11.52, 11.53, 11.54, 11.57, 11.58, 41.6, 11.62, 11.63, 11.65, 11.66, 12.14, 12.17, 19.24, 41.34, 41.35, 11.73, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 11.2, 11.4, 11.6, 11.23, 11.55 |
-| `reactive` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(initial: Held<Accepted> \| undefined, options?: Shaping<Accepted, Shaped, never, Gate>) => Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>` | The value form, for what the scope owns outright, opening at `initial`, at what a promise of it settles to, or at `undefined`. | 4.1, 4.2, 4.14, 4.15, 4.16 |
+| `reactive` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(initial: Held<Accepted> \| undefined, options?: Shaping<Accepted, Shaped, never, Gate>) => Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>` | The value form, for what the scope owns outright, opening at `initial`, at what a promise of it settles to, or at `undefined`. | 4.1, 4.2, 4.14, 4.15, 4.16, 4.20 |
 | `reactive` | `<Accepted>() => [Accepted extends Rpc<infer Value, infer Args, infer Failures, infer Produced> ? true : false] extends [true] ? Reactive<StoredOf<CallOf<Accepted>>, StoredOf<CallOf<Accepted>>, AdoptedFailures<CallOf<Accepted>>, AdoptedProduced<CallOf<Accepted>, StoredOf<CallOf<Accepted>>>> : Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>` | The empty form, for a value nothing has written yet. | 4.14, 4.19 |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | The shape of a `transform`. | 4.6, 4.7, 4.8 |
 | `Shared` | `interface Shared {}` | The app's declaration-merged registry of shared keys. | 10.3 |
 | `reactive.share` | `<Key extends string, Value>(key: Key, create: () => Reactive<Value>) => Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value>` | Get-or-create a reactive value in the component's scope by key. | 10.1, 10.2, 10.4, 10.5, 10.6, 10.7 |
 
-The aliases the body form reads what a body is through — its value, what it streams, and the value
-or keyed value it builds — the one the value form turns a body away with, those a transform's and a
-body's return are split through, the one that adds a declared `schema`'s refusal, and the two the
+The aliases `memo` reads what a body is through — its value, what it streams, and the value or
+keyed value it builds — the one the value form turns a `Reactive` away with, those a transform's and
+a body's return are split through, the one that adds a declared `schema`'s refusal, and the two the
 empty form reads each `Rpc`'s call through, are declared rather than listed, none of them being a
 name an app writes:
 ```ts
-type Held<Accepted> = [Accepted] extends [((...given: never[]) => unknown) | { invalidate: unknown }] ? never : Accepted | (PromiseLike<Accepted> & { invalidate?: never })
+type Held<Accepted> = [Accepted] extends [{ invalidate: unknown }] ? never : Accepted | (PromiseLike<Accepted> & { invalidate?: never })
 type BodyValue<Result> = Awaited<Result> extends AsyncGenerator<infer Chunk> ? Chunk[] : Awaited<Result>
 type BodyProduced<Result, Otherwise> = Awaited<Result> extends AsyncGenerator<infer Chunk> ? Chunk : AdoptedProduced<Result, Otherwise>
 type ReactiveOf<Args, Result, Shaped, Gate, ArgsGate> = [Args] extends [never] ? Reactive<Kept<Shaped>, BodyValue<Result>, AdoptedFailures<Result> | Refusals<Shaped, Gate, BodyValue<Result>>, BodyProduced<Result, Kept<Shaped>>> : Keyed<Kept<Shaped>, Args, BodyValue<Result>, AdoptedFailures<Result> | Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args>, BodyProduced<Result, Kept<Shaped>>>
@@ -353,6 +352,46 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `k.invalidate` | `(pattern?: Partial<Args>) => void` | `invalidate` narrowed to matching entries. | 7.2, 7.3, 13.4, 13.12 |
 | `k.refresh` | `(pattern?: Partial<Args>) => void` | `refresh` narrowed to matching entries. | 7.4, 7.5, 13.4, 13.12 |
 
+## `memo`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `memo` | `<Value = never, Args = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>>(body: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate>) => ReactiveOf<Args, Result, Shaped, Gate, ArgsGate>` | A value `body` produces, keyed where it declares a parameter and a stream where it hands back a generator. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.50, 11.51, 11.52, 11.53, 11.54, 11.57, 11.58, 41.6, 11.62, 11.63, 11.65, 11.66, 12.14, 12.17, 19.24, 41.34, 41.35, 11.73, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 11.2, 11.4, 11.6, 11.23, 11.55, 7.45, 7.46, 11.74 |
+
+## `pipe`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `pipe` | `<const Steps extends readonly [Step, ...Step[]]>(steps: Steps, options?: PipeOptions<FirstIn<Steps>>) => Pipe<FirstIn<Steps>, LastOut<Steps>, AnyFans<Steps>>` | Steps an item runs through in order, at most `concurrency` items at once, as a function to call and a stream pair to pipe through. | 57.1, 57.2, 57.3, 57.4, 57.6, 57.7, 57.8, 57.9, 57.10, 57.11, 57.12, 57.13, 57.14 |
+| `Pipe` | `Pipe<In, Out, Fanned extends boolean = false> = ((input: In, signal?: AbortSignal) => Promise<(Fanned extends true ? Out[] : Out) \| Failed<string, unknown>>) & { readonly readable: ReadableStream<Out \| Failed<string, unknown>>; readonly writable: WritableStream<In>; readonly status: Reactive<PipeStatus>; stop(): Promise<void> }` | What `pipe` hands back. | 57.5, 57.13, 57.15, 57.16, 57.19, 57.20 |
+| `Pipe.status` | `Reactive<PipeStatus>` | Where the pipe's items stand, one value for every caller. | 57.21 |
+| `Pipe.stop` | `() => Promise<void>` | The end of the pipe, and of every attempt in flight. | 57.18 |
+| `PipeOptions` | `<In = unknown>{ concurrency?: number; key?: (input: In) => string; ordered?: boolean; retries?: number; backoff?: number \| ((retry: number) => number); timeout?: number; paused?: Reactive<boolean> \| (() => boolean) }` | How many items run at once and by what key, the order they leave in, each step's retries, their spacing and its deadline, and what holds the pipe. | 57.6, 57.7, 57.9, 57.10, 57.12, 57.16, 57.17 |
+| `PipeStatus` | `{ waiting: number; running: number; done: number; failed: number; paused: boolean }` | How many items wait, run, are done and failed, and whether the pipe is paused. | 57.21 |
+
+The aliases `pipe` reads its steps through — what one place in the steps holds, what a step hands on,
+whether one fans out, and the item a pipe takes and the answer it gives — are declared rather than
+listed, none of them being a name an app writes:
+```ts
+type Step = ((input: never, signal: AbortSignal) => unknown) | Pipe<never, unknown, boolean> | readonly (((input: never, signal: AbortSignal) => unknown) | Pipe<never, unknown, boolean>)[]
+type StepOut<S> = S extends readonly unknown[] ? { -readonly [K in keyof S]: StepOut<S[K]> } : S extends Pipe<never, infer Out, infer _Fanned> ? Exclude<Out, Failed<string, unknown>> : S extends (...given: never[]) => infer Result ? Awaited<Result> extends AsyncIterable<infer Chunk> ? Chunk : Exclude<Awaited<Result>, Failed<string, unknown>> : never
+type StepFans<S> = S extends readonly unknown[] ? false : S extends Pipe<never, unknown, infer Fanned> ? Fanned : S extends (...given: never[]) => infer Result ? Awaited<Result> extends AsyncIterable<unknown> ? true : false : false
+type AnyFans<Steps> = Steps extends readonly [infer First, ...infer Rest] ? StepFans<First> extends true ? true : AnyFans<Rest> : false
+type StepIn<S> = S extends readonly (infer Member)[] ? StepIn<Member> : S extends Pipe<infer In, unknown, boolean> ? In : S extends (input: infer In, signal: AbortSignal) => unknown ? In : never
+type LastOut<Steps> = Steps extends readonly [...unknown[], infer Last] ? StepOut<Last> : never
+type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepIn<First> : never
+```
+
+## `ledger`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `ledger` | `<Entry>(name: string, options?: LedgerOptions<Entry>) => Ledger<Entry>` | Entries appended and never coalesced, read in order from a position or a named cursor. | 58.1, 58.9, 58.10, 58.11, 58.12 |
+| `Ledger` | `<Entry>{ append: (entry: Entry, options?: { key?: string }) => Promise<number>; read: (from?: number \| { cursor: string }) => ReadableStream<Logged<Entry>>; readonly writable: WritableStream<Entry>; readonly head: Reactive<number> }` | What `ledger` hands back: the append, the read, the stream an entry is written to, and the last entry's number. | 58.2, 58.4, 58.5, 58.6, 58.7, 58.8, 58.15, 58.16 |
+| `LedgerOptions` | `<Entry>{ store?: LogStore; retain?: number; ttl?: number; schema?: Schema<Entry> }` | Where the entries are kept, how many are and for how long, and what an entry must be. | 58.3, 58.9, 58.10, 58.14 |
+| `Logged` | `<Entry>{ seq: number; at: number; entry: Entry }` | One entry as a ledger keeps it: its number, when it was appended, and what it holds. | 58.2 |
+| `LogStore` | `{ append: (entry: unknown, key: string \| undefined, at: number) => number \| Promise<number>; since: (seq: number) => Logged<unknown>[] \| Promise<Logged<unknown>[]>; last: () => number \| Promise<number>; position: (cursor: string, seq?: number) => number \| Promise<number>; trim: (through: number) => void \| Promise<void>; watch?: (changed: () => void) => () => void }` | The append face of a `store` a ledger keeps its entries and cursors in. | 58.9, 58.12 |
+
 ## `watch`
 
 | Name | Signature | Meaning | Rules |
@@ -369,9 +408,9 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `Store` | `{ get: () => Stored \| undefined \| Promise<Stored \| undefined>; set: (value: Stored, retention: { ttl: number }) => void \| Promise<void>; watch?: (changed: () => void) => () => void }` | Where a value lives when this process does not. | 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12, 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20, 8.21 |
 | `store` | `{ web; indexedDB; cookies }`, and `sqlite` and `redis` beside them from `@abide/abide/server` | The `Store`s abide ships, as one namespace. | 8.22, 8.25, 8.31, 8.34, 8.37, 8.43 |
 | `store.web` | `<Stored>(key: string, options?: { area?: 'local' \| 'session'; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in the browser's Web Storage. | 8.22, 8.23, 8.24, 8.26, 8.27, 8.28, 8.29, 8.30 |
-| `store.sqlite` | `<Stored>(database: Database \| (() => Database) \| string, key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a `bun:sqlite` table, a member of `@abide/abide/server`'s `store` alone. | 8.25, 8.26, 8.27, 8.28, 8.29, 8.41, 8.42 |
-| `store.redis` | `<Stored>(client: RedisClient \| string, key: string, options?: { schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a Redis key through `bun`'s `RedisClient`, a member of `@abide/abide/server`'s `store` alone. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33 |
-| `store.indexedDB` | `<Stored>(key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in the browser's IndexedDB. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.34, 8.35, 8.36 |
+| `store.sqlite` | `<Stored>(database: Database \| (() => Database) \| string, key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored> & LogStore` | A `Store` kept in a `bun:sqlite` table, a member of `@abide/abide/server`'s `store` alone. | 8.25, 8.26, 8.27, 8.28, 8.29, 8.41, 8.42, 58.9 |
+| `store.redis` | `<Stored>(client: RedisClient \| string, key: string, options?: { schema?: Schema<Stored> }) => Store<Stored> & LogStore` | A `Store` kept in a Redis key through `bun`'s `RedisClient`, a member of `@abide/abide/server`'s `store` alone. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33, 58.9, 58.12, 58.13 |
+| `store.indexedDB` | `<Stored>(key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored> & LogStore` | A `Store` kept in the browser's IndexedDB. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.34, 8.35, 8.36, 58.9, 58.12 |
 | `store.cookies` | `<Stored>(name: string, options?: { path?: string; domain?: string; sameSite?: 'strict' \| 'lax' \| 'none'; secure?: boolean; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a cookie. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.37, 8.38, 8.39, 8.40 |
 | `store` | `Store<Stored> \| ((args: Args) => Store<Stored>)` | The option that keeps a value in a `Store`, or a keyed value's entries one `Store` each. | 8.1, 8.2, 8.3, 8.14, 9.5, 11.42, 11.71 |
 
@@ -436,7 +475,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `stopSignal` | `() => AbortSignal` | The signal a stopping app aborts, which a job's run reads to be told to stop. | 7.38, 7.39 |
+| `stopSignal` | `() => AbortSignal` | The signal that says stop: inside a `memo` body its run's own, and elsewhere the one a stopping app aborts. | 7.38, 7.39, 7.45, 7.46 |
 
 ## `structural`
 
@@ -456,8 +495,8 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- |
 | template expression | The flow itself. | 14.1, 14.2, 14.11, 14.17, 14.19, 32.25, 32.57 |
 | branch-local `<script>` | An item's own setup scope. | 14.8, 34.7, 34.8, 34.9, 34.10, 34.32 |
-| `reactive` body, unkeyed | The unkeyed body's own scope. | 14.3, 14.11, 14.15, 14.16, 14.17, 14.19 |
-| `reactive` body, keyed | The keyed body's own scope. | 14.4 |
+| `memo` body, unkeyed | The unkeyed body's own scope. | 14.3, 14.11, 14.15, 14.16, 14.17, 14.19 |
+| `memo` body, keyed | The keyed body's own scope. | 14.4 |
 | block body binding | A live read, like a prop. | 14.5 |
 | `watch` effect, bare | The effect's own scope. | 14.6, 14.14, 14.16, 14.19 |
 | `watch` effect, over sources | The scope its sources narrow. | 12.3, 14.6 |
@@ -1364,11 +1403,18 @@ type Reached = { readonly [REACHED]: true }
 | `opener.close` | `(options?: { remove?: boolean }) => void` | Closes the `Database` an opener holds, and with `remove` deletes the file it last opened. | 47.11, 47.16, 47.17 |
 | `opener.changed` | `Reactive<number>` | How many times the opener has found another connection's commits to its file. | 47.22, 47.23, 47.24 |
 
+## `table`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `table` | `<Row extends Record<string, unknown>>(database: Database \| (() => Database), name: string, options?: { key?: keyof Row & string }) => { readable: ReadableStream<Change<Row>>; writable: WritableStream<Row> }` | A table of the app's `bun:sqlite` database as a stream pair, its changes read out and rows upserted in, from `@abide/abide/server`. | 47.25, 47.26, 47.27, 47.28, 47.29, 47.30, 47.31 |
+| `Change` | `<Row>{ op: 'insert' \| 'update' \| 'delete'; row: Row \| undefined; previous: Row \| undefined }` | One change to a row: what it is now and what it was. | 47.27 |
+
 ## `job`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29 |
+| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined; paused?: Reactive<boolean> \| (() => boolean) }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38 |
 | `Job` | `{ status: Reactive<JobStatus>; runNow: () => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
 | `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
 | `Job.runNow` | `() => Promise<JobStatus>` | A run ahead of the schedule. | 54.20 |
@@ -1380,7 +1426,7 @@ type Reached = { readonly [REACHED]: true }
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `fetchJson` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T \| FetchFailed>` | Another service's answer as JSON, asked with a deadline, retries and an optional cache, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.34 |
-| `FetchOptions<T>` | `RequestInit & { timeout?: number; retries?: number; ttl?: number; schema?: Schema<T> }` | `fetch`'s own options, with the deadline, the retries, the cache and the gate beside them. | 54.7, 54.8, 54.9, 54.12, 54.15, 54.17 |
+| `FetchOptions<T>` | `RequestInit & { timeout?: number; retries?: number; backoff?: number \| ((retry: number) => number); ttl?: number; schema?: Schema<T> }` | `fetch`'s own options, with the deadline, the retries and their spacing, the cache and the gate beside them. | 54.7, 54.8, 54.9, 54.10, 54.12, 54.15, 54.17 |
 | `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'timeout' \| 'network' \| 'status' \| 'shape' }>` | The refusal a fetch that gave up, or a `Response` `handle` read outside 2xx, settles to. | 15.9, 54.14, 54.16, 54.17, 54.31, 54.34 |
 
 ## `fetchText`
@@ -1802,7 +1848,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97, 38.123, 38.136, 38.181 |
 | `abide native [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 38.175, 38.176, 38.178, 38.179, 38.180, 38.181, 38.182, 38.186, 38.187, 38.188, 38.189, 38.190, 38.191, 38.192, 38.193, 38.194, 44.77, 44.80 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118, 38.130 |
-| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203 |
+| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |
 

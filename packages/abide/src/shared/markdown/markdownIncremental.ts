@@ -3,7 +3,7 @@
 // section}` keeps its nodes and a chunk re-renders only the section still growing.
 
 import { type Live, live } from '../live.ts'
-import { reactive } from '../reactive/index.ts'
+import { memo } from '../reactive/index.ts'
 import {
     blockOf,
     type LinkTarget,
@@ -82,7 +82,7 @@ export function markdownIncremental(options: {
         }
     }
 
-    const sections = reactive((): readonly MarkdownSection[] => {
+    const sections = memo((): readonly MarkdownSection[] => {
         const text = live(options.source) ?? ''
         const names = live(options.blocks) ?? []
         const settings: Settings = {

@@ -7,7 +7,7 @@ import { checkParts } from './checkParts.ts'
 import { number } from './format/index.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import { type Reactive, reactive } from './reactive/index.ts'
+import { memo, type Reactive, reactive } from './reactive/index.ts'
 import { scrub, type ScrubPosition } from './scrub.ts'
 
 /** The range picked, and the scale it is picked on. */
@@ -71,9 +71,7 @@ export function range(options: RangeOptions): RangeParts {
         options.value ?? reactive<readonly [number, number]>([min(), max()])
 
     // The values a thumb stops at, by index from `min`.
-    const last = reactive(() =>
-        Math.max(0, Math.floor((max() - min()) / step())),
-    )
+    const last = memo(() => Math.max(0, Math.floor((max() - min()) / step())))
     const indexOf = (each: number) =>
         Math.min(last(), Math.max(0, Math.round((each - min()) / step())))
     const valueOf = (index: number) => min() + index * step()

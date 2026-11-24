@@ -24,7 +24,7 @@ import { mounted } from './mount.ts'
 import { MUX_FOLLOWS } from './MUX_FOLLOWS.ts'
 import { online } from './online.ts'
 import { onPrincipalRotated } from './principalRotated.ts'
-import { reactive } from './reactive/index.ts'
+import { memo, reactive } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 import { collectWatches, owned, unowned, watch } from './reactive/watch.ts'
 import { rpcRequest } from './rpcRequest.ts'
@@ -204,7 +204,7 @@ function setUp(
         })
     // 53.49 — no network is said before anything else, since nothing below it can change until it
     // returns.
-    const step = reactive((): PairingStep => {
+    const step = memo((): PairingStep => {
         if (!online()) return 'offline'
         if (status.error() !== undefined) return 'unavailable'
         const value = status()
@@ -239,7 +239,7 @@ function readPairing(): {
         const aborted = new AbortController()
         // UNOWNED: it outlives the reader that made it, and ends with the last one.
         const copy: Reactive<BridgeStatus> = unowned(() =>
-            reactive(async () => {
+            memo(async () => {
                 // 44.73 — a refresh the follow sends after the last reader went reads nothing.
                 if (aborted.signal.aborted) return copy.peek()
                 // 44.74 — no tools: the server's `ABIDE_BRIDGE_TOOLS` decides what a pairing grants.

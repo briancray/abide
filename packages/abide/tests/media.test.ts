@@ -113,10 +113,10 @@ test('media and online hydrate as the server answered, and swap after without a 
     })
     try {
         const { mount } = await renderPage(`<script>
-import { isServer, media, online, reactive } from '@abide/abide'
+import { isServer, media, memo, online } from '@abide/abide'
 
 const wide = media('(min-width: 700px)')
-const browser = reactive(() => !isServer())
+const browser = memo(() => !isServer())
 </script>
 
 {#if wide}<p id="wide">wide</p>{:else}<p id="narrow">narrow</p>{/if}

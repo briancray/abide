@@ -1,0 +1,151 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/reactive/pipe', '/reactive/store', '/reactive/reactive']}
+    tests={[
+        {
+            path: 'packages/abide/tests/ledger.test.ts',
+            from: [
+                "test('a read hands on every entry past its position, and waits for the next — 58.5, 58.7'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/ledger.test.ts',
+            from: [
+                "test('a named cursor resumes at the entry its reader had not finished — 58.6'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/ledger.test.ts',
+            from: [
+                "test('a ledger in store.sqlite keeps a row per entry, and its cursors — 58.9'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Log every call a rep makes">
+        <p>An entry appended is kept after every one before it and numbered one past the last.
+            Nothing is coalesced: two calls logged are two entries.</p>
+        <Code language="ts" caption="shared" code={`
+            import { ledger } from '@abide/abide'
+
+            const calls = ledger<{ contact: string; minutes: number }>('calls')
+            await calls.append({ contact: 'c1', minutes: 12 })
+            calls.head() // 1
+        `} />
+    </Section>
+
+    <Section level={3} title="Log a resent call once">
+        <p>Hand <code>append</code> a <code>key</code>, and a second append under it keeps nothing
+            and answers the first entry's number.</p>
+        <Code language="ts" caption="shared" code={`
+            import { ledger } from '@abide/abide'
+
+            const calls = ledger<{ contact: string }>('calls')
+            await calls.append({ contact: 'c1' }, { key: 'call-81' })
+            await calls.append({ contact: 'c1' }, { key: 'call-81' }) // the same number
+        `} />
+    </Section>
+
+    <Section level={3} title="Score each call where the scorer left off">
+        <p>A read with a <code>cursor</code> starts past where that cursor's reader finished, and
+            waits for the next entry rather than ending. An entry is finished once its reader asks
+            for the next.</p>
+        <Code language="ts" caption="server" code={`
+            import { ledger, pipe } from '@abide/abide/server'
+
+            const calls = ledger<{ minutes: number }>('calls')
+            const score = pipe([(logged) => logged.entry.minutes / 60])
+
+            await calls.read({ cursor: 'scorer' }).pipeThrough(score).pipeTo(scores)
+        `} />
+    </Section>
+
+    <Section level={3} title="Follow the call log from a page">
+        <p>A ledger crosses the wire as a streaming <code>GET</code>: a page reading it is handed
+            every entry past <code>after</code>, then each one appended after. An append is a
+            <code>POST</code> whose <code>key</code> the page makes, so an outbox resend keeps one
+            entry.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, ledger, POST } from '@abide/abide/server'
+
+            const calls = ledger<{ contact: string; minutes: number }>('calls')
+
+            export const getCalls = GET(async function* ({ after }: { after: number }) {
+                yield* calls.read(after)
+            })
+            export const logCall = POST(({ call, key }) => calls.append(call, { key }))
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep the call log in SQLite">
+        <p>Hand it <code>store.sqlite</code>, and each entry is one row, and each cursor another:
+            an append costs one row however long the log grows.</p>
+        <Code language="ts" caption="server" code={`
+            import { database, ledger, store } from '@abide/abide/server'
+
+            const crm = database('crm')
+            const calls = ledger('calls', { store: store.sqlite(crm, 'calls') })
+        `} />
+    </Section>
+
+    <Section level={3} title="Share one call log across every server process">
+        <p>Hand it <code>store.redis</code>, and the entries are a Redis Stream every process
+            appends to. An append is one script on the server, so two processes appending at once
+            never take one number or keep one key twice, and a ledger in another process hears
+            it.</p>
+        <Code language="ts" caption="server" code={`
+            import { ledger, store } from '@abide/abide/server'
+
+            const shared = store.redis('redis://localhost:6379', 'calls')
+            const calls = ledger('calls', { store: shared })
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep a rep's offline notes in the browser">
+        <p>Hand it <code>store.indexedDB</code>, and the entries outlive a reload. An append in
+            another tab moves this tab's <code>head</code> and wakes its reads.</p>
+        <Code language="ts" caption="browser" code={`
+            import { ledger, store } from '@abide/abide'
+
+            const notes = ledger<string>('notes', { store: store.indexedDB('notes') })
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep a day of presence pings">
+        <p><code>ttl</code> is an entry's life from its append, in milliseconds: past it the entry
+            is let go, and no read hands it on.</p>
+        <Code language="ts" caption="shared" code={`
+            import { ledger } from '@abide/abide'
+
+            const pings = ledger<string>('pings', { ttl: 86_400_000 })
+        `} />
+    </Section>
+
+    <Section level={3} title="Hear that a slow reader missed entries">
+        <p>A read whose next entry was let go before it got there errors with a refusal at status
+            410 naming what it missed, rather than stepping over it. A read from 0 starts at the
+            oldest entry kept.</p>
+        <Code language="ts" caption="shared" code={`
+            import { ledger } from '@abide/abide'
+
+            const pings = ledger<string>('pings', { retain: 1_000 })
+            const seen: string[] = []
+            // Errors with a 410 where the read fell behind what was kept.
+            for await (const ping of pings.read(seen.length)) seen.push(ping.entry)
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep only the last thousand events">
+        <p><code>retain</code> lets go of every entry but the last ones as each is appended.</p>
+        <Code language="ts" caption="shared" code={`
+            import { ledger } from '@abide/abide'
+
+            const presence = ledger<string>('presence', { retain: 1_000 })
+        `} />
+    </Section>
+</Doc>

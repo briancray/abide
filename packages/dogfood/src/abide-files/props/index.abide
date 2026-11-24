@@ -66,10 +66,10 @@ import Section from '#src/lib/Section.abide'
             changes.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { props, reactive } from '@abide/abide'
+            import { memo, props } from '@abide/abide'
 
             const { name } = props<{ name: string }>()
-            let draft = reactive(() => name)
+            let draft = memo(() => name)
             </script>
 
             <input bind:value={draft}>

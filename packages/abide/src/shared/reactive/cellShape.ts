@@ -408,6 +408,11 @@ export class Cell {
     declare state: number
     declare running: boolean
     /**
+     * The signal `stopSignal()` answered inside this value's current run, or `null` where the run
+     * never asked — made on the ask, so a run that does not ask allocates nothing (7.45).
+     */
+    declare runStop: AbortController | null
+    /**
      * The value this one adopted, or `null`.
      *
      * WHAT THIS VALUE'S BODY HANDED BACK, where it handed back another `Reactive`
@@ -574,6 +579,7 @@ export class Cell {
         this.alive = true
         this.state = CLEAN
         this.running = false
+        this.runStop = null
         this.adoption = null
         this.cap = capFor(label, options?.throttle, options?.debounce)
         const tags = options?.tags

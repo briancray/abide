@@ -1,11 +1,11 @@
 <script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 
 import feed from '../feed.handler.ts'
 import logToFeed from '../logToFeed.handler.ts'
 
 const account = 'hopper-co'
-const entries = reactive(() => feed({ account }))
+const entries = memo(() => feed({ account }))
 </script>
 
 <ul class="fields stacked">

@@ -1555,10 +1555,10 @@ test('a patch updates the one row it wrote to in place — 32.33, 32.67', async 
 // root; the row keeps showing 1.
 test("a list over a Map's values shows a patch written through get — 32.33", async () => {
     await mountPage(`<script>
-import { reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 
 const byId = reactive(new Map([['a', { id: 'a', n: 1 }], ['b', { id: 'b', n: 2 }]]))
-const rows = reactive(() => [...byId.values()])
+const rows = memo(() => [...byId.values()])
 </script>
 
 <ul id="list">{#for row of rows by row.id}<li data-id={row.id}>{row.n}</li>{/for}</ul>

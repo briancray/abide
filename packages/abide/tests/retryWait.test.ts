@@ -90,3 +90,23 @@ test('a Retry-After sooner than the step waits the step, in both — 54.10', asy
     expect(slept).toEqual([250])
     expect(armed).toEqual([250])
 })
+
+// 54.10 — `backoff` IS THE FLOOR THE RULE DOUBLES, OR THE WAIT ITSELF: a number moves where the
+// doubling starts, and a function is asked for each retry by its number from 1. THE REVERT: drop
+// `backoff` from `fetchText`'s `backoffWait` call, and `[250, 500, 1000]` is slept both times.
+test('backoff moves the floor, or names each wait — 54.10', async () => {
+    const slept = sleptBy()
+    await fetchText(`${service.url.origin}/down`, {
+        retries: 3,
+        timeout: 50_000,
+        backoff: 1_000,
+    })
+    expect(slept).toEqual([1_000, 2_000, 4_000])
+    slept.length = 0
+    await fetchText(`${service.url.origin}/down`, {
+        retries: 3,
+        timeout: 50_000,
+        backoff: (retry) => retry ** 2 * 100,
+    })
+    expect(slept).toEqual([100, 400, 900])
+})

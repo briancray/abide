@@ -1,5 +1,5 @@
 <script>
-import { reactive, sortBy } from '@abide/abide'
+import { memo, reactive, sortBy } from '@abide/abide'
 
 type Deal = { name: string; amount: number }
 const deals: Deal[] = [
@@ -9,7 +9,7 @@ const deals: Deal[] = [
 ]
 
 let largestFirst = reactive(false)
-const shown = reactive(() =>
+const shown = memo(() =>
     largestFirst ? sortBy(deals, (deal) => deal.amount, 'descending') : deals,
 )
 </script>

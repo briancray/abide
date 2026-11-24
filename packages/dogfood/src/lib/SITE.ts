@@ -207,7 +207,28 @@ const WRITTEN: readonly {
                 route: '/reactive/reactive',
                 title: '`reactive`',
                 description:
-                    'Hold a value, derive one from others, or load or stream one from a handler, with reads, writes, probes and triggers on one type.',
+                    'Hold a value the page owns, a function included, with reads, writes, probes and triggers on one type.',
+                where: 'anywhere',
+            },
+            {
+                route: '/reactive/memo',
+                title: '`memo`',
+                description:
+                    'Derive a value from others, or load or stream one from a handler, keyed by args where the body takes them.',
+                where: 'anywhere',
+            },
+            {
+                route: '/reactive/pipe',
+                title: '`pipe`',
+                description:
+                    'Run each item through steps in order and at once, a few at a time, retried, timed out and paused, as a function or a stream.',
+                where: 'anywhere',
+            },
+            {
+                route: '/reactive/ledger',
+                title: '`ledger`',
+                description:
+                    'Append events that are never coalesced, and read them in order from a position or a named cursor that resumes.',
                 where: 'anywhere',
             },
             {
@@ -284,7 +305,7 @@ const WRITTEN: readonly {
                 route: '/reactive/stop-signal',
                 title: '`stopSignal`',
                 description:
-                    "Read the signal a stopping app aborts, so a long job's run or its fetch ends early.",
+                    "Read the signal that says stop, so a memo's superseded run or a stopping app's job ends its fetch early.",
                 where: 'anywhere',
             },
             {
@@ -1087,6 +1108,13 @@ const WRITTEN: readonly {
                 title: '`database`',
                 description:
                     "Open the app's SQLite file where the deployment keeps its data, and run each migration once, in order.",
+                where: 'server',
+            },
+            {
+                route: '/data/table',
+                title: '`table`',
+                description:
+                    'Read every change committed to a SQLite table as a stream, refresh what is tagged with it, and upsert rows in batches.',
                 where: 'server',
             },
             {

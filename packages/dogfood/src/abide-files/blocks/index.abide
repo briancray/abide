@@ -61,8 +61,8 @@ import Section from '#src/lib/Section.abide'
             </script>
 
             <script>
-            import { reactive } from '@abide/abide'
-            const notes = reactive(() => getNotes({ id: 'd1' }))
+            import { memo } from '@abide/abide'
+            const notes = memo(() => getNotes({ id: 'd1' }))
             </script>
 
             {#for note of notes}<p>{note}</p>{/for}

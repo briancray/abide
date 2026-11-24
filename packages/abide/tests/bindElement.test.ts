@@ -142,13 +142,13 @@ test('a component swapped in while the last one is leaving builds its own markup
         new Promise<void>((done) => exits.push(done))
     await mountPage(
         `<script>
-import { reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 import First from './First.abide'
 import Second from './Second.abide'
 
 let count = reactive(0)
 let swapped = reactive(false)
-let Shown = reactive(() => (swapped ? Second : First))
+let Shown = memo(() => (swapped ? Second : First))
 </script>
 
 <button id="swap" onclick={() => { swapped = true }}>swap</button>

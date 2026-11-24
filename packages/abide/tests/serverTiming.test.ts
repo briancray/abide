@@ -17,11 +17,11 @@ middleware(async (next) => {
 })
 `
 
-const HANDLERS = `import { reactive } from '@abide/abide'
+const HANDLERS = `import { memo } from '@abide/abide'
 import { GET, trace } from '@abide/abide/server'
 
 export const held = GET(
-    reactive(
+    memo(
         async (args: { n: number }) => {
             await Bun.sleep(50)
             return { n: args.n }
@@ -36,7 +36,7 @@ function spin(milliseconds: number): void {
 }
 
 export const primed = GET(
-    reactive(
+    memo(
         async (args: { n: number }) => {
             spin(50)
             await Promise.resolve()

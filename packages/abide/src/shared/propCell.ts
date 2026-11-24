@@ -8,7 +8,7 @@
 // row component reading ten props builds no `reactive` at all.
 
 import { CHILDREN } from './CHILDREN.ts'
-import { reactive } from './reactive/index.ts'
+import { memo } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 
 // `true` asks a bound accessor for the `Reactive` it binds rather than its value (`boundProp`);
@@ -17,7 +17,7 @@ type Accessor = (hold?: true) => unknown
 
 /** A prop the child writes, as a getter for one `reactive` cell over the caller's accessor. */
 export function propCell(read: Accessor): () => Reactive<unknown> {
-    const cell = reactive(() => read(true))
+    const cell = memo(() => read(true))
     return () => cell
 }
 

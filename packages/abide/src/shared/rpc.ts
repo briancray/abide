@@ -43,8 +43,8 @@ import {
     isKeyed,
     type Kept,
     type Keyed,
+    memo,
     type Reactive,
-    reactive,
     refresh,
     type Refusals,
     type Selection,
@@ -325,15 +325,15 @@ type BuiltArgs<Built> =
  * The signature `GET` and the four mutations share: a handler in, its `Rpc` out.
  *
  * THREE SIGNATURES, ONE PER IDEA, where each shape of handler was an overload of its own: a value, a
- * `Reactive` or `Keyed` already built, and a body, which `reactive` reads (`BodyValue`, `ReactiveOf`'s
+ * `Reactive` or `Keyed` already built, and a body, which `memo` reads (`BodyValue`, `ReactiveOf`'s
  * reading of `Args` and `Result`).
  *
  * THE BODY COMES FIRST: a generic call in the options — a rung helper, 16.86 — is resolved once,
  * against the contextual type of the first signature it is checked under, and that answer is kept
  * for the rest. The body's `Args` is read off the handler, a `Keyed`'s off its call signature as the
  * built form would; the value form's would be `undefined`, and every rung helper was typed for it.
- * The body's `& Plain` turns a `Reactive` or `Keyed` on to the built form, and `Held` every function
- * off the value form.
+ * The body's `& Plain` turns a `Reactive` or `Keyed` on to the built form, and the value form turns
+ * every function away.
  *
  * 16.92 — `Writes` is false for `GET` alone, whose options have no `refreshes`.
  */
@@ -376,15 +376,17 @@ type Declare<Writes extends boolean> = {
         handler: Built,
         options?: OptionsOf<Writes, BuiltArgs<Built>, Answers>,
     ): BuiltRpc<Built, Answers>
-    // 16.1 — a value, `reactive`'s value form given an address, which takes its options beside the
-    // address's (16.6).
+    // 16.1 — a value, `reactive` given an address, which takes its options beside the address's
+    // (16.6). Never a function: a handler's function is its body, the first signature's (16.1).
     <
         Accepted,
         Shaped = Accepted,
         Gate = Schema<Accepted>,
         Answers extends readonly unknown[] = unknown[],
     >(
-        handler: Held<Accepted>,
+        handler: [Accepted] extends [(...given: never[]) => unknown]
+            ? never
+            : Held<Accepted>,
         options?: Shaping<Accepted, Shaped, never, Gate> &
             OptionsOf<Writes, undefined, Answers>,
     ): Rpc<
@@ -491,7 +493,7 @@ export function declare<Declared extends Method>(
         const wrapped =
             onion === null && refreshes === undefined
                 ? null
-                : reactive(
+                : memo(
                       refreshes === undefined
                           ? answer
                           : (args: unknown) =>
@@ -535,7 +537,7 @@ export function declare<Declared extends Method>(
                 args = acceptedArgs(rpc, given)
             } catch (refused) {
                 if (!isFailed(refused)) throw refused
-                return reactive(() => refused)
+                return memo(() => refused)
             }
             const route =
                 rpc.address === undefined ? undefined : routeAt(rpc.address)
@@ -543,7 +545,7 @@ export function declare<Declared extends Method>(
                 try {
                     route.path(args as Record<string, unknown> | undefined)
                 } catch (refused) {
-                    return reactive(() => refused)
+                    return memo(() => refused)
                 }
             }
             // 16.7 — a mutation's call is a write each time, even where the last one settled this

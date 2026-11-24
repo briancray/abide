@@ -48,6 +48,8 @@ export { type Config, config } from './config.ts'
 export type { ConfigField } from './configFields.ts'
 // 47 — the app's SQLite database, opened and migrated on first use.
 export { database } from './database.ts'
+// 47.25-47.31 — a table's changes read out, and rows written in.
+export { type Change, table } from './table.ts'
 // 54 — rungs that let a caller through, another service asked with retries, and work on a schedule.
 export { fetchJson } from './fetchJson.ts'
 export { type FetchOptions, fetchText } from './fetchText.ts'

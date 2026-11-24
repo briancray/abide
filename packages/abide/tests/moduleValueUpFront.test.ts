@@ -23,25 +23,25 @@ export const getTick = GET(async () => {
 })
 `
 
-const ME = `import { reactive } from '@abide/abide'
+const ME = `import { memo } from '@abide/abide'
 import whoami from '#src/who/whoami.handler.ts'
 
-export const me = reactive(() => whoami())
+export const me = memo(() => whoami())
 `
 
-const CAN_EDIT = `import { reactive } from '@abide/abide'
+const CAN_EDIT = `import { memo } from '@abide/abide'
 import { me } from './me.ts'
 
-export const canEdit = reactive(() => me.ready() && me().owner)
+export const canEdit = memo(() => me.ready() && me().owner)
 `
 
 // The child's setup makes a call, so 41.28 builds it after the turn.
 const DEFERRED = `<script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 import getTick from '#src/who/getTick.handler.ts'
 import { canEdit } from './canEdit.ts'
 
-const tick = reactive(() => getTick())
+const tick = memo(() => getTick())
 </script>
 
 <b id="deferred">{canEdit() ? 'edit' : 'view'}</b><i>{tick.busy() ? 0 : tick()}</i>`

@@ -5,7 +5,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { flushSync, reactive } from '#shared'
+import { flushSync, memo, reactive } from '#shared'
 import { startingLoadCall } from '#shared/loadCall.ts'
 import { callLoad } from '#shared/reactive/callLoad.ts'
 
@@ -20,7 +20,7 @@ type Loading = (() => unknown) & {
 // A keyed value whose loads finish only when the test says so, one release per load started.
 function held() {
     const releases: (() => void)[] = []
-    const value = reactive(
+    const value = memo(
         ({ id }: { id: string }) =>
             new Promise<string>((done) => {
                 releases.push(() => done(`invoice ${id}`))
@@ -82,7 +82,7 @@ test('a call after an aborted load starts another — 16.62', async () => {
 // `ending?.abort()` in `Attended.handleEvent`; the body's signal reads `aborted: false`.
 test('the body a call starts is handed the load own signal — 16.49', () => {
     let handed: AbortSignal | undefined
-    const value = reactive(({ id }: { id: string }) => {
+    const value = memo(({ id }: { id: string }) => {
         handed = startingLoadCall().signal
         return new Promise<string>(() => id)
     }) as unknown as (args: unknown) => Loading
@@ -98,7 +98,7 @@ test('the body a call starts is handed the load own signal — 16.49', () => {
 // 16.59 — the 504, on a plain `reactive` with no handler around it. THE REVERT: drop the `timeLoad`
 // call from `callLoad`; the load never settles and the test runs out its own timeout.
 test('a load that goes its timeout refuses 504 — 16.59', async () => {
-    const value = reactive(
+    const value = memo(
         () => new Promise<string>(() => {}),
     ) as unknown as Loading
     callLoad(() => value, undefined, undefined, 30)
@@ -118,7 +118,7 @@ afterEach(() => {
 })
 test('calls joining a load start no clock of their own — 16.61', async () => {
     let release = (): void => {}
-    const value = reactive(
+    const value = memo(
         () =>
             new Promise<string>((done) => {
                 release = () => done('settled')

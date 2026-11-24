@@ -6,9 +6,8 @@ import Section from '#src/lib/Section.abide'
 
 <Doc
     seeAlso={[
+        '/reactive/memo',
         '/reactive/watch',
-        '/reactive/tracking',
-        '/reactive/refresh',
         '/reactive/store',
         '/reactive/structural',
     ]}
@@ -19,15 +18,7 @@ import Section from '#src/lib/Section.abide'
         },
         {
             path: 'packages/abide/tests/reactive.test.ts',
-            from: [
-                "test('a body declaring a parameter is keyed, and one declaring none is not'",
-            ],
-        },
-        {
-            path: 'packages/abide/tests/reactive.test.ts',
-            from: [
-                "test('an async generator body streams: ready from its first chunk, busy until it closes'",
-            ],
+            from: ["test('reactive holds a function as its value — 4.20'"],
         },
     ]}
 >
@@ -44,69 +35,18 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Derive a total from the values a body reads">
-        <p>Pass a body instead. The total reruns when <code>seats</code> or <code>price</code>
-            changes, and on nothing else.</p>
+    <Section level={3} title="Hold a formatter the page swaps">
+        <p>A function is a value like any other: <code>reactive</code> holds it rather than running
+            it. A value computed from others is a <code>memo</code>.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
 
-            let seats = reactive(5)
-            let price = reactive(40)
-            const total = reactive(() => seats * price)
+            let price = reactive((amount: number) => \`$\${amount}\`)
             </script>
 
-            <p>{seats} seats at {price} each: {total}</p>
-        `} />
-    </Section>
-
-    <Section level={3} title="Load a forecast from a handler">
-        <p>A body that calls a handler loads. Ask <code>ready()</code> before showing the figure,
-            and <code>refresh()</code> reloads it while the old figure stays.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive } from '@abide/abide'
-            import getForecast from './getForecast.handler.ts'
-
-            const forecast = reactive(() => getForecast())
-            </script>
-
-            {#if forecast.ready()}
-                <strong>{forecast}</strong>
-            {:else}
-                <p>Adding up the pipeline…</p>
-            {/if}
-            <button onclick={() => forecast.refresh()}>Reload</button>
-        `} />
-    </Section>
-
-    <Section level={3} title="Keep one entry per stage with a keyed body">
-        <p>A body that declares a parameter is keyed. Each set of args is one entry, held and
-            reloaded on its own.</p>
-        <Code language="ts" caption="shared" code={`
-            import { reactive } from '@abide/abide'
-            import getStage from './getStage.handler.ts'
-
-            const stageTotals = reactive(({ stage }: { stage: string }) =>
-                getStage({ stage }),
-            )
-            const won = stageTotals({ stage: 'won' })
-            stageTotals({ stage: 'won' }) === won // true
-            stageTotals.refresh({ stage: 'won' }) // reloads that entry alone
-        `} />
-    </Section>
-
-    <Section level={3} title="Stream the leads still waiting on a follow-up">
-        <p>A generator body streams. The value is every name yielded until now: ready from the first,
-            busy until the generator ends.</p>
-        <Code language="ts" caption="shared" code={`
-            import { reactive } from '@abide/abide'
-            import listDeals from './listDeals.handler.ts'
-
-            const waiting = reactive(async function* () {
-                for (const deal of await listDeals())
-                    if (deal.stage === 'lead') yield deal.name
-            })
+            <p>{price(40)}</p>
+            <button onclick={() => (price = (amount) => \`€\${amount}\`)}>Euros</button>
         `} />
     </Section>
 
@@ -130,11 +70,11 @@ import Section from '#src/lib/Section.abide'
             than one per keystroke.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { reactive } from '@abide/abide'
+            import { memo, reactive } from '@abide/abide'
             import searchDeals from './searchDeals.handler.ts'
 
             let q = reactive('', { debounce: 300 })
-            const found = reactive(() => searchDeals({ q }))
+            const found = memo(() => searchDeals({ q }))
             </script>
 
             <input bind:value={q}>

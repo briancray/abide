@@ -5,12 +5,12 @@
 // ANY ANSWER IS REACHABLE: a 404 or a 500 came from the host, so only a request that never got one
 // — refused, unresolved, timed out — is `false`. `HEAD`, so the answer carries no body to read.
 
-import { reactive } from '#shared/reactive/index.ts'
+import { memo } from '#shared/reactive/index.ts'
 
 const PROBE_TIMEOUT_MILLISECONDS = 5_000
 const ANSWER_HELD_MILLISECONDS = 60_000
 
-const answering = reactive(
+const answering = memo(
     async ({ host }: { host: string }) => {
         try {
             await fetch(host.includes('://') ? host : `https://${host}/`, {

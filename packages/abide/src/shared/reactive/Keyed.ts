@@ -28,7 +28,7 @@ import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
 import { NotLanded } from './NotLanded.ts'
 import { parameterDefaults } from './parameterDefaults.ts'
-import { ownedPoll, refuseBadPoll } from './poll.ts'
+import { endRunSignal, ownedPoll, refuseBadPoll } from './poll.ts'
 import {
     abandonDeferred,
     createReactive,
@@ -401,6 +401,8 @@ export function createKeyed<
         created: Reactive<Stored, Accepted, Failures>,
     ): void {
         entries.delete(key)
+        // 7.46 — an entry released is a run nothing will read, so its signal says stop.
+        endRunSignal(cellOf(created))
         leaveSelections(created)
         unwatchStore(created)
         signalMoved(membership)

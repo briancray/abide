@@ -165,7 +165,7 @@ function bump() { clicks += 1 }
 `
 
 const WARNED = `<script>
-import { reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 
 let flag = reactive(true)
 let one = reactive(1)
@@ -178,19 +178,19 @@ let keyed = reactive(
     { by: 'id' },
 )
 let decoy = reactive([{ id: 1, by: 'someone' }])
-const picked = reactive(() => (flag ? one : two))
-const same = reactive(() => (flag ? flag : false))
-const late = reactive(async () => {
+const picked = memo(() => (flag ? one : two))
+const same = memo(() => (flag ? flag : false))
+const late = memo(async () => {
     const early = two
     await Promise.resolve()
     return one + early
 })
-const later = reactive(() => {
+const later = memo(() => {
     setTimeout(() => two, 0)
     return [1].map(() => one)
 })
-const fallback = reactive(() => name ?? 'nobody')
-const unsure = reactive(() => maybe ?? 'nobody')
+const fallback = memo(() => name ?? 'nobody')
+const unsure = memo(() => maybe ?? 'nobody')
 </script>
 
 {#for row of rows}<input value={row.id}/>{/for}
@@ -219,21 +219,21 @@ const constant = [{ id: 2 }]
 // 14.19 — each read below would be warned on, and the line above it silences the clause it names.
 // `misnamed` is the near miss: its directive names 14.14, and the warning it earns is 14.16.
 const IGNORED = `<script>
-import { reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 
 let flag = reactive(true)
 let one = reactive(1)
 let two = reactive(2)
-const late = reactive(async () => {
+const late = memo(async () => {
     await Promise.resolve()
     // abide-ignore 14.14
     return one
 })
-const picked = reactive(() =>
+const picked = memo(() =>
     // abide-ignore 14.14 14.15
     flag ? one : two,
 )
-const misnamed = reactive(() => {
+const misnamed = memo(() => {
     // abide-ignore 14.14
     setTimeout(() => two, 0)
     return 1
@@ -282,11 +282,11 @@ let tally = reactive({ n: 0 })
 
 // 32.34 — a tag choosing by a value is held to the props of what it may hold, and may hold nothing.
 const CHOSEN = `<script>
-import { reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 import Card from '#src/lib/Card.abide'
 
 let open = reactive(true)
-let Shown = reactive(() => (open ? Card : undefined))
+let Shown = memo(() => (open ? Card : undefined))
 </script>
 
 <Shown title="x"/>

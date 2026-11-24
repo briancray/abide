@@ -1,12 +1,12 @@
 <script>
-import { format, reactive } from '@abide/abide'
+import { format, memo, reactive } from '@abide/abide'
 
 import getStage from '../getStage.handler.ts'
 import { STAGES } from './STAGES.ts'
 
 let stage = reactive('lead')
-const totals = reactive(() => getStage({ stage }))
-const average = reactive(() =>
+const totals = memo(() => getStage({ stage }))
+const average = memo(() =>
     totals.ready() && totals.count > 0
         ? format.money(Math.round(totals.value / totals.count), { digits: 0 })
         : '—',

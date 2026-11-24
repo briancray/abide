@@ -1,9 +1,9 @@
 <script>
-import { cookies, reactive } from '@abide/abide'
+import { cookies, memo } from '@abide/abide'
 
 const DENSITIES = ['comfortable', 'compact']
 
-const density = reactive(() => cookies().get('density') ?? 'comfortable')
+const density = memo(() => cookies().get('density') ?? 'comfortable')
 </script>
 
 <div class="tabs">

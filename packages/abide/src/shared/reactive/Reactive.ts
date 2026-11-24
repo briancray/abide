@@ -50,6 +50,8 @@ import { NO_INITIAL } from './NO_INITIAL.ts'
 import { NotLanded } from './NotLanded.ts'
 import { logOf, PatchLog, type PatchOp, sendInvalidate } from './patchLog.ts'
 import {
+    BODY_RUN,
+    endRunSignal,
     firstRunStarted,
     isPolled,
     jobStopped,
@@ -1921,6 +1923,8 @@ function run(cell: Cell): void {
     // A released orphan read again (12.14) — see `tombstone`. A released stream's run is its next
     // start: the generator its body hands back is promoted onto the stream it already has (9.6).
     if (!cell.alive) revive(cell as unknown as Subscriber)
+    // 7.46 — a new run ends the signal the last one handed out.
+    if (cell.runStop !== null) endRunSignal(cell)
     cell.generation += 1
     cell.state = CLEAN
     cell.running = true
@@ -1934,12 +1938,15 @@ function run(cell: Cell): void {
     reader.cursor = 0
     reader.probeCursor = 0
     let produced: unknown
+    const outerRun = BODY_RUN.cell
+    BODY_RUN.cell = cell
     try {
         // 11.32 — UNDER THE VALUE'S OWN SCOPE, not the ambient one. A drain runs every body a
         // turn's writes woke, and the turn is whichever request scheduled it — so without this a
         // body filed under one request reads the values of another.
         produced = runInScope(cell.scope, body, cell.args, cell.global)
     } catch (thrown) {
+        BODY_RUN.cell = outerRun
         TRACKING.reader = previous
         if (reader.cursor < reader.sources.length) truncate(reader)
         if (reader.probeCursor < reader.probeSources.length)
@@ -1952,6 +1959,7 @@ function run(cell: Cell): void {
         refusedAnswer(cell, thrown)
         return
     }
+    BODY_RUN.cell = outerRun
     TRACKING.reader = previous
     // A body that read FEWER values than last time leaves a tail nothing reads, and
     // that is the only thing the truncation has to do — so the test is here and the call
@@ -2174,6 +2182,8 @@ function pumpRun(
     iterator: AsyncIterator<unknown>,
 ): void {
     stopStream(stream)
+    // 7.46 — a stream's new run ends the signal its last one handed out.
+    if (cell.runStop !== null) endRunSignal(cell)
     const run = stream.run
     beginLoad(cell)
     stream.iterator = iterator
@@ -2221,8 +2231,19 @@ async function pump(
     let begun = false
     for (;;) {
         let step: IteratorResult<unknown>
+        // 7.45 — a generator's body runs inside each `next()`, up to its next await.
+        const outerRun = BODY_RUN.cell
+        BODY_RUN.cell = cell
+        let pending: Promise<IteratorResult<unknown>>
         try {
-            step = await iterator.next()
+            pending = iterator.next()
+        } catch (thrown) {
+            pending = Promise.reject(thrown)
+        } finally {
+            BODY_RUN.cell = outerRun
+        }
+        try {
+            step = await pending
         } catch (failed) {
             if (stream.run !== run) return
             stream.iterator = null
@@ -4428,6 +4449,8 @@ function releaseOrphan(cell: Cell): void {
     cell.orphaned = false
     const own = ownStream(cell)
     if (own !== null) stopStream(own)
+    // 7.46 — released, so its run's signal says stop.
+    if (cell.runStop !== null) endRunSignal(cell)
     dropAdoption(cell)
     // OWED A RUN, so a read that reaches it again runs it — and `run` revives it first. No `body`
     // test: only a value with one is ever orphaned (`createReactive`).

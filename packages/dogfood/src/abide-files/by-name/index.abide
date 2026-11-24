@@ -63,10 +63,10 @@ import Section from '#src/lib/Section.abide'
             value itself rather than a read of it.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { type Reactive, reactive, refresh } from '@abide/abide'
+            import { memo, type Reactive, refresh } from '@abide/abide'
             import listDeals from './listDeals.handler.ts'
 
-            const deals = reactive(() => listDeals())
+            const deals = memo(() => listDeals())
             const held: Reactive<Deal[]> = deals
             </script>
 

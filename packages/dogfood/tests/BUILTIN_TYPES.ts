@@ -50,6 +50,7 @@ export const BUILTIN_TYPES = new Set([
     'PointerEvent',
     'SVGElementTagNameMap',
     'ReadableStream',
+    'WritableStream',
     'Request',
     'RequestInit',
     'Response',

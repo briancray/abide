@@ -47,7 +47,7 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-const LIBRARY = `import { GET, POST, reactive, structural } from '@abide/abide/server'
+const LIBRARY = `import { GET, memo, POST, structural } from '@abide/abide/server'
 
 const shelf = reactive([{ id: 'a' }], {
     global: true,
@@ -57,9 +57,9 @@ const shelf = reactive([{ id: 'a' }], {
 })
 
 const bound = GET(shelf)
-const inline = GET(reactive(() => [{ isbn: '1' }], { by: 'isbn' }))
+const inline = GET(memo(() => [{ isbn: '1' }], { by: 'isbn' }))
 const computed = GET(
-    reactive(({ id }: { id: string }) => [{ id }], {
+    memo(({ id }: { id: string }) => [{ id }], {
         by: (row) => row.id,
         tags: ({ id }) => [id],
         identity: (next, previous) => next === previous,
@@ -109,7 +109,7 @@ test('an option bound to a const carries its literal, and one the build cannot r
     const app = appFixture({
         'index.abide': '<main>home</main>',
         'named/lib/Handlers.abide': `<script server>
-import { GET, reactive } from '@abide/abide/server'
+import { GET, memo } from '@abide/abide/server'
 
 const KEY = 'isbn'
 const TAGS = ['shelf', 'named'] as const
@@ -118,10 +118,10 @@ let grown = 'is'
 grown += 'bn'
 
 const named = GET(
-    reactive(() => [{ isbn: '1' }], { by: KEY, tags: TAGS }),
+    memo(() => [{ isbn: '1' }], { by: KEY, tags: TAGS }),
 )
-const handed = GET(reactive(() => [{ isbn: '1' }], OPTIONS))
-const unread = GET(reactive(() => [{ isbn: '1' }], { by: grown }))
+const handed = GET(memo(() => [{ isbn: '1' }], OPTIONS))
+const unread = GET(memo(() => [{ isbn: '1' }], { by: grown }))
 </script>
 `,
     })
@@ -229,10 +229,10 @@ test("the build writes a handler's parameter defaults into its wrapper, and refu
     const app = appFixture({
         'index.abide': '<main>home</main>',
         'paged/lib/Handlers.abide': `<script server>
-import { GET, POST, reactive } from '@abide/abide/server'
+import { GET, memo, POST } from '@abide/abide/server'
 
 const list = GET(async ({ page = 1, q = 'all' }: { page?: number; q?: string }) => [page, q])
-const kept = GET(reactive(({ size = 20 }: { size?: number }) => size, { by: 'id' }))
+const kept = GET(memo(({ size = 20 }: { size?: number }) => size, { by: 'id' }))
 const save = POST(async ({ draft = true }: { draft?: boolean }) => draft)
 const plain = GET(async ({ id }: { id: string }) => id)
 </script>

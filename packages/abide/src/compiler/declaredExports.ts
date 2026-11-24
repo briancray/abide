@@ -378,10 +378,10 @@ async function declaredDocument(
 }
 
 /**
- * The function a handler call is handed, followed through names and `reactive(…)`.
+ * The function a handler call is handed, followed through names and `memo(…)`.
  *
  * What a handler call is handed, followed to its function — written inline, bound to a name,
- * declared as a function, or handed to `reactive` first — or what it is where it is no function.
+ * declared as a function, or handed to `memo` first — or what it is where it is no function.
  */
 async function handlerBodyOf(
     checker: Checker,

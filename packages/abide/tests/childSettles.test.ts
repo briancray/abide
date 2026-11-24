@@ -24,21 +24,21 @@ export const getSlow = GET(async ({ id }: { id: string }) => {
 `
 
 const child = (call: string, title: string): string => `<script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 import call from '#src/totals/${call}.handler.ts'
 import Grand from './Grand.abide'
 
-const total = reactive(() => call({ id: '${call}' }))
+const total = memo(() => call({ id: '${call}' }))
 </script>
 
 <head><title>${title}</title></head>
 <p class="${call}">{total.busy() ? 'loading' : total().total}</p><Grand />`
 
 const GRAND = `<script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 import getTick from '#src/totals/getTick.handler.ts'
 
-const total = reactive(() => getTick({ id: 'grand' }))
+const total = memo(() => getTick({ id: 'grand' }))
 </script>
 
 <b>{total.busy() ? 'loading' : total().total}</b>`

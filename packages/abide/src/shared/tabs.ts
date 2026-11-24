@@ -5,7 +5,7 @@
 import { checkParts } from './checkParts.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import { type Reactive, reactive } from './reactive/index.ts'
+import { memo, type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving } from './roving.ts'
 
@@ -47,7 +47,7 @@ export function tabs(options: TabsOptions): Tabs {
     const keysOf = () => live(keys)
     const picked = options.selected ?? reactive<string | undefined>(undefined)
     // 51.34 — a key no tab has selects the first.
-    const current = reactive((): string | undefined => {
+    const current = memo((): string | undefined => {
         const listed = keysOf()
         const wanted = picked()
         for (const each of listed) if (each === wanted) return wanted

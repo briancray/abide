@@ -12,14 +12,14 @@ import type { Diagnosis } from '#compiler/Diagnostics.ts'
 import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const QUERIES = `import { jsonSchema, reactive, type StandardSchemaV1 } from '@abide/abide'
+const QUERIES = `import { jsonSchema, memo, type StandardSchemaV1 } from '@abide/abide'
 import { GET } from '@abide/abide/server'
 
-export const unwritten = reactive(({ page }: { page?: number }) => page, {
+export const unwritten = memo(({ page }: { page?: number }) => page, {
     args: jsonSchema({ type: 'object', properties: { page: { type: 'integer', default: 1 } } }),
 })
 
-export const written = reactive(({ page = 1 }: { page?: number }) => page, {
+export const written = memo(({ page = 1 }: { page?: number }) => page, {
     args: jsonSchema({ type: 'object', properties: { page: { type: 'integer', default: 1 } } }),
 })
 
@@ -27,11 +27,11 @@ declare const sized: StandardSchemaV1<{ size: number }> & {
     '~standard': { types?: { input: { size?: number; q: string }; output: { size: number; q: string } } }
 }
 
-export const standard = reactive(({ size, q }: { size?: number; q: string }) => [size, q], {
+export const standard = memo(({ size, q }: { size?: number; q: string }) => [size, q], {
     args: sized,
 })
 
-export const checked = reactive(({ page }: { page?: number }) => page, {
+export const checked = memo(({ page }: { page?: number }) => page, {
     args: (value: unknown) => value as { page?: number },
 })
 
@@ -42,9 +42,9 @@ export const handled = GET(({ per }: { per?: number }) => per, {
 `
 
 const PAGE = `<script>
-import { jsonSchema, reactive } from '@abide/abide'
+import { jsonSchema, memo } from '@abide/abide'
 
-const rows = reactive(({ limit }: { limit?: number }) => limit, {
+const rows = memo(({ limit }: { limit?: number }) => limit, {
     args: jsonSchema({ type: 'object', properties: { limit: { type: 'integer', default: 20 } } }),
 })
 </script>

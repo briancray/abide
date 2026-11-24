@@ -1,9 +1,9 @@
 <script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 
 import getSummary from '../getSummary.handler.ts'
 
-const summary = reactive(() => getSummary())
+const summary = memo(() => getSummary())
 </script>
 
 <ul class="tiles">

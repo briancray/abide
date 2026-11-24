@@ -10,7 +10,7 @@ import type { RedisClient } from 'bun'
 
 import { database } from '#server/database.ts'
 import * as store from '#server/stores.ts'
-import { flushSync, reactive } from '#shared'
+import { flushSync, memo, reactive } from '#shared'
 import { COOKIES, Cookies } from '#shared/cookies.ts'
 
 // A SCOPED NAME, so every key below carries the prefix 8.29 adds and the cookie name has to encode
@@ -166,7 +166,7 @@ test('store.sqlite keeps a value in a row of its table, made where missing — 8
     const path = `${Bun.env.TMPDIR ?? '/tmp'}/abide-sqlite-store-${process.pid}.db`
     const kept = database(path)
     try {
-        const first = reactive(() => ({ list: [1, 2] }), {
+        const first = memo(() => ({ list: [1, 2] }), {
             store: store.sqlite<{ list: number[] }>(path, 'doc', {
                 table: 'kept',
             }),
@@ -178,7 +178,7 @@ test('store.sqlite keeps a value in a row of its table, made where missing — 8
             .get(`${APP}:doc`)
         expect(row).toEqual({ value: '{"list":[1,2]}', expires: null })
         let runs = 0
-        const second = reactive(
+        const second = memo(
             () => {
                 runs += 1
                 return { list: [] as number[] }
@@ -236,7 +236,7 @@ test('a store re-reading unchanged text wakes no reader — 8.30', () => {
     )
     value.set({ wide: true })
     let runs = 0
-    const reader = reactive(() => {
+    const reader = memo(() => {
         runs += 1
         return value().wide
     })
@@ -275,9 +275,11 @@ test('store.redis writes with Redis’s own expiry and follows its keyspace chan
         .redis<number>(client as unknown as RedisClient, 'other')
         .watch?.(() => {})
     await Bun.sleep(0)
-    expect(client.subscribed).toEqual([
+    expect([...client.subscribed].sort()).toEqual([
         `__keyspace@3__:${APP}:count`,
+        `__keyspace@3__:${APP}:count:log`,
         `__keyspace@3__:${APP}:other`,
+        `__keyspace@3__:${APP}:other:log`,
     ])
     expect(`duplicates: ${client.duplicates}`).toBe('duplicates: 1')
     client.publish(`__keyspace@3__:${APP}:count`, 'set')

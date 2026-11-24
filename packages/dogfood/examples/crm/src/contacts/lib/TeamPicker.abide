@@ -1,11 +1,11 @@
 <script>
-import { combobox, reactive } from '@abide/abide'
+import { combobox, memo, reactive } from '@abide/abide'
 
 import listContacts from '../listContacts.handler.ts'
 
 type Contact = { id: string; name: string; company: string }
 
-const contacts = reactive(() => listContacts())
+const contacts = memo(() => listContacts())
 let team = reactive<Contact[]>([])
 // The picker as parts on markup of the page's own: each option names the contact's company under
 // them, and each chip is the contact's name with its own remove button.

@@ -89,9 +89,9 @@ const box: any = { get value() { return n() } }
 // `NotLanded` and this reports no document.
 test('a render continues past a function reading an unlanded value — 41.4', async () => {
     const { html } = await mountPage(`<script>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 
-const n = reactive(() => Promise.resolve(1))
+const n = memo(() => Promise.resolve(1))
 function big() { return n * 2 }
 </script>
 

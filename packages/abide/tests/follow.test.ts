@@ -9,7 +9,7 @@ import { spawned } from '@abide/harness/gate'
 import { BIN, handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, invalidate, POST, reactive, refresh, refuse } from '@abide/abide/server'
+const HANDLERS = `import { GET, invalidate, memo, POST, reactive, refresh, refuse } from '@abide/abide/server'
 
 const shelf = reactive<string[]>(['dune'], { global: true })
 
@@ -39,7 +39,7 @@ export const touch = POST(({ id, refresh }: { id: number; refresh?: boolean }) =
 })
 
 let priced = 0
-const prices = reactive(({ id }: { id: number }) => ({ id, priced: priced++ }), { global: true })
+const prices = memo(({ id }: { id: number }) => ({ id, priced: priced++ }), { global: true })
 
 export const price = GET(prices)
 
@@ -63,7 +63,7 @@ export const touchLocked = POST(() => {
 })
 
 let restocked = 0
-const stock = reactive(() => ({ restocked: restocked++ }), { global: true })
+const stock = memo(() => ({ restocked: restocked++ }), { global: true })
 
 export const level = GET(stock)
 

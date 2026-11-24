@@ -65,10 +65,10 @@ import Section from '#src/lib/Section.abide'
         <p>Both refusals are typed on the handler's failures, so a page narrows each by name.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { reactive } from '@abide/abide'
+            import { memo } from '@abide/abide'
             import getTeamCommission from './getTeamCommission.handler.ts'
 
-            const commission = reactive(() => getTeamCommission())
+            const commission = memo(() => getTeamCommission())
             const error = () => commission.error()
             </script>
 

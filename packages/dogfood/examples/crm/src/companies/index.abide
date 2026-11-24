@@ -1,11 +1,11 @@
 <script>
-import { reactive, url } from '@abide/abide'
+import { memo, url } from '@abide/abide'
 
 import AccountTree from './lib/AccountTree.abide'
 import CampaignAccounts from './lib/CampaignAccounts.abide'
 import listCompanies from './listCompanies.handler.ts'
 
-const companies = reactive(() => listCompanies())
+const companies = memo(() => listCompanies())
 </script>
 
 <ul class="fields">

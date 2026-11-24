@@ -7,6 +7,7 @@ import Section from '#src/lib/Section.abide'
 <Doc
     seeAlso={[
         '/reactive/stop-signal',
+        '/reactive/pipe',
         '/operating/log',
         '/data/database',
         '/handlers/get',
@@ -31,6 +32,12 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/job.test.ts',
             from: [
                 "test('a job measured from the start names its next run an interval after the last run started",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/job.test.ts',
+            from: [
+                "test('a paused job starts no run from a look, and runNow still runs — 54.38'",
             ],
         },
         {
@@ -119,6 +126,35 @@ import Section from '#src/lib/Section.abide'
             import { scoreDeals } from './scoreDeals.worker.ts'
 
             job('score', { every: 300_000, run: (signal) => scoreDeals(signal) })
+        `} />
+    </Section>
+
+    <Section level={3} title="Hold the scoring while a migration runs">
+        <p><code>paused</code> is read as state: while it reads true no look starts a run, and the
+            look its turning false makes runs one that is due. <code>runNow</code> still runs.</p>
+        <Code language="ts" caption="server" code={`
+            import { job, reactive } from '@abide/abide/server'
+
+            import { scoreDeals } from './scoreDeals.worker.ts'
+
+            export const migrating = reactive(false)
+            job('score', { every: 300_000, paused: migrating, run: scoreDeals })
+        `} />
+    </Section>
+
+    <Section level={3} title="Run a pipe of steps on a schedule">
+        <p>A job's <code>run</code> is handed the signal alone, and a <code>pipe</code> takes the
+            item first: hand it no item and the signal second, and the job's stop ends the steps in
+            flight.</p>
+        <Code language="ts" caption="server" code={`
+            import { job, pipe } from '@abide/abide/server'
+            import getDeal from '../deals/getDeal.handler.ts'
+
+            const nightly = pipe([() => getDeal({ id: 'd2' }), (deal) => deal.name])
+            job('nightly', {
+                every: 86_400_000,
+                run: (signal) => nightly(undefined, signal),
+            })
         `} />
     </Section>
 </Doc>

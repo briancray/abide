@@ -6,7 +6,7 @@
 import { anchored } from '../anchored.ts'
 import { checkPopover } from '../checkParts.ts'
 import type { Side } from '../place.ts'
-import { reactive, watch } from '../reactive/index.ts'
+import { memo, reactive, watch } from '../reactive/index.ts'
 import { hints, shown } from './tips.ts'
 
 /** The parts `tooltip.host` hands back: `<span {...shown.hint}>{shown.text}</span>`. */
@@ -21,7 +21,7 @@ export type TooltipHost = {
 export function host(): TooltipHost {
     // 50.36 — this host, among the ones standing; the last shows the hint.
     const shows = hints.stand()
-    const open = reactive(() => (shows() ? shown() : undefined))
+    const open = memo(() => (shows() ? shown() : undefined))
     const element = reactive<HTMLElement | undefined>(undefined)
     // The side taken, which a flip can change from the one asked for.
     const placed = reactive<Side>('top')
