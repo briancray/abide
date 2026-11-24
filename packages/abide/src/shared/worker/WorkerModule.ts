@@ -2,7 +2,7 @@
 // (55.4), posts the call to it, answers what the export answered there — a promise, or an async
 // generator pulled a chunk at a time (55.5) — and ends the thread once the call is done (55.11).
 
-import { stopSignal } from '../reactive/poll.ts'
+import { abortSignal } from '../reactive/poll.ts'
 import type { FromWorker, ToWorker } from './WorkerMessage.ts'
 
 /** One call's thread: what posts to it, and what ends it — which a second time does nothing. */
@@ -104,7 +104,7 @@ export class WorkerModule {
         const abort = () =>
             worker.postMessage({ abort: true } satisfies ToWorker)
         // 55.8, 37.28 — rejected with the stop's own abort, which was asked for and is no failure.
-        const stopping = stopSignal()
+        const stopping = abortSignal()
         const stop = () => {
             thread.end()
             fail(stopping.reason)

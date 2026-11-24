@@ -288,10 +288,10 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
-                route: '/reactive/stop-signal',
-                title: '`stopSignal`',
+                route: '/reactive/abort-signal',
+                title: '`abortSignal`',
                 description:
-                    "Read the signal that says stop, so a memo's superseded run or a stopping app's job ends its fetch early.",
+                    "Read the signal that says stop, so a memo's superseded run, a caller who hung up or a stopping app ends its fetch early.",
                 where: 'anywhere',
             },
             {

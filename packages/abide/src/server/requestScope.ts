@@ -16,7 +16,8 @@ import type { Framed } from '#shared/framing.ts'
 import type { Params } from '#shared/matchRoute.ts'
 import type { Principal } from '#shared/principal.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
-import { type Scope, SCOPING } from '#shared/reactive/scoping.ts'
+import { appStopSignal } from '#shared/reactive/poll.ts'
+import { type RunMark, type Scope, SCOPING } from '#shared/reactive/scoping.ts'
 import { settingUp } from '#shared/reactive/watch.ts'
 
 import { fileIfLoading } from './filedLoads.ts'
@@ -83,6 +84,11 @@ export type RequestScope = Scope & {
      * 16.23 — bun sets the idle timeout only on the one it received itself.
      */
     received: Request | undefined
+    /**
+     * 7.48 — what `abortSignal` answers in this request outside every run, and what a run filed in
+     * it ends with: the received request's signal and the app's stop as one. Made on the first ask.
+     */
+    abortSignal: AbortSignal | undefined
     /** What a write through `response` is collected onto, for whoever answers to apply. 22.9. */
     response: { status: number; headers: Headers }
     /**
@@ -145,6 +151,10 @@ function currentStops(): (() => void)[] | undefined {
 // that request for what the run reaches through it.
 const GLOBAL_RUN = new AsyncLocalStorage<true>()
 
+// 7.47 — THE `memo` RUN THE WORK RUNNING BELONGS TO, carried across every `await` its body makes.
+// Apart from STORAGE: a run is narrower than its request, and ends without the request ending.
+const RUN = new AsyncLocalStorage<RunMark>()
+
 /** Whether the work running is a `global` value's run, or what that run started. */
 export function inGlobalRun(): boolean {
     return GLOBAL_RUN.getStore() === true
@@ -160,6 +170,18 @@ function runIn<Given, Result>(
         : STORAGE.run(scope as RequestScope | undefined, body, given)
 }
 
+/** `runInScope`'s server half, entered as a run by `runAs`. */
+function runScoped<Given, Result>(
+    scope: Scope | undefined,
+    body: (given: Given) => Result,
+    given: Given,
+    global: boolean,
+): Result {
+    return global
+        ? GLOBAL_RUN.run(true, runIn, scope, body, given)
+        : runIn(scope, body, given)
+}
+
 SCOPING.provider = {
     current: (): Scope | undefined => STORAGE.getStore(),
     serverStops: currentStops,
@@ -173,6 +195,21 @@ SCOPING.provider = {
     filed: (forwarder) => {
         if (currentStops() === undefined && !settingUp())
             fileIfLoading(forwarder)
+    },
+    runAs: (mark, scope, body, given, global) =>
+        RUN.run(mark, runScoped, scope, body, given, global),
+    currentRun: () => RUN.getStore(),
+    requestSignal: (scope) => {
+        if (scope === undefined) return undefined
+        const answering = scope as RequestScope
+        if (answering.abortSignal !== undefined) return answering.abortSignal
+        // THE RECEIVED REQUEST, which bun aborts as its caller hangs up, and not one a rung or a
+        // mount made since (37.3); a socket mux connection has none, and its `request` is the one
+        // its close aborts (18.18). 42.8's scope has neither, and no request to end with.
+        const asked = answering.received ?? answering.request
+        if (asked === undefined) return undefined
+        answering.abortSignal = AbortSignal.any([appStopSignal(), asked.signal])
+        return answering.abortSignal
     },
 }
 
@@ -202,6 +239,7 @@ export function scopeFor(
         opened: undefined,
         applied: false,
         request: given,
+        abortSignal: undefined,
         route: undefined,
         params: undefined,
         received,

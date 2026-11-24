@@ -504,10 +504,11 @@ opening that 7.34 puts a first run off for.
 
 7.37 `App.stop` MUST cancel every first run 7.34 is still putting off.
 
-7.38 `App.stop` MUST abort the signal `stopSignal` answers before it drains what is in flight.
+7.38 `App.stop` MUST abort the signal `abortSignal` answers outside every run and request before it
+drains what is in flight.
 
-7.39 The signal `stopSignal` answers MUST stay aborted from 7.38's abort until `App.stop` resolves,
-`onStop` included, and MUST be one not aborted from then on.
+7.39 The signal 7.38 aborts MUST stay aborted from that abort until `App.stop` resolves, `onStop`
+included, and MUST be one not aborted from then on.
 
 7.40 From `App.stop` until `App.listen` or `abide dev` opens an app again, a bare `refresh`, and
 `refresh` over a set of `tags`, MUST invalidate, and MUST NOT reload, a value 7.29 holds back.
@@ -523,11 +524,23 @@ it.
 7.44 A `poll` that 7.43 kept from refreshing a value MUST refresh it once the document's
 `visibilityState` is no longer `hidden`, and once only however many refreshes 7.43 kept from it.
 
-7.45 `stopSignal` called while a `memo` body runs, its synchronous part or a step of its stream,
+7.45 `abortSignal` called while a `memo` body runs, its synchronous part or a step of its stream,
 MUST answer a signal of that run's own.
 
 7.46 The signal 7.45 answers MUST abort where a new run of that value starts, where the value or its
-entry is released, and where 7.38 aborts.
+entry is released, and where its owner's signal aborts: 7.48's for a value filed in a request
+(11.32), and 7.38's for any other, a `global` value's included.
+
+7.47 On a server, `abortSignal` called in work a `memo` run carries across an `await` MUST answer
+7.45's signal of that run, and a signal already aborted once a new run of that value has started or
+the value or its entry has been released.
+
+7.48 `abortSignal` called in a request, outside every run 7.45 and 7.47 name, MUST answer a signal
+that aborts where the received request's signal does, 18.18's close of a connection among them, and
+where 7.38 aborts.
+
+7.49 In a browser, `abortSignal` called outside a `memo` body's synchronous part and the steps of its
+stream MUST answer 7.38's signal.
 
 # 8. Stores
 
@@ -4564,7 +4577,8 @@ mints MUST run `abide-bridge install` at the bridge release its command runs.
 
 44.57 `assistant` MUST hand its `Provider` a `limits.signal` that aborts once the `signal` its caller
 passed does, and once the request's signal aborts — or, called outside a request or in the run of a
-`global` value, which no request owns whichever request reached it first, once `stopSignal` does —
+`global` value, which no request owns whichever request reached it first, once the signal
+`abortSignal` answers there does —
 and once that signal aborts MUST end the conversation without waiting for the provider to, refused
 with `refuse.aborted` at status 499.
 
@@ -6476,7 +6490,7 @@ throwing.
 54.25 A `job` whose `every` is not a positive number MUST start no run from a look, and its
 `nextRun` MUST be null while it is not.
 
-54.26 `run` MUST be handed a signal aborted where the one `stopSignal` answers is, and where
+54.26 `run` MUST be handed a signal aborted where 7.38's is, and where
 `Job.stop` is called.
 
 54.27 `Job.stop` MUST settle once a run in flight has ended, and a `job` it stopped MUST start no
@@ -6540,7 +6554,8 @@ from whenever, the one passed is.
 55.7 A consumer ending a stream before it is done MUST end the export's generator, its `finally`
 included.
 
-55.8 7.38's abort of `stopSignal` MUST end every thread, rejecting its call with that abort.
+55.8 A thread MUST end where the signal `abortSignal` answers where its call was made aborts, 7.38's
+among them, rejecting its call with that abort.
 
 55.9 A thread that fails outside its export MUST reject its call.
 
@@ -6687,8 +6702,8 @@ the `pipe`, until the time it names.
 57.12 An attempt MUST be aborted once it runs past `timeout` milliseconds.
 
 57.13 A step MUST be handed a signal that aborts where its attempt is aborted, where the signal the
-`Pipe` was called with aborts, where `stop` is called, and where the `stopSignal` its call was made
-under aborts.
+`Pipe` was called with aborts, where `stop` is called, and where the signal `abortSignal` answers
+where its call was made aborts.
 
 57.14 A `pipe` step 57.4 reads MUST NOT be attempted again once it has yielded.
 

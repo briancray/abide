@@ -1,0 +1,143 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/reactive/memo', '/reactive/refresh']}
+    tests={[
+        {
+            path: 'packages/abide/tests/abortSignal.test.ts',
+            from: [
+                "test('abortSignal in a memo body is its run’s own, ended by the next run — 7.45, 7.46'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/abortSignal.test.ts',
+            from: [
+                "test('abortSignal is aborted from the stop through its drain, and fresh once the stop resolves — 7.38, 7.39'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/abortSignal.test.ts',
+            from: [
+                "test('on a server, abortSignal after an await in a memo body is still its run’s own — 7.47'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/abortSignal.test.ts',
+            from: [
+                "test('a request and a run filed in it end as the request does — 7.46, 7.48'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/abortSignal.test.ts',
+            from: [
+                "test('in a browser, abortSignal after an await in a memo body is the app’s — 7.49'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/abortSignal.test.ts',
+            from: [
+                "test('a job giving up on abortSignal is not warned on, and a failing one still is — 4.12, 7.28, 37.28'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Cancel a search the next keystroke replaces">
+        <p>Inside a <code>memo</code> body the signal is that run's own. The next run aborts it, so
+            the search a keystroke made obsolete stops rather than finishing for nobody.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { abortSignal, memo, reactive } from '@abide/abide'
+
+            let q = reactive('')
+            const found = memo(() =>
+                fetch(\`/search?q=\${q}\`, { signal: abortSignal() }).then((r) => r.json()),
+            )
+            </script>
+
+            <input bind:value={q}>
+        `} />
+    </Section>
+
+    <Section level={3} title="Read it before the first await in the browser">
+        <p>A browser cannot carry a run across an <code>await</code>, so a body that awaits reads
+            the signal first and hands it on. After the <code>await</code> it would be the app's,
+            which a browser never aborts.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { abortSignal, memo, reactive } from '@abide/abide'
+
+            let q = reactive('')
+            const found = memo(async () => {
+                const signal = abortSignal()
+                const reply = await fetch(\`/search?q=\${q}\`, { signal })
+                return reply.json()
+            })
+            </script>
+
+            <input bind:value={q}>
+        `} />
+    </Section>
+
+    <Section level={3} title="Ask after an await on the server">
+        <p>On the server the run is carried across every <code>await</code>, so a helper the body
+            calls later is still handed that run's signal, without it being passed down.</p>
+        <Code language="ts" caption="server" code={`
+            import { abortSignal, memo } from '@abide/abide'
+            import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
+
+            function stillWanted(): boolean {
+                return !abortSignal().aborted
+            }
+
+            export const leads = memo(async () => {
+                await Bun.sleep(1) // a look at the mail server
+                if (!stillWanted()) return []
+                return DEALS.filter((deal) => deal.stage === 'lead')
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Stop an export when the caller hangs up">
+        <p>Called in a request, outside a run, the signal is the request's. It aborts when the
+            caller goes away, so a long export stops rather than finishing for nobody.</p>
+        <Code language="ts" caption="server" code={`
+            import { abortSignal } from '@abide/abide'
+            import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
+
+            export async function exportDeals(): Promise<string[]> {
+                const names: string[] = []
+                for (const deal of DEALS) {
+                    if (abortSignal().aborted) break
+                    await Bun.sleep(1) // a look at the deal's history
+                    names.push(deal.name)
+                }
+                return names
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="End a follow-up sweep when the app stops">
+        <p>A job on a clock can run for a while. Read <code>abortSignal()</code> in its run and
+            stop early, rather than holding the shutdown until the sweep ends.</p>
+        <Code language="ts" caption="server" code={`
+            import { abortSignal, memo } from '@abide/abide'
+            import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
+
+            export const followUps = memo(
+                async function* () {
+                    const stopping = abortSignal()
+                    for (const deal of DEALS) {
+                        if (stopping.aborted) return
+                        await Bun.sleep(1) // a look at the lead's inbox
+                        if (deal.stage === 'lead') yield deal.name
+                    }
+                },
+                { global: true, poll: 300_000 },
+            )
+        `} />
+    </Section>
+</Doc>

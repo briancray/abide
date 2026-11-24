@@ -51,7 +51,7 @@ import { NotLanded } from './NotLanded.ts'
 import { logOf, PatchLog, type PatchOp, sendInvalidate } from './patchLog.ts'
 import {
     BODY_RUN,
-    endRunSignal,
+    endRun,
     firstRunStarted,
     isPolled,
     jobStopped,
@@ -62,7 +62,7 @@ import {
 } from './poll.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 import { recordWrites } from './recordWrites.ts'
-import { runInScope } from './scoping.ts'
+import { runAsRun } from './scoping.ts'
 import {
     EVERY_PRODUCER,
     fileProducer,
@@ -1504,7 +1504,7 @@ function loadStamp(cell: Cell): LoadStamp {
  * reader sees nothing of it. `loading` is whether a load was in flight as it landed, which tells
  * the load a refresh started from a write refused after it. 7.28 — any other failure of a value
  * declaring `poll`, a job's first run among them, which has no reader for the failure to reach.
- * Neither warns on 37.28's abort, a job's run giving up as `stopSignal` asked it to among them —
+ * Neither warns on 37.28's abort, a job's run giving up as `abortSignal` asked it to among them —
  * past the revalidation's stamp, which is dropped either way.
  */
 function warnFailure(cell: Cell, failure: unknown, loading: boolean): void {
@@ -1923,8 +1923,8 @@ function run(cell: Cell): void {
     // A released orphan read again (12.14) — see `tombstone`. A released stream's run is its next
     // start: the generator its body hands back is promoted onto the stream it already has (9.6).
     if (!cell.alive) revive(cell as unknown as Subscriber)
-    // 7.46 — a new run ends the signal the last one handed out.
-    if (cell.runStop !== null) endRunSignal(cell)
+    // 7.46 — a new run ends the last one, and the signal it handed out.
+    endRun(cell)
     cell.generation += 1
     cell.state = CLEAN
     cell.running = true
@@ -1944,7 +1944,8 @@ function run(cell: Cell): void {
         // 11.32 — UNDER THE VALUE'S OWN SCOPE, not the ambient one. A drain runs every body a
         // turn's writes woke, and the turn is whichever request scheduled it — so without this a
         // body filed under one request reads the values of another.
-        produced = runInScope(cell.scope, body, cell.args, cell.global)
+        // 7.47 — and AS THIS RUN, which a server carries across the body's `await`s.
+        produced = runAsRun(cell, body, cell.args)
     } catch (thrown) {
         BODY_RUN.cell = outerRun
         TRACKING.reader = previous
@@ -2182,19 +2183,16 @@ function pumpRun(
     iterator: AsyncIterator<unknown>,
 ): void {
     stopStream(stream)
-    // 7.46 — a stream's new run ends the signal its last one handed out.
-    if (cell.runStop !== null) endRunSignal(cell)
+    // 7.46 — a stream's new run ends its last one, and the signal that one handed out.
+    endRun(cell)
     const run = stream.run
     beginLoad(cell)
     stream.iterator = iterator
-    // 11.32 — a generator's body runs inside each `next()`, so the pump is what carries the scope.
-    runInScope(
-        cell.scope,
-        () => pump(cell, stream, iterator, run),
+    // 11.32 — a generator's body runs inside each `next()`, so the pump is what carries the scope,
+    // and on a server the run (7.47).
+    runAsRun(cell, () => pump(cell, stream, iterator, run), undefined).then(
         undefined,
-        cell.global,
-    ).then(undefined, (thrown: unknown) =>
-        pumpFailed(cell, stream, run, thrown),
+        (thrown: unknown) => pumpFailed(cell, stream, run, thrown),
     )
 }
 
@@ -4449,8 +4447,8 @@ function releaseOrphan(cell: Cell): void {
     cell.orphaned = false
     const own = ownStream(cell)
     if (own !== null) stopStream(own)
-    // 7.46 — released, so its run's signal says stop.
-    if (cell.runStop !== null) endRunSignal(cell)
+    // 7.46 — released, so its run is over and its signal says stop.
+    endRun(cell)
     dropAdoption(cell)
     // OWED A RUN, so a read that reaches it again runs it — and `run` revives it first. No `body`
     // test: only a value with one is ever orphaned (`createReactive`).

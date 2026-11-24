@@ -408,10 +408,16 @@ export class Cell {
     declare state: number
     declare running: boolean
     /**
-     * The signal `stopSignal()` answered inside this value's current run, or `null` where the run
+     * The signal `abortSignal()` answered inside this value's current run, or `null` where the run
      * never asked — made on the ask, so a run that does not ask allocates nothing (7.45).
      */
     declare runStop: AbortController | null
+    /**
+     * Which of this value's runs is current, counted at every end 7.46 names. A server carries the
+     * count a run started at across its `await`s (7.47), and a continuation holding an older one
+     * belongs to a run already over.
+     */
+    declare runEpoch: number
     /**
      * The value this one adopted, or `null`.
      *
@@ -580,6 +586,7 @@ export class Cell {
         this.state = CLEAN
         this.running = false
         this.runStop = null
+        this.runEpoch = 0
         this.adoption = null
         this.cap = capFor(label, options?.throttle, options?.debounce)
         const tags = options?.tags

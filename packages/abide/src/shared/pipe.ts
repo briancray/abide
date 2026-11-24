@@ -11,10 +11,10 @@
 
 import { type Failed, isFailed, isTransient, retryAt } from './Failed.ts'
 import {
+    abortSignal,
     isReactive,
     type Reactive,
     reactive,
-    stopSignal,
     watch,
 } from './reactive/index.ts'
 import { isThenable } from './reactive/isThenable.ts'
@@ -262,7 +262,7 @@ class Runner {
     /** 57.5, 57.13 — one item, called: its answer, every answer where a step fanned out. */
     async call(input: unknown, signal?: AbortSignal): Promise<unknown> {
         // 57.13 — read where the call is made: inside a `memo` body, the run's own (7.45).
-        const told = stopSignal()
+        const told = abortSignal()
         const walked = await this.item(input, signal, told)
         if (walked.refusal !== undefined) return walked.refusal
         return walked.fanned ? walked.answers : walked.answers[0]
@@ -587,7 +587,7 @@ class Runner {
                 next += 1
             }
         }
-        const told = stopSignal()
+        const told = abortSignal()
         const writable = new WritableStream<unknown>({
             write: async (input) => {
                 const sequence = written

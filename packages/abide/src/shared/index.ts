@@ -190,7 +190,7 @@ export {
     refresh,
     type Selection,
     type Shared,
-    stopSignal,
+    abortSignal,
     type Store,
     synced,
     type Transformer,

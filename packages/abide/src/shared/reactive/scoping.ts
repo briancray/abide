@@ -7,6 +7,8 @@
 // fills `SCOPING.provider` (`#server/requestScope.ts`) and the core asks the slot, and a browser,
 // where nothing fills it, pays one load of a `null` wherever the core asks.
 
+import type { Cell } from './cellShape.ts'
+
 export type Scope = {
     /**
      * One instance per value filed OUTSIDE any scope and reached inside this one — see `scoped.ts`.
@@ -61,7 +63,28 @@ type Scoping = {
      * render to build up front.
      */
     filed(forwarder: unknown): void
+    /**
+     * `run`, as `mark`'s run of its value: what `abortSignal` reads after every `await` the run makes
+     * (7.47), which a browser has no way to carry.
+     */
+    runAs<Given, Result>(
+        mark: RunMark,
+        scope: Scope | undefined,
+        body: (given: Given) => Result,
+        given: Given,
+        global: boolean,
+    ): Result
+    /** The run `runAs` carries to this point, or `undefined` outside every one. */
+    currentRun(): RunMark | undefined
+    /**
+     * The signal of the request `scope` answers, aborted by 7.38's stop too — or `undefined` where
+     * `scope` answers none (7.48).
+     */
+    requestSignal(scope: Scope | undefined): AbortSignal | undefined
 }
+
+/** A value's run as a server carries it: the value, and the `runEpoch` the run started at. */
+export type RunMark = { cell: Cell; epoch: number }
 
 export const SCOPING: { provider: Scoping | null } = { provider: null }
 
@@ -94,4 +117,25 @@ export function runInScope<Given, Result>(
     return provider.current() === scope
         ? body(given)
         : provider.run(scope, body, given)
+}
+
+/**
+ * `runInScope` for `cell`'s body, carried across its `await`s as that run on a server (7.47).
+ *
+ * A BROWSER PAYS ONE LOAD OF A `null`, and `abortSignal` reads its run off the stack instead.
+ */
+export function runAsRun<Given, Result>(
+    cell: Cell,
+    body: (given: Given) => Result,
+    given: Given,
+): Result {
+    const provider = SCOPING.provider
+    if (provider === null) return body(given)
+    return provider.runAs(
+        { cell, epoch: cell.runEpoch },
+        cell.scope,
+        body,
+        given,
+        cell.global,
+    )
 }

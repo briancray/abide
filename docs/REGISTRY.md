@@ -458,11 +458,11 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `invalidate` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Marks the selection stale. | 13.4, 13.6, 13.10, 13.12, 13.15, 13.17 |
 
-## `stopSignal`
+## `abortSignal`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `stopSignal` | `() => AbortSignal` | The signal that says stop: inside a `memo` body its run's own, and elsewhere the one a stopping app aborts. | 7.38, 7.39, 7.45, 7.46 |
+| `abortSignal` | `() => AbortSignal` | The signal that says stop to the work it is called in, from the innermost owner that work runs under. | 7.38, 7.39, 7.45, 7.46, 7.47, 7.48, 7.49 |
 
 ## `isReactive`
 

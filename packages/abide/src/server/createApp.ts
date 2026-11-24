@@ -426,7 +426,7 @@ export async function bootEntered(
         // stream ended, which a listener's stop otherwise waits on for as long as it streams.
         mux?.closeAll(1001, 'the app is stopping')
         endHeld()
-        // 7.38 — `stopSignal` aborted first, so the run a job has is told to end before 7.27 waits
+        // 7.38 — the app's stop signal aborted first, so the run a job has is told to end before 7.27 waits
         // it out; 7.26 — and no job starts another while the app stops.
         const settlePolls = stopUnownedPolls()
         const drain = (async () => {

@@ -204,7 +204,7 @@ test('stop aborts the run in flight, waits on it, and starts no run after — 54
 
 // 54.26, 7.45 — A RUN OUTLIVES THE LOOK THAT STARTED IT: under `from: 'start'` a look does not wait
 // on the run, so the looks after it are new runs of the job's own value — and a run handed that
-// value's signal was aborted by the next look. THE REVERT: hand the run `stopSignal()` read in the
+// value's signal was aborted by the next look. THE REVERT: hand the run `abortSignal()` read in the
 // look, and `aborted by a look: true`.
 test('a run that overruns its interval is not aborted by the looks after it — 54.26, 54.29', async () => {
     const release = Promise.withResolvers<void>()

@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 import { spawned } from '@abide/harness/gate'
 
 import type { App, BootedApp } from '#server/createApp.ts'
-import { log, memo, refresh, stopSignal } from '#shared'
+import { abortSignal, log, memo, refresh } from '#shared'
 import { collectWatches } from '#shared/reactive/watch.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -318,7 +318,7 @@ test('the app opening makes a job’s first run, once — 7.30', async () => {
 // started a day after boot, each next one an interval after the last ended, and a shutdown that
 // cancelled the scan in flight before waiting on it. Two arms over one contract again: media's
 // `scheduleLoop` with its `delay`, stopped as its `onStop` did — cancel, then wait — and
-// `reactive(…, { global: true, poll: { every, after: 'settle', delay } })` reading `stopSignal()`.
+// `reactive(…, { global: true, poll: { every, after: 'settle', delay } })` reading `abortSignal()`.
 
 const EVERY = 20
 const DELAY = 60
@@ -413,7 +413,7 @@ const SPACED_ARMS: Record<
         }
     },
     async abide(ledger, settings) {
-        memo(() => scanRun(ledger, stopSignal(), settings), {
+        memo(() => scanRun(ledger, abortSignal(), settings), {
             global: true,
             poll: { every: EVERY, after: 'settle', delay: () => DELAY },
         })

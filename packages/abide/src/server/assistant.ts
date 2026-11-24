@@ -29,7 +29,7 @@ import { namedLogger } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
 import { mounted } from '#shared/mount.ts'
 import { randomToken } from '#shared/randomToken.ts'
-import { stopSignal } from '#shared/reactive/poll.ts'
+import { abortSignal } from '#shared/reactive/poll.ts'
 import { refuse } from '#shared/refuse.ts'
 
 import {
@@ -215,7 +215,7 @@ async function* converse(
     )
     // 44.57 — the caller's signal and the request's are one: either ends the conversation. Where no
     // request owns the run, the app's own life is the one it has, as a `global` value's `poll` (7.26).
-    const owner = asking === undefined ? stopSignal() : asking.signal
+    const owner = asking === undefined ? abortSignal() : asking.signal
     const signal =
         options.signal === undefined
             ? owner
@@ -435,8 +435,8 @@ async function* asWindow(
     // caller's signal.
     const ended =
         options.signal === undefined
-            ? stopSignal()
-            : AbortSignal.any([stopSignal(), options.signal])
+            ? abortSignal()
+            : AbortSignal.any([abortSignal(), options.signal])
     const scope = scopeFor(asker, asker, app)
     const conversation = converse(
         messages,

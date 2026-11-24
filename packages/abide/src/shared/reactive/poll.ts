@@ -9,7 +9,7 @@
 //
 // A POLL NO OWNER STOPS IS A JOB — a module's value, a `global` one — and the app is its owner:
 // `App.listen` makes its first run (7.29, 7.30), after its `delay` (7.34), and `App.stop` stops it
-// (7.26, 7.27), aborting `stopSignal` first (7.38). Filed here rather than on the cell, for the same
+// (7.26, 7.27), aborting the app's stop signal first (7.38). Filed here rather than on the cell, for the same
 // reason.
 
 import { type Live, live } from '../live.ts'
@@ -17,6 +17,7 @@ import { LONGEST_DELAY } from '../LONGEST_DELAY.ts'
 import type { Cell } from './cellShape.ts'
 import { armTimer } from './Expiry.ts'
 import type { Reactive } from './Reactive.ts'
+import { SCOPING } from './scoping.ts'
 import { unrefTimer } from './unrefTimer.ts'
 import { owned, owning } from './watch.ts'
 
@@ -83,33 +84,54 @@ const STOPPED_JOBS = new WeakSet<Cell>()
  */
 const POLLED = new WeakSet<object>()
 
-/** 7.38, 7.39 — what `stopSignal` answers: aborted by a stop, replaced as that stop ends. */
+/** 7.38, 7.39 — what `abortSignal` answers outside every run and request: aborted by a stop, replaced as that stop ends. */
 let STOPPING = new AbortController()
 
 /**
  * The value whose body is running on this stack — its synchronous part, or a step of its stream —
- * for `stopSignal` to answer that run's own signal (7.45). Set and restored around the call, so a
- * body that reaches another value's body sees its own again once that one returns.
+ * for `abortSignal` to answer that run's own signal in a browser (7.45, 7.49). Set and restored
+ * around the call, so a body that reaches another value's body sees its own again once that one
+ * returns. A server reads the run `runAsRun` carries instead, which survives an `await` (7.47).
  */
 export const BODY_RUN: { cell: Cell | null } = { cell: null }
 
 /**
- * The signal that says stop to the work this is called in: inside a `memo` body, its run's own
- * (7.45, 7.46); anywhere else, the one `App.stop` aborts before it waits on what is in flight (7.38).
- * Never aborted where no app stops and no run is replaced, a browser among them.
+ * The signal that says stop to the work this is called in — the innermost owner it runs under, which
+ * aborts where any owner above it does: a `memo` run's own (7.45, 7.46, 7.47), the request being
+ * served (7.48), and otherwise the one `App.stop` aborts before it waits on what is in flight (7.38).
+ * Never aborted where no app stops and no run is replaced, a browser outside a run among them.
  */
-export function stopSignal(): AbortSignal {
-    const cell = BODY_RUN.cell
-    if (cell === null) return STOPPING.signal
+export function abortSignal(): AbortSignal {
+    const provider = SCOPING.provider
+    if (provider === null) {
+        const cell = BODY_RUN.cell
+        return cell === null
+            ? STOPPING.signal
+            : runSignal(cell, STOPPING.signal)
+    }
+    const mark = provider.currentRun()
+    if (mark === undefined)
+        return provider.requestSignal(provider.current()) ?? STOPPING.signal
+    const cell = mark.cell
+    // 7.47 — a continuation of a run 7.46 has already ended: that run's signal said stop.
+    if (mark.epoch !== cell.runEpoch) return AbortSignal.abort()
+    // 7.46 — A `global` VALUE'S RUN IS NO REQUEST'S (44.57), whichever request reached it first.
+    const owner = cell.global
+        ? STOPPING.signal
+        : (provider.requestSignal(cell.scope) ?? STOPPING.signal)
+    return runSignal(cell, owner)
+}
+
+/** 7.45 — the current run's signal, made on the first ask and aborted where `owner` is (7.46). */
+function runSignal(cell: Cell, owner: AbortSignal): AbortSignal {
     const standing = cell.runStop
     if (standing !== null) return standing.signal
     const run = new AbortController()
     cell.runStop = run
-    // 7.46 — 7.38's abort reaches a run that asked, as it reaches the app's own signal.
-    const stopping = STOPPING.signal
-    if (stopping.aborted) run.abort(stopping.reason)
+    if (owner.aborted) run.abort(owner.reason)
     else
-        stopping.addEventListener('abort', () => run.abort(stopping.reason), {
+        // Removed by the run's own abort, so a long-lived owner does not keep one per run it saw.
+        owner.addEventListener('abort', () => run.abort(owner.reason), {
             once: true,
             signal: run.signal,
         })
@@ -124,8 +146,12 @@ export function appStopSignal(): AbortSignal {
     return STOPPING.signal
 }
 
-/** 7.46 — ends the signal a value's run handed out, where one was asked for: the run is over. */
-export function endRunSignal(cell: Cell): void {
+/**
+ * 7.46 — the value's run is over: a continuation of it is told so (7.47), and the signal it handed
+ * out, where one was asked for, says stop.
+ */
+export function endRun(cell: Cell): void {
+    cell.runEpoch += 1
     const run = cell.runStop
     if (run === null) return
     cell.runStop = null
@@ -242,7 +268,7 @@ export function startUnownedPolls(): void {
 }
 
 /**
- * Aborts `stopSignal` (7.38), stops every poll no owner stops and every `delay` still being waited
+ * Aborts the signal `abortSignal` answers outside every run and request (7.38), stops every poll no owner stops and every `delay` still being waited
  * out (7.26, 7.37), and answers what waits on the run each value has in flight (7.27) — asked once
  * the requests have drained, so one a request started is waited on too.
  *
