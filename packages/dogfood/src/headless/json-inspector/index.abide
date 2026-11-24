@@ -24,6 +24,10 @@ import searchPayload from './lib/SearchPayload.abide' with { type: 'text' }
         },
         {
             path: 'packages/dogfood/examples/crm/src/ops/lib/WebhookPayload.test.ts',
+            from: ['test("a row\'s toggle opens and shuts it, and picks nothing"'],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/ops/lib/WebhookPayload.test.ts',
             from: [
                 "test('a search shows its matches and what holds them, opened and marked'",
             ],
@@ -45,7 +49,8 @@ import searchPayload from './lib/SearchPayload.abide' with { type: 'text' }
             by its JSON Pointer. The rows are flat: render <code>rows</code> as one list, spread
             <code>row(row).item</code> on each, and indent by <code>row.level</code>. The keys are
             <code>tree</code>'s, so Right opens an object, Left closes it, and a click or Enter picks
-            the row <code>inspected</code> answers.</p>
+            the row <code>inspected</code> answers. A click opens nothing, so give each object
+            and array a button that calls <code>row(row).toggle</code>.</p>
         <Example code={inspectPayload}><InspectPayload /></Example>
     </Section>
 

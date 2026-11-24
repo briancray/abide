@@ -824,6 +824,25 @@
         @apply rotate-45;
     }
 
+    /* a branch whose markup carries a toggle button draws the chevron on the button, so what looks
+       pressable is what a pointer opens and shuts it with */
+    & [role=treeitem][aria-expanded]:has(> button)::before {
+        content: none;
+    }
+
+    & [role=treeitem] > button {
+        @apply mr-1 inline-flex size-4 cursor-pointer items-center justify-center border-0 bg-transparent bg-none p-0 align-middle shadow-none;
+    }
+
+    & [role=treeitem] > button::before {
+        content: '';
+        @apply mb-0.5 inline-block size-1.5 -rotate-45 border-r-2 border-b-2 border-muted transition-transform;
+    }
+
+    & [role=treeitem][aria-expanded=true] > button::before {
+        @apply rotate-45;
+    }
+
     & [role=treeitem]:focus-visible {
         @apply outline-2 outline-offset-2 outline-signal outline-solid;
     }

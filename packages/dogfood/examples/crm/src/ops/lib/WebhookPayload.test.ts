@@ -134,3 +134,22 @@ test('a click picks a row, and the row picked is inspected', async () => {
     expect(status()).toBe('/metadata/crm~1account')
     expect(document.querySelector('pre')?.textContent).toBe('"hopper"')
 })
+
+// 51.158, 51.159 — A ROW'S TOGGLE OPENS AND SHUTS IT, and picks nothing: the chevron is the button the
+// markup puts on each object and array. THE REVERTS: leave the button out, and `/invoice` has no
+// toggle to press; let its click reach the item, and the status reads `/invoice`.
+test("a row's toggle opens and shuts it, and picks nothing", async () => {
+    using _payload = await mount(WebhookPayload({}))
+    const toggle = at('/invoice').querySelector('button') as HTMLElement
+    toggle.click()
+    flushSync()
+    expect(at('/invoice').getAttribute('aria-expanded')).toBe('true')
+    expect(shown().indexOf('/invoice/number')).toBe(
+        shown().indexOf('/invoice') + 1,
+    )
+    expect(status()).toBe('no value picked')
+    toggle.click()
+    flushSync()
+    expect(shown()).not.toContain('/invoice/number')
+    expect(at('/id').querySelector('button')).toBeNull()
+})

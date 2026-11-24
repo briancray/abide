@@ -11,6 +11,13 @@ const payload = jsonInspector({ value: WEBHOOK })
     {#for row of payload.rows key row.pointer}
         <li {...payload.row(row).item}
             style:padding-inline-start="{row.level - 1}rem">
+            {#if row.size !== undefined}
+                <button type="button" tabindex="-1" aria-hidden="true"
+                    onclick={(event) => {
+                        event.stopPropagation()
+                        payload.row(row).toggle()
+                    }}></button>
+            {/if}
             {row.key ?? 'payload'}
             {#if row.size === undefined}
                 <code>{JSON.stringify(row.value)}</code>
