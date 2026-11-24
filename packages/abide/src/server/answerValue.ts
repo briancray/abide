@@ -118,8 +118,7 @@ export function sseHeaders(headers: Headers): void {
  * iterable is lifted, which also awaits a promise it holds.
  */
 function chunksOf(value: unknown): AsyncIterator<unknown> {
-    if (Symbol.asyncIterator in (value as object))
-        return (value as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+    if (isAsyncIterable(value)) return value[Symbol.asyncIterator]()
     return lifted(value as Iterable<unknown>)
 }
 

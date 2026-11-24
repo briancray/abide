@@ -140,3 +140,13 @@ test('a tick sets one timer for a list followed oldest-first — 52.73', () => {
     expect(standing()).toHaveLength(1)
     for (const each of leave) each()
 })
+
+// 52.73 PAST THE LONGEST TIMER — a label a month from its next change arms no wait `setTimeout`
+// cannot hold, which fires at once and, re-armed, at once again. THE REVERT, run: arming the raw
+// wait records 2592000000 for a label a month and a half old.
+test('a label a month from its change arms a wait setTimeout holds — 52.73', () => {
+    const now = Date.now()
+    const leave = follow(now - 45 * DAY)
+    expect(standing()[0]?.wait).toBe(2 ** 31 - 1)
+    leave()
+})

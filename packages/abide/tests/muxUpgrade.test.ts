@@ -151,3 +151,33 @@ test('abide start logs each mux connection on abide:socket — 18.1', async () =
         server.kill()
     }
 })
+
+// 37.10 — A FRAME THAT IS NOT A RECORD IS DROPPED, not thrown inside a message handler nobody awaits,
+// where the fault would stop the app. THE REVERT, run: guarding the parsed frame only against
+// `undefined` lets `null` through to `frame.id`, the app stops, and this reads ['open', 'refused'].
+test('a frame of null or a non-text address leaves the app serving — 37.10', async () => {
+    const dir = temporaryModule({
+        'frames.ts': `const base = process.argv[2].replace('http', 'ws') + '/__abide/socket'
+const first = new WebSocket(base)
+const outcomes: string[] = []
+outcomes.push(await new Promise<string>((done) => {
+    first.onopen = () => done('open')
+    first.onerror = () => done('refused')
+}))
+first.send('null')
+first.send('{"op":"sub","id":1,"address":1}')
+await Bun.sleep(300)
+first.close()
+const second = new WebSocket(base)
+outcomes.push(await new Promise<string>((done) => {
+    second.onopen = () => done('open')
+    second.onerror = () => done('refused')
+}))
+second.close()
+console.log(JSON.stringify(outcomes))
+`,
+    })
+    expect(
+        await lastLinePrinted<string[]>(['bun', `${dir}/frames.ts`, base]),
+    ).toEqual(['open', 'open'])
+})

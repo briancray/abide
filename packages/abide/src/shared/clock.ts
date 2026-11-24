@@ -8,6 +8,7 @@
 
 import { RELATIVE_UNITS } from './format/RELATIVE_UNITS.ts'
 import { isServer } from './isServer.ts'
+import { LONGEST_DELAY } from './LONGEST_DELAY.ts'
 import { reactive } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
 
@@ -85,7 +86,9 @@ function arm(time: number, now: number, wait: number): void {
     clearTimeout(timer)
     due = now + wait
     dueFor = time
-    timer = setTimeout(tick, wait)
+    // A wait past the longest `setTimeout` holds fires at once, and re-armed, at once again: a list
+    // of labels a month old ticked every few milliseconds. Capped, it ticks early and weighs again.
+    timer = setTimeout(tick, Math.min(wait, LONGEST_DELAY))
 }
 
 function tick(): void {

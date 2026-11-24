@@ -11,6 +11,7 @@
 // subscription its rungs admitted when it opened (18.8) — they run once, in the connection's request.
 
 import { problemOf } from '#shared/Failed.ts'
+import { isRecord } from '#shared/isRecord.ts'
 import { namedLogger } from '#shared/log.ts'
 import { unmounted } from '#shared/mount.ts'
 import type { BrowserFrame } from '#shared/muxFrames.ts'
@@ -191,10 +192,14 @@ export class MuxConnection {
     }
 
     private async answerFrame(raw: string | Buffer): Promise<void> {
-        // Partial: it is whatever the browser sent.
-        const frame = parsedJson(String(raw)) as
-            Partial<BrowserFrame> | undefined
-        if (frame === undefined) return
+        // Partial: it is whatever the browser sent — and a frame that is not a record, or names an
+        // address that is not text, is dropped here rather than thrown inside a handler nobody awaits,
+        // which would stop the app (37.10).
+        const parsed = parsedJson(String(raw))
+        if (!isRecord(parsed)) return
+        const frame = parsed as Partial<BrowserFrame>
+        if (frame.address !== undefined && typeof frame.address !== 'string')
+            return
         const id = frame.id ?? 0
         // THE ADDRESS BELOW THE MOUNT, which is what the handlers are keyed by: a browser names it
         // as its wrapper resolved it, which is a whole URL, or a path under the app's mount.
