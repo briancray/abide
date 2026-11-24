@@ -93,6 +93,19 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
+    <Section level={3} title="Share one call log across every server process">
+        <p>Hand it <code>store.redis</code>, and the entries are a Redis Stream every process
+            appends to. An append is one script on the server, so two processes appending at once
+            never take one number or keep one key twice, and a ledger in another process hears
+            it.</p>
+        <Code language="ts" caption="server" code={`
+            import { ledger, store } from '@abide/abide/server'
+
+            const shared = store.redis('redis://localhost:6379', 'calls')
+            const calls = ledger('calls', { store: shared })
+        `} />
+    </Section>
+
     <Section level={3} title="Keep a rep's offline notes in the browser">
         <p>Hand it <code>store.indexedDB</code>, and the entries outlive a reload. An append in
             another tab moves this tab's <code>head</code> and wakes its reads.</p>

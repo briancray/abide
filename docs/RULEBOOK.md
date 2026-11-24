@@ -6719,8 +6719,8 @@ the cursor past an entry once its reader asks for the next.
 
 58.8 `head` MUST be the number of the last entry a `ledger` kept, 0 where it has kept none.
 
-58.9 A `ledger` given a `store` MUST keep its entries and its cursors there, and `store.sqlite` and
-`store.indexedDB` MUST each keep one record per entry.
+58.9 A `ledger` given a `store` MUST keep its entries and its cursors there, and `store.sqlite`,
+`store.indexedDB` and `store.redis` MUST each keep one record per entry.
 
 58.10 Where `retain` is given, an append MUST let go of every entry but the last `retain`.
 
@@ -6729,3 +6729,6 @@ the cursor past an entry once its reader asks for the next.
 
 58.12 A `ledger` whose `store` reports a change through its `watch` MUST read its last entry's
 number again, and MUST hand its waiting reads what the change appended.
+
+58.13 `store.redis` MUST look up an append's key, number its entry and keep it as one step on the
+server.

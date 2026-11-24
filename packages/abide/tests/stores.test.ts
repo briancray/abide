@@ -275,9 +275,11 @@ test('store.redis writes with Redis’s own expiry and follows its keyspace chan
         .redis<number>(client as unknown as RedisClient, 'other')
         .watch?.(() => {})
     await Bun.sleep(0)
-    expect(client.subscribed).toEqual([
+    expect([...client.subscribed].sort()).toEqual([
         `__keyspace@3__:${APP}:count`,
+        `__keyspace@3__:${APP}:count:log`,
         `__keyspace@3__:${APP}:other`,
+        `__keyspace@3__:${APP}:other:log`,
     ])
     expect(`duplicates: ${client.duplicates}`).toBe('duplicates: 1')
     client.publish(`__keyspace@3__:${APP}:count`, 'set')

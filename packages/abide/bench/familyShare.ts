@@ -18,6 +18,9 @@
 
 import { Database } from 'bun:sqlite'
 
+import { RedisClient } from 'bun'
+
+import * as store from '../src/server/stores.ts'
 import { ledger } from '../src/shared/ledger.ts'
 import { pipe } from '../src/shared/pipe.ts'
 
@@ -152,3 +155,58 @@ console.log(
 console.log(`  retain 1,000    ${perItem(small, APPENDS)} per append`)
 console.log(`  retain 100,000  ${perItem(large, APPENDS)} per append`)
 console.log(`  ratio, 100,000 / 1,000: ${(large / small).toFixed(2)}x`)
+
+// WHERE A LEDGER IS KEPT: one append each, awaited in turn, into memory, SQLite on disk and — where
+// `ABIDE_REDIS_URL` names a server — Redis, whose append is one script round trip.
+const STORED = 5_000
+const sqliteFile = `${process.env.TMPDIR ?? '/tmp'}/abide-bench-ledger-${Date.now()}.sqlite`
+const kept: Record<string, () => Promise<void>> = {
+    memory: async () => {
+        const log = ledger<number>(`bench-kept-${(named += 1)}`)
+        for (let n = 0; n < STORED; n += 1) await log.append(n)
+    },
+    sqlite: async () => {
+        const log = ledger<number>(`bench-kept-${(named += 1)}`, {
+            store: store.sqlite(sqliteFile, `bench-${named}`),
+        })
+        for (let n = 0; n < STORED; n += 1) await log.append(n)
+    },
+}
+if (process.env.ABIDE_REDIS_URL !== undefined) {
+    const client = new RedisClient(process.env.ABIDE_REDIS_URL)
+    kept.redis = async () => {
+        const log = ledger<number>(`bench-kept-${(named += 1)}`, {
+            store: store.redis(client, `bench-${Date.now()}-${named}`),
+        })
+        for (let n = 0; n < STORED; n += 1) await log.append(n)
+    }
+}
+const atOnce =
+    (name: string, make: () => ReturnType<typeof ledger<number>>) =>
+    async (): Promise<void> => {
+        const log = make()
+        const pending: Promise<number>[] = []
+        for (let n = 0; n < STORED; n += 1) pending.push(log.append(n))
+        await Promise.all(pending)
+        void name
+    }
+kept['sqlite, at once'] = atOnce('sqlite', () =>
+    ledger<number>(`bench-kept-${(named += 1)}`, {
+        store: store.sqlite(sqliteFile, `bench-${named}`),
+    }),
+)
+if (process.env.ABIDE_REDIS_URL !== undefined) {
+    const many = new RedisClient(process.env.ABIDE_REDIS_URL)
+    kept['redis, at once'] = atOnce('redis', () =>
+        ledger<number>(`bench-kept-${(named += 1)}`, {
+            store: store.redis(many, `bench-${Date.now()}-${named}`),
+        }),
+    )
+}
+const keptTook = await fastest(kept)
+console.log(
+    `ledger stores — ${STORED} appends awaited in turn, fastest of ${ROUNDS}`,
+)
+for (const [name, took] of Object.entries(keptTook))
+    console.log(`  ${name.padEnd(16)} ${perItem(took, STORED)} per append`)
+process.exit(0)
