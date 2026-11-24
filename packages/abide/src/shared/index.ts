@@ -270,6 +270,15 @@ export {
     toggleGroup,
 } from './toggleGroup.ts'
 export { type Tree, type TreeNode, type TreeOptions, tree } from './tree.ts'
+// 51.153-51.161 — a JSON value to search and inspect, as `tree`'s parts and a search field.
+export {
+    type JsonInspector,
+    type JsonInspectorOptions,
+    type JsonKind,
+    type JsonRow,
+    type JsonRowParts,
+    jsonInspector,
+} from './jsonInspector.ts'
 // 52.72-52.77 — a time that stays current, as parts on a `<time>` of the app's own.
 export { type TimeAt, type TimeOptions, type TimeParts, time } from './time.ts'
 // 52.82-52.100 — months of days or a range the keys move through and pick, as parts on grids of the app's own.

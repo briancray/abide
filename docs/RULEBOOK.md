@@ -5805,6 +5805,38 @@ item's `item` part MUST be that listbox's `option` part.
 
 51.151 An item's `handle` part MUST carry `aria-hidden="true"` and MUST NOT stand in the tab order.
 
+51.152 `tree`'s `shown` MUST be the nodes that show, in the order they render: each root, and after
+each node that shows and is expanded, its children.
+
+51.153 `jsonInspector` MUST hold a row for `value` and for every entry of every object and array
+within it, each told apart by its JSON Pointer, the root's `''`.
+
+51.154 `jsonInspector`'s `tree` part and each row's `item` part MUST be `tree`'s, each row a node
+whose children are its entries in the order `value` holds them.
+
+51.155 `jsonInspector`'s `rows` MUST be `tree`'s `shown` (51.152) over its rows.
+
+51.156 A row of a `jsonInspector` MUST match a `query` that is not blank where its key, or its value
+where that is not an object or an array, written as text, holds `query`, ignoring case; `matches`
+MUST be every row that matches, in the order `value` holds them; and the `item` part of each row
+that matches MUST carry `data-match`.
+
+51.157 While `query` is not blank, the rows of a `jsonInspector` that show MUST be those that match,
+those holding one, and every entry of a row that matches, and each row holding a match MUST be
+expanded until it is collapsed while that `query` stands; a row expanded or collapsed while `query`
+is not blank MUST NOT be written to `expanded`.
+
+51.158 A row's `keyRuns` and `valueRuns` MUST be its key's and its value's text cut into runs as
+`highlight` cuts them (52.110), each match carrying the `match` part, and a row whose value is an
+object or an array MUST have no `valueRuns`.
+
+51.159 `jsonInspector`'s `search` part MUST be an input of type `search` that writes what is typed to
+`query`, shows `query`, and names the tree's element with `aria-controls`.
+
+51.160 `jsonInspector`'s `inspected` MUST be the row whose pointer `selected` holds, showing or not.
+
+51.161 A `jsonInspector` given no `expanded` MUST start with its root expanded.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.

@@ -1,0 +1,23 @@
+<script>
+import { jsonInspector } from '@abide/abide'
+
+import { WEBHOOK } from './WEBHOOK.ts'
+
+const payload = jsonInspector({ value: WEBHOOK })
+</script>
+
+<p class="status">{payload.inspected?.pointer ?? 'Pick a value.'}</p>
+<ul {...payload.tree} aria-label="Payload" class="tree">
+    {#for row of payload.rows by row.pointer}
+        <li {...payload.row(row).item}
+            style:padding-inline-start="{row.level - 1}rem">
+            {row.key ?? 'payload'}
+            {#if row.size === undefined}
+                <code>{JSON.stringify(row.value)}</code>
+            {:else}
+                <small>{row.size}
+                    {row.kind === 'array' ? 'items' : 'keys'}</small>
+            {/if}
+        </li>
+    {/for}
+</ul>

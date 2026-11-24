@@ -1,0 +1,34 @@
+<script>
+import { jsonInspector } from '@abide/abide'
+
+import { WEBHOOK } from './WEBHOOK.ts'
+
+const payload = jsonInspector({ value: WEBHOOK })
+</script>
+
+<input {...payload.search} aria-label="Search the payload"
+    placeholder="Try “grace”">
+<p class="status">{payload.matches.length} found</p>
+<ul {...payload.tree} aria-label="Payload" class="tree">
+    {#for row of payload.rows by row.pointer}
+        <li {...payload.row(row).item}
+            style:padding-inline-start="{row.level - 1}rem">
+            {#for run of payload.row(row).keyRuns}
+                {#if run.match}
+                    <mark {...run.match}>{run.text}</mark>
+                {:else}
+                    {run.text}
+                {/if}
+            {/for}
+            <code>
+                {#for run of payload.row(row).valueRuns}
+                    {#if run.match}
+                        <mark {...run.match}>{run.text}</mark>
+                    {:else}
+                        {run.text}
+                    {/if}
+                {/for}
+            </code>
+        </li>
+    {/for}
+</ul>
