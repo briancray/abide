@@ -249,7 +249,6 @@ export {
 } from './panZoom.ts'
 export { type Playback, type PlaybackOptions, playback } from './playback.ts'
 export { type Drawer, type DrawerOptions, drawer } from './drawer.ts'
-export { type SheetOptions, sheet } from './sheet.ts'
 export { type Lightbox, type LightboxOptions, lightbox } from './lightbox.ts'
 export { type Stepper, type StepperOptions, stepper } from './stepper.ts'
 export {

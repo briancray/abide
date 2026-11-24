@@ -375,15 +375,7 @@ const WRITTEN: readonly {
                 route: '/headless/drawer',
                 title: '`drawer`',
                 description:
-                    'Open a dialog of your own from an edge of the page, sized from a handle on its inner edge.',
-                where: 'component',
-                subgroup: 'Overlays',
-            },
-            {
-                route: '/headless/sheet',
-                title: '`sheet`',
-                description:
-                    'Raise a panel of your own from the bottom of the page that settles at the heights you give.',
+                    'Open a dialog of your own from an edge of the page, sized from a handle on its inner edge and settling at the sizes you give.',
                 where: 'component',
                 subgroup: 'Overlays',
             },
