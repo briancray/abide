@@ -1,9 +1,0 @@
-<script>
-// Asked once; the native app and a browser each ask as they do for any site.
-async function notify() {
-    if ((await Notification.requestPermission()) !== 'granted') return
-    new Notification('Deal won', { body: 'Acme Corp — $12,000', tag: 'acme' })
-}
-</script>
-
-<button onclick={notify}>Notify me of the win</button>

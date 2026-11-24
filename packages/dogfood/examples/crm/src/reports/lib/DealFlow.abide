@@ -2,7 +2,6 @@
 import { chart, format, props, reactive } from '@abide/abide'
 
 import ChartPlot from '#src/lib/ChartPlot.abide'
-import Tooltips from '#src/lib/Tooltips.abide'
 
 const MONTHS = [5, 6, 7, 8, 9, 10].map((month) => Date.UTC(2026, month, 1))
 const WON = [4, 6, 5, 8, 7, null]
@@ -44,7 +43,3 @@ const plot = chart({
 {#if picked !== undefined}
     <p>Deals closed in {format.date(MONTHS[picked], { style: 'month' })}</p>
 {/if}
-<Tooltips
-    class="m-0 grid w-max gap-0.5 rounded-md border border-rule bg-raised px-3 py-2
-    text-chrome text-ink shadow-sm [&_[data-chart=readout-x]]:text-muted"
- />

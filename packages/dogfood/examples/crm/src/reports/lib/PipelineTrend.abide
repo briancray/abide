@@ -2,7 +2,6 @@
 import { chart, format, reactive } from '@abide/abide'
 
 import ChartPlot from '#src/lib/ChartPlot.abide'
-import Tooltips from '#src/lib/Tooltips.abide'
 
 const MONTHS = [5, 6, 7, 8, 9, 10].map((month) => Date.UTC(2026, month, 1))
 const LEADS = [40_000, 52_000, 47_000, 61_000, 58_000, 66_000]
@@ -42,8 +41,4 @@ const plot = chart({
     plot={plot}
     class="block h-60 w-full overflow-visible text-chrome text-muted
         [&_[data-chart=area]]:opacity-30 [&_[data-chart=line]]:[stroke-dasharray:4_4]"
- />
-<Tooltips
-    class="m-0 w-max rounded-md border border-rule bg-raised px-3 py-2 text-chrome text-ink
-    shadow-sm"
  />
