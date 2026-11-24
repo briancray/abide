@@ -1,5 +1,0 @@
----
-"@abide/abide": minor
----
-
-`Outlet` and `fill` are replaced by `outlet.host` and `outlet.into`, two parts from `@abide/abide` (RULEBOOK 35.20-35.24). Spread `outlet.host('actions')` on the element a layout leaves, and `outlet.into('actions')` on each element a page writes for it — inline, reading and writing the page's own state, with no component to hand over. The browser moves each into the host, in the order they were bound, after what the host's own markup holds, and takes it out when it is unbound; of several hosts under one name the last holds them, and a host carries `data-empty` while it holds none. The server writes an `into` where the page wrote it, `hidden`, so hydration adopts it in place and nothing shows in the wrong place before the move. `@abide/abide/Outlet.abide` is gone: write `<header {...outlet.host('actions')}>` where you wrote `<header><Outlet name="actions" /></header>`, and `<button {...outlet.into('actions')}>` in the page where you wrote `fill('actions', Button)`. The warning for a name no host stands under is on `abide:outlet`.

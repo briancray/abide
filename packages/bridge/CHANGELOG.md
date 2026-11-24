@@ -1,5 +1,31 @@
 # @abide/bridge
 
+## 0.9.0
+
+### Minor Changes
+
+- 9206ce8: An assistant's answer streams as the Messages API streams it, and a conversation is held as the API holds it. `assistant` yields each run of the model event for event — `message_start`, `content_block_start`, `content_block_delta` (`text_delta`, `input_json_delta`, `citations_delta`, …), `content_block_stop`, `message_delta` with its `stop_reason` and `usage`, `message_stop` — through `provider.claudeApi` and `provider.claudeCode` alike, and between runs a `tool_result` event for each call, with its value (RULEBOOK 44.2, 44.11, 44.28, 44.49). `assistantMessage('assistant', events)` makes the messages an answer amounts to, accumulated as the API's own clients accumulate its stream (44.105), and `chat` holds `messages` — the API's own — folding an answer into them as it streams (53.24-53.32, 53.47). `resultsOf` reads a handler's results off those messages (44.51). `ToolAnswer` takes MCP's `isError`.
+  
+  Migrating:
+  
+  - Events: `text` → `content_block_delta` with a `text_delta`; `tool` → `content_block_start` with a `tool_use` block; `input` → that block's `input_json_delta`s; `result` → `tool_result` (`content` is the blocks the model was shown); `done` → each run's `message_delta` (`stop_reason`, `usage`) and `message_stop`. A call reaches the handler its `tool_use` names; events no longer carry `handler`.
+  - `transcript.turn` / `transcript.fold` / `transcript.messages`, `AssistantTurn` and `AssistantTurnPart` are gone: hold `AssistantMessage[]`, and turn a whole answer's events into messages with `assistantMessage('assistant', events)`.
+  - `chat({ turns })` → `chat({ messages })`; `talk.turns` → `talk.messages`; `talk.turn(turn, index)` → `talk.message(message, index)`, rendering its `blocks` where it is `shown`; a tool part → a `tool_use` block, `talk.tool(block)` carrying its `toolResult` and `answer`; permission prompts → `talk.permissions`; an answer's failure and stop → `talk.failed` and `talk.stop_reason`, on the root as `data-failed` and `data-stop`. `data-chat="turn"` → `data-chat="message"`. Show Ask again under a message that `ends` its answer.
+  - `resultsOf(events, handler)` → `resultsOf(assistantMessage('assistant', events), handler)`, or the messages a chat holds.
+  - `ToolAnswer.failed` → `isError`.
+  - A `Provider` an app wrote yields each run as the API streams it — `message_start` first — and a `tool_result` event between runs.
+  - A stored conversation is the API's own messages; one stored as turns has no reader and is rewritten once.
+  - Pair with a bridge of this release: an older bridge reports events in the old shapes.
+
+### Patch Changes
+
+- edb7aae: a refused call is answered through served() like every other report ([`604a78c`](https://github.com/briancray/abide/commit/604a78cd7b05e838d48d4926693426d7444310a2))
+- edb7aae: the bench reads webkit for shared and shapes alone, as skipWebkitClock skips the rest everywhere ([`9a85615`](https://github.com/briancray/abide/commit/9a85615f1ddcc931404b69fafb9f55b1ac4cd3fd))
+- edb7aae: grantFor hands back the args a caller uses, one APP_NAME, the icon in a scratch directory ([`acfe9c2`](https://github.com/briancray/abide/commit/acfe9c2ad9845cef125d57eb0cdb9010e1c0e68e))
+- edb7aae: callTool names its configuration parameter, one XDG directory rule, Bun.env for headersHelper ([`bf58b29`](https://github.com/briancray/abide/commit/bf58b29ce68f2175a20442d2d7b7debffcab8787))
+- edb7aae: a direct call to an http MCP server sends what its headersHelper writes, over its headers, as Claude Code does — 44.95 ([`c75e1bf`](https://github.com/briancray/abide/commit/c75e1bfeaef80545ee8f58c5f746cd42490cf746))
+- 5c6d6da: A turn whose readying fails is reported failed, as a call's already was, rather than left running with nothing reported.
+
 ## 0.8.3
 
 ### Patch Changes
