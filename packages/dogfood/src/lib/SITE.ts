@@ -500,14 +500,6 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
-                route: '/headless/tabs',
-                title: '`tabs`',
-                description:
-                    'Switch between views from a row of tabs that the arrow keys move along.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
                 route: '/headless/toggle',
                 title: '`toggle`',
                 description:
@@ -524,46 +516,6 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
-                route: '/headless/disclosure',
-                title: '`disclosure`',
-                description:
-                    'Show and hide a region from a button, the region still found by find in page.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
-                route: '/headless/accordion',
-                title: '`accordion`',
-                description:
-                    'Stack sections that open one at a time, or several at once, each a disclosure.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
-                route: '/headless/clamp',
-                title: '`clamp`',
-                description:
-                    'Cut text to a few lines, and show the rest from a button only where there is more.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
-                route: '/headless/spoiler',
-                title: '`spoiler`',
-                description:
-                    'Cover content with a button in its place, hidden from find in page and screen readers until pressed.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
-                route: '/headless/pages',
-                title: '`pages`',
-                description:
-                    'Page through a long list with numbered links or buttons, the far pages folded into gaps.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
                 route: '/headless/playback',
                 title: '`playback`',
                 description:
@@ -572,74 +524,10 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
-                route: '/headless/breadcrumbs',
-                title: '`breadcrumbs`',
-                description:
-                    'Show where a page stands as a trail of links, the middle folded into a menu when it runs long.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
-                route: '/headless/scroll-spy',
-                title: '`scrollSpy`',
-                description:
-                    'Mark the section of a long page scrolled to in a nav of links, each landing its section below any sticky header.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
-                route: '/headless/wizard',
-                title: '`wizard`',
-                description:
-                    'Take a task in steps, going on only once each is done, with a meter of how far it has come.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
-                route: '/headless/sortable-list',
-                title: '`sortableList`',
-                description:
-                    'Put a list in order by dragging a handle or with the keys, each move read out to a screen reader.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
-                route: '/headless/tree',
-                title: '`tree`',
-                description:
-                    'Show nested records as a tree that the arrow keys open, close and move through.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
-                route: '/headless/json-inspector',
-                title: '`jsonInspector`',
-                description:
-                    'Search a JSON value and open it row by row in a tree, each row told apart by its pointer.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
                 route: '/headless/range',
                 title: '`range`',
                 description:
                     'Spread a two-thumb range onto markup: the group, the track, the span and each thumb.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
-                route: '/headless/resizable',
-                title: '`resizable`',
-                description:
-                    'Size a panel by dragging its edge or with the arrow keys, kept within the room its parent leaves.',
-                where: 'component',
-                subgroup: 'Inputs',
-            },
-            {
-                route: '/headless/pan-zoom',
-                title: '`panZoom`',
-                description:
-                    'Move and magnify a map, a plan or a drawing with the wheel, a drag, a pinch or the keys.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
@@ -660,12 +548,36 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/sortable-list',
+                title: '`sortableList`',
+                description:
+                    'Put a list in order by dragging a handle or with the keys, each move read out to a screen reader.',
+                where: 'component',
+                subgroup: 'Data',
+            },
+            {
+                route: '/headless/tree',
+                title: '`tree`',
+                description:
+                    'Show nested records as a tree that the arrow keys open, close and move through.',
+                where: 'component',
+                subgroup: 'Data',
+            },
+            {
+                route: '/headless/json-inspector',
+                title: '`jsonInspector`',
+                description:
+                    'Search a JSON value and open it row by row in a tree, each row told apart by its pointer.',
+                where: 'component',
+                subgroup: 'Data',
+            },
+            {
                 route: '/headless/carousel',
                 title: '`carousel`',
                 description:
                     'Swipe through records in a row that snaps to each one, resting on the one picked and saying which is current as you scroll.',
                 where: 'component',
-                subgroup: 'Inputs',
+                subgroup: 'Data',
             },
             {
                 route: '/headless/sortable-table',
@@ -706,6 +618,94 @@ const WRITTEN: readonly {
                     'Keep a scrolling log or transcript at its newest line as lines arrive, until the reader scrolls up to an earlier one.',
                 where: 'component',
                 subgroup: 'Data',
+            },
+            {
+                route: '/headless/tabs',
+                title: '`tabs`',
+                description:
+                    'Switch between views from a row of tabs that the arrow keys move along.',
+                where: 'component',
+                subgroup: 'Navigation',
+            },
+            {
+                route: '/headless/disclosure',
+                title: '`disclosure`',
+                description:
+                    'Show and hide a region from a button, the region still found by find in page.',
+                where: 'component',
+                subgroup: 'Navigation',
+            },
+            {
+                route: '/headless/accordion',
+                title: '`accordion`',
+                description:
+                    'Stack sections that open one at a time, or several at once, each a disclosure.',
+                where: 'component',
+                subgroup: 'Navigation',
+            },
+            {
+                route: '/headless/clamp',
+                title: '`clamp`',
+                description:
+                    'Cut text to a few lines, and show the rest from a button only where there is more.',
+                where: 'component',
+                subgroup: 'Navigation',
+            },
+            {
+                route: '/headless/spoiler',
+                title: '`spoiler`',
+                description:
+                    'Cover content with a button in its place, hidden from find in page and screen readers until pressed.',
+                where: 'component',
+                subgroup: 'Navigation',
+            },
+            {
+                route: '/headless/pages',
+                title: '`pages`',
+                description:
+                    'Page through a long list with numbered links or buttons, the far pages folded into gaps.',
+                where: 'component',
+                subgroup: 'Navigation',
+            },
+            {
+                route: '/headless/breadcrumbs',
+                title: '`breadcrumbs`',
+                description:
+                    'Show where a page stands as a trail of links, the middle folded into a menu when it runs long.',
+                where: 'component',
+                subgroup: 'Navigation',
+            },
+            {
+                route: '/headless/scroll-spy',
+                title: '`scrollSpy`',
+                description:
+                    'Mark the section of a long page scrolled to in a nav of links, each landing its section below any sticky header.',
+                where: 'component',
+                subgroup: 'Navigation',
+            },
+            {
+                route: '/headless/wizard',
+                title: '`wizard`',
+                description:
+                    'Take a task in steps, going on only once each is done, with a meter of how far it has come.',
+                where: 'component',
+                subgroup: 'Navigation',
+            },
+            {
+                route: '/headless/resizable',
+                title: '`resizable`',
+                description:
+                    'Size a panel by dragging its edge or with the arrow keys, kept within the room its parent leaves.',
+                where: 'component',
+                subgroup: 'Layout',
+            },
+            {
+                route: '/headless/pan-zoom',
+                title: '`panZoom`',
+                description:
+                    'Move and magnify a map, a plan or a drawing with the wheel, a drag, a pinch or the keys.',
+                where: 'component',
+                subgroup: 'Layout',
             },
             {
                 route: '/headless/chart',

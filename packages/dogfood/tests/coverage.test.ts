@@ -432,6 +432,30 @@ test('the pages of one run are adjacent in their group', () => {
     expect(split).toEqual([])
 })
 
+// 40.47 — HEADLESS RUNS ARE THE SIX THE RULEBOOK NAMES, in its order; which run a page belongs in is
+// 40.48-40.53 and judgment. THE REVERT: file `/headless/tree` under `Inputs`, out of order behind
+// `Data`'s run, or under `Widgets`, which is no run at all.
+test('headless components are filed in the runs 40.47 names, in its order', () => {
+    const RUNS = [
+        'Overlays',
+        'Inputs',
+        'Data',
+        'Navigation',
+        'Layout',
+        'Charts',
+    ]
+    const headless = SITE.find((group) => group.group === 'Headless components')
+    const wrong: string[] = []
+    let reached = 0
+    for (const page of headless?.pages ?? []) {
+        if (page.guide) continue
+        const run = RUNS.indexOf(page.subgroup ?? '')
+        if (run < reached) wrong.push(`${page.route}: ${page.subgroup}`)
+        else reached = run
+    }
+    expect(wrong).toEqual([])
+})
+
 // docs/BRAND.md, Documentation structure: "A label stands alone." A nav label is read with no
 // sentence around it, so a preposition and a single word waits for a noun the reader does not have.
 const BARE_PREPOSITIONAL =

@@ -4130,6 +4130,24 @@ own app, with no path or origin that changes between two sites.
 40.46 The documentation site MUST run only the commands it lists, each as its argv with no shell, and
 MUST list none that writes a file or calls a handler that changes what the example app holds.
 
+40.47 `Headless components` MUST list every page but its guide in runs per 40.37, and only in
+`Overlays`, `Inputs`, `Data`, `Navigation`, `Layout` and `Charts`, in that order.
+
+40.48 A headless component MUST be filed under `Overlays` where what it shows opens over the page.
+
+40.49 A headless component MUST be filed under `Inputs` where what it holds is a value a form would
+submit, any items it lists being choices for that value.
+
+40.50 A headless component MUST be filed under `Data` where the app hands it content to show, and
+what it holds — an order, what is expanded, what is picked — is how that content is viewed.
+
+40.51 A headless component MUST be filed under `Navigation` where it decides which part of a page is
+shown.
+
+40.52 A headless component MUST be filed under `Layout` where it sizes or moves a view.
+
+40.53 A headless component MUST be filed under `Charts` where it draws values as a figure.
+
 # 41. Rendering and hydration
 
 41.1 `render` MUST send nothing until the page and every layout around it are set up and built, and a
