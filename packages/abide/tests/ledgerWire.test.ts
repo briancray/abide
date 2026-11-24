@@ -13,7 +13,7 @@ const ORIGIN = 'http://ledger-wire.test'
 
 type Call = { contact: string; minutes: number }
 
-const calls = ledger<Call>('ledger-wire-calls')
+const calls = ledger<Call>()
 
 const getCalls = GET(async function* ({ after }: { after: number }) {
     yield* calls.read(after)

@@ -31,7 +31,7 @@ export type LogStore = {
     watch?: (changed: () => void) => () => void
 }
 
-/** What `ledger` takes beside its name. */
+/** What `ledger` takes. */
 export type LedgerOptions<Entry> = {
     store?: LogStore
     retain?: number
@@ -47,22 +47,14 @@ export type Ledger<Entry> = {
     readonly head: Reactive<number>
 }
 
-/** 58.1 — one ledger per name in the process, so every module naming it appends to the same one. */
-const LEDGERS = new Map<string, Ledger<unknown>>()
-
 /** Entries appended and read in order, kept in `store`, or in memory where none is given (58). */
-export function ledger<Entry>(
-    name: string,
-    options?: LedgerOptions<Entry>,
-): Ledger<Entry> {
-    const standing = LEDGERS.get(name)
-    if (standing !== undefined) return standing as Ledger<Entry>
+export function ledger<Entry>(options?: LedgerOptions<Entry>): Ledger<Entry> {
     const log = options?.store ?? memoryLog()
     const retain = options?.retain
     // 58.11 — at construction: a ledger keeping nothing would lose the number it counts from.
     if (retain !== undefined && !(retain >= 1))
         throw new RangeError(
-            `abide: ledger ${JSON.stringify(name)} retains at least one entry. RULEBOOK 58.11.`,
+            `abide: a ledger retains at least one entry. RULEBOOK 58.11.`,
         )
     const ttl = options?.ttl
     const schema = options?.schema as Schema<unknown> | undefined
@@ -122,7 +114,7 @@ export function ledger<Entry>(
             const checked = runSchema(schema, entry)
             if (checked.issues !== null)
                 throw new TypeError(
-                    `abide: ledger ${JSON.stringify(name)} refused an entry its schema does not accept. RULEBOOK 58.3.`,
+                    'abide: a ledger refused an entry its schema does not accept. RULEBOOK 58.3.',
                 )
             kept = checked.value
         }
@@ -177,7 +169,7 @@ export function ledger<Entry>(
                                 controller.error(
                                     refuse(
                                         410,
-                                        `ledger ${JSON.stringify(name)} let entries ${position + 1} to ${next.seq - 1} go before this read reached them. RULEBOOK 58.15.`,
+                                        `a ledger let entries ${position + 1} to ${next.seq - 1} go before this read reached them. RULEBOOK 58.15.`,
                                     ),
                                 )
                                 return
@@ -207,7 +199,7 @@ export function ledger<Entry>(
     }
 
     let writable: WritableStream<Entry> | undefined
-    const made: Ledger<Entry> = {
+    return {
         append,
         read,
         get writable() {
@@ -220,8 +212,6 @@ export function ledger<Entry>(
         },
         head,
     }
-    LEDGERS.set(name, made as Ledger<unknown>)
-    return made
 }
 
 /**

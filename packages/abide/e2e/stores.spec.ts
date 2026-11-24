@@ -47,14 +47,14 @@ let count = reactive(0, { store: store.indexedDB('count') })
         'visits/index.abide': `<script>
 import { ledger, store } from '@abide/abide'
 
-const visits = ledger<string>('visits', { store: store.indexedDB('visits') })
+const visits = ledger<string>({ store: store.indexedDB('visits') })
 </script>
 
 <main id="visits"><p id="head">{visits.head()}</p><button id="visit" onclick={() => visits.append('visit')}>visit</button></main>`,
         'drafts/index.abide': `<script>
 import { ledger, store } from '@abide/abide'
 
-const drafts = ledger<string>('drafts', { store: store.indexedDB('drafts'), retain: 1 })
+const drafts = ledger<string>({ store: store.indexedDB('drafts'), retain: 1 })
 </script>
 
 <main id="drafts"><p id="last">{drafts.head()}</p><button id="save" onclick={() => drafts.append('save', { key: 'k1' })}>save</button><button id="other" onclick={() => drafts.append('other')}>other</button></main>`,

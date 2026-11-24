@@ -29,11 +29,12 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Log every call a rep makes">
         <p>An entry appended is kept after every one before it and numbered one past the last.
-            Nothing is coalesced: two calls logged are two entries.</p>
+            Nothing is coalesced: two calls logged are two entries. A ledger is shared by importing
+            it, like any other binding.</p>
         <Code language="ts" caption="shared" code={`
             import { ledger } from '@abide/abide'
 
-            const calls = ledger<{ contact: string; minutes: number }>('calls')
+            export const calls = ledger<{ contact: string; minutes: number }>()
             await calls.append({ contact: 'c1', minutes: 12 })
             calls.head() // 1
         `} />
@@ -45,7 +46,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="shared" code={`
             import { ledger } from '@abide/abide'
 
-            const calls = ledger<{ contact: string }>('calls')
+            const calls = ledger<{ contact: string }>()
             await calls.append({ contact: 'c1' }, { key: 'call-81' })
             await calls.append({ contact: 'c1' }, { key: 'call-81' }) // the same number
         `} />
@@ -58,7 +59,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { ledger, pipe } from '@abide/abide/server'
 
-            const calls = ledger<{ minutes: number }>('calls')
+            const calls = ledger<{ minutes: number }>()
             const score = pipe([(logged) => logged.entry.minutes / 60])
 
             await calls.read({ cursor: 'scorer' }).pipeThrough(score).pipeTo(scores)
@@ -73,7 +74,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { GET, ledger, POST } from '@abide/abide/server'
 
-            const calls = ledger<{ contact: string; minutes: number }>('calls')
+            const calls = ledger<{ contact: string; minutes: number }>()
 
             export const getCalls = GET(async function* ({ after }: { after: number }) {
                 yield* calls.read(after)
@@ -89,7 +90,7 @@ import Section from '#src/lib/Section.abide'
             import { database, ledger, store } from '@abide/abide/server'
 
             const crm = database('crm')
-            const calls = ledger('calls', { store: store.sqlite(crm, 'calls') })
+            const calls = ledger({ store: store.sqlite(crm, 'calls') })
         `} />
     </Section>
 
@@ -102,7 +103,7 @@ import Section from '#src/lib/Section.abide'
             import { ledger, store } from '@abide/abide/server'
 
             const shared = store.redis('redis://localhost:6379', 'calls')
-            const calls = ledger('calls', { store: shared })
+            const calls = ledger({ store: shared })
         `} />
     </Section>
 
@@ -112,7 +113,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="browser" code={`
             import { ledger, store } from '@abide/abide'
 
-            const notes = ledger<string>('notes', { store: store.indexedDB('notes') })
+            const notes = ledger<string>({ store: store.indexedDB('notes') })
         `} />
     </Section>
 
@@ -122,7 +123,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="shared" code={`
             import { ledger } from '@abide/abide'
 
-            const pings = ledger<string>('pings', { ttl: 86_400_000 })
+            const pings = ledger<string>({ ttl: 86_400_000 })
         `} />
     </Section>
 
@@ -133,7 +134,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="shared" code={`
             import { ledger } from '@abide/abide'
 
-            const pings = ledger<string>('pings', { retain: 1_000 })
+            const pings = ledger<string>({ retain: 1_000 })
             const seen: string[] = []
             // Errors with a 410 where the read fell behind what was kept.
             for await (const ping of pings.read(seen.length)) seen.push(ping.entry)
@@ -145,7 +146,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="shared" code={`
             import { ledger } from '@abide/abide'
 
-            const presence = ledger<string>('presence', { retain: 1_000 })
+            const presence = ledger<string>({ retain: 1_000 })
         `} />
     </Section>
 </Doc>

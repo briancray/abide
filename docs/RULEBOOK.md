@@ -6712,8 +6712,8 @@ whether `paused` reads true.
 
 # 58. Ledgers
 
-58.1 `ledger` called with a name it was called with before in the process MUST answer the `Ledger`
-that call answered.
+58.1 Each call to `ledger` MUST answer a `Ledger` of its own, sharing entries with another only
+through a `store` both were given.
 
 58.2 `append` MUST keep its entry after every entry kept before it, numbered one past the last, and
 settle to that number.

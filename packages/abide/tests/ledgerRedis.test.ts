@@ -60,10 +60,10 @@ test.skipIf(URL === undefined)(
         const name = `ledger-redis-watch-${Date.now()}`
         const one = new RedisClient(URL as string)
         const two = new RedisClient(URL as string)
-        const reading = ledger<string>(`${name}-reader`, {
+        const reading = ledger<string>({
             store: store.redis(one, name),
         })
-        const writing = ledger<string>(`${name}-writer`, {
+        const writing = ledger<string>({
             store: store.redis(two, name),
         })
         await Bun.sleep(50)
@@ -82,7 +82,7 @@ test.skipIf(URL === undefined)(
     async () => {
         const name = `ledger-redis-trim-${Date.now()}`
         const client = new RedisClient(URL as string)
-        const recent = ledger<string>(name, {
+        const recent = ledger<string>({
             store: store.redis(client, name),
             retain: 1,
         })
