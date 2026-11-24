@@ -47,13 +47,13 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-const LIBRARY = `import { GET, memo, POST, structural } from '@abide/abide/server'
+const LIBRARY = `import { deepEqual, GET, memo, POST } from '@abide/abide/server'
 
 const shelf = reactive([{ id: 'a' }], {
     global: true,
     by: 'id',
     tags: ['shelf', 'library'],
-    identity: structural,
+    identity: deepEqual,
 })
 
 const bound = GET(shelf)
@@ -92,7 +92,7 @@ ${LIBRARY}</script>
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
         ''
     expect(line('bound')).toContain(
-        '{"by":"id","tags":["shelf","library"],"identity":"structural"}',
+        '{"by":"id","tags":["shelf","library"],"identity":"deepEqual"}',
     )
     expect(line('inline')).toContain('{"by":"isbn"}')
     expect(line('optioned')).toContain('{"by":"isbn"}')
@@ -165,12 +165,12 @@ test('a selection by the tags a GET declares reaches its copy', async () => {
 })
 
 // 5.3, 5.4 — THE COMPARATOR. A load answering the same shelf as fresh JSON is the same value under
-// `structural`, and wakes nobody. THE REVERT: drop `identity` from `copyOptions`; the reference
+// `deepEqual`, and wakes nobody. THE REVERT: drop `identity` from `copyOptions`; the reference
 // compare calls every parse new, and the reader is woken 1 time where 0 are due.
 test('a copy compared structurally wakes nobody for a load that answers the same', async () => {
     answer = { body: [{ id: 'dune' }], life: 'private, no-store' }
     const shelf = wire('GET', '/library/compared', {
-        identity: 'structural',
+        identity: 'deepEqual',
     }) as (args?: unknown) => (() => unknown) & {
         refresh(): void
     } & PromiseLike<unknown>

@@ -61,7 +61,7 @@ export {
     resumeShare,
     type Shared,
 } from './share.ts'
-export { structural } from './structural.ts'
+export { deepEqual } from './deepEqual.ts'
 export { type Disposer, type Effect, watch } from './watch.ts'
 
 /**

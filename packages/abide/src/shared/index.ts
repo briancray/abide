@@ -173,6 +173,7 @@ export { props } from './props.ts'
 export { Raw, raw } from './Raw.ts'
 export {
     busy,
+    deepEqual,
     type Disposer,
     type Effect,
     flushSync,
@@ -191,7 +192,6 @@ export {
     type Shared,
     stopSignal,
     type Store,
-    structural,
     synced,
     type Transformer,
     watch,

@@ -4226,7 +4226,7 @@ const ADOPTING_PROTOTYPE = brandedPrototype({
  *
  * THE SAME MEMBERS WITH THE COMMON WRITE SPELLED OUT, and a prototype rather than a branch
  * for the reason `acceptIntoStream` already gives: a test in the shared `set` that a value
- * can never take still costs that value. Measured — `identity: structural`, which fails such
+ * can never take still costs that value. Measured — `identity: deepEqual`, which fails such
  * a test on its first load and goes on to the same `produce` it always did, went from 51 ns
  * to 57 with the test in `set`, and to 57 again with the short arm moved behind its own
  * frame instead, so it was never the size of `set`. The seat takes that value back to the

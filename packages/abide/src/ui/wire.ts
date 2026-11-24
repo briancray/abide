@@ -34,7 +34,7 @@ import { HandlerRoute } from '#shared/HandlerRoute.ts'
 import type { JsonValue } from '#shared/JsonValue.ts'
 import { standForLoadCall, startingLoadCall } from '#shared/loadCall.ts'
 import { randomToken } from '#shared/randomToken.ts'
-import { memo, structural } from '#shared/reactive/index.ts'
+import { deepEqual, memo } from '#shared/reactive/index.ts'
 import {
     declareDefaults,
     type Defaults,
@@ -280,7 +280,7 @@ function continuationOf(chunk: unknown): string | undefined {
 const UNANSWERED_RETRY_MS = 5_000
 
 /**
- * The build's copy options as a value takes them, `structural` resolved to its function.
+ * The build's copy options as a value takes them, `deepEqual` resolved to its function.
  *
  * Checked against the value's own types where they were written, on the server; here they are data.
  */
@@ -288,6 +288,6 @@ function copyOptions(options: CopyOptions): never {
     // `stream` is the wire's to read, and not an option a value takes.
     const { identity, stream: _, ...rest } = options
     return (
-        identity === 'structural' ? { ...rest, identity: structural } : rest
+        identity === 'deepEqual' ? { ...rest, identity: deepEqual } : rest
     ) as never
 }

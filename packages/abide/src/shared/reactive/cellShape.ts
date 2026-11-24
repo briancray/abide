@@ -676,7 +676,7 @@ function capFor(
 /**
  * Compiles `identity` into a comparator, or `null` for the default `Object.is`.
  *
- * THE DEFAULT IS THE REFERENCE, and `structural` is exported for an app to pass.
+ * THE DEFAULT IS THE REFERENCE, and `deepEqual` is exported for an app to pass.
  *
  * THE CASE FOR A STRUCTURAL DEFAULT IS REAL: a reload that fetched an equal
  * payload builds a FRESH object, so a reference compare never fires and every reader
@@ -686,7 +686,7 @@ function capFor(
  * rows re-assembled per recompute pays the deep walk every time and collapses never.
  *
  * So the framework takes the cheap, predictable default — `===` is what JavaScript
- * means by "the same value" — and the app names `identity: structural` on the values
+ * means by "the same value" — and the app names `identity: deepEqual` on the values
  * where re-materialization is the common case. 5.5's "not equal wherever it cannot
  * decide" is unchanged; it is just no longer the default reading.
  *

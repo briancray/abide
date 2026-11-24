@@ -10,8 +10,8 @@ export const FRAMEWORK_SOURCES = {
     reactive: besideCompiler('../shared/reactive/Reactive.ts'),
     /** `Selection`, beside the reactive barrel's other names (31.13). */
     selection: besideCompiler('../shared/reactive/index.ts'),
-    /** `structural`, the one `identity` a `GET`'s browser copy is handed by name (18.4). */
-    structural: besideCompiler('../shared/reactive/structural.ts'),
+    /** `deepEqual`, the one `identity` a `GET`'s browser copy is handed by name (18.4). */
+    deepEqual: besideCompiler('../shared/reactive/deepEqual.ts'),
     props: besideCompiler('../shared/props.ts'),
     route: besideCompiler('../shared/route.ts'),
     /** `RouteParams`. */

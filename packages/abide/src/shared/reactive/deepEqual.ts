@@ -2,7 +2,7 @@
  * The by-value comparator an app passes as `identity`: deep equality over arrays and plain objects.
  *
  * Not the default: the default is the reference, and this is what a value whose producer
- * RE-MATERIALIZES declares — `memo(() => getInvoice({ id }), { identity: structural })`. A
+ * RE-MATERIALIZES declares — `memo(() => getInvoice({ id }), { identity: deepEqual })`. A
  * fresh-but-equal payload waking every reader is why it exists at all; what it stops being is the
  * price every other value pays.
  *
@@ -10,7 +10,7 @@
  * a production a reader needed, and the failure is silent — the value stays right while the wake
  * goes missing.
  */
-export function structural(next: unknown, previous: unknown): boolean {
+export function deepEqual(next: unknown, previous: unknown): boolean {
     if (Object.is(next, previous)) return true
     if (
         next === null ||
@@ -27,7 +27,7 @@ export function structural(next: unknown, previous: unknown): boolean {
         const two = previous as unknown[]
         if (one.length !== two.length) return false
         for (let index = 0; index < one.length; index += 1)
-            if (!structural(one[index], two[index])) return false
+            if (!deepEqual(one[index], two[index])) return false
         return true
     }
 
@@ -51,7 +51,7 @@ export function structural(next: unknown, previous: unknown): boolean {
         const key = keys[index] as string
         if (!Object.hasOwn(previous, key)) return false
         if (
-            !structural(
+            !deepEqual(
                 (next as Record<string, unknown>)[key],
                 (previous as Record<string, unknown>)[key],
             )

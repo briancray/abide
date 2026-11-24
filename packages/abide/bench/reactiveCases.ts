@@ -9,7 +9,7 @@
 // `harness/measure` has no abide in its graph at all — the property `lanes.test.ts`
 // walks by resolution, and the reason the harness is a package.
 
-import { flushSync, memo, reactive, structural, watch } from '@abide/abide'
+import { deepEqual, flushSync, memo, reactive, watch } from '@abide/abide'
 
 import { carelessSignal } from './carelessSignal.ts'
 import { signal } from './signal.ts'
@@ -320,9 +320,9 @@ function writeEqualObject(): Case {
 }
 
 /**
- * Case: writing a fresh equal object with `structural` declared.
+ * Case: writing a fresh equal object with `deepEqual` declared.
  *
- * WHAT DECLARING `structural` COSTS AND BUYS, which is now the app's decision rather
+ * WHAT DECLARING `deepEqual` COSTS AND BUYS, which is now the app's decision rather
  * than the framework's. The walk is paid on EVERY write; the wake it saves is only
  * collected when the payload really is equal. An app names it on the values where
  * re-materialization is the common case, and this is the number that decision is made
@@ -330,7 +330,7 @@ function writeEqualObject(): Case {
  */
 function writeEqualObjectStructural(): Case {
     const held = signal({ id: 1, total: 100 })
-    const value = reactive({ id: 1, total: 100 }, { identity: structural })
+    const value = reactive({ id: 1, total: 100 }, { identity: deepEqual })
     let handWakes = 0
     let abideWakes = 0
     held.subscribe(() => {
@@ -348,7 +348,7 @@ function writeEqualObjectStructural(): Case {
         flushSync()
     }
     return {
-        name: 'write a re-materialized equal value, structural declared',
+        name: 'write a re-materialized equal value, deepEqual declared',
         distinguishes:
             'the option an app passes where a reload rebuilds an equal payload — a deep walk per write against a wake per write',
         vanilla,
@@ -1141,7 +1141,7 @@ function probeSettledDag(width: number, depth: number): Case {
  */
 function equalWriteAgainstCareless(width: number, fresh: boolean): Case {
     const name = fresh
-        ? `a re-materialized equal value, ${width} readers, structural vs CARELESS`
+        ? `a re-materialized equal value, ${width} readers, deepEqual vs CARELESS`
         : `a write of the value already held, ${width} readers, vanilla written CARELESSLY`
     const make = (): { id: number; total: number } => ({ id: 1, total: 100 })
     const standing = make()
@@ -1149,7 +1149,7 @@ function equalWriteAgainstCareless(width: number, fresh: boolean): Case {
     // write and not only from the second.
     const held = carelessSignal(fresh ? make() : standing)
     const value = fresh
-        ? reactive(make(), { identity: structural })
+        ? reactive(make(), { identity: deepEqual })
         : reactive(standing)
     // THE READER BODY IS ONE FIELD INCREMENT AND NOTHING ELSE, because only the
     // hand-written arm ever runs it — the counter is not priced alike on both sides

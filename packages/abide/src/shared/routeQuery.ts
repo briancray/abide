@@ -8,10 +8,10 @@ import { CURRENT_ROUTER } from './CURRENT_ROUTER.ts'
 import { navigate, noRouter } from './navigate.ts'
 import { numberFromText } from './numberFromText.ts'
 import { bareName, queryText } from './queryText.ts'
+import { deepEqual } from './reactive/deepEqual.ts'
 import { reactive } from './reactive/index.ts'
 import { pairReactive } from './reactive/pairReactive.ts'
 import type { Reactive } from './reactive/Reactive.ts'
-import { structural } from './reactive/structural.ts'
 
 /** What a query member's default can be: text, a number, a flag, or a list of text. */
 export type QueryDefaults = Record<
@@ -64,7 +64,7 @@ export function routeQuery<Defaults extends QueryDefaults>(
                 ),
         },
         // 30.47 — a change to a member the defaults do not name, or to the path, is the same value.
-        structural,
+        deepEqual,
     ) as unknown as Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>>
 }
 

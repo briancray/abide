@@ -780,10 +780,10 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
-                route: '/helpers/structural',
-                title: '`structural`',
+                route: '/helpers/deep-equal',
+                title: '`deepEqual`',
                 description:
-                    'Compare values by contents rather than reference, so an equal reload or write wakes nobody.',
+                    'Compare arrays and plain objects by contents rather than reference, so an equal reload or write wakes nobody.',
                 where: 'anywhere',
             },
         ],

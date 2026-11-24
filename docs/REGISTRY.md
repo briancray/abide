@@ -990,11 +990,11 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `keyLabel` | `(binding: string, options?: { apple?: boolean }) => string` | A `hotkeys` binding written the way the visitor's platform writes its keys. | 53.3, 53.9, 53.11, 53.51, 53.53 |
 | `keyLabel.parts` | `(binding: string, options?: { apple?: boolean }) => string[]` | Each key `keyLabel` writes for a binding, apart, for one key cap apiece. | 53.52, 53.53 |
 
-## `structural`
+## `deepEqual`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `structural` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator an app declares on `identity`. | 5.4, 5.5, 18.4 |
+| `deepEqual` | `(next: unknown, previous: unknown) => boolean` | The by-value comparator over arrays and plain objects that an app declares on `identity`. | 5.4, 5.5, 18.4 |
 
 # Handlers
 

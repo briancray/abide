@@ -260,9 +260,9 @@ function matchesType(wanted: string, value: unknown): boolean {
 /**
  * Whether two JSON values are equal by value, key order aside.
  *
- * `const` and `enum` compare by VALUE, so a nested object has to be walked. Not `structural`'s walk,
+ * `const` and `enum` compare by VALUE, so a nested object has to be walked. Not `deepEqual`'s walk,
  * which differs twice: JSON Schema compares a number mathematically, so `-0` equals `0` where
- * `structural` reads `Object.is`; and `structural` refuses any object whose prototype is not
+ * `deepEqual` reads `Object.is`; and `deepEqual` refuses any object whose prototype is not
  * `Object.prototype`, where a parsed body is compared by its own members alone. A schema's `const`
  * is small by nature, which bounds this walk — it stops the moment the two shapes part.
  *

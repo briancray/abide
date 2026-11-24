@@ -7,8 +7,8 @@
 // `__proto__` or a member off the prototype chain is refused at 400 rather than reached. A `test` that fails is 409, the patch's precondition rather than its form.
 import { isRecord } from './isRecord.ts'
 import { putOwn } from './putOwn.ts'
+import { deepEqual } from './reactive/deepEqual.ts'
 import type { PatchOp } from './reactive/patchLog.ts'
-import { structural } from './reactive/structural.ts'
 import { refuse } from './refuse.ts'
 
 type Container = Record<string | number, unknown>
@@ -26,7 +26,7 @@ export function applyPatch(root: unknown, ops: PatchOp[]): void {
         } else if (op.op === 'copy')
             add(root, op.path, structuredClone(valueAt(root, op.from)))
         else if (op.op === 'test') {
-            if (!structural(valueAt(root, op.path), op.value))
+            if (!deepEqual(valueAt(root, op.path), op.value))
                 throw refuse(
                     409,
                     `abide: a patch's test failed at \`${op.path}\`.`,

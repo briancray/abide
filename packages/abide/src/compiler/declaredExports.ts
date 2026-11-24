@@ -427,7 +427,7 @@ function literalDefaults(node: Node | undefined): Defaults | null {
  * or the `GET`'s own options where it is handed a plain function (16.6), and the options object,
  * each written inline or bound to a name first. A value is
  * read off its TYPE, so `by: KEY` over a `const KEY = 'id'` carries `'id'` as `by: 'id'` does: a
- * string `by`, string `tags`, and an `identity` of abide's `structural`. A
+ * string `by`, string `tags`, and an `identity` of abide's `deepEqual`. A
  * function form has no serialization and stays the server's. 18.15 — anything else of `by` or `tags`
  * is handed back UNREAD, for the build to warn on.
  */
@@ -458,7 +458,7 @@ async function declaredCopy(
                 isIdentifier(value) &&
                 (await isAbideStructural(checker, value, abide))
             )
-                copy.identity = 'structural'
+                copy.identity = 'deepEqual'
         } else if (name === 'by' || name === 'tags') {
             const type = await checker.getTypeAtLocation(value)
             if (type === undefined) continue
@@ -600,7 +600,7 @@ async function stringLiteralsOf(
 }
 
 /**
- * Whether a name resolves to abide's own `structural` comparator.
+ * Whether a name resolves to abide's own `deepEqual` comparator.
  *
  * Abide's own comparator, by its symbol rather than its spelling: an app's function of the same name
  * is not the one the browser's copy would be handed.
@@ -610,13 +610,13 @@ async function isAbideStructural(
     named: Node,
     abide: Abide,
 ): Promise<boolean> {
-    if (abide.structural === undefined) return false
+    if (abide.deepEqual === undefined) return false
     const symbol = await checker.getSymbolAtLocation(named)
     if (symbol === undefined) return false
     const target = await aliasedSymbol(checker, symbol)
     return (
-        target.name === 'structural' &&
-        target.valueDeclaration?.path === abide.structural
+        target.name === 'deepEqual' &&
+        target.valueDeclaration?.path === abide.deepEqual
     )
 }
 

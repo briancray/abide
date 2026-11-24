@@ -11,6 +11,7 @@ import { gate } from '@abide/harness/gate'
 import { handOnError, onError } from '#server/hooks.ts'
 import {
     busy,
+    deepEqual,
     flushSync,
     invalidate,
     isReactive,
@@ -22,7 +23,6 @@ import {
     ready,
     refresh,
     refuse,
-    structural,
     watch,
 } from '#shared'
 import { holdUntil } from '#shared/Failed.ts'
@@ -547,11 +547,11 @@ test('the signed zeroes are two values, which is what Object.is costs', () => {
 })
 
 // 5.2 through the OVERRIDE. A value whose producer re-materializes — a reload that
-// fetched an equal payload and built a fresh object for it — declares `structural` and
+// fetched an equal payload and built a fresh object for it — declares `deepEqual` and
 // stops waking every reader on every reload. The output stays right either way and
 // only the work moves, which is why this is a wake count and not a value assertion.
 gate(
-    'a set of a structurally equal value wakes no reader where the app declared structural',
+    'a set of a structurally equal value wakes no reader where the app declared deepEqual',
     {
         revert: () => {
             // The broken arm is the app forgetting the option, which is the default.
@@ -572,7 +572,7 @@ gate(
         ).REVERT_IDENTITY
         const invoice = reactive(
             { id: 1, total: 100 },
-            reverted ? undefined : { identity: structural },
+            reverted ? undefined : { identity: deepEqual },
         )
         const counter = wakes(invoice)
         // A FRESH OBJECT with the same contents — the re-materialization every reload
@@ -1909,13 +1909,13 @@ test('re-adopting something with nothing to serve wakes the guards too', () => {
 // adopted value's own `identity` first, so a production the inherited comparator would collapse
 // never reaches the mirror at all — the gate the outer inherits is the one that compares what the
 // NEW inner serves against what the OLD one did. Two values holding equal contents in different
-// objects: `structural` collapses the switch, the reference default would not.
+// objects: `deepEqual` collapses the switch, the reference default would not.
 //
 // The revert is assigning `cell.declaredIdentityFn` alone in `adopt`, inheriting nothing: `woken`
 // is 1 against 0.
 test('an adopting value inherits the identity it did not declare', () => {
-    const first = reactive({ id: 1 }, { identity: structural })
-    const second = reactive({ id: 1 }, { identity: structural })
+    const first = reactive({ id: 1 }, { identity: deepEqual })
+    const second = reactive({ id: 1 }, { identity: deepEqual })
     const pick = reactive(true)
     const outer = memo(() => (pick() ? first : second))
     const woken = wakes(outer)
@@ -6578,7 +6578,7 @@ test('reading a value adopting an invalidated one runs the adopted producer', ()
 // THE REVERT is `produce` and the short write leaving `owes` standing: `peek: undefined`, and the
 // body reloads and `loaded` overwrites `written`.
 test('a write over an invalidated value is served, and the owed reload is not run', async () => {
-    for (const options of [undefined, { identity: structural }]) {
+    for (const options of [undefined, { identity: deepEqual }]) {
         let runs = 0
         const held = memo(async () => {
             runs += 1

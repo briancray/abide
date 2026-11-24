@@ -87,14 +87,14 @@ async function everyPresentMember(
 
 /**
  * Abide's own `Reactive` and `Selection` declarations, and its `props`, `route`, `onConfig`,
- * `methods` and `structural` files, as this project's checker names them.
+ * `methods` and `deepEqual` files, as this project's checker names them.
  *
  * 31.3 — A `Reactive` IS TOLD BY ITS DECLARATION, never by how it prints. Every instantiation of
  * abide's `Reactive` carries the symbol of the one type literal it is declared as, whatever alias
  * or re-export the app reached it through — so `type Counter = Reactive<number>` is one, and an
  * app's own type that happens to be spelled `Reactive` is not. `undefined` where the project never
  * reaches abide, and then nothing in it is one. `props`, `route`, `onConfig`, `methods` and
- * `structural` are abide's files AS THE CHECKER NAMES THEM, not as this module does: it canonicalizes a path to the
+ * `deepEqual` are abide's files AS THE CHECKER NAMES THEM, not as this module does: it canonicalizes a path to the
  * disk's case rules, so on a case-insensitive disk `/Users/…/Code` comes back `/users/…/code` and a
  * string compared against `import.meta.url` never matched.
  */
@@ -111,8 +111,8 @@ export type Abide = {
     onConfig: string | undefined
     /** 16.73 — the file declaring the five methods. */
     methods: string | undefined
-    /** 18.4 — the file declaring `structural`. */
-    structural: string | undefined
+    /** 18.4 — the file declaring `deepEqual`. */
+    deepEqual: string | undefined
     /** 19.28 — the file declaring `jsonSchema`. */
     jsonSchema: string | undefined
 }
@@ -125,7 +125,7 @@ export async function abideIn(project: Project): Promise<Abide> {
         route,
         hooks,
         methods,
-        structural,
+        deepEqual,
         documents,
     ] = await Promise.all([
         project.program.getSourceFile(FRAMEWORK_SOURCES.reactive),
@@ -134,7 +134,7 @@ export async function abideIn(project: Project): Promise<Abide> {
         project.program.getSourceFile(FRAMEWORK_SOURCES.route),
         project.program.getSourceFile(FRAMEWORK_SOURCES.hooks),
         project.program.getSourceFile(FRAMEWORK_SOURCES.methods),
-        project.program.getSourceFile(FRAMEWORK_SOURCES.structural),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.deepEqual),
         project.program.getSourceFile(FRAMEWORK_SOURCES.jsonSchema),
     ])
     let selection: CheckedSymbol | undefined
@@ -167,7 +167,7 @@ export async function abideIn(project: Project): Promise<Abide> {
         props: props?.path,
         onConfig: hooks?.path,
         methods: methods?.path,
-        structural: structural?.path,
+        deepEqual: deepEqual?.path,
         jsonSchema: documents?.path,
     }
 }

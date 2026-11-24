@@ -321,7 +321,7 @@ two is a comparator answering directly.
 
 5.4 The default `identity` MUST be the reference.
 
-5.5 `structural` MUST answer "not equal" wherever it cannot decide.
+5.5 `deepEqual` MUST answer "not equal" wherever it cannot decide.
 
 5.6 A write MUST mint a production of its own.
 
@@ -1489,7 +1489,7 @@ and MUST NOT answer 204.
 for those `Args`.
 
 18.4 A subscriber's copy of a wired `Reactive` MUST carry what that `Reactive` declares of `by` as a
-property name, `tags` as a list of names, and `identity` as `structural`, and MUST NOT carry a
+property name, `tags` as a list of names, and `identity` as `deepEqual`, and MUST NOT carry a
 function form of `by` or `tags`, which stays the server's (13.15).
 
 18.5 A `GET` answered from a `global` value MUST carry the version of the production it answered
