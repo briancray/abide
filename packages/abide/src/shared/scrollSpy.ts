@@ -19,7 +19,13 @@ import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { memo, reactive } from './reactive/index.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
-import { type Scroller, scrollerOf } from './scrollerOf.ts'
+import {
+    offsetIn,
+    rootOf,
+    scrolledIn,
+    type Scroller,
+    scrollerOf,
+} from './scrollerOf.ts'
 import { type Sections, sections } from './sections.ts'
 
 /** The sections `scrollSpy` follows, how one is told apart, how a jump scrolls, and whether a drag scrubs. */
@@ -34,33 +40,6 @@ export type ScrollSpyOptions<Item> = {
 
 // Pixels short of the end that still count as at it.
 const AT_END = 2
-
-/** Where the scroller stands. */
-function scrolledIn(scroller: Scroller): number {
-    return scroller === window
-        ? window.scrollY
-        : (scroller as Element).scrollTop
-}
-
-/** The element whose overflow `scroller` is: the document's root for the window. */
-function rootOf(scroller: Scroller): Element {
-    return scroller === window
-        ? document.documentElement
-        : (scroller as Element)
-}
-
-/** What a section's top in the viewport adds up to where `scroller` lands it: its scroll less its scroll padding. */
-function offsetIn(scroller: Scroller): number {
-    const viewTop =
-        scroller === window
-            ? 0
-            : (scroller as Element).getBoundingClientRect().top
-    const padding =
-        Number.parseFloat(
-            getComputedStyle(rootOf(scroller)).scrollPaddingTop,
-        ) || 0
-    return scrolledIn(scroller) - viewTop - padding
-}
 
 /** Where a scroller `offset` stands for (`offsetIn`) lands `element`: its top less its scroll margin, in whole pixels. */
 function landingOf(element: Element, offset: number): number {

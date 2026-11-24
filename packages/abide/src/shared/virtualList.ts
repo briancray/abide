@@ -16,7 +16,7 @@ import { lastAtOrBefore } from './lastAtOrBefore.ts'
 import { type Live, live } from './live.ts'
 import { memo, reactive } from './reactive/index.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
-import { type Scroller, scrollerOf } from './scrollerOf.ts'
+import { offsetIn, type Scroller, scrollerOf } from './scrollerOf.ts'
 import { type Sections, sections } from './sections.ts'
 
 /** What `virtualList` lists, how an item is told apart and grouped, and how much is rendered first. */
@@ -194,26 +194,8 @@ export function virtualList<Item>(
         if (host === undefined || scroller === undefined) return
         const row = Math.floor(index / (perRow.peek() ?? 1))
         const size = rowSize.peek() ?? estimate
-        const root =
-            scroller === window
-                ? document.documentElement
-                : (scroller as Element)
-        const scrolled =
-            scroller === window
-                ? window.scrollY
-                : (scroller as Element).scrollTop
-        const viewTop =
-            scroller === window
-                ? 0
-                : (scroller as Element).getBoundingClientRect().top
-        const clearance =
-            Number.parseFloat(getComputedStyle(root).scrollPaddingTop) || 0
         const top =
-            scrolled +
-            host.getBoundingClientRect().top -
-            viewTop +
-            row * size -
-            clearance
+            host.getBoundingClientRect().top + offsetIn(scroller) + row * size
         // 51.63 — in `shown` before the scroll lands.
         firstRow.set(row)
         scroller.scrollTo({ top, behavior: live(options.behavior) ?? 'auto' })

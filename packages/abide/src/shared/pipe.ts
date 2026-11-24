@@ -144,13 +144,13 @@ export function pipe<const Steps extends readonly [Step, ...Step[]]>(
     }) as unknown as Pipe<FirstIn<Steps>, LastOut<Steps>, AnyFans<Steps>>
 }
 
-/** One key's slots: how many items run, and the items waiting for one in the order they came. */
 /** An item waiting for a slot: let in, or turned away — and whether it ends on the pipe's shared signal. */
 type Waiter = {
     admit: () => void
     refuse: (reason: unknown) => void
     shared: boolean
 }
+/** One key's slots: how many items run, and the items waiting for one in the order they came. */
 type Lane = { running: number; waiting: Waiter[] }
 
 /** What one item's walk answered: its answers in order, whether a step fanned out, or a refusal. */
