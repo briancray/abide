@@ -6,6 +6,7 @@ import { afterEach, expect, test } from 'bun:test'
 
 import { installServer } from '#server/installServer.ts'
 import { inScope } from '#server/requestScope.ts'
+import { hashText } from '#shared/hashText.ts'
 import { appName } from '#shared/log.ts'
 import { notices } from '#shared/notices.ts'
 import type { Store } from '#shared/reactive/index.ts'
@@ -56,19 +57,31 @@ test("one list's notices never enter another's — 50.68", () => {
     expect(texts(shown(banner).notices)).toEqual(['We are live'])
 })
 
-// Keyed by text, so what a store holds reads as what was closed.
+// Keyed by text, and the key a store holds for `text`.
 const byText = (notice: { text: string }): string => notice.text
+const keyed = hashText
 
-test('a list starts with its initial notices, in order, each keyed by its list — 50.70, 50.71', () => {
+// THE REVERT: keep what `key` answers as it is, and the long announcement's key is the whole
+// sentence — what the store would hold, in a cookie of 4096 bytes.
+test('a list starts with its initial notices, in order, each keyed by a hash of what its key answers — 50.70, 50.71', () => {
     const banner = notices({
         timeout: Infinity,
         key: (notice) => `${notice.tone}:${notice.text}`,
-        initial: ['We are live', { text: 'Pipelines', tone: 'success' }],
+        initial: [
+            'We are live',
+            {
+                text: 'Pipelines can now be shared with a link, from any pipeline.',
+                tone: 'success',
+            },
+        ],
     })
-    expect(banner.list().map((notice) => [notice.key, notice.text])).toEqual([
-        ['info:We are live', 'We are live'],
-        ['success:Pipelines', 'Pipelines'],
+    expect(banner.list().map((notice) => notice.key)).toEqual([
+        keyed('info:We are live'),
+        keyed(
+            'success:Pipelines can now be shared with a link, from any pipeline.',
+        ),
     ])
+    expect(banner.list()[1]?.key.length).toBeLessThan(12)
 })
 
 // THE REVERT: hash the notice with its `id` in it, and the same announcement is a new key on every
@@ -124,9 +137,13 @@ test('a dismissal and an action are remembered for ttl, and a timeout is not —
     host.notice(banner.list().at(-1) as never).act()
     await Bun.sleep(20)
     const remembered = writes.at(-1) ?? {}
-    expect(Object.keys(remembered).sort()).toEqual(['Pipelines', 'Try it'])
-    expect(remembered.Pipelines).toBeGreaterThanOrEqual(before + 60_000)
-    expect(remembered.Pipelines).toBeLessThan(Date.now() + 60_001)
+    expect(Object.keys(remembered).sort()).toEqual(
+        [keyed('Pipelines'), keyed('Try it')].sort(),
+    )
+    expect(remembered[keyed('Pipelines')]).toBeGreaterThanOrEqual(
+        before + 60_000,
+    )
+    expect(remembered[keyed('Pipelines')]).toBeLessThan(Date.now() + 60_001)
 
     // The next page builds the list again over the same store, and shows only what nobody closed.
     const again = notices({
@@ -154,10 +171,9 @@ test('a write leaves out every dismissal already forgotten — 50.73', () => {
         initial: ['We are live'],
     })
     banner.dismiss((banner.list()[0] as { id: number }).id)
-    expect(Object.keys(writes.at(-1) ?? {}).sort()).toEqual([
-        'We are live',
-        'kept',
-    ])
+    expect(Object.keys(writes.at(-1) ?? {}).sort()).toEqual(
+        [keyed('We are live'), 'kept'].sort(),
+    )
 })
 
 test('a dismissal remembered forever is kept as a number JSON holds — 50.69', () => {
@@ -170,7 +186,7 @@ test('a dismissal remembered forever is kept as a number JSON holds — 50.69', 
     })
     banner.dismiss((banner.list()[0] as { id: number }).id)
     expect(JSON.parse(JSON.stringify(writes.at(-1)))).toEqual({
-        'We are live': Number.MAX_SAFE_INTEGER,
+        [keyed('We are live')]: Number.MAX_SAFE_INTEGER,
     })
 })
 
@@ -205,7 +221,7 @@ test("a server's render leaves out what the request's cookie remembers — 50.70
     })
     const kept = encodeURIComponent(
         JSON.stringify({
-            value: { 'We are live': Number.MAX_SAFE_INTEGER },
+            value: { [keyed('We are live')]: Number.MAX_SAFE_INTEGER },
             expires: null,
         }),
     )

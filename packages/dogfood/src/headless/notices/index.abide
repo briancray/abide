@@ -78,9 +78,9 @@ import banner from './lib/Banner.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Choose what makes two announcements the same">
-        <p>A dismissal is remembered by a short hash of the whole notice, so any change to it, its
-            tone included, shows it again. <code>key</code> picks what counts: here only the
-            words.</p>
+        <p>By default two notices are the same only where everything about them is, so any change,
+            its tone included, shows a notice again. <code>key</code> picks what counts: here only
+            the words. What it answers is stored as a short hash, however long.</p>
         <Code language="ts" caption="browser" code={`
             import { notices, store } from '@abide/abide'
 

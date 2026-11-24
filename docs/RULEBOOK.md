@@ -5324,8 +5324,8 @@ be remembered in that `store` under its key until `ttl` milliseconds after it le
 50.70 A `notices` list's `list` MUST start holding its `initial` notices in the order given, on a
 server too.
 
-50.71 A notice's key MUST be what its list's `key` answers for it, and where the list is given none,
-a hash of the notice as JSON, its `id` and its key left out.
+50.71 A notice's key MUST be a hash of what its list's `key` answers for it, and where the list is
+given none, of the notice as JSON, its `id` and its key left out.
 
 50.72 A notice MUST leave its `list` once its `expires` has passed, as 50.13 has it leave at its
 `timeout`.

@@ -15,7 +15,7 @@ import { standing } from './standing.ts'
 export type Notice = {
     /** What `notify` handed back for it, and what `dismiss` takes. */
     id: number
-    /** What a dismissal is remembered by: the list's `key` called with it (50.71). */
+    /** What a dismissal is remembered by: a hash of what the list's `key` answers for it (50.71). */
     key: string
     /** What it says, written in the `text` part. */
     text: string
@@ -58,7 +58,7 @@ export type NoticesOptions = {
     store?: Store<Record<string, number>>
     /** How long a dismissal is remembered, in milliseconds. Default `Infinity`. */
     ttl?: number
-    /** What a notice's dismissal is remembered by. Default a hash of the notice as JSON (50.71). */
+    /** What makes two notices the same one, kept hashed. Default the notice as JSON (50.71). */
     key?: (notice: Omit<Notice, 'id' | 'key'>) => string
 }
 
@@ -119,8 +119,8 @@ let lastId = 0
 
 // 50.71 — the notice as JSON, without the `id` a page load mints afresh: its action's label, and not
 // its `run`, which JSON leaves out.
-const hashNotice = (notice: Omit<Notice, 'id' | 'key'>): string =>
-    hashText(JSON.stringify(notice))
+const asJson = (notice: Omit<Notice, 'id' | 'key'>): string =>
+    JSON.stringify(notice)
 
 /** A list of notices, shown where the app spreads its `host` (50.12). */
 export function notices(options: NoticesOptions = {}): Notices {
@@ -136,7 +136,7 @@ export function notices(options: NoticesOptions = {}): Notices {
             ? undefined
             : reactive<Record<string, number>>({}, { store: options.store })
     const rememberTtl = options.ttl ?? Infinity
-    const keyOf = options.key ?? hashNotice
+    const keyOf = options.key ?? asJson
 
     const build = (
         text: string,
@@ -166,7 +166,8 @@ export function notices(options: NoticesOptions = {}): Notices {
             attributes: given.attributes ?? {},
             expires,
         }
-        return { id, key: keyOf(content), ...content }
+        // Hashed whatever `key` answers, so the store holds a short key however long the words.
+        return { id, key: hashText(keyOf(content)), ...content }
     }
 
     const seeded: Notice[] = []
