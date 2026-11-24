@@ -38,7 +38,7 @@ const CLOSED_DRAWN =
 const warned = new Set<string>()
 
 /** What is wrong with the parts written under `prefix` in `root`, each said once. */
-export function partsProblems(prefix: string, root: ParentNode): string[] {
+function partsProblems(prefix: string, root: ParentNode): string[] {
     const problems = new Set<string>()
     const quoted = JSON.stringify(prefix)
     for (const attribute of REFERENCES)

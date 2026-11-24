@@ -8,6 +8,7 @@
 import { hashText } from './hashText.ts'
 import { isServer } from './isServer.ts'
 import { type Live, live } from './live.ts'
+import { LONGEST_DELAY } from './LONGEST_DELAY.ts'
 import { type Reactive, reactive, type Store } from './reactive/index.ts'
 import { standing } from './standing.ts'
 
@@ -109,9 +110,6 @@ export type Notices = {
 const TIMEOUT_MS = 3000
 // An error's notice stays long enough to reach its action.
 const ERROR_TIMEOUT_MS = 10_000
-// The longest delay `setTimeout` keeps; a later one fires at once. A notice due past it is left to
-// the `expires` filter of the next render.
-const LONGEST_TIMER_MS = 2 ** 31 - 1
 
 // 50.71 — what a notice is told apart by where it names no `id`: it as JSON, hashed so a server's
 // render and every later page agree on it — its action's label, and not its `run`, which JSON leaves
@@ -171,7 +169,8 @@ export function notices(options: NoticesOptions = {}): Notices {
             options.timeout ??
             (notice.tone === 'error' ? ERROR_TIMEOUT_MS : TIMEOUT_MS)
         const due = Math.min(timeout, notice.expires - started)
-        if (due <= LONGEST_TIMER_MS)
+        // A notice due past the longest delay is left to the `expires` filter of the next render.
+        if (due <= LONGEST_DELAY)
             setTimeout(() => close(id, 'timeout'), Math.max(due, 0))
     }
 

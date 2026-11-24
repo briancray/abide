@@ -4,7 +4,7 @@
 
 import { type Live, live } from '../live.ts'
 import { memo } from '../reactive/index.ts'
-import { path, scale } from './index.ts'
+import { path, present, scale } from './index.ts'
 
 /** What `sparkline` draws. A value is read live where a function is given. */
 export type SparklineOptions = {
@@ -54,13 +54,8 @@ export function sparkline(options: SparklineOptions): SparklineParts {
         let last: number | undefined
         let lastIndex = -1
         for (let index = 0; index < values.length; index += 1) {
-            const value = values[index]
-            if (
-                value === null ||
-                value === undefined ||
-                !Number.isFinite(value)
-            )
-                continue
+            const value = present(values[index])
+            if (value === undefined) continue
             if (value < low) low = value
             if (value > high) high = value
             first ??= value
@@ -81,13 +76,8 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             const gap = band * 0.2
             const baseline = y(0)
             for (let index = 0; index < values.length; index += 1) {
-                const value = values[index]
-                if (
-                    value === null ||
-                    value === undefined ||
-                    !Number.isFinite(value)
-                )
-                    continue
+                const value = present(values[index])
+                if (value === undefined) continue
                 const left = index * band + gap / 2
                 bars += `M${left},${baseline}H${left + band - gap}V${y(value)}H${left}Z`
             }

@@ -29,7 +29,7 @@ export type Announcement = {
 export const said = reactive<Announcement | undefined>(undefined)
 
 // 50.36 — the `announce.host` standing: the last holds the message.
-export const announcers = standing('announce.host()', 'abide:announce')
+const announcers = standing('announce.host()', 'abide:announce')
 
 let count = 0
 

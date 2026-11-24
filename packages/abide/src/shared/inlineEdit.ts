@@ -3,6 +3,7 @@
 // input of its own. While a save is in flight the field waits, disabled; a save that fails keeps it
 // open with the failure's message, as a prompt's `run` does (50.45).
 
+import { messageOf } from './messageOf.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { isThenable } from './reactive/isThenable.ts'
 
@@ -55,9 +56,7 @@ export function inlineEdit(options: InlineEditOptions = {}): InlineEdit {
             value.set(text)
             finish()
         } catch (failure) {
-            error.set(
-                failure instanceof Error ? failure.message : String(failure),
-            )
+            error.set(messageOf(failure))
         } finally {
             busy.set(false)
         }

@@ -105,14 +105,10 @@ export function ledger<Entry>(options?: LedgerOptions<Entry>): Ledger<Entry> {
         }
         queued += 1
         mirroring = mirroring.then(async () => {
-            const fresh: Logged<unknown>[] = []
-            let last = (kept.peek() as Logged<unknown>[]).at(-1)?.seq ?? 0
-            for (;;) {
-                const page = await log.since(last)
-                if (page.length === 0) break
-                for (const entry of page) fresh.push(entry)
-                last = (page.at(-1) as Logged<unknown>).seq
-            }
+            const fresh = await keptIn(
+                log,
+                (kept.peek() as Logged<unknown>[]).at(-1)?.seq ?? 0,
+            )
             queued -= 1
             bring(fresh, through)
         })
@@ -273,10 +269,10 @@ export function ledger<Entry>(options?: LedgerOptions<Entry>): Ledger<Entry> {
     }) as unknown as Ledger<Entry>
 }
 
-/** Every entry `log` keeps, oldest first, a page at a time. */
-async function keptIn(log: LogStore): Promise<Logged<unknown>[]> {
+/** Every entry `log` keeps after `from`, oldest first, a page at a time. */
+async function keptIn(log: LogStore, from = 0): Promise<Logged<unknown>[]> {
     const entries: Logged<unknown>[] = []
-    let last = 0
+    let last = from
     for (;;) {
         const page = await log.since(last)
         if (page.length === 0) return entries

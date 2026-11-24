@@ -99,7 +99,7 @@ export function stack<Each extends Pick<Series, 'values' | 'stack'>>(
 }
 
 /** A value that can be drawn, or `undefined`. */
-function present(value: number | null | undefined): number | undefined {
+export function present(value: number | null | undefined): number | undefined {
     return value === null || value === undefined || !Number.isFinite(value)
         ? undefined
         : value

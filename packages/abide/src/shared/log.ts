@@ -218,7 +218,7 @@ const LEVEL_COLOR: Record<Level, string> = {
 }
 
 /** A console call's arguments as the one line `console.log` would print, in color where `colors`. */
-export function messageOf(args: unknown[], colors = false): string {
+export function consoleLine(args: unknown[], colors = false): string {
     let message = ''
     for (let at = 0; at < args.length; at += 1) {
         const arg = args[at]
@@ -253,7 +253,7 @@ function write(
         time,
         level,
         namespace,
-        message: messageOf(args),
+        message: consoleLine(args),
         trace: TRACE.current(),
         span,
     }

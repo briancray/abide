@@ -10,6 +10,7 @@
 // chunks run side by side is a pipe of its own with a `concurrency` of its own.
 
 import { type Failed, isFailed, isTransient, retryAt } from './Failed.ts'
+import { messageOf } from './messageOf.ts'
 import {
     abortSignal,
     isReactive,
@@ -109,11 +110,6 @@ type LastOut<Steps> = Steps extends readonly [...unknown[], infer Last]
 type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]]
     ? StepIn<First>
     : never
-
-/** Whether `value` is a pipe. */
-export function isPipe(value: unknown): value is Pipe<never, unknown, boolean> {
-    return typeof value === 'function' && PIPE_BRAND in value
-}
 
 /**
  * Steps an item runs through in order, at most `concurrency` items at once — per `key` where one is
@@ -637,14 +633,7 @@ class Runner {
                         (thrown: unknown) => {
                             this.counts.failed += 1
                             // 57.15 — on the stream, a failure leaves as a refusal and the stream runs on.
-                            return [
-                                refuse(
-                                    500,
-                                    thrown instanceof Error
-                                        ? thrown.message
-                                        : String(thrown),
-                                ),
-                            ]
+                            return [refuse(500, messageOf(thrown))]
                         },
                     )
                     .then((answers) => {

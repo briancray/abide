@@ -1,4 +1,4 @@
-import { messageOf, useColor } from '#shared/log.ts'
+import { consoleLine, useColor } from '#shared/log.ts'
 import { paint } from '#shared/paint.ts'
 
 const ESCAPE = '\x1b['
@@ -57,7 +57,7 @@ export class LogPanel {
             debug: console.debug,
         }
         const write = (...args: unknown[]): void =>
-            this.write(messageOf(args, this.#color))
+            this.write(consoleLine(args, this.#color))
         for (const method of CONSOLE_METHODS) console[method] = write
         process.stdout.on('resize', this.#resize)
         // A signal ends the process through `stopOnSignalOrFault`, and a terminal left on the
