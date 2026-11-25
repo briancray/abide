@@ -170,7 +170,7 @@ export {
 } from './ledger.ts'
 // 57 — steps an item runs through, under a budget, with retries.
 export { type Pipe, type PipeOptions, type PipeStatus, pipe } from './pipe.ts'
-// 50.19 — where a floating element sits beside its anchor.
+// 50.19, 50.20 — where a floating element sits beside its anchor.
 export type { Side } from './place.ts'
 export { type PopoverOptions, type PopoverParts, popover } from './popover.ts'
 export { type Principal, principal } from './principal.ts'

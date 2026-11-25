@@ -5272,10 +5272,13 @@ carry the role `status`.
 
 50.19 An anchored layer — the element carrying `tooltip.host`'s `hint` part while it shows a hint,
 an element `popover` is bound to and the element carrying `combobox`'s `popup`
-part — MUST sit on `side`, `offset` pixels from its anchor, lined up along it as `align` names.
+part — MUST sit on the side 50.20 takes, `offset` pixels from its anchor, lined up along it as
+`align` names.
 
-50.20 An anchored layer MUST take the side opposite `side` where `side` leaves less room than the
-layer needs and the opposite side leaves more.
+50.20 An anchored layer MUST take `side` where it leaves the room the layer needs there — its height
+on `top` and `bottom`, its width on `left` and `right` — else the side opposite where that one does,
+and else the side of the four leaving the most room past what the layer needs there, of two leaving
+the same the first of `side`, its opposite, `top` or `left`, and `bottom` or `right`.
 
 50.21 An anchored layer MUST stay at least `margin` pixels inside the viewport on both axes, its
 start edge kept where it does not fit.
