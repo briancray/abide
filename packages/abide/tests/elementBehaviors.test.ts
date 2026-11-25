@@ -148,9 +148,13 @@ test('Escape closes an open hint alone, then the panel under it — 50.25, 53.15
     const second = panel.appendChild(document.createElement('button'))
     const stopFirst = bindPart(tip('First', { delay: 0 }), first)
     const stopSecond = bindPart(tip('Second', { delay: 0 }), second)
-    first.dispatchEvent(new MouseEvent('mouseenter'))
+    first.dispatchEvent(
+        new PointerEvent('pointerenter', { pointerType: 'mouse' }),
+    )
     await Bun.sleep(1)
-    second.dispatchEvent(new MouseEvent('mouseenter'))
+    second.dispatchEvent(
+        new PointerEvent('pointerenter', { pointerType: 'mouse' }),
+    )
     await Bun.sleep(1)
     expect(shown.peek()?.anchor).toBe(second)
     expect(escape()).toBe(true)

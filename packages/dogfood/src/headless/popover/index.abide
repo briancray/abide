@@ -7,6 +7,8 @@ import AnchorWidth from './lib/AnchorWidth.abide'
 import anchorWidth from './lib/AnchorWidth.abide' with { type: 'text' }
 import ArrowInset from './lib/ArrowInset.abide'
 import arrowInset from './lib/ArrowInset.abide' with { type: 'text' }
+import ContactPeek from './lib/ContactPeek.abide'
+import contactPeek from './lib/ContactPeek.abide' with { type: 'text' }
 import FilterPanel from './lib/FilterPanel.abide'
 import filterPanel from './lib/FilterPanel.abide' with { type: 'text' }
 import LitTrigger from './lib/LitTrigger.abide'
@@ -26,6 +28,24 @@ import litTrigger from './lib/LitTrigger.abide' with { type: 'text' }
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageFilter.test.ts',
             from: [
                 "test('Escape, a press outside and a second press on the button each shut the stage panel'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPeek.test.ts',
+            from: [
+                'test("a mouse resting on a contact\'s name opens the card, and a touch does not"',
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPeek.test.ts',
+            from: [
+                "test('the card stays while the pointer moves onto it, and closes once it has left both'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPeek.test.ts',
+            from: [
+                "test('focus on the name opens the card at once, and it stays until focus leaves both'",
             ],
         },
         {
@@ -61,6 +81,15 @@ import litTrigger from './lib/LitTrigger.abide' with { type: 'text' }
             by typing, and write <code>open</code> from what opens it. <code>--anchor-width</code> is the
             anchor's width, kept current as it resizes.</p>
         <Example code={anchorWidth}><AnchorWidth /></Example>
+    </Section>
+
+    <Section level={3} title="Show a contact's card when the pointer rests on the name">
+        <p><code>openOnHover</code> opens the popover once a mouse rests on its trigger or anchor
+            that many milliseconds; a touch never does. <code>closeOnLeave</code> closes one a
+            pointer opened once the pointer has left the name and the card, so it can move onto
+            the email. <code>openOnFocus</code> opens it when a key moves focus there, and it
+            stays until focus leaves both.</p>
+        <Example code={contactPeek}><ContactPeek /></Example>
     </Section>
 
     <Section level={3} title="Point an arrow at the button, clear of the rounded corners">
