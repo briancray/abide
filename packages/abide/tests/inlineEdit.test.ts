@@ -108,7 +108,8 @@ test('Enter saves before the value takes it, and a failed save keeps the field o
     expect(saved).toEqual(['Engine renewal, phase 2'])
 })
 
-// THE REVERT: hand focus to nothing on finishing, and it falls to the page.
+// THE REVERT: hand focus to nothing on finishing, and it falls to the page. Drop the write of the
+// value as an edit starts, and the field opens again reading `Scratch`.
 test('Escape puts the value back and hands focus to the text, and leaving saves — 56.27, 56.28', async () => {
     const { name, view, input, type } = standing({
         value: reactive('Engine renewal'),
@@ -123,6 +124,8 @@ test('Escape puts the value back and hands focus to the text, and leaving saves 
     ])
     view.click()
     await settle()
+    // 56.24, 32.113 — opened again, the field holds the value rather than what Escape left in it.
+    expect(input.value).toBe('Engine renewal')
     input.value = 'Hopper expansion'
     input.dispatchEvent(new FocusEvent('blur'))
     await settle()

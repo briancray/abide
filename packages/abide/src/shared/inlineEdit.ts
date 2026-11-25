@@ -95,14 +95,17 @@ export function inlineEdit(options: InlineEditOptions = {}): InlineEdit {
             get 'aria-invalid'() {
                 return error() === undefined ? undefined : 'true'
             },
-            // The field starts from the value, selected, each time an edit begins: `hidden` reads
-            // `editing`, so the spread writes the value again as the edit opens (32.113).
             get value() {
                 return value()
             },
             'bind:element': (element: HTMLInputElement) => {
+                // 56.24 — the field starts from the value, selected, each time an edit begins. The
+                // spread writes the property only where the value moved (32.113), and Escape leaves
+                // what was typed in a field whose value never did.
                 const started = (): void => {
                     if (!editing.peek()) return
+                    const text = value.peek() ?? ''
+                    if (element.value !== text) element.value = text
                     element.focus()
                     element.select()
                 }

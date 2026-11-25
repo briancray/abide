@@ -1,6 +1,7 @@
 import { attributeText } from '#shared/attributeText.ts'
 import { FOREIGN_ATTRIBUTES } from '#shared/FOREIGN_ATTRIBUTES.ts'
 import { HTML_NAMESPACE } from '#shared/INTEGRATION_POINTS.ts'
+import { numberFromText } from '#shared/numberFromText.ts'
 import { WORK } from '#shared/WORK.ts'
 
 /**
@@ -35,6 +36,10 @@ export function setAttribute(
  * `setAttribute` on a form control's `value`, `checked` or `selected`, which also keeps the property
  * of that name written (32.113). Which attributes take it is the compiler's to decide, per element,
  * so the attribute every other binding writes pays no branch for it.
+ *
+ * THE ATTRIBUTE IS WHAT THE BINDING LAST WROTE — the reader's typing moves the property and never
+ * the attribute — so the property is written only when the attribute's text moved. A rerun landing
+ * on the text already written leaves what the reader typed alone.
  */
 export function setControl(
     element: Element,
@@ -43,15 +48,15 @@ export function setControl(
 ): void {
     WORK.bindingRuns += 1
     const next = attributeText(name, value)
-    writeAttributeText(element, name, next)
-    writeControl(element, name, next)
+    if (writeAttributeText(element, name, next))
+        writeControl(element, name, next)
 }
 
 /**
  * 32.113 — THE PROPERTY A CONTROL SHOWS, written from the text `attributeText` answered: the text
- * itself for `value`, `''` where it is absent, and presence for `checked` and `selected`. Compared
- * first, as the attribute is: a write of the text the field already holds would put the caret back
- * at its end.
+ * itself for `value`, `''` where it is absent, and presence for `checked` and `selected`. Called
+ * only where that text moved, and compared even then: a write of the text the field already holds
+ * would put the caret back at its end.
  */
 export function writeControl(
     element: Element,
@@ -61,7 +66,14 @@ export function writeControl(
     const control = element as HTMLInputElement & HTMLOptionElement
     if (name === 'value') {
         const shown = text ?? ''
-        if (control.value !== shown) control.value = shown
+        const standing = control.value
+        if (standing === shown) return
+        // 32.59's reason, for a value written rather than bound: text that already reads as the
+        // number written is the reader's spelling of it — `1.` on its way to `1.5` — and the
+        // handler that wrote `1` from it would otherwise take the keystroke back.
+        const number = numberFromText(shown)
+        if (number !== undefined && number === numberFromText(standing)) return
+        control.value = shown
         return
     }
     const on = text !== null
@@ -70,29 +82,37 @@ export function writeControl(
     } else if (control.selected !== on) control.selected = on
 }
 
-/** Writes text `attributeText` answered, or removes the attribute where it answered `null`. */
+/**
+ * Writes text `attributeText` answered, or removes the attribute where it answered `null` — and
+ * answers whether the attribute moved.
+ */
 function writeAttributeText(
     element: Element,
     name: string,
     text: string | null,
-): void {
+): boolean {
     if (text === null) {
-        if (element.hasAttribute(name)) element.removeAttribute(name)
-        return
+        if (!element.hasAttribute(name)) return false
+        element.removeAttribute(name)
+        return true
     }
-    writeAttribute(element, name, text)
+    return writeAttribute(element, name, text)
 }
 
-/** Writes `text` to `element`'s `name` unless it already reads `text` — `setAttribute`'s compare, shared with a spread. */
+/**
+ * Writes `text` to `element`'s `name` unless it already reads `text` — `setAttribute`'s compare,
+ * shared with a spread — and answers whether it wrote.
+ */
 export function writeAttribute(
     element: Element,
     name: string,
     text: string,
-): void {
+): boolean {
     const standing = element.getAttribute(name)
-    if (standing === text) return
+    if (standing === text) return false
     if (standing === null) addAttribute(element, name, text)
     else element.setAttribute(name, text)
+    return true
 }
 
 /**

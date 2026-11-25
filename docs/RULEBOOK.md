@@ -2758,8 +2758,10 @@ the smallest share its `threshold` names, and where it intersects at all where n
 32.113 A `value` an expression or a spread writes to an `<input>` or a `<textarea>`, a `checked` to
 an `<input>`, and a `selected` to an `<option>` MUST also be written by the browser into the
 element's property of that name — `value` as the attribute's text, or `''` where 32.37 makes it
-absent, and `checked` and `selected` as whether it is present — and MUST NOT be written there while
-the property already holds it.
+absent, and `checked` and `selected` as whether it is present — where that differs from what the
+expression or the spread last wrote, and only there. It MUST NOT be written while the property
+already holds it, nor, for a `value`, while the property's text already reads as the number its
+text reads as (32.59's reason).
 
 32.114 The server MUST render a `value` an expression or a spread writes to a `<textarea>` as its
 text, as well as its attribute: a spread's where the `<textarea>` has no text of its own, and the

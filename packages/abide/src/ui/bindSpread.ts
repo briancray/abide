@@ -2,7 +2,8 @@
 // watch keeps writing it, removing an attribute the value no longer carries, and an `on<event>`
 // listener becomes the element's, with its options (32.4), replaced when the value hands over another.
 // 32.113 — on a form control, a `value`, `checked` or `selected` it carries is written into the
-// property too; whether the element is one is asked once, so a spread on anything else pays nothing.
+// property too, where its attribute moved; whether the element is one is asked once, so a spread on
+// anything else pays nothing.
 
 import { BIND_ELEMENT } from '#shared/BIND_ELEMENT.ts'
 import { isControlProperty } from '#shared/isControlProperty.ts'
@@ -30,8 +31,8 @@ export function bindSpread(
         const next = new Set<string>()
         for (const [name, text] of spreadEntries(read(), explicit, wanted)) {
             next.add(name)
-            writeAttribute(element, name, text)
-            if (control) controlProperty(element, tag, name, text)
+            if (writeAttribute(element, name, text) && control)
+                controlProperty(element, tag, name, text)
         }
         for (const name of written)
             if (!next.has(name)) {

@@ -68,7 +68,9 @@ test('a spread value is a textarea’s text on the server and its property in th
     mount()
     const area = document.getElementById('area') as HTMLTextAreaElement
     const line = document.getElementById('line') as HTMLInputElement
-    expect(area.value).toBe('first')
+    // Hydration writes no property whose attribute the server already wrote (32.113), and happy-dom
+    // keeps the newline after `<textarea>` that a browser's parser drops.
+    expect(area.value.replace(/^\n/, '')).toBe('first')
 
     reader().setText('second')
     flushSync()
@@ -146,6 +148,101 @@ test('a named value is a textarea’s text, and follows a typed-in field — 32.
     expect((document.getElementById('r2') as HTMLTextAreaElement).value).toBe(
         'row two',
     )
+})
+
+const TYPED_PAGE = `<script>
+import { reactive } from '@abide/abide'
+
+let amount = reactive(0)
+let spreadAmount = reactive(0)
+const field = {
+    get value() {
+        return spreadAmount()
+    },
+    oninput: (event: Event) => {
+        spreadAmount = Number((event.target as HTMLInputElement).value)
+    },
+}
+;(globalThis as any).__control = {
+    setAmount: (next: number) => { amount = next },
+    setSpreadAmount: (next: number) => { spreadAmount = next },
+}
+</script>
+
+<form><input id="named" value={amount} oninput={(event) => amount = Number(event.target.value)}><input id="spread" {...field}></form>`
+
+// THE REVERT: drop the compare by number in `writeControl` and both fields read `1` where the
+// reader typed `1.`.
+test('a control is written where its value moves, not where it reads differently from what was typed — 32.113', async () => {
+    await mountPage(TYPED_PAGE)
+    for (const [id, set] of [
+        ['named', (next: number) => reader().setAmount(next)],
+        ['spread', (next: number) => reader().setSpreadAmount(next)],
+    ] as const) {
+        const input = document.getElementById(id) as HTMLInputElement
+        // `1.` writes 1, and 1 is not what the field shows — but it is what the reader meant.
+        typeInto(input, '1.')
+        expect(input.value).toBe('1.')
+        expect(input.getAttribute('value')).toBe('1')
+        // The value moving to what it already was writes nothing.
+        set(1)
+        flushSync()
+        expect(input.value).toBe('1.')
+        // A keystroke landing on the value already written leaves the field as typed too.
+        typeInto(input, '1.5')
+        typeInto(input, '1.50')
+        expect(input.value).toBe('1.50')
+        // A value moved in code is written.
+        set(7)
+        flushSync()
+        expect(input.value).toBe('7')
+        // And one moved back to what the reader had typed, after it moved away, is written.
+        typeInto(input, '1.50')
+        set(2)
+        flushSync()
+        set(1.5)
+        flushSync()
+        expect(input.value).toBe('1.5')
+    }
+})
+
+const RERUN_PAGE = `<script>
+import { reactive } from '@abide/abide'
+
+let draft = reactive('set')
+let tick = reactive(0)
+const field = {
+    get value() {
+        return draft()
+    },
+    get title() {
+        return String(tick())
+    },
+}
+;(globalThis as any).__control = {
+    tick: () => { tick = tick + 1 },
+    setDraft: (next: string) => { draft = next },
+}
+</script>
+
+<form><input id="named" value={tick >= 0 ? draft : ''}><input id="spread" {...field}></form>`
+
+// THE REVERT: write the property on every rerun — `writeControl` unguarded in `setControl` and in
+// `bindSpread` — and both fields read `set` where the reader typed `typed`.
+test('a rerun that writes the text already written leaves what the reader typed — 32.113', async () => {
+    await mountPage(RERUN_PAGE)
+    const named = document.getElementById('named') as HTMLInputElement
+    const spread = document.getElementById('spread') as HTMLInputElement
+    typeInto(named, 'typed')
+    typeInto(spread, 'typed')
+    reader().tick()
+    flushSync()
+    expect(named.value).toBe('typed')
+    expect(spread.value).toBe('typed')
+    reader().setDraft('moved')
+    flushSync()
+    expect(named.value).toBe('moved')
+    expect(spread.value).toBe('moved')
 })
 
 test('a textarea with a value and text of its own is refused — 32.115', () => {
