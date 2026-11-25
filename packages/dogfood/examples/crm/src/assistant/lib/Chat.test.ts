@@ -188,6 +188,8 @@ test('a streamed answer reads each event once, and a chunk rewrites its answer a
     expect(answer?.textContent).toBe(`${'word '.repeat(CHUNKS - 1)}end.`)
 })
 
+// THE REVERT: drop `data-ends` from `chat`'s message part, and the answer that ends reads
+// `[false, false]`.
 test('Stop ends the answer and keeps what arrived', async () => {
     const stream = fed()
     using _chat = await mount(Chat({ ask: stream.ask }))
@@ -208,6 +210,12 @@ test('Stop ends the answer and keeps what arrived', async () => {
     )
     expect(section?.hasAttribute('data-streaming')).toBe(false)
     expect(document.querySelector('[data-chat=send]')).not.toBeNull()
+    // 49.1, 53.29 — the answer the person can ask again is marked as one that ends.
+    expect(
+        [...document.querySelectorAll('[data-chat=message]')].map((message) =>
+            message.hasAttribute('data-ends'),
+        ),
+    ).toEqual([false, true])
 })
 
 test('a permission prompt is answered through permit', async () => {

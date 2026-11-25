@@ -178,8 +178,8 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
 
     <Section level={3} title="Tell the rep's messages from the assistant's">
         <p>Each message carries <code>data-speaker</code>, <code>you</code> or
-            <code>assistant</code>, and the root <code>data-streaming</code> while an answer
-            arrives.</p>
+            <code>assistant</code>, an answer's last message <code>data-ends</code>, and the root
+            <code>data-streaming</code> while an answer arrives.</p>
         <Code language="abide" caption="abide" code={`
             <section {...talk.root} class="data-streaming:opacity-90">
                 <ol {...talk.transcript} class="[&_[data-speaker=you]]:text-right">…</ol>
