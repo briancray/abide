@@ -43,7 +43,7 @@ export type PipeStatus = {
 /** What `pipe` takes beside its steps. */
 export type PipeOptions<In = unknown> = {
     concurrency?: number | undefined
-    key?: ((input: In) => string) | undefined
+    group?: ((input: In) => string) | undefined
     ordered?: boolean | undefined
     retries?: number | undefined
     backoff?: Backoff | undefined
@@ -100,7 +100,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]]
     : never
 
 /**
- * Steps an item runs through in order, at most `concurrency` items at once — per `key` where one is
+ * Steps an item runs through in order, at most `concurrency` items at once — per `group` where one is
  * given — each step's attempt retried, timed out and held as its options say (57).
  */
 export function pipe<const Steps extends readonly [Step, ...Step[]]>(
@@ -135,7 +135,7 @@ type Waiter = {
     refuse: (reason: unknown) => void
     shared: boolean
 }
-/** One key's slots: how many items run, and the items waiting for one in the order they came. */
+/** One group's slots: how many items run, and the items waiting for one in the order they came. */
 type Lane = { running: number; waiting: Waiter[] }
 
 /** What one item's walk answered: its answers in order, whether a step fanned out, or a refusal. */
@@ -161,7 +161,7 @@ class Streamed {
 class Runner {
     steps: readonly Step[]
     concurrency: number
-    key: ((input: unknown) => string) | undefined
+    group: ((input: unknown) => string) | undefined
     ordered: boolean
     retries: number
     backoff: Backoff | undefined
@@ -189,7 +189,7 @@ class Runner {
     constructor(steps: readonly Step[], options: PipeOptions<unknown>) {
         this.steps = steps
         this.concurrency = options.concurrency ?? 1
-        this.key = options.key
+        this.group = options.group
         this.ordered = options.ordered ?? true
         this.retries = options.retries ?? 0
         this.backoff = options.backoff
@@ -324,12 +324,12 @@ class Runner {
     }
 
     laneOf(input: unknown): Lane {
-        // 57.7 — `concurrency` counts per key.
-        const key = this.key === undefined ? '' : this.key(input)
-        let lane = this.lanes.get(key)
+        // 57.7 — `concurrency` counts per group.
+        const group = this.group === undefined ? '' : this.group(input)
+        let lane = this.lanes.get(group)
         if (lane === undefined) {
             lane = { running: 0, waiting: [] }
-            this.lanes.set(key, lane)
+            this.lanes.set(group, lane)
         }
         return lane
     }

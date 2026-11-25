@@ -1,5 +1,5 @@
 // 57 — A PIPE, called and piped through: steps in order and at once, fan-out, the budget per pipe and
-// per key, retries spaced by the one rule, a `Retry-After` holding the step, the deadline, the pause,
+// per group, retries spaced by the one rule, a `Retry-After` holding the step, the deadline, the pause,
 // the stop, and the stream face's order and drain. Every timing here is a count or an order, never a
 // clock read: a sleep only gives a turn for what is already decided to happen.
 
@@ -153,9 +153,9 @@ test('a pipe runs at most concurrency items at once, in the order they came — 
     expect(`default most: ${serialMost}`).toBe('default most: 1')
 })
 
-// 57.7 — `key` COUNTS `concurrency` PER KEY: one source's runs wait on each other, another
-// source's do not. THE REVERT: drop `key` from `laneOf`, and `a and b together: false`.
-test('key counts concurrency per key — 57.7', async () => {
+// 57.7 — `group` COUNTS `concurrency` PER GROUP: one source's runs wait on each other, another
+// source's do not. THE REVERT: drop `group` from `laneOf`, and `a and b together: false`.
+test('group counts concurrency per group — 57.7', async () => {
     const running = new Set<string>()
     let together = false
     const bySource = pipe(
@@ -168,7 +168,7 @@ test('key counts concurrency per key — 57.7', async () => {
                 return run.n
             },
         ],
-        { key: (run) => run.source },
+        { group: (run) => run.source },
     )
     await Promise.all([
         bySource({ source: 'a', n: 1 }),

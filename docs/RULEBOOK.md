@@ -7125,7 +7125,7 @@ reject the promise with what it threw.
 57.6 A `pipe` MUST run at most `concurrency` items at once, 1 where none is given, starting a
 waiting item in the order it came.
 
-57.7 Where `key` is given, 57.6's count MUST be kept for each key `key` answers.
+57.7 Where `group` is given, 57.6's count MUST be kept for each group `group` answers.
 
 57.8 A `pipe` MUST count every item it runs under 57.6, whether called by an app or as a step of
 another `pipe`.

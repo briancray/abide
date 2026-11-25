@@ -101,7 +101,7 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Sync one contact at a time, four contacts at once">
         <p><code>concurrency</code> caps how many items run, one where none is given, and
-            <code>key</code> counts it per key: one contact's syncs wait on each other, and another
+            <code>group</code> counts it per group: one contact's syncs wait on each other, and another
             contact's do not.</p>
         <Code language="ts" caption="shared" code={`
             import { pipe } from '@abide/abide'
@@ -109,7 +109,7 @@ import Section from '#src/lib/Section.abide'
 
             export const syncs = pipe([syncContact], {
                 concurrency: 4,
-                key: (contact: { id: string }) => contact.id,
+                group: (contact: { id: string }) => contact.id,
             })
         `} />
     </Section>
