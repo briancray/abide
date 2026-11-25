@@ -691,17 +691,6 @@
     }
 }
 
-/* A CONTROL BELONGS WITH THE VALUE IT CHANGES. Sat inside the tile, `+` and `−` need no subject:
-   the label above the value is already it, and the relationship is the layout rather than
-   something to work out. */
-@utility spinbutton {
-    @apply flex items-center gap-tight;
-
-    & button {
-        @apply px-2 py-1 font-mono text-prose/5 font-semibold;
-    }
-}
-
 /* A STATUS THAT RESERVES ITS OWN LINE. A probe an example renders is on screen for as long as a
    load takes and gone the rest of the time, so showing it by ADDING a node reflows everything
    under it twice per press — and the frame reports its height to the page, so the shift reaches
