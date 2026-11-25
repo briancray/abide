@@ -107,3 +107,22 @@ test('a notice shows once where two Toasts stand', async () => {
     toasts.dismiss(id)
     flushSync()
 })
+
+// 50.12, 50.71 — A NOTICE ALREADY SHOWING IS NOT ADDED AGAIN: with no `id` it is told apart by a hash
+// of itself, so a second save's "Phone saved" is the first one's, and an `id` of its own repeats it.
+// THE REVERT: have `notify` add a notice whose id the list holds — two "Phone saved" show.
+test('saving twice shows one notice, and an id of its own repeats it', async () => {
+    using _phone = await mount(SavePhone({}))
+    await save('555 0100')
+    await save('555 0100')
+    expect(notices()).toEqual([['success', 'Phone saved', null]])
+    const ids = [
+        toasts.notify('Reminder sent to Ada', { id: 'reminder-1' }),
+        toasts.notify('Reminder sent to Ada', { id: 'reminder-2' }),
+    ]
+    flushSync()
+    expect(notices().length).toBe(3)
+    for (const id of ids) toasts.dismiss(id)
+    document.querySelector<HTMLButtonElement>('[data-notices=close]')?.click()
+    flushSync()
+})
