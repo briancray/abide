@@ -1,0 +1,15 @@
+<script>
+import { dropzone, reactive } from '@abide/abide'
+
+let attached = reactive<readonly File[]>([])
+const drop = dropzone({
+    onfiles: (files) => {
+        attached = [...attached, ...files]
+    },
+})
+</script>
+
+<label class="block border border-dashed p-4" {...drop.host}>
+    Drop papers here, or choose them: <input {...drop.input} />
+</label>
+<p>Attached: {attached.map((file) => file.name).join(', ') || 'none'}</p>

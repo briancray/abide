@@ -1,0 +1,20 @@
+<script>
+import { dropzone, reactive } from '@abide/abide'
+
+let attached = reactive<readonly File[]>([])
+// `files` is the last drop alone; the deal keeps every drop.
+const drop = dropzone({
+    accept: '.pdf',
+    onfiles: (files) => {
+        attached = [...attached, ...files]
+    },
+})
+</script>
+
+<label class="block border border-dashed p-4" {...drop.host}>
+    Drop the deal's papers here, or choose them: <input {...drop.input} />
+</label>
+<ul>
+    {#for file, at of attached key at}<li>{file.name}</li>{/for}
+</ul>
+<p class="status">{drop.files().length} in the last drop</p>
