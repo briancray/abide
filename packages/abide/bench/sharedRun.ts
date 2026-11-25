@@ -1,11 +1,20 @@
 // Runs `sharedCases` through the one batcher, in whichever engine loaded it.
-import { batch, type BatchSpec, emulatedDom } from '@abide/harness/report'
+import {
+    batch,
+    type BatchSpec,
+    claimOf,
+    emulatedDom,
+    ratio,
+    type Sample,
+} from '@abide/harness/report'
 
 import { sharedCases } from './sharedCases.ts'
 
 export type SharedRow = {
     case: string
     arms: Record<string, number>
+    /** Each arm against the first as `ratio()` claims it (43.7): a number only outside the floor. */
+    claims: Record<string, string>
     n: number
     floor: number
     substrate: string
@@ -25,14 +34,22 @@ export function runShared(
             budgetNanoseconds,
             ...sizing,
         })
+        const names = Object.keys(kase.arms)
+        const base = measured.samples[names[0] as string] as Sample
         const arms: Record<string, number> = {}
-        for (const name of Object.keys(kase.arms))
-            arms[name] = (
-                measured.samples[name] as { nanoseconds: number }
-            ).nanoseconds
+        const claims: Record<string, string> = {}
+        for (const name of names) {
+            const sample = measured.samples[name] as Sample
+            arms[name] = sample.nanoseconds
+            claims[name] =
+                sample === base
+                    ? 'base'
+                    : claimOf(ratio(sample, base, { floor: measured.floor }))
+        }
         rows.push({
             case: kase.name,
             arms,
+            claims,
             n: measured.n,
             floor: measured.floor,
             substrate: String(measured.substrate),
@@ -41,19 +58,17 @@ export function runShared(
     return rows
 }
 
-/** Formats shared rows as text: each arm's nanoseconds and its ratio to the first arm. */
+/** Formats shared rows as text: each arm's nanoseconds and its claim against the first arm. */
 export function formatShared(rows: SharedRow[]): string {
     const lines: string[] = []
     for (const row of rows) {
         lines.push(
             `── ${row.case}   [n=${row.n} A/A floor=${(row.floor * 100).toFixed(2)}% ${row.substrate}]`,
         )
-        const names = Object.keys(row.arms)
-        const base = row.arms[names[0] as string] as number
-        for (const name of names) {
+        for (const name of Object.keys(row.arms)) {
             const ns = row.arms[name] as number
             lines.push(
-                `  ${name.padEnd(34)} ${ns.toFixed(1).padStart(9)} ns   ${(ns / base).toFixed(3)}x`,
+                `  ${name.padEnd(34)} ${ns.toFixed(1).padStart(9)} ns   ${row.claims[name]}`,
             )
         }
     }

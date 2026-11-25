@@ -15,6 +15,7 @@
 //
 // `bun run bench:chart-vars`
 
+import { claimOf, ratio, type Sample } from '@abide/harness/report'
 import { chromium } from '@playwright/test'
 
 import { buildCompiledPage, loadCompiledPage } from './buildCompiledPage.ts'
@@ -160,19 +161,21 @@ try {
         )) as {
             n: number
             floor: number
-            samples: Record<string, { nanoseconds: number }>
+            samples: Record<string, Sample>
         }
-        const handed =
-            (result.samples['as handed back']?.nanoseconds ?? 0) / 1e6
+        const handed = result.samples['as handed back'] as Sample
         const lines = [
             `run ${run}: n ${result.n}, A/A floor ${(result.floor * 100).toFixed(1)}%`,
         ]
-        for (const [name, sample] of Object.entries(result.samples)) {
-            const ms = sample.nanoseconds / 1e6
+        // 43.7 — against `as handed back` through `ratio()`, so a share inside the floor says so.
+        for (const [name, sample] of Object.entries(result.samples))
             lines.push(
-                `  ${name.padEnd(28)} ${ms.toFixed(3)} ms   ${((ms / handed) * 100).toFixed(1)}% of as handed back`,
+                `  ${name.padEnd(28)} ${(sample.nanoseconds / 1e6).toFixed(3)} ms   ${
+                    sample === handed
+                        ? 'base'
+                        : `${claimOf(ratio(sample, handed, { floor: result.floor }))} of as handed back`
+                }`,
             )
-        }
         console.log(lines.join('\n'))
         await page.close()
     }
