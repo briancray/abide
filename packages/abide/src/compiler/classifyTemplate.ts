@@ -632,9 +632,9 @@ function explicitNames(node: ElementNode): string[] {
         if (attribute.name === '...') continue
         const lower = attribute.lowerName
         if (isEventName(lower)) continue
-        const name = lower.startsWith('class:')
+        const name = isClassToggle(attribute)
             ? 'class'
-            : lower.startsWith('style:')
+            : isStyleProperty(attribute)
               ? 'style'
               : lower.startsWith('bind:')
                 ? boundProperty(lower)

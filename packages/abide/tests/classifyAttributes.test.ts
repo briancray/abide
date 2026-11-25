@@ -265,3 +265,15 @@ test('the served class: condition and the bound one agree on every value — 32.
     expect(served).toHaveLength(17)
     expect(served).toEqual(bound)
 })
+
+// 32.10, 32.11 — A BARE `class:` OR `style:` IS AN ORDINARY ATTRIBUTE, so the names a spread on the
+// same element may not override are `class:` and `style:` as written, not `class` and `style`.
+// THE REVERT: fold by `startsWith('class:')` / `startsWith('style:')` in `explicitNames` and the
+// spread reports `['class', 'style']` explicit, so its `class` and `style` are dropped unwarned.
+test('a bare class: or style: beside a spread leaves the spread its class and style', () => {
+    const node = element('<div class: style: class:on={x} {...rest}></div>')
+    const spread = classifyAttributes(node, lowering(node)).find(
+        (one) => one.kind === 'spread',
+    )
+    expect(spread).toMatchObject({ explicit: ['class:', 'style:', 'class'] })
+})
