@@ -1,0 +1,49 @@
+<script>
+import { announce, chart, format } from '@abide/abide'
+
+import ChartPlot from '#src/lib/ChartPlot.abide'
+
+const MONTHS = [5, 6, 7, 8, 9, 10].map((month) => Date.UTC(2026, month, 1))
+const WON = [18_000, 24_500, 21_000, 31_000, 27_000, 42_000]
+const CLOSED = [4, 6, 5, 8, 7, 9]
+
+// Where a move the keys make is read out (50.49).
+const regions = announce.host()
+
+// Dollars and deals share one axis as shares of their own peaks, and each reads in its own units.
+const ofPeak = (values: number[]) =>
+    values.map((value) => value / Math.max(...values))
+const plot = chart({
+    label: 'Won revenue and deals closed, June to November',
+    series: [
+        {
+            label: 'Won',
+            values: ofPeak(WON),
+            format: (_, month) =>
+                format.money(WON[month] ?? 0, { notation: 'compact' }),
+        },
+        {
+            label: 'Closed',
+            values: ofPeak(CLOSED),
+            format: (_, month) => `${CLOSED[month]} deals`,
+        },
+    ],
+    x: MONTHS,
+    xFormat: (month) => format.date(month, { style: 'month' }),
+    yFormat: (share) => format.percent(share),
+    zero: true,
+})
+</script>
+
+<ChartPlot
+    plot={plot}
+    class="block h-60 w-full overflow-visible text-chrome text-muted
+        [&_[data-series='0']]:text-signal"
+ />
+<div class="sr-only">
+    <div {...regions.polite}>
+        {#for message of regions.said('polite') key message.count}
+            <span>{message.text}</span>
+        {/for}
+    </div>
+</div>

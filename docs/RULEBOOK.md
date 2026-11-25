@@ -6344,6 +6344,9 @@ part is drawn at, a line across the plot carrying only the one of `--x` and `--y
 52.114 `meter`'s `meter` part MUST carry in its `style` as `--fraction` the share of the meter
 52.108 fills, and no `style` where `value` is `undefined`.
 
+52.115 `chart` MUST write a series' value in its readout by the series' `format`, given the value and
+its index, where the series gives one, and by `yFormat` where it does not.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are

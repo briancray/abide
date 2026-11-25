@@ -1,0 +1,41 @@
+<script>
+import { chart, format } from '@abide/abide'
+
+const WON = [18_000, 24_500, 31_000, 42_000]
+const CLOSED = [4, 6, 8, 9]
+const ofPeak = (values: number[]) =>
+    values.map((value) => value / Math.max(...values))
+
+const plot = chart({
+    label: 'Won revenue and deals closed by month',
+    series: [
+        {
+            label: 'Won',
+            values: ofPeak(WON),
+            format: (_, month) => format.money(WON[month] ?? 0),
+        },
+        {
+            label: 'Closed',
+            values: ofPeak(CLOSED),
+            format: (_, month) => `${CLOSED[month]} deals`,
+        },
+    ],
+    yFormat: (share) => format.percent(share),
+})
+</script>
+
+<svg {...plot.svg} class="h-48 w-full">
+    {#for line of plot.lines key line.series}
+        <path {...line.path} />
+    {/for}
+    {#if plot.readout}
+        <line {...plot.crosshair?.line} />
+    {/if}
+</svg>
+{#if plot.readout}
+    <span {...plot.tip} class="m-0 rounded-md border px-3 py-2">
+        {#for point of plot.readout?.values ?? []}
+            <span {...point.text}>{point.label}: {point.value}</span>
+        {/for}
+    </span>
+{/if}

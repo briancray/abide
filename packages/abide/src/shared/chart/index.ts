@@ -15,6 +15,11 @@ export type Series = {
     stack?: string | false
     /** Whether a line or an area is drawn as a curve through its values (52.105). `false` by default. */
     curve?: boolean
+    /**
+     * Writes one of its values, given it and its index, for the readout and what a key move announces
+     * (52.115): the raw value behind a series scaled to share an axis, say. `yFormat` by default.
+     */
+    format?: (value: number, index: number) => string
 }
 
 /**

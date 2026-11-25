@@ -1,4 +1,4 @@
-// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71, 52.113 — A CHART AS PARTS: series over
+// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71, 52.113, 52.115 — A CHART AS PARTS: series over
 // one pair of axes, handed back as the geometry each mark is drawn at and as parts an app spreads onto
 // elements, SVG or HTML — `{#for point of plot.points}<circle {...point.circle} r="3" />` — with the
 // root's part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
@@ -39,7 +39,7 @@ export type ChartOptions = {
     x?: Live<readonly number[] | undefined>
     /** Writes an x for its tick and the readout: `format.date`, say. `format.number` by default. */
     xFormat?: (x: number) => string
-    /** Writes a value for the y ticks and the readout: `format.money`, say. `format.number` by default. */
+    /** Writes a value for the y ticks, and the readout of a series with no `format` of its own: `format.money`, say. `format.number` by default. */
     yFormat?: (y: number) => string
     /** The most x positions labeled under the plot. 5 by default. */
     xTicks?: Live<number>
@@ -582,17 +582,23 @@ export function chart(options: ChartOptions): ChartParts {
         const normalize = live(options.normalize) === true
         const values: ChartReadout['values'] = []
         for (let line = 0; line < drawn.series.length; line += 1) {
-            const value = drawn.series[line]?.values[index]
+            const each = drawn.series[line]
+            const value = each?.values[index]
             const place = drawn.placed[line]
+            // 52.115 — a series' own `format` writes its value, else `yFormat`.
             let written =
-                value === null || value === undefined ? '—' : yFormat(value)
+                value === null || value === undefined
+                    ? '—'
+                    : each?.format === undefined
+                      ? yFormat(value)
+                      : each.format(value, index)
             // 52.60 — a stacked value under `normalize` reads its share beside it.
             if (normalize && place?.stack !== undefined && written !== '—')
                 written += ` (${percent(Math.abs((place.high[index] ?? 0) - (place.low[index] ?? 0)))})`
             const y = drawn.ysOf[line]?.[index]
             values.push({
                 series: line,
-                label: drawn.series[line]?.label ?? '',
+                label: each?.label ?? '',
                 value: written,
                 y,
                 circle:

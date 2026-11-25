@@ -26,6 +26,8 @@ import HtmlColumns from './lib/HtmlColumns.abide'
 import htmlColumns from './lib/HtmlColumns.abide' with { type: 'text' }
 import KeyboardReadout from './lib/KeyboardReadout.abide'
 import keyboardReadout from './lib/KeyboardReadout.abide' with { type: 'text' }
+import OwnUnits from './lib/OwnUnits.abide'
+import ownUnits from './lib/OwnUnits.abide' with { type: 'text' }
 import PickMonth from './lib/PickMonth.abide'
 import pickMonth from './lib/PickMonth.abide' with { type: 'text' }
 import PointsOverLines from './lib/PointsOverLines.abide'
@@ -99,6 +101,12 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
             path: 'packages/dogfood/examples/crm/src/reports/lib/ClosedByWeek.test.ts',
             from: [
                 "test('the chart is one tab stop whose arrows step the weeks and read each out'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/WonAndClosed.test.ts',
+            from: [
+                "test('each series reads its own units, though both are drawn as shares of their peaks'",
             ],
         },
         {
@@ -283,6 +291,14 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
         <p>Given as a function, <code>series</code> is read live: a series left out of the list
             leaves the chart, and the rest redraw without it.</p>
         <Example code={hideSeries}><HideSeries /></Example>
+    </Section>
+
+    <Section level={3} title="Read dollars and deals in their own units on one axis">
+        <p>Scale each series to its peak so both fill the plot, and give each a
+            <code>format</code>. The readout, and what a key move announces, write each value
+            through it, given the value and its index, rather than through
+            <code>yFormat</code>.</p>
+        <Example code={ownUnits}><OwnUnits /></Example>
     </Section>
 
     <Section level={3} title="Compare two charts on one fixed axis">
