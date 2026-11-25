@@ -1,4 +1,4 @@
-import type { Node } from 'typescript/unstable/ast'
+import type { Expression, Node } from 'typescript/unstable/ast'
 import {
     isTypeAliasDeclaration,
     isVariableDeclaration,
@@ -51,7 +51,7 @@ export async function callReturnOf(
 export async function boundInitializer(
     checker: Checker,
     symbol: CheckedSymbol,
-): Promise<Node | undefined> {
+): Promise<Expression | undefined> {
     const bound = await (
         await aliasedSymbol(checker, symbol)
     ).valueDeclaration?.resolve()

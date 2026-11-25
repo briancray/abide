@@ -36,7 +36,7 @@ import {
 } from '#shared/reactive/parameterDefaults.ts'
 import type { Method } from '#shared/rpc.ts'
 
-import { aliasedSymbol } from './aliasedSymbol.ts'
+import { aliasedSymbol, namesAbide } from './aliasedSymbol.ts'
 import { defaultedMembers, parameterPattern } from './argsDefaultsIn.ts'
 import {
     argsSchemaOf,
@@ -271,7 +271,7 @@ async function declaringMethod(
       }
     | undefined
 > {
-    let declaration = await symbol.valueDeclaration?.resolve()
+    const declaration = await symbol.valueDeclaration?.resolve()
     let call =
         declaration === undefined
             ? undefined
@@ -290,13 +290,7 @@ async function declaringMethod(
     ) {
         const bound = await checker.getSymbolAtLocation(call)
         if (bound === undefined) return undefined
-        declaration = await (
-            await aliasedSymbol(checker, bound)
-        ).valueDeclaration?.resolve()
-        call =
-            declaration !== undefined && isVariableDeclaration(declaration)
-                ? declaration.initializer
-                : undefined
+        call = await boundInitializer(checker, bound)
     }
     if (call === undefined || !isCallExpression(call)) return undefined
     const callee = isPropertyAccessExpression(call.expression)
@@ -366,13 +360,7 @@ async function declaredDocument(
     const callee = isPropertyAccessExpression(gate.expression)
         ? gate.expression.name
         : gate.expression
-    const named = await checker.getSymbolAtLocation(callee)
-    if (named === undefined) return undefined
-    const target = await aliasedSymbol(checker, named)
-    if (
-        target.name !== 'jsonSchema' ||
-        target.valueDeclaration?.path !== abide.jsonSchema
-    )
+    if (!(await namesAbide(checker, callee, 'jsonSchema', abide.jsonSchema)))
         return undefined
     const document = await declarationOf(checker, gate.arguments[0])
     return document === undefined ? undefined : literalJson(document)
@@ -611,14 +599,7 @@ async function isAbideStructural(
     named: Node,
     abide: Abide,
 ): Promise<boolean> {
-    if (abide.deepEqual === undefined) return false
-    const symbol = await checker.getSymbolAtLocation(named)
-    if (symbol === undefined) return false
-    const target = await aliasedSymbol(checker, symbol)
-    return (
-        target.name === 'deepEqual' &&
-        target.valueDeclaration?.path === abide.deepEqual
-    )
+    return namesAbide(checker, named, 'deepEqual', abide.deepEqual)
 }
 
 /**

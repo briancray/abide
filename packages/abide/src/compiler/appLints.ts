@@ -7,6 +7,7 @@ import {
     placedFindings,
 } from './Diagnostics.ts'
 import { projectShadow } from './projectShadow.ts'
+import { abideIn } from './reactiveTypes.ts'
 import type { ParsedSource } from './readSources.ts'
 import type { ShadowHost } from './ShadowHost.ts'
 import { ShadowMap } from './ShadowMap.ts'
@@ -31,6 +32,7 @@ export async function appLints(
     const unkeyed: Diagnosis[] = []
     await host.ask(async (project) => {
         const checker = project.checker
+        const abide = await abideIn(project)
         // As the checker names them, for `Abide`'s reason (`reactiveTypes.ts`).
         const ambientPaths = new Map<string, string>()
         const declared = await Promise.all(
@@ -71,7 +73,7 @@ export async function appLints(
                     ambientPaths.size === 0
                         ? []
                         : ambientReadsIn(checker, sourceFile, ambientPaths),
-                    argsDefaultsIn(checker, sourceFile),
+                    argsDefaultsIn(checker, sourceFile, abide.jsonSchema),
                 ])
                 if (reads.length === 0 && defaults.length === 0) return
                 const shadow = authored.get(host.keyOf(path))

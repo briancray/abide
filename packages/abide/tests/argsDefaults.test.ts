@@ -135,3 +135,33 @@ test('a build warns on an args default the parameter does not write, and compile
         'shared/lib/queries.ts',
     ])
 }, 60_000)
+
+// 11.30 READS ABIDE'S `jsonSchema` BY SYMBOL, as the build's `declaredDocument` does: an aliased import
+// is still a document to read, and an app's own function of that name is not one. THE REVERT: match
+// the callee's spelling `jsonSchema` in `schemaDefaults`; `aliased` goes unwarned and `own` is warned
+// on (['own.ts'] against ['aliased.ts']).
+test("args read as abide's jsonSchema by symbol, not by name — 11.30", async () => {
+    const named = appFixture({
+        'package.json': JSON.stringify({ name: 'args-named', type: 'module' }),
+        'index.abide': '<p>page</p>',
+        'shared/lib/aliased.ts': `import { jsonSchema as js, memo } from '@abide/abide'
+
+export const aliased = memo(({ n }: { n?: number }) => n, {
+    args: js({ type: 'object', properties: { n: { type: 'integer', default: 3 } } }),
+})
+`,
+        'shared/lib/own.ts': `import { memo } from '@abide/abide'
+
+const jsonSchema = (document: object) => (value: unknown) =>
+    (document ? value : value) as { n?: number }
+
+export const own = memo(({ n }: { n?: number }) => n, {
+    args: jsonSchema({ type: 'object', properties: { n: { type: 'integer', default: 3 } } }),
+})
+`,
+    })
+    const warned = (await checkApp(named))
+        .filter((diagnosis) => diagnosis.message.includes('11.30'))
+        .map(({ path }) => path.slice(path.lastIndexOf('/') + 1))
+    expect(warned).toEqual(['aliased.ts'])
+}, 60_000)

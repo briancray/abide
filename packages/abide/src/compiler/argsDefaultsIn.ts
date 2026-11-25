@@ -12,11 +12,13 @@ import {
     isIdentifier,
     isObjectBindingPattern,
     isObjectLiteralExpression,
+    isPropertyAccessExpression,
     isPropertyAssignment,
     isStringLiteral,
 } from 'typescript/unstable/ast/is'
 import { type Checker, SymbolFlags, type Type } from 'typescript/unstable/async'
 
+import { namesAbide } from './aliasedSymbol.ts'
 import type { Finding } from './Diagnostics.ts'
 import { optionNamed, reactiveOptions } from './reactiveOptions.ts'
 
@@ -72,6 +74,7 @@ export function defaultedMembers(node: Node | undefined): string[] {
 export async function argsDefaultsIn(
     checker: Checker,
     sourceFile: Node,
+    jsonSchemaPath: string | undefined,
 ): Promise<Finding[]> {
     const gated: { args: Node; body: Node }[] = []
     const visit = (node: Node): void => {
@@ -90,7 +93,11 @@ export async function argsDefaultsIn(
     const found: Finding[] = []
     for (const { args, body } of gated) {
         const written = defaultedMembers(body)
-        for (const member of await schemaDefaults(checker, args))
+        for (const member of await schemaDefaults(
+            checker,
+            args,
+            jsonSchemaPath,
+        ))
             if (!written.includes(member))
                 found.push({
                     at: args.getStart(),
@@ -110,11 +117,18 @@ function argsOf(call: CallExpression): Node | undefined {
 async function schemaDefaults(
     checker: Checker,
     schema: Node,
+    jsonSchemaPath: string | undefined,
 ): Promise<string[]> {
     const document =
         isCallExpression(schema) &&
-        isIdentifier(schema.expression) &&
-        schema.expression.text === 'jsonSchema'
+        (await namesAbide(
+            checker,
+            isPropertyAccessExpression(schema.expression)
+                ? schema.expression.name
+                : schema.expression,
+            'jsonSchema',
+            jsonSchemaPath,
+        ))
             ? schema.arguments[0]
             : undefined
     if (document !== undefined && isObjectLiteralExpression(document))
