@@ -191,3 +191,31 @@ test('a group switches to the menu whose trigger the pointer enters, and the arr
     flushSync()
     expect(alone.isOpen()).toBe(false)
 })
+
+// 50.82 — TAB LEAVES EVERY MENU, a submenu standing outside the menu it opened from included, where
+// no keydown bubbles from one to the other. THE REVERT: hide the menu Tab is pressed in alone, and the
+// outer menu stands open as focus leaves.
+test('Tab in a submenu standing apart closes it and the menu it opened from — 50.82', async () => {
+    const outer = standing()
+    const inner = menu({ side: 'right' })
+    const opener = outer.list.firstElementChild as HTMLElement
+    const list = document.createElement('div')
+    list.innerHTML = '<button role="menuitem">lead</button>'
+    document.body.append(list)
+    spread(opener, inner.trigger)
+    spread(list, inner.menu)
+    outer.parts.open.set(true)
+    flushSync()
+    opener.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }),
+    )
+    flushSync()
+    expect(list.matches(':popover-open')).toBe(true)
+    ;(list.firstElementChild as HTMLElement).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }),
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    flushSync()
+    expect(list.matches(':popover-open')).toBe(false)
+    expect(outer.isOpen()).toBe(false)
+})

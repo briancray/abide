@@ -34,7 +34,7 @@ test('a menubar opens a menu on ArrowDown and switches menus on ArrowRight — 5
     await page.goto(underMount('headless/toolbar'), {
         waitUntil: 'networkidle',
     })
-    const bar = page.getByRole('menubar', { name: 'Deal' })
+    const bar = page.locator('[role=menubar][aria-orientation=horizontal]')
     await bar.getByRole('menuitem', { name: 'Deal' }).focus()
     await page.keyboard.press('ArrowDown')
     await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeFocused()
@@ -42,4 +42,49 @@ test('a menubar opens a menu on ArrowDown and switches menus on ArrowRight — 5
     await expect(page.getByRole('menuitem', { name: 'Board' })).toBeFocused()
     await page.keyboard.press('Escape')
     await expect(bar.getByRole('menuitem', { name: 'View' })).toBeFocused()
+})
+
+// 50.77, 50.79 — A SUBMENU IN A REAL BROWSER: ArrowRight opens it beside its item, ArrowLeft closes it
+// back to the item, and a pick in it closes both menus and hands focus to the first button.
+test('a submenu opens on ArrowRight, and a pick in it closes every menu — 50.79', async ({
+    page,
+}) => {
+    await page.goto(underMount('headless/menu'), { waitUntil: 'networkidle' })
+    const actions = page.getByRole('button', { name: 'Actions' })
+    await actions.focus()
+    await page.keyboard.press('ArrowDown')
+    const opener = page.getByRole('menuitem', { name: 'Move to' })
+    await expect(opener).toBeFocused()
+    await page.keyboard.press('ArrowRight')
+    await expect(page.getByRole('menuitem', { name: 'Proposal' })).toBeFocused()
+    await page.keyboard.press('ArrowLeft')
+    await expect(opener).toBeFocused()
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowDown')
+    await page.keyboard.press('Enter')
+    await expect(actions).toBeFocused()
+    await expect(page.locator('[role=menu]:popover-open')).toHaveCount(0)
+})
+
+// 50.77 — DOWN A VERTICAL MENUBAR, ArrowDown walks the bar and ArrowRight opens a menu beside it.
+test('a vertical menubar walks on ArrowDown and opens to the right — 50.77', async ({
+    page,
+}) => {
+    await page.goto(underMount('headless/toolbar'), {
+        waitUntil: 'networkidle',
+    })
+    const bar = page.locator('[role=menubar][aria-orientation=vertical]')
+    await bar.getByRole('menuitem', { name: 'Deal' }).focus()
+    await page.keyboard.press('ArrowDown')
+    const view = bar.getByRole('menuitem', { name: 'View' })
+    await expect(view).toBeFocused()
+    await page.keyboard.press('ArrowRight')
+    await expect(
+        page.getByRole('menuitem', { name: 'Board' }).last(),
+    ).toBeFocused()
+    const menuBox = await page.locator('[role=menu]:popover-open').boundingBox()
+    const viewBox = await view.boundingBox()
+    expect(
+        (menuBox?.x ?? 0) >= (viewBox?.x ?? 0) + (viewBox?.width ?? 0) - 1,
+    ).toBe(true)
 })

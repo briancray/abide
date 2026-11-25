@@ -1,0 +1,31 @@
+<script>
+import { menu, reactive } from '@abide/abide'
+
+import { STAGES } from '#src/pipeline/lib/STAGES.ts'
+
+let stage = reactive('proposal')
+let archived = reactive(false)
+const actions = menu()
+// Its trigger is an item of `actions`, so it is a submenu of it.
+const move = menu({ side: 'right' })
+</script>
+
+<button type="button" {...actions.trigger}>Actions</button>
+<div
+    {...actions.menu}
+    class="m-0 flex-col gap-hair rounded-lg border border-rule bg-raised
+    p-tight open:flex"
+>
+    <button role="menuitem" {...move.trigger}>Move to</button>
+    <div
+        {...move.menu}
+        class="m-0 flex-col gap-hair rounded-lg border border-rule bg-raised
+        p-tight open:flex"
+    >
+        {#for next of STAGES}
+            <button role="menuitem" onclick={() => (stage = next)}>{next}</button>
+        {/for}
+    </div>
+    <button role="menuitem" onclick={() => (archived = true)}>Archive</button>
+</div>
+<p class="status">{stage}{archived ? ', archived' : ''}</p>

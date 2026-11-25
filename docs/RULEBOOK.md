@@ -5374,10 +5374,12 @@ opened it, and nothing in its menu where a pointer's rest or focus opened it (50
 50.30 In an open `menu`, ArrowDown and ArrowUp MUST move focus to the next and the previous menu
 item, wrapping, and Home and End to the first and the last.
 
-50.31 Escape in an open `menu`, and a click on one of its items carrying `role="menuitem"`, MUST
-write `false` to its `open` and return focus to its trigger.
+50.31 Escape in an open `menu`, and a click on one of its items carrying `role="menuitem"` and no
+`aria-haspopup`, MUST write `false` to its `open` and return focus to its trigger, save as 50.79 has a
+submenu's click do.
 
-50.32 ArrowDown and ArrowUp on a `menu`'s trigger MUST open it.
+50.32 ArrowDown and ArrowUp on a `menu`'s trigger MUST open it, save as 50.77 has a menu opening to a
+side.
 
 50.33 `prompts.prompt` MUST settle with the text in its input where its prompt closed by the
 confirming button, and `undefined` where it closed any other way.
@@ -5462,7 +5464,8 @@ pointer has been off its trigger or its anchor and the popover that many millise
 `popover` opened any other way MUST NOT close for a leave.
 
 50.57 While a `menu` of a `group` is open, a pointer entering the trigger of another `menu` of that
-`group`, or ArrowLeft or ArrowRight in its menu, MUST close it and open the other — for the keys, the
+`group`, or ArrowLeft or ArrowRight in its menu or a submenu of it that 50.77 does not take, MUST close
+it and open the other — for the keys, the
 one before or after it in the document order of their triggers, going round.
 
 50.58 A `menu` a `group` switches to MUST carry `data-from` naming the side the one it switched from
@@ -5524,6 +5527,22 @@ matches `:focus-visible`, and MUST NOT open for focus that does not.
 
 50.76 A `popover` focus opened MUST close once focus moves to an element outside its trigger or its
 anchor and the popover.
+
+50.77 A `menu` whose `side` is `left` or `right` MUST open from its trigger on the arrow key pointing
+to that side, in place of ArrowDown and ArrowUp, and MUST close, returning focus to its trigger, on
+the arrow key pointing back.
+
+50.78 A `menu` whose trigger is a menu item of another `menu` MUST be a submenu of that menu, and its
+menu items MUST NOT be that menu's, wherever its menu stands.
+
+50.79 A click on a menu item of a submenu carrying `role="menuitem"` and no `aria-haspopup` MUST close
+it and every `menu` it is a submenu of, returning focus to the trigger of the outermost.
+
+50.80 A `menu` closing MUST close every submenu of it.
+
+50.81 A `menu` MUST leave a key on its menu that a handler before it prevented the default of.
+
+50.82 Tab in an open `menu` MUST close it and every `menu` it is a submenu of.
 
 # 51. Lists and tables
 

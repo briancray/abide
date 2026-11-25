@@ -7,6 +7,8 @@ import DealMenus from './lib/DealMenus.abide'
 import dealMenus from './lib/DealMenus.abide' with { type: 'text' }
 import NoteFormatting from './lib/NoteFormatting.abide'
 import noteFormatting from './lib/NoteFormatting.abide' with { type: 'text' }
+import SideMenus from './lib/SideMenus.abide'
+import sideMenus from './lib/SideMenus.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -44,6 +46,18 @@ import noteFormatting from './lib/NoteFormatting.abide' with { type: 'text' }
                 "test('an open menu switches to the next on ArrowRight, and Escape returns to the bar'",
             ],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealSideMenus.test.ts',
+            from: [
+                "test('ArrowDown walks a vertical menubar, and ArrowRight opens a menu'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealSideMenus.test.ts',
+            from: [
+                "test('ArrowLeft closes a menu opening to the right, back to the bar'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Put a row of controls behind one tab stop">
@@ -62,5 +76,12 @@ import noteFormatting from './lib/NoteFormatting.abide' with { type: 'text' }
             is open, ArrowLeft and ArrowRight switch to the menu beside it. Escape hands focus
             back to the bar.</p>
         <Example code={dealMenus}><DealMenus /></Example>
+    </Section>
+
+    <Section level={3} title="Run a menubar down the side">
+        <p>Given <code>orientation: 'vertical'</code>, ArrowDown and ArrowUp walk the bar. Give
+            its menus <code>side: 'right'</code>, and each opens to the right of its item on
+            ArrowRight and closes back to it on ArrowLeft.</p>
+        <Example code={sideMenus}><SideMenus /></Example>
     </Section>
 </Doc>

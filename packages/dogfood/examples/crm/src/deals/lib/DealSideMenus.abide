@@ -1,0 +1,34 @@
+<script>
+import { menu, reactive, toolbar } from '@abide/abide'
+
+import { STAGES } from '#src/pipeline/lib/STAGES.ts'
+
+let stage = reactive('proposal')
+const bar = toolbar({ role: 'menubar', orientation: 'vertical', label: 'Deal' })
+// Down the side of the page, each menu opens to its right.
+const stages = menu({ group: bar.id, side: 'right' })
+const owners = menu({ group: bar.id, side: 'right' })
+</script>
+
+<nav {...bar.toolbar} class="fields stacked">
+    <button type="button" {...stages.trigger} {...bar.item}>Stage</button>
+    <button type="button" {...owners.trigger} {...bar.item}>Owner</button>
+</nav>
+<div
+    {...stages.menu}
+    class="m-0 flex-col gap-hair rounded-lg border border-rule bg-raised
+    p-tight open:flex"
+>
+    {#for next of STAGES}
+        <button role="menuitem" onclick={() => (stage = next)}>{next}</button>
+    {/for}
+</div>
+<div
+    {...owners.menu}
+    class="m-0 flex-col gap-hair rounded-lg border border-rule bg-raised
+    p-tight open:flex"
+>
+    <button role="menuitem">Ada</button>
+    <button role="menuitem">Grace</button>
+</div>
+<p class="status">{stage}</p>

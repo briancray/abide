@@ -52,7 +52,7 @@ test('the arrows walk the bar, and ArrowDown opens a menu', async () => {
     trigger('Stage').focus()
     key(trigger('Stage'), 'ArrowRight')
     expect(document.activeElement).toBe(trigger('View'))
-    expect(open()).toEqual([])
+    expect(open().length).toBe(0)
     key(trigger('View'), 'ArrowDown')
     expect(trigger('View').getAttribute('aria-expanded')).toBe('true')
     expect(document.activeElement?.textContent).toBe('board')
@@ -72,7 +72,7 @@ test('an open menu switches to the next on ArrowRight, and Escape returns to the
     expect(trigger('View').getAttribute('aria-expanded')).toBe('true')
     expect(document.activeElement?.textContent).toBe('board')
     key(document.activeElement as HTMLElement, 'Escape')
-    expect(open()).toEqual([])
+    expect(open().length).toBe(0)
     expect(document.activeElement).toBe(trigger('View'))
     expect(triggers().map((each) => each.getAttribute('tabindex'))).toEqual([
         '-1',
