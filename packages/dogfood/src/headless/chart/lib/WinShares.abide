@@ -11,11 +11,13 @@ const plot = chart({
 })
 </script>
 
-<svg {...plot.svg} class="h-48 w-full">
-    {#for tick of plot.yTicks}
-        <text {...tick.text}>{tick.label}</text>
-    {/for}
-    {#for bar of plot.bars key bar.key}
-        <rect {...bar.rect} />
-    {/for}
-</svg>
+<div class="pl-12">
+    <svg {...plot.svg} class="h-48 w-full overflow-visible">
+        {#for tick of plot.yTicks}
+            <text {...tick.text} dx="-6">{tick.label}</text>
+        {/for}
+        {#for bar of plot.bars key bar.key}
+            <rect {...bar.rect} />
+        {/for}
+    </svg>
+</div>

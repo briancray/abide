@@ -36,16 +36,23 @@ function pointAt(clientX: number) {
     flushSync()
 }
 
-// 52.68 — THE Y LABELS STAND LEFT OF THE PLOT, and the first month's column starts right of where the
-// gridlines do. THE REVERT: start the plot at 0 — the gridlines run under the labels from 0.
-test('no column is drawn over a y label', async () => {
+// 52.68 — THE PLOT IS THE WHOLE CHART: the gridlines run from its left edge to its right, the y labels
+// end at that left edge, in the room the CRM keeps outside it, and every column stands inside it.
+// THE REVERT: keep a gutter for the labels inside the box again — the gridlines start at 43.
+test('the gridlines span the chart, and its y labels end where it begins', async () => {
     using _flow = await mount(DealFlow({}))
-    const start = Number(
-        chart().querySelector('[data-chart=grid]')?.getAttribute('x1'),
-    )
-    expect(start).toBeGreaterThan(0)
-    for (const bar of [...bars(0), ...bars(1)])
-        expect(bar.x).toBeGreaterThanOrEqual(start)
+    for (const grid of chart().querySelectorAll('[data-chart=grid]')) {
+        expect(grid.getAttribute('x1')).toBe('0')
+        expect(grid.getAttribute('x2')).toBe('600')
+    }
+    for (const label of chart().querySelectorAll('[data-axis=y]')) {
+        expect(label.getAttribute('x')).toBe('0')
+        expect(label.getAttribute('text-anchor')).toBe('end')
+    }
+    for (const bar of [...bars(0), ...bars(1)]) {
+        expect(bar.x).toBeGreaterThanOrEqual(0)
+        expect(bar.x + bar.width).toBeLessThanOrEqual(600)
+    }
 })
 
 // 52.37 — COLUMNS IN NO STACK STAND SIDE BY SIDE in their month's slot, each up from zero, and a
@@ -60,14 +67,14 @@ test('won and lost stand side by side in each month', async () => {
         const left = won[month] as (typeof won)[0]
         const right = lost[month] as (typeof lost)[0]
         expect(right.x).toBeCloseTo(left.x + left.width)
-        expect(left.y + left.height).toBe(216)
-        expect(right.y + right.height).toBe(216)
+        expect(left.y + left.height).toBe(240)
+        expect(right.y + right.height).toBe(240)
     }
     expect(texts('[data-axis=y]')[0]).toBe('0')
 })
 
 // 52.58 — STACKED, LOST STANDS ON WON. THE REVERT: draw each column from zero whatever its stack —
-// Lost's foot is at 216 where Won's top is due.
+// Lost's foot is at 240 where Won's top is due.
 test('stacked, lost stands on top of won in one column', async () => {
     using _flow = await mount(DealFlow({ stacked: true }))
     const won = bars(0)
@@ -92,7 +99,7 @@ test('as shares, every month fills the column and reads its share', async () => 
         '80%',
         '100%',
     ])
-    for (const top of bars(1)) expect(top.y).toBeCloseTo(16)
+    for (const top of bars(1)) expect(top.y).toBeCloseTo(0)
     pointAt(0)
     expect(texts('[data-chart=readout-value]')).toEqual([
         'Won: 4 (57.1%)',

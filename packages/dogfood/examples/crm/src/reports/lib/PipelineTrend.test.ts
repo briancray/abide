@@ -26,7 +26,7 @@ function pointAt(clientX: number) {
 
 // 52.52 — A STACKED AREA CLOSES ONTO THE AREA UNDER IT, and through August, where Qualified has no
 // value, at the height of what is under it. THE REVERT: close every area down to the plot's floor —
-// Qualified's floor is 216 throughout where Proposals' top is due.
+// Qualified's floor is 240 throughout where Proposals' top is due.
 test('each stage stacks on the one before it, through a month it has no value', async () => {
     using _trend = await mount(PipelineTrend({}))
     const proposals = points("[data-chart=area][data-series='0']")
@@ -35,7 +35,7 @@ test('each stage stacks on the one before it, through a month it has no value', 
     const qualifiedFloor = qualified.slice(6).reverse()
     expect(qualifiedFloor).toEqual(proposalsTop)
     expect(qualified[2]).toEqual(proposalsTop[2] as number[])
-    expect(proposals.slice(6).every(([, y]) => y === 216)).toBe(true)
+    expect(proposals.slice(6).every(([, y]) => y === 240)).toBe(true)
 })
 
 // 52.105 — THE STAGES CURVE, each through its own months and each floor along the curve of the stage
@@ -65,9 +65,8 @@ test('each stage curves through its months, on the curve of the one under it', a
 test('the target is drawn at its own values, on an axis fixed at $150K', async () => {
     using _trend = await mount(PipelineTrend({}))
     expect(texts('[data-axis=y]')).toEqual(['$0', '$50K', '$100K', '$150K'])
-    // $90K of $150K, up from the floor at 216 to the top at 16, right of the five characters of
-    // `$150K` at 7 apiece and the 8 between them and the plot (52.68).
-    expect(points('[data-chart=line]')[0]).toEqual([43, 96])
+    // $90K of $150K, up from the floor at 240 to the top at 0, at the plot's left edge (52.68).
+    expect(points('[data-chart=line]')[0]).toEqual([0, 96])
 })
 
 // 52.24 — A STAGE UNCHECKED IS NO LONGER DRAWN, and checked again it is drawn where the series list

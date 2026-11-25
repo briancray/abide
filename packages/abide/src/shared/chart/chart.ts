@@ -42,7 +42,7 @@ export type ChartOptions = {
     xFormat?: (x: number) => string
     /** Writes a value for the y ticks, and the readout of a series with no `format` of its own: `format.money`, say. `format.number` by default. */
     yFormat?: (y: number) => string
-    /** The most x positions labeled under the plot. 5 by default. */
+    /** The most x positions labeled along the bottom of the plot. 5 by default. */
     xTicks?: Live<number>
     /** About how many intervals the y gridlines divide the range into. 4 by default. */
     yTicks?: Live<number>
@@ -75,14 +75,6 @@ export type ChartOptions = {
     disabled?: (index: number) => boolean
 }
 
-/** The edges of the plot, inside the room the axis labels take. */
-export type ChartFrame = {
-    left: number
-    top: number
-    right: number
-    bottom: number
-}
-
 /** A y gridline and its label. */
 export type ChartYTick = {
     value: number
@@ -90,11 +82,11 @@ export type ChartYTick = {
     label: string
     /** The gridline across the plot: `<line {...tick.grid} />`. */
     grid: Record<string, unknown>
-    /** The label left of the plot: `<text {...tick.text}>{tick.label}</text>`. */
+    /** The label at the plot's left edge, ending there: `<text {...tick.text}>{tick.label}</text>`. */
     text: Record<string, unknown>
 }
 
-/** An x position labeled under the plot. */
+/** An x position labeled at the plot's bottom edge. */
 export type ChartXTick = {
     index: number
     x: number
@@ -177,11 +169,9 @@ export type ChartParts = {
     x(value: number): number
     /** The y of `value`. */
     y(value: number): number
-    /** The edges of the plot. */
-    get frame(): ChartFrame
     /** The y gridlines and their labels. */
     get yTicks(): ChartYTick[]
-    /** The x positions labeled under the plot. */
+    /** The x positions labeled at the plot's bottom edge. */
     get xTicks(): ChartXTick[]
     /** The line at zero, where `zero` is set (52.25). */
     get zero(): { y: number; line: Record<string, unknown> } | undefined
@@ -207,14 +197,6 @@ export type ChartParts = {
     readonly tip: Record<string, unknown>
 }
 
-// Room over the top gridline for its label, and under the plot for the x labels.
-const TOP = 16
-const BOTTOM = 24
-// The room left of the plot per character of the longest y label, and between that label and the plot:
-// a label is laid out before the chart can measure its text, so the room is the width of a character in
-// the small type a chart is set in, and a longer one runs into the plot rather than being cut off.
-const CHARACTER = 7
-const GUTTER = 8
 // The share of an x's slot its columns fill, the rest the gap between one x and the next.
 const BAND = 0.8
 
@@ -229,7 +211,7 @@ export function chart(options: ChartOptions): ChartParts {
     })
     const hovered = reactive(-1)
     // 52.116 — whether the root is bound to an `<svg>`, whose marks are placed by their attributes
-    // alone: the vars are a `style` per mark that no rule reads there, a third of a redraw.
+    // alone: the vars are a `style` per mark that no rule reads there, 45% of a redraw.
     const svgRoot = reactive(false)
     // The width the root was last measured at, read without following it.
     const measuredWidth = () => size.peek()?.width ?? 0
@@ -289,25 +271,15 @@ export function chart(options: ChartOptions): ChartParts {
             )
         const floor = yBounds?.[0] ?? gridValues[0] ?? low
         const ceiling = yBounds?.[1] ?? gridValues.at(-1) ?? high
-        const bottom = height - BOTTOM
-        // 52.59 — under `normalize` the axis is shares, whatever the values are written as.
-        const gridLabels: string[] = []
-        let longest = 0
-        for (const value of gridValues) {
-            const label = normalize ? percent(value) : yFormat(value)
-            gridLabels.push(label)
-            longest = Math.max(longest, label.length)
-        }
-        // 52.68 — the plot starts right of the y labels, so no mark is drawn over one.
-        const left = longest === 0 ? 0 : longest * CHARACTER + GUTTER
+        // 52.68 — the plot is the whole box: its labels stand outside it, in room the app keeps.
         // Columns are centered on their x, so the first and last stand a half slot in from the edges.
-        const slot = (width - left) / Math.max(1, length)
+        const slot = width / Math.max(1, length)
         const inset = columns ? slot / 2 : 0
         const toX = scale(
             bounds?.x ?? [positions[0] ?? 0, positions.at(-1) ?? 0],
-            [left + inset, width - inset],
+            [inset, width - inset],
         )
-        const toY = scale([floor, ceiling], [bottom, TOP])
+        const toY = scale([floor, ceiling], [height, 0])
         const xs: number[] = []
         for (const position of positions) xs.push(toX(position))
         // Where a column rises from and an area in no stack fills down to: zero, or the edge nearer it.
@@ -438,10 +410,11 @@ export function chart(options: ChartOptions): ChartParts {
             yTickList.push({
                 value,
                 y,
-                label: gridLabels[index] as string,
+                // 52.59 — under `normalize` the axis is shares, whatever the values are written as.
+                label: normalize ? percent(value) : yFormat(value),
                 grid: {
                     'data-chart': 'grid',
-                    x1: left,
+                    x1: 0,
                     x2: width,
                     y1: y,
                     y2: y,
@@ -454,6 +427,7 @@ export function chart(options: ChartOptions): ChartParts {
                     'data-axis': 'y',
                     x: 0,
                     y,
+                    'text-anchor': 'end',
                     'dominant-baseline': 'middle',
                     fill: 'currentColor',
                     style: vars
@@ -478,7 +452,7 @@ export function chart(options: ChartOptions): ChartParts {
                     'data-chart': 'tick',
                     'data-axis': 'x',
                     x,
-                    y: bottom + 6,
+                    y: height,
                     'text-anchor':
                         shown === 1 || columns
                             ? 'middle'
@@ -490,7 +464,7 @@ export function chart(options: ChartOptions): ChartParts {
                     'dominant-baseline': 'hanging',
                     fill: 'currentColor',
                     style: vars
-                        ? `--x: ${percentOf(x, width)}%; --y: ${percentOf(bottom + 6, height)}%`
+                        ? `--x: ${percentOf(x, width)}%; --y: 100%`
                         : undefined,
                 },
             })
@@ -506,7 +480,6 @@ export function chart(options: ChartOptions): ChartParts {
             points,
             yTicks: yTickList,
             xTicks: xTickList,
-            frame: { left, top: TOP, right: width, bottom },
             width,
             height,
             vars,
@@ -517,7 +490,7 @@ export function chart(options: ChartOptions): ChartParts {
                       y: zeroY,
                       line: {
                           'data-chart': 'zero',
-                          x1: left,
+                          x1: 0,
                           x2: width,
                           y1: zeroY,
                           y2: zeroY,
@@ -787,9 +760,6 @@ export function chart(options: ChartOptions): ChartParts {
         },
         x: (value) => plot().toX(value),
         y: (value) => plot().toY(value),
-        get frame() {
-            return plot().frame
-        },
         get yTicks() {
             return plot().yTicks
         },
@@ -830,7 +800,7 @@ export function chart(options: ChartOptions): ChartParts {
         get crosshair() {
             const read = readout()
             if (read === undefined) return undefined
-            const { frame, width, vars } = plot()
+            const { width, height, vars } = plot()
             return {
                 index: read.index,
                 x: read.x,
@@ -838,8 +808,8 @@ export function chart(options: ChartOptions): ChartParts {
                     'data-chart': 'crosshair',
                     x1: read.x,
                     x2: read.x,
-                    y1: frame.top,
-                    y2: frame.bottom,
+                    y1: 0,
+                    y2: height,
                     stroke: 'currentColor',
                     style: vars
                         ? `--x: ${percentOf(read.x, width)}%`

@@ -8,20 +8,22 @@ const plot = chart({
 })
 </script>
 
-<svg {...plot.svg} class="h-48 w-full">
-    <rect
-        x={plot.frame.left}
-        width={plot.frame.right - plot.frame.left}
-        y={plot.y(30_000)}
-        height={plot.y(20_000) - plot.y(30_000)}
-        fill="currentColor"
-        opacity="0.1"
-     />
-    {#for tick of plot.yTicks}
-        <line {...tick.grid} />
-        <text {...tick.text}>{tick.label}</text>
-    {/for}
-    {#for line of plot.lines key line.series}
-        <path {...line.path} />
-    {/for}
-</svg>
+<div class="pl-12">
+    <svg {...plot.svg} class="h-48 w-full overflow-visible">
+        <rect
+            x="0"
+            width="100%"
+            y={plot.y(30_000)}
+            height={plot.y(20_000) - plot.y(30_000)}
+            fill="currentColor"
+            opacity="0.1"
+         />
+        {#for tick of plot.yTicks}
+            <line {...tick.grid} />
+            <text {...tick.text} dx="-6">{tick.label}</text>
+        {/for}
+        {#for line of plot.lines key line.series}
+            <path {...line.path} />
+        {/for}
+    </svg>
+</div>

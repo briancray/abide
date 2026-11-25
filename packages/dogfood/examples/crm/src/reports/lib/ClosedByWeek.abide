@@ -17,25 +17,27 @@ const plot = chart({
 })
 </script>
 
-<div {...plot.svg} class="relative block h-40 w-full text-chrome text-muted">
-    {#for tick of plot.yTicks}
-        <span {...tick.text} class="absolute top-(--y) left-0 -translate-y-1/2">
-            {tick.label}
-        </span>
-    {/for}
-    {#for bar of plot.bars key bar.key}
-        <span
-            {...bar.rect}
-            class="absolute top-(--y) left-(--x) h-(--height) w-(--width)
+<div class="pl-8">
+    <div {...plot.svg} class="relative block h-40 w-full text-chrome text-muted">
+        {#for tick of plot.yTicks}
+            <span {...tick.text} class="absolute top-(--y) right-full -translate-y-1/2 pr-2">
+                {tick.label}
+            </span>
+        {/for}
+        {#for bar of plot.bars key bar.key}
+            <span
+                {...bar.rect}
+                class="absolute top-(--y) left-(--x) h-(--height) w-(--width)
                 rounded-t-sm bg-signal"
-        ></span>
-    {/for}
-    {#if plot.readout}
-        <span
-            {...plot.crosshair?.line}
-            class="absolute inset-y-0 left-(--x) w-px bg-current"
-        ></span>
-    {/if}
+            ></span>
+        {/for}
+        {#if plot.readout}
+            <span
+                {...plot.crosshair?.line}
+                class="absolute inset-y-0 left-(--x) w-px bg-current"
+            ></span>
+        {/if}
+    </div>
 </div>
 {#if plot.readout}
     <span

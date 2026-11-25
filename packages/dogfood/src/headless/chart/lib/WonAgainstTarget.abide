@@ -16,21 +16,23 @@ const plot = chart({
 })
 </script>
 
-<svg {...plot.svg} class="h-48 w-full overflow-visible">
-    {#for tick of plot.yTicks}
-        <line {...tick.grid} />
-        <text {...tick.text}>{tick.label}</text>
-    {/for}
-    {#for tick of plot.xTicks}
-        <text {...tick.text}>{tick.label}</text>
-    {/for}
-    {#for line of plot.lines key line.series}
-        <path {...line.path} />
-    {/for}
-    {#if plot.readout}
-        <line {...plot.crosshair?.line} />
-    {/if}
-</svg>
+<div class="pb-6 pl-12">
+    <svg {...plot.svg} class="h-48 w-full overflow-visible">
+        {#for tick of plot.yTicks}
+            <line {...tick.grid} />
+            <text {...tick.text} dx="-6">{tick.label}</text>
+        {/for}
+        {#for tick of plot.xTicks}
+            <text {...tick.text} dy="6">{tick.label}</text>
+        {/for}
+        {#for line of plot.lines key line.series}
+            <path {...line.path} />
+        {/for}
+        {#if plot.readout}
+            <line {...plot.crosshair?.line} />
+        {/if}
+    </svg>
+</div>
 {#if plot.readout}
     <span {...plot.tip} class="m-0 grid rounded-md border px-3 py-2">
         <span {...plot.readout?.heading}>{plot.readout?.label}</span>

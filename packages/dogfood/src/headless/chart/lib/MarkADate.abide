@@ -19,8 +19,8 @@ const plot = chart({
     <line
         x1={plot.x(LAUNCH)}
         x2={plot.x(LAUNCH)}
-        y1={plot.frame.top}
-        y2={plot.frame.bottom}
+        y1="0"
+        y2="100%"
         stroke="currentColor"
         stroke-dasharray="4 4"
      />

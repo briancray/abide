@@ -84,7 +84,7 @@ test('the crosshair reads each line at the nearest month', async () => {
 })
 
 // 52.34 — held by `chart.ticks`, which widens a range of no width. THE REVERT: have `ticks` answer
-// `[low]` for one — the line runs across the middle of the plot, at 116 where 216 is due.
+// `[low]` for one — the line runs across the middle of the plot, at 120 where 240 is due.
 test('a series of zeroes is drawn along the bottom of a chart that takes zero in', async () => {
     using _chart = await mount(
         WonRevenue({ won: [0, 0, 0], target: [0, 0, 0] }),
@@ -95,7 +95,7 @@ test('a series of zeroes is drawn along the bottom of a chart that takes zero in
             (match) => match[1],
         ),
     )
-    expect([...heights]).toEqual(['216'])
+    expect([...heights]).toEqual(['240'])
 })
 
 /** A key pressed on the chart, bubbling to the document as a browser's does. */

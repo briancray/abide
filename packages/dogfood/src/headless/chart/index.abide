@@ -80,6 +80,10 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
             ],
         },
         {
+            path: 'packages/abide/tests/chartParts.test.ts',
+            from: ["test('the plot spans the box, and no label moves a mark'"],
+        },
+        {
             path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
             from: [
                 "test('every month won is marked by a dot of its own, on the line'",
@@ -151,7 +155,9 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
         },
         {
             path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
-            from: ["test('no column is drawn over a y label'"],
+            from: [
+                "test('the gridlines span the chart, and its y labels end where it begins'",
+            ],
         },
         {
             path: 'packages/dogfood/examples/crm/src/reports/lib/DealFlow.test.ts',
@@ -224,7 +230,9 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
 
     <Section level={3} title="Fill the box a layout gives the chart">
         <p>Size the <code>svg</code> with classes. It measures itself and redraws at the new size
-            whenever its box changes, so its labels are never stretched.</p>
+            whenever its box changes, so its labels are never stretched. The box is the plot, edge
+            to edge: the labels stand outside it, so keep room for them on the element around it
+            and let the <code>svg</code> show what overflows.</p>
         <Example code={fillTheBox}><FillTheBox /></Example>
     </Section>
 
@@ -249,8 +257,9 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
     </Section>
 
     <Section level={3} title="Shade a target band behind the line">
-        <p><code>y</code> maps a value onto the plot and <code>frame</code> answers its edges, so a
-            drawing lines up with the marks the parts draw.</p>
+        <p><code>y</code> maps a value onto the plot, and the plot is the whole box, so a drawing
+            from <code>0</code> to <code>100%</code> across it lines up with the marks the parts
+            draw.</p>
         <Example code={targetBand}><TargetBand /></Example>
     </Section>
 

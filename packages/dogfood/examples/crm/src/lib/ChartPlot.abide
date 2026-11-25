@@ -1,6 +1,7 @@
 <script>
 // The CRM's chart markup over `chart`'s parts: gridlines and their labels, the months, every series'
-// mark, the crosshair with its points, and the readout opened against it. `class` styles the `<svg>`.
+// mark, the crosshair with its points, and the readout opened against it. `class` styles the `<svg>`,
+// which is the plot: its labels stand outside it, in the room the `div` around it keeps.
 import { type Attributes, type ChartParts, props } from '@abide/abide'
 
 const { plot, ...rest } = props<
@@ -8,37 +9,39 @@ const { plot, ...rest } = props<
 >()
 </script>
 
-<svg {...rest} {...plot.svg}>
-    {#for tick of plot.yTicks}
-        <line {...tick.grid} />
-        <text {...tick.text}>{tick.label}</text>
-    {/for}
-    {#if plot.zero}
-        <line {...plot.zero?.line} />
-    {/if}
-    {#for tick of plot.xTicks}
-        <text {...tick.text}>{tick.label}</text>
-    {/for}
-    {#for mark of plot.marks key mark.series}
-        {#if mark.kind === 'column'}
-            <g {...mark.columns}>
-                {#for bar of mark.bars key bar.index}
-                    <rect {...bar.rect} />
-                {/for}
-            </g>
-        {:else}
-            <path {...mark.path} />
+<div class="pb-6 pl-12">
+    <svg {...rest} {...plot.svg}>
+        {#for tick of plot.yTicks}
+            <line {...tick.grid} />
+            <text {...tick.text} dx="-6">{tick.label}</text>
+        {/for}
+        {#if plot.zero}
+            <line {...plot.zero?.line} />
         {/if}
-    {/for}
-    {#if plot.readout}
-        <line {...plot.crosshair?.line} />
-        {#for point of plot.readout?.values ?? []}
-            {#if point.circle}
-                <circle {...point.circle} />
+        {#for tick of plot.xTicks}
+            <text {...tick.text} dy="6">{tick.label}</text>
+        {/for}
+        {#for mark of plot.marks key mark.series}
+            {#if mark.kind === 'column'}
+                <g {...mark.columns}>
+                    {#for bar of mark.bars key bar.index}
+                        <rect {...bar.rect} />
+                    {/for}
+                </g>
+            {:else}
+                <path {...mark.path} />
             {/if}
         {/for}
-    {/if}
-</svg>
+        {#if plot.readout}
+            <line {...plot.crosshair?.line} />
+            {#for point of plot.readout?.values ?? []}
+                {#if point.circle}
+                    <circle {...point.circle} />
+                {/if}
+            {/for}
+        {/if}
+    </svg>
+</div>
 {#if plot.readout}
     <span
         {...plot.tip}

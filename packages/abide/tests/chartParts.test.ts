@@ -169,6 +169,33 @@ test("an svg root's marks carry no vars, and a div root's do", () => {
     expect(div.styles.every((style) => String(style).includes('--'))).toBe(true)
 })
 
+// 52.68 — THE PLOT IS THE WHOLE BOX, whatever its labels say: a point stands at the same share of the
+// box under a label of forty characters as under one of one, the gridlines run edge to edge, and the
+// extremes of the range stand on the box's top and bottom.
+// THE REVERT: keep room inside the box for the longest y label — the first point moves right from 0.
+test('the plot spans the box, and no label moves a mark', () => {
+    const drawn = (yFormat: (value: number) => string) =>
+        chart({
+            label: 'Won',
+            series: () => [{ label: 'Won', values: [10, 20, 30] }],
+            yFormat,
+        })
+    const short = drawn(() => '1')
+    const long = drawn((value) => `${value}`.padStart(40, '$'))
+    expect(long.points.map((point) => [point.x, point.y])).toEqual(
+        short.points.map((point) => [point.x, point.y]),
+    )
+    expect(long.points[0]?.x).toBe(0)
+    expect(long.points.at(-1)?.x).toBe(600)
+    for (const tick of long.yTicks) {
+        expect([tick.grid.x1, tick.grid.x2]).toEqual([0, 600])
+        expect(tick.text.x).toBe(0)
+    }
+    expect(long.y(10)).toBe(240)
+    expect(long.y(30)).toBe(0)
+    expect(long.xTicks[0]?.text.y).toBe(240)
+})
+
 // 52.119 — `pad` KEEPS THE VALUES OFF THE EDGES: the range widens by a share of its span before the
 // ticks round it, before zero is taken in, so a column still stands on zero, and a flat range is not
 // widened. THE REVERT: drop `padded` from `chart` and `sparkline` — the ticks end at 10 and 20, on the

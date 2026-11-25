@@ -6250,8 +6250,10 @@ the slices' values, clockwise from the top in the order given, its index as `dat
 52.67 `pie` MUST open a hint for a slice as `tooltip` does, reading its label, its value and its
 share, placed against the box of that slice's own arc rather than the whole ring's.
 
-52.68 `chart` MUST draw its y ticks as `data-chart="tick"` labels left of its plot, and no mark over
-one.
+52.68 `chart` MUST draw its plot over the whole box its root part is drawn at — its x positions and
+its y range spanning it, and its gridlines, its zero line and its crosshair across it — and MUST hand
+back its y ticks as `data-chart="tick"` labels ending at the plot's left edge and its x ticks as
+labels at its bottom edge, each at its value, keeping no room inside the box for either.
 
 52.69 `chart` MUST take focus, and while it has it, ArrowRight and ArrowLeft MUST move its crosshair
 one x position, from none to the first and the last, stopping at either end, and Home and End to the

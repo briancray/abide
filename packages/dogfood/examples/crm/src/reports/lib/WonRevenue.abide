@@ -28,35 +28,37 @@ const plot = chart({
 })
 </script>
 
-<svg
-    {...plot.svg}
-    class="block h-60 w-full overflow-visible text-chrome text-muted
-        [&_[data-chart=line]]:stroke-2 [&_[data-series='0']]:text-signal
-        [&_[data-series='0']]:stroke-signal
-        [&_[data-chart=line][data-series='1']]:[stroke-dasharray:4_4]"
->
-    {#for tick of plot.yTicks}
-        <line {...tick.grid} />
-        <text {...tick.text}>{tick.label}</text>
-    {/for}
-    {#if plot.zero}
-        <line {...plot.zero?.line} />
-    {/if}
-    {#for tick of plot.xTicks}
-        <text {...tick.text}>{tick.label}</text>
-    {/for}
-    {#for line of plot.lines key line.series}
-        <path {...line.path} />
-    {/for}
-    {#for point of plot.points key point.key}
-        {#if point.series === 0}
-            <circle {...point.circle} r="3" />
+<div class="pb-6 pl-12">
+    <svg
+        {...plot.svg}
+        class="block h-60 w-full overflow-visible text-chrome text-muted
+            [&_[data-chart=line]]:stroke-2 [&_[data-series='0']]:text-signal
+            [&_[data-series='0']]:stroke-signal
+            [&_[data-chart=line][data-series='1']]:[stroke-dasharray:4_4]"
+    >
+        {#for tick of plot.yTicks}
+            <line {...tick.grid} />
+            <text {...tick.text} dx="-6">{tick.label}</text>
+        {/for}
+        {#if plot.zero}
+            <line {...plot.zero?.line} />
         {/if}
-    {/for}
-    {#if plot.readout}
-        <line {...plot.crosshair?.line} />
-    {/if}
-</svg>
+        {#for tick of plot.xTicks}
+            <text {...tick.text} dy="6">{tick.label}</text>
+        {/for}
+        {#for line of plot.lines key line.series}
+            <path {...line.path} />
+        {/for}
+        {#for point of plot.points key point.key}
+            {#if point.series === 0}
+                <circle {...point.circle} r="3" />
+            {/if}
+        {/for}
+        {#if plot.readout}
+            <line {...plot.crosshair?.line} />
+        {/if}
+    </svg>
+</div>
 {#if plot.readout}
     <span
         {...plot.tip}
