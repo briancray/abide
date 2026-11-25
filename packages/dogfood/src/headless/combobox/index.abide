@@ -5,10 +5,14 @@ import Section from '#src/lib/Section.abide'
 
 import ActiveOption from './lib/ActiveOption.abide'
 import activeOption from './lib/ActiveOption.abide' with { type: 'text' }
+import CapTags from './lib/CapTags.abide'
+import capTags from './lib/CapTags.abide' with { type: 'text' }
 import ListOverClip from './lib/ListOverClip.abide'
 import listOverClip from './lib/ListOverClip.abide' with { type: 'text' }
 import MarkTyped from './lib/MarkTyped.abide'
 import markTyped from './lib/MarkTyped.abide' with { type: 'text' }
+import NewTag from './lib/NewTag.abide'
+import newTag from './lib/NewTag.abide' with { type: 'text' }
 import NothingMatches from './lib/NothingMatches.abide'
 import nothingMatches from './lib/NothingMatches.abide' with { type: 'text' }
 import OwnChips from './lib/OwnChips.abide'
@@ -48,6 +52,18 @@ import searchCompanies from './lib/SearchCompanies.abide' with { type: 'text' }
             path: 'packages/dogfood/examples/crm/src/contacts/lib/TeamPicker.test.ts',
             from: [
                 "test('Backspace in an empty input takes out the last contact, and a chip takes out its own'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/profile/lib/TagPicker.test.ts',
+            from: [
+                "test('a tag nobody has written yet is listed last, and Enter adds it'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/profile/lib/TagPicker.test.ts',
+            from: [
+                "test('a fourth tag the gate refuses leaves the tags, the field and the list as they stood'",
             ],
         },
         {
@@ -115,6 +131,20 @@ import searchCompanies from './lib/SearchCompanies.abide' with { type: 'text' }
             <code>value</code> is then every item picked, and <code>chip(item)</code> is a chip and the
             button taking it out, as Backspace in the empty field takes the last.</p>
         <Example code={ownChips}><OwnChips /></Example>
+    </Section>
+
+    <Section level={3} title="Add a tag nobody has written yet">
+        <p><code>create</code> makes an item of the typed text where nothing listed or picked
+            carries it as its label, and lists it last, so Enter or a click picks it like any other.
+            <code>creating</code> is that item, for an option to say it is new.</p>
+        <Example code={newTag}><NewTag /></Example>
+    </Section>
+
+    <Section level={3} title="Hold the tags to two with a schema">
+        <p>Bind <code>value</code> to a <code>reactive</code> with a <code>schema</code>, and a pick
+            the schema refuses changes nothing: the chips, the typed text and the open list stay as
+            they were.</p>
+        <Example code={capTags}><CapTags /></Example>
     </Section>
 
     <Section level={3} title="Mark what was typed in each company">

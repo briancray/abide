@@ -6120,6 +6120,15 @@ default, or where the item is a field the key types into.
 51.189 A `toolbar`'s `item` part MUST carry `role="menuitem"` given `role: 'menubar'`, and no role
 otherwise.
 
+51.190 `combobox` given `create` MUST list last, while its list is open, the item `create` answers
+for its input's text with the whitespace at either end taken off, where that leaves any text and no
+item it lists or holds carries that text as its `label`, ignoring case.
+
+51.191 `combobox`'s `creating` MUST be the item 51.190 lists, and `undefined` where it lists none.
+
+51.192 A `combobox` whose write to `value` is refused (4.18) MUST leave its input's text and whether
+its list is open as they stood.
+
 # 52. Formatting, markdown and charts
 
 52.1 Each formatter of `format` MUST write `—` for a value it cannot format.
