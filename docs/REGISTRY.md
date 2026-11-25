@@ -233,7 +233,8 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `navigate` | `{ (by: number): Promise<void>; (url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }): Promise<void> }` | Navigates to an address, or steps through the history. | 30.7, 30.38, 30.39, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22, 30.23, 30.24, 30.25, 30.27, 30.29, 30.30, 30.31, 30.32, 45.12, 45.24 |
+| `navigate` | `(url?: URL \| string, options?: { replace?: boolean, keepScroll?: boolean }) => Promise<void>` | Navigates to an address. | 30.7, 30.9, 30.10, 30.11, 30.12, 30.13, 30.14, 30.15, 30.16, 30.17, 30.18, 30.20, 30.21, 30.22, 30.23, 30.24, 30.25, 30.27, 30.29, 30.30, 30.31, 30.32, 45.12, 45.24 |
+| `navigate` | `(by: number) => Promise<void>` | The stepping form, through the history by a number of entries. | 30.38, 30.39 |
 
 # Reactive primitives
 
@@ -1515,7 +1516,8 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `assistantMessage` | `{ (role: 'assistant', events: readonly AssistantEvent[]): AssistantMessage[]; (role: 'user' \| 'assistant', parts: readonly (string \| Blob \| URL \| AssistantContent)[]): Promise<AssistantMessage & { content: AssistantContent[] }> }` | A message as the Messages API holds it: what was written and attached, in the order given, or the messages an answer's events amount to. | 44.37, 44.52, 44.53, 44.54, 44.55, 44.105, 44.106 |
+| `assistantMessage` | `(role: 'user' \| 'assistant', parts: readonly (string \| Blob \| URL \| AssistantContent)[]) => Promise<AssistantMessage & { content: AssistantContent[] }>` | A message as the Messages API holds it: what was written and attached, in the order given. | 44.37, 44.52, 44.53, 44.54, 44.55 |
+| `assistantMessage` | `(role: 'assistant', events: readonly AssistantEvent[]) => AssistantMessage[]` | The answer form, the messages an answer's events amount to. | 44.105, 44.106 |
 
 ## `provider`
 
