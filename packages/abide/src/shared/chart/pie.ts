@@ -16,13 +16,13 @@ export type PieOptions = {
     /** What the pie shows, as its accessible name: `'Open pipeline by stage'`. */
     label: Live<string>
     /** The hole at the center, as a fraction of the radius: `0.6` for a donut. `0` by default. */
-    inner?: Live<number>
+    inner?: Live<number> | undefined
     /** Writes a slice's value for its hint: `format.money`, say. `format.number` by default. */
-    valueFormat?: (value: number) => string
+    valueFormat?: ((value: number) => string) | undefined
     /** Called with the index of a slice clicked, where `disabled` does not hold for it (52.38). */
-    onpick?: (index: number) => void
+    onpick?: ((index: number) => void) | undefined
     /** Whether a slice takes no pick, written as `data-disabled` on it (52.39). */
-    disabled?: (index: number) => boolean
+    disabled?: ((index: number) => boolean) | undefined
 }
 
 /** One slice drawn: a value missing, zero or below it is none (52.65). */

@@ -76,7 +76,7 @@ export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
  * answer a browser could not get (16.81).
  */
 export type CallOptions<Args = unknown, Value = unknown> = {
-    signal?: AbortSignal
+    signal?: AbortSignal | undefined
     offline?(args: Args): Value
 }
 
@@ -178,10 +178,10 @@ type Derived<Member, Whole = Member> = Member extends
 
 /** Which generated surfaces carry a handler (20.1). */
 export type Clients = {
-    ui?: boolean
-    mcp?: boolean
-    cli?: boolean
-    openapi?: boolean
+    ui?: boolean | undefined
+    mcp?: boolean | undefined
+    cli?: boolean | undefined
+    openapi?: boolean | undefined
 }
 
 export type RpcContext<Args = unknown> = { request: Request; args: () => Args }
@@ -227,7 +227,7 @@ export type RpcOptions<
     Args = unknown,
     Answers extends readonly unknown[] = unknown[],
 > = {
-    description?: string
+    description?: string | undefined
     /**
      * 16.86 — one rung per answer in `Answers`, each read in context: a rung's own refusals are
      * inferred where the list is written at the declaration.
@@ -241,15 +241,19 @@ export type RpcOptions<
     middleware?:
         | { [At in keyof Answers]: HandlerRung<Args, Answers[At]> }
         | readonly HandlerRung<NoInfer<Args>, unknown>[]
-    timeout?: number
-    clients?: Clients
-    crossOrigin?: boolean | string[]
-    maxBodySize?: number
+        | undefined
+    timeout?: number | undefined
+    clients?: Clients | undefined
+    crossOrigin?: boolean | string[] | undefined
+    maxBodySize?: number | undefined
     /**
      * 16.89 — what a run of a mutation `refresh`es once it answers without a refusal, or what
      * returns it for the call's `Args`. Never a `GET`'s (16.92).
      */
-    refreshes?: Refreshed | ((args: Args) => Refreshed | PromiseLike<Refreshed>)
+    refreshes?:
+        | Refreshed
+        | ((args: Args) => Refreshed | PromiseLike<Refreshed>)
+        | undefined
 }
 
 /**
@@ -280,13 +284,13 @@ type Refreshed = readonly (
  * value's option — `GET(reactive(f), { ttl })` — fell through its own arm to a plain one, and the
  * option was dropped by a value that had already been built.
  */
-export type Plain = { invalidate?: never }
+export type Plain = { invalidate?: never | undefined }
 
 /**
  * What narrows a trigger on an `Rpc` beside its pattern: `caller`, the `principal.caller` of the one
  * browser whose followed copies it reaches (18.37) — `true` for the one making this request (18.39).
  */
-export type TriggerOptions = { caller?: string | true }
+export type TriggerOptions = { caller?: string | true | undefined }
 
 /** A handler's options: `RpcOptions` for a mutation, less `refreshes` for a `GET` (16.92). */
 type OptionsOf<
@@ -433,7 +437,14 @@ export function declare<Declared extends Method>(
             handler,
             cacheOptions === undefined
                 ? options
-                : { ...cacheOptions, ...options },
+                : {
+                      ...cacheOptions,
+                      ...options,
+                      // A `ttl` given `undefined` declares none, and 0 stands.
+                      ttl:
+                          (options as { ttl?: number | undefined } | undefined)
+                              ?.ttl ?? cacheOptions.ttl,
+                  },
         )
         const keyed = isKeyed(value)
         // 19.7 — the handler's `args` gate and its parameter defaults, on the `Rpc` too, for the
@@ -690,7 +701,8 @@ export function declare<Declared extends Method>(
             const tags =
                 value === handler
                     ? DECLARED_TAGS.get(value as object)
-                    : (options as { tags?: string[] } | undefined)?.tags
+                    : (options as { tags?: string[] | undefined } | undefined)
+                          ?.tags
             if (tags !== undefined) DECLARED_TAGS.set(rpc, tags)
         }
         return rpc

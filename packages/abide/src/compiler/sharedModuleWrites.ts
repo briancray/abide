@@ -57,7 +57,10 @@ export async function sharedModuleWrites(
             (list.flags & NodeFlags.Const) !== 0
         )
             continue
-        shared.push({ name: (name as { text?: string }).text ?? '', symbol })
+        shared.push({
+            name: (name as { text?: string | undefined }).text ?? '',
+            symbol,
+        })
     }
     if (shared.length === 0) return []
     const warnings: Finding[] = []

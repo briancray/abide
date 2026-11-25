@@ -10,12 +10,17 @@ export function windowHandler(
 ): { postMessage(message: string): void } | undefined {
     return (
         globalThis as {
-            webkit?: {
-                messageHandlers?: Record<
-                    string,
-                    { postMessage(message: string): void } | undefined
-                >
-            }
+            webkit?:
+                | {
+                      messageHandlers?:
+                          | Record<
+                                string,
+                                | { postMessage(message: string): void }
+                                | undefined
+                            >
+                          | undefined
+                  }
+                | undefined
         }
     ).webkit?.messageHandlers?.[name]
 }

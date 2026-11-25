@@ -6,13 +6,13 @@ import { HOOKS, inOrder } from './hooks.ts'
 import { standardJsonSchemaOf } from './standardJsonSchemaOf.ts'
 
 type Property = {
-    type?: string | string[]
-    title?: string
-    description?: string
+    type?: string | string[] | undefined
+    title?: string | undefined
+    description?: string | undefined
     default?: unknown
-    enum?: unknown[]
-    format?: string
-    writeOnly?: boolean
+    enum?: unknown[] | undefined
+    format?: string | undefined
+    writeOnly?: boolean | undefined
 }
 
 /** One input on the start form. */
@@ -42,7 +42,10 @@ export function configFields(
                 Object.assign(defaults, answered)
         } catch {}
         const document = standardJsonSchemaOf(options?.schema) as
-            | { properties?: Record<string, Property>; required?: string[] }
+            | {
+                  properties?: Record<string, Property> | undefined
+                  required?: string[] | undefined
+              }
             | undefined
         if (document?.properties !== undefined)
             declared = { ...declared, ...document.properties }

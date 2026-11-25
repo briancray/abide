@@ -26,7 +26,7 @@ export function parseSources(
     sources: readonly {
         path: string
         text: string
-        quiet?: boolean
+        quiet?: boolean | undefined
     }[],
     refusals: Diagnostics,
 ): ParsedSource[] {

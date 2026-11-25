@@ -12,7 +12,7 @@ import { withPart } from './withPart.ts'
 /** The items, how each is told apart, the one it rests on, and whether it is showing. */
 export type LightboxOptions<Item> = CarouselOptions<Item> & {
     /** Whether it is showing: a `Reactive` to read and write it. One of its own by default. */
-    open?: Reactive<boolean>
+    open?: Reactive<boolean> | undefined
 }
 
 /** The dialog's parts, the carousel's, whether it is showing, and what opens it on an item. */

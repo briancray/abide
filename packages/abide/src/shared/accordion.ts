@@ -12,11 +12,11 @@ import { withPart } from './withPart.ts'
 /** Which keys are open, and whether many may be at once. */
 export type AccordionOptions<Multiple extends boolean = false> = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** Whether any number may be open at once. `false` by default: opening one closes the one open. */
-    multiple?: Multiple
+    multiple?: Multiple | undefined
     /** The key open, or every key open where many may be: a `Reactive` to read and set. Held by the parts, and handed back as `open`, where none is given. */
-    open?: Reactive<Picked<string, Multiple>>
+    open?: Reactive<Picked<string, Multiple>> | undefined
 }
 
 /** The parts `accordion` hands back: `<button {...faq.item('pricing').button}>`. */

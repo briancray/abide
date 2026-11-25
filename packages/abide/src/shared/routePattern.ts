@@ -149,7 +149,10 @@ export function coversRoute(outer: Segment[], route: Segment[]): boolean {
  * beside each table: the server's boot and the client router's start compile through one call.
  */
 export function rankRoutes<
-    T extends { pattern: string; matchers?: Record<string, string> },
+    T extends {
+        pattern: string
+        matchers?: Record<string, string> | undefined
+    },
 >(rows: T[]): (T & { segments: Segment[] })[] {
     const ranked: (T & { segments: Segment[] })[] = []
     for (const row of rows)

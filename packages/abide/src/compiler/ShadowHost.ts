@@ -84,7 +84,7 @@ export class ShadowHost {
         const config: {
             extends: string
             compilerOptions: Record<string, unknown>
-            files?: string[]
+            files?: string[] | undefined
         } = {
             extends: `./${basename(this.tsconfig)}`,
             // A package's `exports` names `./x.abide` exactly, so the checker asks for its
@@ -217,7 +217,7 @@ export * from '${checked}'
         // what is read, rather than a second guess at the disk that could disagree with it.
         const internals = api as unknown as {
             ensureInitialized(): Promise<void>
-            toPath?: (path: string) => string
+            toPath?: ((path: string) => string) | undefined
         }
         await internals.ensureInitialized()
         const toPath = internals.toPath
@@ -493,9 +493,9 @@ export * from '${checked}'
     async ask<Answer>(
         question: (project: Project) => Promise<Answer>,
         asking: {
-            edit?: ShadowEdit
-            modules?: readonly string[]
-            latest?: boolean
+            edit?: ShadowEdit | undefined
+            modules?: readonly string[] | undefined
+            latest?: boolean | undefined
         } = {},
     ): Promise<Answer | undefined> {
         using _held = this.hold()
@@ -688,7 +688,7 @@ export * from '${checked}'
         const client = (
             this.api as unknown as {
                 client: {
-                    process?: { kill(): boolean }
+                    process?: { kill(): boolean } | undefined
                     close(): Promise<void>
                 }
             }

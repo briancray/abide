@@ -137,7 +137,10 @@ export async function enqueue(
     } catch (refused) {
         // 46.19 — A STAND-IN THE BROWSER CANNOT KEEP — a function, a DOM node — is left out, and the
         // call is kept without it; anything else that stops the write stops the call (16.82).
-        if ((refused as { name?: string })?.name !== 'DataCloneError')
+        if (
+            (refused as { name?: string | undefined })?.name !==
+            'DataCloneError'
+        )
             return false
         kept.standIn = undefined
         try {
@@ -166,7 +169,8 @@ export function deliver(): void {
     if (sending || held || undelivered() === 0) return
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return
     // Where there is none — a DOM emulator's is `null` — this tab is the only one there is to ask.
-    const locks = (navigator as { locks?: LockManager | null }).locks
+    const locks = (navigator as { locks?: LockManager | null | undefined })
+        .locks
     if (locks === undefined || locks === null) {
         void sendLine()
         return

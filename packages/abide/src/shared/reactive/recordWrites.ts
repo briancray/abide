@@ -306,7 +306,7 @@ export function recordWrites<Value>(
     // places share, and a value sent whole loses that the same way.
     const stored = (value: unknown): unknown => {
         if (value === null || typeof value !== 'object') return value
-        const target = (value as { [TARGET]?: object })[TARGET]
+        const target = (value as { [TARGET]?: object | undefined })[TARGET]
         if (target !== undefined) return target
         if (!isPlainData(value)) return value
         walked ??= new Set()

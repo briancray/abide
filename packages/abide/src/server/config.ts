@@ -18,7 +18,10 @@ import { packageDirectory } from './packageDirectory.ts'
 import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
 /** The fields of an app's `package.json` 27.3 derives from. */
-export type AppPackage = { name?: string; version?: string }
+export type AppPackage = {
+    name?: string | undefined
+    version?: string | undefined
+}
 
 /**
  * The app's own `package.json`, for 27.3's derivation — set by `bootApp` before `config` is read.

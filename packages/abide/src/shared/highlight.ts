@@ -11,7 +11,7 @@ const MATCH = { 'data-highlight': 'match' }
 export function highlight(
     text: string,
     query: string,
-    options: { words?: boolean } = {},
+    options: { words?: boolean | undefined } = {},
 ): readonly LabelRun[] {
     return labelRuns(text, needlesOf(query, options.words === true), MATCH)
 }

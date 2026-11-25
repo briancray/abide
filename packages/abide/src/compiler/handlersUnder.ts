@@ -166,7 +166,7 @@ function refuseUndeclaredParameters(
 ): void {
     const schema = args as
         | {
-              properties?: Record<string, unknown>
+              properties?: Record<string, unknown> | undefined
               additionalProperties?: unknown
           }
         | undefined

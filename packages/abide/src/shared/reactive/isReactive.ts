@@ -14,6 +14,8 @@ import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 export function isReactive(value: unknown): value is Reactive<unknown> {
     return (
         typeof value === 'function' &&
-        (value as { [REACTIVE_BRAND]?: boolean })[REACTIVE_BRAND] === true
+        (value as { [REACTIVE_BRAND]?: boolean | undefined })[
+            REACTIVE_BRAND
+        ] === true
     )
 }

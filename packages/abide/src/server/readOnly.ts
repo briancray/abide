@@ -14,9 +14,9 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 export function readOnly(
     options: {
         /** The handlers whose writes stay open, each matched by its `rpc.address`. */
-        allow?: readonly { address: string | undefined }[]
+        allow?: readonly { address: string | undefined }[] | undefined
         /** What the `ReadOnly` refusal says, in place of the default. */
-        message?: string
+        message?: string | undefined
     } = {},
 ): Middleware<never, object, Failed<'ReadOnly', undefined>> {
     const refused = refuse.named('ReadOnly', {

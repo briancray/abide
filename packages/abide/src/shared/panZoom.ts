@@ -17,13 +17,13 @@ export type PanZoomView = {
 /** The bounds of its magnification, what a key moves it by, and its view. */
 export type PanZoomOptions = {
     /** Where it stands: a `Reactive` to read and set. Held by the parts, and handed back as `view`, where none is given. */
-    view?: Reactive<PanZoomView>
+    view?: Reactive<PanZoomView> | undefined
     /** The least magnification. `0.25` by default; a function is read live. */
-    min?: Live<number>
+    min?: Live<number> | undefined
     /** The most magnification. `8` by default; a function is read live. */
-    max?: Live<number>
+    max?: Live<number> | undefined
     /** The surface's accessible name; a function is read live. */
-    label?: Live<string>
+    label?: Live<string> | undefined
 }
 
 /** The parts `panZoom` hands back, its view, and what moves it from code. */

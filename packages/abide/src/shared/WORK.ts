@@ -32,7 +32,7 @@ export const WORK = {
 // checks the SHAPE at the read rather than sharing a type, so a rename breaks a test rather than
 // silently publishing to a key nothing looks at.
 type HarnessGlobal = {
-    __HARNESS_WORK__?: Record<string, Record<string, number>>
+    __HARNESS_WORK__?: Record<string, Record<string, number>> | undefined
 }
 const published = (globalThis as HarnessGlobal).__HARNESS_WORK__ ?? {}
 published.abide = WORK

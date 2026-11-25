@@ -154,7 +154,9 @@ export async function shell(options: {
     // Ctrl+L is readline's clear, which knows nothing of the panel, so the panel is emptied after it.
     const keyed = (
         _: string,
-        key: { name?: string; ctrl?: boolean } | undefined,
+        key:
+            | { name?: string | undefined; ctrl?: boolean | undefined }
+            | undefined,
     ): void => {
         if (!(key?.ctrl === true && key.name === 'c')) leaving = false
         if (key?.ctrl === true && key.name === 'l') panel?.clear()

@@ -10,9 +10,9 @@ import { bareName } from './queryText.ts'
 
 /** The part of a JSON Schema document coercion reads: each member's declared types. */
 export type Document = {
-    type?: string | string[]
-    properties?: Record<string, Document>
-    items?: Document
+    type?: string | string[] | undefined
+    properties?: Record<string, Document> | undefined
+    items?: Document | undefined
 }
 
 /**

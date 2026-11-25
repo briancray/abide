@@ -4,6 +4,6 @@ export function isRunning(pid: number): boolean {
         process.kill(pid, 0)
         return true
     } catch (thrown) {
-        return (thrown as { code?: string }).code === 'EPERM'
+        return (thrown as { code?: string | undefined }).code === 'EPERM'
     }
 }

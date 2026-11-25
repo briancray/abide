@@ -16,15 +16,15 @@ import { withPart } from './withPart.ts'
 /** The items a group offers, how each is told apart, what it picks, and what it is called. */
 export type ToggleGroupOptions<Item, Multiple extends boolean = false> = {
     /** The base the ids its buttons write are derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** The items, in the order their buttons render; a function is read live. */
     items: Live<readonly Item[]>
     /** Whether it picks many, each press adding its key or taking it out. `false` by default. */
-    multiple?: Multiple
+    multiple?: Multiple | undefined
     /** The key picked, or every key picked where it picks many: a `Reactive` to read and set. Held by the parts, and handed back as `value`, where none is given. */
-    value?: Reactive<Picked<string, Multiple>>
+    value?: Reactive<Picked<string, Multiple>> | undefined
     /** The group's accessible name; a function is read live. */
-    label?: Live<string>
+    label?: Live<string> | undefined
 } & KeyOption<Item>
 
 /** The parts `toggleGroup` hands back: `<div {...view.group}>`, `<button {...view.item('board')}>`. */

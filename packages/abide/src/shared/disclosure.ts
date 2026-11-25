@@ -9,9 +9,9 @@ import { type Reactive, reactive } from './reactive/index.ts'
 /** Whether the region is open, and the base of the ids its parts write. */
 export type DisclosureOptions = {
     /** The base the region's id is derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** Whether the region is open: hand it a `Reactive` to read and write it. Held by the parts, and handed back as `open`, where none is given. */
-    open?: Reactive<boolean>
+    open?: Reactive<boolean> | undefined
 }
 
 /** The parts `disclosure` hands back: `<button {...more.button}>`, `<div {...more.region}>`. */

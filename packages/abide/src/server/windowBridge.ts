@@ -8,11 +8,17 @@
 export function windowBridge(): void {
     const handler = (
         globalThis as {
-            webkit?: {
-                messageHandlers?: {
-                    abideWindow?: { postMessage(message: string): void }
-                }
-            }
+            webkit?:
+                | {
+                      messageHandlers?:
+                          | {
+                                abideWindow?:
+                                    | { postMessage(message: string): void }
+                                    | undefined
+                            }
+                          | undefined
+                  }
+                | undefined
         }
     ).webkit?.messageHandlers?.abideWindow
     if (handler === undefined) return

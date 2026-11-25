@@ -31,7 +31,7 @@ export async function withAbideSources(
 ): Promise<string> {
     const map = JSON.parse(mapText) as {
         sources: string[]
-        sourcesContent?: (string | null)[]
+        sourcesContent?: (string | null)[] | undefined
         mappings: string
     }
     const sources = map.sources

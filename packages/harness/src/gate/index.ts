@@ -84,7 +84,7 @@ export function gate(
                 `gate("${name}") passed with the mechanism out. A case reporting the same number either way distinguishes nothing, and this gate is worth nothing.`,
             )
         const reported = String(
-            (failure as { message?: string }).message ?? failure,
+            (failure as { message?: string | undefined }).message ?? failure,
         )
         for (const [counter, value] of Object.entries(spec.worth)) {
             if (reported.includes(String(value))) continue

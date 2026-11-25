@@ -12,7 +12,9 @@ export async function appPlugins(root: string): Promise<Bun.BunPlugin[]> {
     const file = Bun.file(`${directory}/bunfig.toml`)
     if (!(await file.exists())) return []
     const parsed = Bun.TOML.parse(await file.text()) as {
-        serve?: { static?: { plugins?: string[] } }
+        serve?:
+            | { static?: { plugins?: string[] | undefined } | undefined }
+            | undefined
     }
     const plugins: Bun.BunPlugin[] = []
     for (const specifier of parsed.serve?.static?.plugins ?? [])

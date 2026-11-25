@@ -31,48 +31,50 @@ import {
 /** What `chart` draws and how. A value is read live where a function is given. */
 export type ChartOptions = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** What the chart shows, as its accessible name: `'Won revenue by month'`. */
     label: Live<string>
     /** The series drawn, in order, the first at the back (52.24). */
     series: Live<readonly Series[]>
     /** The x of each position, ascending: a time in epoch milliseconds, say. Indices by default. */
-    x?: Live<readonly number[] | undefined>
+    x?: Live<readonly number[] | undefined> | undefined
     /** Writes an x for its tick and the readout: `format.date`, say. `format.number` by default. */
-    xFormat?: (x: number) => string
+    xFormat?: ((x: number) => string) | undefined
     /** Writes a value for the y ticks, and the readout of a series with no `format` of its own: `format.money`, say. `format.number` by default. */
-    yFormat?: (y: number) => string
+    yFormat?: ((y: number) => string) | undefined
     /** The most x positions labeled along the bottom of the plot. 5 by default. */
-    xTicks?: Live<number>
+    xTicks?: Live<number> | undefined
     /** About how many intervals the y gridlines divide the range into. 4 by default. */
-    yTicks?: Live<number>
+    yTicks?: Live<number> | undefined
     /** Whether the y range takes in zero, with a line drawn there. `false` by default. */
-    zero?: Live<boolean>
+    zero?: Live<boolean> | undefined
     /**
      * The room kept above and below the values, as a share of their span: `0.15`, or `[below, above]`
      * (52.119). None by default.
      */
-    pad?: Live<number | readonly [number, number]>
+    pad?: Live<number | readonly [number, number]> | undefined
     /** Whether a series with no `stack` of its own piles into one stack with the others (52.54). `false` by default. */
-    stack?: Live<boolean>
+    stack?: Live<boolean> | undefined
     /** Whether each stack is drawn as shares of its total at each x (52.56, 52.59). `false` by default. */
-    normalize?: Live<boolean>
+    normalize?: Live<boolean> | undefined
     /** The range each axis spans, in place of the range of the values (52.61). */
-    bounds?: Live<
-        | {
-              x?: readonly [number, number]
-              y?: readonly [number, number]
-          }
+    bounds?:
+        | Live<
+              | {
+                    x?: readonly [number, number] | undefined
+                    y?: readonly [number, number] | undefined
+                }
+              | undefined
+          >
         | undefined
-    >
     /** The width drawn at before the root is measured. 600 by default. */
-    width?: number
+    width?: number | undefined
     /** The height drawn at before the root is measured. 240 by default. */
-    height?: number
+    height?: number | undefined
     /** Called with the x position nearest a click, or the crosshair's on Enter, where `disabled` does not hold for it (52.38, 52.70). */
-    onpick?: (index: number) => void
+    onpick?: ((index: number) => void) | undefined
     /** Whether an x position takes no pick, written as `data-disabled` on its bars and the readout (52.39). */
-    disabled?: (index: number) => boolean
+    disabled?: ((index: number) => boolean) | undefined
 }
 
 /** A y gridline and its label. */

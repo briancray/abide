@@ -43,8 +43,8 @@ import { nearest } from './nearest.ts'
 // register the other's text for a moment; a burst of keystrokes collapses onto the last one.
 
 type Message = {
-    id?: number | string
-    method?: string
+    id?: number | string | undefined
+    method?: string | undefined
     params?: unknown
 }
 
@@ -332,7 +332,8 @@ export async function serveLanguage(
             // 38.98 — the protocol's `CompletionItemKind` is the checker's own numbering.
             case 'textDocument/completion': {
                 const trigger = (
-                    params?.context as { triggerCharacter?: string } | undefined
+                    params?.context as
+                        { triggerCharacter?: string | undefined } | undefined
                 )?.triggerCharacter
                 const found = await ask(params, (lowered, text, offset) =>
                     completionAt(lowered, text, offset, trigger),
@@ -369,7 +370,7 @@ export async function serveLanguage(
                 const found = await references(params)
                 const declarations = (
                     params?.context as
-                        { includeDeclaration?: boolean } | undefined
+                        { includeDeclaration?: boolean | undefined } | undefined
                 )?.includeDeclaration
                 const locations: object[] = []
                 for (const place of found?.occurrences ?? [])
@@ -616,8 +617,8 @@ function refusedRename(id: Message['id'], name: string): object {
  * 38.118.
  */
 function codeOf(diagnosis: Diagnosis): {
-    code?: number | string
-    codeDescription?: { href: string }
+    code?: number | string | undefined
+    codeDescription?: { href: string } | undefined
 } {
     if (diagnosis.code !== 0) return { code: diagnosis.code }
     const [clause] = citedClauses(diagnosis.message)

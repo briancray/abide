@@ -52,19 +52,19 @@ export type ChatOptions = {
      */
     permit?: ((answer: { id: string; allow: boolean }) => unknown) | undefined
     /** 49.8, 53.47 — the conversation: bind it to load one and to keep it as it grows. Held by the parts, empty, where none is given. */
-    messages?: Reactive<AssistantMessage[]>
+    messages?: Reactive<AssistantMessage[]> | undefined
     /** The input's accessible name. `'Message'` by default. */
-    label?: Live<string | undefined>
+    label?: Live<string | undefined> | undefined
     /** Whether the composer refuses to send: a provider not yet paired, say. */
-    disabled?: Live<boolean | undefined>
+    disabled?: Live<boolean | undefined> | undefined
     /** 49.8, 53.105 — the user message being written: bind it to put a question back. Held by the parts, empty, where none is given. */
-    draft?: Reactive<AssistantMessage>
+    draft?: Reactive<AssistantMessage> | undefined
     /** The files its `dropzone` takes, as an `<input accept>` writes them: every file `assistantMessage` carries by default. */
-    accept?: string
+    accept?: string | undefined
     /** 53.37 — a file taken as the blocks it answers: `assistantMessage`'s by default. */
-    attach?: (file: File) => Promise<AssistantContent[]>
+    attach?: ((file: File) => Promise<AssistantContent[]>) | undefined
     /** 53.37 — handed the files its `dropzone` turned away, and the files `attach` threw on. */
-    onreject?: (files: File[], event: Event) => void
+    onreject?: ((files: File[], event: Event) => void) | undefined
 }
 
 /** A message's parts: its element, its speaker, its blocks, and what is shown under an answer. */

@@ -62,11 +62,15 @@ const DEFAULT_BUDGET_NANOSECONDS = 2_000_000_000
 // `bun:jsc` is a specifier a browser bundler must resolve and nothing stands in for it.
 // Read by the MEMBER, so a browser — which has no `Bun` — gets `undefined` here and
 // `collectGarbage` does nothing, rather than a TypeError in the middle of a timing run.
-const BUN_GC = (globalThis as { Bun?: { gc?(sync: boolean): void } }).Bun?.gc
+const BUN_GC = (
+    globalThis as { Bun?: { gc?(sync: boolean): void } | undefined }
+).Bun?.gc
 
 // `bun run test` is `--parallel`, and bun marks a worker process with this.
 const WORKER_ID = (
-    globalThis as { process?: { env: Record<string, string | undefined> } }
+    globalThis as {
+        process?: { env: Record<string, string | undefined> } | undefined
+    }
 ).process?.env?.BUN_TEST_WORKER_ID
 
 /** What `batch()` returns: one `Sample` per arm, and the A/A floor they were measured against. */
@@ -108,17 +112,18 @@ export type BatchSpec = {
      * Counting and timing are mutually exclusive passes over the same body — the counter runs
      * inside the path it counts — so the work cannot come off this run and is handed in.
      */
-    work?: Readonly<Record<string, Readonly<Record<string, number>>>>
+    work?:
+        Readonly<Record<string, Readonly<Record<string, number>>>> | undefined
     /**
      * Fixed batch size, when a second `batch()` call has to match a first.
      *
      * Left out, it grows until the sample clears the bar.
      */
-    n?: number
-    reps?: number
-    warmup?: number
+    n?: number | undefined
+    reps?: number | undefined
+    warmup?: number | undefined
     /** Wall clock for the whole call. A page has a reader waiting on it. */
-    budgetNanoseconds?: number
+    budgetNanoseconds?: number | undefined
 }
 
 function collectGarbage(): void {

@@ -10,17 +10,17 @@ import { type Reactive, reactive } from './reactive/index.ts'
 /** The number, its bounds, how far a step moves it, and its accessible name. */
 export type StepperOptions = {
     /** The base the field's id is derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** The number: a `Reactive` to read and set. Held by the parts, and handed back as `value`, where none is given. */
-    value?: Reactive<number>
+    value?: Reactive<number> | undefined
     /** The least it takes. Unbounded by default; a function is read live. */
-    min?: Live<number>
+    min?: Live<number> | undefined
     /** The most it takes. Unbounded by default; a function is read live. */
-    max?: Live<number>
+    max?: Live<number> | undefined
     /** How far a step moves it. `1` by default; a function is read live. */
-    step?: Live<number>
+    step?: Live<number> | undefined
     /** The field's accessible name; a function is read live. */
-    label?: Live<string>
+    label?: Live<string> | undefined
 }
 
 /** The parts `stepper` hands back: `<input {...seats.input}>`, `<button {...seats.increment}>`. */

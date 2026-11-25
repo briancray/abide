@@ -289,7 +289,8 @@ function sameCookiesRead(rendered: Cookies, carried: Cookies): boolean {
 
 /** 41.12 — the warning a call the buffer was expected to answer, and did not, is logged with. */
 function missed(rpc: object, key: string, why: string): void {
-    const address = (rpc as { address?: string }).address ?? 'a handler'
+    const address =
+        (rpc as { address?: string | undefined }).address ?? 'a handler'
     HYDRATE_LOG.warning(
         `the call to ${address} with args ${key} was not answered from the seed buffer, because ${why}, so the handler ran again. RULEBOOK 41.12.`,
     )

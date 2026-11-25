@@ -83,7 +83,7 @@ export function isKeyed(
 ): value is Keyed<unknown, unknown, unknown, never, unknown> & Gated<unknown> {
     return (
         typeof value === 'function' &&
-        (value as { [KEYED_BRAND]?: boolean })[KEYED_BRAND] === true
+        (value as { [KEYED_BRAND]?: boolean | undefined })[KEYED_BRAND] === true
     )
 }
 

@@ -310,7 +310,8 @@ async function claim(lock: string): Promise<boolean> {
         await writeFile(lock, String(process.pid), { flag: 'wx' })
         return true
     } catch (thrown) {
-        if ((thrown as { code?: string }).code === 'EEXIST') return false
+        if ((thrown as { code?: string | undefined }).code === 'EEXIST')
+            return false
         throw thrown
     }
 }

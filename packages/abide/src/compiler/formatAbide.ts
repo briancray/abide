@@ -188,7 +188,7 @@ async function ignoredByConfig(path: string): Promise<boolean> {
     while (bunfig !== undefined) {
         const directory = dirname(bunfig)
         const options = Bun.TOML.parse(await Bun.file(bunfig).text()) as {
-            fmt?: { ignorePatterns?: string[] }
+            fmt?: { ignorePatterns?: string[] | undefined } | undefined
         }
         if (options.fmt !== undefined) {
             const relative = path.slice(directory.length + 1)

@@ -12,9 +12,9 @@ import { standing } from '../standing.ts'
  */
 export type TooltipOptions = Omit<PlaceOptions, 'side'> & {
     /** The side of the anchor the hint opens on, another taken where it has no room (50.20). Default `'top'`; a function is read at each placement. */
-    side?: Live<Side>
+    side?: Live<Side> | undefined
     /** Milliseconds a pointer rests on the anchor before the hint opens. Default `300`; a function is read as the pointer rests. */
-    delay?: Live<number>
+    delay?: Live<number> | undefined
 }
 
 /** The hint open: its text, the anchor it is open against, and where it opens. */

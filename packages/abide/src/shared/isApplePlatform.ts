@@ -14,8 +14,11 @@ export function isApplePlatform(): boolean {
     // Off `globalThis`, so a browser bundle is not handed a `process` shim for a branch it never runs.
     if (agent === '' && isServer())
         return (
-            (globalThis as { process?: { platform?: string } }).process
-                ?.platform === 'darwin'
+            (
+                globalThis as {
+                    process?: { platform?: string | undefined } | undefined
+                }
+            ).process?.platform === 'darwin'
         )
     return APPLE.test(agent)
 }

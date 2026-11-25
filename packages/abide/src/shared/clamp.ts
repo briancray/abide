@@ -12,11 +12,11 @@ import { withPart } from './withPart.ts'
 /** How many lines show while it is shut, and whether it is open. */
 export type ClampOptions = {
     /** The lines shown while it is shut. `3` by default; a function is read live. */
-    lines?: Live<number>
+    lines?: Live<number> | undefined
     /** Whether all of it shows: hand it a `Reactive` to read and write it. Held by the parts, and handed back as `open`, where none is given. */
-    open?: Reactive<boolean>
+    open?: Reactive<boolean> | undefined
     /** The base the text's id is derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
 }
 
 /** The parts `clamp` hands back: `<p {...summary.text}>`, `<button {...summary.button}>`. */

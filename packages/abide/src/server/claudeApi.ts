@@ -23,13 +23,13 @@ import { blocksOf, type Provider, toolBlocksOf } from './assistant.ts'
 /** A Messages API request body, less what abide writes, with the client's key and origin. */
 export type ClaudeApiConfig = {
     apiKey: string
-    baseURL?: string
+    baseURL?: string | undefined
     model: string
     max_tokens: number
-    system?: string | unknown[]
-    tools?: unknown[]
-    messages?: never
-    stream?: never
+    system?: string | unknown[] | undefined
+    tools?: unknown[] | undefined
+    messages?: never | undefined
+    stream?: never | undefined
     [field: string]: unknown
 }
 

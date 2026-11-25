@@ -3,14 +3,14 @@
 // the browser names what `ask()` hands it without reaching for the server's entry.
 
 /** Where the API caches the prompt up to a block: the Messages API's `cache_control`. */
-type CacheControl = { type: 'ephemeral'; ttl?: '5m' | '1h' }
+type CacheControl = { type: 'ephemeral'; ttl?: '5m' | '1h' | undefined }
 
 /** Words, and the citations an answer's words carry back. */
 type TextBlock = {
     type: 'text'
     text: string
-    citations?: Record<string, unknown>[]
-    cache_control?: CacheControl
+    citations?: Record<string, unknown>[] | undefined
+    cache_control?: CacheControl | undefined
 }
 
 type ImageBlock = {
@@ -24,8 +24,9 @@ type ImageBlock = {
           }
         | { type: 'url'; url: string }
         | { type: 'file'; file_id: string }
-    transformations?: { oversized_image?: 'downsize' | 'error' }
-    cache_control?: CacheControl
+    transformations?:
+        { oversized_image?: 'downsize' | 'error' | undefined } | undefined
+    cache_control?: CacheControl | undefined
 }
 
 type DocumentBlock = {
@@ -39,10 +40,10 @@ type DocumentBlock = {
           }
         | { type: 'url'; url: string }
         | { type: 'file'; file_id: string }
-    title?: string
-    context?: string
-    citations?: { enabled: boolean }
-    cache_control?: CacheControl
+    title?: string | undefined
+    context?: string | undefined
+    citations?: { enabled: boolean } | undefined
+    cache_control?: CacheControl | undefined
 }
 
 type SearchResultBlock = {
@@ -50,8 +51,8 @@ type SearchResultBlock = {
     source: string
     title: string
     content: TextBlock[]
-    citations?: { enabled: boolean }
-    cache_control?: CacheControl
+    citations?: { enabled: boolean } | undefined
+    cache_control?: CacheControl | undefined
 }
 
 /**
@@ -71,7 +72,7 @@ export type AssistantContent =
           id: string
           name: string
           input: unknown
-          cache_control?: CacheControl
+          cache_control?: CacheControl | undefined
       }
     | {
           type: 'tool_result'
@@ -79,8 +80,9 @@ export type AssistantContent =
           content?:
               | string
               | (TextBlock | ImageBlock | DocumentBlock | SearchResultBlock)[]
-          is_error?: boolean
-          cache_control?: CacheControl
+              | undefined
+          is_error?: boolean | undefined
+          cache_control?: CacheControl | undefined
       }
     | { type: 'thinking'; thinking: string; signature: string }
     | { type: 'redacted_thinking'; data: string }
@@ -95,8 +97,8 @@ export type AssistantMessage = {
 export type AssistantUsage = {
     input_tokens: number
     output_tokens: number
-    cache_creation_input_tokens?: number | null
-    cache_read_input_tokens?: number | null
+    cache_creation_input_tokens?: number | null | undefined
+    cache_read_input_tokens?: number | null | undefined
     [field: string]: unknown
 }
 
@@ -142,9 +144,9 @@ export type AssistantEvent =
           // The run's usage so far, which names its output and may name the rest.
           usage: {
               output_tokens: number
-              input_tokens?: number | null
-              cache_creation_input_tokens?: number | null
-              cache_read_input_tokens?: number | null
+              input_tokens?: number | null | undefined
+              cache_creation_input_tokens?: number | null | undefined
+              cache_read_input_tokens?: number | null | undefined
               [field: string]: unknown
           }
       }

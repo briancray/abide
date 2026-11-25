@@ -11,23 +11,23 @@ import { type Reactive, reactive } from './reactive/index.ts'
 /** Which way the panel sizes, which edge its handle is on, and the bounds it keeps to. */
 export type ResizableOptions = {
     /** The base the panel's id is derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** `'x'` sizes the panel's width, `'y'` its height. `'x'` by default. */
-    axis?: 'x' | 'y'
+    axis?: 'x' | 'y' | undefined
     /** The panel's edge the handle stands on: `'end'` grows it as the handle moves right or down, `'start'` as it moves left or up. `'end'` by default. */
-    edge?: 'start' | 'end'
+    edge?: 'start' | 'end' | undefined
     /** The panel's size in pixels, or `undefined` for its own: a `Reactive` to read and set. Held by the parts, and handed back as `size`, where none is given. */
-    size?: Reactive<number | undefined>
+    size?: Reactive<number | undefined> | undefined
     /** The fewest pixels the panel keeps. `0` by default; a function is read live. */
-    min?: Live<number>
+    min?: Live<number> | undefined
     /** The most pixels the panel takes. Unbounded by default; a function is read live. */
-    max?: Live<number>
+    max?: Live<number> | undefined
     /** The pixels of the panel's parent left to what stands beside it, bounding the panel by its parent. Unbounded by its parent where none is given; a function is read live. */
-    keep?: Live<number>
+    keep?: Live<number> | undefined
     /** The pixels an arrow key moves it. `10` by default; a function is read live. */
-    step?: Live<number>
+    step?: Live<number> | undefined
     /** The handle's accessible name; a function is read live. */
-    label?: Live<string>
+    label?: Live<string> | undefined
 }
 
 /** The parts `resizable` hands back: `<aside {...side.panel}>`, `<div {...side.handle}>`. */

@@ -10,19 +10,19 @@ import { type Picked, Selection } from './Selection.ts'
 /** What `listbox` is handed: the options, how each is told apart, what is selected, and what Enter and Escape do. */
 export type ListboxOptions<Option, Multiple extends boolean = false> = {
     /** The base every option's element id is derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** The options in the order they render; a function is read live. */
     options: Live<readonly Option[]>
     /** Whether an arrow past either end goes round to the other end. `true` unless set; a function is read live. */
-    wrap?: Live<boolean>
+    wrap?: Live<boolean> | undefined
     /** 51.98 — whether it selects many, each press changing the selection rather than moving it. `false` by default. */
-    multiple?: Multiple
+    multiple?: Multiple | undefined
     /** The keys selected, where the app holds them: a `Reactive` to read and set. Where it selects one, the key last moved to (51.104). Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<Picked<string, Multiple>>
+    selected?: Reactive<Picked<string, Multiple>> | undefined
     /** Called with the active option when Enter is pressed, and with an option clicked where it selects one. */
-    onpick?: (option: Option) => void
+    onpick?: ((option: Option) => void) | undefined
     /** Called when Escape is pressed. */
-    onescape?: () => void
+    onescape?: (() => void) | undefined
 } & KeyOption<Option>
 
 /** The keyboard over a list of options, which of them is active, and which are selected. */

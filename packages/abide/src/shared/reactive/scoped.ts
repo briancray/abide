@@ -155,7 +155,7 @@ export function scoped(
 ): unknown {
     const filed = new Filed(make, lazy, global)
     // A keyed value, carrying both, or any other value, carrying neither.
-    const home = filed.home as { [KEYED_BRAND]?: true } & Partial<
+    const home = filed.home as { [KEYED_BRAND]?: true | undefined } & Partial<
         Gated<unknown>
     >
     if (!lazy && home[KEYED_BRAND] === true) {

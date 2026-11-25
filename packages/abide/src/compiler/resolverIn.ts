@@ -49,7 +49,7 @@ function throughImports(specifier: string, from: string): string | undefined {
     if (manifest === undefined) return undefined
     const imports = (
         JSON.parse(readFileSync(manifest, 'utf8')) as {
-            imports?: Record<string, unknown>
+            imports?: Record<string, unknown> | undefined
         }
     ).imports
     if (imports === undefined) return undefined

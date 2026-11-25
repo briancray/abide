@@ -25,9 +25,9 @@ const layers = reactive<readonly Layer[]>([])
 /** Which of a press outside and an Escape dismiss: `dismissible`'s options. */
 export type DismissibleOptions = {
     /** Whether Escape dismisses. `true` by default. */
-    escape?: boolean
+    escape?: boolean | undefined
     /** Whether a press outside the element dismisses. `true` by default. */
-    outside?: boolean
+    outside?: boolean | undefined
 }
 
 /** The two parts `dismissible` hands back: `<form {...edit.host}>`, `<button {...edit.inside}>`. */
@@ -80,7 +80,7 @@ export function dismissible(
 export function dismissing(
     onDismiss: (event: PointerEvent | KeyboardEvent) => void,
     options: DismissibleOptions & {
-        inside?: Iterable<Element | null | undefined>
+        inside?: Iterable<Element | null | undefined> | undefined
     } = {},
 ): (element: Element) => Disposer {
     return (element) =>

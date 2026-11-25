@@ -10,16 +10,16 @@ export type Series = {
     /** One value per x position. `null` or `undefined` is a value missing there. */
     values: readonly (number | null | undefined)[]
     /** How `chart` draws it: a line, a column per value, or a filled area. `'line'` by default. */
-    kind?: 'line' | 'column' | 'area'
+    kind?: 'line' | 'column' | 'area' | undefined
     /** The stack it piles into with the series naming the same one, or `false` for none (52.54). */
-    stack?: string | false
+    stack?: string | false | undefined
     /** Whether a line or an area is drawn as a curve through its values (52.105). `false` by default. */
-    curve?: boolean
+    curve?: boolean | undefined
     /**
      * Writes one of its values, given it and its index, for the readout and what a key move announces
      * (52.118): the raw value behind a series scaled to share an axis, say. `yFormat` by default.
      */
-    format?: (value: number, index: number) => string
+    format?: ((value: number, index: number) => string) | undefined
 }
 
 /**
@@ -30,7 +30,10 @@ export type Series = {
  */
 export function stack<Each extends Pick<Series, 'values' | 'stack'>>(
     series: readonly Each[],
-    options: { stack?: boolean; normalize?: boolean } = {},
+    options: {
+        stack?: boolean | undefined
+        normalize?: boolean | undefined
+    } = {},
 ): {
     low: (number | undefined)[]
     high: (number | undefined)[]
@@ -195,9 +198,9 @@ export function path(
     ys: readonly (number | null | undefined)[],
     options: {
         /** Where each run closes down to, as an area to fill: one y, or one per x. */
-        baseline?: number | readonly number[]
+        baseline?: number | readonly number[] | undefined
         /** Whether each run curves through its points rather than running straight. */
-        curve?: boolean
+        curve?: boolean | undefined
     } = {},
 ): string {
     const { baseline, curve = false } = options

@@ -68,6 +68,16 @@ test('a formatter writes en-US where no locale is named — 52.2', () => {
 // THE REVERT: build the formatter from abide's defaults alone, leaving out the caller's options —
 // `5` where `05` is due, and `$1,234.50` where `USD 1,234.50` is. Asking for a minimum above the
 // default maximum without moving the maximum throws instead.
+// 59.1 — AN OPTION GIVEN `undefined` IS AN OPTION NOT GIVEN, so abide's default beneath it stands: 52.112's
+// options are typed to take `undefined`, and the cache keys them without it. THE REVERT: spread the
+// caller's options over the defaults with `undefined` kept; the percent reads `13%` where `12.5%`
+// is due, and the default it was cached under reads `13%` after it.
+test('an option given undefined leaves the default standing — 59.1, 52.112', () => {
+    formatters.clear()
+    expect(percent(0.125, { maximumFractionDigits: undefined })).toBe('12.5%')
+    expect(percent(0.125)).toBe('12.5%')
+})
+
 test("a number formatter takes Intl.NumberFormat's own options under their own names — 52.112", () => {
     expect(number(5, { minimumIntegerDigits: 2 })).toBe('05')
     expect(money(1234.5, { currencyDisplay: 'code' })).toBe('USD 1,234.50')

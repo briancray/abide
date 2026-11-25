@@ -24,9 +24,9 @@ import { withPart } from './withPart.ts'
 /** What a combobox lists, how an item is told apart and written, and the pick it holds. */
 export type ComboboxOptions<Item, Multiple extends boolean = false> = {
     /** The input's id, for a `<label for>`; the list's and each option's ids are derived from it. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** The items to pick from, narrowed to those whose label holds what was typed; a function is read live. */
-    options?: Live<readonly Item[]>
+    options?: Live<readonly Item[]> | undefined
     /** Finds the items for what was typed, in place of narrowing `options`: a handler call, or any async function. */
     search?(
         query: string,
@@ -35,11 +35,11 @@ export type ComboboxOptions<Item, Multiple extends boolean = false> = {
         | PromiseLike<readonly Item[]>
         | Reactive<readonly Item[], unknown, unknown, unknown>
     /** Milliseconds typing has to pause before `search` runs again. */
-    debounce?: number
+    debounce?: number | undefined
     /** 51.55 — whether it picks many: a pick adds an item or takes it out again. `false` by default. */
-    multiple?: Multiple
+    multiple?: Multiple | undefined
     /** The pick, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `value`, where none is given. */
-    value?: Reactive<Picked<Item, Multiple>>
+    value?: Reactive<Picked<Item, Multiple>> | undefined
 } & KeyOption<Item> &
     LabelOption<Item>
 

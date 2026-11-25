@@ -19,7 +19,7 @@ import { ShadowMap } from './ShadowMap.ts'
 /** One source a diagnosis lowers: read, placed where it is a page or a layout, and maybe quiet. */
 export type DiagnosedSource = Omit<ReadSource, 'quiet'> &
     Partial<Pick<PlacedSource, 'kind' | 'route'>> & {
-        quiet?: boolean
+        quiet?: boolean | undefined
     }
 
 /**

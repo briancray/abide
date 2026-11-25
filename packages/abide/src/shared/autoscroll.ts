@@ -9,11 +9,11 @@ import type { Disposer } from './reactive/watch.ts'
 /** Whether the scroller is following, how near its bottom counts as at it, and how a jump scrolls. */
 export type AutoscrollOptions = {
     /** Whether the scroller is kept at its bottom: a `Reactive` to read it and to stop following from the app. Held by the parts, `true`, and handed back as `following`, where none is given. */
-    following?: Reactive<boolean>
+    following?: Reactive<boolean> | undefined
     /** Pixels from the bottom that still count as at it. `2` by default; a function is read live. */
-    threshold?: Live<number>
+    threshold?: Live<number> | undefined
     /** How `toBottom` scrolls. `'smooth'` by default; a function is read live. */
-    behavior?: Live<'auto' | 'smooth'>
+    behavior?: Live<'auto' | 'smooth'> | undefined
 }
 
 /** The parts `autoscroll` hands back: `<ol {...follow.host}>` and `<button {...follow.jump}>`. */

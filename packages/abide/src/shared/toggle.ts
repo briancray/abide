@@ -7,9 +7,9 @@ import { type Reactive, reactive } from './reactive/index.ts'
 /** Whether the button is pressed, and whether it reads as a toggle button or a switch. */
 export type ToggleOptions = {
     /** Whether it is pressed: hand it a `Reactive` to read and write it. Held by the part, and handed back as `pressed`, where none is given. */
-    pressed?: Reactive<boolean>
+    pressed?: Reactive<boolean> | undefined
     /** `'switch'` for an on/off switch, read as `role="switch"` with `aria-checked`. `'button'` by default; a function is read live. */
-    role?: Live<'button' | 'switch'>
+    role?: Live<'button' | 'switch'> | undefined
 }
 
 /** The part `toggle` hands back, and whether it is pressed: `<button {...pin.button}>`. */

@@ -141,7 +141,7 @@ export class ReportDraft {
  * refused, where given them.
  */
 export function report(options?: {
-    trace?: string
+    trace?: string | undefined
     /** A refusal a call was answered with — `error` off a value, or what a call refused with. */
     failure?: unknown
 }): ReportDraft {

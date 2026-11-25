@@ -14,11 +14,17 @@
 export function pageBridge(permission: NotificationPermission): void {
     const handler = (
         globalThis as {
-            webkit?: {
-                messageHandlers?: {
-                    abidePage?: { postMessage(message: string): void }
-                }
-            }
+            webkit?:
+                | {
+                      messageHandlers?:
+                          | {
+                                abidePage?:
+                                    | { postMessage(message: string): void }
+                                    | undefined
+                            }
+                          | undefined
+                  }
+                | undefined
         }
     ).webkit?.messageHandlers?.abidePage
     if (handler === undefined) return

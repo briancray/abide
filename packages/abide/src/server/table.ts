@@ -46,7 +46,7 @@ const PREPARED = new WeakMap<Database, Set<string>>()
 export function table<Row extends Record<string, unknown>>(
     database: Database | (() => Database),
     name: string,
-    options?: { key?: keyof Row & string },
+    options?: { key?: (keyof Row & string) | undefined },
 ): { readable: ReadableStream<Change<Row>>; writable: WritableStream<Row> } {
     if (!IDENTIFIER.test(name))
         throw new Error(

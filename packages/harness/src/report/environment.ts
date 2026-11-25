@@ -4,7 +4,7 @@
 // than the name of a global anything could define.
 
 const UNDER_BUN =
-    typeof (globalThis as { Bun?: { nanoseconds?: unknown } }).Bun
+    typeof (globalThis as { Bun?: { nanoseconds?: unknown } | undefined }).Bun
         ?.nanoseconds === 'function'
 
 /** Whether this is bun, rather than a browser. */

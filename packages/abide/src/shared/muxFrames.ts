@@ -14,13 +14,13 @@ import type { PatchOp } from './reactive/patchLog.ts'
 export type BrowserFrame = {
     op: 'sub' | 'unsub' | 'stream'
     id: number
-    address?: string
+    address?: string | undefined
     args?: unknown
     version?: number | undefined
     /** 16.93 — the address a streaming `GET`'s call names, args and all, for `stream`. */
-    url?: string
+    url?: string | undefined
     /** 16.99 — the token of a parked answer `url` takes, presented as its header rather than in it. */
-    token?: string
+    token?: string | undefined
 }
 
 /**
@@ -53,18 +53,18 @@ export type ServerFrame = {
         | 'end'
         | 'http'
     id: number
-    version?: number
-    base?: number
-    ops?: PatchOp[]
+    version?: number | undefined
+    base?: number | undefined
+    ops?: PatchOp[] | undefined
     value?: unknown
-    error?: Problem
+    error?: Problem | undefined
     /**
      * 16.93 — a stream's head, then its body's text as it lands under `lines`, then `end`; or `http`,
      * where the answer is one the mux cannot carry, taken over http by its token — or, carrying none,
      * one the mux never began, which the call makes over http itself.
      */
-    head?: StreamHead
-    lines?: string
+    head?: StreamHead | undefined
+    lines?: string | undefined
     /** 16.94 — the token that takes, over http, the answer the mux began and could not carry. */
-    http?: string
+    http?: string | undefined
 }

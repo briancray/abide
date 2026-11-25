@@ -23,21 +23,21 @@ export type CalendarPick<Range extends boolean> = Range extends true
 /** The months shown, the day or the range picked, and how the weeks are laid out. */
 export type CalendarOptions<Range extends boolean = false> = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** The first month shown as `YYYY-MM`, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `month`, where none is given. */
-    month?: Reactive<string | undefined>
+    month?: Reactive<string | undefined> | undefined
     /** 52.97 — whether it picks a range of days rather than one. Read once. */
-    range?: Range
+    range?: Range | undefined
     /** The day picked as `YYYY-MM-DD`, or the range as `[start, end]`, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<CalendarPick<Range>>
+    selected?: Reactive<CalendarPick<Range>> | undefined
     /** How many months are shown side by side, from the first. 1 by default. */
-    months?: Live<number | undefined>
+    months?: Live<number | undefined> | undefined
     /** The day a week starts on, `1` for Monday to `7` for Sunday, as `Intl.Locale` numbers them. The locale's by default. */
-    firstDay?: Live<number | undefined>
+    firstDay?: Live<number | undefined> | undefined
     /** The BCP 47 locale the month and the weekdays are written in. `'en-US'` by default. */
-    locale?: Live<string | undefined>
+    locale?: Live<string | undefined> | undefined
     /** The IANA zone today is read in, as `format.date` takes one. */
-    timeZone?: Live<string | undefined>
+    timeZone?: Live<string | undefined> | undefined
 }
 
 /** One weekday's header cell, and its name. */
@@ -141,8 +141,8 @@ function firstDayIn(locale: string): number {
     return cached(`calendar first day ${locale}`, () => {
         // `getWeekInfo` is the standard's, `weekInfo` the accessor engines shipped first.
         const found = new Intl.Locale(locale) as Intl.Locale & {
-            getWeekInfo?: () => { firstDay: number }
-            weekInfo?: { firstDay: number }
+            getWeekInfo?: (() => { firstDay: number }) | undefined
+            weekInfo?: { firstDay: number } | undefined
         }
         return (found.getWeekInfo?.() ?? found.weekInfo)?.firstDay ?? 7
     })

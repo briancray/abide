@@ -26,7 +26,7 @@ const APPLE_NAMED: Record<string, string> = {
 /** What `keyLabel` and `keyLabel.parts` take beside the binding. */
 type LabelOptions = {
     /** 53.53 — whether to write the keys as an Apple platform does. The platform 53.3 reads by default. */
-    apple?: boolean
+    apple?: boolean | undefined
 }
 
 /**

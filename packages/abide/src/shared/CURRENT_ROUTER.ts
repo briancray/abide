@@ -10,7 +10,10 @@ export type Navigable = {
     step(by: number): Promise<void>
 }
 
-export type NavigateOptions = { replace?: boolean; keepScroll?: boolean }
+export type NavigateOptions = {
+    replace?: boolean | undefined
+    keepScroll?: boolean | undefined
+}
 
 /**
  * The router this document has, or null.

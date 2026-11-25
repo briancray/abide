@@ -5,6 +5,6 @@
  * to hold.
  */
 export function unrefTimer(timer: unknown): void {
-    const unref = (timer as { unref?: () => void }).unref
+    const unref = (timer as { unref?: (() => void) | undefined }).unref
     if (typeof unref === 'function') unref.call(timer)
 }

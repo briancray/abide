@@ -25,7 +25,10 @@ let channel: BroadcastChannel | undefined
  */
 export function indexedDB<Stored>(
     key: string,
-    options?: { table?: string; schema?: Schema<Stored> },
+    options?: {
+        table?: string | undefined
+        schema?: Schema<Stored> | undefined
+    },
 ): Store<Stored> & LogStore {
     const table = options?.table ?? 'abide_store'
     const schema = options?.schema as Schema<unknown> | undefined
@@ -164,7 +167,7 @@ function logFace(table: string, log: () => string): LogStore {
             const keyed = transaction.objectStore(keys)
             // 58.4 — the keys go with their entries.
             const going = (await requested(kept.getAll(range(0, through)))) as {
-                key?: string
+                key?: string | undefined
             }[]
             for (const record of going)
                 if (record.key !== undefined) keyed.delete([log(), record.key])

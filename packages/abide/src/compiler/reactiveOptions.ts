@@ -35,7 +35,7 @@ export function reactiveOptions(
 
 /** A call's options — its second argument — where it is an object written inline, else `undefined`. */
 export function inlineOptions(
-    call: Node & { arguments?: readonly Node[] },
+    call: Node & { arguments?: readonly Node[] | undefined },
 ): ObjectLiteralExpression | undefined {
     const options = call.arguments?.[1]
     return options !== undefined && isObjectLiteralExpression(options)

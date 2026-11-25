@@ -7,7 +7,7 @@ import { type Reactive, reactive } from './reactive/index.ts'
 /** Whether the content shows. */
 export type SpoilerOptions = {
     /** Whether the content shows: hand it a `Reactive` to read and write it. Held by the parts, and handed back as `open`, where none is given. */
-    open?: Reactive<boolean>
+    open?: Reactive<boolean> | undefined
 }
 
 /** The parts `spoiler` hands back: `<button {...secret.cover}>`, `<span {...secret.content}>`. */

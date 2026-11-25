@@ -33,15 +33,15 @@ export type JsonRow = {
 /** The document, what it is searched for, and which rows are expanded and picked. */
 export type JsonInspectorOptions = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** The JSON value inspected; a function is read live. */
     value: Live<JsonValue>
     /** What is searched for, where the app holds it: a `Reactive` to read and set. Held by the parts, blank, and handed back as `query`, where none is given. */
-    query?: Reactive<string>
+    query?: Reactive<string> | undefined
     /** The pointers of the rows expanded, where the app holds them. Held by the parts, the root expanded, and handed back as `expanded`, where none is given. */
-    expanded?: Reactive<readonly string[]>
+    expanded?: Reactive<readonly string[]> | undefined
     /** The pointer of the row picked, where the app holds it. Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<string | undefined>
+    selected?: Reactive<string | undefined> | undefined
 }
 
 /** One row's parts: its item, its key and value in runs, whether it is expanded, and the toggle. */

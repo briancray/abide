@@ -279,8 +279,12 @@ export function classifyPropRead(node: Node): Read | undefined {
     if (isNotARead(parent)) return undefined
     if (parent.kind === SyntaxKind.BindingElement) {
         // The binding itself, and the key it renames from — neither is a read.
-        if ((parent as { name?: Node }).name === node) return undefined
-        if ((parent as { propertyName?: Node }).propertyName === node)
+        if ((parent as { name?: Node | undefined }).name === node)
+            return undefined
+        if (
+            (parent as { propertyName?: Node | undefined }).propertyName ===
+            node
+        )
             return undefined
     }
     const read = newRead(node.getStart(), node.end)
@@ -306,7 +310,7 @@ export function classifyRead(
     if (
         (parent.kind === SyntaxKind.VariableDeclaration ||
             parent.kind === SyntaxKind.BindingElement) &&
-        (parent as { name?: Node }).name === node
+        (parent as { name?: Node | undefined }).name === node
     )
         return undefined
     const read = newRead(node.getStart(), node.end)

@@ -560,12 +560,12 @@ async function warningsFor(
         if (READING.has(read.shape))
             starts.push({
                 start: read.start,
-                name: (node as { text?: string }).text ?? '',
+                name: (node as { text?: string | undefined }).text ?? '',
             })
     const warnings: Finding[] = []
     const typed: Promise<void>[] = []
     for (const { node, read } of located) {
-        const name = (node as { text?: string }).text ?? ''
+        const name = (node as { text?: string | undefined }).text ?? ''
         if (READING.has(read.shape))
             for (const warning of trackingWarnings(
                 node,
@@ -701,7 +701,10 @@ async function declaredType(
             holder = holder.parent
         return holder === undefined
             ? undefined
-            : annotated(checker, (holder as { type?: TypeNode }).type)
+            : annotated(
+                  checker,
+                  (holder as { type?: TypeNode | undefined }).type,
+              )
     }
     if (isArrowFunction(parent) && parent.body === top)
         return annotated(checker, parent.type)
@@ -1234,7 +1237,7 @@ async function isRouteParams(
  * about, as a pattern under any other callee is a pattern of values.
  */
 function declaredNames(
-    declaration: Node & { name: Node; initializer?: Node },
+    declaration: Node & { name: Node; initializer?: Node | undefined },
     visit: (name: Node) => void,
 ): void {
     const { name, initializer } = declaration
@@ -1262,7 +1265,7 @@ function patternNames(
     if (isIdentifier(name)) visit(name)
     else if (isObjectBindingPattern(name) || isArrayBindingPattern(name))
         for (const element of name.elements)
-            patternNames((element as { name?: Node }).name, visit)
+            patternNames((element as { name?: Node | undefined }).name, visit)
 }
 
 /**

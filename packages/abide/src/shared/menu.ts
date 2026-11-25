@@ -15,7 +15,7 @@ import { withPart } from './withPart.ts'
 /** Where a menu opens and what opens and closes it, as a `popover` takes them, and the menus it switches between. */
 export type MenuOptions = PopoverOptions & {
     /** The menus sharing this name switch between each other: a pointer on another's trigger, or ArrowLeft and ArrowRight, opens it while one of them is open. A function is read live. */
-    group?: Live<string | undefined>
+    group?: Live<string | undefined> | undefined
 }
 
 /** The parts `menu` hands back, each spread onto an element: `<button {...actions.trigger}>`. */

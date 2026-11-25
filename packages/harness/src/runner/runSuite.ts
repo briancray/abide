@@ -156,8 +156,8 @@ export async function runSuite(spec: {
     command: string[]
     reportTo: ReportTo
     cwd: string
-    environment?: Record<string, string>
-    deadline?: number
+    environment?: Record<string, string> | undefined
+    deadline?: number | undefined
 }): Promise<{ suites: Suite[]; milliseconds: number }> {
     const deadline = spec.deadline ?? SUITE_DEADLINE_MILLISECONDS
     const report = `${tmpdir()}/abide-suite-${crypto.randomUUID()}.xml`

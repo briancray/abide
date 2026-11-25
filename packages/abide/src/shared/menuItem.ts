@@ -43,11 +43,11 @@ export type MenuItem =
     | {
           label: string
           /** The shortcut, modifiers first: `cmd+shift+k`. */
-          key?: string
-          role?: MenuRole
+          key?: string | undefined
+          role?: MenuRole | undefined
           /** An address in the app, navigated to when the item is picked. */
-          href?: string
-          items?: MenuItem[]
+          href?: string | undefined
+          items?: MenuItem[] | undefined
       }
 
 /**
@@ -75,7 +75,11 @@ export class MenuEntry {
     /** 38.213 — the page's listener for `key`, while an answer is filed. */
     private listener: ((event: KeyboardEvent) => void) | undefined = undefined
 
-    constructor(item: { label: string; key?: string; href?: string }) {
+    constructor(item: {
+        label: string
+        key?: string | undefined
+        href?: string | undefined
+    }) {
         this.label = item.label
         this.key = item.key
         this.href = item.href
@@ -132,8 +136,8 @@ export class MenuEntry {
 /** A menu item a page answers with `on`. */
 export function menuItem(item: {
     label: string
-    key?: string
-    href?: string
+    key?: string | undefined
+    href?: string | undefined
 }): MenuEntry {
     return new MenuEntry(item)
 }

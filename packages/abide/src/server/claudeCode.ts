@@ -61,15 +61,15 @@ import { request } from './requestScope.ts'
  * for: built-in by name, or of the visitor's own MCP servers as `mcp__<server>__<tool>`.
  */
 export type ClaudeCodeConfig = {
-    model?: string
-    fallbackModel?: string
-    systemPrompt?: string
-    appendSystemPrompt?: string
-    effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
-    maxBudgetUsd?: number
-    betas?: string[]
-    disallowedTools?: string[]
-    tools?: string[]
+    model?: string | undefined
+    fallbackModel?: string | undefined
+    systemPrompt?: string | undefined
+    appendSystemPrompt?: string | undefined
+    effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max' | undefined
+    maxBudgetUsd?: number | undefined
+    betas?: string[] | undefined
+    disallowedTools?: string[] | undefined
+    tools?: string[] | undefined
 }
 
 /**
@@ -78,8 +78,8 @@ export type ClaudeCodeConfig = {
  * the question a link asks shows as its own words (44.91).
  */
 type PairingOptions = Pick<ClaudeCodeConfig, 'tools'> & {
-    full?: boolean
-    note?: string
+    full?: boolean | undefined
+    note?: string | undefined
 }
 
 /** The visitor's own Claude Code, reached through the bridge paired to their browser. */

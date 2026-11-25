@@ -68,7 +68,7 @@ export type RefusalAnswer = (
 
 export type Env = Record<string, string | undefined>
 export type ConfigDefaults = (env: Env) => unknown
-export type ConfigOptions = { schema?: Schema<unknown> }
+export type ConfigOptions = { schema?: Schema<unknown> | undefined }
 
 type Wrapper = (inner: () => Promise<void>) => void | Promise<void>
 

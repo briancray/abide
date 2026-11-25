@@ -680,10 +680,10 @@ function item(
     kind: TurnItem['kind'],
     fields: {
         event?: unknown
-        id?: number
-        method?: string
+        id?: number | undefined
+        method?: string | undefined
         params?: unknown
-        message?: string
+        message?: string | undefined
     },
 ): TurnItem {
     return {
@@ -841,14 +841,14 @@ type BridgeReport = {
     type: TurnItem['kind'] | 'missing'
     turn: string
     answer?: unknown
-    tools?: string[]
-    name?: string
+    tools?: string[] | undefined
+    name?: string | undefined
     input?: unknown
     event?: unknown
-    id?: number
-    method?: string
+    id?: number | undefined
+    method?: string | undefined
     params?: unknown
-    message?: string
+    message?: string | undefined
 }
 
 /** The tools of `asked` that `reported` names: a bridge says what it cannot give of no other. */

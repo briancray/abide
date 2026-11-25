@@ -22,31 +22,32 @@ export function markdown(
          * other renders as its text, and an address with no scheme is a path on this origin.
          * `['http', 'https', 'mailto']` by default.
          */
-        schemes?: readonly string[]
+        schemes?: readonly string[] | undefined
         /** The level a `#` heading renders at, the deeper ones below it, down to 6. 1 by default. */
-        headingLevel?: number
+        headingLevel?: number | undefined
         /**
          * Where each link `schemes` lets through goes: an address — a path under the app's mount,
          * say — or the address with the `target` and `rel` it opens with (52.40). A link it answers
          * `undefined` for renders as its text.
          */
-        href?: (address: string) => string | LinkTarget | undefined
+        href?:
+            ((address: string) => string | LinkTarget | undefined) | undefined
         /**
          * 52.42 — the fenced blocks rendered by the caller, by the first word of the fence's info:
          * each is handed the block's source and the rest of the info, and answers its markup, which is
          * written as it is.
          */
-        blocks?: Readonly<
-            Record<string, (source: string, info: string) => string>
-        >
+        blocks?:
+            | Readonly<Record<string, (source: string, info: string) => string>>
+            | undefined
         /** Whether `text` is one line of inline marks — a title, a table cell — with no paragraph around it. */
-        inline?: boolean
+        inline?: boolean | undefined
         /**
          * 52.50 — whether `text` is still being written, a model's answer as it streams: what its
          * end may yet turn into something else — an emphasis, a link, a table — is left out until it
          * can't.
          */
-        streaming?: boolean
+        streaming?: boolean | undefined
     } = {},
 ): string {
     const settings = {

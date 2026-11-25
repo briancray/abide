@@ -76,7 +76,10 @@ const PROBLEM_SCHEMA = {
 
 /** `schema` without the members the path carries, or `schema` itself where it carries none. */
 function withoutMembers(
-    schema: { properties?: Record<string, unknown>; required?: string[] },
+    schema: {
+        properties?: Record<string, unknown> | undefined
+        required?: string[] | undefined
+    },
     names: Set<string>,
 ): unknown {
     if (names.size === 0 || schema.properties === undefined) return schema
@@ -129,7 +132,10 @@ function openApiOf(handlers: Map<string, Mounted>): {
         // without a schema to type them. OpenAPI has no optional path parameter, so an optional or
         // rest segment is published present and says it may be left out (30.4, 30.5).
         const schema = each.schema as
-            | { properties?: Record<string, unknown>; required?: string[] }
+            | {
+                  properties?: Record<string, unknown> | undefined
+                  required?: string[] | undefined
+              }
             | undefined
         const inPath = new Set<string>()
         const parameters: unknown[] = []
@@ -238,9 +244,9 @@ const published = new WeakMap<Map<string, Mounted>, Reactive<Published[]>>()
 
 type JsonRpc = {
     jsonrpc: '2.0'
-    id?: number | string | null
+    id?: number | string | null | undefined
     method: string
-    params?: Record<string, unknown>
+    params?: Record<string, unknown> | undefined
 }
 
 /** An MCP request answered as JSON-RPC's `result` or `error`, without the envelope. */
@@ -488,8 +494,9 @@ function withPathPatterns(
     matchers: Record<string, string>,
 ): unknown {
     if (schema === null || typeof schema !== 'object') return schema
-    const properties = (schema as { properties?: Record<string, unknown> })
-        .properties
+    const properties = (
+        schema as { properties?: Record<string, unknown> | undefined }
+    ).properties
     if (properties === undefined) return schema
     const constrained: Record<string, unknown> = { ...properties }
     let changed = false

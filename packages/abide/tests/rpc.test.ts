@@ -83,6 +83,26 @@ test('a mutation runs again on a later call, where a read serves what it holds �
     expect(payments).toBe(2)
 })
 
+// 59.1, 16.7 — A `ttl` GIVEN `undefined` IS NO `ttl` DECLARED, and the mutation's 0 stands. THE REVERT:
+// spread the handler's options over `{ ttl: 0 }` with `undefined` kept; the second payment is served
+// the first one's answer and the body runs 1 time where 2 are due.
+test('a mutation given a ttl of undefined still runs again on a later call — 59.1, 16.7', async () => {
+    let payments = 0
+    const payInvoice = POST(
+        ({ id }: { id: string }) => {
+            payments += 1
+            return id
+        },
+        { ttl: undefined },
+    )
+
+    await payInvoice({ id: '42' })
+    await Bun.sleep(0)
+    await payInvoice({ id: '42' })
+
+    expect(payments).toBe(2)
+})
+
 // 16.7 IN ONE TURN — the `ttl` of 0 is dropped by a timer, and a second call awaited straight after
 // the first reached the answer before the timer did. THE REVERT: drop the `outlived` check in the
 // keyed reach and the `dropExpired` in `rpc.ts`; each body runs 1 time where 2 are due.

@@ -18,9 +18,9 @@ export type SortableTableOptions<Row> = {
     /** The columns: what each sorts by, shows and lines up on. */
     columns: Live<readonly Column<Row>[]>
     /** The column sorted by and its direction: hand it a `Reactive` to read and set the sort. */
-    sort?: Reactive<Sort | undefined>
+    sort?: Reactive<Sort | undefined> | undefined
     /** The keys of the rows picked: hand it a `Reactive` to read and set the selection (51.72). */
-    selected?: Reactive<readonly string[] | undefined>
+    selected?: Reactive<readonly string[] | undefined> | undefined
 } & KeyOption<Row>
 
 /** One column's parts: its header cell, the button in it that sorts, and its body cells. */

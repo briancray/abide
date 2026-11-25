@@ -11,15 +11,15 @@ export type Side = 'top' | 'bottom' | 'left' | 'right'
 /** Where a floating element sits against its anchor, and how it is kept on screen. */
 export type PlaceOptions = {
     /** The side tried first; where it has no room, the opposite one, and where neither has, whichever has the most (50.20). Default `'bottom'`; a function is read at each placement. */
-    side?: Live<Side>
+    side?: Live<Side> | undefined
     /** Which edge of the anchor the floating element lines up with along that side: `'start'`, `'center'` or `'end'`. Default `'center'`; a function is read at each placement. */
-    align?: Live<'start' | 'center' | 'end'>
+    align?: Live<'start' | 'center' | 'end'> | undefined
     /** Pixels between the anchor and the floating element. Default `8`; a function is read at each placement. */
-    offset?: Live<number>
+    offset?: Live<number> | undefined
     /** Pixels the floating element keeps from the viewport's edges. Default `8`; a function is read at each placement. */
-    margin?: Live<number>
+    margin?: Live<number> | undefined
     /** 50.35 — pixels `arrow` keeps from each end of the floating element's facing edge, so an arrow clears its rounded corners. Default `0`; a function is read at each placement. */
-    arrowInset?: Live<number>
+    arrowInset?: Live<number> | undefined
 }
 
 /** Where `place` puts a floating element, in viewport pixels. */

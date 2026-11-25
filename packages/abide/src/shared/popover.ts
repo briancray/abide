@@ -24,13 +24,13 @@ import { withPart } from './withPart.ts'
 export type PopoverOptions = PlaceOptions &
     HoverAndFocusOptions & {
         /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
-        id?: string
+        id?: string | undefined
         /** Whether the popover is open: hand it a `Reactive` to read and write it, and every way it closes writes `false` back. */
-        open?: Reactive<boolean>
+        open?: Reactive<boolean> | undefined
         /** 50.60 — whether Escape closes it. `true` by default. */
-        escape?: boolean
+        escape?: boolean | undefined
         /** 50.60 — whether a press outside it and its trigger or anchor closes it. `true` by default. */
-        outside?: boolean
+        outside?: boolean | undefined
     }
 
 /** The parts `popover` hands back: `<button {...filters.trigger}>`, `<div {...filters.popover}>`. */

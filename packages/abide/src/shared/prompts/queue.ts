@@ -11,30 +11,30 @@ import { standing } from '../standing.ts'
 /** What a `prompts.confirm`, `prompts.alert` or `prompts.prompt` shows, and what its buttons say. */
 export type PromptOptions = {
     /** The heading, written in the `title` part, and the dialog's accessible name where given. */
-    title?: string
+    title?: string | undefined
     /** The question or the message, written in the `body` part. A string handed in place of the options is this. */
-    body?: string
+    body?: string | undefined
     /** The confirming button's text: `'OK'` by default. An alert's one button. */
-    confirm?: string
+    confirm?: string | undefined
     /** The declining button's text: `'Cancel'` by default. An alert has none. */
-    cancel?: string
+    cancel?: string | undefined
     /** Whether confirming loses something: written as `data-danger` on the dialog, for a warning's colors. */
-    danger?: boolean
+    danger?: boolean | undefined
     /** A word the person types before the confirming button enables, matched trimmed and ignoring case. */
-    mustType?: string
+    mustType?: string | undefined
     /** The text the input starts with: `''` by default. Only `prompts.prompt` asks for text unless `mustType` is set. */
-    value?: string
+    value?: string | undefined
     /** The input's placeholder. */
-    placeholder?: string
+    placeholder?: string | undefined
     /** Withdraws the prompt once it aborts, waiting or showing; it settles as one declined (50.43). */
-    signal?: AbortSignal
+    signal?: AbortSignal | undefined
     /** Whether it is shown modal, over an inert page. `false` leaves the page usable around it (50.44). Default `true`. */
-    modal?: boolean
+    modal?: boolean | undefined
     /**
      * The call confirming makes, handed the text typed: the prompt stays up, `data-busy`, until it
      * settles, closes once it resolves, and shows its error once it rejects (50.45).
      */
-    run?: (answer: string) => unknown
+    run?: ((answer: string) => unknown) | undefined
 }
 
 /** One queued prompt: what it shows, which of the three asked it, and what settles its caller. */

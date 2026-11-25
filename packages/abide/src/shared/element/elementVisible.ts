@@ -72,24 +72,28 @@ class Rooted {
 export function elementVisible(
     target: Reactive<unknown, boolean, unknown, unknown>,
     options?: Margins & {
-        root?: Reactive<Root | null | undefined, never, unknown, unknown>
-        once?: boolean
+        root?:
+            | Reactive<Root | null | undefined, never, unknown, unknown>
+            | undefined
+        once?: boolean | undefined
     },
 ): Record<string, unknown>
 export function elementVisible(
     target: Reactive<unknown, boolean, unknown, unknown>,
-    options?: Margins & { root?: Root; once?: boolean },
+    options?: Margins & { root?: Root | undefined; once?: boolean | undefined },
 ): Record<string, unknown>
 export function elementVisible(
     target: (visible: boolean) => void,
     options?: Margins & {
-        root?: Reactive<Root | null | undefined, never, unknown, unknown>
-        once?: boolean
+        root?:
+            | Reactive<Root | null | undefined, never, unknown, unknown>
+            | undefined
+        once?: boolean | undefined
     },
 ): Record<string, unknown>
 export function elementVisible(
     target: (visible: boolean) => void,
-    options?: Margins & { root?: Root; once?: boolean },
+    options?: Margins & { root?: Root | undefined; once?: boolean | undefined },
 ): Record<string, unknown>
 /**
  * 32.110 — whether it is in view, held for the reader: `host` to spread and `visible` read by
@@ -97,16 +101,18 @@ export function elementVisible(
  */
 export function elementVisible(
     options?: Margins & {
-        root?: Reactive<Root | null | undefined, never, unknown, unknown>
-        once?: boolean
+        root?:
+            | Reactive<Root | null | undefined, never, unknown, unknown>
+            | undefined
+        once?: boolean | undefined
     },
 ): VisibleObserved
 export function elementVisible(
-    options?: Margins & { root?: Root; once?: boolean },
+    options?: Margins & { root?: Root | undefined; once?: boolean | undefined },
 ): VisibleObserved
 export function elementVisible(
     target?: unknown,
-    options?: Margins & { root?: unknown; once?: boolean },
+    options?: Margins & { root?: unknown; once?: boolean | undefined },
 ): Record<string, unknown> | VisibleObserved {
     // 1.6 — a `Reactive` is a function, so the brand needs no read ahead of this one.
     if (typeof target === 'function')
@@ -121,7 +127,8 @@ export function elementVisible(
             'bind:element': visibleBinding(
                 seen,
                 target as
-                    (Margins & { root?: unknown; once?: boolean }) | undefined,
+                    | (Margins & { root?: unknown; once?: boolean | undefined })
+                    | undefined,
             ),
         },
         get visible() {
@@ -133,7 +140,7 @@ export function elementVisible(
 // The binding the part carries.
 function visibleBinding(
     target: unknown,
-    options?: Margins & { root?: unknown; once?: boolean },
+    options?: Margins & { root?: unknown; once?: boolean | undefined },
 ): (element: Element) => Disposer {
     const root = options?.root
     const once = options?.once === true

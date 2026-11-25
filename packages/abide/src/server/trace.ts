@@ -99,7 +99,7 @@ export const trace = Object.assign(
         span<T>(
             name: string,
             body: () => T,
-            options?: { timing?: boolean },
+            options?: { timing?: boolean | undefined },
         ): T {
             const timing = options?.timing === true
             if (timing && !TOKEN.test(name))

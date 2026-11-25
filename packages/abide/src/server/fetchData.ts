@@ -12,17 +12,17 @@ import { runSchema, type Schema } from '#shared/Schema.ts'
 /** `fetch`'s own options, and the reading, the deadline, the retries, the cache and the gate beside them. */
 export type FetchOptions<T> = RequestInit & {
     /** 54.17 — the body read as JSON, text or a `Blob` whatever its type says, in place of as `handle` reads it. */
-    as?: 'json' | 'text' | 'blob'
+    as?: 'json' | 'text' | 'blob' | undefined
     /** 54.7 — the milliseconds one attempt may take before it is aborted; 10000 where none is given. */
-    timeout?: number
+    timeout?: number | undefined
     /** 54.8, 54.9 — how many times to ask again after a failure worth asking again; 2 for an idempotent method, 0 for any other. */
-    retries?: number
+    retries?: number | undefined
     /** 54.10 — the first wait before asking again, doubled per retry, or the wait before each retry; 250 where none is given. */
-    backoff?: Backoff
+    backoff?: Backoff | undefined
     /** 54.12, 54.13 — the milliseconds a `GET`'s answer is held for the same URL, headers and reading. */
-    ttl?: number
+    ttl?: number | undefined
     /** 54.17 — what the body must be, checked before it is the answer. */
-    schema?: Schema<T>
+    schema?: Schema<T> | undefined
 }
 
 const DEFAULT_TIMEOUT = 10_000

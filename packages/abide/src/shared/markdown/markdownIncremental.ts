@@ -30,15 +30,15 @@ export function markdownIncremental(options: {
     /** The markdown to render, as it stands: a stream hands it the text so far. */
     source: Live<string>
     /** As `markdown` takes it. */
-    schemes?: Live<readonly string[] | undefined>
+    schemes?: Live<readonly string[] | undefined> | undefined
     /** As `markdown` takes it. */
-    headingLevel?: Live<number | undefined>
+    headingLevel?: Live<number | undefined> | undefined
     /** As `markdown` takes it (52.40). A new function renders every section again. */
-    href?: (address: string) => string | LinkTarget | undefined
+    href?: ((address: string) => string | LinkTarget | undefined) | undefined
     /** 52.43 — the first words of a fence's info whose block the app renders, as a section's `block`. */
-    blocks?: Live<readonly string[] | undefined>
+    blocks?: Live<readonly string[] | undefined> | undefined
     /** 52.50 — as `markdown` takes it. */
-    streaming?: Live<boolean | undefined>
+    streaming?: Live<boolean | undefined> | undefined
 }): { readonly sections: readonly MarkdownSection[] } {
     // The sections no later text can change, the source and settings they were rendered from, and
     // the section still growing as the last text left it.

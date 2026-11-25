@@ -24,13 +24,13 @@ const contentOf = (clicked: Element): Copyable => ({
 export function copy(
     options: {
         /** What to copy, or a function read at the click — handed the element clicked — for a value that changes. The element clicked's text and markup by default. */
-        value?: Copyable | ((clicked: Element) => Copyable)
+        value?: Copyable | ((clicked: Element) => Copyable) | undefined
         /** How long `data-copied` stays on the element after a copy, in milliseconds. 1500 by default. */
-        copiedFor?: number
+        copiedFor?: number | undefined
         /** The buttons inside the element a click copies from, in place of the element itself. */
-        selector?: string
+        selector?: string | undefined
         /** 53.44 — called once a click's copy has landed or failed, with whether it landed and the element clicked. */
-        oncopied?: (copied: boolean, clicked: Element) => void
+        oncopied?: ((copied: boolean, clicked: Element) => void) | undefined
     } = {},
 ): Record<string, unknown> {
     const { value = contentOf, copiedFor = 1500, selector, oncopied } = options

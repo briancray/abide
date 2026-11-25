@@ -64,7 +64,7 @@ export class TypeSession {
     /** Reads and compiler warnings for every file, in one checker snapshot (`reactiveReads`). */
     readsFor(
         sources: readonly (Pick<ParsedSource, 'path' | 'file'> & {
-            text?: string
+            text?: string | undefined
         })[],
     ): Promise<{ answers: CheckerAnswer[]; warnings: Diagnosis[] }> {
         return reactiveReads(this.host, sources)

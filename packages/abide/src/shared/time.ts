@@ -12,11 +12,11 @@ import { type Live, live } from './live.ts'
 /** How a time is written. Each is read live where a function is given. */
 export type TimeOptions = {
     /** `'long'` (`12 minutes ago`), `'short'` (`12 min. ago`) or `'narrow'` (`12m ago`). `'long'` by default. */
-    style?: Live<'long' | 'short' | 'narrow'>
+    style?: Live<'long' | 'short' | 'narrow'> | undefined
     /** The BCP 47 locale it is written in. `'en-US'` by default. */
-    locale?: Live<string | undefined>
+    locale?: Live<string | undefined> | undefined
     /** The zone the `title` writes the date in, as `format.date` takes one. */
-    timeZone?: Live<string | undefined>
+    timeZone?: Live<string | undefined> | undefined
 }
 
 /** One time's parts: the `<time>` holding it, and the text it reads as. */

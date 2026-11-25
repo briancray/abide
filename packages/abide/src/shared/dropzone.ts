@@ -11,17 +11,17 @@ export type DropzoneOptions = {
      * The files taken, written as an `<input type="file">`'s `accept`: MIME types, `image/*`
      * wildcards and `.pdf` extensions, separated by commas. Every file by default.
      */
-    accept?: string
+    accept?: string | undefined
     /** Whether a paste of files into the host is taken as a drop. `false` by default; a function is read live. */
-    paste?: Live<boolean>
+    paste?: Live<boolean> | undefined
     /** Whether more than the first accepted file is taken. `true` by default; a function is read live. */
-    multiple?: Live<boolean>
+    multiple?: Live<boolean> | undefined
     /** 49.8 — the files taken last, to read, clear or bind; one of the parts' own by default. */
-    files?: Reactive<readonly File[]>
+    files?: Reactive<readonly File[]> | undefined
     /** Handed the files a drop, a paste or a pick took, where it took any. */
-    onfiles?: (files: File[], event: Event) => void
+    onfiles?: ((files: File[], event: Event) => void) | undefined
     /** 53.45 — handed the files a drop, a paste or a pick carried that were not taken, where there are any. */
-    onreject?: (files: File[], event: Event) => void
+    onreject?: ((files: File[], event: Event) => void) | undefined
 }
 
 /** The parts `dropzone` hands back: `<div {...drop.host}>`, `<input {...drop.input}>`. */

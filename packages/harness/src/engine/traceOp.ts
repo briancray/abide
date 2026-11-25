@@ -21,7 +21,9 @@ const TRACE_CATEGORIES = [
 
 type TraceEvent = {
     name: string
-    args?: { beginData?: { stackTrace?: unknown }; data?: unknown }
+    args?:
+        | { beginData?: { stackTrace?: unknown } | undefined; data?: unknown }
+        | undefined
 }
 
 type Metrics = Record<string, number>

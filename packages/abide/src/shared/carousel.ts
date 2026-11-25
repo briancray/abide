@@ -25,21 +25,21 @@ import { withPart } from './withPart.ts'
 /** The items, how each is told apart and named, the one the carousel rests on, and how it scrolls. */
 export type CarouselOptions<Item> = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** The items, in the order they render; a function is read live. */
     items: Live<readonly Item[]>
     /** The key of the item the carousel rests on, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. A key no item has rests on the first. */
-    selected?: Reactive<string | undefined>
+    selected?: Reactive<string | undefined> | undefined
     /** Which edge of an item, or its center, lines up with the same place in the scroller: `'center'` by default, as `scroll-snap-align` names it. A function is read live. */
-    align?: Live<'start' | 'center' | 'end'>
+    align?: Live<'start' | 'center' | 'end'> | undefined
     /** How `scrollTo`, `reset`, `previous` and `next` scroll. `'smooth'` by default; a function is read live. */
-    behavior?: Live<'auto' | 'smooth'>
+    behavior?: Live<'auto' | 'smooth'> | undefined
     /** Whether `next` at the last item goes to the first, and `previous` at the first to the last. `false` by default; a function is read live. */
-    loop?: Live<boolean>
+    loop?: Live<boolean> | undefined
     /** The milliseconds between steps while it plays; none, and it never steps by itself. A function is read live. */
-    autoplay?: Live<number | undefined>
+    autoplay?: Live<number | undefined> | undefined
     /** Whether it is playing: a `Reactive` to read and set. Held by the parts, and handed back as `playing`, where none is given — starting true where `autoplay` is given. */
-    playing?: Reactive<boolean>
+    playing?: Reactive<boolean> | undefined
 } & KeyOption<Item> &
     LabelOption<Item>
 
@@ -71,8 +71,8 @@ export type Carousel<Item> = {
 
 // What 53.66 reads off a snap event: the element the scroller snaps to, on either axis.
 type SnapEvent = Event & {
-    snapTargetInline?: Element | null
-    snapTargetBlock?: Element | null
+    snapTargetInline?: Element | null | undefined
+    snapTargetBlock?: Element | null | undefined
 }
 
 type Align = 'start' | 'center' | 'end'

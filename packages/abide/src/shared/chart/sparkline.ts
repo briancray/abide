@@ -13,16 +13,16 @@ export type SparklineOptions = {
     /** What the trend shows, as the image's accessible name: `'Won revenue, last 6 months'`. */
     label: Live<string>
     /** Whether the range takes in zero, so a run of zeroes lies along the bottom. `false` by default. */
-    zero?: Live<boolean>
+    zero?: Live<boolean> | undefined
     /** 52.33 — `'bar'` scales the values from zero, as bars are read by their length. `'line'` by default. */
-    kind?: Live<'line' | 'bar'>
+    kind?: Live<'line' | 'bar'> | undefined
     /** Whether the line and the area under it curve through the values (52.105). `false` by default. */
-    curve?: Live<boolean>
+    curve?: Live<boolean> | undefined
     /**
      * The room kept above and below the values, as a share of their span: `0.15`, or `[below, above]`
      * to leave the area room under the line (52.119). None by default.
      */
-    pad?: Live<number | readonly [number, number]>
+    pad?: Live<number | readonly [number, number]> | undefined
 }
 
 /** The parts `sparkline` hands back, each spread onto an element of its own. */

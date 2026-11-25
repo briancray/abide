@@ -47,7 +47,7 @@ const DECLARES = /\b(?:const|let|var|import)\b/
 export async function reactiveReads(
     host: ShadowHost,
     sources: readonly (Pick<ParsedSource, 'path' | 'file'> & {
-        text?: string
+        text?: string | undefined
     })[],
 ): Promise<{ answers: CheckerAnswer[]; warnings: Diagnosis[] }> {
     // Per source, its shadow and what is asked of it, or `undefined` where nothing is declared.
@@ -137,7 +137,7 @@ async function fixedPoint(
     host: ShadowHost,
     first: Project,
     sources: readonly (Pick<ParsedSource, 'path' | 'file'> & {
-        text?: string
+        text?: string | undefined
     })[],
     queries: readonly (
         { map: ShadowMap; projection: Projection } | undefined

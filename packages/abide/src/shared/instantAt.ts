@@ -19,7 +19,7 @@ const WALL_CLOCK = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$/
  */
 export function instantAt(
     wallClock: string,
-    options: { timeZone?: string } = {},
+    options: { timeZone?: string | undefined } = {},
 ): number | undefined {
     if (!WALL_CLOCK.test(wallClock)) return undefined
     const reading = Date.UTC(

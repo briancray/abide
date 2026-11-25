@@ -8,7 +8,7 @@ import { place, type Placement, type PlaceOptions } from './place.ts'
 /** Where an anchored popover sits, and whether it takes the pointer. */
 export type AnchoredOptions = PlaceOptions & {
     /** 50.47 — `false` for a layer the pointer passes through, as a hint is. Default `true`. */
-    interactive?: boolean
+    interactive?: boolean | undefined
     /** 52.67 — the box the layer is placed against, where it is not the anchor's own: a pie slice's arc, whose element is the whole ring. Read at each placement. */
     box?: ((anchor: Element) => DOMRect) | undefined
 }

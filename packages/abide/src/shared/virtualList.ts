@@ -30,19 +30,19 @@ export type VirtualListOptions<Item> = {
     /** The items, in order; a function is read live. */
     items: Live<readonly Item[]>
     /** The section an item stands in — the letter its title starts with, say — for `sections`. */
-    section?: (item: Item) => string
+    section?: ((item: Item) => string) | undefined
     /** Every section `sections` lists, in order, those with no item among them; a function is read live. */
-    labels?: Live<readonly string[]>
+    labels?: Live<readonly string[]> | undefined
     /** Rows rendered past each end of the view. `3` by default; a function is read live. */
-    overscan?: Live<number>
+    overscan?: Live<number> | undefined
     /** Items rendered before the first measurement, and on a server. `40` by default. */
-    initial?: number
+    initial?: number | undefined
     /** An item's height in pixels before one is measured. `48` by default. */
-    estimate?: number
+    estimate?: number | undefined
     /** How `scrollTo` and a section's jump scroll. `'auto'` by default; a function is read live. */
-    behavior?: Live<'auto' | 'smooth'>
+    behavior?: Live<'auto' | 'smooth'> | undefined
     /** Whether a pointer dragged along `sections`' host jumps by each jump it reaches. `false` by default; a function is read live. */
-    scrub?: Live<boolean>
+    scrub?: Live<boolean> | undefined
 } & KeyOption<Item>
 
 /** One item `shown` renders: the item, where it stands in `items`, and its key. */

@@ -21,11 +21,11 @@ const LONGEST_MAX_AGE = 400 * 24 * 60 * 60
 export function cookies<Stored>(
     name: string,
     options?: {
-        path?: string
-        domain?: string
-        sameSite?: 'strict' | 'lax' | 'none'
-        secure?: boolean
-        schema?: Schema<Stored>
+        path?: string | undefined
+        domain?: string | undefined
+        sameSite?: 'strict' | 'lax' | 'none' | undefined
+        secure?: boolean | undefined
+        schema?: Schema<Stored> | undefined
     },
 ): Store<Stored> {
     const schema = options?.schema as Schema<unknown> | undefined
@@ -70,16 +70,17 @@ export function cookies<Stored>(
         // 8.40 — the browser's `cookieStore` reports a change, where it has one (22.6); a server, or
         // a browser without it, follows nothing (22.7).
         watch: (changed) => {
-            const store = (globalThis as { cookieStore?: EventTarget })
-                .cookieStore
+            const store = (
+                globalThis as { cookieStore?: EventTarget | undefined }
+            ).cookieStore
             if (store === undefined) return () => {}
             // The jar first: it listens too, and must have taken the change in before `get` reads it.
             requestCookies()
             const listener = (event: Event): void => {
                 const { changed: written = [], deleted = [] } =
                     event as unknown as {
-                        changed?: { name: string }[]
-                        deleted?: { name: string }[]
+                        changed?: { name: string }[] | undefined
+                        deleted?: { name: string }[] | undefined
                     }
                 const named = cookieName()
                 for (const cookie of written)

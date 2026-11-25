@@ -12,13 +12,13 @@ import { type Reactive, reactive, watch } from './reactive/index.ts'
 /** Whether the dialog shows, and how it opens and closes. */
 export type DialogOptions = {
     /** Whether the dialog is showing: hand it a `Reactive` to read and write it, and every way it closes writes `false` back. One of the dialog's own by default. */
-    open?: Reactive<boolean>
+    open?: Reactive<boolean> | undefined
     /** Whether it opens modal, over an inert page, or beside the page with `show`. `true` by default. */
-    modal?: Live<boolean>
+    modal?: Live<boolean> | undefined
     /** Whether Escape and a click on the backdrop, or on the element `backdrop` is spread on, close it. `true` by default. */
-    dismissible?: Live<boolean>
+    dismissible?: Live<boolean> | undefined
     /** Called each time it closes, however it closed, with the `<dialog>`'s `returnValue`. */
-    onclose?: (returnValue: string) => void
+    onclose?: ((returnValue: string) => void) | undefined
 }
 
 /** The parts `dialog` hands back, `<dialog {...edit.dialog}>`, and whether it is showing. */

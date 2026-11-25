@@ -390,7 +390,7 @@ async function etagOf(blob: Blob): Promise<string> {
     // A file `Bun.file` made carries its path as `name` and its write time as `lastModified`.
     const { name: path, lastModified } = blob as {
         name?: unknown
-        lastModified?: number
+        lastModified?: number | undefined
     }
     if (
         typeof path === 'string' &&

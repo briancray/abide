@@ -39,14 +39,17 @@ export function authorize(
     admits: Admits,
     options?: {
         /** What the `Forbidden` refusal says. */
-        message?: string
+        message?: string | undefined
         /** 403, the default, refuses `Forbidden`; 404 answers as an address nothing serves (54.28). */
-        status?: 403
+        status?: 403 | undefined
     },
 ): Middleware<never, object, SignedOut | Failed<'Forbidden', undefined>>
 export function authorize(
     admits: Admits,
-    options: { message?: string; status?: 403 | 404 } = {},
+    options: {
+        message?: string | undefined
+        status?: 403 | 404 | undefined
+    } = {},
 ): Middleware<
     never,
     object,

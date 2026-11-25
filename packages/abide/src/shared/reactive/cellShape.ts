@@ -597,7 +597,9 @@ export class Cell {
                   ? tags(args as never)
                   : tags
         this.mutation =
-            (options as { [MUTATION]?: true } | undefined)?.[MUTATION] === true
+            (options as { [MUTATION]?: true | undefined } | undefined)?.[
+                MUTATION
+            ] === true
         this.local = false
         const store = options?.store
         this.store =

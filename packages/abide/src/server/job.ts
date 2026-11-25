@@ -32,29 +32,30 @@ export type Job<Input = undefined> = {
 /** 54.18 — what a job is: its name, its schedule, its work, and what holds or remembers it. */
 export type JobOptions<Input = undefined> = {
     /** 54.23 — what a failed run is logged under, beside `job`. */
-    name?: string
+    name?: string | undefined
     /** 54.26, 54.39 — the work, handed what `Job.run` was given and `undefined` where a look started it; `abortSignal()` in it says stop. */
     run: (input: Input | undefined) => unknown
     /** 54.21 — when the last run ended before this process, in epoch milliseconds, or `undefined` where none has. */
-    lastRun?: () => number | undefined
+    lastRun?: (() => number | undefined) | undefined
     /** 54.38 — what holds the schedule: while it reads true, a look starts no run. */
-    paused?: Reactive<boolean, never, never, boolean> | (() => boolean)
+    paused?:
+        Reactive<boolean, never, never, boolean> | (() => boolean) | undefined
 } & (
     | {
           /** 54.18, 54.19, 54.25 — the milliseconds between the end of one run and the next, or between their starts under `from`, read at each look where a function. */
           every: number | (() => number)
           /** 54.29 — whether `every` is measured from when the last run `'end'`ed, the default, or from when it `'start'`ed. */
-          from?: 'end' | 'start'
-          cron?: never
-          timeZone?: never
+          from?: 'end' | 'start' | undefined
+          cron?: never | undefined
+          timeZone?: never | undefined
       }
     | {
           /** 54.40, 54.41 — the times a run is due, as a five-field cron expression or a nickname such as `@daily`. */
           cron: string
           /** 54.41 — the IANA zone `cron` is read in, where it is not the server's own. */
-          timeZone?: string
-          every?: never
-          from?: never
+          timeZone?: string | undefined
+          every?: never | undefined
+          from?: never | undefined
       }
 )
 

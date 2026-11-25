@@ -13,23 +13,23 @@ import { scrub, type ScrubPosition } from './scrub.ts'
 /** The range picked, and the scale it is picked on. */
 export type RangeOptions = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** The low and the high end of the range picked, where the app holds them: a `Reactive` to read and set. Held by the parts, from `min` to `max`, and handed back as `value`, where none is given. */
-    value?: Reactive<readonly [number, number]>
+    value?: Reactive<readonly [number, number]> | undefined
     /** What the range is of, as the group's accessible name: `'Deal amount'`. */
     label: Live<string>
     /** The least value. 0 by default. */
-    min?: Live<number>
+    min?: Live<number> | undefined
     /** The greatest value. 100 by default. */
-    max?: Live<number>
+    max?: Live<number> | undefined
     /** How far apart the values a thumb stops at are, from `min`. 1 by default. */
-    step?: Live<number>
+    step?: Live<number> | undefined
     /** Each thumb's accessible name, low then high. `['Minimum', 'Maximum']` by default; a function is read live. */
-    labels?: Live<readonly [string, string]>
+    labels?: Live<readonly [string, string]> | undefined
     /** Writes a value for the thumb's `aria-valuetext`: `format.money`, say. `format.number` by default. */
-    format?: (value: number) => string
+    format?: ((value: number) => string) | undefined
     /** The name each end is submitted under by `input`, low then high (51.91); a function is read live. */
-    name?: Live<string | undefined>
+    name?: Live<string | undefined> | undefined
 }
 
 /** One end's parts, low (`0`) or high (`1`): its thumb, and the hidden field submitting it. */

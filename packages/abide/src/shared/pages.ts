@@ -12,13 +12,13 @@ export type PagesOptions = {
     /** How many pages there are; a function is read live. */
     count: Live<number>
     /** The page on, from `1`: a `Reactive` to read and set. Held by the parts, and handed back as `page`, where none is given. */
-    page?: Reactive<number>
+    page?: Reactive<number> | undefined
     /** How many pages either side of the page on are listed. `1` by default; a function is read live. */
-    around?: Live<number>
+    around?: Live<number> | undefined
     /** The address of a page, making each part a link to it rather than a button. */
-    href?: (page: number) => string
+    href?: ((page: number) => string) | undefined
     /** The nav's accessible name. `'Pages'` by default; a function is read live. */
-    label?: Live<string>
+    label?: Live<string> | undefined
 }
 
 /** The parts `pages` hands back: `<nav {...list.nav}>`, `<a {...list.link(n)}>`. */

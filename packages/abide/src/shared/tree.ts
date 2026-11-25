@@ -20,17 +20,17 @@ import { type Picked, Selection } from './Selection.ts'
 /** The nodes, how each is told apart and named, and which are open and picked. */
 export type TreeOptions<Node, Multiple extends boolean = false> = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** The top level's nodes, in the order they render; a function is read live. */
     roots: Live<readonly Node[]>
     /** A node's children, in order; none, or an empty list, for a leaf. */
     children(node: Node): readonly Node[] | undefined
     /** The keys of the nodes expanded, where the app holds them: a `Reactive` to read and set. Held by the parts, none expanded, and handed back as `expanded`, where none is given. */
-    expanded?: Reactive<readonly string[]>
+    expanded?: Reactive<readonly string[]> | undefined
     /** 51.98 — whether it selects many, each press changing the selection rather than replacing it. `false` by default. */
-    multiple?: Multiple
+    multiple?: Multiple | undefined
     /** The key of the node picked, or every key picked where it selects many, where the app holds them: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<Picked<string, Multiple>>
+    selected?: Reactive<Picked<string, Multiple>> | undefined
 } & KeyOption<Node> &
     LabelOption<Node>
 

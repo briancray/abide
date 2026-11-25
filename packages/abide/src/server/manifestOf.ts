@@ -73,7 +73,8 @@ export function manifestOf(
         if (module !== ENTRY_MODULE) continue
         manifest.entry = chunkName(output)
         // NOT IN bun-types, and in the metafile: the stylesheet an entry's CSS was collected into.
-        const sheet = (described as { cssBundle?: string }).cssBundle
+        const sheet = (described as { cssBundle?: string | undefined })
+            .cssBundle
         manifest.stylesheet = sheet === undefined ? undefined : chunkName(sheet)
     }
 

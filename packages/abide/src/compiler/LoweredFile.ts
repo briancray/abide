@@ -182,7 +182,8 @@ export class LoweredFile {
                       ])
                 const definitions: Place[] = []
                 for (const node of declarations) {
-                    const named = (node as { name?: Node }).name ?? node
+                    const named =
+                        (node as { name?: Node | undefined }).name ?? node
                     const file = node.getSourceFile()
                     definitions.push(
                         this.spanInSource(
@@ -267,7 +268,8 @@ export class LoweredFile {
                 if (definition === undefined) continue
                 const declaredIn = definition.getSourceFile().fileName
                 if (!this.authored(declaredIn)) renamable = false
-                const declared = (definition as { name?: Node }).name
+                const declared = (definition as { name?: Node | undefined })
+                    .name
                 const references = await Promise.all(
                     entry.references.map((handle) => handle.resolve(project)),
                 )
@@ -300,8 +302,8 @@ export class LoweredFile {
                         holder.kind ===
                             SyntaxKind.ShorthandPropertyAssignment ||
                         (holder.kind === SyntaxKind.BindingElement &&
-                            (holder as { propertyName?: Node }).propertyName ===
-                                undefined)
+                            (holder as { propertyName?: Node | undefined })
+                                .propertyName === undefined)
                     occurrences.push({
                         ...placed,
                         declaration,

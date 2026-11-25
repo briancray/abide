@@ -15,12 +15,12 @@ export type Hotkey =
            * Whether the binding runs while the event's target is a field the visitor types in
            * (`isEditableTarget`). `false` by default: a bare `n` belongs to the field it is typed in.
            */
-          editable?: boolean
+          editable?: boolean | undefined
           /**
            * Whether the binding calls `preventDefault` on the press it runs for. `true` by default;
            * `false` leaves the key's default to the page — an Escape a dialog still closes on.
            */
-          prevent?: boolean
+          prevent?: boolean | undefined
       }
 
 type Bound = HotkeyBinding & {

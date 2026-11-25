@@ -10,9 +10,9 @@ import { isThenable } from './reactive/isThenable.ts'
 /** The value, and what saves an edit of it. */
 export type InlineEditOptions = {
     /** The value shown and edited: a `Reactive` to read and write it. Held by the parts, and handed back as `value`, where none is given. */
-    value?: Reactive<string>
+    value?: Reactive<string> | undefined
     /** Saves the text an edit ends with, before `value` takes it; a promise it hands back is waited on, and its rejection keeps the field open. */
-    save?: (text: string) => unknown
+    save?: ((text: string) => unknown) | undefined
 }
 
 /** The parts `inlineEdit` hands back: `<button {...name.view}>`, `<input {...name.input}>`. */

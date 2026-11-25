@@ -11,17 +11,17 @@ export type MeterOptions = {
     /** The value; `undefined` for a progress bar whose progress is not known. A function is read live. */
     value: Live<number | undefined>
     /** The bottom of the range. `0` by default; a function is read live. */
-    min?: Live<number>
+    min?: Live<number> | undefined
     /** The top of the range. `1` by default; a function is read live. */
-    max?: Live<number>
+    max?: Live<number> | undefined
     /** Below this the value is `low`. A function is read live. */
-    low?: Live<number>
+    low?: Live<number> | undefined
     /** Above this the value is `high`. A function is read live. */
-    high?: Live<number>
+    high?: Live<number> | undefined
     /** `'progressbar'` for progress toward an end rather than a measure. `'meter'` by default; a function is read live. */
-    role?: Live<'meter' | 'progressbar'>
+    role?: Live<'meter' | 'progressbar'> | undefined
     /** The accessible name; a function is read live. */
-    label?: Live<string>
+    label?: Live<string> | undefined
 }
 
 /** The parts `meter` hands back: `<div {...quota.meter}><div {...quota.fill}></div></div>`. */

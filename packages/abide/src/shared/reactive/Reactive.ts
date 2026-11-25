@@ -112,7 +112,7 @@ export type Transformer<Accepted, Stored, Failures = never> = (
 export type Store<Stored> = {
     get: () => Stored | undefined | Promise<Stored | undefined>
     set: (value: Stored, retention: { ttl: number }) => void | Promise<void>
-    watch?: (changed: () => void) => () => void
+    watch?: ((changed: () => void) => () => void) | undefined
 }
 
 /**
@@ -151,21 +151,21 @@ export type ReactiveOptions<
      * RULEBOOK 11.40, 11.28, 11.68: the gate on a keyed value's args — what it returns is what the
      * body is handed, and the key was taken before it ran (11.26).
      */
-    args?: [Args] extends [never] ? never : Schema<Args>
+    args?: ([Args] extends [never] ? never : Schema<Args>) | undefined
     /**
      * What makes a gated write a repeat: a projection or a comparator.
      *
      * RULEBOOK 5.3: discriminated by arity — one parameter is a projection compared by
      * `!==`, two is a comparator answering directly.
      */
-    identity?: Identity<Stored>
+    identity?: Identity<Stored> | undefined
     /**
      * The life of a production, in milliseconds.
      *
      * RULEBOOK 6.1 through 6.14. On a value with no producer it is how long a write stands before
      * the value it was built with is written back (6.2) — see `REWIND_PROTOTYPE`.
      */
-    ttl?: number
+    ttl?: number | undefined
     /**
      * A refresh every this many milliseconds, or `{ every, after, delay }`.
      *
@@ -174,7 +174,7 @@ export type ReactiveOptions<
      * each refresh from the previous run's end (7.33), and `delay` puts a job's first run off
      * (7.34).
      */
-    poll?: Poll
+    poll?: Poll | undefined
     /**
      * The gate on the way in, run before `transform` on every way in.
      *
@@ -182,7 +182,7 @@ export type ReactiveOptions<
      * the settled value, on every way in alike: a write, what a body produced (11.46) and
      * what an adoption mirrors (11.47).
      */
-    schema?: Schema<Accepted>
+    schema?: Schema<Accepted> | undefined
     /**
      * Shapes a settled value on the way in, or refuses it by returning a `Failed`.
      *
@@ -191,16 +191,16 @@ export type ReactiveOptions<
      * indistinguishable from the body having failed, and 4.9 has a refused write mint
      * nothing where a failed producer (2.3) may still have something to say.
      */
-    transform?: Transformer<Accepted, Stored, Failures>
+    transform?: Transformer<Accepted, Stored, Failures> | undefined
     /**
      * Wakes a reader at once, then at most once per window.
      *
      * RULEBOOK 5.8, 5.12: a change reaches a reader immediately and then at most once per
      * window. Declaring this beside `debounce` is refused at construction (5.14).
      */
-    throttle?: number
+    throttle?: number | undefined
     /** Wakes a reader once the changes stop (RULEBOOK 5.8, 5.13). */
-    debounce?: number
+    debounce?: number | undefined
     /**
      * What a `Selection` matches on; the function form is handed the entry's args.
      *
@@ -208,21 +208,21 @@ export type ReactiveOptions<
      * across values. The function form is handed the entry's args, and `undefined` on a value
      * that has none — which is the only value it is ever `undefined` on.
      */
-    tags?: string[] | ((args: ArgsOf<Args>) => string[])
+    tags?: string[] | ((args: ArgsOf<Args>) => string[]) | undefined
     /**
      * Where the value lives when the process does not.
      *
      * RULEBOOK 8, 9.5, 11.42: where the value lives when the process does not. The function form
      * is handed the entry's args, so each key of a `Keyed` has a store of its own.
      */
-    store?: Store<Stored> | ((args: ArgsOf<Args>) => Store<Stored>)
+    store?: Store<Stored> | ((args: ArgsOf<Args>) => Store<Stored>) | undefined
     /**
      * One value for the whole process rather than one per request.
      *
      * RULEBOOK 11.32, 11.34: one value for the whole process rather than one per request. Inert in a
      * browser, where the process IS the scope.
      */
-    global?: boolean
+    global?: boolean | undefined
     /**
      * What tells one array element from another.
      *
@@ -232,6 +232,7 @@ export type ReactiveOptions<
     key?:
         | (keyof ElementOf<Stored> & string)
         | ((element: ElementOf<Stored>) => unknown)
+        | undefined
 }
 
 /**

@@ -61,7 +61,7 @@ async function aliasPaths(root: string): Promise<Record<string, string[]>> {
     if (manifest === undefined) return paths
     const imports = (
         (await Bun.file(manifest).json()) as {
-            imports?: Record<string, unknown>
+            imports?: Record<string, unknown> | undefined
         }
     ).imports
     const base = dirname(manifest)

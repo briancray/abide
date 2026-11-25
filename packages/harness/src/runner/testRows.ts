@@ -22,13 +22,18 @@ const BUN_WIDTH = 8
  * replaces either glob, relative to `root`.
  */
 export type TestSuite =
-    | { section: string; root: string; runner: 'bun'; pattern?: string }
+    | {
+          section: string
+          root: string
+          runner: 'bun'
+          pattern?: string | undefined
+      }
     | {
           section: string
           root: string
           runner: 'playwright'
           projects: string[]
-          pattern?: string
+          pattern?: string | undefined
       }
 
 type TestItem = RowItem & { command: string[]; browser: boolean }

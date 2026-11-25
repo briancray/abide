@@ -264,7 +264,7 @@ async function declaringMethod(
           middleware: string[] | null
           copy: CopyOptions | undefined
           unread: Node[]
-          defaulted?: string[]
+          defaulted?: string[] | undefined
           defaults?: Defaults | undefined
           document?: JsonValue | undefined
       }
@@ -628,7 +628,7 @@ async function isAbideStructural(
  * OpenAPI and MCP off the handler itself, and is not in the table.
  */
 function describedAs(
-    call: Node & { arguments?: readonly Node[] },
+    call: Node & { arguments?: readonly Node[] | undefined },
 ): string | undefined {
     const options = inlineOptions(call)
     if (options === undefined) return undefined
@@ -650,7 +650,7 @@ function describedAs(
  * `homeAccess`.
  */
 function rungsNamed(
-    call: Node & { arguments?: readonly Node[] },
+    call: Node & { arguments?: readonly Node[] | undefined },
 ): string[] | null {
     const options = call.arguments?.[1]
     if (options === undefined) return []
@@ -682,7 +682,7 @@ function rungName(entry: Node): string {
  * 16.37's default. An options object built elsewhere, or a value that is not a literal, is not read.
  */
 function declaredFor(
-    call: Node & { arguments?: readonly Node[] },
+    call: Node & { arguments?: readonly Node[] | undefined },
     surface: 'ui' | 'cli' | 'mcp',
 ): boolean | undefined {
     const options = inlineOptions(call)

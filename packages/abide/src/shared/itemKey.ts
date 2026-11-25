@@ -9,7 +9,7 @@ export type KeyOption<Item> = [Item] extends [
 ]
     ? {
           /** What tells one item from another. Its `id`, or the item itself where it has none, by default. */
-          key?: (item: Item) => string
+          key?: ((item: Item) => string) | undefined
       }
     : {
           /** What tells one item from another. */
@@ -20,7 +20,7 @@ export type KeyOption<Item> = [Item] extends [
 export type LabelOption<Item> = [Item] extends [string | number]
     ? {
           /** What an item reads as. The item itself by default. */
-          label?: (item: Item) => string
+          label?: ((item: Item) => string) | undefined
       }
     : {
           /** What an item reads as. */

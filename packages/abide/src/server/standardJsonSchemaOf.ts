@@ -9,9 +9,17 @@ export function standardJsonSchemaOf(schema: unknown): object | undefined {
     const standard = (
         schema as
             | {
-                  '~standard'?: {
-                      jsonSchema?: { input?: (options: unknown) => unknown }
-                  }
+                  '~standard'?:
+                      | {
+                            jsonSchema?:
+                                | {
+                                      input?:
+                                          | ((options: unknown) => unknown)
+                                          | undefined
+                                  }
+                                | undefined
+                        }
+                      | undefined
               }
             | undefined
     )?.['~standard']

@@ -13,17 +13,17 @@ import { withPart } from './withPart.ts'
 /** The edge it stands on, how it opens, and the bounds of its size. */
 export type DrawerOptions = DialogOptions & {
     /** The edge of the page it stands on. `'end'` by default; read once, since it fixes the axis it sizes along. */
-    side?: 'start' | 'end' | 'top' | 'bottom'
+    side?: 'start' | 'end' | 'top' | 'bottom' | undefined
     /** Its size in pixels across its edge, or `undefined` for its own: a `Reactive` to read and set. Held by the parts, and handed back as `size`, where none is given. */
-    size?: Reactive<number | undefined>
+    size?: Reactive<number | undefined> | undefined
     /** The fewest pixels it keeps. `0` by default; a function is read live. */
-    min?: Live<number>
+    min?: Live<number> | undefined
     /** The most pixels it takes. Unbounded by default; a function is read live. */
-    max?: Live<number>
+    max?: Live<number> | undefined
     /** The handle's accessible name; a function is read live. */
-    label?: Live<string>
+    label?: Live<string> | undefined
     /** The sizes it settles at when its handle is let go, as shares of the viewport across `side`. Below every stop it closes. None by default, and it rests where it is dropped; a function is read live. */
-    stops?: Live<readonly number[]>
+    stops?: Live<readonly number[]> | undefined
 }
 
 /** The parts `drawer` hands back: `<dialog {...filters.drawer}>`, `<div {...filters.handle}>`. */

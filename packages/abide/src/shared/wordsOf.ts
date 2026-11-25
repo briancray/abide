@@ -1,6 +1,9 @@
 /** The words of a message's or a tool result's content: its string, or its text blocks joined. */
 export function wordsOf(
-    content: string | readonly { type: string; text?: string }[] | undefined,
+    content:
+        | string
+        | readonly { type: string; text?: string | undefined }[]
+        | undefined,
 ): string {
     if (typeof content === 'string') return content
     let text = ''

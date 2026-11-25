@@ -282,7 +282,10 @@ function parsed(argv: string[]) {
     try {
         return parseFlags(argv)
     } catch (thrown) {
-        const { code, message } = thrown as { code?: string; message: string }
+        const { code, message } = thrown as {
+            code?: string | undefined
+            message: string
+        }
         if (!code?.startsWith('ERR_PARSE_ARGS_')) throw thrown
         // Bun's message goes on to advise `--`, which no command here reads.
         const refusal = message.split('. ')[0] as string
@@ -518,7 +521,7 @@ async function surfaceAt(
     address: string,
 ): Promise<
     | ((
-          init?: RequestInit & { headers?: Record<string, string> },
+          init?: RequestInit & { headers?: Record<string, string> | undefined },
       ) => Promise<Response>)
     | number
 > {

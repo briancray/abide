@@ -244,11 +244,12 @@ export function browserCookies(): Cookies {
         true,
     )
     documentJar = jar
-    const store = (globalThis as { cookieStore?: EventTarget }).cookieStore
+    const store = (globalThis as { cookieStore?: EventTarget | undefined })
+        .cookieStore
     store?.addEventListener('change', (event) => {
         const { changed = [], deleted = [] } = event as unknown as {
-            changed?: { name: string; value?: string }[]
-            deleted?: { name: string }[]
+            changed?: { name: string; value?: string | undefined }[] | undefined
+            deleted?: { name: string }[] | undefined
         }
         for (const cookie of changed) {
             const value = decodedOrKept(cookie.value ?? '')

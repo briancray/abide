@@ -26,8 +26,8 @@ export type Poll =
     | number
     | {
           every: number
-          after?: 'tick' | 'settle'
-          delay?: Live<number>
+          after?: 'tick' | 'settle' | undefined
+          delay?: Live<number> | undefined
       }
 
 type Polled = Pick<Reactive<unknown>, 'busy' | 'refresh' | 'then'>

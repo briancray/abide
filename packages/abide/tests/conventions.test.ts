@@ -473,3 +473,77 @@ test('an on name an element or a component takes is lowercase — 49.13', async 
                 offenders.push(`${path}: ${key[1]}`)
     expect(offenders).toEqual([])
 })
+
+// 59.2 — AN OPTIONAL PROPERTY ACCEPTS `undefined`, written out: `name?: T | undefined`. Under
+// `exactOptionalPropertyTypes` a bare `name?: T` takes the property's absence and refuses
+// `undefined`, so an app with that setting on cannot hand an option on that it may not have — and
+// one without it reads both as the same. The framework reads an option given `undefined` as one not
+// given (59.1), and the type says so for every reader. In abide's source and the harness's, interfaces,
+// type literals and classes alike. A PARSE, unlike the checks above: the checker's own syntax tree,
+// since a type's end is no line's. THE REVERT: write `concurrency?: number` in `PipeOptions` and it
+// is named.
+test('an optional property accepts undefined — 59.2', async () => {
+    const { SyntaxKind } = await import('typescript/unstable/ast')
+    const { API } = await import('typescript/unstable/async')
+    type Node = import('typescript/unstable/ast').Node
+    type Typed = Node & {
+        postfixToken?: Node
+        type?: Node
+        types?: readonly Node[]
+        literal?: Node
+        name: Node
+    }
+    const ACCEPTING = new Set([
+        SyntaxKind.UndefinedKeyword,
+        SyntaxKind.AnyKeyword,
+        SyntaxKind.UnknownKeyword,
+    ])
+    const accepts = (type: Typed | undefined): boolean =>
+        type === undefined ||
+        ACCEPTING.has(type.kind) ||
+        (type.kind === SyntaxKind.LiteralType &&
+            type.literal?.kind === SyntaxKind.UndefinedKeyword) ||
+        (type.kind === SyntaxKind.ParenthesizedType &&
+            accepts(type.type as Typed)) ||
+        (type.kind === SyntaxKind.UnionType &&
+            (type.types ?? []).some((member) => accepts(member as Typed)))
+    const refusing: string[] = []
+    for (const name of ['abide', 'harness']) {
+        const root = Bun.fileURLToPath(new URL(name, PACKAGES))
+        const api = new API({ cwd: root })
+        try {
+            const snapshot = await api.updateSnapshot({
+                openProjects: [`${root}/tsconfig.json`],
+            })
+            const program = snapshot.getProjects()[0]?.program
+            for (const file of (await program?.getSourceFileNames()) ?? []) {
+                if (!file.startsWith(`${root}/src/`)) continue
+                const source = await program?.getSourceFile(file)
+                if (source === undefined) continue
+                const visit = (node: Node): void => {
+                    const typed = node as Typed
+                    if (
+                        (node.kind === SyntaxKind.PropertySignature ||
+                            node.kind === SyntaxKind.PropertyDeclaration) &&
+                        typed.postfixToken?.kind === SyntaxKind.QuestionToken &&
+                        !accepts(typed.type as Typed | undefined)
+                    ) {
+                        const line = source.text
+                            .slice(0, node.getStart())
+                            .split('\n').length
+                        refusing.push(
+                            `${name}/${file.slice(root.length + 1)}:${line} ${typed.name.getText()}`,
+                        )
+                    }
+                    node.forEachChild((child: Node) => {
+                        visit(child)
+                    })
+                }
+                visit(source as unknown as Node)
+            }
+        } finally {
+            await api.close()
+        }
+    }
+    expect(refusing).toEqual([])
+}, 60_000)

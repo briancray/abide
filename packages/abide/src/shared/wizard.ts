@@ -14,9 +14,9 @@ export type WizardOptions<Step> = {
     /** The steps, in order; a function is read live. */
     steps: Live<readonly Step[]>
     /** The key of the step on: a `Reactive` to read and set. Held by the parts, and handed back as `current`, where none is given. A key no step has is the first. */
-    current?: Reactive<string | undefined>
+    current?: Reactive<string | undefined> | undefined
     /** Whether a step is done enough to go on from. Every step is by default. */
-    valid?: (step: Step) => boolean
+    valid?: ((step: Step) => boolean) | undefined
 } & KeyOption<Step>
 
 /** The parts `wizard` hands back: `<li {...signup.step('plan')}>`, `<button {...signup.next}>`. */

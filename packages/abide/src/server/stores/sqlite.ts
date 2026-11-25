@@ -27,7 +27,10 @@ const OPENERS = new Map<string, () => Database>()
 export function sqlite<Stored>(
     database: Database | (() => Database) | string,
     key: string,
-    options?: { table?: string; schema?: Schema<Stored> },
+    options?: {
+        table?: string | undefined
+        schema?: Schema<Stored> | undefined
+    },
 ): Store<Stored> & LogStore {
     const table = options?.table ?? 'abide_store'
     if (!IDENTIFIER.test(table))

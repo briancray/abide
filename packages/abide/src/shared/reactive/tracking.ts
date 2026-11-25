@@ -218,7 +218,7 @@ export const RELEASING: { unread: ((source: Tracked) => void) | null } = {
  * every other source answers `undefined` and stops here.
  */
 function unread(source: Tracked): void {
-    if ((source as { orphaned?: boolean }).orphaned !== true) return
+    if ((source as { orphaned?: boolean | undefined }).orphaned !== true) return
     if (source.readers.length !== 0 || source.probeReaders.length !== 0) return
     RELEASING.unread?.(source)
 }

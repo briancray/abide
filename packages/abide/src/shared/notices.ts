@@ -34,39 +34,40 @@ export type CloseReason = 'timeout' | 'dismissed' | 'action'
 /** How a notice reads, how long it stays, and what it offers. */
 export type NotifyOptions = {
     /** What tells it from another notice. A hash of it as JSON by default, so the same notice has the same id on every page (50.71). */
-    id?: string
+    id?: string | undefined
     /** `'info'`, `'success'` or `'error'`, written as `data-tone` on the notice. Default `'info'`. */
-    tone?: Notice['tone']
+    tone?: Notice['tone'] | undefined
     /** Milliseconds before it takes itself down; `Infinity` keeps it until it is dismissed. Default the list's `timeout`. */
-    timeout?: number
+    timeout?: number | undefined
     /** The moment it stops showing, wherever it is rendered — a server's render included (50.72). */
-    expires?: Date | number
+    expires?: Date | number | undefined
     /** A button on the notice that takes the notice down and calls `run`: an undo, a retry, or `report({ trace }).open()` for a failed call. */
-    action?: { label: string; run: () => unknown }
+    action?: { label: string; run: () => unknown } | undefined
     /** Written onto the notice's element: a `data-` attribute an analytics tag reads, say (50.41). */
-    attributes?: Record<string, string>
+    attributes?: Record<string, string> | undefined
     /** Called once as the notice leaves, told whether its timeout, a dismissal or its action took it (50.42). */
-    onclose?: (reason: CloseReason) => void
+    onclose?: ((reason: CloseReason) => void) | undefined
 }
 
 /** What a `notices` list starts with, where it remembers its dismissals, and how long its notices stay. */
 export type NoticesOptions = {
     /** The notices it starts with, on a server's render too, less those its `store` remembers (50.70). */
-    initial?: readonly (string | ({ text: string } & NotifyOptions))[]
+    initial?:
+        readonly (string | ({ text: string } & NotifyOptions))[] | undefined
     /** A notice's `timeout` where it names none. Default `3000`, and `10000` for an error (50.14). */
-    timeout?: number
+    timeout?: number | undefined
     /** Where a dismissal is remembered, by key, as the moment it is forgotten (50.69). */
-    store?: Store<Record<string, number>>
+    store?: Store<Record<string, number>> | undefined
     /** How long a dismissal is remembered, in milliseconds. Default `Infinity`. */
-    ttl?: number
+    ttl?: number | undefined
     /** What a dismissal is remembered by, kept hashed. The notice's `id` by default (50.71). */
-    key?: (notice: Notice) => string
+    key?: ((notice: Notice) => string) | undefined
 }
 
 /** What the region is called. */
 export type NoticesHostOptions = {
     /** The region's accessible name. `'Notices'` by default; read live where a function is given. */
-    label?: Live<string>
+    label?: Live<string> | undefined
 }
 
 /** One notice's parts: its element, its text, its action and close buttons, and what runs its action or closes it. */

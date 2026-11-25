@@ -62,7 +62,7 @@ type PairingStatus = Reactive<
 export function pairing(
     options: {
         /** 53.48 — milliseconds of connecting before the step is `slow`. `8000` by default. */
-        slowAfter?: number
+        slowAfter?: number | undefined
     } = {},
 ): {
     status: PairingStatus

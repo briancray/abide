@@ -38,7 +38,7 @@ const STORE_LOG = namedLogger('abide:reactive')
 export function redis<Stored>(
     client: RedisClient | string,
     key: string,
-    options?: { schema?: Schema<Stored> },
+    options?: { schema?: Schema<Stored> | undefined },
 ): Store<Stored> & LogStore {
     const redis = typeof client === 'string' ? opened(client) : client
     const schema = options?.schema as Schema<unknown> | undefined

@@ -16,7 +16,11 @@ import { escapeAttribute as escape } from '../escapeText.ts'
 import { numericReferenceCharacter } from '../numericReferenceCharacter.ts'
 
 /** 52.40 — where a link goes: its address, and the `target` and `rel` it opens with. */
-export type LinkTarget = { href: string; target?: string; rel?: string }
+export type LinkTarget = {
+    href: string
+    target?: string | undefined
+    rel?: string | undefined
+}
 
 /** The settings a render runs under, defaults filled in. */
 export type Settings = {

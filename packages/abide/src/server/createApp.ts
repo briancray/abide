@@ -88,19 +88,22 @@ const REQUEST_LOG = namedLogger(REQUEST_NAMESPACE)
 const STOP_TIMEOUT = 5000
 
 /** Who a scope `App.run` or `App.fetch` opens is answered as, over what its request's cookies say. */
-type Presumed = { principal?: Record<string, unknown>; caller?: string }
+type Presumed = {
+    principal?: Record<string, unknown> | undefined
+    caller?: string | undefined
+}
 
 /** The app object: what a host, a test or a script holds the app as. */
 export interface App {
     fetch(request: Request, options?: Presumed): Promise<Response>
     run<Result>(
         fn: () => Result | Promise<Result>,
-        options?: { request?: Request } & Presumed,
+        options?: { request?: Request | undefined } & Presumed,
     ): Promise<Result>
     listen(options?: {
-        port?: number
-        hostname?: string
-        unix?: string
+        port?: number | undefined
+        hostname?: string | undefined
+        unix?: string | undefined
     }): Promise<void>
     stop(): Promise<void>
     [Symbol.asyncDispose](): Promise<void>

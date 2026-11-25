@@ -34,9 +34,9 @@ export type ScrollSpyOptions<Item> = {
     /** The sections, in the order they stand; a function is read live. Each one's element is the one whose id is its key. */
     items: Live<readonly Item[]>
     /** How a jump scrolls. `'auto'` by default; a function is read live. */
-    behavior?: Live<'auto' | 'smooth'>
+    behavior?: Live<'auto' | 'smooth'> | undefined
     /** Whether a pointer dragged along the host jumps by each jump it reaches. `false` by default; a function is read live. */
-    scrub?: Live<boolean>
+    scrub?: Live<boolean> | undefined
 } & KeyOption<Item>
 
 // Pixels short of the end that still count as at it.

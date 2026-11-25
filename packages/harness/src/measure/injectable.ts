@@ -13,9 +13,11 @@ import { measure } from './measure.ts'
 install()
 ;(
     globalThis as {
-        __HARNESS_MEASURE__?: {
-            measure: typeof measure
-            patchSet: typeof patchSet
-        }
+        __HARNESS_MEASURE__?:
+            | {
+                  measure: typeof measure
+                  patchSet: typeof patchSet
+              }
+            | undefined
     }
 ).__HARNESS_MEASURE__ = { measure, patchSet }

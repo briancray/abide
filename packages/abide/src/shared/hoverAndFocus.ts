@@ -8,11 +8,11 @@ import { type Live, live } from './live.ts'
 /** 50.55, 50.56, 50.75 — what opens a layer besides a press, and what closes one a pointer opened. */
 export type HoverAndFocusOptions = {
     /** 50.55 — milliseconds a mouse or a pen rests on the trigger or the anchor before it opens, or `false` for never. Off by default; a function is read live. */
-    openOnHover?: Live<number | false>
+    openOnHover?: Live<number | false> | undefined
     /** 50.56 — milliseconds after the pointer leaves the trigger or the anchor and the layer before one a pointer opened closes, or `false` for never. Off by default; a function is read live. */
-    closeOnLeave?: Live<number | false>
+    closeOnLeave?: Live<number | false> | undefined
     /** 50.75 — whether it opens at once when the trigger or the anchor takes focus the browser shows. Off by default; a function is read live. */
-    openOnFocus?: Live<boolean>
+    openOnFocus?: Live<boolean> | undefined
 }
 
 /** How an open layer was opened, where it matters to what closes it: a pointer resting, a pointer's press, or focus. */

@@ -33,22 +33,26 @@ const bound = new WeakSet<Element>()
 export function elementSize(
     target: Reactive<unknown, Size, unknown, unknown>,
     options?: {
-        box?: Reactive<ResizeObserverBoxOptions, never, unknown, unknown>
+        box?:
+            | Reactive<ResizeObserverBoxOptions, never, unknown, unknown>
+            | undefined
     },
 ): Record<string, unknown>
 export function elementSize(
     target: Reactive<unknown, Size, unknown, unknown>,
-    options?: { box?: ResizeObserverBoxOptions },
+    options?: { box?: ResizeObserverBoxOptions | undefined },
 ): Record<string, unknown>
 export function elementSize(
     target: (size: Size) => void,
     options?: {
-        box?: Reactive<ResizeObserverBoxOptions, never, unknown, unknown>
+        box?:
+            | Reactive<ResizeObserverBoxOptions, never, unknown, unknown>
+            | undefined
     },
 ): Record<string, unknown>
 export function elementSize(
     target: (size: Size) => void,
-    options?: { box?: ResizeObserverBoxOptions },
+    options?: { box?: ResizeObserverBoxOptions | undefined },
 ): Record<string, unknown>
 /**
  * 32.110 — the size held for the reader: `host` to spread, and the width and the height read by
@@ -56,10 +60,11 @@ export function elementSize(
  * `undefined` until the first observation (32.82).
  */
 export function elementSize(options?: {
-    box?: Reactive<ResizeObserverBoxOptions, never, unknown, unknown>
+    box?:
+        Reactive<ResizeObserverBoxOptions, never, unknown, unknown> | undefined
 }): SizeObserved
 export function elementSize(options?: {
-    box?: ResizeObserverBoxOptions
+    box?: ResizeObserverBoxOptions | undefined
 }): SizeObserved
 export function elementSize(
     target?: unknown,

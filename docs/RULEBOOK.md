@@ -97,6 +97,7 @@ These are immutable. A change to them is a change to what this document is.
 - [56. Forms](#56)
 - [57. Pipes](#57)
 - [58. Ledgers](#58)
+- [59. Options](#59)
 
 ## Terms
 
@@ -142,6 +143,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | menu bar extra | The item `menuBarExtra` puts in the platform's menu bar. |
 | example app | The app every `<Example>` is drawn from, kept whole so a reader can download it and run it. |
 | headless component | A function `@abide/abide` exports handing back parts an app spreads onto elements it writes. |
+| option | A property an object handed to a name a public entry point exports may leave out. |
 
 RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**, **SHALL**,
 **SHOULD**, **SHOULD NOT**, **MAY**.
@@ -7210,3 +7212,12 @@ error with a refusal at status 410 naming the entries it missed; a read from 0, 
 never moved, MUST start at the oldest entry kept.
 
 58.16 An entry a `ledger` lets go MUST take the key it was appended under with it.
+
+# 59. Options
+
+*Free-standing: these clauses govern every option, of every name that takes one, which no one
+REGISTRY row names.*
+
+59.1 An option given `undefined` MUST be read as an option not given.
+
+59.2 Every option's type MUST accept `undefined`.

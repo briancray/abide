@@ -17,17 +17,17 @@ export type PlaybackOptions = {
     /** How long it runs, in milliseconds; a function is read live. */
     duration: Live<number>
     /** Where it is, in milliseconds from the start: a `Reactive` to read and set. Held by the parts, and handed back as `at`, where none is given. */
-    at?: Reactive<number>
+    at?: Reactive<number> | undefined
     /** Whether it is playing: a `Reactive` to read and set. Held by the parts, and handed back as `playing`, where none is given. */
-    playing?: Reactive<boolean>
+    playing?: Reactive<boolean> | undefined
     /** How fast it plays, `1` being real time: a `Reactive` to read and set. Held by the parts, and handed back as `rate`, where none is given. */
-    rate?: Reactive<number>
+    rate?: Reactive<number> | undefined
     /** The speeds its `toggleGroup` offers. `[0.5, 1, 2]` by default; a function is read live. */
-    rates?: Live<readonly number[]>
+    rates?: Live<readonly number[]> | undefined
     /** Whether it starts over at its end rather than stopping. `false` by default; a function is read live. */
-    loop?: Live<boolean>
+    loop?: Live<boolean> | undefined
     /** The milliseconds an arrow key moves it. `5000` by default; a function is read live. */
-    step?: Live<number>
+    step?: Live<number> | undefined
 }
 
 /** The parts `playback` hands back, and where it is, whether it plays and how fast. */

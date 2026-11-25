@@ -39,7 +39,7 @@ export async function runBenches(
         const { CEILINGS = {}, ...exported } = (await import(
             Bun.pathToFileURL(`${base}${file}`).href
         )) as {
-            CEILINGS?: Record<string, Record<string, number>>
+            CEILINGS?: Record<string, Record<string, number>> | undefined
         } & Record<string, unknown>
         for (const [name, priced] of Object.entries(exported)) {
             if (typeof priced !== 'function') continue

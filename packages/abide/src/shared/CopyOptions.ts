@@ -7,13 +7,13 @@
  * own has no serialization and stays the server's, as a function `key` or `tags` does.
  */
 export type CopyOptions = {
-    key?: string
-    tags?: string[]
-    identity?: 'deepEqual'
+    key?: string | undefined
+    tags?: string[] | undefined
+    identity?: 'deepEqual' | undefined
     /**
      * The handler is an async generator, so its answer is a stream the copy reads as it lands.
      *
      * 16.32.
      */
-    stream?: true
+    stream?: true | undefined
 }

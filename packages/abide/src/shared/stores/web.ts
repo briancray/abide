@@ -12,7 +12,10 @@ import { KeptText, storeKey } from '../storedValue.ts'
  */
 export function web<Stored>(
     key: string,
-    options?: { area?: 'local' | 'session'; schema?: Schema<Stored> },
+    options?: {
+        area?: 'local' | 'session' | undefined
+        schema?: Schema<Stored> | undefined
+    },
 ): Store<Stored> {
     const name = options?.area === 'session' ? 'sessionStorage' : 'localStorage'
     const schema = options?.schema as Schema<unknown> | undefined

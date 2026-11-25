@@ -48,7 +48,7 @@ export type RatioSpec = {
      * Byte-identical page source ran 4.5x apart because one arm shipped a stylesheet and the
      * other was therefore not doing the work at all.
      */
-    workFactor?: number
+    workFactor?: number | undefined
 }
 
 const DEFAULT_WORK_FACTOR = 1.05

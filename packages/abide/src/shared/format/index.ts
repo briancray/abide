@@ -30,7 +30,7 @@ function numeric(value: unknown): number | bigint | undefined {
  */
 type NumberOptions = Omit<Intl.NumberFormatOptions, 'style'> & {
     /** The BCP 47 locale it is written in. `'en-US'` by default. */
-    locale?: string
+    locale?: string | undefined
 }
 
 // 52.6 — every option a formatter is keyed by, in a fixed order, so one set of options given in any
@@ -82,7 +82,12 @@ function numberFormat(
     const locale = options.locale ?? LOCALE
     return cached(`${kind} ${locale}${keyOf(NUMBER_OPTIONS, options)}`, () => {
         const { locale: _locale, ...given } = options
-        const asked: Intl.NumberFormatOptions = { ...defaults, ...given, style }
+        // An option given `undefined` is one not given, so the default beneath it stands.
+        const asked: Intl.NumberFormatOptions = { ...defaults }
+        for (const [name, value] of Object.entries(given))
+            if (value !== undefined)
+                (asked as Record<string, unknown>)[name] = value
+        asked.style = style
         const least = given.minimumFractionDigits
         const most = given.maximumFractionDigits
         if (
@@ -164,7 +169,7 @@ export function plural(
     many: string = `${one}s`,
     options: {
         /** The BCP 47 locale the count is written in, and whose rules pick the word. `'en-US'` by default. */
-        locale?: string
+        locale?: string | undefined
     } = {},
 ): string {
     const amount = numeric(value)
@@ -183,7 +188,7 @@ export function list(
     value: unknown,
     options: Intl.ListFormatOptions & {
         /** The BCP 47 locale the list is written in. `'en-US'` by default. */
-        locale?: string
+        locale?: string | undefined
     } = {},
 ): string {
     if (!Array.isArray(value)) return MISSING
@@ -264,15 +269,22 @@ type DateOptions = Omit<
      * `<input type="datetime-local">` takes, the same in every locale. `'day'` by default.
      */
     style?:
-        'day' | 'monthDay' | 'month' | 'time' | 'hour' | 'dateTime' | 'input'
+        | 'day'
+        | 'monthDay'
+        | 'month'
+        | 'time'
+        | 'hour'
+        | 'dateTime'
+        | 'input'
+        | undefined
     /**
      * The IANA time zone the time is written in. By default the zone `format.timeZone` pins, and
      * where none is pinned the visitor's: UTC on a server and while a page hydrates, the browser's
      * own after (52.44, 52.45).
      */
-    timeZone?: string
+    timeZone?: string | undefined
     /** The BCP 47 locale the date is written in. `'en-US'` by default. */
-    locale?: string
+    locale?: string | undefined
 }
 
 /**
@@ -375,7 +387,7 @@ export function duration(
     value: unknown,
     options: {
         /** The BCP 47 locale the duration is written in. `'en-US'` by default. */
-        locale?: string
+        locale?: string | undefined
     } = {},
 ): string {
     const milliseconds = numeric(value)
@@ -412,13 +424,13 @@ export function relative(
     value: unknown,
     options: {
         /** The time it is measured from, in epoch milliseconds. `Date.now()` by default. */
-        now?: number
+        now?: number | undefined
         /** The BCP 47 locale it is written in. `'en-US'` by default. */
-        locale?: string
+        locale?: string | undefined
         /** `'long'` (`12 minutes ago`), `'short'` (`12 min. ago`) or `'narrow'` (`12m ago`). `'long'` by default. */
-        style?: Intl.RelativeTimeFormatStyle
+        style?: Intl.RelativeTimeFormatStyle | undefined
         /** `'auto'` (`yesterday`) or `'always'` (`1 day ago`). `'auto'` by default. */
-        numeric?: Intl.RelativeTimeFormatNumeric
+        numeric?: Intl.RelativeTimeFormatNumeric | undefined
     } = {},
 ): string {
     const time = instant(value)
@@ -460,7 +472,7 @@ export function bytes(
         'minimumFractionDigits' | 'maximumFractionDigits'
     > & {
         /** The BCP 47 locale the size is written in. `'en-US'` by default. */
-        locale?: string
+        locale?: string | undefined
     } = {},
 ): string {
     const size = numeric(value)

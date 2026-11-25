@@ -5,13 +5,13 @@ export type Column<Row> = {
     /** The header's text, written in the header's sort button. */
     label: string
     /** The side the column's cells sit on, written as `data-align` on its header and its cells. */
-    align?: 'start' | 'end'
+    align?: 'start' | 'end' | undefined
     /** The value the column sorts by and hands `format`, where the row's `key` field is not it. */
     value?(row: Row): unknown
     /** The text a cell shows for its value, where the value's own text is not it. */
     format?(value: unknown, row: Row): string
     /** `false` for a column whose header does not sort. */
-    sortable?: boolean
+    sortable?: boolean | undefined
     /** 51.50 — the direction a first press of the header sorts in: `'descending'` for a count read most-first. `'ascending'` by default. */
-    firstDirection?: 'ascending' | 'descending'
+    firstDirection?: 'ascending' | 'descending' | undefined
 }

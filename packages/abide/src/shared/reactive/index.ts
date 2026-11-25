@@ -130,9 +130,10 @@ export type Shaping<
     ReactiveOptions<Accepted, Kept<NoInfer<Shaped>>, never, Args>,
     'transform' | 'schema' | 'args'
 > & {
-    transform?: (value: Accepted) => Shaped
-    schema?: Gate & Schema<Accepted>
-    args?: [Args] extends [never] ? never : ArgsGate & Schema<Args>
+    transform?: ((value: Accepted) => Shaped) | undefined
+    schema?: (Gate & Schema<Accepted>) | undefined
+    args?:
+        ([Args] extends [never] ? never : ArgsGate & Schema<Args>) | undefined
 }
 /**
  * The validation refusal a declared `schema` adds to `Failures`, and `never` where none is.
@@ -191,7 +192,7 @@ type StoredOf<Calls> =
  */
 export type Held<Accepted> = [Accepted] extends [{ invalidate: unknown }]
     ? never
-    : Accepted | (PromiseLike<Accepted> & { invalidate?: never })
+    : Accepted | (PromiseLike<Accepted> & { invalidate?: never | undefined })
 /** What a body's value is, read off what it returns: the chunks a generator yields where it streams (9.6), else what it settles to. */
 export type BodyValue<Result> =
     Awaited<Result> extends AsyncGenerator<infer Chunk>
@@ -330,7 +331,12 @@ function filed(
     ) => unknown,
 ): unknown {
     const options = given[1] as
-        { global?: boolean; store?: unknown; tags?: string[] } | undefined
+        | {
+              global?: boolean | undefined
+              store?: unknown
+              tags?: string[] | undefined
+          }
+        | undefined
     let built: unknown
     if (outsideScope(options?.global === true)) {
         const lazy = !keyed && options?.store !== undefined
@@ -381,7 +387,8 @@ export function handlerValue(body: unknown, options: unknown): unknown {
         return scoped(
             () => buildBody(given, keyed),
             true,
-            (options as { global?: boolean } | undefined)?.global === true,
+            (options as { global?: boolean | undefined } | undefined)
+                ?.global === true,
         )
     return memo(body as () => unknown, options as undefined)
 }

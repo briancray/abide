@@ -41,13 +41,14 @@ export type PipeStatus = {
 
 /** What `pipe` takes beside its steps. */
 export type PipeOptions<In = unknown> = {
-    concurrency?: number
-    key?: (input: In) => string
-    ordered?: boolean
-    retries?: number
-    backoff?: Backoff
-    timeout?: number
-    paused?: Reactive<boolean, never, never, boolean> | (() => boolean)
+    concurrency?: number | undefined
+    key?: ((input: In) => string) | undefined
+    ordered?: boolean | undefined
+    retries?: number | undefined
+    backoff?: Backoff | undefined
+    timeout?: number | undefined
+    paused?:
+        Reactive<boolean, never, never, boolean> | (() => boolean) | undefined
 }
 
 /**

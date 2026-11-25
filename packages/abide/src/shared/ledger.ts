@@ -34,20 +34,23 @@ export type LogStore = {
     last: () => number | Promise<number>
     position: (cursor: string, seq?: number) => number | Promise<number>
     trim: (through: number) => void | Promise<void>
-    watch?: (changed: () => void) => () => void
+    watch?: ((changed: () => void) => () => void) | undefined
 }
 
 /** What `ledger` takes. */
 export type LedgerOptions<Entry> = {
-    store?: LogStore
-    retain?: number
-    ttl?: number
-    schema?: Schema<Entry>
+    store?: LogStore | undefined
+    retain?: number | undefined
+    ttl?: number | undefined
+    schema?: Schema<Entry> | undefined
 }
 
 /** A ledger: the entries it keeps, appended to, and read in order from a position or a named cursor. */
 export type Ledger<Entry> = Reactive<Logged<Entry>[], never> & {
-    append: (entry: Entry, options?: { key?: string }) => Promise<number>
+    append: (
+        entry: Entry,
+        options?: { key?: string | undefined },
+    ) => Promise<number>
     read: (from?: number | { cursor: string }) => ReadableStream<Logged<Entry>>
     readonly writable: WritableStream<Entry>
 }
@@ -158,7 +161,7 @@ export function ledger<Entry>(options?: LedgerOptions<Entry>): Ledger<Entry> {
 
     const append = async (
         entry: Entry,
-        given?: { key?: string },
+        given?: { key?: string | undefined },
     ): Promise<number> => {
         // 58.3 — a gate that refuses is the append's failure: nothing is kept.
         let value: unknown = entry

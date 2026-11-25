@@ -97,9 +97,9 @@ export type Provider = {
 
 /** What `assistant` takes beside a provider, the same for every one. */
 export type AssistantOptions = {
-    tools?: boolean
-    maxTurns?: number
-    signal?: AbortSignal
+    tools?: boolean | undefined
+    maxTurns?: number | undefined
+    signal?: AbortSignal | undefined
 }
 
 const MAX_TURNS = 10

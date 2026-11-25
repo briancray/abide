@@ -16,10 +16,10 @@ type Listener<Event> =
     | ((event: Event) => unknown)
     | {
           handleEvent(event: Event): unknown
-          capture?: boolean
-          once?: boolean
-          passive?: boolean
-          signal?: AbortSignal
+          capture?: boolean | undefined
+          once?: boolean | undefined
+          passive?: boolean | undefined
+          signal?: AbortSignal | undefined
       }
 
 /**
@@ -111,9 +111,9 @@ type Unreflected<Tag> = (Tag extends
     | 'output'
     | 'select'
     | 'textarea'
-    ? { form?: string }
+    ? { form?: string | undefined }
     : unknown) &
-    (Tag extends 'input' ? { list?: string } : unknown)
+    (Tag extends 'input' ? { list?: string | undefined } : unknown)
 
 /**
  * The attributes element `Tag` takes, typed as a component's props: a caller passing them is held to
@@ -148,11 +148,11 @@ type HtmlAttributes<Tag extends keyof HTMLElementTagNameMap> = {
     >
 } & Unreflected<Tag> &
     Global & {
-        itemscope?: boolean
-        itemtype?: string
-        itemprop?: string
-        itemid?: string
-        itemref?: string
+        itemscope?: boolean | undefined
+        itemtype?: string | undefined
+        itemprop?: string | undefined
+        itemid?: string | undefined
+        itemref?: string | undefined
     }
 
 /**
@@ -173,16 +173,16 @@ type SvgAttributes<Tag extends keyof SVGElementTagNameMap> = {
         }
     >
 } & Global & {
-        id?: string
-        lang?: string
-        tabindex?: number | `${number}` | null
-        role?: string
+        id?: string | undefined
+        lang?: string | undefined
+        tabindex?: number | `${number}` | null | undefined
+        role?: string | undefined
     }
 
 /** Attributes every element takes that no reflected property types. */
 type Global = {
-    class?: string
-    style?: string
+    class?: string | undefined
+    style?: string | undefined
     [data: `data-${string}`]: unknown
     [aria: `aria-${string}`]: string | number | boolean | null | undefined
 }

@@ -19,9 +19,9 @@ export type Command = {
     /** What the command is called: what it lists as, and what typing matches. */
     label: string
     /** Further words typing matches: `['add', 'create']` beside `'New deal'`. */
-    keywords?: readonly string[]
+    keywords?: readonly string[] | undefined
     /** The binding the app runs the command on elsewhere, which the palette shows and does not bind. */
-    key?: string
+    key?: string | undefined
     /** What choosing the command does, once the palette has shut. */
     run: () => void
 }
@@ -31,13 +31,13 @@ export type CommandPaletteOptions = {
     /** What the palette can do, in the order it lists them, each told apart by its `label`; a function is read live. */
     commands: Live<readonly Command[]>
     /** Whether the palette is showing: a `Reactive` to open it from a button of the app's own. One of the palette's own by default. */
-    open?: Reactive<boolean>
+    open?: Reactive<boolean> | undefined
     /** The binding that opens and shuts it, as `hotkeys` reads one. `'mod+k'` by default. */
-    hotkey?: Live<string>
+    hotkey?: Live<string> | undefined
     /** The base the input's, the list's and each option's ids are derived from; unique on the page. */
-    id?: string
+    id?: string | undefined
     /** The palette's accessible name. `'Commands'` by default. */
-    label?: Live<string>
+    label?: Live<string> | undefined
 }
 
 /** One command's parts: its option, the label and the key written in it, and the label's runs. */

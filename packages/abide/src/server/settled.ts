@@ -11,7 +11,9 @@ const DEFAULT_TIMEOUT_MILLISECONDS = 2_000
  * Resolves once no value is loading and no effect is pending, running every effect that wakes on
  * the way; throws naming what is still pending where `timeout` passes first.
  */
-export async function settled(options?: { timeout?: number }): Promise<void> {
+export async function settled(options?: {
+    timeout?: number | undefined
+}): Promise<void> {
     const timeout = options?.timeout ?? DEFAULT_TIMEOUT_MILLISECONDS
     const deadline = performance.now() + timeout
     for (;;) {

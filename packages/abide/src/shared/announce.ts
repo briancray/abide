@@ -13,7 +13,7 @@ import { standing } from './standing.ts'
 /** How urgently a message interrupts what a screen reader is reading. */
 export type AnnounceOptions = {
     /** `'polite'` waits for a pause; `'assertive'` interrupts. Default `'polite'`. */
-    politeness?: 'polite' | 'assertive'
+    politeness?: 'polite' | 'assertive' | undefined
 }
 
 /** The message `announce.host`'s regions hold: its words, how urgently they are read, and which message it is. */

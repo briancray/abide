@@ -12,9 +12,9 @@ const DEFAULT_DEADLINE_MILLISECONDS = 60_000
 export async function spawned(
     command: string[],
     options: {
-        cwd?: string
-        env?: Record<string, string | undefined>
-        deadline?: number
+        cwd?: string | undefined
+        env?: Record<string, string | undefined> | undefined
+        deadline?: number | undefined
     } = {},
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     const child = Bun.spawn(command, {

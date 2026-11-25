@@ -29,9 +29,9 @@ const BESIDE = ['', '-wal', '-shm']
 type Migration = string | ((database: Database) => void)
 
 type Options = Pick<DatabaseOptions, 'readonly' | 'safeIntegers' | 'strict'> & {
-    migrations?: Migration[]
-    openNewer?: boolean
-    open?: (database: Database) => void
+    migrations?: Migration[] | undefined
+    openNewer?: boolean | undefined
+    open?: ((database: Database) => void) | undefined
 }
 
 /**
@@ -62,7 +62,7 @@ export function database(
     file: string | (() => string),
     options?: Options,
 ): (() => Database) & {
-    close: (options?: { remove?: boolean }) => void
+    close: (options?: { remove?: boolean | undefined }) => void
     changed: Reactive<number>
 } {
     if (typeof file === 'string') checked(file)
@@ -72,7 +72,7 @@ export function database(
     // 47.4 — the test file a scratch database was opened for.
     let scratchFor: string | undefined
     // 47.16, 47.17.
-    const close = (closing?: { remove?: boolean }): void => {
+    const close = (closing?: { remove?: boolean | undefined }): void => {
         opened?.close()
         opened = undefined
         if (

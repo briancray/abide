@@ -13,11 +13,11 @@ import { roving } from './roving.ts'
 /** The tabs, how each is told apart, and the one selected. */
 export type TabsOptions<Item> = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
-    id?: string
+    id?: string | undefined
     /** The tabs, in the order they render; a function is read live. */
     items: Live<readonly Item[]>
     /** The selected tab's key, where the app holds it: a `Reactive` to read and set the pick. Held by the parts, and handed back as `selected`, where none is given. A key no tab has selects the first. */
-    selected?: Reactive<string | undefined>
+    selected?: Reactive<string | undefined> | undefined
 } & KeyOption<Item>
 
 /** One tab's parts: its button, and the panel kept for it alone, hidden while another is selected. */

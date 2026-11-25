@@ -148,7 +148,7 @@ const NO_SURFACE = {
 // 48.4, 48.5 — THE WINDOW'S, BY ITS CREDENTIAL (44.79): its user agent is a hint any client can
 // claim (38.141), and a browser claiming it would read the lines of every request but its own.
 const linesHandler = declare('GET')(
-    ({ traces }: { traces?: string }): LogRecord[] =>
+    ({ traces }: { traces?: string | undefined }): LogRecord[] =>
         fromNativeWindow() && typeof traces === 'string'
             ? serverLines(traces.split(',').filter((trace) => trace !== ''))
             : [],

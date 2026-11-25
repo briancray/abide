@@ -6,13 +6,13 @@
 /** How small to make it, and what to write it as. */
 export type ShrinkImageOptions = {
     /** The most pixels its longer edge keeps. `1600` by default. */
-    maxEdge?: number
+    maxEdge?: number | undefined
     /** The most bytes it may take. Unbounded by default. */
-    maxBytes?: number
+    maxBytes?: number | undefined
     /** What it is written as. Its own type where that is JPEG or WebP, else JPEG, by default. */
-    type?: 'image/jpeg' | 'image/webp' | 'image/png'
+    type?: 'image/jpeg' | 'image/webp' | 'image/png' | undefined
     /** The quality it is written at first, from `0` to `1`. `0.85` by default. */
-    quality?: number
+    quality?: number | undefined
 }
 
 // The least quality `maxBytes` lowers it to before it lowers its size instead, and how much of its size
@@ -22,7 +22,7 @@ const SHRINK = 0.85
 
 /** `file` no larger than `maxEdge` on its longer edge and `maxBytes` in bytes, as a `File` of the same name. */
 export async function shrinkImage(
-    file: Blob & { name?: string },
+    file: Blob & { name?: string | undefined },
     options: ShrinkImageOptions = {},
 ): Promise<File> {
     const maxEdge = options.maxEdge ?? 1600

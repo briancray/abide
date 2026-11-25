@@ -450,8 +450,11 @@ function prototypeNamed(
     let proto: object | null = Object.getPrototypeOf(instance)
     while (proto) {
         if (
-            (proto as { constructor?: { name?: string } }).constructor?.name ===
-            interfaceName
+            (
+                proto as {
+                    constructor?: { name?: string | undefined } | undefined
+                }
+            ).constructor?.name === interfaceName
         )
             return proto
         proto = Object.getPrototypeOf(proto)

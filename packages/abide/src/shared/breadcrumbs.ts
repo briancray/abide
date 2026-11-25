@@ -12,9 +12,9 @@ export type BreadcrumbsOptions<Crumb> = {
     /** The address a crumb leads to. */
     href: (crumb: Crumb) => string
     /** How many crumbs show before the middle folds into the menu. Every one by default; a function is read live. */
-    max?: Live<number>
+    max?: Live<number> | undefined
     /** The nav's accessible name. `'Breadcrumb'` by default; a function is read live. */
-    label?: Live<string>
+    label?: Live<string> | undefined
 }
 
 /** The parts `breadcrumbs` hands back: `<nav {...crumbs.nav}>`, `<a {...crumbs.link(crumb)}>`. */

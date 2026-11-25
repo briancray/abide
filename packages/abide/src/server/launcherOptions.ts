@@ -27,31 +27,34 @@ export const VIBRANCY_MATERIALS = {
  * refuses each where the answer is typed.
  */
 export type LauncherOptions = {
-    width?: number
-    height?: number
-    minWidth?: number
-    minHeight?: number
+    width?: number | undefined
+    height?: number | undefined
+    minWidth?: number | undefined
+    minHeight?: number | undefined
     /** 38.142 — the address `abide native`'s `updates` directory is served at. */
-    update?: string
-    maxWidth?: number
-    maxHeight?: number
-    titlebar?: 'standard' | 'hidden' | 'inset'
-    vibrancy?: keyof typeof VIBRANCY_MATERIALS
-    appearance?: 'system' | 'light' | 'dark'
-    resizable?: boolean
-    fullScreen?: boolean
-    alwaysOnTop?: boolean
-    shadow?: boolean
-    rememberFrame?: boolean
-    inspector?: boolean
-    panelWidth?: number
-    panelHeight?: number
+    update?: string | undefined
+    maxWidth?: number | undefined
+    maxHeight?: number | undefined
+    titlebar?: 'standard' | 'hidden' | 'inset' | undefined
+    vibrancy?: keyof typeof VIBRANCY_MATERIALS | undefined
+    appearance?: 'system' | 'light' | 'dark' | undefined
+    resizable?: boolean | undefined
+    fullScreen?: boolean | undefined
+    alwaysOnTop?: boolean | undefined
+    shadow?: boolean | undefined
+    rememberFrame?: boolean | undefined
+    inspector?: boolean | undefined
+    panelWidth?: number | undefined
+    panelHeight?: number | undefined
 } & (
-    | { start?: true | 'immediately'; connect?: boolean }
-    | { start: false; connect?: true }
+    | {
+          start?: true | 'immediately' | undefined
+          connect?: boolean | undefined
+      }
+    | { start: false; connect?: true | undefined }
 ) &
     (
-        | { dock?: boolean; menuBarExtra?: boolean }
+        | { dock?: boolean | undefined; menuBarExtra?: boolean | undefined }
         | { dock: 'window'; menuBarExtra: true }
     )
 
