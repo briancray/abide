@@ -7,6 +7,8 @@ import ContractPages from './lib/ContractPages.abide'
 import contractPages from './lib/ContractPages.abide' with { type: 'text' }
 import DimLastArrow from './lib/DimLastArrow.abide'
 import dimLastArrow from './lib/DimLastArrow.abide' with { type: 'text' }
+import FullScreenPages from './lib/FullScreenPages.abide'
+import fullScreenPages from './lib/FullScreenPages.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -22,6 +24,10 @@ import dimLastArrow from './lib/DimLastArrow.abide' with { type: 'text' }
             path: 'packages/abide/tests/lightbox.test.ts',
             from: ["test('the arrow keys step it as its carousel buttons do"],
         },
+        {
+            path: 'packages/abide/tests/lightbox.test.ts',
+            from: ['test("its backdrop is its dialog\'s'],
+        },
     ]}
 >
     <Section level={3} title="Open a contract's pages on the one picked">
@@ -31,6 +37,13 @@ import dimLastArrow from './lib/DimLastArrow.abide' with { type: 'text' }
             the carousel's parts inside it, and call <code>show(key)</code> to open it resting on
             that item. Escape and the backdrop close it, as they do any dialog.</p>
         <Example code={contractPages}><ContractPages /></Example>
+    </Section>
+
+    <Section level={3} title="Close a full-screen contract viewer on a click beside the page">
+        <p>A lightbox filling the screen has no backdrop outside its box. Spread
+            <code>backdrop</code> on the element around the pages: a click on it, and not on a
+            page, closes the lightbox.</p>
+        <Example code={fullScreenPages}><FullScreenPages /></Example>
     </Section>
 
     <Section level={3} title="Dim the arrow that has no page beyond">

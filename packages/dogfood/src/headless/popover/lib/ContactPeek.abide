@@ -1,0 +1,11 @@
+<script>
+import { popover } from '@abide/abide'
+
+const peek = popover({ openOnHover: 300, closeOnLeave: 200, openOnFocus: true })
+</script>
+
+<a href="#ada" {...peek.anchor}>Ada Lovelace</a>
+<div class="m-0 w-64 rounded-md bg-raised p-3" {...peek.popover}>
+    <strong>Ada Lovelace</strong>
+    <a href="mailto:ada@engines.example">ada@engines.example</a>
+</div>

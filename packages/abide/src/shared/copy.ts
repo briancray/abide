@@ -1,7 +1,7 @@
-// 53.21-53.23, 53.43, 53.44, 53.54, 53.55, 53.79 — A CLICK THAT COPIES, and the element marked once the copy lands.
+// 53.21, 53.23, 53.43, 53.44, 53.79 — A CLICK THAT COPIES, and the element marked once the copy lands.
 
+import { type Copyable, copyToClipboard } from './copyToClipboard.ts'
 import type { Disposer } from './reactive/watch.ts'
-import { type Copyable, writeClipboard } from './writeClipboard.ts'
 
 /** 53.79 — the element clicked, as the text it reads and the markup it holds. */
 const contentOf = (clicked: Element): Copyable => ({
@@ -46,7 +46,7 @@ export function copy(
                       : null
             if (clicked === null || !element.contains(clicked)) return
             // Read and written inside the click: Safari writes the clipboard from a gesture alone.
-            const copied = await writeClipboard(
+            const copied = await copyToClipboard(
                 typeof value === 'function' ? value(clicked) : value,
             )
             if (!bound) return

@@ -2,6 +2,7 @@
 // the page: nothing is added beside the anchor, and one popover serves every hint on the page.
 
 import { dismissing } from '../dismissible.ts'
+import { hoverAndFocus, type OpenedBy } from '../hoverAndFocus.ts'
 import { live } from '../live.ts'
 import type { Disposer } from '../reactive/watch.ts'
 import { hints, type OpenTip, shown, type TooltipOptions } from './tips.ts'
@@ -11,8 +12,8 @@ import { hints, type OpenTip, shown, type TooltipOptions } from './tips.ts'
 let unstack: Disposer | undefined
 
 /**
- * The part opening `text` against the element it is spread on once a pointer has rested on it for
- * `delay` milliseconds, and at once when it takes focus the browser shows (`:focus-visible`). The
+ * The part opening `text` against the element it is spread on once a mouse or a pen has rested on it
+ * for `delay` milliseconds, and at once when it takes focus the browser shows (`:focus-visible`). The
  * text describes the element from the server's markup on (50.23).
  *
  * @param text what the hint says, and what describes the element
@@ -42,48 +43,58 @@ export function tipAgainst(
     box: ((anchor: Element) => DOMRect) | undefined,
 ): (anchor: Element) => Disposer {
     return (anchor) => {
-        let timer: ReturnType<typeof setTimeout> | undefined
         let open: OpenTip | undefined
+        // How the hint showing was opened: a leave closes what a rest opened, a blur what focus did.
+        let openedBy: OpenedBy | undefined
+        const showing = (): boolean =>
+            open !== undefined && shown.peek() === open
 
-        const show = (): void => {
-            clearTimeout(timer)
-            if (open !== undefined && shown.peek() === open) return
+        const show = (by: OpenedBy): void => {
+            if (showing()) return
             hints.asked()
             unstack?.()
             open = { anchor, text, options, box }
+            openedBy = by
             shown.set(open)
             unstack = dismissing(hide, { outside: false })(anchor)
         }
         function hide(): void {
-            clearTimeout(timer)
-            if (open === undefined || shown.peek() !== open) return
+            opens.stop()
+            if (!showing()) return
             open = undefined
             unstack?.()
             unstack = undefined
             shown.set(undefined)
         }
-        // 50.24 — a click focuses a button too, and a hint opened by it would stand until focus moved.
-        const focused = (event: Event): void => {
-            if ((event.target as Element).matches(':focus-visible')) show()
-        }
-        // THE TRIGGER IS THE HINT'S OWN: a pointer resting and focus the browser shows open nothing else
-        // abide ships — a `menu` opens on a press the popover toggles and on the arrows `openingEnd`
-        // names, a `Combobox` on those arrows and on typing — so there is no second caller to share it.
-        const linger = (): void => {
-            clearTimeout(timer)
-            timer = setTimeout(show, live(options.delay) ?? 300)
-        }
+        // 50.24, 50.25 — a popover's rest and focus, a leave closing the hint at once.
+        const opens = hoverAndFocus(
+            {
+                openOnHover: () => live(options.delay) ?? 300,
+                closeOnLeave: 0,
+                openOnFocus: true,
+            },
+            {
+                isOpen: showing,
+                openedBy: () => (showing() ? openedBy : undefined),
+                show,
+                hide,
+                inside: () => [anchor],
+            },
+        )
 
-        anchor.addEventListener('mouseenter', linger)
-        anchor.addEventListener('mouseleave', hide)
-        anchor.addEventListener('focusin', focused)
-        anchor.addEventListener('focusout', hide)
+        // An anchor is any element, an SVG slice's among them, whose event map names none of these.
+        const listeners: [string, EventListener][] = [
+            ['pointerenter', opens.enter as EventListener],
+            ['pointerleave', opens.leave],
+            ['focusin', opens.focused as EventListener],
+            ['focusout', opens.blurred as EventListener],
+        ]
+        for (const [name, listener] of listeners)
+            anchor.addEventListener(name, listener)
         return () => {
             hide()
-            anchor.removeEventListener('mouseenter', linger)
-            anchor.removeEventListener('mouseleave', hide)
-            anchor.removeEventListener('focusin', focused)
-            anchor.removeEventListener('focusout', hide)
+            for (const [name, listener] of listeners)
+                anchor.removeEventListener(name, listener)
         }
     }
 }

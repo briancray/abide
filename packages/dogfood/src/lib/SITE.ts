@@ -840,6 +840,13 @@ const WRITTEN: readonly {
                 where: 'browser',
             },
             {
+                route: '/helpers/copy-to-clipboard',
+                title: '`copyToClipboard`',
+                description:
+                    'Copy text or rich text to the clipboard from a handler, and learn whether it landed.',
+                where: 'browser',
+            },
+            {
                 route: '/helpers/sort-by',
                 title: '`sortBy`',
                 description:

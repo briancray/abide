@@ -1,0 +1,20 @@
+<script>
+import { copyToClipboard, reactive } from '@abide/abide'
+
+let said = reactive('')
+
+async function picked(event: Event) {
+    const select = event.currentTarget as HTMLSelectElement
+    const action = select.value
+    select.value = ''
+    if (action !== 'email') return
+    if (await copyToClipboard('grace@hopper.example')) said = 'Email copied'
+}
+</script>
+
+<select aria-label="Contact actions" onchange={picked}>
+    <option value="">Actions</option>
+    <option value="email">Copy email</option>
+    <option value="call">Call</option>
+</select>
+<p>{said}</p>

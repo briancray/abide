@@ -4737,8 +4737,8 @@ set `step` to `waiting` and navigate the page to the status's `link`.
 44.71 2500 ms after `pairing`'s `start`, `step` MUST become `click` where the window blurred since,
 or `status` is paired, and `install` otherwise.
 
-44.72 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard as 53.54 and 53.22
-copy, and once written MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to
+44.72 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard through
+`copyToClipboard`, and once written MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to
 `click`.
 
 44.73 A `pairing` MUST, once its `stop` or its `[Symbol.dispose]` is called, or the component whose
@@ -5250,8 +5250,8 @@ a function of the item (49.9), not of its key.
 `onclose` with the `returnValue` that close set, and `''` where it set none, save that a close
 reported after the dialog has opened again MUST leave `open` true.
 
-50.3 Escape and a click on a `dialog`'s backdrop MUST close it where `dismissible` is true, and MUST
-NOT where it is false.
+50.3 Escape, a click on a `dialog`'s backdrop, and a click whose target is the element its `backdrop`
+part is spread on MUST close it where `dismissible` is true, and MUST NOT where it is false.
 
 50.4 A `dialog`'s `<dialog>` MUST focus the element inside it carrying `autofocus` as it opens.
 
@@ -5298,10 +5298,13 @@ carry the role `status`.
 
 50.19 An anchored layer — the element carrying `tooltip.host`'s `hint` part while it shows a hint,
 an element `popover` is bound to and the element carrying `combobox`'s `popup`
-part — MUST sit on `side`, `offset` pixels from its anchor, lined up along it as `align` names.
+part — MUST sit on the side 50.20 takes, `offset` pixels from its anchor, lined up along it as
+`align` names.
 
-50.20 An anchored layer MUST take the side opposite `side` where `side` leaves less room than the
-layer needs and the opposite side leaves more.
+50.20 An anchored layer MUST take `side` where it leaves the room the layer needs there — its height
+on `top` and `bottom`, its width on `left` and `right` — else the side opposite where that one does,
+and else the side of the four leaving the most room past what the layer needs there, of two leaving
+the same the first of `side`, its opposite, `top` or `left`, and `bottom` or `right`.
 
 50.21 An anchored layer MUST stay at least `margin` pixels inside the viewport on both axes, its
 start edge kept where it does not fit.
@@ -5312,12 +5315,12 @@ place.
 50.23 `tooltip.tip` MUST describe the element it is spread on by its text, through an
 `aria-description` among its part's attributes.
 
-50.24 `tooltip.tip` MUST open its hint once a pointer has rested on its element for `delay` milliseconds, and at once when its element takes focus that matches `:focus-visible`, and
-MUST NOT open it for focus that does not.
+50.24 `tooltip.tip` MUST open its hint as a `popover` given an `openOnHover` of `delay` milliseconds
+and `openOnFocus` opens (50.55, 50.75).
 
 50.25 `tooltip.tip` MUST close its hint on an Escape no one prevented, as the top layer of `dismissible`'s
-stack while it shows (53.14, 53.15), once it is unbound, when the pointer leaves its element and
-when its element loses focus.
+stack while it shows (53.14, 53.15), once it is unbound, and as a `popover` given a `closeOnLeave`
+of `0` closes for a leave and for a blur (50.56, 50.76).
 
 50.26 The element carrying `tooltip.host`'s `hint` part while it shows a hint, a `chart`'s `tip`,
 an element `popover` is bound to and the element carrying `combobox`'s `popup`
@@ -5332,7 +5335,7 @@ part MUST write the side it took as `data-side`, how far along its facing edge t
 falls as the `--arrow-offset` custom property, and the anchor's width as `--anchor-width`.
 
 50.28 A `menu` MUST focus its first menu item as it opens, or its last where ArrowUp on its trigger
-opened it.
+opened it, and nothing in its menu where a pointer's rest or focus opened it (50.55, 50.75).
 
 50.29 The menu items of a `menu` MUST be the descendants of its menu carrying `role="menuitem"`,
 `role="menuitemcheckbox"` or `role="menuitemradio"` that are not disabled.
@@ -5420,11 +5423,12 @@ it: `role="tooltip"` and `popover="manual"`, with `data-open` present while a hi
 50.54 `tooltip.host`'s `text` MUST be the text of the hint showing in that host, and absent while none
 does.
 
-50.55 A `menu` given `openOnHover` MUST open once a mouse or a pen has rested on its trigger that many
-milliseconds, focusing nothing in its menu, and MUST NOT open from a touch's resting.
+50.55 A `popover` given `openOnHover` MUST open once a mouse or a pen has rested on its trigger or its
+anchor that many milliseconds, and MUST NOT open from a touch's resting.
 
-50.56 A `menu` a pointer opened, given `closeOnLeave`, MUST close once the pointer has been off its
-trigger and its menu that many milliseconds, and a `menu` a key opened MUST NOT close for a leave.
+50.56 A `popover` a pointer opened, by a rest or a click, given `closeOnLeave`, MUST close once the
+pointer has been off its trigger or its anchor and the popover that many milliseconds, and a
+`popover` opened any other way MUST NOT close for a leave.
 
 50.57 While a `menu` of a `group` is open, a pointer entering the trigger of another `menu` of that
 `group`, or ArrowLeft or ArrowRight in its menu, MUST close it and open the other — for the keys, the
@@ -5443,7 +5447,7 @@ and on a press outside it and outside its `trigger` or `anchor`, save where its 
 
 50.61 `drawer`'s `drawer` part MUST be `dialog`'s `dialog` part, given every option the drawer was,
 with a `resizable`'s `panel` part laid over it, and MUST carry `data-side` naming `side`, `end` where
-none is given.
+none is given; its `backdrop` part MUST be that `dialog`'s `backdrop` part.
 
 50.62 `drawer`'s `handle` part MUST be that `resizable`'s `handle`, sizing the drawer across `side`
 and growing it as the handle moves away from the edge `side` names.
@@ -5457,7 +5461,7 @@ that size than none.
 drag set it and `open` as it was.
 
 50.65 `lightbox`'s parts MUST be a `carousel`'s, given every option the lightbox was, beside a
-`dialog`'s `dialog` part opened and closed by `open`.
+`dialog`'s `dialog` and `backdrop` parts opened and closed by `open`.
 
 50.66 ArrowLeft and ArrowRight in `lightbox`'s `dialog` MUST do what a click on its carousel's
 `previous` and `next` does, and nothing where that button is disabled.
@@ -5483,6 +5487,12 @@ as JSON, its id left out; and the key a dismissal is remembered by MUST be a has
 50.73 A write to a `notices` list's `store` MUST NOT hold a key whose remembering has ended.
 
 50.74 `toasts` MUST be a `notices` list built with no options.
+
+50.75 A `popover` given `openOnFocus` MUST open at once when its trigger or its anchor takes focus that
+matches `:focus-visible`, and MUST NOT open for focus that does not.
+
+50.76 A `popover` focus opened MUST close once focus moves to an element outside its trigger or its
+anchor and the popover.
 
 # 51. Lists and tables
 
@@ -6440,10 +6450,10 @@ and MUST NOT once the drag leaves or drops.
 53.20 `dropzone` with `paste` MUST take a `paste` carrying files `accept` takes as a drop, and MUST
 leave a paste carrying none to the browser.
 
-53.21 `copy` MUST write its value to the clipboard on a click of its element, calling a function
-it was given at the click.
+53.21 `copy` MUST write its value to the clipboard through `copyToClipboard` on a click of its
+element, calling a function it was given at the click.
 
-53.22 `copy` MUST copy through a selected textarea where `navigator.clipboard` or `ClipboardItem`
+53.22 `copyToClipboard` MUST copy through a selected textarea where `navigator.clipboard` or `ClipboardItem`
 is absent or refuses, laying every string its value holds on the `copy` event under its type.
 
 53.23 `copy` MUST write `data-copied` on its element once a copy lands, and MUST remove it
@@ -6543,10 +6553,10 @@ and options, apart and in the order `keyLabel` writes them.
 53.53 `keyLabel` and `keyLabel.parts` MUST write for an Apple platform where `apple` is `true`, and
 for any other where it is `false`, whatever 53.3 reads.
 
-53.54 `copy` MUST write a string as `text/plain`, and a record as one clipboard item holding each
+53.54 `copyToClipboard` MUST write a string as `text/plain`, and a record as one clipboard item holding each
 MIME type the record names.
 
-53.55 `copy` MUST report a value holding no string as not copied where 53.22 copies.
+53.55 `copyToClipboard` MUST settle `false` for a value holding no string where 53.22 copies.
 
 53.56 What a drop, a paste or a pick `dropzone` takes MUST replace its `files`, and one taking none
 MUST leave them as they are.
@@ -6699,6 +6709,11 @@ leaves the `host` where it already is, MUST NOT be on its way in 53.65's sense.
 
 53.102 `shrinkImage` MUST answer a `File` carrying none of the EXIF, XMP, IPTC, comment or text
 metadata of the file it is handed.
+
+53.103 `copyToClipboard` MUST settle `true` once its value is on the clipboard, and `false` where
+`navigator.clipboard` and 53.22's copy both leave it off, and MUST NOT reject for a refusal.
+
+53.104 `copyToClipboard` MUST reject where `isServer` is true.
 
 # 54. Guards, fetches and jobs
 

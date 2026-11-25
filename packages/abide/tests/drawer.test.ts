@@ -64,6 +64,30 @@ test('a drawer opens as its dialog does, stands on its side, and its handle size
     expect(notes.size()).toBe(230)
 })
 
+// THE REVERT: leave `backdrop` off the drawer's parts, and a drawer filling the screen has nothing
+// beside its panel a click closes it by.
+test("a drawer's backdrop is its dialog's, closing it where it is dismissible — 50.61, 50.3", () => {
+    const backdropClick = (parts: { backdrop: Record<string, unknown> }) => {
+        const veil = document.createElement('div')
+        ;(parts.backdrop.onclick as (event: Event) => void)({
+            target: veil,
+            currentTarget: veil,
+        } as unknown as Event)
+        flushSync()
+    }
+    const notes = drawer()
+    notes.open.set(true)
+    backdropClick(notes)
+    expect([notes.open(), notes.backdrop['data-drawer']]).toEqual([
+        false,
+        'backdrop',
+    ])
+    const pinned = drawer({ dismissible: false })
+    pinned.open.set(true)
+    backdropClick(pinned)
+    expect(pinned.open()).toBe(true)
+})
+
 // THE REVERT: drop `settle` from the handle's `pointerup`, and a drawer let go stays where it was dropped.
 test('a drawer with stops let go settles at the nearest stop, a flick carries it on, and below every stop it closes — 50.63', () => {
     Object.defineProperty(globalThis, 'innerHeight', {

@@ -1,23 +1,19 @@
-// 50.28-50.32, 50.37-50.40, 50.55-50.58 — A BUTTON AND THE ACTIONS IT OPENS: WAI-ARIA's menu button, as
+// 50.28-50.32, 50.37-50.40, 50.57, 50.58 — A BUTTON AND THE ACTIONS IT OPENS: WAI-ARIA's menu button, as
 // parts an app spreads onto elements of its own. The menu opens in a `popover` of its own (50.37): the
 // popover places it, shows it and closes it on a press outside, and the menu is the keyboard over its
 // items and what a pick does. Each part is the popover's with the menu's laid over it, so an app spreads
 // one per element.
 
 import { type Live, live } from './live.ts'
-import { popover, type PopoverOptions } from './popover.ts'
+import { popoverLayer, type PopoverOptions } from './popover.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { join } from './register.ts'
 import { openingEnd, roving, typeahead } from './roving.ts'
 import { withPart } from './withPart.ts'
 
-/** Where a menu opens and what closes it, as a `popover` takes them, and how a pointer opens it and switches between menus. */
+/** Where a menu opens and what opens and closes it, as a `popover` takes them, and the menus it switches between. */
 export type MenuOptions = PopoverOptions & {
-    /** Milliseconds a mouse or pen rests on the trigger before the menu opens, or `false` for none. Off by default; a function is read live. */
-    openOnHover?: Live<number | false>
-    /** Milliseconds after the pointer leaves the trigger and the menu before a menu a pointer opened closes, or `false` for never. Off by default; a function is read live. */
-    closeOnLeave?: Live<number | false>
     /** The menus sharing this name switch between each other: a pointer on another's trigger, or ArrowLeft and ArrowRight, opens it while one of them is open. A function is read live. */
     group?: Live<string | undefined>
 }
@@ -36,7 +32,7 @@ export type Menu = {
     readonly open: Reactive<boolean>
 }
 
-// 50.55-50.57 — every menu standing, so a group finds its members: one list per request on a server, as
+// 50.57 — every menu standing, so a group finds its members: one list per request on a server, as
 // every `reactive` without `global` is (11.32), and a menu is a member for as long as its setup stands.
 type Member = {
     group(): string | undefined
@@ -50,8 +46,7 @@ type Member = {
 }
 const members = reactive<readonly Member[]>([])
 
-// Where focus goes as a menu opens: its first item, its last (50.28), or nowhere — a pointer resting
-// on the trigger leaves focus where it was (50.55).
+// Where focus goes as a menu opens: its first item, its last, or nowhere (50.28).
 type Focus = 'first' | 'last' | 'none'
 
 /** The members of `group` standing, in the document order of their triggers. */
@@ -78,7 +73,7 @@ export function menu(options: MenuOptions = {}): Menu {
     // 50.37 — the popover it opens in, under a menu's own placement defaults. Hydration runs setup again
     // (41.6), and every attribute naming one is bound to it, so the ids are rewritten together; the
     // popover's own check (49.7) covers every id the menu names.
-    const layer = popover({
+    const layer = popoverLayer({
         ...options,
         id: options.id ?? `menu-${randomToken(4, 'hex')}`,
         align: () => live(options.align) ?? 'start',
@@ -98,23 +93,20 @@ export function menu(options: MenuOptions = {}): Menu {
             : [...list.querySelectorAll<HTMLElement>(ITEM)]
     }
 
-    // Read as the popover opens, then put back: what an opening nothing here asked for does.
-    let focusOnOpen: Focus = 'first'
-    // 50.56 — whether a pointer opened it, which alone a leave closes.
-    let byPointer = false
+    // Read as the popover opens, then put back: an opening nothing here asked for focuses as 50.28
+    // has it for how the popover opened.
+    let focusOnOpen: Focus | undefined
     // 50.58 — the side the menu a group switched from stood on, and the side the one it switched to
     // stands on, for a transition to read.
     const cameFrom = reactive<'start' | 'end' | undefined>(undefined)
     const goingTo = reactive<'start' | 'end' | undefined>(undefined)
-    let hovering: ReturnType<typeof setTimeout> | undefined
-    let leaving: ReturnType<typeof setTimeout> | undefined
 
     const isOpen = (): boolean => open.peek() === true
     const show = (focused: Focus, pointer: boolean): void => {
         if (isOpen()) return
         focusOnOpen = focused
-        byPointer = pointer
-        open.set(true)
+        // 50.56 — a pointer switching menus opened this one, so a leave closes it.
+        layer.show(pointer ? 'hover' : undefined)
     }
     const hide = (): void => {
         if (isOpen()) open.set(false)
@@ -123,19 +115,6 @@ export function menu(options: MenuOptions = {}): Menu {
     const closeToTrigger = (): void => {
         hide()
         triggerOf()?.focus()
-    }
-    const cancelLeave = (): void => {
-        clearTimeout(leaving)
-        leaving = undefined
-    }
-    // 50.56 — a menu a pointer opened closes once the pointer has been off its trigger and its menu
-    // for `closeOnLeave` milliseconds; coming back onto either keeps it.
-    const armLeave = (): void => {
-        cancelLeave()
-        if (!byPointer || !isOpen()) return
-        const after = live(options.closeOnLeave)
-        if (after === undefined || after === false) return
-        leaving = setTimeout(hide, after)
     }
 
     const self: Member = {
@@ -167,29 +146,26 @@ export function menu(options: MenuOptions = {}): Menu {
     const toggled = (event: Event): void => {
         if ((event as ToggleEvent).newState === 'open') {
             goingTo.set(undefined)
-            if (focusOnOpen !== 'none') {
+            const by = layer.openedBy()
+            const focused =
+                focusOnOpen ??
+                (by === 'hover' || by === 'focus' ? 'none' : 'first')
+            if (focused !== 'none') {
                 const listed = items()
-                listed[focusOnOpen === 'first' ? 0 : listed.length - 1]?.focus()
+                listed[focused === 'first' ? 0 : listed.length - 1]?.focus()
             }
-            focusOnOpen = 'first'
+            focusOnOpen = undefined
             return
         }
-        cancelLeave()
         cameFrom.set(undefined)
-        byPointer = false
     }
 
-    // The popover's trigger with the menu's laid over it; its click is the popover's, then the menu's.
-    const toggle = layer.trigger.onclick as (event: MouseEvent) => void
+    // The popover's trigger with the menu's laid over it; a pointer entering is the popover's where
+    // no groupmate is open.
+    const rest = layer.trigger.onpointerenter as (event: PointerEvent) => void
     const trigger = withPart(withPart({}, layer.trigger), {
         'data-menu': 'trigger',
         'aria-haspopup': 'menu',
-        // 50.59 — the popover opens and shuts it; this says whether a pointer did. A click from a key
-        // (Enter, Space) has no pointer under it, and `detail` 0 says so.
-        onclick: (event: MouseEvent) => {
-            toggle(event)
-            byPointer = event.detail !== 0
-        },
         // 50.32
         onkeydown: (event: KeyboardEvent) => {
             const end = openingEnd(event.key, 'vertical')
@@ -197,13 +173,14 @@ export function menu(options: MenuOptions = {}): Menu {
             event.preventDefault()
             show(end, false)
         },
-        // 50.55, 50.57 — a groupmate open switches to this one at once; else a resting mouse or pen
-        // opens it after `openOnHover`. A touch has no hover, and a tap is a click.
+        // 50.57 — a groupmate open switches to this one at once; else the popover's rest (50.55).
         onpointerenter: (event: PointerEvent) => {
-            cancelLeave()
-            if (event.pointerType === 'touch' || isOpen()) return
             const group = self.group()
-            if (group !== undefined) {
+            if (
+                event.pointerType !== 'touch' &&
+                !isOpen() &&
+                group !== undefined
+            ) {
                 const openMate = groupOf(group).find(
                     (mate) => mate !== self && mate.isOpen(),
                 )
@@ -217,15 +194,7 @@ export function menu(options: MenuOptions = {}): Menu {
                     return
                 }
             }
-            const after = live(options.openOnHover)
-            if (after === undefined || after === false) return
-            clearTimeout(hovering)
-            hovering = setTimeout(() => show('none', true), after)
-        },
-        onpointerleave: () => {
-            clearTimeout(hovering)
-            hovering = undefined
-            armLeave()
+            rest(event)
         },
     })
 
@@ -241,8 +210,6 @@ export function menu(options: MenuOptions = {}): Menu {
             return goingTo()
         },
         ontoggle: toggled,
-        onpointerenter: cancelLeave,
-        onpointerleave: armLeave,
         onkeydown: (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 // Kept from `dismissible`'s stack (53.14), which would close it and leave focus inside.

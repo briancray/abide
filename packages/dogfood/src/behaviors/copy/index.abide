@@ -20,6 +20,7 @@ import copyRecord from './lib/CopyRecord.abide' with { type: 'text' }
         '/behaviors/element-size',
         '/behaviors/dismissible',
         '/headless/dropzone',
+        '/helpers/copy-to-clipboard',
     ]}
     tests={[
         {
@@ -32,22 +33,6 @@ import copyRecord from './lib/CopyRecord.abide' with { type: 'text' }
             path: 'packages/abide/tests/elementBehaviors.test.ts',
             from: [
                 "test('a click copies, marks the element copied, and the mark wears off",
-            ],
-        },
-        {
-            path: 'packages/abide/tests/elementBehaviors.test.ts',
-            from: ["test('a record copies as one item holding each type it names"],
-        },
-        {
-            path: 'packages/abide/tests/elementBehaviors.test.ts',
-            from: [
-                "test('a page with no clipboard copies through a selected textarea, carrying every string type",
-            ],
-        },
-        {
-            path: 'packages/abide/tests/elementBehaviors.test.ts',
-            from: [
-                "test('a value holding no string reports not copied where there is no clipboard",
             ],
         },
         {

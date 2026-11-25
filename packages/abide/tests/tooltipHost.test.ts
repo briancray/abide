@@ -31,7 +31,9 @@ function standing() {
 async function opened(text: string): Promise<() => void> {
     const anchor = document.body.appendChild(document.createElement('button'))
     const unbind = bindPart(tip(text, { delay: 0 }), anchor)
-    anchor.dispatchEvent(new MouseEvent('mouseenter'))
+    anchor.dispatchEvent(
+        new PointerEvent('pointerenter', { pointerType: 'mouse' }),
+    )
     await Bun.sleep(1)
     flushSync()
     return unbind
@@ -85,7 +87,9 @@ test('a hint keeps the margin it is given from the viewport — 50.21', async ()
     anchor.getBoundingClientRect = () =>
         DOMRect.fromRect({ x: 0, y: 100, width: 20, height: 20 })
     const unbind = bindPart(tip('Signed.', { delay: 0, margin: 30 }), anchor)
-    anchor.dispatchEvent(new MouseEvent('mouseenter'))
+    anchor.dispatchEvent(
+        new PointerEvent('pointerenter', { pointerType: 'mouse' }),
+    )
     await Bun.sleep(1)
     flushSync()
     expect(popover.style.inset.split(' ').at(-1)).toBe('30px')
@@ -132,7 +136,9 @@ test("a pie slice's hint opens against its own arc, not the ring — 52.67", asy
         'bind:element': (element: Element) => () => void
     }
     const unbind = lost['bind:element'](circle)
-    circle.dispatchEvent(new MouseEvent('mouseenter'))
+    circle.dispatchEvent(
+        new PointerEvent('pointerenter', { pointerType: 'mouse' }),
+    )
     await Bun.sleep(350)
     flushSync()
     expect(popover.style.inset).toBe('82px auto auto 15px')

@@ -1,4 +1,4 @@
-// 50.28-50.39, 50.55-50.57 — `menu` and the popover it opens in. The parts are spread by hand here, as
+// 50.28-50.39, 50.55-50.57 — `menu` and the popover it opens in, given the popover's rest and leave. The parts are spread by hand here, as
 // 32.11 spreads them: an attribute per string, a listener per `on<event>`, and the element handed to
 // `bind:element`. What a template does with them is the CRM's tests'.
 
@@ -121,8 +121,8 @@ test('Escape in the menu closes it and hands focus back to the trigger — 50.31
     expect(document.activeElement).toBe(trigger)
 })
 
-// THE REVERT: drop the `openOnHover` timer from the trigger's `pointerenter`, and a resting mouse opens
-// nothing.
+// THE REVERT: hand the trigger's `pointerenter` to the group switch alone, never on to the popover's
+// rest, and a resting mouse opens nothing.
 test('a mouse resting on the trigger opens the menu after openOnHover, and a touch does not — 50.55', async () => {
     const hover = standing({ openOnHover: 5 })
     hover.enter(hover.trigger, 'touch')

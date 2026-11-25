@@ -2,7 +2,8 @@
 // `showModal` dialog in the top layer, makes the page behind it inert, keeps focus inside it and fires
 // `cancel` on Escape, so none of that is code here. What is: `open` shown and closed both ways, Escape
 // and the backdrop held back where it is not `dismissible`, and the `[autofocus]` that renders with the
-// opening focused. `modal: false` is `show`, which does none of the browser's part: the page stays
+// opening focused. A dialog filling the viewport has no backdrop outside its box to click, so the
+// `backdrop` part names an element of the app's own that stands for it. `modal: false` is `show`, which does none of the browser's part: the page stays
 // usable around the dialog.
 
 import { type Live, live } from './live.ts'
@@ -14,16 +15,18 @@ export type DialogOptions = {
     open?: Reactive<boolean>
     /** Whether it opens modal, over an inert page, or beside the page with `show`. `true` by default. */
     modal?: Live<boolean>
-    /** Whether Escape and a click on the backdrop close it. `true` by default. */
+    /** Whether Escape and a click on the backdrop, or on the element `backdrop` is spread on, close it. `true` by default. */
     dismissible?: Live<boolean>
     /** Called each time it closes, however it closed, with the `<dialog>`'s `returnValue`. */
     onclose?: (returnValue: string) => void
 }
 
-/** The part `dialog` hands back, `<dialog {...edit.dialog}>`, and whether it is showing. */
+/** The parts `dialog` hands back, `<dialog {...edit.dialog}>`, and whether it is showing. */
 export type DialogParts = {
     /** The `<dialog>`'s opening and closing, its dismissal and `data-open`. */
     readonly dialog: Record<string, unknown>
+    /** An element inside the `<dialog>` standing for its backdrop: a click on it, and not on what it holds, dismisses the dialog. */
+    readonly backdrop: Record<string, unknown>
     /** Whether the dialog is showing — the `open` it was handed, or one of its own. */
     readonly open: Reactive<boolean>
 }
@@ -36,6 +39,14 @@ export function dialog(options: DialogOptions = {}): DialogParts {
 
     return {
         open,
+        // 50.3 — the click's target is the element itself, so a click on what it holds closes nothing.
+        backdrop: {
+            'data-dialog': 'backdrop',
+            onclick: (event: MouseEvent) => {
+                if (dismissible() && event.target === event.currentTarget)
+                    open.set(false)
+            },
+        },
         dialog: {
             'data-dialog': 'dialog',
             get 'data-open'() {

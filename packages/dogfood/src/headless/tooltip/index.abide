@@ -48,7 +48,7 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Open a hint under its anchor, with no wait">
-        <p><code>side</code> is where the hint goes, flipped where there is no room.
+        <p><code>side</code> is where the hint goes; with no room there, it takes another side.
             <code>delay</code> is how long a pointer rests before it opens. A click does not
             open it at once; a key that moves focus to the element does.</p>
         <Example code={starHint}><StarHint /></Example>

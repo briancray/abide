@@ -11,7 +11,7 @@ import { standing } from '../standing.ts'
  * drift — and how long a pointer rests first. Only the side's default is a hint's own.
  */
 export type TooltipOptions = Omit<PlaceOptions, 'side'> & {
-    /** The side of the anchor the hint opens on, flipped to the opposite one where it has no room. Default `'top'`; a function is read at each placement. */
+    /** The side of the anchor the hint opens on, another taken where it has no room (50.20). Default `'top'`; a function is read at each placement. */
     side?: Live<Side>
     /** Milliseconds a pointer rests on the anchor before the hint opens. Default `300`; a function is read as the pointer rests. */
     delay?: Live<number>

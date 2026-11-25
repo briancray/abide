@@ -64,10 +64,26 @@ test('a side with no room flips to the opposite one — 50.20', () => {
     })
 })
 
-// Neither side has room, and the one asked for has more: it stays.
-test('a side keeps its place where the opposite one has less room — 50.20', () => {
+// THE REVERT: try the opposite side alone, and a tall menu under a toolbar's middle button stays on
+// top, running 76 pixels off the screen, with 184 to spare on its right.
+test('neither side of the axis fitting, the roomier side of the other one is taken — 50.20', () => {
     const anchor = box(100, 140, 40, 20)
-    expect(place(anchor, box(0, 0, 60, 200), { side: 'top' }).side).toBe('top')
+    expect(place(anchor, box(0, 0, 60, 200), { side: 'top' })).toMatchObject({
+        x: 148,
+        side: 'right',
+    })
+    expect(
+        place(box(300, 140, 40, 20), box(0, 0, 60, 200), { side: 'bottom' })
+            .side,
+    ).toBe('left')
+})
+
+// THE REVERT: take a side that leaves as much room as the one before it, and this lands on the
+// bottom, the opposite of the side asked for, with no more room there.
+test('no side fitting, the roomiest is taken, the side asked for winning a tie — 50.20', () => {
+    const anchor = box(10, 140, 380, 20)
+    expect(place(anchor, box(0, 0, 100, 200), { side: 'top' }).side).toBe('top')
+    expect(place(anchor, box(0, 0, 50, 200), { side: 'top' }).side).toBe('left')
 })
 
 // THE REVERT: drop the clamp, and a menu by the right edge runs to x 410, past 400.

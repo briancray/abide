@@ -1,0 +1,21 @@
+<script>
+import { popover } from '@abide/abide'
+
+// A card a pointer can move onto: it opens on a rest or on focus, and waits a moment after a leave.
+const peek = popover({
+    side: 'right',
+    openOnHover: 300,
+    closeOnLeave: 200,
+    openOnFocus: true,
+})
+</script>
+
+<a href="/contacts/ada" {...peek.anchor}>Ada Lovelace</a>
+<div
+    class="m-0 w-64 rounded-md border border-rule bg-raised p-3 shadow-sm"
+    {...peek.popover}
+>
+    <strong>Ada Lovelace</strong>
+    <p>Analytical Engines · Lead</p>
+    <a href="mailto:ada@engines.example">ada@engines.example</a>
+</div>

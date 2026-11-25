@@ -1,0 +1,17 @@
+<script>
+import { dialog } from '@abide/abide'
+
+const preview = dialog()
+</script>
+
+<button onclick={() => (preview.open = true)}>Preview the contract</button>
+<dialog
+    {...preview.dialog}
+    class="m-0 h-dvh max-h-none w-dvw max-w-none bg-transparent p-0"
+>
+    <div {...preview.backdrop} class="grid h-full place-items-center bg-ink/40">
+        <article class="w-80 rounded-xl bg-raised p-5">
+            Hopper &amp; Co renewal
+        </article>
+    </div>
+</dialog>

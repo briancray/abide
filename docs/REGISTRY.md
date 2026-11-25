@@ -487,7 +487,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `dialog` | `(options?: DialogOptions) => DialogParts` | A native modal as a part an app spreads onto a `<dialog>` of its own, opened and closed by `open`. | 50.1, 50.2, 50.3, 50.4, 49.2, 49.4, 49.5, 49.6 |
 | `DialogOptions` | `{ open?: Reactive<boolean>; modal?: boolean \| (() => boolean); dismissible?: boolean \| (() => boolean); onclose?: (returnValue: string) => void }` | Whether the dialog shows, and how it opens and closes. | 50.1, 50.2, 50.3 |
-| `DialogParts` | `{ readonly dialog: Record<string, unknown>; readonly open: Reactive<boolean> }` | The `<dialog>`'s part, and whether it is showing. | 32.11, 32.99, 49.3, 49.8, 49.9 |
+| `DialogParts` | `{ readonly dialog: Record<string, unknown>; readonly backdrop: Record<string, unknown>; readonly open: Reactive<boolean> }` | The `<dialog>`'s part, the part for an element inside it standing for its backdrop, and whether it is showing. | 32.11, 32.99, 50.3, 49.3, 49.8, 49.9 |
 
 ## `prompts`
 
@@ -534,16 +534,16 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as parts an app spreads onto elements of its own: a trigger and the menu it opens in a `popover`. | 50.28, 50.29, 50.30, 50.31, 50.32, 50.37, 50.38, 50.39, 50.40, 50.55, 50.56, 50.57, 50.58, 49.2, 49.4, 49.5, 49.6 |
-| `MenuOptions` | `PopoverOptions & { openOnHover?: number \| false \| (() => number \| false); closeOnLeave?: number \| false \| (() => number \| false); group?: string \| (() => string \| undefined) }` | Where the menu opens and what closes it, as a `popover` takes them, whether a resting pointer opens it and a leaving one closes it, and the group it switches within. | 50.37, 49.8, 49.10, 49.11, 50.55, 50.56, 50.57 |
+| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as parts an app spreads onto elements of its own: a trigger and the menu it opens in a `popover`. | 50.28, 50.29, 50.30, 50.31, 50.32, 50.37, 50.38, 50.39, 50.40, 50.57, 50.58, 49.2, 49.4, 49.5, 49.6 |
+| `MenuOptions` | `PopoverOptions & { group?: string \| (() => string \| undefined) }` | Where the menu opens and what opens and closes it, as a `popover` takes them, and the group it switches within. | 50.37, 49.8, 49.10, 49.11, 50.57 |
 | `Menu` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the menu's, and whether the menu is open. | 32.11, 50.37, 50.38, 49.3, 49.8, 49.9, 49.17 |
 
 ## `popover`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `popover` | `(options?: PopoverOptions) => PopoverParts` | An app's own overlay as parts it spreads onto a trigger or an anchor and a popover of its own, shown in the top layer against the one while `open` holds. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.48, 50.59, 50.60, 32.99, 49.7, 49.12, 49.14, 49.2, 49.4, 49.5, 49.6 |
-| `PopoverOptions` | `{ side?: Side \| (() => Side); align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); margin?: number \| (() => number); arrowInset?: number \| (() => number); id?: string; open?: Reactive<boolean>; escape?: boolean; outside?: boolean }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners, the base of its ids, whether it is open, and whether Escape and a press outside close it. | 50.19, 50.20, 50.21, 50.35, 50.60, 49.8, 49.10, 49.11 |
+| `popover` | `(options?: PopoverOptions) => PopoverParts` | An app's own overlay as parts it spreads onto a trigger or an anchor and a popover of its own, shown in the top layer against the one while `open` holds. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.48, 50.55, 50.56, 50.59, 50.60, 50.75, 50.76, 32.99, 49.7, 49.12, 49.14, 49.2, 49.4, 49.5, 49.6 |
+| `PopoverOptions` | `{ side?: Side \| (() => Side); align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); margin?: number \| (() => number); arrowInset?: number \| (() => number); id?: string; open?: Reactive<boolean>; escape?: boolean; outside?: boolean; openOnHover?: number \| false \| (() => number \| false); closeOnLeave?: number \| false \| (() => number \| false); openOnFocus?: boolean \| (() => boolean) }` | The side tried first, the edge lined up with, the gap to the anchor, the gap kept to the viewport and the gap the arrow keeps to the corners, the base of its ids, whether it is open, whether Escape and a press outside close it, and whether a resting pointer and focus open it and a leaving pointer closes it. | 50.19, 50.20, 50.21, 50.35, 50.55, 50.56, 50.60, 50.75, 49.8, 49.10, 49.11 |
 | `PopoverParts` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly popover: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the popover's, and whether it is open. | 50.48, 50.59, 32.11, 49.3, 49.8, 49.9, 49.17 |
 | `Side` | `'top' \| 'bottom' \| 'left' \| 'right'` | A side of an anchor. | 50.19, 50.20 |
 
@@ -553,7 +553,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `drawer` | `(options?: DrawerOptions) => Drawer` | A `dialog` standing on an edge of the page, sized from a `resizable`'s handle on its inner edge and settling at its stops, as parts an app spreads onto a `<dialog>` and a handle of its own. | 50.61, 50.62, 50.63, 50.64, 49.2, 49.4, 49.5, 49.6 |
 | `DrawerOptions` | `DialogOptions & { side?: 'start' \| 'end' \| 'top' \| 'bottom'; size?: Reactive<number \| undefined>; min?: number \| (() => number); max?: number \| (() => number); label?: string \| (() => string); stops?: readonly number[] \| (() => readonly number[]) }` | How it opens, the edge it stands on, its size and the bounds of it, the handle's accessible name, and the sizes it settles at as shares of the viewport's. | 50.61, 50.62, 50.63, 50.64, 49.8, 49.10, 49.11 |
-| `Drawer` | `{ readonly drawer: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly open: Reactive<boolean>; readonly size: Reactive<number \| undefined> }` | The dialog's part, the handle's, whether it is showing, and its size. | 32.11, 50.61, 50.62, 49.3, 49.8, 49.9 |
+| `Drawer` | `{ readonly drawer: Record<string, unknown>; readonly backdrop: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly open: Reactive<boolean>; readonly size: Reactive<number \| undefined> }` | The dialog's part, its backdrop's, the handle's, whether it is showing, and its size. | 32.11, 50.61, 50.62, 49.3, 49.8, 49.9 |
 
 ## `lightbox`
 
@@ -561,7 +561,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `lightbox` | `<Item>(options: LightboxOptions<Item>) => Lightbox<Item>` | A `carousel` in a `dialog`, its arrow keys bound with `hotkeys` to the carousel's own buttons, as parts an app spreads onto a `<dialog>` and the carousel's markup of its own. | 50.65, 50.66, 50.67, 49.2, 49.4, 49.5, 49.6 |
 | `LightboxOptions` | `<Item>CarouselOptions<Item> & { open?: Reactive<boolean> }` | The carousel's options, and whether it is showing. | 50.65, 49.8 |
-| `Lightbox` | `<Item>Carousel<Item> & { readonly dialog: Record<string, unknown>; readonly open: Reactive<boolean>; show(key: string): void }` | The carousel's parts, the dialog's, whether it is showing, and what opens it on an item. | 32.11, 50.65, 50.67, 49.3, 49.8, 49.9 |
+| `Lightbox` | `<Item>Carousel<Item> & { readonly dialog: Record<string, unknown>; readonly backdrop: Record<string, unknown>; readonly open: Reactive<boolean>; show(key: string): void }` | The carousel's parts, the dialog's, its backdrop's, whether it is showing, and what opens it on an item. | 32.11, 50.65, 50.67, 49.3, 49.8, 49.9 |
 
 ## `commandPalette`
 
@@ -915,7 +915,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `copy` | `(options?: { value?: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>); copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => Record<string, unknown>` | The part copying the element clicked, or text, or a record of MIME type to what it holds, to the clipboard on a click of the element it is spread on, or of a button inside it. | 32.99, 53.21, 53.22, 53.23, 53.43, 53.44, 53.54, 53.55, 53.79, 49.3, 49.12 |
+| `copy` | `(options?: { value?: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>); copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => Record<string, unknown>` | The part copying the element clicked, or text, or a record of MIME type to what it holds, to the clipboard on a click of the element it is spread on, or of a button inside it. | 32.99, 53.21, 53.23, 53.43, 53.44, 53.79, 49.3, 49.12 |
 
 ## `hotkeys`
 
@@ -991,6 +991,12 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `download` | `(data: Blob \| string, name: string, type?: string) => void` | Text or bytes made in the page, saved as a file under a name. | 53.90, 53.91 |
+
+## `copyToClipboard`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `copyToClipboard` | `(value: string \| Record<string, string \| Blob>) => Promise<boolean>` | Text, or a record of MIME type to what it holds, written to the clipboard, settling whether it landed. | 53.22, 53.54, 53.55, 53.103, 53.104 |
 
 ## `sortBy`
 

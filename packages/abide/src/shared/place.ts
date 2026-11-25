@@ -10,7 +10,7 @@ export type Side = 'top' | 'bottom' | 'left' | 'right'
 
 /** Where a floating element sits against its anchor, and how it is kept on screen. */
 export type PlaceOptions = {
-    /** The side tried first; the opposite one is taken where this one has no room and that one has more. Default `'bottom'`; a function is read at each placement. */
+    /** The side tried first; where it has no room, the opposite one, and where neither has, whichever has the most (50.20). Default `'bottom'`; a function is read at each placement. */
     side?: Live<Side>
     /** Which edge of the anchor the floating element lines up with along that side: `'start'`, `'center'` or `'end'`. Default `'center'`; a function is read at each placement. */
     align?: Live<'start' | 'center' | 'end'>
@@ -41,6 +41,14 @@ const OPPOSITE: Record<Side, Side> = {
     right: 'left',
 }
 
+// 50.20 — the two sides of the other axis, in the order a tie between them is broken.
+const ACROSS: Record<Side, readonly [Side, Side]> = {
+    top: ['left', 'right'],
+    bottom: ['left', 'right'],
+    left: ['top', 'bottom'],
+    right: ['top', 'bottom'],
+}
+
 /**
  * Where `floating` sits beside `anchor` in the viewport, for an element positioned `fixed` — the top
  * layer a popover or a modal dialog opens in. It reads layout and writes nothing.
@@ -61,16 +69,19 @@ export function place(
     const width = viewport.clientWidth
     const height = viewport.clientHeight
 
+    // 50.20 — the room a side leaves past what the layer needs there; it fits where that is not negative.
+    const spare = (side: Side): number =>
+        room(side, at, width, height, offset + margin) -
+        (side === 'top' || side === 'bottom' ? size.height : size.width)
     let side = live(options.side) ?? 'bottom'
-    const opposite = OPPOSITE[side]
-    const needed =
-        side === 'top' || side === 'bottom' ? size.height : size.width
-    const roomOnSide = room(side, at, width, height, offset + margin)
-    if (
-        roomOnSide < needed &&
-        room(opposite, at, width, height, offset + margin) > roomOnSide
-    )
-        side = opposite
+    if (spare(side) < 0) {
+        const opposite = OPPOSITE[side]
+        // Neither fitting, the roomiest of the four: one of the other axis where either fits.
+        if (spare(opposite) >= 0) side = opposite
+        else
+            for (const other of [opposite, ...ACROSS[side]])
+                if (spare(other) > spare(side)) side = other
+    }
 
     const vertical = side === 'top' || side === 'bottom'
     const main = vertical

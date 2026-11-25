@@ -30,6 +30,8 @@ export type DrawerOptions = DialogOptions & {
 export type Drawer = {
     /** The `<dialog>`'s part: `dialog`'s, sized as a `resizable`'s panel, with `data-side`. */
     readonly drawer: Record<string, unknown>
+    /** An element inside the `<dialog>` standing for its backdrop: `dialog`'s. */
+    readonly backdrop: Record<string, unknown>
     /** The handle on its inner edge: a `resizable`'s. */
     readonly handle: Record<string, unknown>
     /** Whether it is showing — the `open` it was handed, or one of its own. */
@@ -115,6 +117,9 @@ export function drawer(options: DrawerOptions = {}): Drawer {
         drawer: withPart(withPart(withPart({}, shown.dialog), sized.panel), {
             'data-drawer': 'drawer',
             'data-side': side,
+        }),
+        backdrop: withPart(withPart({}, shown.backdrop), {
+            'data-drawer': 'backdrop',
         }),
         handle,
         open: shown.open,

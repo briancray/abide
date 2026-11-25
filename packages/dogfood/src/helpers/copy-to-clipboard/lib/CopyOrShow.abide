@@ -1,0 +1,13 @@
+<script>
+import { copyToClipboard, reactive } from '@abide/abide'
+
+let shown = reactive('')
+
+async function share() {
+    const link = `${location.origin}/deals/ledger-audit`
+    shown = (await copyToClipboard(link)) ? 'Link copied' : link
+}
+</script>
+
+<button onclick={share}>Share deal</button>
+<p>{shown}</p>

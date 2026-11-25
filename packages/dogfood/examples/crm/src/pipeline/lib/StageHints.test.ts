@@ -42,19 +42,27 @@ test('focus opens the hint at once and Escape closes it', async () => {
 test('a pointer resting on a stage opens its hint', async () => {
     using _hints = await mount(StageHints({}))
     const won = stage('won')
-    won.dispatchEvent(new MouseEvent('mouseenter'))
-    won.dispatchEvent(new MouseEvent('mouseleave'))
+    won.dispatchEvent(
+        new PointerEvent('pointerenter', { pointerType: 'mouse' }),
+    )
+    won.dispatchEvent(
+        new PointerEvent('pointerleave', { pointerType: 'mouse' }),
+    )
     await Bun.sleep(400)
     flushSync()
     expect(tip().matches(':popover-open')).toBe(false)
-    won.dispatchEvent(new MouseEvent('mouseenter'))
+    won.dispatchEvent(
+        new PointerEvent('pointerenter', { pointerType: 'mouse' }),
+    )
     flushSync()
     expect(tip().matches(':popover-open')).toBe(false)
     await Bun.sleep(400)
     flushSync()
     expect(tip().matches(':popover-open')).toBe(true)
     expect(tip().textContent).toBe('Signed. It counts toward the target.')
-    won.dispatchEvent(new MouseEvent('mouseleave'))
+    won.dispatchEvent(
+        new PointerEvent('pointerleave', { pointerType: 'mouse' }),
+    )
     flushSync()
     expect(tip().matches(':popover-open')).toBe(false)
 })
