@@ -6191,7 +6191,8 @@ function answers for the block's source and the rest of its info, written as it 
 
 52.43 `markdown.incremental` MUST answer a section that is one closed fenced block, and nothing else,
 whose info starts with a name `blocks` holds, as a `block` carrying that name, the block's `source`
-and the rest of its `info`, and MUST answer the block as code while its fence is open.
+and the rest of its `info`, and MUST answer the block as code while its fence is open. A code fence
+opening unindented MUST be a section of its own, with or without a blank line above or below it.
 
 52.44 `format.timeZone` MUST hold the zone the app pins, `undefined` until it pins one, one value per
 request on a server.

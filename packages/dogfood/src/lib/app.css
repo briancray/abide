@@ -505,6 +505,11 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply hidden;
     }
 
+    /* Paired, the answers are read like a page: as tall as the window under the bar allows. */
+    .answers:has(.conversation) {
+        @apply h-[calc(100dvh_-_var(--spacing-bar)_-_1.5rem)] max-h-none;
+    }
+
     .answers > header {
         @apply flex items-center gap-snug;
     }
@@ -529,7 +534,7 @@ html:has(> body > .site)::view-transition-new(root) {
     }
 
     .pairing[data-step="paired"] {
-        @apply min-h-0 flex-col flex-nowrap items-stretch gap-section;
+        @apply min-h-0 flex-1 flex-col flex-nowrap items-stretch gap-section;
     }
 
     .pairing[data-step="paired"] > [data-pairing="pair"] {
@@ -537,10 +542,18 @@ html:has(> body > .site)::view-transition-new(root) {
     }
 
     /* `Conversation.abide`, styled by what `chat`'s parts write. The question is the visitor's
-       bubble; the answer is the page's own prose, with no speaker line, and says it is still
-       thinking for as long as it streams. */
+       bubble; the answer is the page's own prose, at a page's measure, with no speaker line, and
+       the transcript says it is still thinking, once, for as long as the answer streams. */
     .conversation {
-        @apply flex min-h-0 flex-col gap-section;
+        @apply mx-auto flex min-h-0 w-full max-w-176 flex-1 flex-col gap-section;
+    }
+
+    .conversation :is(h1, h2, h3) {
+        @apply font-display text-title/6 font-semibold text-(color:--color-heading);
+    }
+
+    .conversation h3 {
+        @apply text-prose/5;
     }
 
     /* THE TRANSCRIPT IS THE SCROLLER, not the panel: it is `chat`'s `autoscroll` host (53.39), so it
@@ -549,11 +562,21 @@ html:has(> body > .site)::view-transition-new(root) {
        reaches it, and it is `relative` so the speakers' `sr-only` boxes scroll inside it rather
        than stretching the panel. */
     .conversation [data-chat="transcript"] {
-        @apply relative m-0 flex min-h-0 list-none flex-col gap-section overflow-y-auto p-0;
+        @apply relative m-0 flex min-h-0 flex-1 list-none flex-col gap-flow overflow-y-auto p-0;
     }
 
     .conversation [data-chat="message"] {
         @apply flex flex-col gap-flow;
+    }
+
+    /* A message holding only what draws nothing — a thinking block — takes no row and no gap. */
+    .conversation [data-chat="message"]:not(:has(> :not([data-chat="speaker"]))) {
+        @apply hidden;
+    }
+
+    /* A turn is a section from the one before; within it, a docs tool's line sits a flow apart. */
+    .conversation [data-speaker="you"]:not(:first-child) {
+        @apply mt-(--spacing-section);
     }
 
     /* Shown only once the reader has scrolled the transcript up (53.59). */
@@ -569,7 +592,7 @@ html:has(> body > .site)::view-transition-new(root) {
         @apply self-end rounded-lg bg-signal/10 px-3 py-2 font-medium;
     }
 
-    .conversation [data-chat="message"][data-streaming]::after {
+    .conversation[data-streaming] [data-chat="transcript"]::after {
         @apply animate-board-pulse text-chrome text-muted;
         content: "Thinking…";
     }

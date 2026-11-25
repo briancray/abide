@@ -67,6 +67,21 @@ test('a fenced sh block renders as the code with a Copy beside it, and once clos
     )
 })
 
+// THE REVERT: open a section only after a blank line, and both fences are one section of the
+// paragraph's — two code blocks with no Copy, `copies: 0`.
+test('a fenced sh block is a block with no blank line around it — 52.43', async () => {
+    using _note = await mount(NotePreview({}))
+    write('Run these:\n```sh\nbun install\n```\n```sh\nbun run dev\n```\nThen pair.')
+    const blocks = preview()?.querySelectorAll('pre code') ?? []
+    expect({
+        copies: preview()?.querySelectorAll('pre button').length,
+        code: [...blocks].map((block) => block.textContent),
+    }).toEqual({ copies: 2, code: ['bun install', 'bun run dev'] })
+    expect(preview()?.querySelector('p:last-child')?.textContent).toBe(
+        'Then pair.',
+    )
+})
+
 // THE REVERT: drop the definitions, and `[the quote][q]` stays as written.
 test('a reference link takes its address from a definition anywhere in the note, which shows nothing', async () => {
     using _note = await mount(NotePreview({}))

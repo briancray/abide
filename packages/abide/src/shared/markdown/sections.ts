@@ -141,11 +141,15 @@ function blank(line: string): boolean {
  * The offset the section starting at `from` ends at: the start of the next line that opens a
  * section, or the end of `text`. A line opens one where it follows a blank line outside a fence,
  * starts unindented, and is not a list item — and a line still being written opens one only where
- * its first character already rules a list item out.
+ * its first character already rules a list item out. 52.43 — a code fence opening unindented is a
+ * section of its own, whatever stands against it: its whole opening line opens one, and the first
+ * line after its close that is not blank does.
  */
 export function sectionEnd(text: string, from: number): number {
     let fence: Fence | undefined
     let afterBlank = false
+    let fenced = false
+    let fenceClosed = false
     let at = from
     while (at < text.length) {
         const newline = text.indexOf('\n', at)
@@ -153,20 +157,30 @@ export function sectionEnd(text: string, from: number): number {
         const line = text
             .slice(at, complete ? newline : text.length)
             .replace(/\r$/, '')
-        if (
-            at > from &&
-            afterBlank &&
-            fence === undefined &&
-            !blank(line) &&
-            (complete ? !LIST_ITEM.test(line) : !/^[\d*+-]/.test(line)) &&
-            line[0] !== ' ' &&
-            line[0] !== '\t'
-        )
-            return at
+        const opensCode =
+            complete && (line[0] === '`' || line[0] === '~') && fence === undefined
+                ? fenceOf(line)
+                : undefined
+        if (at > from && fence === undefined && !blank(line)) {
+            if (fenceClosed || opensCode !== undefined) return at
+            if (
+                afterBlank &&
+                (complete ? !LIST_ITEM.test(line) : !/^[\d*+-]/.test(line)) &&
+                line[0] !== ' ' &&
+                line[0] !== '\t'
+            )
+                return at
+        }
         if (!complete) return text.length
         if (fence !== undefined) {
-            if (closes(line, fence)) fence = undefined
-        } else fence = fenceOf(line)
+            if (closes(line, fence)) {
+                fence = undefined
+                fenceClosed = fenced
+            }
+        } else {
+            fence = fenceOf(line)
+            fenced = at === from && opensCode !== undefined
+        }
         afterBlank = fence === undefined && blank(line)
         at = newline + 1
     }
