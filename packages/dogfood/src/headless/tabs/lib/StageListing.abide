@@ -1,0 +1,22 @@
+<script>
+import { reactive, tabs } from '@abide/abide'
+
+const DEALS = [
+    { name: 'Hopper & Co pilot', stage: 'lead' },
+    { name: 'Langley Research audit', stage: 'lead' },
+    { name: 'Hopper & Co expansion', stage: 'proposal' },
+]
+
+let stage = reactive<string | undefined>('lead')
+const view = tabs({ items: ['lead', 'proposal'], selected: stage })
+</script>
+
+<div {...view.list}>
+    <button {...view.tab('lead').button}>Lead</button>
+    <button {...view.tab('proposal').button}>Proposal</button>
+</div>
+<ul {...view.panel}>
+    {#for deal of DEALS.filter((each) => each.stage === stage)}
+        <li>{deal.name}</li>
+    {/for}
+</ul>

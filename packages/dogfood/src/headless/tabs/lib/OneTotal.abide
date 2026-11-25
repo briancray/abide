@@ -1,0 +1,14 @@
+<script>
+import { reactive, tabs } from '@abide/abide'
+
+const TOTALS: Record<string, string> = { open: '$96K', won: '$12K' }
+
+let tab = reactive<string | undefined>('open')
+const view = tabs({ items: ['open', 'won'], selected: tab })
+</script>
+
+<div {...view.list}>
+    <button {...view.tab('open').button}>Open</button>
+    <button {...view.tab('won').button}>Won</button>
+</div>
+<p {...view.panel}>Total {TOTALS[tab ?? 'open']}</p>
