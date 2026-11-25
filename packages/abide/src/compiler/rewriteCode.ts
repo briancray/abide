@@ -18,9 +18,10 @@ export type CodeRewrite = {
     module: (code: string) => string
     /**
      * An `.abide` file's script blocks in order, each rewritten — handed together, since a page's
-     * nested per-arm `<script>` reads what its top-level one imports.
+     * nested per-arm `<script>` reads what its top-level one imports. Each block as a `module` where
+     * it is not given.
      */
-    scripts: (blocks: string[]) => string[]
+    scripts?: ((blocks: string[]) => string[]) | undefined
 }
 
 /** `text`, a file at `path`, with the code in it rewritten by `rewrite`. */
@@ -52,7 +53,9 @@ function rewritten(text: string, kind: Kind, rewrite: CodeRewrite): string {
     // An `.abide` file: its script blocks are modules, and a code sample written in its markup — a
     // template literal handed to a prop — is a file of its own.
     const matches = [...text.matchAll(new RegExp(SCRIPT.source, 'gd'))]
-    const blocks = rewrite.scripts(matches.map((match) => match[2] as string))
+    const found = matches.map((match) => match[2] as string)
+    const blocks =
+        rewrite.scripts?.(found) ?? found.map((block) => rewrite.module(block))
     let out = ''
     let last = 0
     for (let index = 0; index < matches.length; index += 1) {

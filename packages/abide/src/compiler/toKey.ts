@@ -29,7 +29,6 @@ export function toKey(text: string, path: string): string {
 const TO_KEY: CodeRewrite = {
     word: 'by',
     module: optionsKeyed,
-    scripts: (blocks) => blocks.map(optionsKeyed),
 }
 
 const FOR_HEAD = /\{\s*#for\b/g

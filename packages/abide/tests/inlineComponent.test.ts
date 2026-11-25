@@ -226,7 +226,9 @@ test('a hover inside an inline component is answered — 38.39', async () => {
         false,
     )
     expect(diagnoses).toEqual([])
-    const hover = await session.inspect(path, page, page.indexOf('toFixed'))
+    const hover = await session
+        .lowered(path)
+        ?.inspect(page, page.indexOf('toFixed'))
     expect(hover?.signature).toContain('(method) toFixed(')
 })
 

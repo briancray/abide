@@ -25,7 +25,6 @@ export function toRefuseNamed(text: string, path: string): string {
 const TO_REFUSE_NAMED: CodeRewrite = {
     word: 'named',
     module: refusalsMoved,
-    scripts: (blocks) => blocks.map(refusalsMoved),
 }
 
 /** A module with each `refuse.named(name, status, message, options)` written `refuse.named(name, { … })`. */

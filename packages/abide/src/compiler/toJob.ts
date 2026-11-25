@@ -27,7 +27,6 @@ const TO_JOB: CodeRewrite = {
     // Every `job` call is handed a `run`, and `runNow` holds it.
     word: 'run',
     module: jobsMoved,
-    scripts: (blocks) => blocks.map(jobsMoved),
 }
 
 /** A module with each `job`'s name moved into its options and each `.runNow` read as `.run`. */

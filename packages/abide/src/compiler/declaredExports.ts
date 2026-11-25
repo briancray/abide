@@ -41,6 +41,7 @@ import { defaultedMembers, parameterPattern } from './argsDefaultsIn.ts'
 import {
     argsSchemaOf,
     DEEPEST,
+    holdsUndefined,
     resultSchemaOf,
     type Walk,
 } from './argsSchemaOf.ts'
@@ -759,9 +760,8 @@ async function unwiredIn(
             const item = items[at] as Type
             const itemPath = `${path}${array ? '[]' : `[${at}]`}`
             // 16.105 — JSON writes an `undefined` item as `null`.
-            for (const member of await unionMembers(item))
-                if (member.flags & (TypeFlags.Undefined | TypeFlags.Void))
-                    return { at: itemPath, reactive: false }
+            if (await holdsUndefined(item))
+                return { at: itemPath, reactive: false }
             const found = await unwiredIn(
                 checker,
                 reactive,

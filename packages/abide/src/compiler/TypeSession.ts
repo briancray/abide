@@ -3,7 +3,7 @@ import { appLints } from './appLints.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { type DiagnosedSource, diagnoseSources } from './diagnoseSources.ts'
 import type { Diagnosis } from './Diagnostics.ts'
-import type { Inspection, LoweredFile } from './LoweredFile.ts'
+import type { LoweredFile } from './LoweredFile.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { reactiveReads } from './reactiveReads.ts'
 import type { ParsedSource } from './readSources.ts'
@@ -98,15 +98,6 @@ export class TypeSession {
     /** The lowering a diagnosis last registered for the `.abide` at `path`, whatever its text. */
     lowered(path: string): LoweredFile | undefined {
         return this.host.lowered(path)
-    }
-
-    /** The name at `offset` in a `.abide` as its last lowering holds it (`LoweredFile.inspect`). */
-    async inspect(
-        path: string,
-        text: string,
-        offset: number,
-    ): Promise<Inspection | undefined> {
-        return this.lowered(path)?.inspect(text, offset)
     }
 
     /** Closes the checker, and ends its process. */

@@ -31,6 +31,22 @@ type Migration = {
 const SOURCES = new Bun.Glob('**/*.{ts,tsx,js,mjs,abide,md}')
 const NOT_SOURCES = /(^|\/)(node_modules|\.abide|\.git|dist|build)\//
 
+/** A migration rewriting each source file by `rewrite`, keeping only the files it changed. */
+function eachSource(
+    rewrite: (text: string, path: string) => string,
+): Migration['migrate'] {
+    return async (read, sources) => {
+        const changed: Record<string, string> = {}
+        for (const path of await sources()) {
+            const text = await read(path)
+            if (text === undefined) continue
+            const migrated = rewrite(text, path)
+            if (migrated !== text) changed[path] = migrated
+        }
+        return changed
+    }
+}
+
 // 38.198 — in the order of their versions.
 const MIGRATIONS: Migration[] = [
     {
@@ -43,90 +59,18 @@ const MIGRATIONS: Migration[] = [
                 : { 'AGENTS.md': await withoutRestatedNotes(notes) }
         },
     },
-    {
-        // 38.215 — a body handed to `reactive` is handed to `memo`.
-        version: '0.143.0',
-        migrate: async (read, sources) => {
-            const changed: Record<string, string> = {}
-            for (const path of await sources()) {
-                const text = await read(path)
-                if (text === undefined || !text.includes('reactive')) continue
-                const migrated = toMemo(text, path)
-                if (migrated !== text) changed[path] = migrated
-            }
-            return changed
-        },
-    },
-    {
-        // 38.217 — what tells one element from another is `key`, where it was `by`.
-        version: '0.143.0',
-        migrate: async (read, sources) => {
-            const changed: Record<string, string> = {}
-            for (const path of await sources()) {
-                const text = await read(path)
-                if (text === undefined) continue
-                const migrated = toKey(text, path)
-                if (migrated !== text) changed[path] = migrated
-            }
-            return changed
-        },
-    },
-    {
-        // 38.219 — a `job`'s name is one of its options, and `run` is what runs it ahead of schedule.
-        version: '0.144.0',
-        migrate: async (read, sources) => {
-            const changed: Record<string, string> = {}
-            for (const path of await sources()) {
-                const text = await read(path)
-                if (text === undefined) continue
-                const migrated = toJob(text, path)
-                if (migrated !== text) changed[path] = migrated
-            }
-            return changed
-        },
-    },
-    {
-        // 38.220 — the part spread on a \`chart\`'s root is \`root\`, where it was \`svg\`.
-        version: '0.144.0',
-        migrate: async (read, sources) => {
-            const changed: Record<string, string> = {}
-            for (const path of await sources()) {
-                const text = await read(path)
-                if (text === undefined) continue
-                const migrated = toChartRoot(text)
-                if (migrated !== text) changed[path] = migrated
-            }
-            return changed
-        },
-    },
-    {
-        // 38.221 — another component's parts handed back whole are a member named for it (49.18).
-        version: '0.144.0',
-        migrate: async (read, sources) => {
-            const changed: Record<string, string> = {}
-            for (const path of await sources()) {
-                const text = await read(path)
-                if (text === undefined) continue
-                const migrated = toNamedParts(text)
-                if (migrated !== text) changed[path] = migrated
-            }
-            return changed
-        },
-    },
-    {
-        // 38.222 — a refusal is declared by its name and its options, its status among them.
-        version: '0.144.0',
-        migrate: async (read, sources) => {
-            const changed: Record<string, string> = {}
-            for (const path of await sources()) {
-                const text = await read(path)
-                if (text === undefined) continue
-                const migrated = toRefuseNamed(text, path)
-                if (migrated !== text) changed[path] = migrated
-            }
-            return changed
-        },
-    },
+    // 38.215 — a body handed to `reactive` is handed to `memo`.
+    { version: '0.143.0', migrate: eachSource(toMemo) },
+    // 38.217 — what tells one element from another is `key`, where it was `by`.
+    { version: '0.143.0', migrate: eachSource(toKey) },
+    // 38.219 — a `job`'s name is one of its options, and `run` is what runs it ahead of schedule.
+    { version: '0.144.0', migrate: eachSource(toJob) },
+    // 38.220 — the part spread on a `chart`'s root is `root`, where it was `svg`.
+    { version: '0.144.0', migrate: eachSource(toChartRoot) },
+    // 38.221 — another component's parts handed back whole are a member named for it (49.18).
+    { version: '0.144.0', migrate: eachSource(toNamedParts) },
+    // 38.222 — a refusal is declared by its name and its options, its status among them.
+    { version: '0.144.0', migrate: eachSource(toRefuseNamed) },
 ]
 
 /**

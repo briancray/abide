@@ -270,7 +270,8 @@ function literalsOf(literals: Type[]): Schema {
         : { type: kind, enum: values }
 }
 
-async function holdsUndefined(type: Type): Promise<boolean> {
+/** Whether `type` holds `undefined` (or `void`) among its members. */
+export async function holdsUndefined(type: Type): Promise<boolean> {
     for (const member of await unionMembers(type))
         if (member.flags & (TypeFlags.Undefined | TypeFlags.Void)) return true
     return false

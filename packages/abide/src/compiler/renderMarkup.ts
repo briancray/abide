@@ -61,12 +61,18 @@ export type MarkupLane = {
      * the browser adopts what it rendered in the turn it chose the arm.
      */
     armAnchor: (arm: number) => string
+    /**
+     * 32.96 — whether a `{#try}` counts the reads an abort took and renders its `{:pending}` arm in
+     * their place. The client's does not: `TryRegion` fills its region.
+     */
+    countsAborts: boolean
 }
 
 export const SERVER_LANE: MarkupLane = {
     leftEmpty: () => undefined,
     declarations: (sink, lowering) => definitions(sink, lowering),
     armAnchor: (arm) => JSON.stringify(anchorMarkup(armAnchor(arm))),
+    countsAborts: true,
 }
 
 export const CLIENT_LANE: MarkupLane = {
@@ -88,6 +94,7 @@ export const CLIENT_LANE: MarkupLane = {
     },
     declarations: () => '',
     armAnchor: () => OPEN_ANCHOR,
+    countsAborts: false,
 }
 
 // A region's anchors, as the JS string literals the emitted server render concatenates.
@@ -248,7 +255,7 @@ function renderPosition(
         const rescue = renderMarkup(at.inner[1] as Cursor, lowering, lane)
         const bound = node.error === '' ? '__failure' : node.error
         const waiting = at.inner[2] as Cursor | undefined
-        const counted = lane === SERVER_LANE
+        const counted = lane.countsAborts
         const reads = counted
             ? `const __reads = ${lowering.use('abortedReads')}()\n        `
             : ''
