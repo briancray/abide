@@ -19,6 +19,9 @@ import { elementKeyOf } from '#shared/reactive/elementKeyOf.ts'
 import { drainLog, type PatchOp } from '#shared/reactive/patchLog.ts'
 import { writtenAt } from '#shared/reactive/patchMarks.ts'
 import { servedCellOf } from '#shared/reactive/producer.ts'
+import type { Reactive } from '#shared/reactive/Reactive.ts'
+
+import { chainOf } from './durableChain.ts'
 
 let next = Date.now() * 1000
 
@@ -43,6 +46,16 @@ const STAMPS = new WeakMap<object, Stamp>()
 /** The version a value's standing production is named by over the wire. 18.7. */
 export function versionOf(value: unknown): number {
     const cell = servedCellOf(value)
+    // 18.42 — where the value's store keeps a log, its versions are that log's record numbers.
+    const chain = chainOf(
+        cell,
+        value as Reactive<unknown>,
+        (cell as { store?: { store?: unknown } | null | undefined }).store
+            ?.store,
+        (opened) => {
+            versionOf(opened.value)
+        },
+    )
     const held = (value as { peek(): unknown }).peek()
     const patched = writtenAt(held)
     const stamp = STAMPS.get(cell)
@@ -64,7 +77,18 @@ export function versionOf(value: unknown): number {
               : stamp.held === undefined || held === undefined
                 ? null
                 : diffOps(stamp.held, held, elementKeyOf(value))
-    next += 1
+    let version: number
+    if (chain === null) {
+        next += 1
+        version = next
+    } else if (chain.incoming !== undefined) version = chain.incoming
+    // A chain just opened stands at the log's last record, which is the value held (18.42).
+    else if (stamp === undefined) version = chain.last
+    else
+        version = chain.append(
+            ops === null ? { snapshot: structuredClone(held) } : { ops },
+            held,
+        )
     // The chain carries on from the stamp this replaces, whose array it takes over.
     const recent = ops === null || stamp === undefined ? [] : stamp.recent
     if (ops !== null && stamp !== undefined) {
@@ -76,10 +100,10 @@ export function versionOf(value: unknown): number {
         ordinal: cell.ordinal,
         held,
         patched,
-        version: next,
+        version,
         recent,
     })
-    return next
+    return version
 }
 
 /**
@@ -91,7 +115,19 @@ export function patchesSince(
     since: number | undefined,
 ): PatchOp[] | undefined {
     if (since === undefined) return undefined
-    const recent = STAMPS.get(servedCellOf(value))?.recent
+    const cell = servedCellOf(value)
+    // 18.43 — a value kept in a log is sent what the log holds past `since`, across restarts.
+    const chain = chainOf(
+        cell,
+        value as Reactive<unknown>,
+        (cell as { store?: { store?: unknown } | null | undefined }).store
+            ?.store,
+        (opened) => {
+            versionOf(opened.value)
+        },
+    )
+    if (chain !== null) return chain.since(since)
+    const recent = STAMPS.get(cell)?.recent
     if (recent === undefined) return undefined
     for (let at = 0; at < recent.length; at += 1) {
         if ((recent[at] as Step).from !== since) continue

@@ -4124,6 +4124,14 @@ export function streamingOrSettled(value: unknown): Promise<unknown> {
 }
 
 /**
+ * `value` settled: its value, or the refusal it settled to (1.4) — as awaiting it answers, without the
+ * derived value its `then` builds, which a call's promise has no use for (16.3).
+ */
+export function settledOf(value: unknown): Promise<unknown> {
+    return settled(cellOf(value))
+}
+
+/**
  * The keys of every `Reactive` member.
  *
  * What `forwardingPrototype` forwards for a value filed outside every scope (`scoped.ts`): read off

@@ -1648,6 +1648,19 @@ MUST be fed from it, as a call for them would build it.
 version it replaced as the JSON Patch from that value to the new one, an array its `key` tells apart
 matched element by element, and MUST NOT be sent as the value.
 
+18.42 A served `memo` entry kept in a store whose log reads synchronously MUST record each change in
+that log, and its version MUST be the number of the change's record; opened again on that store
+where the value it holds is the value the log leaves, it MUST stand at the log's last record.
+
+18.43 A subscription naming a version the log of 18.42 holds MUST be sent the records after it as
+JSON Patch, in this process or one opened on the store after it.
+
+18.44 The log of 18.42 MUST write the value whole every 64 records, MUST keep 64 records behind that,
+and a subscription naming a version older than the records kept MUST be sent the value.
+
+18.45 A record another process appends to the log of 18.42 MUST be applied to this process's entry at
+that record's number, and sent on to its subscriptions.
+
 # 19. Mount paths and schemas
 
 19.1 A route MUST be answered for each method by one file at most, a page answering `GET` and `HEAD`

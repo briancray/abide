@@ -401,11 +401,15 @@ export function createKeyed<
         created: Reactive<Stored, Accepted, Failures>,
     ): void {
         entries.delete(key)
+        const cell = cellOf(created)
         // 7.46 — an entry released is a run nothing will read, so its signal says stop.
-        endRun(cellOf(created))
+        endRun(cell)
         leaveSelections(created)
         unwatchStore(created)
-        signalMoved(membership)
+        // A SETTLED ENTRY LEAVING MOVES NO PROBE: `busy` asks whether any entry loads and `ready`
+        // whether every one serves (13.2, 13.11), and one that served and was not loading is neither
+        // answer's reason — so a 16.7 mutation's entry, let go as it lands, wakes no reader.
+        if (cell.loading || !cell.servable) signalMoved(membership)
     }
 
     function reach(given: Args): Reactive<Stored, Accepted, Failures> {

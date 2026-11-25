@@ -1,5 +1,6 @@
 import { CALL_ENTRY } from './CALL_ENTRY.ts'
 import { cellOf } from './cellShape.ts'
+import { settledOf } from './Reactive.ts'
 import { track, TRACKING } from './tracking.ts'
 
 /**
@@ -25,7 +26,7 @@ export function answerOfCall(entry: unknown, streams: boolean): object {
                 (entry as AsyncIterable<unknown>)[Symbol.asyncIterator](),
         }
     else {
-        const settled = Promise.resolve(entry)
+        const settled = settledOf(entry)
         settled.then(undefined, () => undefined)
         answer = settled
     }
