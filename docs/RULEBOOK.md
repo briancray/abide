@@ -6237,7 +6237,8 @@ of its values.
 
 52.62 `chart` and `pie` MUST keep each mark's element across a change of the values it draws.
 
-52.63 `chart` MUST write a column's place and size, and `pie` a slice's sweep, as `style` properties.
+52.63 `chart` MUST write a column's place and size as its `x`, `y`, `width` and `height`, and `pie`
+a slice's sweep as `style` properties.
 
 52.64 `pie` MUST draw each slice as a `data-pie="slice"` arc sweeping its value's share of the sum of
 the slices' values, clockwise from the top in the order given, its index as `data-series`.
@@ -6421,7 +6422,8 @@ date, the time it writes those naming a part of a time, and both the rest.
 52.116 Each part `chart` hands back for a point, a column, a tick, a gridline, the zero line or the
 crosshair, and `sparkline`'s `dot`, MUST carry in its `style` where it is drawn as `--x` and `--y`,
 and a column its size as `--width` and `--height` besides, each a percentage of the box its root
-part is drawn at, a line across the plot carrying only the one of `--x` and `--y` it is drawn at.
+part is drawn at, a line across the plot carrying only the one of `--x` and `--y` it is drawn at; and
+`chart`'s MUST carry none while its root part is bound to an `<svg>`.
 
 52.117 `meter`'s `meter` part MUST carry in its `style` as `--fraction` the share of the meter
 52.108 fills, and no `style` where `value` is `undefined`.

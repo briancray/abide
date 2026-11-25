@@ -74,6 +74,12 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
             ],
         },
         {
+            path: 'packages/abide/tests/chartParts.test.ts',
+            from: [
+                'test("an svg root\'s marks carry no vars, and a div root\'s do"',
+            ],
+        },
+        {
             path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
             from: [
                 "test('every month won is marked by a dot of its own, on the line'",
@@ -225,8 +231,9 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
     <Section level={3} title="Draw the columns as HTML elements">
         <p>No part asks for SVG. Spread the root part on a <code>div</code> and each bar on a
             <code>span</code>: a placed mark carries <code>--x</code> and <code>--y</code>, and a
-            column <code>--width</code> and <code>--height</code>, as percentages of the box. The
-            bar's <code>transform</code> places an SVG rect, so turn it off.</p>
+            column <code>--width</code> and <code>--height</code>, as percentages of the box.
+            Spread on an <code>svg</code>, the parts leave them out: there the attributes place
+            every mark.</p>
         <Example code={htmlColumns}><HtmlColumns /></Example>
     </Section>
 
@@ -331,8 +338,9 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
     </Section>
 
     <Section level={3} title="Ease columns between stacked and side by side">
-        <p>A column is drawn by a CSS <code>transform</code> on the same element whatever its
-            values become, so a transition on it animates every change.</p>
+        <p>A column is the same rect whatever its values become, placed by its <code>x</code>,
+            <code>y</code>, <code>width</code> and <code>height</code>, so a CSS transition on
+            those animates every change.</p>
         <Example code={easeColumns}><EaseColumns /></Example>
     </Section>
 

@@ -17,7 +17,7 @@ const plot = chart({
     {#for bar of plot.bars key bar.key}
         <rect
             {...bar.rect}
-            class="transition-transform motion-reduce:transition-none"
+            class="transition-[x,y,width,height] motion-reduce:transition-none"
          />
     {/for}
 </svg>

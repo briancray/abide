@@ -37,7 +37,7 @@ const plot = chart({
 <ChartPlot
     plot={plot}
     class="block h-60 w-full overflow-visible text-chrome text-muted
-        [&_[data-series='0']]:text-signal [&_[data-chart=bar]]:transition-transform
+        [&_[data-series='0']]:text-signal [&_[data-chart=bar]]:transition-[x,y,width,height]
         [&_[data-disabled]]:opacity-40"
  />
 {#if picked !== undefined}

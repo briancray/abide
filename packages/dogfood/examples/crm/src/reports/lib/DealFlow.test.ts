@@ -9,18 +9,18 @@ import DealFlow from './DealFlow.abide'
 const chart = () => document.querySelector('svg') as SVGSVGElement
 const texts = (selector: string) =>
     [...document.querySelectorAll(selector)].map((node) => node.textContent)
-// A column's place and size, read off the transform that draws its unit rect (52.63).
+// A column's place and size, read off the rect's own geometry (52.63).
 function bars(series: number) {
     return [
         ...chart().querySelectorAll(
             `[data-chart=bar][data-series='${series}']`,
         ),
-    ].map((bar) => {
-        const [x = 0, y = 0, width = 0, height = 0] = (
-            (bar as SVGElement).style.transform.match(/-?[\d.]+/g) ?? []
-        ).map(Number)
-        return { x, y, width, height }
-    })
+    ].map((bar) => ({
+        x: Number(bar.getAttribute('x')),
+        y: Number(bar.getAttribute('y')),
+        width: Number(bar.getAttribute('width')),
+        height: Number(bar.getAttribute('height')),
+    }))
 }
 function check(name: string) {
     const box = [...document.querySelectorAll('label')]

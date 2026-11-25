@@ -42,6 +42,7 @@
         "bench:spread-part": "bun packages/abide/bench/spreadPartShare.ts",
         "bench:mux": "bun packages/abide/bench/muxShare.ts",
         "bench:first-chunk": "bun packages/abide/bench/firstChunkShare.ts",
+        "bench:chart-vars": "bun packages/abide/bench/chartVarsShare.ts",
         "prepare": "git config core.hooksPath .githooks || true",
         "changeset": "changeset",
         "version-packages": "bun run scripts/autofillChangesets.ts && changeset version",

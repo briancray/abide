@@ -46,8 +46,8 @@ test("a pointer moving under a chart's readout keeps it open — 50.47", async (
 
 // 52.81, 52.116 — A CHART DRAWN IN HTML IS LAID OUT BY ITS PERCENTAGES: each column a `span` inside the
 // `div` it is spread on, as tall against the others as its count.
-// THE REVERT: drop the example's `transform-none!` — the bar's own transform, which places an SVG rect,
-// moves and scales each `span` again, out of the chart. Px in place of the percentages passes here:
+// THE REVERT: place a column by a `transform` in its `style` again, as an SVG rect once was — it
+// moves and scales each `span` out of the chart. Px in place of the percentages passes here:
 // once the box is measured the two agree, and the CRM's test, with no layout, is what tells them apart.
 test('columns drawn as spans stand inside their div, each as tall as its count — 52.116', async ({
     page,

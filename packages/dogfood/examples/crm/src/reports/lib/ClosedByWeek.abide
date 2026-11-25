@@ -27,7 +27,7 @@ const plot = chart({
         <span
             {...bar.rect}
             class="absolute top-(--y) left-(--x) h-(--height) w-(--width)
-                transform-none! rounded-t-sm bg-signal"
+                rounded-t-sm bg-signal"
         ></span>
     {/for}
     {#if plot.readout}

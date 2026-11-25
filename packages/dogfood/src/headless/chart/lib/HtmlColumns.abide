@@ -11,8 +11,7 @@ const plot = chart({
     {#for bar of plot.bars key bar.key}
         <span
             {...bar.rect}
-            class="absolute top-(--y) left-(--x) h-(--height) w-(--width)
-                transform-none! bg-signal"
+            class="absolute top-(--y) left-(--x) h-(--height) w-(--width) bg-signal"
         ></span>
     {/for}
     {#if plot.readout}

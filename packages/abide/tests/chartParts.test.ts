@@ -134,6 +134,41 @@ test('a placed mark carries where it stands as percentages of the box', () => {
     expect(vars(trend.dot)).toEqual({ x: 100, y: 50 })
 })
 
+// 52.116, 52.63 — AN `<svg>` ROOT'S MARKS ARE PLACED BY THEIR ATTRIBUTES ALONE: the vars are a `style`
+// per mark no rule reads there, 45% of a 600-mark redraw (`bench:chart-vars`), so they leave once the
+// root is bound to one, and a column is its rect's own geometry rather than a transform.
+// THE REVERT: write the vars whatever the root is — every point carries a `style` on an `<svg>`.
+test("an svg root's marks carry no vars, and a div root's do", () => {
+    const drawn = (root: Element) => {
+        const plot = chart({
+            label: 'Deals',
+            series: () => [
+                { label: 'Won', values: [4, 8], kind: 'column' },
+                { label: 'Target', values: [5, 6] },
+            ],
+        })
+        const stop = (
+            plot.svg['bind:element'] as (element: Element) => () => void
+        )(root)
+        const parts = [
+            ...plot.points.map((point) => point.circle),
+            ...plot.bars.map((bar) => bar.rect),
+            ...plot.yTicks.map((tick) => tick.grid),
+        ]
+        const bar = plot.bars[0]
+        stop()
+        return { styles: parts.map((part) => part.style), bar }
+    }
+    const svg = drawn(
+        document.createElementNS('http://www.w3.org/2000/svg', 'svg'),
+    )
+    expect(svg.styles.every((style) => style === undefined)).toBe(true)
+    expect(svg.bar?.rect.y).toBe(svg.bar?.y)
+    expect(svg.bar?.rect.height).toBe(svg.bar?.height)
+    const div = drawn(document.createElement('div'))
+    expect(div.styles.every((style) => String(style).includes('--'))).toBe(true)
+})
+
 // 52.119 — `pad` KEEPS THE VALUES OFF THE EDGES: the range widens by a share of its span before the
 // ticks round it, before zero is taken in, so a column still stands on zero, and a flat range is not
 // widened. THE REVERT: drop `padded` from `chart` and `sparkline` — the ticks end at 10 and 20, on the
