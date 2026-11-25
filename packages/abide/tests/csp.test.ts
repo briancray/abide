@@ -8,10 +8,10 @@ import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const PAGE = `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import getTotal from '#src/totals/getTotal.handler.ts'
 
-const total = memo(() => getTotal())
+const total = computed(() => getTotal())
 </script>
 
 <main><p id="total">{total()}</p></main>`

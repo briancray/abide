@@ -1,10 +1,10 @@
 <script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
 import getContact from '../getContact.handler.ts'
 import SignInAs from './SignInAs.abide'
 
-const contact = memo(() => getContact())
+const contact = computed(() => getContact())
 
 const dealValue = () => contact.dealValue ?? 'admins only'
 </script>

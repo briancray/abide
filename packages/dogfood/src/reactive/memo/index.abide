@@ -1,21 +1,16 @@
 <script>
-import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
-import Forecast from './lib/Forecast.abide'
-import forecast from './lib/Forecast.abide' with { type: 'text' }
-import SeatTotal from './lib/SeatTotal.abide'
-import seatTotal from './lib/SeatTotal.abide' with { type: 'text' }
 import StageEntries from './lib/StageEntries.abide'
 import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
 </script>
 
 <Doc
     seeAlso={[
+        '/reactive/computed',
         '/reactive/reactive',
-        '/reactive/tracking',
         '/reactive/refresh',
         '/ambients/abort-signal',
     ]}
@@ -23,13 +18,7 @@ import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/reactive.test.ts',
             from: [
-                "test('a body declaring a parameter is keyed, and one declaring none is not'",
-            ],
-        },
-        {
-            path: 'packages/abide/tests/reactive.test.ts',
-            from: [
-                "test('an async generator body streams: ready from its first chunk, busy until it closes'",
+                "test('computed is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3'",
             ],
         },
         {
@@ -40,36 +29,12 @@ import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
         },
     ]}
 >
-    <Section level={3} title="Derive a total from the values a body reads">
-        <p>Pass a body. The total reruns when <code>seats</code> or <code>price</code> changes, and
-            on nothing else: type a note, and the total stays where it was.</p>
-        <Example code={seatTotal}><SeatTotal /></Example>
-    </Section>
-
-    <Section level={3} title="Load a forecast from a handler">
-        <p>A body that calls a handler loads. Ask <code>ready()</code> before showing the figure,
-            and <code>refresh()</code> reloads it while the old figure stays.</p>
-        <Example code={forecast}><Forecast /></Example>
-    </Section>
-
-    <Section level={3} title="Keep one entry per stage with a keyed body">
-        <p>A body that declares a parameter is keyed. Each set of args is one entry, held and
-            reloaded on its own, so going back to a stage shows its count without loading it
-            again.</p>
+    <Section level={3} title="Keep one entry per stage">
+        <p>A <code>memo</code> holds one entry per set of args, each held and reloaded on its own,
+            so going back to a stage shows its count without loading it again. Read an entry by
+            calling the <code>memo</code> inside a <code>computed</code>, which follows the
+            stage as it changes.</p>
         <Example code={stageEntries}><StageEntries /></Example>
     </Section>
 
-    <Section level={3} title="Stream the leads still waiting on a follow-up">
-        <p>A generator body streams. The value is every name yielded until now: ready from the first,
-            busy until the generator ends.</p>
-        <Code language="ts" caption="shared" code={`
-            import { memo } from '@abide/abide'
-            import listDeals from './listDeals.handler.ts'
-
-            const waiting = memo(async function* () {
-                for (const deal of await listDeals())
-                    if (deal.stage === 'lead') yield deal.name
-            })
-        `} />
-    </Section>
 </Doc>

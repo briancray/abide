@@ -1,8 +1,8 @@
 <script>
 import {
     type Column,
+    computed,
     format,
-    memo,
     reactive,
     type Sort,
     sortableTable,
@@ -33,7 +33,7 @@ const COLUMNS: Column<Deal>[] = [
     { key: 'closes', label: 'Closes', format: (date) => String(date ?? '—') },
 ]
 
-const deals = memo(() => listClosing())
+const deals = computed(() => listClosing())
 let sort = reactive<Sort | undefined>({ key: 'closes', direction: 'ascending' })
 let picked = reactive<string | undefined>(undefined)
 const table = sortableTable({

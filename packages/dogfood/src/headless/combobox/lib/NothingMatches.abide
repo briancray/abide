@@ -11,9 +11,9 @@ const listContacts = GET((): Contact[] => [
 </script>
 
 <script>
-import { combobox, memo, reactive } from '@abide/abide'
+import { combobox, computed, reactive } from '@abide/abide'
 
-const contacts = memo(() => listContacts())
+const contacts = computed(() => listContacts())
 let contact = reactive<Contact | undefined>(undefined)
 const box = combobox({
     id: 'deal-contact',

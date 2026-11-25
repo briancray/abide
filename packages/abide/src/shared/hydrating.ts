@@ -15,7 +15,7 @@
 // In `#shared` because the values are; the router's hydration (`Router.hydrate`) begins and ends it.
 
 import { isServer } from './isServer.ts'
-import { ambientMemo } from './reactive/index.ts'
+import { ambientComputed } from './reactive/index.ts'
 
 type StandIn = {
     value: { set(next: unknown): unknown }
@@ -39,7 +39,7 @@ const HYDRATION: {
  * answer from the same value (22.11); where there is no window, nothing writes it.
  */
 export function hydratedValue<Value>(server: Value, browser: () => Value) {
-    const value = ambientMemo<Value>(() =>
+    const value = ambientComputed<Value>(() =>
         typeof window === 'undefined' || isServer() || HYDRATION.pending
             ? server
             : browser(),

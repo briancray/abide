@@ -23,25 +23,25 @@ export const getTick = GET(async () => {
 })
 `
 
-const ME = `import { memo } from '@abide/abide'
+const ME = `import { computed } from '@abide/abide'
 import whoami from '#src/who/whoami.handler.ts'
 
-export const me = memo(() => whoami())
+export const me = computed(() => whoami())
 `
 
-const CAN_EDIT = `import { memo } from '@abide/abide'
+const CAN_EDIT = `import { computed } from '@abide/abide'
 import { me } from './me.ts'
 
-export const canEdit = memo(() => me.ready() && me().owner)
+export const canEdit = computed(() => me.ready() && me().owner)
 `
 
 // The child's setup makes a call, so 41.28 builds it after the turn.
 const DEFERRED = `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import getTick from '#src/who/getTick.handler.ts'
 import { canEdit } from './canEdit.ts'
 
-const tick = memo(() => getTick())
+const tick = computed(() => getTick())
 </script>
 
 <b id="deferred">{canEdit() ? 'edit' : 'view'}</b><i>{tick.busy() ? 0 : tick()}</i>`

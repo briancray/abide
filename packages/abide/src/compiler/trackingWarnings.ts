@@ -50,7 +50,7 @@ const SYNCHRONOUS = new Set([
     'from',
 ])
 
-type Body = { node: Node; kind: 'memo' | 'watch' | 'template' }
+type Body = { node: Node; kind: 'computed' | 'watch' | 'template' }
 
 /**
  * 14.2 — the template positions that track: what the template renders, tests or iterates, and what
@@ -94,8 +94,8 @@ function trackedKind(functionNode: Node): Body['kind'] | undefined {
     if (!isCallExpression(parent) || parent.arguments[0] !== child)
         return undefined
     const name = calleeName(parent)
-    // 14.4 — a body declaring a parameter is keyed, and does not track.
-    if (name === 'memo' && functionNode.parameters.length === 0) return 'memo'
+    // 14.4 — a `memo` is keyed, and does not track.
+    if (name === 'computed') return 'computed'
     if (name === 'watch') return 'watch'
     return undefined
 }
@@ -238,12 +238,12 @@ export function trackingWarnings(
     // to run and each run re-subscribes them.
     if (
         decides !== undefined &&
-        body.kind === 'memo' &&
+        body.kind === 'computed' &&
         decidesARead(decides.condition, decides.within, name, reads)
     )
         warnings.push({
             at,
-            message: `abide: \`${name}\` decides a condition in a memo body, so which values the body reads changes from run to run, and every change re-subscribes them. Read what both branches need before deciding. RULEBOOK 14.15.`,
+            message: `abide: \`${name}\` decides a condition in a computed body, so which values the body reads changes from run to run, and every change re-subscribes them. Read what both branches need before deciding. RULEBOOK 14.15.`,
         })
     return warnings
 }

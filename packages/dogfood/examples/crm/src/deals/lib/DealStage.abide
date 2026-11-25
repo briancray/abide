@@ -1,5 +1,5 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 import getDeal from '../getDeal.handler.ts'
 import moveDeal from '../moveDeal.handler.ts'
@@ -7,7 +7,7 @@ import moveDeal from '../moveDeal.handler.ts'
 let id = reactive('d2')
 let refusal = reactive('')
 
-let deal = memo(() => getDeal({ id }))
+let deal = computed(() => getDeal({ id }))
 
 async function move(stage: string) {
     try {

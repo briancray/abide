@@ -1,11 +1,11 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 import listDeals from '../listDeals.handler.ts'
 import DealDetail from './DealDetail.abide'
 import DealRow from './DealRow.abide'
 
-const deals = memo(() => listDeals())
+const deals = computed(() => listDeals())
 
 // Held HERE, above both readers, so each finds this one on the way up.
 reactive.share('selectedDeal', () => reactive('d1'))

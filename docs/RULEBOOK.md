@@ -124,7 +124,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | namespace | The name a log line is written under, and what `DEBUG` selects. |
 | entry | One key's slot in a `Keyed`. |
 | scope | The lifetime a value is filed under and dropped with. |
-| adoption | What a `memo` body does with a `Reactive` it returned. |
+| adoption | What a `computed` body does with a `Reactive` it returned. |
 | forwarding | The delegation between an adopting `Reactive` and the one it adopted. |
 | propagation | The derivation of a probe from the values a body read. |
 | sink | What 35.7 defines. |
@@ -526,14 +526,14 @@ it.
 7.44 A `poll` that 7.43 kept from refreshing a value MUST refresh it once the document's
 `visibilityState` is no longer `hidden`, and once only however many refreshes 7.43 kept from it.
 
-7.45 `abortSignal` called while a `memo` body runs, its synchronous part or a step of its stream,
+7.45 `abortSignal` called while a `computed` or `memo` body runs, its synchronous part or a step of its stream,
 MUST answer a signal of that run's own.
 
 7.46 The signal 7.45 answers MUST abort where a new run of that value starts, where the value or its
 entry is released, and where its owner's signal aborts: 7.48's for a value filed in a request
 (11.32), and 7.38's for any other, a `global` value's included.
 
-7.47 On a server, `abortSignal` called in work a `memo` run carries across an `await` MUST answer
+7.47 On a server, `abortSignal` called in work a `computed` or `memo` run carries across an `await` MUST answer
 7.45's signal of that run, and a signal already aborted once a new run of that value has started or
 the value or its entry has been released.
 
@@ -541,7 +541,7 @@ the value or its entry has been released.
 that aborts where the received request's signal does, 18.18's close of a connection among them, and
 where 7.38 aborts.
 
-7.49 In a browser, `abortSignal` called outside a `memo` body's synchronous part and the steps of its
+7.49 In a browser, `abortSignal` called outside a `computed` or `memo` body's synchronous part and the steps of its
 stream MUST answer 7.38's signal.
 
 # 8. Stores
@@ -666,7 +666,7 @@ read that asks for it.
 
 9.5 A `store` MUST round-trip the latest production.
 
-9.6 A `memo` body declared as an async generator function MUST be a streaming producer from
+9.6 A `computed` or `memo` body declared as an async generator function MUST be a streaming producer from
 construction, and a body whose run hands back an async iterable that is not a `Reactive` — an async
 generator or a `ReadableStream` among them — or a promise resolving to one, MUST be one from that
 run on, and a run replaced by a later one MUST cancel the stream it was reading.
@@ -718,15 +718,16 @@ inferred from the thunk.
 
 # 11. Derived and keyed values
 
-11.1 A `memo` body declaring no parameter MUST produce an unkeyed, tracked `Reactive`.
+11.1 `computed` MUST produce an unkeyed, tracked `Reactive`.
 
-11.2 A `memo` body declaring one parameter MUST produce a keyed, untracked `Keyed`.
+11.2 `memo` MUST produce a keyed, untracked `Keyed`, keyed on `undefined` where its body declares no
+parameter.
 
-11.3 An implementation MUST NOT provide an option converting one `memo` form into the other.
+11.3 `memo` and `computed` MUST NOT read a body's parameters to decide what they produce.
 
 11.4 A `Keyed` MUST hold one entry per `Args` key, computed when that key is reached.
 
-11.5 An unkeyed `memo` MUST recompute on the first read that follows a change to a value its
+11.5 A `computed` MUST recompute on the first read that follows a change to a value its
 body read.
 
 11.6 A `Keyed` MUST NOT recompute for that reason, and `ttl`, `invalidate`, `refresh` and
@@ -734,15 +735,15 @@ eviction MUST be its only ways back.
 
 11.7 Both `memo` forms MUST accept a write.
 
-11.8 A write to a `memo` that is not adopting MUST stand until the next recompute replaces it.
+11.8 A write to a `computed` that is not adopting MUST stand until the next recompute replaces it.
 
-11.9 An implementation MUST NOT warn on a write to a `memo`.
+11.9 An implementation MUST NOT warn on a write to a `computed`.
 
-11.10 A write of a settled value to a `memo` MUST move no probe.
+11.10 A write of a settled value to a `computed` MUST move no probe.
 
-11.11 A write of an unsettled value to a `memo` MUST be a load, per 4.2 and 1.6.
+11.11 A write of an unsettled value to a `computed` MUST be a load, per 4.2 and 1.6.
 
-11.12 A `Reactive` returned from a `memo` body MUST be adopted, and MUST NOT be stored as a
+11.12 A `Reactive` returned from a `computed` or `memo` body MUST be adopted, and MUST NOT be stored as a
 value.
 
 11.13 Adoption MUST mirror the adopted productions into the adopting `Reactive`.
@@ -764,7 +765,7 @@ it.
 
 11.20 `s.busy` and `s.ready` MUST be the probes that propagate.
 
-11.21 An unkeyed `memo` MUST report `s.busy` for its own load, or for any value its body read.
+11.21 A `computed` MUST report `s.busy` for its own load, or for any value its body read.
 
 11.22 An implementation MUST derive a propagated probe on the read that asks for it, and MUST NOT
 hold a subscription per source for it.
@@ -791,7 +792,7 @@ both sides, and the parameter's defaults MUST apply to an absent `Args` as to `{
 
 11.31 A reactive value in an argument position MUST be read, and `Args` MUST be plain args.
 
-11.32 A `reactive` or a `memo` without `global` MUST be request-local on a server and process-local
+11.32 A `reactive`, a `computed` or a `memo` without `global` MUST be request-local on a server and process-local
 in a browser.
 
 11.33 `ttl: Infinity` without `global` MUST mean to the end of that scope.
@@ -814,8 +815,7 @@ readers that remain.
 
 11.40 `args` on a `memo` MUST check `Args`.
 
-11.41 `args` MUST be unspellable on a `memo` whose body declares no parameter, and spelling it MUST
-be a compile error naming it.
+11.41 `args` MUST be unspellable on a `computed`, and spelling it MUST be a compile error naming it.
 
 11.42 `store` on a `Keyed` MUST accept a function of the `Args`.
 
@@ -841,7 +841,7 @@ values.
 
 11.52 A provisional run MUST mint no production.
 
-11.53 A reader joining a `global` `memo`'s stream after it began MUST NOT be answered with a
+11.53 A reader joining a `global` `computed`'s stream after it began MUST NOT be answered with a
 refusal.
 
 11.54 A `memo` MUST NOT report `s.ready` before its body has run for the value being probed.
@@ -850,14 +850,14 @@ refusal.
 
 11.56 An implementation MUST NOT warn where two `Args` keys differ only in the case of a value.
 
-11.57 An unkeyed `memo` MUST NOT recompute before a read or an `Effect` asks for its value.
+11.57 A `computed` MUST NOT recompute before a read or an `Effect` asks for its value.
 
-11.58 An unkeyed `memo` MUST report `s.ready` only where every value its body read reports it.
+11.58 A `computed` MUST report `s.ready` only where every value its body read reports it.
 
 11.59 `s.set` and `s.patch` on an adopting `Reactive`, given anything but a `Reactive`, MUST reach the
 adopted `Reactive`.
 
-11.60 `args` spelled on a `memo` whose body declares no parameter MUST refuse at construction.
+11.60 `args` spelled on a `computed` MUST refuse at construction.
 
 11.61 `s.set` given a `Reactive`, and `reactive` opened on one, MUST adopt it per 11.12, and MUST NOT
 store it as a value — on a streaming producer, as a write that 11.59 does not reach through.
@@ -875,7 +875,7 @@ naming the cycle.
 
 11.66 `s.set` MUST throw 11.65's refusal, and a body whose answer 11.65 refuses MUST fail with it.
 
-11.67 A `reactive` or a `memo` without `global` MUST be built afresh in each request that reaches it
+11.67 A `reactive`, a `computed` or a `memo` without `global` MUST be built afresh in each request that reaches it
 or whose `render` builds it under 41.34, from its declaration and never from what a write outside
 every request left.
 
@@ -886,7 +886,7 @@ start again when the load ends.
 
 11.70 `s.set` MUST take only a `Reactive` whose `Failures` are this value's.
 
-11.71 An unkeyed `memo` with a `store`, built on a server outside every request, MUST NOT run
+11.71 A `computed` with a `store`, built on a server outside every request, MUST NOT run
 the `store`'s `get` before it is reached.
 
 11.72 A `Keyed` MUST NOT hold an entry for an `Args` its `args` gate refuses, and the gate MUST run
@@ -943,7 +943,7 @@ save where a clause orders them.
 12.16 A stream released under 12.14 MUST stop its run, and the later read MUST start it once more,
 whether or not the stopped run had closed.
 
-12.17 A `reactive` or a `memo` declared where 12.4, 12.5 and 12.13 would own no `watch` MUST NOT be
+12.17 A `reactive`, a `computed` or a `memo` declared where 12.4, 12.5 and 12.13 would own no `watch` MUST NOT be
 owned by one current where it is first reached, save the instance a request builds of it under
 11.67, which that request owns.
 
@@ -1020,9 +1020,9 @@ them, which MUST recompute from the load it reads.
 
 14.2 A template expression MUST track the `Reactive` values it reads.
 
-14.3 An unkeyed `memo` body MUST track.
+14.3 A `computed` body MUST track.
 
-14.4 A keyed `memo` body MUST NOT track.
+14.4 A `memo` body MUST NOT track.
 
 14.5 A block body's binding MUST track, and MUST bind the value the block produced rather than a
 `Reactive`.
@@ -1047,8 +1047,8 @@ against nothing.
 14.14 The compiler MUST warn on a reactive read an `await` dominates inside a tracked body, naming
 the read.
 
-14.15 The compiler MUST warn on a reactive read in a condition position inside an unkeyed
-`memo` body, where what the condition decides reads another value, naming the read.
+14.15 The compiler MUST warn on a reactive read in a condition position inside a
+`computed` body, where what the condition decides reads another value, naming the read.
 
 14.16 The compiler MUST warn on a reactive read inside a function a tracked body creates and
 does not call synchronously, naming the read.
@@ -1709,7 +1709,7 @@ beside it.
 20.4 `ui: false` MUST generate no client wrapper, and importing that handler from the client graph
 MUST then be a compile error naming it.
 
-20.5 `/__abide/openapi.json` and `/__abide/mcp` MUST be served from a `memo` over the route table,
+20.5 `/__abide/openapi.json` and `/__abide/mcp` MUST be served from a `computed` over the route table,
 and MUST take no `ttl`.
 
 20.6 `/__abide/openapi.json` MUST publish OpenAPI 3.1, and MUST publish a handler's `JsonSchema`
@@ -3945,6 +3945,10 @@ MUST leave the same member read off any other name.
 `undefined`, MUST spread options not written in place as an object literal, and MUST leave a call
 handed an object literal second.
 
+38.223 The migration keyed to 0.144.0 MUST rename to `computed` every `memo` handed a body written in
+place that declares no parameter, MUST leave a `memo` whose body declares one, and MUST import
+`computed` where it renames one.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -4210,7 +4214,7 @@ inline, and the rest MUST be picked up by the client's own request.
 41.5 Data MUST reach a browser by answering that browser's own `Rpc` call from the seed buffer, and
 a document MUST NOT carry a copy of an answer.
 
-41.6 Hydration MUST re-execute setup: every `<script>` and every `memo` body runs
+41.6 Hydration MUST re-execute setup: every `<script>` and every `computed` body runs
 again, and a serialized setup result MUST NOT be adopted.
 
 41.7 The `Rpc` calls that re-execution makes MUST be answered from the seed buffer.
@@ -4298,7 +4302,7 @@ MUST hold every chunk of that run, its run closed, as hydration adopts the page.
 a module declared outside every request whose build there left a load in flight, before it sets up a
 page or a layout.
 
-41.35 A `render` MUST NOT build under 41.34 a `reactive` or a `memo` built in a component's setup or
+41.35 A `render` MUST NOT build under 41.34 a `reactive` or a `computed` built in a component's setup or
 in another `render`, nor one nothing reaches.
 
 # 42. The app object

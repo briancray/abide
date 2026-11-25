@@ -148,10 +148,10 @@ const filesUnder = GET(async ({ directory }: { directory: string }) => {
 // A DIRECTORY OF THE CRM AS ITS ADDRESSES (40.44): each file, what its place and name make it, and
 // the address it answers at, read off the CRM's own files as the page renders — and every page at
 // an address that answers, served here as the CRM serves it (40.24), a link a reader can follow.
-import { memo, props, type RouteLiteral, url } from '@abide/abide'
+import { computed, props, type RouteLiteral, url } from '@abide/abide'
 
 const { directory } = props<{ directory: string }>()
-const entries = memo(() => filesUnder({ directory }))
+const entries = computed(() => filesUnder({ directory }))
 </script>
 
 {#if entries}

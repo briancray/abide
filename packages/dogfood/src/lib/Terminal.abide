@@ -99,14 +99,14 @@ const transcript = GET(async ({ command }: { command: string }) => {
 <script>
 // A TERMINAL: a command a page names, as typed, and what it printed and the code it exited with when
 // the CRM ran it — read rather than written, so the output on the page is the command's own.
-import { memo, props } from '@abide/abide'
+import { computed, props } from '@abide/abide'
 
 import Code from './Code.abide'
 
 const { command } = props<{ command: string }>()
 
-const answer = memo(() => transcript({ command }))
-const printed = memo(() =>
+const answer = computed(() => transcript({ command }))
+const printed = computed(() =>
     answer
         ? [
               ...(answer.output === '' ? [] : [answer.output]),

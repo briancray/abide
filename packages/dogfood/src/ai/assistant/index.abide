@@ -63,13 +63,13 @@ import Section from '#src/lib/Section.abide'
             a <code>text_delta</code> is a piece of the reply: join them in a derived value.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { memo } from '@abide/abide'
+            import { computed } from '@abide/abide'
             import askAssistant from './askAssistant.handler.ts'
 
             const events = askAssistant({
                 messages: [{ role: 'user', content: 'Where does Ada work?' }],
             })
-            const answer = memo(() => {
+            const answer = computed(() => {
                 let text = ''
                 for (const event of events)
                     if (

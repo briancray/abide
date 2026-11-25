@@ -1,5 +1,5 @@
 <script>
-import { format, memo, reactive, toggleGroup } from '@abide/abide'
+import { computed, format, reactive, toggleGroup } from '@abide/abide'
 
 import { STAGES } from './STAGES.ts'
 
@@ -17,7 +17,7 @@ const chips = toggleGroup({
     value: stages,
     label: 'Stages',
 })
-const shown = memo(() =>
+const shown = computed(() =>
     stages.length === 0
         ? DEALS
         : DEALS.filter((deal) => stages.includes(deal.stage)),

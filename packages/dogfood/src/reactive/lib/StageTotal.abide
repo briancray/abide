@@ -1,5 +1,5 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 const DEALS = [
     { name: 'Acme renewal', stage: 'lead', amount: 12_000 },
@@ -9,7 +9,7 @@ const DEALS = [
 
 let stage = reactive('lead')
 let note = reactive('')
-const total = memo(() => {
+const total = computed(() => {
     let sum = 0
     for (const deal of DEALS) if (deal.stage === stage) sum += deal.amount
     return sum

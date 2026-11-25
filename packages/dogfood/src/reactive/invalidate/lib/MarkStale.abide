@@ -8,10 +8,10 @@ const getForecast = GET(async () => {
 </script>
 
 <script>
-import { invalidate, memo, reactive } from '@abide/abide'
+import { computed, invalidate, reactive } from '@abide/abide'
 
 let open = reactive(true)
-const forecast = memo(() => getForecast())
+const forecast = computed(() => getForecast())
 </script>
 
 <div class="row">

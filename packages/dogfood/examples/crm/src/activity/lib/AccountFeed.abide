@@ -1,11 +1,11 @@
 <script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
 import feed from '../feed.handler.ts'
 import logToFeed from '../logToFeed.handler.ts'
 
 const account = 'hopper-co'
-const entries = memo(() => feed({ account }))
+const entries = computed(() => feed({ account }))
 </script>
 
 <ul class="fields stacked">

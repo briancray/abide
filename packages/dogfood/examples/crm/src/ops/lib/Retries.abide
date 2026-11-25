@@ -1,9 +1,9 @@
 <script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
 import getRetries from '../getRetries.handler.ts'
 
-const policy = memo(() => getRetries())
+const policy = computed(() => getRetries())
 </script>
 
 <ul class="tiles">

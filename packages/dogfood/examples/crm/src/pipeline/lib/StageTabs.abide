@@ -1,11 +1,11 @@
 <script>
-import { memo, reactive, tabs } from '@abide/abide'
+import { computed, reactive, tabs } from '@abide/abide'
 
 import listDeals from '../listDeals.handler.ts'
 
 const STAGES = ['lead', 'qualified', 'proposal']
 
-const deals = memo(() => listDeals())
+const deals = computed(() => listDeals())
 let stage = reactive<string | undefined>('lead')
 const view = tabs({ items: STAGES, selected: stage })
 </script>

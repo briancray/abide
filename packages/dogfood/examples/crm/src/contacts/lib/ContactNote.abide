@@ -1,12 +1,12 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 import listContacts from '../listContacts.handler.ts'
 
 // Owned, derived, loaded, and waiting for its first write.
 let draft = reactive('')
-const words = memo(() => (draft ? draft.split(' ').length : 0))
-const contacts = memo(() => listContacts())
+const words = computed(() => (draft ? draft.split(' ').length : 0))
+const contacts = computed(() => listContacts())
 let saved = reactive<string>()
 </script>
 

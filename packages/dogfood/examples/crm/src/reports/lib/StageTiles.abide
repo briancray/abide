@@ -1,10 +1,10 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 import { summarizeStage } from './summarizeStage.ts'
 
 let stage = reactive('qualified')
-const summary = memo(() => summarizeStage(stage))
+const summary = computed(() => summarizeStage(stage))
 </script>
 
 <div class="tabs">

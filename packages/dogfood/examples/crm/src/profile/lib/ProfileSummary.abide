@@ -1,16 +1,16 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 let name = reactive('Ada Lovelace')
 let phone = reactive('')
 
-const initials = memo(() =>
+const initials = computed(() =>
     name
         .split(' ')
         .map((word) => word.charAt(0))
         .join(''),
 )
-const filled = memo(() => [name, phone].filter(Boolean).length)
+const filled = computed(() => [name, phone].filter(Boolean).length)
 </script>
 
 <div class="row">

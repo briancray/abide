@@ -13,7 +13,7 @@ import {
 } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import { memo, type Reactive, reactive } from './reactive/index.ts'
+import { computed, type Reactive, reactive } from './reactive/index.ts'
 import { roving, typeahead } from './roving.ts'
 import { type Picked, Selection } from './Selection.ts'
 
@@ -91,7 +91,7 @@ export function tree<Node, Multiple extends boolean = false>(
 
     // EVERY NODE PLACED, and the ones that show in order: one walk, again only when the nodes or what
     // is expanded change.
-    const walked = memo(() => {
+    const walked = computed(() => {
         const open = new Set(expanded())
         const placed = new Map<string, Placed>()
         const shown: string[] = []
@@ -129,7 +129,7 @@ export function tree<Node, Multiple extends boolean = false>(
     // 51.79 — the item in the page's tab order: the one focused last, else the first one picked, else
     // the first.
     const focused = reactive<string | undefined>(undefined)
-    const current = memo((): string | undefined => {
+    const current = computed((): string | undefined => {
         const { shown } = walked()
         const wanted = focused()
         if (wanted !== undefined && shown.includes(wanted)) return wanted

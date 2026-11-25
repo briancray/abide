@@ -5,7 +5,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { flushSync, memo, reactive } from '#shared'
+import { computed, flushSync, memo, reactive } from '#shared'
 import { startingLoadCall } from '#shared/loadCall.ts'
 import { callLoad } from '#shared/reactive/callLoad.ts'
 
@@ -98,7 +98,7 @@ test('the body a call starts is handed the load own signal — 16.49', () => {
 // 16.59 — the 504, on a plain `reactive` with no handler around it. THE REVERT: drop the `timeLoad`
 // call from `callLoad`; the load never settles and the test runs out its own timeout.
 test('a load that goes its timeout refuses 504 — 16.59', async () => {
-    const value = memo(
+    const value = computed(
         () => new Promise<string>(() => {}),
     ) as unknown as Loading
     callLoad(() => value, undefined, undefined, 30)
@@ -118,7 +118,7 @@ afterEach(() => {
 })
 test('calls joining a load start no clock of their own — 16.61', async () => {
     let release = (): void => {}
-    const value = memo(
+    const value = computed(
         () =>
             new Promise<string>((done) => {
                 release = () => done('settled')

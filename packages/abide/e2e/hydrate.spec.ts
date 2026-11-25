@@ -39,22 +39,22 @@ export default GET(async () => {
 // 41.34 — A MODULE'S VALUE WHOSE BUILD MAKES A CALL, read by the page's own markup and by a child
 // whose setup makes a call, which 41.28 builds after the turn.
 const MODULE_VALUE = {
-    'lib/me.ts': `import { memo } from '@abide/abide'
+    'lib/me.ts': `import { computed } from '@abide/abide'
 import whoami from '#src/data/whoami.handler.ts'
 
-export const me = memo(() => whoami())
+export const me = computed(() => whoami())
 `,
-    'lib/canEdit.ts': `import { memo } from '@abide/abide'
+    'lib/canEdit.ts': `import { computed } from '@abide/abide'
 import { me } from './me.ts'
 
-export const canEdit = memo(() => me.ready() && me().owner)
+export const canEdit = computed(() => me.ready() && me().owner)
 `,
     'lib/Deferred.abide': `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import getValue from '#src/data/getValue.handler.ts'
 import { canEdit } from './canEdit.ts'
 
-const value = memo(() => getValue({ id: 'deferred' }))
+const value = computed(() => getValue({ id: 'deferred' }))
 </script>
 
 <p id="deferred">{#if canEdit()}<b>edit</b>{:else}<i>view</i>{/if}{value.busy() ? '' : value().word}</p>`,
@@ -70,10 +70,10 @@ import { canEdit } from '../lib/canEdit.ts'
 // refuse an arm bound to the other's nodes (41.10). What witnesses it is the handler a click runs,
 // and the static `class` — the one thing an arm bound to the other's button never writes.
 const pageOver = (handler: string) => `<script>
-import { memo, reactive } from '@abide/abide'
+import { computed, memo, reactive } from '@abide/abide'
 import ${handler} from '#src/data/${handler}.handler.ts'
 
-const value = memo(() => ${handler}({ id: 'one' }))
+const value = computed(() => ${handler}({ id: 'one' }))
 const pressed = reactive('')
 </script>
 
@@ -83,15 +83,15 @@ const pressed = reactive('')
 // the server painted settled (41.34 built it in setup, and `getValue` answers inside the turn), one
 // it painted in flight (`getSlow` does not).
 const MODULE_CALL = {
-    'lib/early.ts': `import { memo } from '@abide/abide'
+    'lib/early.ts': `import { computed } from '@abide/abide'
 import getValue from '#src/data/getValue.handler.ts'
 
-export const early = memo(() => getValue({ id: 'module' }))
+export const early = computed(() => getValue({ id: 'module' }))
 `,
-    'lib/late.ts': `import { memo } from '@abide/abide'
+    'lib/late.ts': `import { computed } from '@abide/abide'
 import getSlow from '#src/data/getSlow.handler.ts'
 
-export const late = memo(() => getSlow({ id: 'module' }))
+export const late = computed(() => getSlow({ id: 'module' }))
 `,
     'early/index.abide': `<script>
 import { early } from '../lib/early.ts'

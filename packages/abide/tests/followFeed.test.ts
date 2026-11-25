@@ -9,7 +9,14 @@ import { expect, test } from 'bun:test'
 import { Mux, type MuxConnection } from '#server/answerSocket.ts'
 import { Followers } from '#server/Followers.ts'
 import type { FollowedHandler } from '#server/mountHandlers.ts'
-import { flushSync, invalidate, memo, reactive, refresh } from '#shared'
+import {
+    computed,
+    flushSync,
+    invalidate,
+    memo,
+    reactive,
+    refresh,
+} from '#shared'
 import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { GET } from '#shared/rpc.ts'
 
@@ -107,7 +114,7 @@ test('a change is serialized once for every follower of a value, and each is sen
 // sends no frame.
 test('a free invalidate and refresh over a tag reach the followers of the GET serving it — 7.10, 7.18', async () => {
     let built = 0
-    const value = memo(() => ({ built: built++ }), {
+    const value = computed(() => ({ built: built++ }), {
         global: true,
         tags: ['stock'],
     })

@@ -130,10 +130,10 @@ export default POST(() => {
 }
 
 const PAGE = `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import getInvoice from '#src/invoices/getInvoice.handler.ts'
 
-const invoice = memo(() => getInvoice({ id: '4021' }))
+const invoice = computed(() => getInvoice({ id: '4021' }))
 </script>
 
 <main><p id="total">{invoice().total}</p></main>`
@@ -981,10 +981,10 @@ test('a handler with clients.ui false gets no browser wrapper — 20.4', async (
     }
     const refused = appFixture({
         'index.abide': `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import internal from '#src/staff/internal.handler.ts'
 
-const value = memo(() => internal())
+const value = computed(() => internal())
 </script>
 
 <p>{value()}</p>`,
@@ -996,10 +996,10 @@ const value = memo(() => internal())
 
     const allowed = appFixture({
         'index.abide': `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import open from '#src/staff/open.handler.ts'
 
-const value = memo(() => open())
+const value = computed(() => open())
 </script>
 
 <p>{value()}</p>`,

@@ -126,7 +126,7 @@ affected code saying what it did, and tell the user.
   `items = [...items, item]`). Bind through the path too: `bind:value={edits.kind}` (32.5), not a
   `{ get, set }` pair. In a `.ts` file the same write is
   `edits.patch((value) => { value.kind = kind })`, not `edits.set({ ...edits(), kind })`.
-- Derive a value with `memo(() => …)`. `watch` is only for reaching outside the reactive graph —
+- Derive a value with `computed(() => …)`. `watch` is only for reaching outside the reactive graph —
   the DOM, a timer, an imperative API — and its run never assigns state, a value computed from what
   it read being a derived value. What a timer or a call it started hands back is written when that
   lands, the way an event handler writes. A user action's effect belongs in its event handler. A `watch` runs during a server render too (RULEBOOK 12.5), so one that starts a
@@ -137,7 +137,7 @@ affected code saying what it did, and tell the user.
   hand-written `removeEventListener`. A listener that needs options is an object, on any element as
   much as there: `onwheel={{ handleEvent: zoom, passive: false }}` (32.95).
 - A preference the page renders — a currency, a theme, a panel left open — lives in a cookie:
-  `const theme = memo(() => cookies().get('theme') ?? 'light')`, written with
+  `const theme = computed(() => cookies().get('theme') ?? 'light')`, written with
   `cookies().set('theme', next)`. `cookies()` is the request's on the server and the document's in
   the browser, and a read by name is tracked (RULEBOOK 22.2, 22.4), so the first paint is already
   right and a write repaints. The browser sends it, so check what it holds before trusting it.

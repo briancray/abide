@@ -149,9 +149,9 @@ test('a static component nothing invokes emits no client module', async () => {
 // test reports no document at all rather than a document with one empty slot.
 test('a render continues past a value still in flight — 41.4, 32.23', async () => {
     const { html, mount } = await renderPage(`<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
-const invoice = memo(() => Promise.resolve({ number: 'INV-1' }))
+const invoice = computed(() => Promise.resolve({ number: 'INV-1' }))
 </script>
 
 <main><h1 id="static">Invoice</h1><strong id="slot">{invoice.number}</strong></main>`)
@@ -186,9 +186,9 @@ const invoice = memo(() => Promise.resolve({ number: 'INV-1' }))
 // test reports [] against [north, south] either way, and only the second one looks fine on screen.
 test('a render continues past a {#for} subject still in flight — 41.4, 32.22', async () => {
     const { html, mount } = await renderPage(`<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
-const rows = memo(() => Promise.resolve(['north', 'south']))
+const rows = computed(() => Promise.resolve(['north', 'south']))
 </script>
 
 <main><h1 id="static">Regions</h1><ul id="list">{#for row of rows key row}<li>{row}</li>{/for}</ul></main>`)
@@ -227,10 +227,10 @@ const rows = memo(() => Promise.resolve(['north', 'south']))
 // most of it. This test then reports nothing rendered rather than a page with two empty values.
 test('a render continues past an unlanded attribute and style — 41.4', async () => {
     const { html, mount } = await renderPage(`<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
-const tone = memo(() => Promise.resolve('warm'))
-const width = memo(() => Promise.resolve('40px'))
+const tone = computed(() => Promise.resolve('warm'))
+const width = computed(() => Promise.resolve('40px'))
 </script>
 
 <main><h1 id="static">Panel</h1><p id="attr" title={tone}>t</p><b id="styled" style:width={width}>w</b></main>`)
@@ -269,11 +269,11 @@ const { title, tone } = props<{ title: string; tone: string }>()
 <b class="tip">{title}/{tone}</b>`
 
 const SPREAD_PAGE = `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import Tip from './Tip.abide'
 
-let detail = memo(() => Promise.resolve({ title: 'late' }))
-let Shown = memo(() => Tip)
+let detail = computed(() => Promise.resolve({ title: 'late' }))
+let Shown = computed(() => Tip)
 </script>
 
 <main><p id="plain"><Tip {...{ title: detail.title }} {...{ tone: 'warm' }}/></p><p id="chosen"><Shown {...detail} tone="cool"/></p><p id="after">after</p><button id="move" onclick={() => { detail = { title: 'moved' } }}>move</button></main>`
@@ -325,11 +325,11 @@ test('a mount into an empty region continues past a spread still in flight — 3
 // `disabled="false"` and `hidden="false"`, and the first assertion reports it.
 test('a boolean attribute is present or absent, and any other is its text — 32.37', async () => {
     const { html, mount } = await renderPage(`<script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 let busy = reactive(false)
 let rows = reactive([{ id: 1, off: true }])
-const shown = memo(() => ({ hidden: busy(), 'aria-hidden': busy() }))
+const shown = computed(() => ({ hidden: busy(), 'aria-hidden': busy() }))
 
 function flip() {
     busy = !busy
@@ -414,9 +414,9 @@ let found = reactive<string | boolean>('until-found')
 // `emitClient` instead and the document is served with an empty region that never fills.
 test('a render continues past an {#if} subject still in flight — 41.4, 32.12', async () => {
     const { html, mount } = await renderPage(`<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
-const shown = memo(() => Promise.resolve(true))
+const shown = computed(() => Promise.resolve(true))
 </script>
 
 <main><h1 id="static">Panel</h1>{#if shown}<span id="arm">on</span>{:else}<span id="off">off</span>{/if}</main>`)
@@ -903,9 +903,9 @@ let gap = reactive('4px')
 // moving the text to 42 — this reports `waiting`.
 test('an await operand holds the Reactive — 31.3', async () => {
     const { mount } = await renderPage(`<script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
-const total = memo(async () => {
+const total = computed(async () => {
     await Bun.sleep(20)
     return 42
 })
@@ -1018,9 +1018,9 @@ test('a template position cannot await', async () => {
     let thrown = ''
     try {
         await renderPage(`<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
-const rows = memo(async () => 1)
+const rows = computed(async () => 1)
 </script>
 
 <p id="out">{await rows}</p>`)

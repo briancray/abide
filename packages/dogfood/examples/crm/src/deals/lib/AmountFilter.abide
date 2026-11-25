@@ -1,5 +1,5 @@
 <script>
-import { format, memo, range, reactive } from '@abide/abide'
+import { computed, format, range, reactive } from '@abide/abide'
 
 const DEALS = [
     { id: 'noether-pilot', name: 'Noether pilot', amount: 6_500 },
@@ -17,7 +17,7 @@ const slider = range({
     name: 'amount',
     format: (each) => format.money(each, { notation: 'compact' }),
 })
-const shown = memo(() =>
+const shown = computed(() =>
     DEALS.filter(
         (deal) => deal.amount >= amount[0] && deal.amount <= amount[1],
     ),

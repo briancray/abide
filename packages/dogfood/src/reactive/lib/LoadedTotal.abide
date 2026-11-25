@@ -16,10 +16,10 @@ const getStage = GET(async ({ stage }: { stage: string }) => {
 </script>
 
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 let stage = reactive('lead')
-const total = memo(() => getStage({ stage }))
+const total = computed(() => getStage({ stage }))
 </script>
 
 <select bind:value={stage}>

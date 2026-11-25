@@ -1,9 +1,9 @@
 <script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
 import listContacts from '../listContacts.handler.ts'
 
-const contacts = memo(() => listContacts())
+const contacts = computed(() => listContacts())
 </script>
 
 <ul class="fields">

@@ -6,7 +6,7 @@
 import type { Column } from './Column.ts'
 import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
-import { memo, type Reactive, reactive, watch } from './reactive/index.ts'
+import { computed, type Reactive, reactive, watch } from './reactive/index.ts'
 import { runOf } from './Selection.ts'
 import type { Sort } from './Sort.ts'
 import { cellText, sortRows } from './sortRows.ts'
@@ -80,7 +80,7 @@ export function sortableTable<Row>(
     const rows = () => live(options.rows)
     const columns = () => live(options.columns)
 
-    const sorted = memo(() => sortRows(rows(), columns(), sort()))
+    const sorted = computed(() => sortRows(rows(), columns(), sort()))
 
     // 51.50 — a header pressed again turns its direction round; a new one sorts its first direction.
     function sortBy(column: Column<Row>) {
@@ -107,7 +107,7 @@ export function sortableTable<Row>(
 
     // 51.72-51.76 — ROWS PICKED BY NATIVE CHECKBOXES: a table is no grid, so each row's checkbox is in
     // the page's tab order and Space toggles it as the browser does, with nothing to rove.
-    const picked = memo(() => new Set(selected()))
+    const picked = computed(() => new Set(selected()))
     // Read only where the header's box is spread, so a table with nothing selectable holds no value
     // that waits on its rows.
     const every = () =>

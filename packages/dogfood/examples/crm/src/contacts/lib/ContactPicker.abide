@@ -1,11 +1,11 @@
 <script>
-import { combobox, memo, reactive } from '@abide/abide'
+import { combobox, computed, reactive } from '@abide/abide'
 
 import listContacts from '../listContacts.handler.ts'
 
 type Contact = { id: string; name: string; company: string }
 
-const contacts = memo(() => listContacts())
+const contacts = computed(() => listContacts())
 let contact = reactive<Contact | undefined>(undefined)
 const box = combobox({
     id: 'deal-contact',

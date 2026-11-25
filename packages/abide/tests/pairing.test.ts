@@ -138,7 +138,7 @@ test('reads the browser’s pairing off /__abide/pairing, naming no tools — 44
 // 44.69 — A READ THAT FAILED IS THE STATUS'S FAILURE, so a page can say the assistant is unavailable
 // rather than wait on a status that never lands — on `error()`, a refused write's (4.10), so a READ
 // of `status` goes on answering `undefined` rather than throwing it (2.3). THE REVERT: give `status`
-// the 8ec67742 body, `memo(() => read.copy())`; the read throws, and this reports `read: threw
+// the 8ec67742 body, `computed(() => read.copy())`; the read throws, and this reports `read: threw
 // HttpError`.
 test('a pairing /__abide/pairing fails to answer fails its status with that failure — 44.69', async () => {
     globalThis.fetch = (async () =>

@@ -10,11 +10,11 @@ const getStage = GET(async ({ stage }: { stage: string }) => {
 </script>
 
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, memo, reactive } from '@abide/abide'
 
 const stageCounts = memo(({ stage }: { stage: string }) => getStage({ stage }))
 let stage = reactive('lead')
-const count = memo(() => stageCounts({ stage }))
+const count = computed(() => stageCounts({ stage }))
 </script>
 
 <div class="row">

@@ -202,10 +202,10 @@ test('twenty elementRects share one listener set, and a burst of scrolls is one 
 test('given no target, each of the eight is read by name — 32.110', async () => {
     ;(globalThis as { __WIDE__?: number }).__WIDE__ = 0
     const html = await mount(`<script>
-import { elementRect, memo } from '@abide/abide'
+import { computed, elementRect } from '@abide/abide'
 
 const placed = elementRect()
-const wide = memo(() => {
+const wide = computed(() => {
     ;(globalThis as { __WIDE__?: number }).__WIDE__ = ((globalThis as { __WIDE__?: number }).__WIDE__ ?? 0) + 1
     return placed.width ?? 'none'
 })
@@ -248,10 +248,10 @@ test('the last elementRect to leave removes the listeners — 32.86', async () =
 test('a frame reading the rectangle already held wakes nobody — 32.84', async () => {
     ;(globalThis as { __TOPS__?: number }).__TOPS__ = 0
     await mount(`<script>
-import { elementRect, memo, reactive } from '@abide/abide'
+import { computed, elementRect, reactive } from '@abide/abide'
 
 let rect = reactive<{ top: number } | undefined>(undefined)
-const shown = memo(() => {
+const shown = computed(() => {
     ;(globalThis as { __TOPS__?: number }).__TOPS__ = ((globalThis as { __TOPS__?: number }).__TOPS__ ?? 0) + 1
     return rect === undefined ? 'unmeasured' : String(rect.top)
 })

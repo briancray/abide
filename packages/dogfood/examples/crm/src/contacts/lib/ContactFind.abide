@@ -1,9 +1,9 @@
 <script>
-import { highlight, memo, reactive } from '@abide/abide'
+import { computed, highlight, reactive } from '@abide/abide'
 
 const CONTACTS = ['Ada Lovelace', 'Grace Hopper', 'Katherine Johnson']
 let query = reactive('')
-const kept = memo(() =>
+const kept = computed(() =>
     CONTACTS.filter((name) => highlight(name, query).some((run) => run.match)),
 )
 </script>

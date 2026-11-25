@@ -12,23 +12,23 @@ import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { refusal } from './typed.ts'
 
-const SESSION = `import { cookies as jar, memo, principal } from '@abide/abide'
+const SESSION = `import { computed, cookies as jar, principal } from '@abide/abide'
 import { csp, GET, request, response } from '@abide/abide/server'
 
-export const who = memo(() => principal, { global: true })
-export const crumbs = memo(() => jar(), { global: true })
-export const nonce = memo(() => csp.nonce, { global: true })
-export const policy = memo(() => csp, { global: true })
-export const local = memo(() => request().url)
+export const who = computed(() => principal, { global: true })
+export const crumbs = computed(() => jar(), { global: true })
+export const nonce = computed(() => csp.nonce, { global: true })
+export const policy = computed(() => csp, { global: true })
+export const local = computed(() => request().url)
 export const viewer = GET(() => principal.authenticated, { global: true })
 export const framed = GET(() => response.json(request.ip()), { global: true })
 `
 
 const PAGE = `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
 const route = { x: 1 }
-const mine = memo(() => route.x, { global: true })
+const mine = computed(() => route.x, { global: true })
 </script>
 
 <p>{mine}</p>`

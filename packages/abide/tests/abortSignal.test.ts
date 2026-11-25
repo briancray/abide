@@ -8,7 +8,7 @@ import { expect, test } from 'bun:test'
 
 import type { App, BootedApp } from '#server/createApp.ts'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
-import { abortSignal, log, memo, reactive, watch } from '#shared'
+import { abortSignal, computed, log, reactive, watch } from '#shared'
 import { appStopSignal } from '#shared/reactive/poll.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
@@ -52,15 +52,15 @@ function warningsSince(before: number, mentioning: string): number {
 test('a job giving up on abortSignal is not warned on, and a failing one still is — 4.12, 7.28, 37.28', async () => {
     const before = (log.records.peek() ?? []).length
     let landedRuns = 0
-    const landed = memo(
+    const landed = computed(
         () => {
             landedRuns += 1
             return landedRuns === 1 ? 1 : givenUp(abortSignal())
         },
         { global: true, poll: 5 },
     )
-    memo(() => givenUp(abortSignal()), { global: true, poll: 5 })
-    memo(
+    computed(() => givenUp(abortSignal()), { global: true, poll: 5 })
+    computed(
         (): number => {
             throw new Error('the feed could not be read')
         },
@@ -85,7 +85,7 @@ test('a job giving up on abortSignal is not warned on, and a failing one still i
 test('abortSignal is aborted from the stop through its drain, and fresh once the stop resolves — 7.38, 7.39', async () => {
     let started = false
     let duringTheDrain: boolean | undefined
-    memo(
+    computed(
         async () => {
             started = true
             await givenUp(abortSignal()).catch(() => undefined)
@@ -115,7 +115,7 @@ test('abortSignal is aborted from the stop through its drain, and fresh once the
 test('abortSignal in a memo body is its run’s own, ended by the next run — 7.45, 7.46', () => {
     const query = reactive('lead')
     const signals: AbortSignal[] = []
-    const found = memo(() => {
+    const found = computed(() => {
         const asked = query()
         signals.push(abortSignal())
         return asked
@@ -137,7 +137,7 @@ test('a memo released while it loads ends the signal its run asked for — 7.46,
     let asked: AbortSignal | undefined
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    const loading = memo(() => {
+    const loading = computed(() => {
         asked = abortSignal()
         return new Promise<number>(() => undefined)
     })
@@ -158,7 +158,7 @@ test('a memo released while it loads ends the signal its run asked for — 7.46,
 // `told: false`.
 test('a run that asked for its signal is told when the app stops — 7.46', async () => {
     let asked: AbortSignal | undefined
-    memo(
+    computed(
         () => {
             asked = abortSignal()
             return givenUp(asked).catch(() => 0)
@@ -179,7 +179,7 @@ test('a run that asked for its signal is told when the app stops — 7.46', asyn
 test('on a server, abortSignal after an await in a memo body is still its run’s own — 7.47', async () => {
     const query = reactive('lead')
     const signals: AbortSignal[] = []
-    const found = memo(async () => {
+    const found = computed(async () => {
         const asked = query()
         await Bun.sleep(0)
         signals.push(abortSignal())
@@ -203,7 +203,7 @@ test('a run asking after the next run started is handed a signal already aborted
     const query = reactive(1)
     let resume: () => void = () => undefined
     const asked: AbortSignal[] = []
-    const found = memo(async () => {
+    const found = computed(async () => {
         const run = query()
         if (run === 1) await new Promise<void>((resolve) => (resume = resolve))
         asked[run] = abortSignal()
@@ -234,7 +234,7 @@ test('a request and a run filed in it end as the request does — 7.46, 7.48', a
     let inRun: AbortSignal | undefined
     const deals = inOpenScope(scope, () => {
         inRequest = abortSignal()
-        return memo(async () => {
+        return computed(async () => {
             await Bun.sleep(0)
             inRun = abortSignal()
             return 1
@@ -258,7 +258,7 @@ test('in a browser, abortSignal after an await in a memo body is the app’s —
     try {
         let before: AbortSignal | undefined
         let after: AbortSignal | undefined
-        const found = memo(async () => {
+        const found = computed(async () => {
             before = abortSignal()
             await Bun.sleep(0)
             after = abortSignal()

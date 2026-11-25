@@ -1,5 +1,5 @@
 <script>
-import { memo, range, reactive } from '@abide/abide'
+import { computed, range, reactive } from '@abide/abide'
 
 const DEALS = [
     { id: 'noether-pilot', name: 'Noether pilot', probability: 20 },
@@ -8,7 +8,7 @@ const DEALS = [
 ]
 
 let likely = reactive<readonly [number, number]>([50, 100])
-const shown = memo(() =>
+const shown = computed(() =>
     DEALS.filter(
         (deal) =>
             deal.probability >= likely[0] && deal.probability <= likely[1],

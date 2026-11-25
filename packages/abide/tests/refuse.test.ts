@@ -6,6 +6,7 @@
 import { expect, test } from 'bun:test'
 
 import {
+    computed,
     type Failed,
     flushSync,
     isFailed,
@@ -357,10 +358,10 @@ test('a body that returns a refusal refuses — 15.5', async () => {
     const summary = (value: { error(): unknown; ready(): boolean }): string =>
         `error: ${isFailed(value.error()) ? (value.error() as Error).name : 'none'}, ready: ${value.ready()}`
 
-    const settled = memo(() => refuse.notFound())
+    const settled = computed(() => refuse.notFound())
     expect(summary(settled)).toBe('error: NotFound, ready: false')
 
-    const loaded = memo(async () => refuse.notFound())
+    const loaded = computed(async () => refuse.notFound())
     await loaded.catch(() => {})
     expect(summary(loaded)).toBe('error: NotFound, ready: false')
 
@@ -382,7 +383,9 @@ test('a body that returns a refusal refuses — 15.5', async () => {
 // beside it, exactly as a recompute that threw does.
 test('a recompute that returns a refusal keeps serving what it had', () => {
     const id = reactive('42')
-    const invoice = memo(() => (id() === '42' ? 'INV-0042' : refuse.notFound()))
+    const invoice = computed(() =>
+        id() === '42' ? 'INV-0042' : refuse.notFound(),
+    )
     const seen: string[] = []
     watch(() => {
         const error = invoice.error() as Error | undefined

@@ -5,7 +5,7 @@
 
 import { log } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
-import { memo, type Reactive, reactive } from '#shared/reactive/index.ts'
+import { computed, type Reactive, reactive } from '#shared/reactive/index.ts'
 import { appStopSignal } from '#shared/reactive/poll.ts'
 
 import { ownedBy } from './requestScope.ts'
@@ -199,7 +199,7 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         return write({ nextRun: null })
     }
 
-    memo(look, {
+    computed(look, {
         global: true,
         poll: {
             every:

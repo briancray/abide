@@ -10,10 +10,10 @@ const getStage = GET(async ({ stage }: { stage: string }) => {
 </script>
 
 <script>
-import { busy, memo, refresh } from '@abide/abide'
+import { busy, computed, refresh } from '@abide/abide'
 
-const lead = memo(() => getStage({ stage: 'lead' }))
-const won = memo(() => getStage({ stage: 'won' }))
+const lead = computed(() => getStage({ stage: 'lead' }))
+const won = computed(() => getStage({ stage: 'won' }))
 </script>
 
 <ul class={busy(getStage) ? 'tiles opacity-40' : 'tiles'}>

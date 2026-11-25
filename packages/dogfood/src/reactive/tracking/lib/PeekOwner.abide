@@ -1,9 +1,9 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 let stage = reactive('lead')
 let owner = reactive('ada')
-const label = memo(() => `${stage} (${owner.peek()})`)
+const label = computed(() => `${stage} (${owner.peek()})`)
 </script>
 
 <p>{label}</p>

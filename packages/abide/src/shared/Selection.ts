@@ -4,7 +4,7 @@
 // on — to it.
 
 import { isApplePlatform } from './isApplePlatform.ts'
-import { memo, type Reactive, reactive } from './reactive/index.ts'
+import { computed, type Reactive, reactive } from './reactive/index.ts'
 
 /** What a pick holds: every one picked where it picks many, else the one picked or none. */
 export type Picked<Item, Multiple extends boolean> = Multiple extends true
@@ -47,7 +47,7 @@ export class Selection {
                 Picked<string, boolean>
             >)
         const held = this.selected as Reactive<readonly string[] | undefined>
-        this.keys = memo(() => (many ? new Set(held() ?? []) : NONE))
+        this.keys = computed(() => (many ? new Set(held() ?? []) : NONE))
     }
 
     /** Whether `key` is selected, read live. */

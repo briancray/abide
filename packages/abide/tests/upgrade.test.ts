@@ -8,6 +8,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { spawned } from '@abide/harness/gate'
 
 import { paragraphsOf } from '#compiler/agentNotes.ts'
+import { toComputed } from '#compiler/toComputed.ts'
 import { toMemo } from '#compiler/toMemo.ts'
 import { upgrade } from '#compiler/upgrade.ts'
 import { ABIDE_DIRECTORY } from '#server/ABIDE_DIRECTORY.ts'
@@ -176,18 +177,18 @@ const found = reactive(async () => q.toUpperCase())
     const upgraded = await abide(app, 'upgrade')
     expect(upgraded.stdout).toContain('abide upgrade: 2 files changed')
     expect(await Bun.file(`${app}/src/lib/totals.ts`).text())
-        .toBe(`import { memo, reactive } from '@abide/abide'
+        .toBe(`import { computed, memo, reactive } from '@abide/abide'
 
 const score = (args: { id: string }) => args.id.length
 export const seats = reactive(5)
-export const total = memo(() => seats() * 40)
+export const total = computed(() => seats() * 40)
 export const scored = memo(score)
 `)
     expect(await Bun.file(`${app}/src/index.abide`).text()).toBe(`<script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 let q = reactive('')
-const found = memo(async () => q.toUpperCase())
+const found = computed(async () => q.toUpperCase())
 </script>
 
 <input bind:value={q}><p>{found}</p>`)
@@ -232,27 +233,27 @@ let rows = reactive(() => [{ id: 1 }])
     })
     const [row, edit] = await upgrade(app, '0.142.0')
     expect(row?.after).toBe(`<script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 1 }])
 </script>
 
 {#for row of rows key row.id}
     <script>
-    const label = memo(() => String(row.id))
+    const label = computed(() => String(row.id))
     </script>
     <b>{label}</b>
 {/for}
 `)
     expect(edit?.after).toBe(`<script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
-let rows = memo(() => [{ id: 1 }])
+let rows = computed(() => [{ id: 1 }])
 </script>
 
 {#for row of rows key row.id}
     <script>
-    const label = memo(() => String(row.id))
+    const label = computed(() => String(row.id))
     const count = reactive(0)
     </script>
     <b>{label}{count}</b>
@@ -309,11 +310,11 @@ const deals = reactive([], { by: 'id' })
     const after = (path: string) =>
         edits.find((edit) => edit.path === path)?.after
     expect(after('src/index.abide')).toBe(`<script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 1, by: 'me' }], { key: 'id' })
 const by = (row: { id: number }) => row.id
-const named = memo(() => rows, { key: by, tags: ['rows'] })
+const named = computed(() => rows, { key: by, tags: ['rows'] })
 </script>
 
 {#for row of rows key row.id}<b>{row.by}</b>{/for}
@@ -322,10 +323,10 @@ const named = memo(() => rows, { key: by, tags: ['rows'] })
 {#for row of rows key by}<s>{row.id}</s>{/for}
 `)
     expect(after('src/lib/books.ts'))
-        .toBe(`import { GET, memo, reactive } from '@abide/abide'
+        .toBe(`import { computed, GET, reactive } from '@abide/abide'
 
 const OPTIONS = { by: 'id' }
-export const books = GET(memo(() => [{ isbn: '1' }], { key: 'isbn' }))
+export const books = GET(computed(() => [{ isbn: '1' }], { key: 'isbn' }))
 export const kept = reactive<{ id: string }[]>([], {
     key(row) {
         return row.id
@@ -662,5 +663,31 @@ import { memo, reactive, watch } from '@abide/abide'
 
 export const total = memo(() => 1)
 export const kept = reactive(0)
+`)
+})
+
+// 38.223 — A BODY DECLARING NO PARAMETER IS HANDED TO `computed`, and one declaring a parameter stays
+// a `memo`: written in place as an arrow, an async arrow, a function and a generator, each beside a
+// keyed one, in a module whose `memo` stays imported for the keyed one. THE REVERT: accept every
+// body in `isBodyWithoutParameter`; the keyed `memo` is renamed too, and `memo` leaves the import.
+test('a body declaring no parameter is handed to computed, and a keyed one stays memo — 38.223', () => {
+    const text = `import { memo, reactive } from '@abide/abide'
+
+const seats = reactive(5)
+export const total = memo(() => seats() * 40)
+export const loaded = memo(async (): Promise<number> => 1)
+export const named = memo(function () { return 1 })
+export const streamed = memo(async function* () { yield 1 })
+export const byId = memo(({ id }: { id: string }) => id)
+`
+    expect(toComputed(text, 'src/lib/totals.ts'))
+        .toBe(`import { computed, memo, reactive } from '@abide/abide'
+
+const seats = reactive(5)
+export const total = computed(() => seats() * 40)
+export const loaded = computed(async (): Promise<number> => 1)
+export const named = computed(function () { return 1 })
+export const streamed = computed(async function* () { yield 1 })
+export const byId = memo(({ id }: { id: string }) => id)
 `)
 })

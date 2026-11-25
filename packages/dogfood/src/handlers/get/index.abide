@@ -69,11 +69,11 @@ import Section from '#src/lib/Section.abide'
             reads <code>deal.name</code> by name and loads again when <code>id</code> changes.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { memo, reactive } from '@abide/abide'
+            import { computed, reactive } from '@abide/abide'
             import getDeal from './getDeal.handler.ts'
 
             let id = reactive('d1')
-            const deal = memo(() => getDeal({ id }))
+            const deal = computed(() => getDeal({ id }))
             </script>
 
             <button onclick={() => (id = 'd2')}>Next deal</button>

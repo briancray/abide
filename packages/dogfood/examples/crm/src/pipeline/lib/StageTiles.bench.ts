@@ -1,4 +1,4 @@
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 import { batch, type Batched } from '@abide/harness/report'
 
 import { STAGES } from './STAGES.ts'
@@ -15,7 +15,7 @@ function panels(count: number): () => void {
         }
     }
     const stages = [reactive('lead'), reactive('lead'), reactive('lead')]
-    const readers = stages.map((stage) => memo(() => entries.get(stage())))
+    const readers = stages.map((stage) => computed(() => entries.get(stage())))
     for (const reader of readers) reader()
     let at = 0
     return () => {

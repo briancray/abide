@@ -1,9 +1,9 @@
 <script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
 import getSummary from '../getSummary.handler.ts'
 
-const summary = memo(() => getSummary())
+const summary = computed(() => getSummary())
 </script>
 
 <ul class="tiles">

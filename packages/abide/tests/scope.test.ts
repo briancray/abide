@@ -17,9 +17,17 @@ import {
     type RequestScope,
 } from '#server/requestScope.ts'
 import { response } from '#server/response.ts'
-import { flushSync, invalidate, memo, reactive, refresh, watch } from '#shared'
+import {
+    computed,
+    flushSync,
+    invalidate,
+    memo,
+    reactive,
+    refresh,
+    watch,
+} from '#shared'
 import { cellOf } from '#shared/reactive/cellShape.ts'
-import { ambient, ambientMemo } from '#shared/reactive/index.ts'
+import { ambient, ambientComputed } from '#shared/reactive/index.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
 import { GET, POST } from '#shared/rpc.ts'
 
@@ -30,7 +38,7 @@ installServer()
 // reads the first one's `set` — 5 where 0 is due.
 test('a value built outside every request is one value per request — 11.32', async () => {
     let runs = 0
-    const visits = memo(() => {
+    const visits = computed(() => {
         runs += 1
         return 0
     })
@@ -60,7 +68,7 @@ test('an ambient first built inside a request derives its home outside it — 11
     let doubled: (() => number) | undefined
     await inScope(new Request('http://app/a'), async () => {
         base.set(5)
-        doubled = ambientMemo(() => base() * 2)
+        doubled = ambientComputed(() => base() * 2)
         expect(doubled()).toBe(10)
     })
     expect(doubled!()).toBe(2)
@@ -157,7 +165,7 @@ test("a value derived in a request lets go of a global at the request's teardown
     const level = reactive(0, { global: true })
     for (const path of ['a', 'b'])
         await inScope(new Request(`http://app/${path}`), async () => {
-            const plus = memo(() => level() + 1)
+            const plus = computed(() => level() + 1)
             expect(plus()).toBe(1)
             releaseScope(currentRequestScope() as RequestScope)
         })
@@ -410,7 +418,7 @@ test('a body reruns under its own request, whichever request drained it — 11.3
     const quantity = reactive(1)
     const totals: Record<string, number> = {}
     const derive = (name: string) => (): void => {
-        const total = memo(() => quantity() * 10)
+        const total = computed(() => quantity() * 10)
         watch(() => {
             totals[name] = total()
         })
@@ -440,7 +448,7 @@ test('a body reruns under its own request, whichever request drained it — 11.3
 test('an effect a load aborted reruns under its own request, whichever request drained it — 11.63', async () => {
     const tenant = reactive('none')
     const opens: Record<string, (answer: string) => void> = {}
-    const profile = memo(
+    const profile = computed(
         () =>
             new Promise<string>((open) => {
                 opens[new URL(request().url).pathname.slice(1)] = open
@@ -497,7 +505,7 @@ test('an effect a load aborted reruns under its own request, whichever request d
 // again for A's refresh — 2 loads where 1 is due.
 test('a refresh by tag reaches the request it was made in and no other — 13.8', async () => {
     let loads = 0
-    const stock = memo(
+    const stock = computed(
         () => {
             loads += 1
             return 3
@@ -529,7 +537,7 @@ test('a refresh by tag reaches the request it was made in and no other — 13.8'
 // REVERT: drop `|| cell.global` from `carrying`; neither body runs again — 0 loads where 2 are due.
 test('a refresh by tag inside a request reaches a global value and its entries — 13.13', () => {
     let loads = 0
-    const prices = memo(
+    const prices = computed(
         () => {
             loads += 1
             return 3
@@ -557,7 +565,7 @@ test('a refresh by tag inside a request reaches a global value and its entries �
 // `inReach`'s bare branch; B's body runs again for A's refresh — 2 loads where 1 is due.
 test('a bare refresh reaches the request it was made in and no other — 13.8', async () => {
     let loads = 0
-    const stock = memo(async () => {
+    const stock = computed(async () => {
         loads += 1
         return 3
     })
@@ -595,7 +603,7 @@ test('a bare refresh reaches the request it was made in and no other — 13.8', 
 // inside request B neither is reached — 0 loads where 2 are due.
 test('a bare invalidate and a bare refresh reach every global load in the process — 13.10', () => {
     let loads = 0
-    const rates = memo(
+    const rates = computed(
         async () => {
             loads += 1
             return 3

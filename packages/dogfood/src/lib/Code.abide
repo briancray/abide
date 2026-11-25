@@ -4,7 +4,7 @@
 // THE CAPTION IS THE SYNTAX AND THE SPINE IS THE SIDE. A path says both by itself; one of the four
 // side words — `server`, `browser`, `shared`, `abide` — is shown beside the language, because "browser"
 // alone says where the code runs and leaves a reader guessing between a name read by name and `s()`.
-import { copy, memo, props, raw } from '@abide/abide'
+import { computed, copy, props, raw } from '@abide/abide'
 
 import { dedent } from './dedent.ts'
 import { highlight, sideOf } from './highlight.ts'
@@ -18,7 +18,7 @@ const {
 // Written inside an indented template literal, the code is shown flush: its first and last blank
 // lines dropped and the margin every line shares taken off. A memo, since an example's live
 // markup is code that changes as the reader works the example.
-const flush = memo(() =>
+const flush = computed(() =>
     dedent(
         code
             .replace(/^\s*\n/, '')

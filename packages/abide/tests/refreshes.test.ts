@@ -5,18 +5,27 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET, log, memo, POST, principal, refuse, watch } from '#server'
+import {
+    computed,
+    GET,
+    log,
+    memo,
+    POST,
+    principal,
+    refuse,
+    watch,
+} from '#server'
 import type { BootedApp } from '#server/createApp.ts'
 import type { Selection } from '#shared'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
 const runs = { cars: 0, boats: 0, car1: 0, car2: 0 }
-const cars = memo(async () => ++runs.cars, {
+const cars = computed(async () => ++runs.cars, {
     global: true,
     tags: ['refreshes:cars'],
 })
-const boats = memo(async () => ++runs.boats, {
+const boats = computed(async () => ++runs.boats, {
     global: true,
     tags: ['refreshes:boats'],
 })
@@ -312,7 +321,7 @@ test('a refreshes that fails answers the write as it returned, and warns once â€
 // and the failure is still warned once (16.102). THE REVERT: drop the per-entry `try` in `refreshEach`
 // in `rpc.ts`; the throw leaves the loop, and `after +0` where `after +1` is due.
 let afterRuns = 0
-const after = memo(async () => ++afterRuns, { global: true })
+const after = computed(async () => ++afterRuns, { global: true })
 const broken = {
     refresh() {
         throw new Error('this entry broke')

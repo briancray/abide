@@ -8,7 +8,7 @@ import Section from '#src/lib/Section.abide'
     seeAlso={[
         '/pages/files',
         '/orchestration/job',
-        '/reactive/memo',
+        '/reactive/computed',
         '/ambients/abort-signal',
     ]}
     tests={[
@@ -80,15 +80,15 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Rescore the pipeline every hour from a memo">
+    <Section level={3} title="Rescore the pipeline every hour from a computed">
         <p>An export is an async function, so anything that takes one can take it. A
-            <code>memo</code> over it keeps the last scoring for every page to read, and its poll
+            <code>computed</code> over it keeps the last scoring for every page to read, and its poll
             runs the next scoring in a fresh thread.</p>
         <Code language="ts" caption="shared" code={`
-            import { memo } from '@abide/abide'
+            import { computed } from '@abide/abide'
             import { scoreDeals } from './scoreDeals.worker.ts'
 
-            export const dealScores = memo(scoreDeals, {
+            export const dealScores = computed(scoreDeals, {
                 global: true,
                 poll: { every: 3_600_000, after: 'settle', delay: 60_000 },
             })

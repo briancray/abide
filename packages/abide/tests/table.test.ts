@@ -6,7 +6,7 @@ import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
 
 import { type Change, table } from '#server'
-import { memo } from '#shared'
+import { computed } from '#shared'
 
 type Deal = { id: string; name: string; amount: number }
 
@@ -127,7 +127,7 @@ test('a change refreshes every value tagged with the table — 47.29', async () 
     const db = deals()
     db.run("INSERT INTO deals VALUES ('d1', 'Acme', 100)")
     table<Deal>(db, 'deals')
-    const total = memo(
+    const total = computed(
         () =>
             (
                 db.query('SELECT SUM(amount) AS total FROM deals').get() as {

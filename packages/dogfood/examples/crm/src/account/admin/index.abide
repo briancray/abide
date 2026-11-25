@@ -1,9 +1,9 @@
 <script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
 import getTeam from './getTeam.handler.ts'
 
-const team = memo(() => getTeam())
+const team = computed(() => getTeam())
 </script>
 
 <head><title>Admin — CRM</title></head>

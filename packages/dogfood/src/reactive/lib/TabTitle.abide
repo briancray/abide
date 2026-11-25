@@ -1,8 +1,8 @@
 <script>
-import { isServer, memo, reactive, watch } from '@abide/abide'
+import { computed, isServer, reactive, watch } from '@abide/abide'
 
 let seats = reactive(5)
-const total = memo(() => seats * 40)
+const total = computed(() => seats * 40)
 
 watch(() => {
     if (isServer()) return

@@ -8,9 +8,9 @@ const getNotes = GET(({ id }: { id: string }) => NOTES[id] ?? [])
 </script>
 
 <script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
-const notes = memo(() => getNotes({ id: 'd1' }))
+const notes = computed(() => getNotes({ id: 'd1' }))
 </script>
 
 {#for note of notes}<p>{note}</p>{/for}

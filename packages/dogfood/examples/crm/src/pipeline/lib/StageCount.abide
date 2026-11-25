@@ -1,11 +1,11 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 import getStage from '../getStage.handler.ts'
 import { STAGES } from './STAGES.ts'
 
 let stage = reactive('lead')
-const totals = memo(() => getStage({ stage }))
+const totals = computed(() => getStage({ stage }))
 </script>
 
 <ul class="fields stacked">

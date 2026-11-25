@@ -2,7 +2,7 @@
  * The by-value comparator an app passes as `identity`: deep equality over arrays and plain objects.
  *
  * Not the default: the default is the reference, and this is what a value whose producer
- * RE-MATERIALIZES declares — `memo(() => getInvoice({ id }), { identity: deepEqual })`. A
+ * RE-MATERIALIZES declares — `computed(() => getInvoice({ id }), { identity: deepEqual })`. A
  * fresh-but-equal payload waking every reader is why it exists at all; what it stops being is the
  * price every other value pays.
  *

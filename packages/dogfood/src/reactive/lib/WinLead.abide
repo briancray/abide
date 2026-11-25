@@ -17,10 +17,10 @@ const moveAcme = POST(() => {
 </script>
 
 <script>
-import { busy, memo, refresh } from '@abide/abide'
+import { busy, computed, refresh } from '@abide/abide'
 
-const leads = memo(() => getStage({ stage: 'lead' }))
-const won = memo(() => getStage({ stage: 'won' }))
+const leads = computed(() => getStage({ stage: 'lead' }))
+const won = computed(() => getStage({ stage: 'won' }))
 
 async function move() {
     await moveAcme()

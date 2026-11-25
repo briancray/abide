@@ -1,11 +1,11 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 import listDeals from '../listDeals.handler.ts'
 
-const deals = memo(() => listDeals())
+const deals = computed(() => listDeals())
 const selected = reactive.share('selectedDeal', () => reactive(''))
-const deal = memo(() =>
+const deal = computed(() =>
     deals.ready() ? deals.find((each) => each.id === selected) : undefined,
 )
 </script>

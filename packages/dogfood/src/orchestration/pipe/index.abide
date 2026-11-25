@@ -65,11 +65,11 @@ import Section from '#src/lib/Section.abide'
             <code>error()</code>. A run the memo replaces aborts its item.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { memo, pipe } from '@abide/abide'
+            import { computed, pipe } from '@abide/abide'
             import saveDeal from './saveDeal.handler.ts'
 
             const save = pipe([saveDeal], { retries: 2 })
-            const saved = memo(() =>
+            const saved = computed(() =>
                 save({ id: 'd2', name: 'Acme', company: 'Acme', amount: 9 }),
             )
             </script>

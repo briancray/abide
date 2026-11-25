@@ -1,8 +1,8 @@
 <script>
-import { ledger, memo } from '@abide/abide'
+import { computed, ledger } from '@abide/abide'
 
 const calls = ledger<{ contact: string; minutes: number }>()
-const logged = memo(() => calls())
+const logged = computed(() => calls())
 </script>
 
 <button onclick={() => calls.append({ contact: 'Ada', minutes: 12 })}>

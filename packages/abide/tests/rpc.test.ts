@@ -4,6 +4,7 @@ import { GET, POST } from '#server'
 import { inScope } from '#server/requestScope.ts'
 import {
     busy,
+    computed,
     type Failed,
     flushSync,
     invalidate,
@@ -51,7 +52,7 @@ test('a reactive handler is reached, not wrapped — 16.3, 16.5', async () => {
     const getTotals = GET(totals)
     expect(getTotals({ region: 'north' })).toBe(totals({ region: 'north' }))
 
-    const viewer = memo(() => ({ readOnly: true }))
+    const viewer = computed(() => ({ readOnly: true }))
     const getViewer = GET(viewer)
     expect(getViewer()).toBe(viewer)
     expect(await getViewer()).toEqual({ readOnly: true })
@@ -170,7 +171,7 @@ test("a plain handler's options build its value too — 16.6", async () => {
     await payInvoice({ id: '42' })
     expect(`payments: ${payments}`).toBe('payments: 1')
 
-    const viewer = memo(() => 1)
+    const viewer = computed(() => 1)
     const byId = memo(({ id }: { id: string }) => id)
     // @ts-expect-error a value handed in has decided its own options
     GET(viewer, { ttl: 0 })
@@ -493,7 +494,7 @@ test('a value adopts an rpc call whose failures it carries — 11.61, 16.8', asy
     const updatePhone = POST(async ({ phone }: { phone: string }) => ({
         phone,
     }))
-    const contact = memo(() => getContact({ id: '4021' }))
+    const contact = computed(() => getContact({ id: '4021' }))
     await contact
     contact.set(updatePhone({ phone: '2' }))
     await contact

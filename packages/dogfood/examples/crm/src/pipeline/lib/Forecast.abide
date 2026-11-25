@@ -1,10 +1,10 @@
 <script>
-import { format, memo } from '@abide/abide'
+import { computed, format } from '@abide/abide'
 
 import getForecast from '../getForecast.handler.ts'
 
-const forecast = memo(() => getForecast())
-const reloading = memo(() => forecast.busy() && forecast.ready())
+const forecast = computed(() => getForecast())
+const reloading = computed(() => forecast.busy() && forecast.ready())
 </script>
 
 {#if forecast.busy() && !forecast.ready()}

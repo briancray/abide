@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 
 import { spawned } from '@abide/harness/gate'
 
-import { memo, reactive } from '#shared'
+import { computed, reactive } from '#shared'
 import { collectWatches } from '#shared/reactive/watch.ts'
 
 /** Runs `build` as a component's setup is run, and answers what ends it. */
@@ -194,7 +194,7 @@ test('an opening value structuredClone cannot copy whole is refused at construct
     reactive(0, { ttl: 1_000 })
     reactive(new Date(0), { ttl: 1_000 })
     // A value with a producer writes nothing back, so it has nothing to copy.
-    memo(() => new Draft(), { ttl: 1_000 })
+    computed(() => new Draft(), { ttl: 1_000 })
 })
 
 // 6.4: A VALUE WRITTEN AND NEVER ENDED DOES NOT KEEP THE PROCESS ALIVE — a module's flag, set by the

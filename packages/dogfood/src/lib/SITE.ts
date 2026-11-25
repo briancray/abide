@@ -249,10 +249,17 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
+                route: '/reactive/computed',
+                title: '`computed`',
+                description:
+                    'Derive a value from others, or load or stream one from a handler, run again when what it read changes.',
+                where: 'anywhere',
+            },
+            {
                 route: '/reactive/memo',
                 title: '`memo`',
                 description:
-                    'Derive a value from others, or load or stream one from a handler, keyed by args where the body takes them.',
+                    'Keep one value per set of args, computed when that set is first reached.',
                 where: 'anywhere',
             },
             {

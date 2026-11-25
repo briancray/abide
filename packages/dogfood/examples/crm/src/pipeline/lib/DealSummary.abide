@@ -1,12 +1,12 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 import Markdown from '#src/lib/Markdown.abide'
 
 import summarizeDeal from '../summarizeDeal.handler.ts'
 
 let asked = reactive(false)
-const summary = memo(() => (asked ? summarizeDeal() : []))
+const summary = computed(() => (asked ? summarizeDeal() : []))
 </script>
 
 <div class="row">

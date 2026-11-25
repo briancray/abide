@@ -1,10 +1,10 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 let seats = reactive(5)
 let price = reactive(40)
 let note = reactive('')
-const total = memo(() => seats * price)
+const total = computed(() => seats * price)
 </script>
 
 <p>{seats} seats at ${price} each: ${total}</p>

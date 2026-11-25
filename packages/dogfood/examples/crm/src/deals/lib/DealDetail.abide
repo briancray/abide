@@ -1,11 +1,11 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 import getDeal from '../getDeal.handler.ts'
 
 let id = reactive('d1')
 
-const deal = memo(() => getDeal({ id }))
+const deal = computed(() => getDeal({ id }))
 </script>
 
 <div class="tabs">

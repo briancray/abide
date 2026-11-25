@@ -1,0 +1,68 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import Forecast from './lib/Forecast.abide'
+import forecast from './lib/Forecast.abide' with { type: 'text' }
+import SeatTotal from './lib/SeatTotal.abide'
+import seatTotal from './lib/SeatTotal.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={[
+        '/reactive/reactive',
+        '/reactive/memo',
+        '/reactive/tracking',
+        '/reactive/refresh',
+        '/ambients/abort-signal',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('computed is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('an async generator body streams: ready from its first chunk, busy until it closes'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('a body handing back a ReadableStream streams its chunks — 9.6'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Derive a total from the values a body reads">
+        <p>Pass a body. The total reruns when <code>seats</code> or <code>price</code> changes, and
+            on nothing else: type a note, and the total stays where it was.</p>
+        <Example code={seatTotal}><SeatTotal /></Example>
+    </Section>
+
+    <Section level={3} title="Load a forecast from a handler">
+        <p>A body that calls a handler loads. Ask <code>ready()</code> before showing the figure,
+            and <code>refresh()</code> reloads it while the old figure stays.</p>
+        <Example code={forecast}><Forecast /></Example>
+    </Section>
+
+    <Section level={3} title="Stream the leads still waiting on a follow-up">
+        <p>A body that hands back an async iterable streams: a generator, or a
+            <code>ReadableStream</code>. The value is every item handed on until now: ready from the
+            first, busy until the stream ends.</p>
+        <Code language="ts" caption="shared" code={`
+            import { computed } from '@abide/abide'
+            import listDeals from './listDeals.handler.ts'
+
+            const waiting = computed(async function* () {
+                for (const deal of await listDeals())
+                    if (deal.stage === 'lead') yield deal.name
+            })
+        `} />
+    </Section>
+</Doc>

@@ -281,15 +281,10 @@ export function reactive(
 }
 
 /**
- * A value `body` produces, run again when a value it read changes: keyed where it declares a
- * parameter, an optional one included (11.2), and a stream where it hands back a generator (9.6).
+ * A value `body` produces, run again when a value it read changes (11.1), and a stream where it hands
+ * back an async iterable (9.6).
  *
- * ONE SIGNATURE FOR EVERY SHAPE OF BODY, read off `Args` and `Result` by `ReactiveOf`. `Args` is
- * inferred from the body's parameter — `X | undefined` for an optional one — or, unannotated, from the
- * `args` its options declare; a body declaring none infers nothing and takes the default, `never`,
- * which is what an unkeyed body is.
- *
- * `Value` IS READ ONLY THROUGH `Result`'s DEFAULT: `memo<number[]>(() => …)` names the value the
+ * `Value` IS READ ONLY THROUGH `Result`'s DEFAULT: `computed<number[]>(() => …)` names the value the
  * body produces, and with explicit type arguments the rest take their defaults. Inferred, it is
  * never read.
  *
@@ -297,9 +292,30 @@ export function reactive(
  * through `Awaited`, so a `Schema<{ id: number }>` beside an async body put `{ id: number }` in it
  * and the body's promise no longer fit.
  */
+export function computed<
+    Value = never,
+    Result = Value,
+    Shaped = BodyValue<Result>,
+    Gate = Schema<BodyValue<Result>>,
+>(
+    body: () => Result,
+    options?: Shaping<BodyValue<NoInfer<Result>>, Shaped, never, Gate>,
+): ReactiveOf<never, Result, Shaped, Gate, never>
+export function computed(body: unknown, options?: unknown): unknown {
+    refuseValue(body, 'computed')
+    return filed([body, options], false, buildBody)
+}
+
+/**
+ * One value per `Args` key `body` produces (11.2), computed when that key is reached (11.4).
+ *
+ * NO PARAMETER IS SNIFFED: a body declaring none is keyed on `undefined`, called as `m()`. Which form
+ * a value is was read off the body's source text, and a function written elsewhere — a ledger's read
+ * handed whole — turned keyed by what its author never meant as a key.
+ */
 export function memo<
     Value = never,
-    Args = never,
+    Args = undefined,
     Result = Value,
     Shaped = BodyValue<Result>,
     Gate = Schema<BodyValue<Result>>,
@@ -307,15 +323,26 @@ export function memo<
 >(
     body: (args: Args) => Result,
     options?: Shaping<BodyValue<NoInfer<Result>>, Shaped, Args, Gate, ArgsGate>,
-): ReactiveOf<Args, Result, Shaped, Gate, ArgsGate>
+): Keyed<
+    Kept<Shaped>,
+    Args,
+    BodyValue<Result>,
+    | AdoptedFailures<Result>
+    | Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args>,
+    BodyProduced<Result, Kept<Shaped>>
+>
 export function memo(body: unknown, options?: unknown): unknown {
-    // 11.74 — at construction, the earliest moment there is: a value handed where a body belongs
-    // would otherwise be read as one by every later call.
+    refuseValue(body, 'memo')
+    return filed([body, options], true, buildBody)
+}
+
+// 11.74 — at construction, the earliest moment there is: a value handed where a body belongs would
+// otherwise be read as one by every later call.
+function refuseValue(body: unknown, name: string): void {
     if (typeof body !== 'function' || isReactive(body) || isKeyed(body))
         throw new TypeError(
-            'abide: memo takes a body, a function it runs. A value to hold is reactive(value). RULEBOOK 11.74.',
+            `abide: ${name} takes a body, a function it runs. A value to hold is reactive(value). RULEBOOK 11.74.`,
         )
-    return filed([body, options], isKeyedBody(body), buildBody)
 }
 
 /**
@@ -356,7 +383,7 @@ function filed(
 }
 
 /**
- * `reactive` and `memo` for a framework ambient — `route`, `online` — filed per scope whatever the
+ * `reactive` and `computed` for a framework ambient — `route`, `online` — filed per scope whatever the
  * load order.
  *
  * A factory decides at construction, and a value abide itself builds at import can be built before
@@ -366,10 +393,10 @@ function filed(
  */
 export const ambient = ((...given: [first?: unknown, options?: unknown]) =>
     scoped(() => buildValue(given))) as unknown as typeof reactive
-export const ambientMemo = ((body: unknown, options?: unknown) =>
+export const ambientComputed = ((body: unknown, options?: unknown) =>
     scoped(() =>
-        buildBody([body, options], isKeyedBody(body)),
-    )) as unknown as typeof memo
+        buildBody([body, options], false),
+    )) as unknown as typeof computed
 
 /**
  * `memo` over a handler's plain function, or `reactive` over its value, for `declare` — or the
@@ -422,7 +449,7 @@ function buildBody(
             (options ?? undefined) as Parameters<typeof createKeyed>[2],
         )
     return createReactive(
-        'memo',
+        'computed',
         body as (args: unknown) => unknown,
         undefined,
         undefined,

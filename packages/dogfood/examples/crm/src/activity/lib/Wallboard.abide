@@ -1,10 +1,10 @@
 <script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
 import ticker from '../ticker.handler.ts'
 
 // A plain request, as a wallboard sends it: no `Accept` asks for events.
-const answer = memo(async () => {
+const answer = computed(async () => {
     const raw = await ticker.raw()
     return { type: raw.headers.get('content-type'), body: await raw.text() }
 })

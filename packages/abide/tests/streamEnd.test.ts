@@ -10,7 +10,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { cookies, GET, memo } from '#server'
+import { computed, cookies, GET } from '#server'
 import { CONTINUE_HEADER } from '#server/CONTINUE_HEADER.ts'
 import type { App } from '#server/createApp.ts'
 import { streamOverMux } from '#server/streamOverMux.ts'
@@ -39,7 +39,7 @@ function gatedStream(count: number): {
     const gates: Promise<void>[] = []
     for (let index = 0; index < count; index += 1)
         gates.push(new Promise((resolve) => releases.push(resolve)))
-    const value = memo(
+    const value = computed(
         async function* () {
             for (let index = 0; index < count; index += 1) {
                 await gates[index]
@@ -142,7 +142,7 @@ type Lane = (app: App, value: unknown) => Promise<unknown[]>
 
 const LANES: Record<string, Lane> = {
     async 'for await over a forwarding value'(_app, value) {
-        const forwarding = memo(
+        const forwarding = computed(
             () => value as never,
         ) as unknown as AsyncIterable<unknown>
         const read: unknown[] = []
@@ -150,11 +150,13 @@ const LANES: Record<string, Lane> = {
         return read
     },
     async 'await of a forwarding value'(_app, value) {
-        return (await memo(() => value as never)) as unknown[]
+        return (await computed(() => value as never)) as unknown[]
     },
     async 'the wire’s chunks of a forwarding value'(_app, value) {
         const read: unknown[] = []
-        for await (const chunk of chunksOfStream(memo(() => value as never)))
+        for await (const chunk of chunksOfStream(
+            computed(() => value as never),
+        ))
             read.push(chunk)
         return read
     },
@@ -235,7 +237,7 @@ test('a reader joining a run mid-way reads every chunk it produced, on every lan
 test('a run failing as it yields its last chunk throws after every chunk it produced — 9.15, 9.17', async () => {
     let release = (): void => {}
     const gate = new Promise<void>((resolve) => (release = resolve))
-    const value = memo(
+    const value = computed(
         async function* () {
             yield 0
             yield 1
@@ -250,7 +252,7 @@ test('a run failing as it yields its last chunk throws after every chunk it prod
     const read: unknown[] = []
     const reading = (async () => {
         try {
-            for await (const chunk of memo(
+            for await (const chunk of computed(
                 () => value as never,
             ) as unknown as AsyncIterable<unknown>)
                 read.push(chunk)

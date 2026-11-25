@@ -1,10 +1,10 @@
 <script>
-import { listbox, memo, reactive } from '@abide/abide'
+import { computed, listbox, reactive } from '@abide/abide'
 
 import listDeals from '../listDeals.handler.ts'
 
-const deals = memo(() => listDeals())
-const leads = memo(() => deals.filter((deal) => deal.stage === 'lead'))
+const deals = computed(() => listDeals())
+const leads = computed(() => deals.filter((deal) => deal.stage === 'lead'))
 let calling = reactive('')
 
 const queue = listbox({

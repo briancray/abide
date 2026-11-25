@@ -1,9 +1,9 @@
 <script>
-import { memo, scrollEdges } from '@abide/abide'
+import { computed, scrollEdges } from '@abide/abide'
 
 import listDeals from '../listDeals.handler.ts'
 
-const deals = memo(() => listDeals())
+const deals = computed(() => listDeals())
 </script>
 
 <ol

@@ -14,14 +14,14 @@ const clauseTexts = GET(({ ids }: { ids: string[] }) => {
 <script>
 // 40.11 — A PAGE'S RULES: every clause its REGISTRY rows cite, in rulebook order, each quoted and
 // linked to its anchor on `/rulebook`.
-import { memo, props, raw, type RouteLiteral, url } from '@abide/abide'
+import { computed, props, raw, type RouteLiteral, url } from '@abide/abide'
 
 import { inline } from './inline.ts'
 import Section from './Section.abide'
 
 const { ids } = props<{ ids: readonly string[] }>()
 const rulebook = url('/rulebook' as RouteLiteral)
-const clauses = memo(() => clauseTexts({ ids: [...ids] }))
+const clauses = computed(() => clauseTexts({ ids: [...ids] }))
 </script>
 
 {#if ids.length > 0}

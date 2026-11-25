@@ -1,11 +1,11 @@
 <script>
-import { isFailed, memo, reactive, refresh } from '@abide/abide'
+import { computed, isFailed, reactive, refresh } from '@abide/abide'
 
 import exportCompanies from '../exportCompanies.handler.ts'
 import reportedErrors from '../reportedErrors.handler.ts'
 
 let told = reactive('—')
-const reported = memo(() => reportedErrors())
+const reported = computed(() => reportedErrors())
 
 async function runExport() {
     try {

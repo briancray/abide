@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { flushSync, isFailed, memo, pipe, reactive, refuse } from '#shared'
+import { computed, flushSync, isFailed, pipe, reactive, refuse } from '#shared'
 import { holdUntil } from '#shared/Failed.ts'
 
 const turn = (): Promise<void> => Bun.sleep(1)
@@ -38,7 +38,7 @@ test('a call resolves to its answer or its refusal, and a memo over it fails wit
         (answer) => (isFailed(answer) ? answer.status : 'answer'),
         () => 'rejected',
     )
-    const shown = memo(() => refusing(undefined))
+    const shown = computed(() => refusing(undefined))
     shown.peek()
     await shown.then(
         () => undefined,
@@ -298,7 +298,7 @@ test('a pipe called in a memo body is told when the run is superseded — 57.13,
         { concurrency: 2 },
     )
     const q = reactive('a')
-    const found = memo(() => search(q()))
+    const found = computed(() => search(q()))
     found.peek()
     await turn()
     q.set('ab')

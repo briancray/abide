@@ -1,11 +1,11 @@
 <script>
-import { format, memo, refresh } from '@abide/abide'
+import { computed, format, refresh } from '@abide/abide'
 
 import listDeals from '../listDeals.handler.ts'
 
-const deals = memo(() => listDeals())
+const deals = computed(() => listDeals())
 
-const total = memo(() => {
+const total = computed(() => {
     let sum = 0
     for (const deal of deals) if (deal.stage !== 'won') sum += deal.amount
     return sum

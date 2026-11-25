@@ -15,7 +15,7 @@ import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
 import { popoverOn } from './popover.ts'
 import { randomToken } from './randomToken.ts'
-import { busy, memo, type Reactive, reactive } from './reactive/index.ts'
+import { busy, computed, type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { openingEnd } from './roving.ts'
 import type { Picked } from './Selection.ts'
@@ -108,10 +108,10 @@ export function combobox<Item, Multiple extends boolean = false>(
     // What was typed since the last pick; the input shows the pick's label while nothing has been.
     const typed = reactive<string | undefined>(undefined)
     // 51.55 — the items picked, where it picks many; `undefined` where it picks one.
-    const picks = memo((): readonly Item[] | undefined =>
+    const picks = computed((): readonly Item[] | undefined =>
         many ? ((value() ?? []) as readonly Item[]) : undefined,
     )
-    const query = memo(() => {
+    const query = computed(() => {
         const text = typed()
         const one = value()
         if (text !== undefined) return text
@@ -120,13 +120,13 @@ export function combobox<Item, Multiple extends boolean = false>(
             : label(one as Item)
     })
     // 51.16, 51.106 — what the labels are narrowed by and marked with.
-    const needles = memo(() => needlesOf(query(), false))
+    const needles = computed(() => needlesOf(query(), false))
     const open = reactive(false)
     // 51.57 — what the open list is placed against.
     const input = reactive<HTMLInputElement | undefined>(undefined)
 
     // Nothing is searched while the list is shut, and a search in flight keeps the last results listed.
-    const found = memo(
+    const found = computed(
         () => {
             if (!open()) return NOTHING as readonly Item[]
             const text = query()
@@ -230,7 +230,7 @@ export function combobox<Item, Multiple extends boolean = false>(
         list.onkeydown(event)
     }
 
-    const pickedKeys = memo(() => {
+    const pickedKeys = computed(() => {
         const held = picks()
         const one = value()
         const keys = new Set<string>()

@@ -54,10 +54,10 @@ const callTool = (name: string, args: Record<string, string>) =>
             value the page reads by name.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { memo } from '@abide/abide'
+            import { computed } from '@abide/abide'
             import getDeal from './getDeal.handler.ts'
 
-            const deal = memo(() => getDeal({ id: 'd1' }))
+            const deal = computed(() => getDeal({ id: 'd1' }))
             </script>
 
             <h2>{deal.name}</h2>

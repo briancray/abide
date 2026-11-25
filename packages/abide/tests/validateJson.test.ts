@@ -6,7 +6,7 @@ import { expect, test } from 'bun:test'
 
 import { GET, POST } from '#server'
 import type { Issues, JsonValue, StandardSchemaV1 } from '#shared'
-import { jsonSchema, memo, reactive, validateJson } from '#shared'
+import { computed, jsonSchema, memo, reactive, validateJson } from '#shared'
 
 // THE TYPE ARGUMENT IS NOT DECORATION. `Issues<T>` answers a bare `string[]` where `T` is
 // not an object, and `unknown` is not — so `validateJson(…)` with none types its own result
@@ -640,7 +640,7 @@ test('a body is typed from the body, whatever schema gates it — 19.23, 19.24',
     const total: number = (await invoice({ id: 2 })).total
     expect(total).toBe(20)
 
-    const label = memo(() => 'seats', {
+    const label = computed(() => 'seats', {
         schema: jsonSchema({ type: 'string' }),
     })
     const read: string = label()
@@ -653,7 +653,7 @@ test('a body is typed from the body, whatever schema gates it — 19.23, 19.24',
             validate: (value) => ({ value: value as { id: number } }),
         },
     }
-    const loaded = memo(async () => ({ id: 7 }), { schema: standard })
+    const loaded = computed(async () => ({ id: 7 }), { schema: standard })
     const id: number = (await loaded).id
     expect(id).toBe(7)
 })

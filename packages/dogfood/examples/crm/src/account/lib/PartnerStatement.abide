@@ -16,12 +16,12 @@ const askAs = GET(
 </script>
 
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 const ORIGINS = ['https://books.example', 'https://elsewhere.example']
 
 let origin = reactive(ORIGINS[0] ?? '')
-const allowed = memo(() => askAs({ origin }))
+const allowed = computed(() => askAs({ origin }))
 </script>
 
 <div class="tabs">

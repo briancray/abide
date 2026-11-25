@@ -9,9 +9,9 @@ const getDeal = GET(({ id }: { id: string }) => ({
 </script>
 
 <script>
-import { memo, synced } from '@abide/abide'
+import { computed, synced } from '@abide/abide'
 
-let deal = memo(() => getDeal({ id: 'd2' }))
+let deal = computed(() => getDeal({ id: 'd2' }))
 </script>
 
 <p>{deal.name}: {deal.stage}</p>

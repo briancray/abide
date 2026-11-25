@@ -23,12 +23,12 @@ export default GET(async function* ({ n }: { n: string }) {
 `
 
 const PAGE = `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import ticks from '#src/data/ticks.handler.ts'
 
-const a = memo(() => ticks({ n: 'a' }))
-const b = memo(() => ticks({ n: 'b' }))
-const c = memo(() => ticks({ n: 'c' }))
+const a = computed(() => ticks({ n: 'a' }))
+const b = computed(() => ticks({ n: 'b' }))
+const c = computed(() => ticks({ n: 'c' }))
 </script>
 
 <main>

@@ -121,7 +121,7 @@ const exchange = GET(
 <script>
 // AN EXCHANGE: the request a page names, as HTTP, and the answer the CRM gave it this render —
 // read rather than written, so a status, a header or a body on the page is one the server sends.
-import { memo, props } from '@abide/abide'
+import { computed, props } from '@abide/abide'
 
 import Code from './Code.abide'
 
@@ -145,7 +145,7 @@ const {
     pick?: readonly string[]
 }>()
 
-const answer = memo(() =>
+const answer = computed(() =>
     exchange({
         method,
         path,
@@ -159,7 +159,7 @@ const requested = [
     ...headers,
     ...(body === undefined ? [] : ['', body]),
 ].join('\n')
-const answered = memo(() =>
+const answered = computed(() =>
     answer
         ? [
               `HTTP/1.1 ${answer.status}`,

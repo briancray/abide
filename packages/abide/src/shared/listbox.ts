@@ -3,7 +3,7 @@ import { hotkeys } from './hotkeys.ts'
 import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import { memo, type Reactive, reactive } from './reactive/index.ts'
+import { computed, type Reactive, reactive } from './reactive/index.ts'
 import { roving } from './roving.ts'
 import { type Picked, Selection } from './Selection.ts'
 
@@ -87,7 +87,7 @@ export function listbox<Option, Multiple extends boolean = false>(
         pointed.set(undefined)
         chosen.set(each)
     }
-    const active = memo(() => {
+    const active = computed(() => {
         const moved = chosen()
         const pointer = pointed()
         const wanted =

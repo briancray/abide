@@ -4,6 +4,7 @@
 // app already moved finds nothing left to move.
 
 import { withoutRestatedNotes } from './agentNotes.ts'
+import { toComputed } from './toComputed.ts'
 import { toJob } from './toJob.ts'
 import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
@@ -69,6 +70,8 @@ const MIGRATIONS: Migration[] = [
     { version: '0.144.0', migrate: eachSource(toNamedParts) },
     // 38.222 — a refusal is declared by its name and its options, its status among them.
     { version: '0.144.0', migrate: eachSource(toRefuseNamed) },
+    // 38.223 — a body declaring no parameter is handed to `computed`, and `memo` is keyed alone.
+    { version: '0.144.0', migrate: eachSource(toComputed) },
 ]
 
 /**

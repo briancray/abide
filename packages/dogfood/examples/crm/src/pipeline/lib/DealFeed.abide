@@ -1,9 +1,9 @@
 <script>
-import { format, memo } from '@abide/abide'
+import { computed, format } from '@abide/abide'
 
 import listDeals from '../listDeals.handler.ts'
 
-const deals = memo(() => listDeals())
+const deals = computed(() => listDeals())
 
 // Each update names one deal and its new amount.
 const UPDATES = [

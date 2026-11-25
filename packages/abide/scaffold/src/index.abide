@@ -1,10 +1,10 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 import getGreeting from '#src/getGreeting.handler.ts'
 
 let count = reactive(0)
-const greeting = memo(() => getGreeting({ name: 'world' }))
+const greeting = computed(() => getGreeting({ name: 'world' }))
 </script>
 
 <head><title>Hello</title></head>

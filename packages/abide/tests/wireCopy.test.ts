@@ -47,7 +47,7 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-const LIBRARY = `import { deepEqual, GET, memo, POST } from '@abide/abide/server'
+const LIBRARY = `import { computed, deepEqual, GET, memo, POST } from '@abide/abide/server'
 
 const shelf = reactive([{ id: 'a' }], {
     global: true,
@@ -57,8 +57,8 @@ const shelf = reactive([{ id: 'a' }], {
 })
 
 const bound = GET(shelf)
-const inline = GET(memo(() => [{ isbn: '1' }], { key: 'isbn' }))
-const computed = GET(
+const inline = GET(computed(() => [{ isbn: '1' }], { key: 'isbn' }))
+const keyedCopy = GET(
     memo(({ id }: { id: string }) => [{ id }], {
         key: (row) => row.id,
         tags: ({ id }) => [id],
@@ -97,7 +97,7 @@ ${LIBRARY}</script>
     expect(line('inline')).toContain('{"key":"isbn"}')
     expect(line('optioned')).toContain('{"key":"isbn"}')
     // Functions have no serialization, a plain handler declares nothing, and a mutation walks nothing.
-    for (const name of ['computed', 'plain', 'change'])
+    for (const name of ['keyedCopy', 'plain', 'change'])
         expect(line(name)).not.toContain('{"')
     // …and a function form is the server's by design, which is nothing to warn on (18.15).
     expect(built.stderr).not.toContain('18.15')
@@ -109,7 +109,7 @@ test('an option bound to a const carries its literal, and one the build cannot r
     const app = appFixture({
         'index.abide': '<main>home</main>',
         'named/lib/Handlers.abide': `<script server>
-import { GET, memo } from '@abide/abide/server'
+import { computed, GET } from '@abide/abide/server'
 
 const KEY = 'isbn'
 const TAGS = ['shelf', 'named'] as const
@@ -118,10 +118,10 @@ let grown = 'is'
 grown += 'bn'
 
 const named = GET(
-    memo(() => [{ isbn: '1' }], { key: KEY, tags: TAGS }),
+    computed(() => [{ isbn: '1' }], { key: KEY, tags: TAGS }),
 )
-const handed = GET(memo(() => [{ isbn: '1' }], OPTIONS))
-const unread = GET(memo(() => [{ isbn: '1' }], { key: grown }))
+const handed = GET(computed(() => [{ isbn: '1' }], OPTIONS))
+const unread = GET(computed(() => [{ isbn: '1' }], { key: grown }))
 </script>
 `,
     })

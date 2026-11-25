@@ -1,10 +1,10 @@
 <script>
-import { memo, outlet, route } from '@abide/abide'
+import { computed, outlet, route } from '@abide/abide'
 
 import getCompany from './getCompany.handler.ts'
 import CompanyTabs from './lib/CompanyTabs.abide'
 
-const company = memo(() => getCompany({ id: route.params.id }))
+const company = computed(() => getCompany({ id: route.params.id }))
 </script>
 
 <head><title>{company.name} — CRM</title></head>

@@ -1,5 +1,5 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 import getRegistration from '../getRegistration.handler.ts'
 
@@ -10,7 +10,7 @@ const COMPANIES = [
 
 let id = reactive('hopper-and-co')
 
-const registration = memo(() => getRegistration({ id }))
+const registration = computed(() => getRegistration({ id }))
 
 // Whether there is an answer from the registry to show.
 const answered = () => registration.ready() && !registration.error()

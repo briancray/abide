@@ -60,10 +60,10 @@ import Section from '#src/lib/Section.abide'
             needs, so a key no handler returns never reaches a browser.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { memo } from '@abide/abide'
+            import { computed } from '@abide/abide'
             import getRetries from './getRetries.handler.ts'
 
-            const policy = memo(() => getRetries())
+            const policy = computed(() => getRetries())
             </script>
 
             <p>{policy.retries + 1} attempts per call</p>

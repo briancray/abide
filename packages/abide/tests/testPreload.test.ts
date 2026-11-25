@@ -350,11 +350,11 @@ export default GET(async () => {
 })
 `,
         'src/things/lib/Things.abide': `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
 import listThings from '../listThings.handler.ts'
 
-const things = memo(() => listThings())
+const things = computed(() => listThings())
 </script>
 
 <ul>
@@ -472,10 +472,10 @@ const greet = GET(() => 'hi')
 </script>
 
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 let out = reactive('none')
-const greeting = memo(() => greet())
+const greeting = computed(() => greet())
 const press = async () => {
     try {
         out = String(await bump())
@@ -687,10 +687,10 @@ test('a click is settled, past the call the test above left hanging', async () =
 // THE REVERT: call `keepLoads()` where `Reactive.ts` declares it; this reports `["memo"]`.
 test('a process that never loaded @abide/abide/test keeps no load — 38.206', async () => {
     const run = await inAFreshProcess(`
-import { memo } from '${import.meta.dir}/../src/shared/reactive/index.ts'
+import { computed, memo } from '${import.meta.dir}/../src/shared/reactive/index.ts'
 import { pendingWork } from '${import.meta.dir}/../src/shared/reactive/producer.ts'
 
-const waiting = memo(() => new Promise(() => {}))
+const waiting = computed(() => new Promise(() => {}))
 waiting.busy()
 console.log(JSON.stringify(pendingWork().loading))
 `)

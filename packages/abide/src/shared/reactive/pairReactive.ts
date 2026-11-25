@@ -9,7 +9,7 @@
 // callable it adopted.
 
 import { cellOf } from './cellShape.ts'
-import { memo } from './index.ts'
+import { computed } from './index.ts'
 import { brandedPrototype, type Reactive } from './Reactive.ts'
 
 type Pair = { get(): unknown; set(value: unknown): void }
@@ -35,7 +35,7 @@ export function pairReactive(
     pair: Pair,
     identity?: (next: unknown, previous: unknown) => unknown,
 ): Reactive<unknown> {
-    const over = memo(
+    const over = computed(
         () => pair.get(),
         identity === undefined ? undefined : { identity },
     )

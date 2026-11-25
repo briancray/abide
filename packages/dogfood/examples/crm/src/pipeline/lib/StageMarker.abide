@@ -1,12 +1,12 @@
 <script>
-import { elementRect, memo } from '@abide/abide'
+import { computed, elementRect } from '@abide/abide'
 
 import { STAGES } from './STAGES.ts'
 
 const board = elementRect()
 const current = elementRect()
 // How far down the board the deal's stage sits, wherever the page has scrolled.
-const offset = memo(() => (current.top ?? 0) - (board.top ?? 0))
+const offset = computed(() => (current.top ?? 0) - (board.top ?? 0))
 </script>
 
 <ol class="relative" {...board.host}>

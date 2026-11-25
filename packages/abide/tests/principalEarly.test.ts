@@ -18,7 +18,7 @@ import {
     principalMembers,
 } from '#shared/principal.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
-import { memo, watch } from '#shared/reactive/index.ts'
+import { computed, watch } from '#shared/reactive/index.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import { seededDocument } from '#shared/seededDocument.ts'
 
@@ -289,7 +289,7 @@ test('a sign-in reloads every value the tab reads, serving the old one meanwhile
     let caller = 'nobody'
     let landInbox = (): void => {}
     let loads = 0
-    const inbox = memo(async () => {
+    const inbox = computed(async () => {
         loads += 1
         const reading = caller
         if (loads > 1)
@@ -365,7 +365,7 @@ test('a GET that signs in reloads the principal and nothing else — 26.24', asy
     }) as typeof fetch
     principalMembers().document.invalidate()
     let loads = 0
-    const verified = memo(async () => {
+    const verified = computed(async () => {
         loads += 1
         // The revert's loop, stopped so it does not outlive the case.
         if (loads > 50) return loads
@@ -396,7 +396,7 @@ test('a GET that signs in reloads the principal and nothing else — 26.24', asy
 // `rotated`; the value is loaded 1 time where 2 are due.
 test("another tab's sign-in reloads every value this tab reads — 26.24", async () => {
     let loads = 0
-    const inbox = memo(async () => {
+    const inbox = computed(async () => {
         loads += 1
         return loads
     })
@@ -438,7 +438,9 @@ test('a value painted settled is reloaded by a sign-in — 13.6, 26.24', async (
     }
     const globals = globalThis as unknown as Record<string, unknown>
     globals[EARLY_CALLS] = started
-    const contact = memo(() => seededDocument<{ dealValue: string }>(address))
+    const contact = computed(() =>
+        seededDocument<{ dealValue: string }>(address),
+    )
     globals[EARLY_CALLS] = undefined
     const stopWatching = watch(() => {
         if (contact.ready()) contact()
@@ -484,7 +486,7 @@ test('a value painted settled is reloaded by a sign-in — 13.6, 26.24', async (
 // drop the `global` test from `refreshCallerHeld`; the shared value is loaded 2 times where 1 is due.
 test('a sign-in leaves a global value be — 26.24, 11.34', async () => {
     let sharedLoads = 0
-    const shared = memo(
+    const shared = computed(
         async () => {
             sharedLoads += 1
             return sharedLoads
@@ -492,7 +494,7 @@ test('a sign-in leaves a global value be — 26.24, 11.34', async () => {
         { global: true },
     )
     let ownLoads = 0
-    const own = memo(async () => {
+    const own = computed(async () => {
         ownLoads += 1
         return ownLoads
     })

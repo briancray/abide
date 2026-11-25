@@ -450,13 +450,13 @@ test('a value built before its source failed fails the body it is read in — 32
     failing.catch(() => undefined)
     ;(globalThis as { pairingRead?: Promise<string> }).pairingRead = failing
     await served(`<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 
-const copy = memo(() => (globalThis as unknown as { pairingRead: Promise<string> }).pairingRead)
-const status = memo(() =>
+const copy = computed(() => (globalThis as unknown as { pairingRead: Promise<string> }).pairingRead)
+const status = computed(() =>
     copy.ready() || copy.error() !== undefined ? copy() : undefined,
 )
-const shown = memo(() => status())
+const shown = computed(() => status())
 </script>
 
 {#try}

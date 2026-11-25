@@ -165,7 +165,7 @@ function bump() { clicks += 1 }
 `
 
 const WARNED = `<script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 let flag = reactive(true)
 let one = reactive(1)
@@ -178,19 +178,19 @@ let keyed = reactive(
     { key: 'id' },
 )
 let decoy = reactive([{ id: 1, key: 'someone' }])
-const picked = memo(() => (flag ? one : two))
-const same = memo(() => (flag ? flag : false))
-const late = memo(async () => {
+const picked = computed(() => (flag ? one : two))
+const same = computed(() => (flag ? flag : false))
+const late = computed(async () => {
     const early = two
     await Promise.resolve()
     return one + early
 })
-const later = memo(() => {
+const later = computed(() => {
     setTimeout(() => two, 0)
     return [1].map(() => one)
 })
-const fallback = memo(() => name ?? 'nobody')
-const unsure = memo(() => maybe ?? 'nobody')
+const fallback = computed(() => name ?? 'nobody')
+const unsure = computed(() => maybe ?? 'nobody')
 </script>
 
 {#for row of rows}<input value={row.id}/>{/for}
@@ -219,21 +219,21 @@ const constant = [{ id: 2 }]
 // 14.19 — each read below would be warned on, and the line above it silences the clause it names.
 // `misnamed` is the near miss: its directive names 14.14, and the warning it earns is 14.16.
 const IGNORED = `<script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 let flag = reactive(true)
 let one = reactive(1)
 let two = reactive(2)
-const late = memo(async () => {
+const late = computed(async () => {
     await Promise.resolve()
     // abide-ignore 14.14
     return one
 })
-const picked = memo(() =>
+const picked = computed(() =>
     // abide-ignore 14.14 14.15
     flag ? one : two,
 )
-const misnamed = memo(() => {
+const misnamed = computed(() => {
     // abide-ignore 14.14
     setTimeout(() => two, 0)
     return 1
@@ -282,11 +282,11 @@ let tally = reactive({ n: 0 })
 
 // 32.34 — a tag choosing by a value is held to the props of what it may hold, and may hold nothing.
 const CHOSEN = `<script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 import Card from '#src/lib/Card.abide'
 
 let open = reactive(true)
-let Shown = memo(() => (open ? Card : undefined))
+let Shown = computed(() => (open ? Card : undefined))
 </script>
 
 <Shown title="x"/>
@@ -972,13 +972,13 @@ function clear() {
 test('a member a read built is checked as its value — 31.15', async () => {
     const built = appFixture({
         'index.abide': `<script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 type View = { x: number }
 let view = reactive<View>({ x: 1 })
 let hero = reactive({ frame: 0 })
-const glance = memo(() => ({ view, hero }))
-const longhand = memo(() => ({ view: view, list: [hero] }))
+const glance = computed(() => ({ view, hero }))
+const longhand = computed(() => ({ view: view, list: [hero] }))
 const x: number = glance.view.x
 const frame: number = glance.hero.frame
 const y: number = longhand.view.x + longhand.list[0].frame

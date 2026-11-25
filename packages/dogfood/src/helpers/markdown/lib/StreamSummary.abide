@@ -10,9 +10,9 @@ const summarizeDeal = GET(async function* () {
 </script>
 
 <script>
-import { markdown, memo, raw } from '@abide/abide'
+import { computed, markdown, raw } from '@abide/abide'
 
-const summary = memo(() => summarizeDeal())
+const summary = computed(() => summarizeDeal())
 const doc = markdown.incremental({ source: () => summary.join('') })
 </script>
 

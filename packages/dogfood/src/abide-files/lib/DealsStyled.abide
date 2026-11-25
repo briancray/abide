@@ -10,11 +10,11 @@ const listDeals = GET(() => DEALS)
 </script>
 
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 import DealItem from './DealItem.abide'
 
-const deals = memo(() => listDeals())
+const deals = computed(() => listDeals())
 let showWon = reactive(false)
 </script>
 

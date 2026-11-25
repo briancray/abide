@@ -40,6 +40,7 @@ import {
     type AdoptedFailures,
     type BodyProduced,
     type BodyValue,
+    computed,
     handlerValue,
     type Held,
     isKeyed,
@@ -552,7 +553,7 @@ export function declare<Declared extends Method>(
                 args = acceptedArgs(rpc, given)
             } catch (refused) {
                 if (!isFailed(refused)) throw refused
-                return memo(() => refused)
+                return computed(() => refused)
             }
             const route =
                 rpc.address === undefined ? undefined : routeAt(rpc.address)
@@ -560,7 +561,7 @@ export function declare<Declared extends Method>(
                 try {
                     route.path(args as Record<string, unknown> | undefined)
                 } catch (refused) {
-                    return memo(() => refused)
+                    return computed(() => refused)
                 }
             }
             // 16.7 — a mutation's call is a write each time, even where the last one settled this

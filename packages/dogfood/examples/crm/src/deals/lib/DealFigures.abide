@@ -1,5 +1,5 @@
 <script>
-import { format, memo, reactive } from '@abide/abide'
+import { computed, format, reactive } from '@abide/abide'
 
 type Deal = { name: string; amount: number | null; probability: number }
 
@@ -8,7 +8,7 @@ let deals = reactive<Deal[]>([
     { name: 'Langley Research seats', amount: 15_000, probability: 0.35 },
 ])
 
-const weighted = memo(() =>
+const weighted = computed(() =>
     deals.reduce((sum, deal) => sum + (deal.amount ?? 0) * deal.probability, 0),
 )
 

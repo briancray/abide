@@ -1,10 +1,10 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 import { closedTotals } from './closedTotals.ts'
 
 let days = reactive(7)
-const closed = memo(() => closedTotals(days))
+const closed = computed(() => closedTotals(days))
 </script>
 
 <div class="tabs">

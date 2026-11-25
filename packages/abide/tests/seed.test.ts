@@ -6,7 +6,7 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from 'bun:test'
 
 import { onConfig } from '#server/hooks.ts'
 import { seedFor, takeSeed } from '#server/seedBuffer.ts'
-import { memo } from '#shared/reactive/index.ts'
+import { computed } from '#shared/reactive/index.ts'
 
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -27,10 +27,10 @@ export const getInvoice = GET(async ({ id }: { id: string }) => {
 `
 
 const PAGE = `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import getInvoice from '#src/invoices/getInvoice.handler.ts'
 
-const invoice = memo(() => getInvoice({ id: '4021' }))
+const invoice = computed(() => getInvoice({ id: '4021' }))
 </script>
 
 <main><p id="total">{invoice().id}</p></main>`
@@ -46,7 +46,7 @@ middleware((next, { request }) => {
 
 // 41.25, 41.26 — ONE CALL OF EACH KIND A PAGE IS PAINTED FROM: answered within the render's turn,
 // refused within it, and a stream that has closed within it.
-const TOTALS = `import { GET, memo, refuse } from '@abide/abide/server'
+const TOTALS = `import { computed, GET, refuse } from '@abide/abide/server'
 
 export const getTotal = GET(({ id }: { id: string }) => ({ id, total: 12 }))
 
@@ -57,7 +57,7 @@ export const getLines = GET(async function* ({ id }: { id: string }) {
 })
 
 // FORWARDED AND STILL RUNNING: the call's value adopts the global one, and is no load of its own.
-const scoring = memo(
+const scoring = computed(
     async function* () {
         await new Promise(() => {})
         yield 1
@@ -69,16 +69,16 @@ export const getScores = GET(() => scoring)
 `
 
 const PAINTED = `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import getLines from '#src/totals/getLines.handler.ts'
 import getScores from '#src/totals/getScores.handler.ts'
 import getMissing from '#src/totals/getMissing.handler.ts'
 import getTotal from '#src/totals/getTotal.handler.ts'
 
-const total = memo(() => getTotal({ id: 't' }))
-const missing = memo(() => getMissing({ id: 'm' }))
-const lines = memo(() => getLines({ id: 'l' }))
-const scores = memo(() => getScores())
+const total = computed(() => getTotal({ id: 't' }))
+const missing = computed(() => getMissing({ id: 'm' }))
+const lines = computed(() => getLines({ id: 'l' }))
+const scores = computed(() => getScores())
 </script>
 
 <main><p>{total.busy()}</p><p>{missing.error()}</p><p>{lines.busy()}</p><p>{scores.busy()}</p></main>`
@@ -107,10 +107,10 @@ export const getFeed = GET(async function* () {
 `
 
 const FEED_PAGE = `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import getFeed from '#src/feed/getFeed.handler.ts'
 
-const lines = memo(() => getFeed())
+const lines = computed(() => getFeed())
 </script>
 
 <main><p>{lines.busy()}</p></main>`
@@ -124,10 +124,10 @@ export const art = GET(cover)
 `
 
 const SHELF_PAGE = `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import books from '#src/shelf/books.handler.ts'
 
-const shelved = memo(() => books())
+const shelved = computed(() => books())
 </script>
 
 <main><p>{shelved()}</p></main>`
@@ -146,10 +146,10 @@ export const getAccount = GET(() => {
 `
 
 const ACCOUNT_PAGE = `<script>
-import { memo } from '@abide/abide'
+import { computed } from '@abide/abide'
 import getAccount from '#src/account/getAccount.handler.ts'
 
-const account = memo(() => getAccount())
+const account = computed(() => getAccount())
 </script>
 
 <main><p>{account.busy()}</p></main>`
@@ -467,7 +467,7 @@ test('a seeded stream whose transcript passes ABIDE_MAX_STREAM_BUFFER_SIZE is no
     try {
         const handler = { address: '/reports/rows' }
         const streamOf = (count: number) =>
-            memo(async function* () {
+            computed(async function* () {
                 for (let at = 0; at < count; at += 1) yield 'aaaa'
             })
         const over = streamOf(2)
