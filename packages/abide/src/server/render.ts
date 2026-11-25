@@ -158,26 +158,25 @@ function mergeHead(
 // A tag `headKeyOf` can key, in any case: markup matching nothing here keys nothing.
 const MAY_HOLD_A_KEY = /<(?:title|base|meta|link)[\s/>]/i
 
-// ONE SHELL AT A TIME: an app renders into one, so the slot is only refilled by a test or a
-// shell read from a `URL` per render — and then compared by content, which is still cheaper than
-// the rewrite it saves.
+// ONE ENTRY PER SHELL, each built once: a route's document (its own modulepreloads), the error
+// document, the default and the launcher's. Every shell `renderDocument` is handed is made at boot or
+// is a constant, so the map holds as many as the app has routes, and a page alternating between two
+// routes reads both from here.
 type ShellHead = {
-    document: string
     keys: Map<string, number>
     merged: string
 }
-let lastShell: ShellHead | undefined
+const SHELLS = new Map<string, ShellHead>()
 
 function shellHeadOf(document: string, headAt: number): ShellHead {
-    if (lastShell?.document !== document) {
+    let shell = SHELLS.get(document)
+    if (shell === undefined) {
         const opening = document.slice(0, headAt)
-        lastShell = {
-            document,
-            keys: keyCounts(opening),
-            merged: mergeKeyed(opening),
-        }
+        const keys = keyCounts(opening)
+        shell = { keys, merged: mergeKeyed(opening, keys) }
+        SHELLS.set(document, shell)
     }
-    return lastShell
+    return shell
 }
 
 /** How many times each key stands at the top of `markup`'s head. */
@@ -191,8 +190,7 @@ function keyCounts(markup: string): Map<string, number> {
 }
 
 /** `markup` with every keyed element at the top of its head but the last for its key dropped. */
-function mergeKeyed(markup: string): string {
-    const total = keyCounts(markup)
+function mergeKeyed(markup: string, total: Map<string, number>): string {
     for (const count of total.values())
         if (count > 1) return dropShadowed(markup, total)
     return markup
