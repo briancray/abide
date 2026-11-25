@@ -11,17 +11,23 @@ const press = (svg: Record<string, unknown>, key: string) =>
     )
 
 // 52.78 — A POINT STANDS WHERE THE PLOT'S OWN SCALE PUTS ITS VALUE, one per present value, so a mark an
-// app draws with `plot.x` and `plot.y` lines up with the ones the parts hand back.
-// THE REVERT: push a point for a missing value too — four points where three are due.
+// app draws with `plot.x` and `plot.y` lines up with the ones the parts hand back, and `plot.x` places a
+// value between two positions — a date no value was recorded on.
+// THE REVERTS: push a point for a missing value too — four points where three are due; and map `x` by
+// index — `plot.x(2)` stands at the third position, 30, where a fifth of the way to 10 is due.
 test("every present value is a point at the plot's own x and y", () => {
+    const POSITIONS = [0, 10, 30, 40]
     const plot = chart({
         label: 'Won',
         series: () => [{ label: 'Won', values: [10, null, 30, 20] }],
+        x: POSITIONS,
     })
     const points = plot.points
     expect(points.map((point) => point.index)).toEqual([0, 2, 3])
+    expect(plot.x(20)).toBeCloseTo((plot.x(10) + plot.x(30)) / 2)
+    expect(plot.x(2)).toBeCloseTo(plot.x(0) + (plot.x(10) - plot.x(0)) / 5)
     for (const point of points) {
-        expect(point.x).toBe(plot.x(point.index))
+        expect(point.x).toBe(plot.x(POSITIONS[point.index] ?? 0))
         expect(point.y).toBe(plot.y(point.value))
         expect(point.circle.cx).toBe(point.x)
     }

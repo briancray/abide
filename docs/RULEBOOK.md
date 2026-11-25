@@ -6217,8 +6217,10 @@ page is shown.
 hydrates at in a browser, a label a boundary passed between the two being written as changed text and
 not as a hydration mismatch.
 
-52.78 `chart` MUST hand back a point for each present value of each series, at the x `x` answers for
-its index and the y `y` answers for the value it is drawn at, and none for a missing value.
+52.78 `chart` MUST hand back a point for each present value of each series, at the x its part `x`
+answers for its position — the value its option `x` holds at its index, or the index where that
+option is not given — and the y `y` answers for the value it is drawn at, and none for a missing
+value; and its part `x` MUST map any value in those units as it maps a position.
 
 52.79 `chart`'s crosshair part MUST carry the same binding at every x position it stands at, and
 its `tip` MUST be placed again against the crosshair at each x the crosshair moves to.

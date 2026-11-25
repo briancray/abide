@@ -26,6 +26,8 @@ import HtmlColumns from './lib/HtmlColumns.abide'
 import htmlColumns from './lib/HtmlColumns.abide' with { type: 'text' }
 import KeyboardReadout from './lib/KeyboardReadout.abide'
 import keyboardReadout from './lib/KeyboardReadout.abide' with { type: 'text' }
+import MarkADate from './lib/MarkADate.abide'
+import markADate from './lib/MarkADate.abide' with { type: 'text' }
 import OwnUnits from './lib/OwnUnits.abide'
 import ownUnits from './lib/OwnUnits.abide' with { type: 'text' }
 import PickMonth from './lib/PickMonth.abide'
@@ -235,6 +237,12 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
         <p><code>y</code> maps a value onto the plot and <code>frame</code> answers its edges, so a
             drawing lines up with the marks the parts draw.</p>
         <Example code={targetBand}><TargetBand /></Example>
+    </Section>
+
+    <Section level={3} title="Mark a launch date that falls between two months">
+        <p><code>x</code> maps a value in the units of the <code>x</code> option, so a date with
+            no value of its own stands where it falls between the months either side.</p>
+        <Example code={markADate}><MarkADate /></Example>
     </Section>
 
     <Section level={3} title="Draw won revenue as columns under a target line">

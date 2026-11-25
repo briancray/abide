@@ -167,8 +167,8 @@ export type ChartParts = {
     readonly id: string
     /** The root, an `<svg>` or any element: its size, measured (52.24), its name, focus, and the pointer and keys that move the crosshair (52.26, 52.69). */
     readonly svg: Record<string, unknown>
-    /** The x of position `index`. */
-    x(index: number): number
+    /** The x of `value`, in the units of the `x` option: a time between two positions, say (52.78). */
+    x(value: number): number
     /** The y of `value`. */
     y(value: number): number
     /** The edges of the plot. */
@@ -750,7 +750,7 @@ export function chart(options: ChartOptions): ChartParts {
             onkeydown: key,
             onclick: (event: MouseEvent) => pick(scrubbing.indexAt(event)),
         },
-        x: (index) => plot().xs[index] ?? plot().toX(index),
+        x: (value) => plot().toX(value),
         y: (value) => plot().toY(value),
         get frame() {
             return plot().frame
