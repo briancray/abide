@@ -9,84 +9,50 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
-import { closerOf, type Token, tokenize } from './tokenize.ts'
-
-/** Which grammar `text` is: a TypeScript module, an `.abide` file, or Markdown with code fences. */
-type Kind = 'ts' | 'abide' | 'md'
+import { type CodeRewrite, rewriteCode } from './rewriteCode.ts'
+import {
+    afterTypeArguments,
+    closerOf,
+    type Token,
+    tokenize,
+} from './tokenize.ts'
 
 /** 38.215 — `text`, a file at `path`, with each `reactive` handed a body renamed `memo`. */
 export function toMemo(text: string, path: string): string {
-    const kind: Kind = path.endsWith('.abide')
-        ? 'abide'
-        : path.endsWith('.md')
-          ? 'md'
-          : 'ts'
-    return migrate(text, kind)
+    return rewriteCode(text, path, TO_MEMO)
 }
 
-function migrate(text: string, kind: Kind): string {
-    if (!text.includes('reactive')) return text
-    if (kind === 'ts') return migrateModule(text)
-    if (kind === 'md')
-        return replaceSpans(
-            text,
-            /^([ \t]*)(```|~~~)([\w-]*)[^\n]*\n([\s\S]*?)^\1\2[ \t]*$/gm,
-            4,
-            (inner) => (inner.includes('<script') ? 'abide' : 'ts'),
-        )
-    // An `.abide` file: its script blocks are modules, and a code sample written in its markup — a
-    // template literal handed to a prop — is a file of its own, shown rather than run.
-    const migrated = replaceSpans(
-        text,
-        /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g,
-        2,
-        () => 'ts',
-    )
-    return replaceOutsideScripts(migrated)
+const TO_MEMO: CodeRewrite = {
+    word: 'reactive',
+    module: (code) => {
+        const renamed = renamedToMemo(code)
+        return withMemoImported(renamed.code, renamed.count > 0, '')
+    },
+    // A PAGE'S SCRIPTS ARE ONE SCOPE: a nested per-arm `<script>` reads the top-level one's imports,
+    // so `memo` goes beside the `reactive` the page imports wherever a body was renamed, and
+    // `reactive` stays imported while any script still calls it.
+    scripts: (blocks) => {
+        const renamed = blocks.map(renamedToMemo)
+        const codes = renamed.map((block) => block.code)
+        let migrated = false
+        for (const block of renamed) if (block.count > 0) migrated = true
+        if (!migrated) return codes
+        for (let index = 0; index < codes.length; index += 1) {
+            const code = codes[index] as string
+            const others = codes.filter((_, other) => other !== index)
+            const imported = withMemoImported(code, true, others.join('\n'))
+            codes[index] = imported
+            // The first script importing `reactive` is the one `memo` joins, even where it already has.
+            if (imported !== code || IMPORTS_REACTIVE.test(code)) break
+        }
+        return codes
+    },
 }
 
-/** Each match's group `group` migrated as the grammar `kindOf` reads it as, the rest kept. */
-function replaceSpans(
-    text: string,
-    pattern: RegExp,
-    group: number,
-    kindOf: (inner: string) => Kind,
-): string {
-    let out = ''
-    let last = 0
-    const indexed = new RegExp(pattern.source, `${pattern.flags}d`)
-    for (const match of text.matchAll(indexed)) {
-        const inner = match[group] ?? ''
-        const start = match.indices?.[group]?.[0] ?? match.index ?? 0
-        out += text.slice(last, start)
-        out += migrate(inner, kindOf(inner))
-        last = start + inner.length
-    }
-    return out + text.slice(last)
-}
+const IMPORTS_REACTIVE = /import\s*\{[^}]*\breactive\b[^}]*\}\s*from/
 
-/** The template literals an `.abide` file's markup holds, each migrated as the code it shows. */
-function replaceOutsideScripts(text: string): string {
-    let out = ''
-    let last = 0
-    for (const script of text.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/g)) {
-        const start = script.index ?? 0
-        out += samples(text.slice(last, start))
-        out += script[0]
-        last = start + script[0].length
-    }
-    return out + samples(text.slice(last))
-}
-
-/** `markup` with each backtick-delimited sample in it migrated. */
-function samples(markup: string): string {
-    return replaceSpans(markup, /`((?:\\[\s\S]|[^`\\])*)`/g, 1, (inner) =>
-        inner.includes('<script') ? 'abide' : 'ts',
-    )
-}
-
-/** A module's `reactive` calls over a body renamed, and `memo` imported beside `reactive`. */
-function migrateModule(text: string): string {
+/** A module's `reactive` calls over a body renamed `memo`, and how many were. */
+function renamedToMemo(text: string): { code: string; count: number } {
     const tokens = tokenize(text)
     const renames: number[] = []
     for (let at = 0; at < tokens.length; at += 1) {
@@ -103,52 +69,15 @@ function migrateModule(text: string): string {
             continue
         if (isBody(tokens, open + 1, text)) renames.push(token.start)
     }
-    let migrated = text
+    let code = text
     for (let index = renames.length - 1; index >= 0; index -= 1) {
         const start = renames[index] as number
-        migrated =
-            migrated.slice(0, start) +
+        code =
+            code.slice(0, start) +
             'memo' +
-            migrated.slice(start + 'reactive'.length)
+            code.slice(start + 'reactive'.length)
     }
-    migrated = migrateSamples(migrated)
-    return withMemoImported(migrated, renames.length > 0)
-}
-
-/** The template literals a module holds — a code sample a docs page shows — each migrated. */
-function migrateSamples(text: string): string {
-    if (!/`[^`]*reactive/.test(text)) return text
-    let out = ''
-    let last = 0
-    for (const token of tokenize(text)) {
-        if (
-            token.kind !== SyntaxKind.NoSubstitutionTemplateLiteral ||
-            !token.text.includes('reactive')
-        )
-            continue
-        const inner = token.text.slice(1, -1)
-        out += text.slice(last, token.start + 1)
-        out += migrate(inner, inner.includes('<script') ? 'abide' : 'ts')
-        last = token.end - 1
-    }
-    return out + text.slice(last)
-}
-
-/** The index past a call's `<…>` type arguments, or `at` where there are none. */
-function afterTypeArguments(tokens: Token[], at: number): number {
-    if ((tokens[at] as Token | undefined)?.kind !== SyntaxKind.LessThanToken)
-        return at
-    let depth = 0
-    for (let index = at; index < tokens.length; index += 1) {
-        const kind = (tokens[index] as Token).kind
-        if (kind === SyntaxKind.LessThanToken) depth += 1
-        else if (kind === SyntaxKind.GreaterThanToken) depth -= 1
-        else if (kind === SyntaxKind.GreaterThanGreaterThanToken) depth -= 2
-        else if (kind === SyntaxKind.GreaterThanGreaterThanGreaterThanToken)
-            depth -= 3
-        if (depth <= 0) return index + 1
-    }
-    return at
+    return { code, count: renames.length }
 }
 
 /**
@@ -224,9 +153,14 @@ function bindsFunction(text: string, name: string, before: number): boolean {
 
 /**
  * `text` with `memo` imported wherever it was migrated: beside `reactive` in the import naming it,
- * and in place of it where nothing else in `text` still calls `reactive`.
+ * and in place of it where nothing else in `text`, nor in `elsewhere` — the code sharing its scope —
+ * still calls `reactive`.
  */
-function withMemoImported(text: string, migrated: boolean): string {
+function withMemoImported(
+    text: string,
+    migrated: boolean,
+    elsewhere: string,
+): string {
     if (!migrated) return text
     const importPattern = /import\s*\{([^}]*)\}\s*from\s*(['"][^'"]+['"])/g
     for (const found of text.matchAll(importPattern)) {
@@ -238,7 +172,7 @@ function withMemoImported(text: string, migrated: boolean): string {
         if (!names.includes('reactive') || names.includes('memo')) continue
         const start = found.index ?? 0
         const rest = text.slice(0, start) + text.slice(start + found[0].length)
-        const stillCalled = calls(rest)
+        const stillCalled = calls(rest) || calls(elsewhere)
         const kept = stillCalled
             ? names
             : names.filter((name) => name !== 'reactive')

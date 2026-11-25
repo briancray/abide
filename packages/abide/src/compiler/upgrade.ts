@@ -4,6 +4,7 @@
 // app already moved finds nothing left to move.
 
 import { withoutRestatedNotes } from './agentNotes.ts'
+import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
 
 /** A file's text before and after `abide upgrade`. */
@@ -47,6 +48,20 @@ const MIGRATIONS: Migration[] = [
                 const text = await read(path)
                 if (text === undefined || !text.includes('reactive')) continue
                 const migrated = toMemo(text, path)
+                if (migrated !== text) changed[path] = migrated
+            }
+            return changed
+        },
+    },
+    {
+        // 38.217 — what tells one element from another is `key`, where it was `by`.
+        version: '0.143.0',
+        migrate: async (read, sources) => {
+            const changed: Record<string, string> = {}
+            for (const path of await sources()) {
+                const text = await read(path)
+                if (text === undefined) continue
+                const migrated = toKey(text, path)
                 if (migrated !== text) changed[path] = migrated
             }
             return changed

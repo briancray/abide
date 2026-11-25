@@ -8,6 +8,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { spawned } from '@abide/harness/gate'
 
 import { paragraphsOf } from '#compiler/agentNotes.ts'
+import { upgrade } from '#compiler/upgrade.ts'
 import { ABIDE_DIRECTORY } from '#server/ABIDE_DIRECTORY.ts'
 
 import { BIN } from './builtApp.ts'
@@ -192,3 +193,155 @@ const found = memo(async () => q.toUpperCase())
     const again = await abide(app, 'upgrade', '--check')
     expect(again.stdout).toBe('abide upgrade: nothing to change\n')
 }, 30_000)
+
+// 38.215 — A PAGE'S SCRIPTS ARE ONE SCOPE: a body renamed in a `{#for}` row's own `<script>` is a
+// `memo` the page's top-level script imports, and `reactive` stays imported for the row's other
+// call. THE REVERT: hand each script block to `toMemo`'s module rewrite apart; the row's script
+// imports nothing, so `memo` is never imported where only the row renamed a body, and the top-level
+// script, calling `reactive` only over a body, drops `reactive` while the row still calls it.
+test('a body renamed in a nested script is imported in the page script — 38.215', async () => {
+    const app = temporaryModule({
+        'src/Row.abide': `<script>
+import { reactive } from '@abide/abide'
+
+let rows = reactive([{ id: 1 }])
+</script>
+
+{#for row of rows key row.id}
+    <script>
+    const label = reactive(() => String(row.id))
+    </script>
+    <b>{label}</b>
+{/for}
+`,
+        'src/index.abide': `<script>
+import { reactive } from '@abide/abide'
+
+let rows = reactive(() => [{ id: 1 }])
+</script>
+
+{#for row of rows key row.id}
+    <script>
+    const label = reactive(() => String(row.id))
+    const count = reactive(0)
+    </script>
+    <b>{label}{count}</b>
+{/for}
+`,
+    })
+    const [row, edit] = await upgrade(app, '0.142.0')
+    expect(row?.after).toBe(`<script>
+import { memo, reactive } from '@abide/abide'
+
+let rows = reactive([{ id: 1 }])
+</script>
+
+{#for row of rows key row.id}
+    <script>
+    const label = memo(() => String(row.id))
+    </script>
+    <b>{label}</b>
+{/for}
+`)
+    expect(edit?.after).toBe(`<script>
+import { memo, reactive } from '@abide/abide'
+
+let rows = memo(() => [{ id: 1 }])
+</script>
+
+{#for row of rows key row.id}
+    <script>
+    const label = memo(() => String(row.id))
+    const count = reactive(0)
+    </script>
+    <b>{label}{count}</b>
+{/for}
+`)
+})
+
+// 38.217 — `by` IS `key`, in a `{#for}` head and in the options a `reactive` or a `memo` is handed in
+// place, in a page, a module and a Markdown fence. A `by` that is a name — the head's item, a member
+// in its subject, the key's own name, an option of another call or of an object built apart — is
+// left, and run again the migration changes nothing (38.200). THE REVERT: drop the `toKey`
+// migration from `MIGRATIONS`; nothing is changed and `upgrade` answers no edits.
+test('abide upgrade renames a by naming a key to key — 38.217, 38.200', async () => {
+    const page = `<script>
+import { memo, reactive } from '@abide/abide'
+
+let rows = reactive([{ id: 1, by: 'me' }], { by: 'id' })
+const by = (row: { id: number }) => row.id
+const named = memo(() => rows, { by, tags: ['rows'] })
+</script>
+
+{#for row of rows by row.id}<b>{row.by}</b>{/for}
+{#for item of group.by by item}<i>{item}</i>{/for}
+{#for by of rows by by}<u>{by.id}</u>{/for}
+{#for row of rows key by}<s>{row.id}</s>{/for}
+`
+    const module = `import { GET, memo, reactive } from '@abide/abide'
+
+const OPTIONS = { by: 'id' }
+export const books = GET(memo(() => [{ isbn: '1' }], { by: 'isbn' }))
+export const kept = reactive<{ id: string }[]>([], {
+    by(row) {
+        return row.id
+    },
+})
+export const built = reactive([], OPTIONS)
+export const sorted = sortBy(rows, { by: 'id' })
+`
+    const notes = `# Rows
+
+\`\`\`abide
+<script>
+const deals = reactive([], { by: 'id' })
+</script>
+{#for deal of deals by deal.id}<li>{deal.name}</li>{/for}
+\`\`\`
+`
+    const app = temporaryModule({
+        'src/index.abide': page,
+        'src/lib/books.ts': module,
+        'NOTES.md': notes,
+    })
+    const edits = await upgrade(app, '0.142.0')
+    const after = (path: string) =>
+        edits.find((edit) => edit.path === path)?.after
+    expect(after('src/index.abide')).toBe(`<script>
+import { memo, reactive } from '@abide/abide'
+
+let rows = reactive([{ id: 1, by: 'me' }], { key: 'id' })
+const by = (row: { id: number }) => row.id
+const named = memo(() => rows, { key: by, tags: ['rows'] })
+</script>
+
+{#for row of rows key row.id}<b>{row.by}</b>{/for}
+{#for item of group.by key item}<i>{item}</i>{/for}
+{#for by of rows key by}<u>{by.id}</u>{/for}
+{#for row of rows key by}<s>{row.id}</s>{/for}
+`)
+    expect(after('src/lib/books.ts'))
+        .toBe(`import { GET, memo, reactive } from '@abide/abide'
+
+const OPTIONS = { by: 'id' }
+export const books = GET(memo(() => [{ isbn: '1' }], { key: 'isbn' }))
+export const kept = reactive<{ id: string }[]>([], {
+    key(row) {
+        return row.id
+    },
+})
+export const built = reactive([], OPTIONS)
+export const sorted = sortBy(rows, { by: 'id' })
+`)
+    expect(after('NOTES.md')).toBe(`# Rows
+
+\`\`\`abide
+<script>
+const deals = reactive([], { key: 'id' })
+</script>
+{#for deal of deals key deal.id}<li>{deal.name}</li>{/for}
+\`\`\`
+`)
+    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    expect(await upgrade(app, '0.142.0')).toEqual([])
+})

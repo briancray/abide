@@ -376,3 +376,23 @@ export function skipQuoted(source: string, open: number): number {
     }
     return at
 }
+
+/** The index past a call's `<…>` type arguments, or `at` where there are none. */
+export function afterTypeArguments(
+    tokens: readonly Token[],
+    at: number,
+): number {
+    if ((tokens[at] as Token | undefined)?.kind !== SyntaxKind.LessThanToken)
+        return at
+    let depth = 0
+    for (let index = at; index < tokens.length; index += 1) {
+        const kind = (tokens[index] as Token).kind
+        if (kind === SyntaxKind.LessThanToken) depth += 1
+        else if (kind === SyntaxKind.GreaterThanToken) depth -= 1
+        else if (kind === SyntaxKind.GreaterThanGreaterThanToken) depth -= 2
+        else if (kind === SyntaxKind.GreaterThanGreaterThanGreaterThanToken)
+            depth -= 3
+        if (depth <= 0) return index + 1
+    }
+    return at
+}

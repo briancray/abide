@@ -3898,6 +3898,10 @@ file writes in place or binds to the name it is handed, and MUST import `memo` w
 with the one method a `405` answer's `Allow` names besides `HEAD` and `OPTIONS`, and MUST NOT call
 again where `--method` was given.
 
+38.217 The migration keyed to 0.143.0 MUST rename to `key` the `by` dividing a `{#for}` head's
+subject from its key, and every `by` property of an options object written in place as the second
+argument of a `reactive` or a `memo`.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

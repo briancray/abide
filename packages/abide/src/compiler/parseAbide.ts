@@ -1301,8 +1301,14 @@ function endsSubject(tokens: readonly Token[], at: number): boolean {
  * a call or an object pattern is the expression's own, and only one at depth zero divides the
  * header. `key` is a word rather than a keyword, and a common name, so it divides the header only
  * where it follows a token the subject can end on and is not followed by `.`.
+ *
+ * `word` is the one dividing the subject from the key: `key`, or `by` for the migration off the
+ * head written before it (38.217).
  */
-export function forSeparators(header: string): {
+export function forSeparators(
+    header: string,
+    word = 'key',
+): {
     of: Token | undefined
     comma: Token | undefined
     key: Token | undefined
@@ -1329,7 +1335,7 @@ export function forSeparators(header: string): {
         } else if (
             key === undefined &&
             kind === SyntaxKind.Identifier &&
-            token.text === 'key' &&
+            token.text === word &&
             endsSubject(tokens, index - 1) &&
             tokens[index + 1]?.kind !== SyntaxKind.DotToken
         )
