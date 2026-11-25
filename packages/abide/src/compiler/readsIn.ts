@@ -69,6 +69,7 @@ import { optionNamed, reactiveOptions } from './reactiveOptions.ts'
 import {
     type Abide,
     boundInitializer,
+    callReturnOf,
     isReactiveSymbol,
     isReactiveType,
     unionMembers,
@@ -131,9 +132,16 @@ export async function readsIn(
     shadowPath: string,
     projection: Projection,
     file: AbideFile,
-    /** Where each name the lowered program proved a `Reactive` starts (`bindingsOfReads`). */
-    held: ReadonlySet<number>,
-): Promise<{ answer: CheckerAnswer; warnings: Finding[]; suspects: number[] }> {
+    /**
+     * What the lowered program has answered so far: where each name it proved a `Reactive` starts
+     * (`bindingsOfReads`), and where each 31.15 access it proved holds none ends (`membersOfReads`).
+     */
+    settled: { held: ReadonlySet<number>; released: ReadonlySet<number> },
+): Promise<{
+    answer: CheckerAnswer
+    warnings: Finding[]
+    suspects: Suspect[]
+}> {
     const scriptsEnd = projection.scripts.end
     const positions = projection.positions
     const names: Node[] = []
@@ -213,14 +221,20 @@ export async function readsIn(
                 : undefined,
         ),
     )
-    const memberNodes = await members
+    const accessed = await members
+    // A member the lowered program RELEASED still hands its value on to a binding of it, as a
+    // 31.15 read does — it is the value there (`dropValueHolders`).
     const memberSpans = new Set<string>()
-    for (const node of memberNodes) memberSpans.add(spanKey(node))
+    for (const node of accessed) memberSpans.add(spanKey(node))
+    const memberNodes =
+        settled.released.size === 0
+            ? accessed
+            : accessed.filter((node) => !settled.released.has(node.end))
     await dropValueHolders(checker, names, reactive, memberSpans)
     for (let at = 0; at < names.length; at += 1)
         if (
             reactive[at] === undefined &&
-            held.has((names[at] as Node).getStart())
+            settled.held.has((names[at] as Node).getStart())
         )
             reactive[at] = symbols[at]
     // 32.32 — A VALUE WHOSE `reactive(…)` DECLARES `key` keys a `{#for}` over it,
@@ -324,18 +338,26 @@ export async function readsIn(
     ))
         warnings.push(warning)
     const answer = new CheckerAnswer(reads, statics)
-    return {
-        answer,
-        warnings,
-        suspects: await bindingsOfReads(
+    const [bindings, accesses] = await Promise.all([
+        bindingsOfReads(checker, abide, names, reactive, answer),
+        membersOfReads(
             checker,
             abide,
+            sourceFile,
             names,
-            reactive,
+            symbols,
+            memberNodes,
             answer,
         ),
-    }
+    ])
+    return { answer, warnings, suspects: [...bindings, ...accesses] }
 }
+
+/**
+ * A position for the lowered program to answer: where a binding's name starts, asked whether it is
+ * a `Reactive` there, or where a 31.15 access ends, asked whether it still is one.
+ */
+export type Suspect = { at: number; member: boolean }
 
 /**
  * Where each binding starts whose type the projection cannot vouch for, for the lowered program to
@@ -358,8 +380,8 @@ async function bindingsOfReads(
     names: readonly Node[],
     reactive: readonly (CheckedSymbol | undefined)[],
     answer: CheckerAnswer,
-): Promise<number[]> {
-    const suspects: number[] = []
+): Promise<Suspect[]> {
+    const suspects: Suspect[] = []
     const asked: Promise<void>[] = []
     for (let at = 0; at < names.length; at += 1) {
         const name = names[at] as Node
@@ -392,7 +414,7 @@ async function bindingsOfReads(
                         returned !== undefined &&
                         (await isReactiveType(checker, abide, returned, false))
                     ) {
-                        suspects.push(name.getStart())
+                        suspects.push({ at: name.getStart(), member: false })
                         return
                     }
                 }
@@ -402,6 +424,125 @@ async function bindingsOfReads(
     await Promise.all(asked)
     return suspects
 }
+
+/**
+ * Which 31.15 accesses the projection may have typed from a read, for the lowered program to answer
+ * (`reactiveReads`).
+ *
+ * 31.15 — A MEMBER INFERRED FROM A READ IS TYPED FROM THE `Reactive` IN THE PROJECTION, and the read
+ * is of its value. `memo(() => ({ view }))` is `{ view: Reactive<View> }` as written and
+ * `{ view: view() }` as it runs, so `glance.view` asked of the projection alone was a `Reactive`,
+ * lowered to `glance().view()`, and called a `View`.
+ *
+ * ONLY AN ACCESS A READ COULD HAVE TYPED IS ASKED: a property an object literal in this file
+ * declares with a value that reads, and an element of a binding with no annotation whose
+ * initializer reads — an element has no declaration to ask. A member a type declares is 31.3's
+ * own hold: the `open` a `dialog({ … })` hands back is one however its arguments read, and asking
+ * would cost every page that reads one a second snapshot.
+ */
+async function membersOfReads(
+    checker: Checker,
+    abide: Abide,
+    sourceFile: SourceFile,
+    names: readonly Node[],
+    symbols: readonly (CheckedSymbol | undefined)[],
+    members: readonly Node[],
+    answer: CheckerAnswer,
+): Promise<Suspect[]> {
+    const suspects: Suspect[] = []
+    if (members.length === 0) return suspects
+    const reads = (node: Node): boolean =>
+        answer.holdsRead({ start: node.getStart(), end: node.end }, (read) =>
+            READING.has(read.shape),
+        )
+    // Per access, the node to ask: a property's name, or the name an element's receivers step
+    // down from — in one round trip.
+    const asked: Node[] = []
+    for (const access of members) {
+        if (isPropertyAccessExpression(access)) {
+            asked.push(access.name)
+            continue
+        }
+        let root = unwrapped(receiverOf(access))
+        while (
+            isPropertyAccessExpression(root) ||
+            isElementAccessExpression(root)
+        )
+            root = unwrapped(receiverOf(root))
+        asked.push(root)
+    }
+    const found = await checker.getSymbolAtLocation(asked)
+    const inferred = new Set<number>()
+    for (let at = 0; at < names.length; at += 1) {
+        const declaration = (names[at] as Node).parent
+        const symbol = symbols[at]
+        if (
+            symbol !== undefined &&
+            isVariableDeclaration(declaration) &&
+            declaration.type === undefined &&
+            declaration.initializer !== undefined &&
+            reads(declaration.initializer)
+        )
+            inferred.add(symbol.id)
+    }
+    await Promise.all(
+        members.map(async (access, at) => {
+            if (!isPropertyAccessExpression(access)) {
+                if (inferred.has(found[at]?.id ?? -1))
+                    suspects.push({ at: access.end, member: true })
+                return
+            }
+            const member =
+                found[at] ?? (await steppedMember(checker, abide, access))
+            const declaration = member?.declarations.find(
+                (one) =>
+                    one.path === sourceFile.path &&
+                    LITERAL_MEMBERS.has(one.kind),
+            )
+            const declared = await declaration?.resolve()
+            if (declared !== undefined && reads(declared))
+                suspects.push({ at: access.end, member: true })
+        }),
+    )
+    return suspects
+}
+
+/**
+ * The member `access` names, stepped down from its receiver where the checker resolves none at the
+ * access — the projection asks a `Reactive` for its value's member, which is an error there
+ * (`steppedReactive`), and so is every access below one.
+ */
+async function steppedMember(
+    checker: Checker,
+    abide: Abide,
+    access: Node & { name: Node & { text: string } },
+): Promise<CheckedSymbol | undefined> {
+    const receiver = unwrapped(receiverOf(access))
+    let type = await checker.getTypeAtLocation(receiver)
+    if (
+        type !== undefined &&
+        (type.flags & TypeFlags.Any) !== 0 &&
+        isPropertyAccessExpression(receiver)
+    ) {
+        const stepped = await steppedMember(checker, abide, receiver)
+        type =
+            stepped === undefined
+                ? undefined
+                : await checker.getTypeOfSymbol(stepped)
+    }
+    if (type === undefined) return undefined
+    if (await isReactiveType(checker, abide, type, false))
+        type = await callReturnOf(checker, type)
+    return type === undefined
+        ? undefined
+        : checker.getPropertyOfType(type, access.name.text)
+}
+
+/** A member an object literal declares, whose type is inferred from its value. */
+const LITERAL_MEMBERS: ReadonlySet<SyntaxKind> = new Set([
+    SyntaxKind.PropertyAssignment,
+    SyntaxKind.ShorthandPropertyAssignment,
+])
 
 /**
  * The tracking and type warnings a file's reactive reads earn.

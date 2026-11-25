@@ -2352,7 +2352,8 @@ copy it or any level above it, and MUST NOT wake a reader.
 
 31.15 Inside a `.abide` file a property access or an element access whose declared type is a
 `Reactive` MUST be read and written as a name bound to a `Reactive` is, per 31.1 to 31.7, save an
-access on a `Reactive`, which 31.5 governs.
+access on a `Reactive`, which 31.5 governs. The declared type is the access's in the program as it
+runs, where a member inferred from a name 31.1 reads holds that name's value.
 
 31.16 `abide check` MUST hold a write through a member path — an assignment, a compound assignment
 or an update, at any depth and through a computed key — to the type of the member it writes, on the
