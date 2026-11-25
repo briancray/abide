@@ -5,7 +5,7 @@
 // (23.23). So listing a directory lists its routes.
 //
 // ONE WALK for the sources, the handler files, the lib modules, and the public files `abide build`
-// copies and `abide dev` answers, and the refusals (23.16, 23.17, 23.18, 23.22, 23.23) — each
+// copies and `abide dev` answers, and the refusals (23.16, 23.18, 23.22, 23.23) — each
 // file what `placeOf` says of its path, so the walk and every reader of one path agree, and ONE SKIP
 // RULE, `skipped`, for every walk of the tree.
 //
@@ -50,7 +50,7 @@ type AppFiles = {
 
 /**
  * The app's `.abide` sources, handler files, lib modules and public files, refusing a tree 23.16,
- * 23.17, 23.18, 23.22 or 23.23 forbids into `refusals`, each at its path below the root.
+ * 23.18, 23.22 or 23.23 forbids into `refusals`, each at its path below the root.
  *
  * A missing root is an app with nothing in it, not a fault.
  */
