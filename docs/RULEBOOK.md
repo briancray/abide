@@ -3914,6 +3914,9 @@ again where `--method` was given.
 subject from its key, and every `by` property of an options object written in place as the second
 argument of a `reactive` or a `memo`.
 
+38.218 The `tsconfig.json` `abide scaffold` writes, and the default project 38.30 types an app
+against, MUST read every `.ts` file as a module, one with no `import` or `export` among them.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -6352,6 +6355,10 @@ each word of `query` — stretches that overlap or touch carrying it as one run.
 own name, over the defaults each formatter keeps, and MUST NOT refuse a caller naming one bound of
 the fraction digits for the default of the other.
 
+52.113 `format.date`, `format.dateParts`, `format.relative` and `time` MUST read a value that is a
+`YYYY-MM-DD` string as the midnight of that day in the zone they write in (52.3) — the one
+`timeZone` names where their caller names one — as `instantAt` reads it (52.102).
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are
@@ -6634,11 +6641,12 @@ it is not, under the file's name with that type's extension, alike where Bun run
 53.88 `shrinkImage` given `maxBytes` MUST lower the quality it writes at and then its size until it
 takes no more than `maxBytes`, save for PNG, whose size it MUST NOT lower for bytes.
 
-53.89 `shrinkImage` MUST answer a file already within `maxEdge` and `maxBytes` and of `type` as it is,
-written again by nothing.
+53.89 `shrinkImage` MUST answer a file already within `maxEdge` and `maxBytes`, of `type`, and
+carrying none of the metadata 53.102 names as it is, written again by nothing.
 
-53.90 `download` MUST save `data` as a file named `name`, as a click on a link to it with that
-`download` would, text written as `type`.
+53.90 `download` MUST save `data` as a file named `name`, as a click on a link to it in the
+document with that `download` would, text written as `type`, the link's address standing until the
+save has read it.
 
 53.91 `download` MUST throw where `isServer` is true.
 
@@ -6673,6 +6681,9 @@ leaves the host where aligning the current one does.
 
 53.101 A scroll that `scrollTo`, `reset` or a change of the item `carousel` rests on starts, and that
 leaves the `host` where it already is, MUST NOT be on its way in 53.65's sense.
+
+53.102 `shrinkImage` MUST answer a `File` carrying none of the EXIF, XMP, IPTC, comment or text
+metadata of the file it is handed.
 
 # 54. Guards, fetches and jobs
 
@@ -6803,6 +6814,10 @@ empty as it came.
 
 54.38 A look MUST NOT start a run of a `job` while its `paused` reads true, and `runNow` MUST run
 it all the same.
+
+54.39 A `job`'s run MUST run outside every request and every `memo` run, whichever started it, and
+`abortSignal` called in it, outside every run 7.45 and 7.47 name and every request entered in it,
+MUST answer a signal aborted where 54.26's is.
 
 # 55. Worker files
 

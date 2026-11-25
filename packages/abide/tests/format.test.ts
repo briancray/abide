@@ -107,6 +107,27 @@ test('a date is written in UTC where no time zone is named — 52.3', () => {
     ).toBe('10:04 AM')
 })
 
+// THE REVERT: read a `YYYY-MM-DD` with `Date.parse`, and it is UTC's midnight — the 17th in New
+// York, and 20 hours ago at Los Angeles' noon rather than 12.
+test('a day alone is its midnight in the zone it is written in — 52.113', () => {
+    expect(date('2026-11-18', { timeZone: 'America/New_York' })).toBe(
+        'Nov 18, 2026',
+    )
+    expect(date('2026-11-18', { timeZone: 'Asia/Tokyo' })).toBe('Nov 18, 2026')
+    expect(date('2026-02-30', { timeZone: 'America/New_York' })).toBe('—')
+    try {
+        timeZone.set('America/Los_Angeles')
+        expect(date('2026-11-18', { style: 'dateTime' })).toBe(
+            'Nov 18, 2026, 12:00 AM',
+        )
+        // Noon in Los Angeles is 20:00 UTC.
+        const now = Date.UTC(2026, 10, 18, 20)
+        expect(relative('2026-11-18', { now })).toBe('12 hours ago')
+    } finally {
+        timeZone.set(undefined)
+    }
+})
+
 test('a duration is its two largest units — 52.4', () => {
     expect(duration(3_900_000)).toBe('1h 5m')
     expect(duration(90_061_000)).toBe('1d 1h')

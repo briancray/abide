@@ -1,4 +1,4 @@
-// 53.87-53.89 — A PICTURE MADE SMALL ENOUGH TO SEND: no wider or taller than `maxEdge`, and no larger
+// 53.87-53.89, 53.102 — A PICTURE MADE SMALL ENOUGH TO SEND: no wider or taller than `maxEdge`, and no larger
 // than `maxBytes`, lowering its quality and then its size until it fits. The same call on both sides:
 // `createImageBitmap` and an `OffscreenCanvas` in a browser, `Bun.Image` on a server, each turning the
 // picture the way its EXIF says first.
@@ -33,11 +33,13 @@ export async function shrinkImage(
             : 'image/jpeg')
     const picture = await decoded(file)
     let scale = Math.min(1, maxEdge / Math.max(picture.width, picture.height))
-    // 53.89 — already within every bound and of the type asked for: handed back as it is.
+    // 53.89 — already within every bound, of the type asked for and carrying nothing but the picture:
+    // handed back as it is. A file carrying metadata is written again, which leaves it behind (53.102).
     if (
         scale === 1 &&
         file.type === type &&
-        (options.maxBytes === undefined || file.size <= options.maxBytes)
+        (options.maxBytes === undefined || file.size <= options.maxBytes) &&
+        !carriesMetadata(new Uint8Array(await file.arrayBuffer()))
     )
         return named(file, file.name, type)
     let quality = options.quality ?? 0.85
@@ -106,6 +108,60 @@ async function decoded(file: Blob): Promise<Decoded> {
             return written.blob()
         },
     }
+}
+
+// What a picture carries beside its pixels that can say where, when and by whom it was taken: JPEG's
+// APP1 (EXIF, XMP), APP13 (IPTC) and comment segments, WebP's `EXIF` and `XMP ` chunks, and PNG's
+// `eXIf` and text chunks.
+const JPEG_METADATA = new Set([0xe1, 0xed, 0xfe])
+const WEBP_METADATA = new Set(['EXIF', 'XMP '])
+const PNG_METADATA = new Set(['eXIf', 'tEXt', 'zTXt', 'iTXt'])
+
+/** Whether the JPEG, WebP or PNG in `bytes` carries any of the metadata above, read from its headers. */
+function carriesMetadata(bytes: Uint8Array): boolean {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    const tag = (at: number) =>
+        String.fromCharCode(
+            bytes[at] ?? 0,
+            bytes[at + 1] ?? 0,
+            bytes[at + 2] ?? 0,
+            bytes[at + 3] ?? 0,
+        )
+    if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+        let at = 2
+        while (at + 4 <= bytes.length && bytes[at] === 0xff) {
+            const marker = bytes[at + 1] ?? 0
+            // Fill bytes before a marker.
+            if (marker === 0xff) {
+                at += 1
+                continue
+            }
+            // The scan starts: no segment after it is a header.
+            if (marker === 0xda || marker === 0xd9) return false
+            if (JPEG_METADATA.has(marker)) return true
+            at += 2 + view.getUint16(at + 2)
+        }
+        return false
+    }
+    if (tag(0) === 'RIFF' && tag(8) === 'WEBP') {
+        for (let at = 12; at + 8 <= bytes.length;) {
+            if (WEBP_METADATA.has(tag(at))) return true
+            const size = view.getUint32(at + 4, true)
+            at += 8 + size + (size % 2)
+        }
+        return false
+    }
+    if (bytes[0] === 0x89 && tag(1) === 'PNG') {
+        for (let at = 8; at + 8 <= bytes.length;) {
+            const type = tag(at + 4)
+            if (PNG_METADATA.has(type)) return true
+            if (type === 'IEND') return false
+            at += 12 + view.getUint32(at)
+        }
+        return false
+    }
+    // A type it cannot read the headers of is taken to carry some.
+    return true
 }
 
 /** `blob` as a `File` named for `name`, its extension the one `type` takes. */

@@ -155,6 +155,32 @@ const GLOBAL_RUN = new AsyncLocalStorage<true>()
 // Apart from STORAGE: a run is narrower than its request, and ends without the request ending.
 const RUN = new AsyncLocalStorage<RunMark>()
 
+// 54.39 — THE SIGNAL THAT OWNS WORK OUTSIDE EVERY REQUEST AND RUN, where one narrower than the app's
+// stop does: a `job`'s run.
+const OWNER = new AsyncLocalStorage<AbortSignal>()
+
+/** Runs `body` outside every request and `memo` run, `abortSignal` answering `signal` in it: 54.39. */
+export function ownedBy<Result>(
+    signal: AbortSignal,
+    body: () => Result,
+): Result {
+    return STORAGE.run(undefined, () => RUN.exit(() => OWNER.run(signal, body)))
+}
+
+/** 7.48 — the signal of the request `scope` answers, aborted by 7.38's stop too, or `undefined`. */
+function requestSignal(scope: Scope | undefined): AbortSignal | undefined {
+    if (scope === undefined) return undefined
+    const answering = scope as RequestScope
+    if (answering.abortSignal !== undefined) return answering.abortSignal
+    // THE RECEIVED REQUEST, which bun aborts as its caller hangs up, and not one a rung or a
+    // mount made since (37.3); a socket mux connection has none, and its `request` is the one
+    // its close aborts (18.18). 42.8's scope has neither, and no request to end with.
+    const asked = answering.received ?? answering.request
+    if (asked === undefined) return undefined
+    answering.abortSignal = AbortSignal.any([appStopSignal(), asked.signal])
+    return answering.abortSignal
+}
+
 /** Whether the work running is a `global` value's run, or what that run started. */
 export function inGlobalRun(): boolean {
     return GLOBAL_RUN.getStore() === true
@@ -199,17 +225,11 @@ SCOPING.provider = {
     runAs: (mark, scope, body, given, global) =>
         RUN.run(mark, runScoped, scope, body, given, global),
     currentRun: () => RUN.getStore(),
-    requestSignal: (scope) => {
-        if (scope === undefined) return undefined
-        const answering = scope as RequestScope
-        if (answering.abortSignal !== undefined) return answering.abortSignal
-        // THE RECEIVED REQUEST, which bun aborts as its caller hangs up, and not one a rung or a
-        // mount made since (37.3); a socket mux connection has none, and its `request` is the one
-        // its close aborts (18.18). 42.8's scope has neither, and no request to end with.
-        const asked = answering.received ?? answering.request
-        if (asked === undefined) return undefined
-        answering.abortSignal = AbortSignal.any([appStopSignal(), asked.signal])
-        return answering.abortSignal
+    requestSignal,
+    // A request entered inside a job's run is the narrower owner.
+    ownerSignal: () => {
+        const scope = STORAGE.getStore()
+        return scope === undefined ? OWNER.getStore() : requestSignal(scope)
     },
 }
 

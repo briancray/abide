@@ -222,8 +222,9 @@ test('a worker file the thread imports is the module itself, run in that thread 
 })
 
 // A job's `run` is any function handed the job's signal, and a worker export is one: each run is a
-// thread of its own, and `stop` aborts the run in it.
-test('a job whose run is a worker export runs it off the main thread, and stopping it aborts it there — 54.26, 55.6', async () => {
+// thread of its own, and the call is made where `abortSignal` answers the run's signal (54.39), so
+// `stop` ends the thread and rejects the call with the stop (55.8).
+test('a job whose run is a worker export runs it off the main thread, and stopping it ends the thread — 54.26, 54.39, 55.8', async () => {
     let onMain: boolean | undefined
     const offloaded = job('offloaded', {
         every: 3_600_000,
@@ -234,17 +235,23 @@ test('a job whose run is a worker export runs it off the main thread, and stoppi
     await offloaded.runNow()
     expect(onMain).toBe(false)
     await offloaded.stop()
-    let answered: string | undefined
+    let ended: string | undefined
     const waiting = job('waiting', {
         every: 3_600_000,
         run: async (signal) => {
-            answered = await thread.untilAborted(signal)
+            ended = await thread.untilAborted(signal).then(
+                (answered) => `answered ${answered}`,
+                (thrown: unknown) =>
+                    thrown === signal.reason
+                        ? 'rejected with the stop'
+                        : String(thrown),
+            )
         },
     })
     const running = waiting.runNow()
     await waiting.stop()
     await running
-    expect(answered).toBe('aborted')
+    expect(ended).toBe('rejected with the stop')
 })
 
 test('the app stopping aborts a call in flight — 55.8, 37.28', async () => {

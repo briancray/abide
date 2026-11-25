@@ -805,7 +805,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `time` | `(options?: TimeOptions) => TimeParts` | Times kept current as parts an app spreads onto a `<time>` of its own, one per value: its `datetime` and `title`, and its label. | 52.1, 52.2, 52.3, 52.5, 52.72, 52.73, 52.74, 52.75, 52.76, 52.77, 49.2, 49.4, 49.5, 49.6 |
+| `time` | `(options?: TimeOptions) => TimeParts` | Times kept current as parts an app spreads onto a `<time>` of its own, one per value: its `datetime` and `title`, and its label. | 52.1, 52.2, 52.3, 52.5, 52.72, 52.73, 52.74, 52.75, 52.76, 52.77, 52.113, 49.2, 49.4, 49.5, 49.6 |
 | `TimeOptions` | `{ style?: 'long' \| 'short' \| 'narrow' \| (() => 'long' \| 'short' \| 'narrow'); locale?: string \| undefined \| (() => string \| undefined); timeZone?: string \| undefined \| (() => string \| undefined) }` | How a time is written, each read live where a function is given. | 52.72 |
 | `TimeParts` | `{ at(value: unknown): TimeAt }` | A value's parts. | 32.11, 32.99, 52.72, 52.73, 49.9 |
 | `TimeAt` | `{ readonly time: Record<string, unknown>; get text(): string }` | A value's `<time>` attributes and its label. | 32.99, 52.72, 52.73, 49.3 |
@@ -966,11 +966,11 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `format.number` | `(value: unknown, options?: Omit<Intl.NumberFormatOptions, 'style'> & { locale?: string }) => string` | A number with its thousands grouped. | 52.1, 52.2, 52.6, 52.112 |
 | `format.plural` | `(value: unknown, one: string, many?: string, options?: { locale?: string }) => string` | A count and the word for what it counts. | 52.1, 52.2, 52.6 |
 | `format.list` | `(value: unknown, options?: Intl.ListFormatOptions & { locale?: string }) => string` | A list of items as a sentence says it. | 52.1, 52.2, 52.6, 52.112 |
-| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101 |
-| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101 |
+| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101, 52.113 |
+| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101, 52.113 |
 | `format.timeZone` | `Reactive<string \| undefined>` | The zone the app pins every date to where its caller names none, or `undefined` for the visitor's own. | 52.3, 52.44, 52.45 |
 | `format.duration` | `(value: unknown, options?: { locale?: string }) => string` | A length of time in milliseconds, in its two largest units. | 52.1, 52.2, 52.4, 52.6 |
-| `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow'; numeric?: 'auto' \| 'always' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32 |
+| `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow'; numeric?: 'auto' \| 'always' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32, 52.113 |
 | `format.bytes` | `(value: unknown, options?: { minimumFractionDigits?: number; maximumFractionDigits?: number; locale?: string }) => string` | A size in bytes, in the largest unit it fills. | 52.1, 52.2, 52.6, 52.7, 52.112 |
 
 ## `highlight`
@@ -983,7 +983,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `shrinkImage` | `(file: Blob & { name?: string }, options?: ShrinkImageOptions) => Promise<File>` | A picture made no larger than an edge and a byte budget, the same call where Bun runs and in a browser. | 53.87, 53.88, 53.89 |
+| `shrinkImage` | `(file: Blob & { name?: string }, options?: ShrinkImageOptions) => Promise<File>` | A picture made no larger than an edge and a byte budget, the same call where Bun runs and in a browser. | 53.87, 53.88, 53.89, 53.102 |
 | `ShrinkImageOptions` | `{ maxEdge?: number; maxBytes?: number; type?: 'image/jpeg' \| 'image/webp' \| 'image/png'; quality?: number }` | The most pixels its longer edge keeps, the most bytes it takes, what it is written as, and the quality it is written at first. | 53.87, 53.88 |
 
 ## `download`
@@ -1283,7 +1283,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `abortSignal` | `() => AbortSignal` | The signal that says stop to the work it is called in, from the innermost owner that work runs under. | 7.38, 7.39, 7.45, 7.46, 7.47, 7.48, 7.49 |
+| `abortSignal` | `() => AbortSignal` | The signal that says stop to the work it is called in, from the innermost owner that work runs under. | 7.38, 7.39, 7.45, 7.46, 7.47, 7.48, 7.49, 54.39 |
 
 # Browser context
 
@@ -1444,7 +1444,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined; paused?: Reactive<boolean> \| (() => boolean) }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38 |
+| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined; paused?: Reactive<boolean> \| (() => boolean) }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38, 54.39 |
 | `Job` | `{ status: Reactive<JobStatus>; runNow: () => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
 | `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
 | `Job.runNow` | `() => Promise<JobStatus>` | A run ahead of the schedule. | 54.20 |
@@ -1847,13 +1847,13 @@ rows a runner prints, and an adapter for an abide app.
 
 | Command | Meaning | Rules |
 | --- | --- | --- |
-| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106, 38.112, 38.122, 38.124, 38.131, 38.132, 38.195 |
+| `abide scaffold <name>` | Writes a starter project. | 38.1, 38.42, 38.103, 38.104, 38.106, 38.112, 38.122, 38.124, 38.131, 38.132, 38.195, 38.218 |
 | `abide run <file> [args…]` | Runs a script under the abide runtime. | 38.2, 38.57, 38.211 |
-| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105, 38.123, 38.138, 38.196, 38.197, 38.209, 38.210, 38.212 |
+| `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105, 38.123, 38.138, 38.196, 38.197, 38.209, 38.210, 38.212, 38.218 |
 | `abide format [--check] [path…]` | The formatter over a `.abide` tree. | 38.25, 38.125, 38.126, 38.127, 38.128, 38.129, 38.137 |
 | `abide routes [--json]` | Every address the app answers, the file answering it, what each matcher takes, the rungs each handler names, and where each hook is filed. | 38.108, 38.123, 38.135 |
 | `abide dev [--port <n>] [--hostname <host>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97, 38.123, 38.136, 7.30 |
-| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94, 38.123, 38.139 |
+| `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94, 38.123, 38.139, 38.218 |
 | `abide start [--port <n>] [--hostname <host>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97, 38.110, 38.123, 38.136, 38.139 |
 | `abide [--url <origin>] [--port <n>] [--hostname <host>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.7, 38.53, 38.54, 38.55, 38.58, 38.59, 38.60, 38.62, 38.123, 38.136 |
 | `abide call <address> [args]` | One call to one handler. | 38.8, 38.61, 38.110, 38.216 |

@@ -60,7 +60,7 @@ export type ChatOptions = {
 
 /** A message's parts: its element, its speaker, its blocks, and what is shown under an answer. */
 export type ChatMessageParts = {
-    /** The message's element: `data-speaker` and `data-streaming`. */
+    /** The message's element: `data-speaker`, `data-streaming` and `data-ends`. */
     readonly message: Record<string, unknown>
     /** The element naming who spoke. */
     readonly speaker: Record<string, unknown>
@@ -351,6 +351,12 @@ export function chat(options: ChatOptions): ChatParts {
     const follow = autoscroll()
 
     const answering = (index: number) => streaming() && index >= answerStart
+    // 53.29 — an assistant message followed by nothing, or by one the person wrote.
+    const endsAnswer = (message: AssistantMessage, index: number) => {
+        if (message.role !== 'assistant') return false
+        const next = messages()[index + 1]
+        return next === undefined || written(next)
+    }
 
     return {
         messages,
@@ -389,6 +395,10 @@ export function chat(options: ChatOptions): ChatParts {
                     get 'data-streaming'() {
                         return answering(index) ? '' : undefined
                     },
+                    // 49.1, 53.29 — the state `ends` reads, for a caller to style.
+                    get 'data-ends'() {
+                        return endsAnswer(message, index) ? '' : undefined
+                    },
                 },
                 speaker: { 'data-chat': 'speaker' },
                 role,
@@ -405,9 +415,7 @@ export function chat(options: ChatOptions): ChatParts {
                     return answering(index)
                 },
                 get ends() {
-                    if (message.role !== 'assistant') return false
-                    const next = messages()[index + 1]
-                    return next === undefined || written(next)
+                    return endsAnswer(message, index)
                 },
                 actions: { 'data-chat': 'actions' },
                 retry: () => retry(index),

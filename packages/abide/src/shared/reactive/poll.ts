@@ -98,7 +98,7 @@ export const BODY_RUN: { cell: Cell | null } = { cell: null }
 /**
  * The signal that says stop to the work this is called in — the innermost owner it runs under, which
  * aborts where any owner above it does: a `memo` run's own (7.45, 7.46, 7.47), the request being
- * served (7.48), and otherwise the one `App.stop` aborts before it waits on what is in flight (7.38).
+ * served (7.48), a `job`'s run (54.39), and otherwise the one `App.stop` aborts before it waits on what is in flight (7.38).
  * Never aborted where no app stops and no run is replaced, a browser outside a run among them.
  */
 export function abortSignal(): AbortSignal {
@@ -110,8 +110,7 @@ export function abortSignal(): AbortSignal {
             : runSignal(cell, STOPPING.signal)
     }
     const mark = provider.currentRun()
-    if (mark === undefined)
-        return provider.requestSignal(provider.current()) ?? STOPPING.signal
+    if (mark === undefined) return provider.ownerSignal() ?? STOPPING.signal
     const cell = mark.cell
     // 7.47 — a continuation of a run 7.46 has already ended: that run's signal said stop.
     if (mark.epoch !== cell.runEpoch) return AbortSignal.abort()

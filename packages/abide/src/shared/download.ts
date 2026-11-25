@@ -3,6 +3,8 @@
 
 import { isServer } from './isServer.ts'
 
+const RELEASE_AFTER = 40_000
+
 /** Saves `data` as a file named `name`, as a click on a link to it would. */
 export function download(
     data: Blob | string,
@@ -19,7 +21,11 @@ export function download(
     link.href = address
     link.download = name
     link.rel = 'noopener'
+    // In the document for the click: an engine may ignore one on a link outside it.
+    document.body.append(link)
     link.click()
-    // Released once the save has had the address; a click starts it in the same task.
-    setTimeout(() => URL.revokeObjectURL(address), 0)
+    link.remove()
+    // A save may read the address long after the click — WebKit decides on a download, `abide
+    // native`'s included (38.192), on a later turn — so it is released well after any read starts.
+    setTimeout(() => URL.revokeObjectURL(address), RELEASE_AFTER)
 }

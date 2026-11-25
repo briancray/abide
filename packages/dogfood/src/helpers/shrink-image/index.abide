@@ -19,6 +19,7 @@ import shrinkPhoto from './lib/ShrinkPhoto.abide' with { type: 'text' }
             from: [
                 "test('a picture over maxBytes is lowered in quality",
                 "test('a picture already within every bound is handed back as it is",
+                "test('a picture carrying metadata is written again without it",
             ],
         },
     ]}
@@ -27,8 +28,9 @@ import shrinkPhoto from './lib/ShrinkPhoto.abide' with { type: 'text' }
         <p>Hand <code>shrinkImage</code> a picked or dropped file. It answers one no larger than
             <code>maxEdge</code> on its longer edge, and, given <code>maxBytes</code>, lowers its
             quality and then its size until it fits. The same call runs on the server, through
-            <code>Bun.Image</code>, and in the browser, through a canvas; a file already within
-            every bound comes back as it is.</p>
+            <code>Bun.Image</code>, and in the browser, through a canvas. A file already within
+            every bound comes back as it is, unless it carries metadata — a phone's EXIF and the
+            place it was taken — which it is written again without.</p>
         <Example code={shrinkPhoto}><ShrinkPhoto /></Example>
     </Section>
 </Doc>
