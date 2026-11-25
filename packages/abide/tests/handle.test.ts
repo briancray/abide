@@ -34,11 +34,31 @@ test('JSON is its value, text is a string, and anything else is a Blob — 54.30
     expect(await handle(new Response(null, { status: 204 }))).toBeUndefined()
 })
 
+// THE REVERT: cancel a refused body unread — every `cause` below is `undefined`.
 test('a status outside 2xx, and JSON that does not parse, are a FetchFailed — 54.31', async () => {
-    expect(await handle(new Response('no', { status: 404 }))).toMatchObject({
+    const missing = await handle(new Response('no', { status: 404 }))
+    expect(missing).toMatchObject({
         name: 'FetchFailed',
         data: { status: 404, reason: 'status' },
     })
+    expect((missing as Error).cause).toBe('no')
+    const unroutable = await handle(
+        Response.json({ error: 'No path could be found' }, { status: 422 }),
+    )
+    expect((unroutable as Error).cause).toEqual({
+        error: 'No path could be found',
+    })
+    const garbled = await handle(
+        new Response('<html>', {
+            status: 502,
+            headers: { 'content-type': 'application/json' },
+        }),
+    )
+    expect((garbled as Error).cause).toBe('<html>')
+    const declaredLong = await handle(
+        new Response('x'.repeat(70_000), { status: 500 }),
+    )
+    expect((declaredLong as Error).cause).toBeUndefined()
     const broken = await handle(
         new Response('<html>', {
             headers: { 'content-type': 'application/json' },

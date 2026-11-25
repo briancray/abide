@@ -24,6 +24,13 @@ const service = Bun.serve({
                 ? new Response('busy', { status: 503 })
                 : Response.json({ name: 'Hopper & Co' })
         if (pathname === '/missing') return new Response('no', { status: 404 })
+        if (pathname === '/no-route')
+            return Response.json(
+                { error: 'No path could be found for input' },
+                { status: 422 },
+            )
+        if (pathname === '/long-refusal')
+            return new Response('x'.repeat(70_000), { status: 422 })
         if (pathname === '/limited')
             return new Response('later', {
                 status: 429,
@@ -130,6 +137,22 @@ test('a FetchFailed carries what fetch threw as its cause, and the wire carries 
     expect(
         JSON.stringify(problemOf(answer as Failed<string, unknown>)),
     ).not.toContain('ECONNREFUSED')
+})
+
+// THE REVERT: cancel a refused body unread, as `refusedBy` did — the service's own `error` is
+// `undefined` where `No path could be found for input` is due.
+test('a refused FetchFailed carries what the service said as its cause, and the wire carries none of it — 54.31, 54.34', async () => {
+    const answer = await fetchData(at('/no-route'), { retries: 0 })
+    expect(answer).toMatchObject({ data: { status: 422, reason: 'status' } })
+    expect((answer as Error).cause).toEqual({
+        error: 'No path could be found for input',
+    })
+    expect(
+        JSON.stringify(problemOf(answer as Failed<string, unknown>)),
+    ).not.toContain('No path')
+    const long = await fetchData(at('/long-refusal'), { retries: 0 })
+    expect(long).toMatchObject({ data: { status: 422, reason: 'status' } })
+    expect((long as Error).cause).toBeUndefined()
 })
 
 test("the caller's own abort is thrown, and nothing is asked again — 54.11", async () => {

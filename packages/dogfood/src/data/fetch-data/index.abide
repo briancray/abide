@@ -49,6 +49,12 @@ import Section from '#src/lib/Section.abide'
                 "test('a FetchFailed carries what fetch threw as its cause, and the wire carries none of it",
             ],
         },
+        {
+            path: 'packages/abide/tests/fetchData.test.ts',
+            from: [
+                "test('a refused FetchFailed carries what the service said as its cause",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Fill in a company from a registry that fails now and then">
@@ -125,6 +131,22 @@ import Section from '#src/lib/Section.abide'
             })
             if (isFailed(filing))
                 log.warning('registry gave up', filing.data, filing.cause)
+        `} />
+    </Section>
+
+    <Section level={3} title="Pass on the registry's own reason for refusing">
+        <p>A status outside 2xx keeps what the service answered as the <code>cause</code>, read
+            as its type says: a JSON body as its value, text as a string. Like a thrown
+            <code>cause</code>, it never leaves the server unless you hand it on.</p>
+        <Code language="ts" caption="server" code={`
+            import { fetchData, GET, isFailed, refuse } from '@abide/abide/server'
+
+            export default GET(async ({ id }: { id: string }) => {
+                const entry = await fetchData(\`https://registry.example/companies/\${id}\`)
+                if (isFailed(entry) && entry.data.status === 422)
+                    return refuse(422, (entry.cause as { error: string }).error)
+                return entry
+            })
         `} />
     </Section>
 

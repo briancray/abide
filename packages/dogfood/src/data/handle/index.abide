@@ -43,6 +43,18 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
+    <Section level={3} title="Show what a refusing service said">
+        <p>A <code>FetchFailed</code> for a status outside 2xx carries the service's body as its
+            <code>cause</code>, read as its type says.</p>
+        <Code language="ts" caption="shared" code={`
+            import { handle, isFailed, log } from '@abide/abide'
+
+            const response = await fetch('https://registry.example/companies/hopper')
+            const company = await handle(response)
+            if (isFailed(company)) log.warning('registry refused', company.cause)
+        `} />
+    </Section>
+
     <Section level={3} title="Read a stream of deal moves as they arrive">
         <p>A JSON Lines or event stream is its chunks, each handed over as it arrives.</p>
         <Code language="ts" caption="shared" code={`

@@ -6768,8 +6768,10 @@ looks MUST be spaced from when each started rather than from the end of the run 
 a type ending `+json`, as its parsed value, and a type 54.32 and 54.33 do not name as a `Blob`.
 
 54.31 `handle` MUST answer a `Response` outside 2xx with a `FetchFailed` carrying its status, the
-reason `status`, and its body canceled, and JSON that does not parse with one for the reason
-`shape` whose `cause` is what the parse threw.
+reason `status`, and as its `cause` its body read as 54.30 and 54.33 read one — a stream, and JSON
+that does not parse, as its text — where the body is 65,536 bytes or fewer, and no `cause` where it is
+longer; and MUST answer a 2xx `Response` whose JSON does not parse with one for the reason `shape`
+whose `cause` is what the parse threw.
 
 54.32 `handle` MUST answer a JSON Lines or event stream `Response` with an async iterable of its
 chunks, each yielded as the frame carrying it completes.
@@ -6778,7 +6780,8 @@ chunks, each yielded as the frame carrying it completes.
 a `Response` with no body as `undefined`.
 
 54.34 A `FetchFailed` that `fetchData` settles to for a thrown attempt MUST carry what
-was thrown as its `cause`, and Problem Details MUST NOT carry a `cause`.
+was thrown as its `cause`, one for an attempt answered outside 2xx the body 54.31 reads, and Problem
+Details MUST NOT carry a `cause`.
 
 54.35 `trustedIdentity` MUST sign in, for the request it runs in, the caller its `header` names on a
 request from one of its `proxies`, as the claims `claims` makes of the header's value, as `App.run`'s

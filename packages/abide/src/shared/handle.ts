@@ -14,7 +14,7 @@ import { essenceOf, framedStream, framingOf } from './framing.ts'
  * @param response what a `fetch` answered
  */
 export function handle(response: Response): Promise<unknown | FetchFailed> {
-    // 54.31 — refused: the status it was answered at, and a body nobody will read let go.
+    // 54.31 — refused: the status it was answered at, and what the service said as its cause.
     return response.ok ? readBody(response) : refusedBy(response)
 }
 
@@ -60,15 +60,64 @@ export async function readBody(
 }
 
 /**
- * 54.31 — a `Response` outside 2xx as the `FetchFailed` naming its status, its body let go. 15.23,
- * 15.24 — the service's own `Retry-After` is kept with it, so a handler handing it on says it too.
+ * 54.31 — a `Response` outside 2xx as the `FetchFailed` naming its status, what the service said as
+ * its `cause`. 15.23, 15.24 — the service's own `Retry-After` is kept with it, so a handler handing
+ * it on says it too.
  */
 export async function refusedBy(response: Response): Promise<FetchFailed> {
-    await response.body?.cancel()
     const failure = fetchFailed({ status: response.status, reason: 'status' })
+    failure.cause = await refusalBody(response)
     const at = retryAtOf(response.headers.get('retry-after'))
     if (at !== undefined) holdUntil(failure, at)
     return failure
+}
+
+// 54.31 — the most of a refused body read; a longer one is let go unread.
+const REFUSAL_BODY_BYTES = 65_536
+
+/**
+ * A refused `Response`'s body, read as 54.30 and 54.33 read one — JSON that does not parse, and a
+ * stream, as its text — or `undefined` where there is none or it runs past `REFUSAL_BODY_BYTES`.
+ */
+async function refusalBody(response: Response): Promise<unknown> {
+    const body = response.body
+    if (body === null) return undefined
+    if (Number(response.headers.get('content-length')) > REFUSAL_BODY_BYTES) {
+        await body.cancel()
+        return undefined
+    }
+    const chunks: Uint8Array<ArrayBuffer>[] = []
+    let size = 0
+    const reader = body.getReader()
+    for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        size += value.byteLength
+        if (size > REFUSAL_BODY_BYTES) {
+            await reader.cancel()
+            return undefined
+        }
+        chunks.push(value)
+    }
+    if (size === 0) return undefined
+    const type = response.headers.get('content-type')
+    const essence = essenceOf(type)
+    const json = essence === 'application/json' || essence.endsWith('+json')
+    const read = new Blob(chunks, { type: type ?? '' })
+    if (
+        !json &&
+        essence !== '' &&
+        !essence.startsWith('text/') &&
+        framingOf(type) === null
+    )
+        return read
+    const written = await read.text()
+    if (!json) return written
+    try {
+        return JSON.parse(written)
+    } catch {
+        return written
+    }
 }
 
 async function* emptyStream(): AsyncGenerator<never> {}
