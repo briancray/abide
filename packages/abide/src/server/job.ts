@@ -25,7 +25,7 @@ export type JobStatus = {
 /** 54.18 — a job's status beside the ways to run it ahead of its schedule and to end it. */
 export type Job<Input = undefined> = {
     status: Reactive<JobStatus>
-    runNow: (input?: Input) => Promise<JobStatus>
+    run: (input?: Input) => Promise<JobStatus>
     stop: () => Promise<JobStatus>
 }
 
@@ -33,24 +33,26 @@ export type Job<Input = undefined> = {
 const LONGEST_LOOK = 60_000
 
 /** Work run every `every` milliseconds on the server, one run at a time: 54.18-54.27. */
-export function job<Input = undefined>(
-    name: string,
-    options: {
-        /** 54.18, 54.19, 54.25 — the milliseconds between the end of one run and the next, or between their starts under `from`, read at each look where a function. */
-        every: number | (() => number)
-        /** 54.29 — whether `every` is measured from when the last run `'end'`ed, the default, or from when it `'start'`ed. */
-        from?: 'end' | 'start'
-        /** 54.26, 54.39 — the work, handed what `runNow` was given and `undefined` where a look started it; `abortSignal()` in it says stop. */
-        run: (input: Input | undefined) => unknown
-        /** 54.21 — when the last run ended before this process, in epoch milliseconds, or `undefined` where none has. */
-        lastRun?: () => number | undefined
-        /** 54.38 — what holds the schedule: while it reads true, a look starts no run. */
-        paused?: Reactive<boolean, never, never, boolean> | (() => boolean)
-    },
-): Job<Input> {
-    const { every, run, from = 'end' } = options
+export function job<Input = undefined>(options: {
+    /** 54.23 — what a failed run is logged under, beside `job`. */
+    name?: string
+    /** 54.18, 54.19, 54.25 — the milliseconds between the end of one run and the next, or between their starts under `from`, read at each look where a function. */
+    every: number | (() => number)
+    /** 54.29 — whether `every` is measured from when the last run `'end'`ed, the default, or from when it `'start'`ed. */
+    from?: 'end' | 'start'
+    /** 54.26, 54.39 — the work, handed what `Job.run` was given and `undefined` where a look started it; `abortSignal()` in it says stop. */
+    run: (input: Input | undefined) => unknown
+    /** 54.21 — when the last run ended before this process, in epoch milliseconds, or `undefined` where none has. */
+    lastRun?: () => number | undefined
+    /** 54.38 — what holds the schedule: while it reads true, a look starts no run. */
+    paused?: Reactive<boolean, never, never, boolean> | (() => boolean)
+}): Job<Input> {
+    const { every, run: work, from = 'end' } = options
     const intervalOf = typeof every === 'function' ? every : () => every
-    const logger = log.named('job').named(name)
+    const logger =
+        options.name === undefined
+            ? log.named('job')
+            : log.named('job').named(options.name)
     let current: JobStatus = {
         running: false,
         lastRun: null,
@@ -86,7 +88,7 @@ export function job<Input = undefined>(
         let lastError = current.lastError
         try {
             // 54.39 — its own owner, whichever request asked for it or look started it.
-            await ownedBy(signal, () => run(input))
+            await ownedBy(signal, () => work(input))
             lastError = null
         } catch (error) {
             // 54.24 — a run told to stop has not failed.
@@ -112,7 +114,7 @@ export function job<Input = undefined>(
 
     // 54.20 — a run asked for while one is in flight joins it, its input unread. Cleared once
     // settled rather than inside the run, which may settle before it is filed as in flight.
-    const runNow = (input?: Input): Promise<JobStatus> => {
+    const run = (input?: Input): Promise<JobStatus> => {
         if (running !== undefined) return running
         if (stopping.signal.aborted) return Promise.resolve(current)
         const started = runOnce(input)
@@ -141,8 +143,8 @@ export function job<Input = undefined>(
             // 54.29 — the clock spaces its looks from when one settles, so a look waiting on the run
             // would measure from its end. A look made while it runs joins it (54.20): a run due
             // while the last one overran starts at the look after that one ends.
-            if (from === 'start') void runNow()
-            else await runNow()
+            if (from === 'start') void run()
+            else await run()
             return
         }
         const nextRun = nextRunOf()
@@ -165,5 +167,5 @@ export function job<Input = undefined>(
             after: 'settle',
         },
     })
-    return { status, runNow, stop }
+    return { status, run, stop }
 }

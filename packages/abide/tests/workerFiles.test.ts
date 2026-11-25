@@ -226,17 +226,19 @@ test('a worker file the thread imports is the module itself, run in that thread 
 // the call with the stop (55.8) — the call handed no signal of its own.
 test('a job whose run is a worker export runs it off the main thread, and stopping it ends the thread — 54.26, 54.39, 55.8', async () => {
     let onMain: boolean | undefined
-    const offloaded = job('offloaded', {
+    const offloaded = job({
+        name: 'offloaded',
         every: 3_600_000,
         run: async () => {
             onMain = await thread.onMainThread()
         },
     })
-    await offloaded.runNow()
+    await offloaded.run()
     expect(onMain).toBe(false)
     await offloaded.stop()
     let ended: string | undefined
-    const waiting = job('waiting', {
+    const waiting = job({
+        name: 'waiting',
         every: 3_600_000,
         run: async () => {
             const signal = abortSignal()
@@ -249,7 +251,7 @@ test('a job whose run is a worker export runs it off the main thread, and stoppi
             )
         },
     })
-    const running = waiting.runNow()
+    const running = waiting.run()
     await waiting.stop()
     await running
     expect(ended).toBe('rejected with the stop')
