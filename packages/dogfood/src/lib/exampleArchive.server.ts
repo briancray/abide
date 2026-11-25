@@ -1,4 +1,4 @@
-// THE EXAMPLE APP AS A TARBALL a reader unpacks and runs: every file the app is made of under `<app>/`,
+// THE EXAMPLE APP AS A TARBALL a reader unpacks and runs: every file the app is made of under `crm/`,
 // with the workspace's own dependencies rewritten to the published versions they stand for, so
 // `bun install` outside this repo resolves them.
 
@@ -24,9 +24,9 @@ function published(dependencies: Record<string, string> | undefined): void {
             dependencies[name] = PUBLISHED[name] ?? '*'
 }
 
-/** The app as a gzipped tarball, or `undefined` for a name that is not the CRM. */
-export async function exampleArchive(app: string): Promise<Blob | undefined> {
-    const directory = exampleDirectory(app)
+/** The CRM as a gzipped tarball, or `undefined` where no CRM is above the docs app. */
+export async function exampleArchive(): Promise<Blob | undefined> {
+    const directory = exampleDirectory()
     if (directory === undefined) return undefined
     const entries: Record<string, Blob | string> = {}
     for (const path of new Bun.Glob('**').scanSync({
@@ -35,13 +35,13 @@ export async function exampleArchive(app: string): Promise<Blob | undefined> {
     })) {
         if (path.startsWith('node_modules/') || path.startsWith('.abide/'))
             continue
-        entries[`${app}/${path}`] = Bun.file(`${directory}/${path}`)
+        entries[`crm/${path}`] = Bun.file(`${directory}/${path}`)
     }
     const manifest = (await Bun.file(
         `${directory}/package.json`,
     ).json()) as Manifest
     published(manifest.dependencies)
     published(manifest.devDependencies)
-    entries[`${app}/package.json`] = `${JSON.stringify(manifest, null, 4)}\n`
+    entries['crm/package.json'] = `${JSON.stringify(manifest, null, 4)}\n`
     return new Bun.Archive(entries, { compress: 'gzip' }).blob()
 }

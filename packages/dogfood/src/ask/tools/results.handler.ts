@@ -4,7 +4,7 @@ import { exampleResults } from '#src/lib/exampleDirectory.server.ts'
 
 export default GET(
     async ({ path }: { path: string }) => {
-        const results = await exampleResults('crm')
+        const results = await exampleResults()
         if (results === null) return null
         const bench = results.benches[path]
         if (bench !== undefined)

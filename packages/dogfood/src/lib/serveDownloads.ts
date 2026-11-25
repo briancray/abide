@@ -54,14 +54,14 @@ export const serveDownloads: Middleware<Response> = async (
     { request },
 ) => {
     const { pathname } = new URL(request.url)
-    const archived = /^\/examples\/([^/]+)\.tar\.gz$/.exec(pathname)
-    if (archived) {
-        const archive = await exampleArchive(archived[1] as string)
+    if (pathname === '/examples/crm.tar.gz') {
+        const archive = await exampleArchive()
         return archive
             ? new Response(archive, {
                   headers: {
                       'content-type': 'application/gzip',
-                      'content-disposition': `attachment; filename="${archived[1]}.tar.gz"`,
+                      'content-disposition':
+                          'attachment; filename="crm.tar.gz"',
                   },
               })
             : next()
