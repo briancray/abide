@@ -1769,6 +1769,9 @@ refused, its text naming the tool and the image's type, and MUST be logged per 2
 tool's input declares, a rest's on each of its items, MUST carry the pattern its segment takes a part
 by, anchored, and a matcher's name MUST be no part of the path, the operation or the tool.
 
+20.24 `rpc.tool` MUST be the name 20.13 gives its handler, read from its `rpc.address` with the mount
+(16.10) taken off, and MUST be `undefined` while its `rpc.address` is.
+
 # 21. Generated headers
 
 21.1 Every response MUST carry `x-content-type-options: nosniff`.

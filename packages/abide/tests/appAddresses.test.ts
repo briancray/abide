@@ -10,7 +10,9 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
+import { GET, POST } from '#server'
 import { buildFiles } from '#server/appBuild.ts'
+import { MOUNT } from '#shared/mount.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import { surfaceName } from '#shared/surfaceName.ts'
 
@@ -607,6 +609,26 @@ test('a handler is named on MCP and OpenAPI by its method and its route — 20.1
     expect(surfaceName('POST', '/media/[id]')).toBe('post_media_id')
     expect(surfaceName('GET', '/files/[...rest]')).toBe('get_files_rest')
     expect(surfaceName('GET', '/')).toBe('get')
+})
+
+// THE REVERT: name the tool by `rpc.address` as it stands — under `/docs` it reads
+// `post_docs_figures_draw` where `post_figures_draw` is due.
+test('rpc.tool is the name MCP lists the handler by, under a mount too — 20.24', () => {
+    const draw = POST(({ shape }: { shape: string }) => shape)
+    expect(draw.tool).toBeUndefined()
+    draw.address = '/figures/draw'
+    expect(draw.tool).toBe('post_figures_draw')
+    const standing = MOUNT.current
+    MOUNT.current = () => '/docs'
+    try {
+        draw.address = '/docs/figures/draw'
+        expect(draw.tool).toBe('post_figures_draw')
+        const read = GET(({ id }: { id: number }) => id)
+        read.address = '/docs/media/[id]'
+        expect(read.tool).toBe('get_media_id')
+    } finally {
+        MOUNT.current = standing
+    }
 })
 
 // 16.9 — a parameter rides in the path and leaves the args, whatever the method. THE REVERT: drop

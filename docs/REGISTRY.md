@@ -1068,6 +1068,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `rpc.method` | `string` | The HTTP method. | 16.2 |
 | `rpc.url` | `(args?: Args) => string` | The address, resolved against the mount. | 16.9, 16.10, 30.28 |
 | `rpc.address` | `string \| undefined` | Where the handler answers. | 16.88 |
+| `rpc.tool` | `string \| undefined` | The name MCP and OpenAPI list the handler by. | 20.13, 20.24 |
 | `rpc.description` | `string \| undefined` | The human description. | 16.28 |
 | `PatchOp` | `{ op: 'add' \| 'replace' \| 'test'; path: string; value: unknown } \| { op: 'remove'; path: string } \| { op: 'move' \| 'copy'; from: string; path: string }` | One JSON Patch operation (RFC 6902), its paths JSON Pointers, as a followed `GET` is sent what an `s.patch` wrote. | 18.11, 18.13 |
 
@@ -1487,7 +1488,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `resultsOf` | `<Value>(messages: readonly AssistantMessage[], handler: ((...args: never) => Reactive<Value, never, unknown, unknown>) & { method: string; address: string \| undefined }) => Value[]` | What a conversation's calls to one handler answered. | 20.13, 44.51 |
+| `resultsOf` | `<Value>(messages: readonly AssistantMessage[], handler: ((...args: never) => Reactive<Value, never, unknown, unknown>) & { tool: string \| undefined }) => Value[]` | What a conversation's calls to one handler answered. | 20.13, 20.24, 44.51 |
 
 ## `assistantMessage`
 
