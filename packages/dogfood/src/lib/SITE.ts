@@ -1319,7 +1319,7 @@ const WRITTEN: readonly {
                 route: '/ai/results-of',
                 title: '`resultsOf`',
                 description:
-                    "Read what a conversation's calls to one handler answered, typed as that handler's value.",
+                    "Read what a stored conversation's calls to one handler answered, typed as that handler's value.",
                 where: 'anywhere',
             },
             {

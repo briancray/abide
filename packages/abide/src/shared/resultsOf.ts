@@ -1,12 +1,12 @@
 import type { AssistantMessage } from './AssistantEvent.ts'
-import { parsedJson } from './parsedJson.ts'
+import { callsOf } from './callsOf.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 import type { Rpc } from './rpc.ts'
-import { wordsOf } from './wordsOf.ts'
 
 /**
- * What every call to `handler` in `messages` answered, in order, each its value read as JSON (44.49)
- * — a failed call's, and one whose words spell no JSON, left out. 44.51.
+ * What every call to `handler` in `messages` answered, in order — a failed call's, and one that
+ * answered no value, left out. 44.51. For a conversation outside `chat`, a stored one read on a
+ * server say; inside one, `calls` reads the same calls live.
  *
  * A call is the handler's by the tool name its MCP surface lists it under (20.13, 20.24).
  */
@@ -17,22 +17,7 @@ export function resultsOf<Value>(
         Pick<Rpc<Value, never>, 'tool'>,
 ): Value[] {
     const values: Value[] = []
-    const name = handler.tool
-    if (name === undefined) return values
-    const calls = new Set<string>()
-    for (const message of messages) {
-        if (typeof message.content === 'string') continue
-        for (const block of message.content)
-            if (block.type === 'tool_use' && block.name === name)
-                calls.add(block.id)
-            else if (
-                block.type === 'tool_result' &&
-                block.is_error !== true &&
-                calls.has(block.tool_use_id)
-            ) {
-                const value = parsedJson(wordsOf(block.content))
-                if (value !== undefined) values.push(value as Value)
-            }
-    }
+    for (const call of callsOf<unknown, Value>(messages, handler.tool, false))
+        if (call.value !== undefined) values.push(call.value)
     return values
 }

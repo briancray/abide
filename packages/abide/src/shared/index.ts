@@ -52,7 +52,8 @@ export {
     type CommandParts,
     commandPalette,
 } from './commandPalette.ts'
-// 53.31-53.40 — a conversation over an assistant handler, as parts.
+// 53.31-53.40, 53.109 — a conversation over an assistant handler, as parts, and its calls to one handler.
+export { type ChatCall } from './callsOf.ts'
 export {
     type ChatOptions,
     type ChatParts,

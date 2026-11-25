@@ -4668,9 +4668,9 @@ JSON where its call did not fail and its handler has a schema 19.21 derives, and
 
 44.50 A `Provider` MUST name the tool of each `tool_use` block it streams as its `Toolbox` lists it.
 
-44.51 `resultsOf` MUST hand back, in order, the words of each `tool_result` block in the messages
-it is given read as JSON, whose `tool_use` names the tool 20.13 lists the `Rpc` it is given under, and
-none of a call that failed or whose words spell no JSON.
+44.51 `resultsOf` MUST hand back, in order, the value 44.106 reads for each call among the messages
+it is given whose `tool_use` names the tool 20.13 lists the `Rpc` it is given under, and none for a
+call that failed or answered no value.
 
 44.52 `assistantMessage` MUST draw an image longer than 1568 pixels on its long side down to 1568,
 and a JPEG and an image of a type 44.36 does not name at their own size, so a photo's metadata —
@@ -4890,6 +4890,11 @@ block's words, a `citations_delta` adds to its `citations`, a `thinking_delta` a
 event MUST go into the user message after the run, every result of one run in one message. A
 `tool_use` no `tool_result` answers, and an assistant message left with nothing in it, MUST be left
 out.
+
+44.106 A call's value MUST be the `value` of the `tool_result` event its `tool_result` block was
+folded from (44.49), kept beside the block, which MUST carry nothing the Messages API does not take;
+for a block no event was folded into, its words read as JSON, and `undefined` where they spell none;
+and a call that failed, or that nothing has answered, MUST have none.
 
 # 45. Offline
 
@@ -6799,6 +6804,10 @@ user message of its blocks in order, less each text block holding only whitespac
 
 53.108 `chat`'s `attaching` MUST be true while an `attach` call has not settled, and a send while it
 is true MUST be held, and made once every call has settled.
+
+53.109 `chat`'s `calls` of an `Rpc` MUST be the calls 44.51 finds in its messages for that `Rpc`, in
+order, each with its `tool_use` block's `input` as it stands, the value 44.106 reads, whether its
+result is an error, and `streaming` while an answer streams and no `tool_result` answers it.
 
 # 54. Guards, fetches and jobs
 

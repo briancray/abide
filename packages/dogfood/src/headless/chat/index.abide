@@ -32,6 +32,18 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
             ],
         },
         {
+            path: 'packages/dogfood/examples/crm/src/ops/lib/AssistedReport.test.ts',
+            from: [
+                "test('the page reads what the assistant wrote off its calls to draftReport'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/assistantBlocks.test.ts',
+            from: [
+                "test('chat hands back the calls to one handler, live, each value as its event delivered it — 53.109, 44.106'",
+            ],
+        },
+        {
             path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
             from: ["test('Stop ends the answer and keeps what arrived'"],
         },
@@ -187,6 +199,35 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
             {#if block.type === 'tool_use'}
                 <span {...talk.tool(block).tool}>used {block.name}</span>
             {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Fill a report from what the assistant wrote">
+        <p><code>calls(handler)</code> is every call the conversation made to one handler, in
+            order, typed by it: its <code>input</code>, its <code>value</code> as the answer
+            delivered it, and whether it <code>failed</code> or is still
+            <code>streaming</code>. Read it in a <code>watch</code>, and each value lands as
+            its call answers.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { chat, props, type ReportDraft, watch } from '@abide/abide'
+            import askReport from '../askReport.handler.ts'
+            import draftReport from '../draftReport.handler.ts'
+
+            const { draft } = props<{ draft: ReportDraft }>()
+            const talk = chat({
+                ask: (_conversation, options) =>
+                    askReport({ draft: draft.markdown() }, options),
+            })
+
+            watch(() => {
+                for (const written of talk.calls(draftReport))
+                    if (written.value !== undefined) {
+                        draft.summary.set(written.value.summary)
+                        draft.description.set(written.value.description)
+                    }
+            })
+            </script>
         `} />
     </Section>
 

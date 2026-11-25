@@ -10,6 +10,7 @@ import type {
     AssistantMessage,
 } from '#shared/AssistantEvent.ts'
 import { assistantMessage } from '#shared/assistantMessage.ts'
+import type { ChatCall } from '#shared/callsOf.ts'
 import { chat } from '#shared/chat.ts'
 import { resultsOf } from '#shared/resultsOf.ts'
 import { POST, type Rpc } from '#shared/rpc.ts'
@@ -310,4 +311,116 @@ test('resultsOf reads what a handler’s calls answered off the messages — 44.
             whoami,
         ),
     ).toEqual(['ada'])
+})
+
+// 53.109, 44.106 — A CONVERSATION'S CALLS TO ONE HANDLER, live: a call shows as its block starts, with
+// the input its JSON streamed, running until a result answers it, its value then the one the
+// `tool_result` event delivered — here a value its words do not spell, so it is not read back from
+// them — and a failed call's none. `resultsOf` reads the same calls: off the folded answer the
+// delivered value, and off the same messages stored and read back, with no event behind them, the
+// words alone. THE REVERTS: drop `delivered.set` from `MessageAccumulator`, and the call's value is
+// `undefined` where `4217` is due; drop `streaming` from `callsOf`'s record, and the running call
+// reads as settled.
+test('chat hands back the calls to one handler, live, each value as its event delivered it — 53.109, 44.106', async () => {
+    const balance = POST((args: { account: string }) => args.account.length)
+    balance.address = '/accounts/balance'
+    const run = (id: string, input: string): AssistantEvent[] => [
+        {
+            type: 'message_start',
+            message: {
+                id: `msg_${id}`,
+                type: 'message',
+                role: 'assistant',
+                model: 'claude-opus-5-5',
+                content: [],
+                stop_reason: null,
+                stop_sequence: null,
+                usage: { input_tokens: 1, output_tokens: 1 },
+            },
+        },
+        {
+            type: 'content_block_start',
+            index: 0,
+            content_block: {
+                type: 'tool_use',
+                id,
+                name: 'post_accounts_balance',
+                input: {},
+            },
+        },
+        {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'input_json_delta', partial_json: input },
+        },
+        { type: 'content_block_stop', index: 0 },
+        { type: 'message_stop' },
+    ]
+    const events: AssistantEvent[] = [
+        ...run('t1', '{"account":"checking"}'),
+        {
+            type: 'tool_result',
+            tool_use_id: 't1',
+            content: [{ type: 'text', text: 'checking holds 4217' }],
+            is_error: false,
+            value: 4217,
+        },
+        ...run('t2', '{"account":"closed"}'),
+        {
+            type: 'tool_result',
+            tool_use_id: 't2',
+            content: [{ type: 'text', text: 'no such account' }],
+            is_error: true,
+            value: undefined,
+        },
+    ]
+    let release: () => void = () => {}
+    const paused = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    const talk = chat({
+        async *ask() {
+            yield* events.slice(0, 5)
+            await paused
+            yield* events.slice(5)
+        },
+    })
+    talk.draft.set({ role: 'user', content: 'my balances?' })
+    talk.submit()
+    while (talk.messages().length < 2) await Bun.sleep(1)
+    const read = (calls: ChatCall<{ account: string }, number>[]) =>
+        calls.map(({ input, value, failed, streaming }) => ({
+            input,
+            value,
+            failed,
+            streaming,
+        }))
+    expect(read(talk.calls(balance))).toEqual([
+        {
+            input: { account: 'checking' },
+            value: undefined,
+            failed: false,
+            streaming: true,
+        },
+    ])
+    release()
+    while (talk.streaming) await Bun.sleep(1)
+    expect(read(talk.calls(balance))).toEqual([
+        {
+            input: { account: 'checking' },
+            value: 4217,
+            failed: false,
+            streaming: false,
+        },
+        {
+            input: { account: 'closed' },
+            value: undefined,
+            failed: true,
+            streaming: false,
+        },
+    ])
+    expect(resultsOf(assistantMessage('assistant', events), balance)).toEqual([
+        4217,
+    ])
+    expect(resultsOf(structuredClone(talk.messages()), balance)).toEqual([])
 })

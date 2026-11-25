@@ -1,11 +1,11 @@
 <script>
 import {
-    assistantMessage,
+    chat,
     onRefusal,
     reactive,
     report,
     type ReportDraft,
-    resultsOf,
+    watch,
 } from '@abide/abide'
 
 import askReport from '../askReport.handler.ts'
@@ -13,29 +13,38 @@ import draftReport from '../draftReport.handler.ts'
 import sendStatement from '../sendStatement.handler.ts'
 
 let draft = reactive<ReportDraft | undefined>(undefined)
-let asked = reactive(false)
 
 onRefusal((_refusal, call) => {
     draft = report({ trace: call.trace })
 })
 
 // The assistant reads the draft as the person sees it, and nothing more.
-async function ask(current: ReportDraft) {
-    asked = true
-    const events = await askReport({ draft: current.markdown() })
-    const messages = assistantMessage('assistant', events)
-    for (const written of resultsOf(messages, draftReport)) {
-        current.summary.set(written.summary)
-        current.description.set(written.description)
-    }
+const talk = chat({
+    ask: (_conversation, options) =>
+        askReport({ draft: draft?.markdown() ?? '' }, options),
+})
+
+// What the assistant wrote through draftReport goes into the draft as it lands.
+watch(() => {
+    const current = draft
+    for (const written of talk.calls(draftReport))
+        if (current !== undefined && written.value !== undefined) {
+            current.summary.set(written.value.summary)
+            current.description.set(written.value.description)
+        }
+})
+
+function ask() {
+    talk.draft = { role: 'user', content: 'Write my problem report.' }
+    talk.submit()
 }
 </script>
 
 <div class="row">
     <button onclick={() => sendStatement({ id: 'c2' })}>
         Email Grace her statement</button>
-    <button disabled={draft === undefined || asked}
-        onclick={() => draft && ask(draft)}>Ask the assistant</button>
+    <button disabled={draft === undefined || talk.messages.length > 0}
+        onclick={ask}>Ask the assistant</button>
     <button disabled={draft === undefined} onclick={() => draft?.open()}>
         Review and send</button>
 </div>

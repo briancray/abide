@@ -12,6 +12,7 @@ import type {
 } from './AssistantEvent.ts'
 import { assistantMessage, ATTACHABLE } from './assistantMessage.ts'
 import { type Autoscroll, autoscroll } from './autoscroll.ts'
+import { callsOf, type ChatCall } from './callsOf.ts'
 import { dropzone, type DropzoneParts } from './dropzone.ts'
 import { hotkeys } from './hotkeys.ts'
 import { type Live, live } from './live.ts'
@@ -19,6 +20,7 @@ import { MessageAccumulator } from './MessageAccumulator.ts'
 import { messageOf } from './messageOf.ts'
 import { reactive } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
+import type { Rpc } from './rpc.ts'
 import { wordsOf } from './wordsOf.ts'
 
 type Text = Extract<AssistantContent, { type: 'text' }>
@@ -123,6 +125,14 @@ export type ChatParts = {
         /** What it answered, in words, `undefined` while it runs. */
         readonly answer: string | undefined
     }
+    /** 53.109 — every call in the conversation to `handler`, in order, each typed by the handler: live while it streams. */
+    calls<Input, Value>(
+        handler: ((
+            args: Input,
+            ...rest: never[]
+        ) => Reactive<Value, never, unknown, unknown>) &
+            Pick<Rpc<Value, never>, 'tool'>,
+    ): ChatCall<Input, Value>[]
     /** 53.26 — the permission prompts the answer streaming asks, each with the visitor's answer. */
     get permissions(): readonly ChatPermission[]
     /** A permission prompt's elements: the prompt, with `data-answer`, its name, its input, and the two buttons answering it. */
@@ -534,6 +544,8 @@ export function chat(options: ChatOptions): ChatParts {
                         : wordsOf(toolResult.content),
             }
         },
+        // 53.109
+        calls: (handler) => callsOf(messages(), handler.tool, streaming()),
         get permissions() {
             return permissions()
         },

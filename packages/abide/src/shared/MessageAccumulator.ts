@@ -17,6 +17,18 @@ import type {
 /** A block as it is written: any of the API's, by its fields, which its deltas fill in. */
 type Writing = { type: string; [field: string]: unknown }
 
+// 44.106 — THE VALUE EACH `tool_result` EVENT DELIVERED (44.49), by the block it was folded into: the
+// block goes back to the API as the API takes it, so the value is kept beside it rather than on it,
+// and what a call answered is read from here rather than from its words read again as JSON.
+const delivered = new WeakMap<AssistantContent, unknown>()
+
+/** The value the `tool_result` event folded into `block` delivered, and `undefined` where no event was. */
+export function deliveredValue(
+    block: AssistantContent,
+): { value: unknown } | undefined {
+    return delivered.has(block) ? { value: delivered.get(block) } : undefined
+}
+
 /** Folds an answer's events, one at a time, into the messages they amount to. */
 export class MessageAccumulator {
     /** Where in the messages the answer begins: what `settle` reads from. */
@@ -97,6 +109,7 @@ export class MessageAccumulator {
                     content: event.content,
                     is_error: event.is_error,
                 }
+                delivered.set(answered, event.value)
                 // 44.12 — every result of one run in one user message.
                 const last = messages[messages.length - 1]
                 if (last !== undefined && answersOnly(last))

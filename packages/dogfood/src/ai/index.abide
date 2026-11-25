@@ -233,20 +233,25 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
     </Section>
 
     <Section title="Read what a tool answered as its handler's own value">
-        <p>A tool's answer reaches the model as text.
-            <a href={url('/ai/results-of')}><code>resultsOf</code></a> hands the page the value
-            each call to one handler answered, typed as that handler's, and leaves a failed call
-            out.</p>
+        <p>A tool's answer reaches the model as text. In a page,
+            <a href={url('/headless/chat')}><code>chat</code></a>'s <code>calls(handler)</code>
+            hands back each call to one handler, typed as that handler's, its value as the answer
+            delivered it, live while it streams. For a conversation outside a
+            <code>chat</code> — one stored and read on a server —
+            <a href={url('/ai/results-of')}><code>resultsOf</code></a> hands back the values
+            alone, a failed call left out.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { type AssistantMessage, props, resultsOf } from '@abide/abide'
+            import { chat } from '@abide/abide'
+            import askAssistant from './askAssistant.handler.ts'
             import searchContacts from './searchContacts.handler.ts'
 
-            const { messages } = props<{ messages: AssistantMessage[] }>()
-            const found = resultsOf(messages, searchContacts).flat()
+            const talk = chat({ ask: askAssistant })
             </script>
 
-            {#for contact of found}<p>{contact.name}</p>{/for}
+            {#for call of talk.calls(searchContacts) key call.toolUse.id}
+                {#for contact of call.value ?? []}<p>{contact.name}</p>{/for}
+            {/for}
         `} />
     </Section>
 

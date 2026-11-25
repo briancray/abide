@@ -5,7 +5,12 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={['/ai/assistant', '/ai/assistant-message', '/handlers/get']}
+    seeAlso={[
+        '/headless/chat',
+        '/ai/assistant',
+        '/ai/assistant-message',
+        '/handlers/get',
+    ]}
     tests={[
         {
             path: 'packages/abide/tests/assistant.test.ts',
@@ -27,38 +32,32 @@ import Section from '#src/lib/Section.abide'
         },
     ]}
 >
-    <Section level={3} title="Fill a report from what the assistant drafted">
-        <p>Await the assistant handler for every event, keep them as the messages they amount
-            to, then hand those to <code>resultsOf</code> with the handler whose answers you
-            want. Each value is typed as that handler's.</p>
-        <Code language="ts" caption="browser" code={`
-            import { assistantMessage, type ReportDraft, resultsOf } from '@abide/abide'
-            import askReport from './askReport.handler.ts'
-            import draftReport from './draftReport.handler.ts'
+    <Section level={3} title="Count the contacts a stored conversation found">
+        <p>Hand <code>resultsOf</code> a conversation as you stored it and the handler whose
+            answers you want. Each value is typed as that handler's, in the order its calls
+            were made. In a page, read a <code>chat</code>'s own <code>calls</code>
+            instead.</p>
+        <Code language="ts" caption="server" code={`
+            import type { AssistantMessage } from '@abide/abide/server'
+            import { resultsOf } from '@abide/abide'
+            import searchContacts from '../searchContacts.handler.ts'
 
-            async function fill(draft: ReportDraft) {
-                const events = await askReport({ draft: draft.markdown() })
-                const messages = assistantMessage('assistant', events)
-                for (const written of resultsOf(messages, draftReport)) {
-                    draft.summary.set(written.summary)
-                    draft.description.set(written.description)
-                }
+            export function contactsFound(stored: AssistantMessage[]) {
+                return resultsOf(stored, searchContacts).flat().length
             }
         `} />
     </Section>
 
-    <Section level={3} title="List every contact the assistant looked up">
+    <Section level={3} title="Read only the reports the assistant managed to write">
         <p>A failed call is left out, so each value is one the handler answered.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { type AssistantMessage, props, resultsOf } from '@abide/abide'
-            import searchContacts from './searchContacts.handler.ts'
+        <Code language="ts" caption="server" code={`
+            import type { AssistantMessage } from '@abide/abide/server'
+            import { resultsOf } from '@abide/abide'
+            import draftReport from '../draftReport.handler.ts'
 
-            const { messages } = props<{ messages: AssistantMessage[] }>()
-            const found = resultsOf(messages, searchContacts).flat()
-            </script>
-
-            {#for contact of found}<p>{contact.name}</p>{/for}
+            export function summaries(stored: AssistantMessage[]) {
+                return resultsOf(stored, draftReport).map((written) => written.summary)
+            }
         `} />
     </Section>
 </Doc>
