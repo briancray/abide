@@ -8,6 +8,8 @@ import { messageOf } from './messageOf.ts'
 import { readLines } from './readLines.ts'
 import { scratchDirectory } from './scratchDirectory.ts'
 
+// The version the bridge PROPOSES as a client to a visitor's MCP server — not abide's
+// `MCP_PROTOCOL_VERSION`, the one abide serves, so the two move independently.
 const PROTOCOL_VERSION = '2025-06-18'
 /** How long a `headersHelper` has to write its headers, as Claude Code gives one. */
 const HEADERS_HELPER_MILLISECONDS = 10_000

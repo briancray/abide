@@ -6,7 +6,7 @@
 // same shell, so a difference between them is the implementation and not the harness. CLAUDE.md:
 // two arms running byte-identical source differed 4.5x because only one shipped a stylesheet.
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
+import { rmSync, writeFileSync } from 'node:fs' // bun has no sync rm of its own
 import { resolve } from 'node:path' // bun has no path helpers of its own
 
 import {
@@ -22,6 +22,7 @@ import {
 import { render } from '@abide/abide/server'
 import type { Browser, Page } from '@playwright/test'
 
+import { temporaryModule } from '../tests/temporaryModule.ts'
 import { armLayers } from './armLayers.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
@@ -45,7 +46,7 @@ export async function buildCompiledPage(
     const session = await TypeSession.open(
         `${REPO}packages/abide/tsconfig.json`,
     )
-    const scratch = mkdtempSync(`${REPO}.test-modules/page-`)
+    const scratch = temporaryModule({})
     try {
         // THE PAGE IS ONE OF THE FILES, not a case beside them: same parse, same snapshot, same
         // emit pair. Its shadow goes at the `browser.abide` fixture because that is the one the
