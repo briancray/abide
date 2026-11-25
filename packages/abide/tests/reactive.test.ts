@@ -16,6 +16,7 @@ import {
     flushSync,
     invalidate,
     isReactive,
+    jsonSchema,
     log,
     memo,
     NotLanded,
@@ -370,6 +371,35 @@ test('a memo keeps a promise per key, and shares a stream with a cursor per call
     expect(`one: ${one}, two: ${two}, late: ${late}, streams: ${streams}`).toBe(
         'one: 1,2, two: 1,2, late: 1,2, streams: 1',
     )
+})
+
+// 11.27 — ARGS A MEMO'S GATE REFUSES THROW THE REFUSAL, as a call's promise rejects with it (16.3),
+// and the function never runs. THE REVERT: return what the entry's read threw in `createMemo`; the
+// call answers the refusal and nothing is thrown.
+test('a memo called with args its gate refuses throws the refusal — 11.27', () => {
+    let runs = 0
+    const byId = memo(
+        (args: { id: number }) => {
+            runs += 1
+            return args.id
+        },
+        {
+            args: jsonSchema<{ id: number }>({
+                type: 'object',
+                properties: { id: { type: 'number' } },
+                required: ['id'],
+            }),
+        },
+    )
+    let thrown: unknown
+    try {
+        byId({ id: 'x' as unknown as number })
+    } catch (refusal) {
+        thrown = refusal
+    }
+    expect(
+        `${(thrown as { status?: number } | undefined)?.status}, runs: ${runs}`,
+    ).toBe('422, runs: 0')
 })
 
 // 15.19 — A MEMO'S REJECTED PROMISE IS RUN AGAIN by the next call, where a settled answer is kept.

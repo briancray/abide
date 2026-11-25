@@ -89,14 +89,8 @@ export function createMemo<Args, Result>(
         // 11.76 — a stream's entry is answered as a call of a streaming handler is: a cursor of this
         // caller's own over the one run, carrying the entry for a `computed` to adopt.
         if (isStreaming(entry)) return answerOfCall(entry, true)
-        let answer: Answer
-        try {
-            answer = entry()
-        } catch (thrown) {
-            // 11.27 — args the gate refused are answered as the refusal, as a call over the wire is.
-            if (isFailed(thrown)) return thrown
-            throw thrown
-        }
+        // 11.27 — args the gate refused throw the refusal, as a call over the wire rejects with it.
+        let answer = entry()
         // 15.19 — a rejection, or a refusal for now, is run again by the next call.
         if (answer.stale) {
             entry.refresh()
