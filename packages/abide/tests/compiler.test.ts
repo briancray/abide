@@ -488,6 +488,34 @@ test('a key in a for head is the separator only where it follows the subject', (
     expect(head('letter of key key letter')).toEqual(['key', 'letter'])
 })
 
+// A MEMBER NAMED BY A KEYWORD ENDS THE SUBJECT TOO — the scanner reads `from` in `proposed.from` as
+// `FromKeyword`, and only after `.` or `?.` is it a name (32.13). THE REVERT: `ENDS_SUBJECT` alone in
+// `forSeparators`; every head below then folds `key tag.id` into its subject and keys nothing.
+test('a key after a keyword-named member divides the for head', () => {
+    const head = (source: string) => {
+        const block = parseAbide(`{#for ${source}}y{/for}`).template[0] as {
+            subject: string
+            key: string
+        }
+        return [block.subject, block.key]
+    }
+    expect(head('tag of proposed.from key tag.id')).toEqual([
+        'proposed.from',
+        'tag.id',
+    ])
+    expect(head('tag of options?.default key tag.id')).toEqual([
+        'options?.default',
+        'tag.id',
+    ])
+    expect(head('tag of pairs.of key tag')).toEqual(['pairs.of', 'tag'])
+    expect(head('tag of (proposed.in) key tag.id')).toEqual([
+        '(proposed.in)',
+        'tag.id',
+    ])
+    // A bare keyword is never a subject's end: `typeof key` is the subject's own `key`.
+    expect(head('tag of typeof key')).toEqual(['typeof key', ''])
+})
+
 // AN EXPRESSION SLOT HAS COMMENTS IN IT. THE REVERT: drop the comment and regex cases from
 // `readExpression`; the first slot below ends at the `}` INSIDE the comment, so `x }` is emitted
 // as markup, and the second opens a string at the apostrophe and swallows the rest of the

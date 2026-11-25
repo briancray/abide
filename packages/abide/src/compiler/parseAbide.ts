@@ -1,4 +1,5 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
+import { tokenIsIdentifierOrKeyword } from 'typescript/unstable/ast/scanner'
 
 import { CHILDREN } from '#shared/CHILDREN.ts'
 import { isEventName } from '#shared/isEventName.ts'
@@ -1278,6 +1279,22 @@ const ENDS_SUBJECT = new Set<SyntaxKind>([
 ])
 
 /**
+ * Whether the subject can end on `tokens[at]`: a token in `ENDS_SUBJECT`, or a member named by a
+ * keyword (`proposed.from`, `options?.default`) — a keyword after `.` or `?.` is a name, which the
+ * scanner still reads as the keyword. A bare keyword never ends one (`of new`, `of typeof`).
+ */
+function endsSubject(tokens: readonly Token[], at: number): boolean {
+    const kind = (tokens[at] as Token).kind
+    if (ENDS_SUBJECT.has(kind)) return true
+    const before = tokens[at - 1]?.kind
+    return (
+        (before === SyntaxKind.DotToken ||
+            before === SyntaxKind.QuestionDotToken) &&
+        tokenIsIdentifierOrKeyword(kind)
+    )
+}
+
+/**
  * The `of`, the `,` and the `key` that divide a `{#for}` header — each the first at depth zero.
  *
  * THE HEADER IS TOKENS, read by the scanner a slot is: an `of`, a `,` or a `key` inside a string,
@@ -1313,7 +1330,7 @@ export function forSeparators(header: string): {
             key === undefined &&
             kind === SyntaxKind.Identifier &&
             token.text === 'key' &&
-            ENDS_SUBJECT.has((tokens[index - 1] as Token).kind) &&
+            endsSubject(tokens, index - 1) &&
             tokens[index + 1]?.kind !== SyntaxKind.DotToken
         )
             key = token

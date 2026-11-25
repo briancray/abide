@@ -92,6 +92,26 @@ test('every expression a slot, an attribute, a spread or a block head holds is f
 `)
 })
 
+// A HEAD WHOSE SUBJECT ENDS ON A KEYWORD-NAMED MEMBER (`proposed.from`) keeps its `key` apart, so
+// `bun fmt` takes the subject alone and may drop its parentheses. THE REVERT: `ENDS_SUBJECT` alone
+// in `forSeparators`; the subject and the key reach `bun fmt` as one expression, `(proposed.from)
+// key tag.id` does not parse, and the file is refused (38.128) with one finding.
+test('a for head over a keyword-named member formats and round-trips — 38.126, 38.127', async () => {
+    const source = `{#for tag of (proposed.from)   key tag.id}
+    <b>{tag.id}</b>
+{/for}
+`
+    const first = await formatted(source)
+    expect(first.findings).toEqual([])
+    expect(first.text).toBe(`{#for tag of proposed.from key tag.id}
+    <b>{tag.id}</b>
+{/for}
+`)
+    const second = await formatted(first.text)
+    expect(second.findings).toEqual([])
+    expect(second.text).toBe(first.text)
+})
+
 // THE REVERT: dedent only the lines after the first of an argument `bun fmt` broke onto lines of its
 // own; the expression opens one indent in from its brace, `{    name`.
 test('an expression too long for its line opens at its brace — 38.126', async () => {
