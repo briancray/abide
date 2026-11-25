@@ -65,17 +65,20 @@ type Declared<Name extends string, Data> = ((
  * twice. TypeScript has no partial inference: an app that could hand `Data` over as a type
  * argument had to hand `Name` over beside it, spelling `<'TooBig', …>('TooBig')`. Taken off the
  * schema, both are inferred — and a message function is typed by the data it is given.
+ *
+ * `| undefined` ON EACH OPTIONAL: an absent status or message and an `undefined` one are the same
+ * default here, so an app under `exactOptionalPropertyTypes` can hand on a message it may not have.
  */
 type Named = {
     <Name extends string>(
         name: Name,
-        options?: { status?: number; message?: string },
+        options?: { status?: number | undefined; message?: string | undefined },
     ): Declared<Name, undefined>
     <Name extends string, Data extends JsonValue>(
         name: Name,
         options: {
-            status?: number
-            message?: string | ((data: Data) => string)
+            status?: number | undefined
+            message?: string | ((data: Data) => string) | undefined
             schema: Schema<Data>
         },
     ): Declared<Name, Data>
@@ -92,9 +95,9 @@ refuse.named = named as Named
 function named<Name extends string, Data>(
     name: Name,
     options: {
-        status?: number
-        message?: string | ((data: Data) => string)
-        schema?: Schema<Data>
+        status?: number | undefined
+        message?: string | ((data: Data) => string) | undefined
+        schema?: Schema<Data> | undefined
     } = {},
 ): Declared<Name, Data> {
     const { status = 400, message, schema } = options

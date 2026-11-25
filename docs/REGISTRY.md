@@ -910,8 +910,8 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `refuse.named` | `<Name extends string>(name: Name, options?: { status?: number; message?: string }) => ((data?: undefined) => Failed<Name, undefined>) & { is: (error: unknown) => error is Failed<Name, undefined> }` | A reusable factory for a named, narrowable failure. | 15.3, 15.13, 15.18 |
-| `refuse.named` | `<Name extends string, Data extends JsonValue>(name: Name, options: { status?: number; message?: string \| ((data: Data) => string); schema: Schema<Data> }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | A reusable factory for a named failure whose data its schema declares and checks. | 15.3, 15.11, 15.12, 15.13, 15.14, 15.15, 15.18 |
+| `refuse.named` | `<Name extends string>(name: Name, options?: { status?: number \| undefined; message?: string \| undefined }) => ((data?: undefined) => Failed<Name, undefined>) & { is: (error: unknown) => error is Failed<Name, undefined> }` | A reusable factory for a named, narrowable failure. | 15.3, 15.13, 15.18 |
+| `refuse.named` | `<Name extends string, Data extends JsonValue>(name: Name, options: { status?: number \| undefined; message?: string \| ((data: Data) => string) \| undefined; schema: Schema<Data> }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | A reusable factory for a named failure whose data its schema declares and checks. | 15.3, 15.11, 15.12, 15.13, 15.14, 15.15, 15.18 |
 | `return myError(data)` | `Failed<Name, Data>` | The one spelling for every refusal. | 15.4, 15.5 |
 | `refuse.notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | abide's own refusal for an address nothing answers. | 15.7, 15.9, 15.22 |
 | `refuse.validation` | `<T>(data?: Issues<T>) => Failed<'ValidationError', Issues<T>>` | abide's own refusal for a schema or an `args` gate that refused, or a call's route parameter no segment can spell. | 15.8, 15.9 |

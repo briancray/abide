@@ -57,12 +57,10 @@ export function authorize(
     const refused =
         options.status === 404
             ? hidden
-            : refuse.named(
-                  'Forbidden',
-                  options.message === undefined
-                      ? { status: 403 }
-                      : { status: 403, message: options.message },
-              )
+            : refuse.named('Forbidden', {
+                  status: 403,
+                  message: options.message,
+              })
     const passes =
         typeof admits === 'function'
             ? admits
