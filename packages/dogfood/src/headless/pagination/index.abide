@@ -27,7 +27,7 @@ import pageWindow from './lib/PageWindow.abide' with { type: 'text' }
             ],
         },
         {
-            path: 'packages/abide/tests/pages.test.ts',
+            path: 'packages/abide/tests/pagination.test.ts',
             from: ["test('the pages listed hold one length"],
         },
     ]}

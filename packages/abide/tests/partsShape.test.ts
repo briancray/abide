@@ -40,17 +40,17 @@ import {
     listbox,
     type Menu,
     menu,
-    pages,
+    pagination,
     pie,
     type PieParts,
     playback,
     popover,
-    range,
-    type RangeEnd,
-    type RangeParts,
     reactive,
     scrollSpy,
     type Sections,
+    slider,
+    type SliderEnd,
+    type SliderParts,
     sortableList,
     sortableTable,
     type SortableTableColumn,
@@ -136,8 +136,8 @@ test('every part is a member, a function of its item, or an action — 49.9', ()
     shaped<Listbox<string>>()
     shaped<Tree<string>>()
     shaped<TreeNode>()
-    shaped<RangeParts>()
-    shaped<RangeEnd>()
+    shaped<SliderParts>()
+    shaped<SliderEnd>()
     shaped<CommandPaletteParts>()
     shaped<CommandParts>()
     shaped<ComboboxParts<string>>()
@@ -171,7 +171,7 @@ function elementParts(): Record<string, unknown> {
     const view = tabs({ items: ['a'] })
     const opener = menu()
     const nodes = tree<string>({ roots: ['a'], children: () => undefined })
-    const slider = range({ label: 'Amount' })
+    const thumbs = slider({ label: 'Amount' })
     const palette = commandPalette({ commands: [COMMAND] })
     const box = combobox({ options: () => ['a'], multiple: true })
     const table = sortableTable({
@@ -223,11 +223,11 @@ function elementParts(): Record<string, unknown> {
         'tree.tree': nodes.tree,
         'tree.node.item': nodes.node('a').item,
         'tree.node.group': nodes.node('a').group,
-        'range.root': slider.root,
-        'range.track': slider.track,
-        'range.fill': slider.fill,
-        'range.end.thumb': slider.end(0).thumb,
-        'range.end.input': slider.end(0).input,
+        'slider.root': thumbs.root,
+        'slider.track': thumbs.track,
+        'slider.fill': thumbs.fill,
+        'slider.end.thumb': thumbs.end(0).thumb,
+        'slider.end.input': thumbs.end(0).input,
         'commandPalette.dialog': palette.dialog,
         'commandPalette.input': palette.input,
         'commandPalette.listbox': palette.listbox,
@@ -347,7 +347,7 @@ test('every option an app binds is optional and handed back, and every id is mad
     const view = tabs({ items: ['a', 'b'] })
     const opener = menu()
     const nodes = tree<string>({ roots: ['a'], children: () => undefined })
-    const slider = range({ label: 'Amount', min: 10, max: 40 })
+    const thumbs = slider({ label: 'Amount', min: 10, max: 40 })
     const palette = commandPalette({ commands: [COMMAND] })
     const box = combobox({ options: () => ['a', 'b'] })
     const table = sortableTable({
@@ -365,7 +365,7 @@ test('every option an app binds is optional and handed back, and every id is mad
         'menu.open': opener.open,
         'tree.expanded': nodes.expanded,
         'tree.selected': nodes.selected,
-        'range.value': slider.value,
+        'slider.value': thumbs.value,
         'commandPalette.open': palette.open,
         'combobox.value': box.value,
         'listbox.selected': keys.selected,
@@ -384,7 +384,7 @@ test('every option an app binds is optional and handed back, and every id is mad
     expect(view.selected()).toBe('a')
     view.selected.set('b')
     expect(view.selected()).toBe('b')
-    expect(slider.value()).toEqual([10, 40])
+    expect(thumbs.value()).toEqual([10, 40])
     expect(box.value()).toBeUndefined()
     expect(drop.files()).toEqual([])
     // An id made where none was given, readable among the parts.
@@ -399,13 +399,13 @@ test('every option an app binds is optional and handed back, and every id is mad
 
 // 33.5, 49.11 — AN OPTION HANDED AS AN ACCESSOR STAYS LIVE: a component hands its props over as
 // accessors, and the parts read them as they are used, so a prop that changes after mount reaches
-// the markup. THE REVERT: destructure `labels` in `range` (or `label` in `commandPalette`, or `key` in
+// the markup. THE REVERT: destructure `labels` in `slider` (or `label` in `commandPalette`, or `key` in
 // `combobox`) at setup -> the old value stays.
 test('options handed as accessors are read as they are used — 33.5, 49.11', () => {
     let labels: readonly [string, string] = ['Least', 'Most']
     let named = 'Commands'
     let keyOf = (item: string) => item
-    const slider = range({
+    const thumbs = slider({
         label: 'Amount',
         get labels() {
             return labels
@@ -424,7 +424,7 @@ test('options handed as accessors are read as they are used — 33.5, 49.11', ()
         },
     })
     const before = [
-        slider.end(0).thumb['aria-label'],
+        thumbs.end(0).thumb['aria-label'],
         palette.listbox['aria-label'],
         box.option('a').id,
     ]
@@ -432,7 +432,7 @@ test('options handed as accessors are read as they are used — 33.5, 49.11', ()
     named = 'Actions'
     keyOf = (item) => `${item}-moved`
     const after = [
-        slider.end(0).thumb['aria-label'],
+        thumbs.end(0).thumb['aria-label'],
         palette.listbox['aria-label'],
         box.option('a').id,
     ]
@@ -457,7 +457,7 @@ test('every headless component that writes ids takes the id given and hands it b
             roots: ['a'],
             children: () => undefined,
         }),
-        range: range({ id: 'given-range', label: 'Amount' }),
+        slider: slider({ id: 'given-slider', label: 'Amount' }),
         menu: menu({ id: 'given-menu' }),
         chart: chart({ id: 'given-chart', label: 'Won', series: [] }),
         carousel: carousel({ id: 'given-carousel', items: ['a'] }),
@@ -481,7 +481,7 @@ test('a value option takes the value itself or a function answering it — 49.10
 // (`live(options.labels ?? DEFAULT_LABELS)`) -> the thumb's name throws on undefined.
 test('an option answering undefined takes its default, as one left out does — 49.10', () => {
     const unset = (): undefined => undefined
-    const slider = range({
+    const thumbs = slider({
         label: 'Amount',
         labels: unset as never,
         min: unset as never,
@@ -492,9 +492,9 @@ test('an option answering undefined takes its default, as one left out does — 
         label: unset as never,
     })
     expect([
-        slider.end(0).thumb['aria-label'],
-        slider.end(0).thumb['aria-valuemin'],
-        slider.end(1).thumb['aria-valuemax'],
+        thumbs.end(0).thumb['aria-label'],
+        thumbs.end(0).thumb['aria-valuemin'],
+        thumbs.end(1).thumb['aria-valuemax'],
         palette.listbox['aria-label'],
     ]).toEqual(['Minimum', 0, 100, 'Commands'])
 })
@@ -505,7 +505,7 @@ test('an option answering undefined takes its default, as one left out does — 
 test('a part carrying aria-current or aria-expanded carries data-current or data-open with it — 49.17', () => {
     const named = (crumb: string) => `/${crumb}`
     const crumbs = breadcrumbs({ trail: ['home', 'deals'], href: named })
-    const list = pages({ count: 3 })
+    const list = pagination({ count: 3 })
     const steps = wizard({ steps: ['plan', 'pay'] })
     // With no month written it shows today's, so today is among its cells.
     const days = calendar()
@@ -527,8 +527,8 @@ test('a part carrying aria-current or aria-expanded carries data-current or data
     const parts: Record<string, unknown> = {
         'breadcrumbs.link current': crumbs.link('deals'),
         'breadcrumbs.link': crumbs.link('home'),
-        'pages.link current': list.link(1),
-        'pages.link': list.link(2),
+        'pagination.link current': list.link(1),
+        'pagination.link': list.link(2),
         'wizard.step current': steps.step('plan'),
         'wizard.step': steps.step('pay'),
         'calendar.day today': today?.cell,

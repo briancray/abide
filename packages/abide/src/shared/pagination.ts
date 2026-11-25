@@ -8,7 +8,7 @@ import { type Live, live } from './live.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
 /** How many pages there are, the one on, and where each lives. */
-export type PagesOptions = {
+export type PaginationOptions = {
     /** How many pages there are; a function is read live. */
     count: Live<number>
     /** The page on, from `1`: a `Reactive` to read and set. Held by the parts, and handed back as `page`, where none is given. */
@@ -21,8 +21,8 @@ export type PagesOptions = {
     label?: Live<string> | undefined
 }
 
-/** The parts `pages` hands back: `<nav {...list.nav}>`, `<a {...list.link(n)}>`. */
-export type Pages = {
+/** The parts `pagination` hands back: `<nav {...list.nav}>`, `<a {...list.link(n)}>`. */
+export type Pagination = {
     /** The nav's attributes. */
     readonly nav: Record<string, unknown>
     /** The pages listed in order, a `'gap'` standing where pages between two of them are left out. */
@@ -38,7 +38,7 @@ export type Pages = {
 }
 
 /** Pagination over `count` pages, as parts to spread. */
-export function pages(options: PagesOptions): Pages {
+export function pagination(options: PaginationOptions): Pagination {
     const page = options.page ?? reactive(1)
     const count = () => Math.max(1, live(options.count))
     const on = () => Math.min(Math.max(1, page()), count())
@@ -73,7 +73,7 @@ export function pages(options: PagesOptions): Pages {
         return href === undefined
             ? {
                   type: 'button',
-                  'data-pages': part,
+                  'data-pagination': part,
                   get disabled() {
                       return part !== 'page' && disabled()
                   },
@@ -84,7 +84,7 @@ export function pages(options: PagesOptions): Pages {
                   },
               }
             : {
-                  'data-pages': part,
+                  'data-pagination': part,
                   get href() {
                       return part !== 'page' && disabled()
                           ? undefined
@@ -108,9 +108,9 @@ export function pages(options: PagesOptions): Pages {
         const atEnd = part === 'next' ? on() >= count() : on() <= 1
         handFocus(pressed, atEnd, () =>
             pressed
-                ?.closest('[data-pages="nav"]')
+                ?.closest('[data-pagination="nav"]')
                 ?.querySelector<HTMLElement>(
-                    `[data-pages="${part === 'next' ? 'previous' : 'next'}"]`,
+                    `[data-pagination="${part === 'next' ? 'previous' : 'next'}"]`,
                 ),
         )
     }
@@ -139,7 +139,7 @@ export function pages(options: PagesOptions): Pages {
     return {
         // 51.129
         nav: {
-            'data-pages': 'nav',
+            'data-pagination': 'nav',
             get 'aria-label'() {
                 return live(options.label) ?? 'Pages'
             },

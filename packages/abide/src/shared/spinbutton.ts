@@ -9,7 +9,7 @@ import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
 /** The number, its bounds, how far a step moves it, and its accessible name. */
-export type StepperOptions = {
+export type SpinbuttonOptions = {
     /** The base the field's id is derived from; unique on the page. One is made where none is given. */
     id?: string | undefined
     /** The number: a `Reactive` to read and set. Held by the parts, and handed back as `value`, where none is given. */
@@ -24,8 +24,8 @@ export type StepperOptions = {
     label?: Live<string> | undefined
 }
 
-/** The parts `stepper` hands back: `<input {...seats.input}>`, `<button {...seats.increment}>`. */
-export type Stepper = {
+/** The parts `spinbutton` hands back: `<input {...seats.input}>`, `<button {...seats.increment}>`. */
+export type Spinbutton = {
     /** The field's attributes and keys. */
     readonly input: Record<string, unknown>
     /** The button stepping it down. */
@@ -37,10 +37,10 @@ export type Stepper = {
 }
 
 /** WAI-ARIA's spin button: a field and its two buttons, as parts to spread. */
-export function stepper(options: StepperOptions = {}): Stepper {
+export function spinbutton(options: SpinbuttonOptions = {}): Spinbutton {
     const value = options.value ?? reactive(live(options.min) ?? 0)
-    const id = options.id ?? `stepper-${randomToken(4, 'hex')}`
-    if (process.env.NODE_ENV !== 'production') checkParts('stepper', id)
+    const id = options.id ?? `spinbutton-${randomToken(4, 'hex')}`
+    if (process.env.NODE_ENV !== 'production') checkParts('spinbutton', id)
     const step = () => live(options.step) ?? 1
     const min = () => live(options.min) ?? Number.NEGATIVE_INFINITY
     const max = () => live(options.max) ?? Number.POSITIVE_INFINITY
@@ -61,7 +61,7 @@ export function stepper(options: StepperOptions = {}): Stepper {
     }
     const button = (part: string, steps: number, name: string) => ({
         type: 'button',
-        'data-stepper': part,
+        'data-spinbutton': part,
         tabindex: '-1',
         'aria-controls': id,
         'aria-label': name,
@@ -87,7 +87,7 @@ export function stepper(options: StepperOptions = {}): Stepper {
             id,
             role: 'spinbutton',
             inputmode: 'decimal',
-            'data-stepper': 'input',
+            'data-spinbutton': 'input',
             get 'aria-label'() {
                 return live(options.label)
             },

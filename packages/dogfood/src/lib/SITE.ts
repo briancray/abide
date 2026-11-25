@@ -456,8 +456,8 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
-                route: '/headless/stepper',
-                title: '`stepper`',
+                route: '/headless/spinbutton',
+                title: '`spinbutton`',
                 description:
                     'Step a number up and down from a field and two buttons, kept to its bounds and its step.',
                 where: 'component',
@@ -496,8 +496,8 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
-                route: '/headless/range',
-                title: '`range`',
+                route: '/headless/slider',
+                title: '`slider`',
                 description:
                     'Spread a two-thumb range onto markup: the group, the track, the span and each thumb.',
                 where: 'component',
@@ -632,8 +632,8 @@ const WRITTEN: readonly {
                 subgroup: 'Navigation',
             },
             {
-                route: '/headless/pages',
-                title: '`pages`',
+                route: '/headless/pagination',
+                title: '`pagination`',
                 description:
                     'Page through a long list with numbered links or buttons, the far pages folded into gaps.',
                 where: 'component',

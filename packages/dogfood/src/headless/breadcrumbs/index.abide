@@ -10,7 +10,7 @@ import dealTrail from './lib/DealTrail.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/headless/menu', '/headless/pages']}
+    seeAlso={['/headless/menu', '/headless/pagination']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/DealCrumbs.test.ts',

@@ -1,9 +1,9 @@
 <script>
-import { format, reactive, stepper } from '@abide/abide'
+import { format, reactive, spinbutton } from '@abide/abide'
 
 const PER_SEAT = 1_200
 let seats = reactive(10)
-const count = stepper({
+const count = spinbutton({
     value: seats,
     min: 5,
     max: 200,

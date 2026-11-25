@@ -11,7 +11,7 @@ import { memo, type Reactive, reactive } from './reactive/index.ts'
 import { scrub, type ScrubPosition } from './scrub.ts'
 
 /** The range picked, and the scale it is picked on. */
-export type RangeOptions = {
+export type SliderOptions = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
     id?: string | undefined
     /** The low and the high end of the range picked, where the app holds them: a `Reactive` to read and set. Held by the parts, from `min` to `max`, and handed back as `value`, where none is given. */
@@ -33,15 +33,15 @@ export type RangeOptions = {
 }
 
 /** One end's parts, low (`0`) or high (`1`): its thumb, and the hidden field submitting it. */
-export type RangeEnd = {
+export type SliderEnd = {
     /** The thumb: its slider role, values, keys and the `style` that places it. */
     readonly thumb: Record<string, unknown>
     /** A hidden field submitting the end under `name`. */
     readonly input: Record<string, unknown>
 }
 
-/** The parts `range` hands back, each spread onto an element: `<span {...amount.end(0).thumb} />`. */
-export type RangeParts = {
+/** The parts `slider` hands back, each spread onto an element: `<span {...amount.end(0).thumb} />`. */
+export type SliderParts = {
     /** The base its parts' ids are derived from. */
     readonly id: string
     /** The group's role, name and `data-dragging`. */
@@ -51,7 +51,7 @@ export type RangeParts = {
     /** The span between the thumbs, as the `style` that places it. */
     readonly fill: Record<string, unknown>
     /** One end's parts, low (`0`) or high (`1`). */
-    end(which: 0 | 1): RangeEnd
+    end(which: 0 | 1): SliderEnd
     /** The low and the high end picked, read and set. */
     readonly value: Reactive<readonly [number, number]>
 }
@@ -59,7 +59,7 @@ export type RangeParts = {
 const DEFAULT_LABELS = ['Minimum', 'Maximum'] as const
 
 /** WAI-ARIA's multi-thumb slider: a low and a high value on one track, as parts to spread. */
-export function range(options: RangeOptions): RangeParts {
+export function slider(options: SliderOptions): SliderParts {
     // 49.11 — read where they are used.
     const labelOf = (which: 0 | 1) =>
         (live(options.labels) ?? DEFAULT_LABELS)[which]
@@ -126,7 +126,7 @@ export function range(options: RangeOptions): RangeParts {
     // rewritten together.
     const base = options.id ?? `range-${randomToken(4, 'hex')}`
     const thumbId = (which: number) => `${base}-${which}`
-    if (process.env.NODE_ENV !== 'production') checkParts('range', base)
+    if (process.env.NODE_ENV !== 'production') checkParts('slider', base)
 
     // The thumb a held pointer drags, or -1 while none is held.
     const dragging = reactive(-1)
@@ -177,7 +177,7 @@ export function range(options: RangeOptions): RangeParts {
         value,
         root: {
             role: 'group',
-            'data-range': 'root',
+            'data-slider': 'root',
             get 'aria-label'() {
                 return live(options.label)
             },
@@ -186,7 +186,7 @@ export function range(options: RangeOptions): RangeParts {
             },
         },
         track: {
-            'data-range': 'track',
+            'data-slider': 'track',
             onpointerdown: press,
             onpointermove: (event: PointerEvent) => {
                 const held = dragging.peek()
@@ -196,7 +196,7 @@ export function range(options: RangeOptions): RangeParts {
             onlostpointercapture: letGo,
         },
         fill: {
-            'data-range': 'fill',
+            'data-slider': 'fill',
             // 51.90 — the span between the thumbs, as the computed `left` and `right` placing it.
             get style() {
                 const [low, high] = value()
@@ -207,7 +207,7 @@ export function range(options: RangeOptions): RangeParts {
             thumb: {
                 id: thumbId(which),
                 role: 'slider',
-                'data-range': 'thumb',
+                'data-slider': 'thumb',
                 tabindex: '0',
                 'data-thumb': which === 0 ? 'low' : 'high',
                 get 'aria-label'() {
@@ -234,7 +234,7 @@ export function range(options: RangeOptions): RangeParts {
             },
             input: {
                 type: 'hidden',
-                'data-range': 'input',
+                'data-slider': 'input',
                 get name() {
                     return live(options.name)
                 },

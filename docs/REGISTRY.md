@@ -545,13 +545,13 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `InlineEditOptions` | `{ value?: Reactive<string>; save?: (text: string) => unknown }` | The value, and what saves an edit of it. | 56.25, 56.26, 49.8 |
 | `InlineEdit` | `{ readonly view: Record<string, unknown>; readonly input: Record<string, unknown>; readonly editing: Reactive<boolean>; readonly value: Reactive<string>; get busy(): boolean; get error(): string \| undefined }` | The button's part, the input's, whether it is being edited, the value, whether a save is in flight, and why the last one failed. | 32.11, 56.24, 56.26, 49.3, 49.8, 49.9 |
 
-## `stepper`
+## `spinbutton`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `stepper` | `(options?: StepperOptions) => Stepper` | WAI-ARIA's spin button as parts an app spreads onto a field and the buttons either side of it. | 56.29, 56.30, 56.31, 56.32, 56.33, 49.7, 49.2, 49.4, 49.5, 49.6, 49.15 |
-| `StepperOptions` | `{ id?: string; value?: Reactive<number>; min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); label?: string \| (() => string) }` | The base of its id, the number, its bounds, how far a step moves it, and its accessible name. | 56.29, 56.30, 56.32, 56.33, 49.8, 49.10, 49.11 |
-| `Stepper` | `{ readonly input: Record<string, unknown>; readonly decrement: Record<string, unknown>; readonly increment: Record<string, unknown>; readonly value: Reactive<number> }` | The field's part, the buttons stepping it down and up, and the number. | 32.11, 56.29, 56.31, 49.3, 49.8, 49.9 |
+| `spinbutton` | `(options?: SpinbuttonOptions) => Spinbutton` | WAI-ARIA's spin button as parts an app spreads onto a field and the buttons either side of it. | 56.29, 56.30, 56.31, 56.32, 56.33, 49.7, 49.2, 49.4, 49.5, 49.6, 49.15 |
+| `SpinbuttonOptions` | `{ id?: string; value?: Reactive<number>; min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); label?: string \| (() => string) }` | The base of its id, the number, its bounds, how far a step moves it, and its accessible name. | 56.29, 56.30, 56.32, 56.33, 49.8, 49.10, 49.11 |
+| `Spinbutton` | `{ readonly input: Record<string, unknown>; readonly decrement: Record<string, unknown>; readonly increment: Record<string, unknown>; readonly value: Reactive<number> }` | The field's part, the buttons stepping it down and up, and the number. | 32.11, 56.29, 56.31, 49.3, 49.8, 49.9 |
 
 ## `combobox`
 
@@ -621,13 +621,13 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `SpoilerOptions` | `{ open?: Reactive<boolean> }` | Whether the content shows. | 51.152, 49.8 |
 | `Spoiler` | `{ readonly cover: Record<string, unknown>; readonly content: Record<string, unknown>; readonly open: Reactive<boolean> }` | The cover's part, the content's, and whether the content shows. | 32.11, 51.152, 51.153, 49.3, 49.8, 49.9 |
 
-## `pages`
+## `pagination`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `pages` | `(options: PagesOptions) => Pages` | Pagination as parts an app spreads onto a nav and links or buttons of its own: a link per page listed, and one to the page before and after. | 51.125, 51.126, 51.127, 51.128, 51.129, 49.2, 49.4, 49.5, 49.6, 49.15 |
-| `PagesOptions` | `{ count: number \| (() => number); page?: Reactive<number>; around?: number \| (() => number); href?: (page: number) => string; label?: string \| (() => string) }` | How many pages there are, the one on, how many around it are listed, each page's address, and the nav's accessible name. | 51.125, 51.126, 51.129, 49.8, 49.10, 49.11 |
-| `Pages` | `{ readonly nav: Record<string, unknown>; get items(): readonly (number \| 'gap')[]; link(page: number): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; readonly page: Reactive<number> }` | The nav's part, the pages listed, a page's link, the links before and after, and the page on. | 32.11, 51.125, 51.127, 51.128, 49.3, 49.8, 49.9, 49.17 |
+| `pagination` | `(options: PaginationOptions) => Pagination` | Pagination as parts an app spreads onto a nav and links or buttons of its own: a link per page listed, and one to the page before and after. | 51.125, 51.126, 51.127, 51.128, 51.129, 49.2, 49.4, 49.5, 49.6, 49.15 |
+| `PaginationOptions` | `{ count: number \| (() => number); page?: Reactive<number>; around?: number \| (() => number); href?: (page: number) => string; label?: string \| (() => string) }` | How many pages there are, the one on, how many around it are listed, each page's address, and the nav's accessible name. | 51.125, 51.126, 51.129, 49.8, 49.10, 49.11 |
+| `Pagination` | `{ readonly nav: Record<string, unknown>; get items(): readonly (number \| 'gap')[]; link(page: number): Record<string, unknown>; readonly previous: Record<string, unknown>; readonly next: Record<string, unknown>; readonly page: Reactive<number> }` | The nav's part, the pages listed, a page's link, the links before and after, and the page on. | 32.11, 51.125, 51.127, 51.128, 49.3, 49.8, 49.9, 49.17 |
 
 ## `playback`
 
@@ -690,14 +690,14 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `JsonKind` | `'object' \| 'array' \| 'string' \| 'number' \| 'boolean' \| 'null'` | What a JSON value is. | — |
 | `JsonRowParts` | `{ readonly item: Record<string, unknown>; get keyRuns(): readonly LabelRun[]; get valueRuns(): readonly LabelRun[]; get expanded(): boolean; toggle(): void }` | A row's item, its key and value in runs, whether it is expanded, and what expands or collapses it. | 51.158, 51.160, 51.162, 49.3 |
 
-## `range`
+## `slider`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `range` | `(options: RangeOptions) => RangeParts` | WAI-ARIA's multi-thumb slider as parts an app spreads onto elements of its own: a group, a track, the span between the thumbs, two thumbs and a field for each. | 51.85, 51.86, 51.87, 51.88, 51.89, 51.90, 51.91, 49.7, 49.2, 49.4, 49.5, 49.6 |
-| `RangeOptions` | `{ id?: string; value?: Reactive<readonly [number, number]>; label: string \| (() => string); min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); labels?: readonly [string, string] \| (() => readonly [string, string]); format?: (value: number) => string; name?: string \| (() => string \| undefined) }` | The range picked, and the scale it is picked on. | 51.85, 51.86, 51.91, 49.8, 49.10, 49.11 |
-| `RangeParts` | `{ readonly id: string; readonly root: Record<string, unknown>; readonly track: Record<string, unknown>; readonly fill: Record<string, unknown>; end(which: 0 \| 1): RangeEnd; readonly value: Reactive<readonly [number, number]> }` | The group's part, the track's, the span's, an end's parts, and the range picked. | 32.11, 51.90, 49.3, 49.8, 49.9 |
-| `RangeEnd` | `{ readonly thumb: Record<string, unknown>; readonly input: Record<string, unknown> }` | An end's thumb, and the hidden field submitting it. | 51.90, 51.91, 49.3 |
+| `slider` | `(options: SliderOptions) => SliderParts` | WAI-ARIA's multi-thumb slider as parts an app spreads onto elements of its own: a group, a track, the span between the thumbs, two thumbs and a field for each. | 51.85, 51.86, 51.87, 51.88, 51.89, 51.90, 51.91, 49.7, 49.2, 49.4, 49.5, 49.6 |
+| `SliderOptions` | `{ id?: string; value?: Reactive<readonly [number, number]>; label: string \| (() => string); min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); labels?: readonly [string, string] \| (() => readonly [string, string]); format?: (value: number) => string; name?: string \| (() => string \| undefined) }` | The range picked, and the scale it is picked on. | 51.85, 51.86, 51.91, 49.8, 49.10, 49.11 |
+| `SliderParts` | `{ readonly id: string; readonly root: Record<string, unknown>; readonly track: Record<string, unknown>; readonly fill: Record<string, unknown>; end(which: 0 \| 1): SliderEnd; readonly value: Reactive<readonly [number, number]> }` | The group's part, the track's, the span's, an end's parts, and the range picked. | 32.11, 51.90, 49.3, 49.8, 49.9 |
+| `SliderEnd` | `{ readonly thumb: Record<string, unknown>; readonly input: Record<string, unknown> }` | An end's thumb, and the hidden field submitting it. | 51.90, 51.91, 49.3 |
 
 ## `listbox`
 

@@ -203,11 +203,11 @@ export {
     watch,
 } from './reactive/index.ts'
 export {
-    type RangeEnd,
-    type RangeOptions,
-    type RangeParts,
-    range,
-} from './range.ts'
+    type SliderEnd,
+    type SliderOptions,
+    type SliderParts,
+    slider,
+} from './slider.ts'
 export { refuse } from './refuse.ts'
 // 44.51 — what a conversation's calls to one handler answered.
 export { resultsOf } from './resultsOf.ts'
@@ -247,7 +247,11 @@ export { type Meter, type MeterOptions, meter } from './meter.ts'
 export { highlight } from './highlight.ts'
 export { type ShrinkImageOptions, shrinkImage } from './shrinkImage.ts'
 export { download } from './download.ts'
-export { type Pages, type PagesOptions, pages } from './pages.ts'
+export {
+    type Pagination,
+    type PaginationOptions,
+    pagination,
+} from './pagination.ts'
 export {
     type PanZoom,
     type PanZoomOptions,
@@ -257,7 +261,11 @@ export {
 export { type Playback, type PlaybackOptions, playback } from './playback.ts'
 export { type Drawer, type DrawerOptions, drawer } from './drawer.ts'
 export { type Lightbox, type LightboxOptions, lightbox } from './lightbox.ts'
-export { type Stepper, type StepperOptions, stepper } from './stepper.ts'
+export {
+    type Spinbutton,
+    type SpinbuttonOptions,
+    spinbutton,
+} from './spinbutton.ts'
 export {
     type SortableItem,
     type SortableList,

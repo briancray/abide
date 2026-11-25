@@ -1,7 +1,7 @@
 // 51.88 — A THUMB PRESSED KEEPS FOCUS, so the keys step the thumb the pointer just moved: the
 // press's own focusing would put focus back on the page, a track being nothing that takes it.
 //
-// THE REVERT: drop the `preventDefault` from `range`'s press, and the arrows after a drag step nothing.
+// THE REVERT: drop the `preventDefault` from `slider`'s press, and the arrows after a drag step nothing.
 import { expect, test } from '@playwright/test'
 
 function underMount(address: string): string {
@@ -10,12 +10,12 @@ function underMount(address: string): string {
 }
 
 test('a thumb dragged takes the keys after it — 51.88', async ({ page }) => {
-    await page.goto(underMount('headless/range'), {
+    await page.goto(underMount('headless/slider'), {
         waitUntil: 'networkidle',
     })
     const frame = page.locator('.result').first()
     await frame.scrollIntoViewIfNeeded()
-    const track = frame.locator('[data-range=track]')
+    const track = frame.locator('[data-slider=track]')
     const box = (await track.boundingBox()) as NonNullable<
         Awaited<ReturnType<typeof track.boundingBox>>
     >

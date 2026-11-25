@@ -21,7 +21,7 @@ import submitBothEnds from './lib/SubmitBothEnds.abide' with { type: 'text' }
             ],
         },
         {
-            path: 'packages/dogfood/e2e/range.spec.ts',
+            path: 'packages/dogfood/e2e/slider.spec.ts',
             from: ["test('a thumb dragged takes the keys after it — 51.88'"],
         },
         {

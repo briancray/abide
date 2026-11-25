@@ -5255,8 +5255,8 @@ warn once on `abide:parts` where that popover is drawn while it is closed, and a
 the check.
 
 49.15 A click on a button among a headless component's parts that leaves that button disabled MUST, where
-it held focus, move focus on: `carousel`'s and `pages`' `previous` and `next` to the other, `wizard`'s
-`next` to its `previous` and its `previous` to its `next`, and `stepper`'s `increment` and `decrement`
+it held focus, move focus on: `carousel`'s and `pagination`'s `previous` and `next` to the other, `wizard`'s
+`next` to its `previous` and its `previous` to its `next`, and `spinbutton`'s `increment` and `decrement`
 to its `input`.
 
 49.16 A headless component over a list MUST take the list's items, telling them apart by its `key` (49.8),
@@ -5757,26 +5757,26 @@ in, and `tree` MUST write `aria-selected` on each item and `data-selected` on ea
 
 51.84 `tree` MUST hide the element holding a node's children while the node is collapsed.
 
-51.85 `range`'s parts MUST be a `role="group"` named by `label` and two thumbs, each `role="slider"`
+51.85 `slider`'s parts MUST be a `role="group"` named by `label` and two thumbs, each `role="slider"`
 named by its entry of `labels`, with its value as `aria-valuenow`, what `format` writes for it as
 `aria-valuetext`, and the bounds the other thumb leaves it as `aria-valuemin` and `aria-valuemax`.
 
-51.86 `range` MUST keep its low thumb at most at its high thumb and its high thumb at least at its
+51.86 `slider` MUST keep its low thumb at most at its high thumb and its high thumb at least at its
 low, each at a whole number of `step`s from `min`, within `min` and `max`.
 
-51.87 A thumb of a `range` MUST step up by `step` on ArrowUp and ArrowRight and down on ArrowDown
+51.87 A thumb of a `slider` MUST step up by `step` on ArrowUp and ArrowRight and down on ArrowDown
 and ArrowLeft, by a tenth of the way on Page Up and Page Down, and to the least and the greatest
 value it can take on Home and End, as a `chart`'s crosshair steps (52.69).
 
-51.88 A press on a `range`'s track MUST move the thumb nearer it to the value nearest the press and
+51.88 A press on a `slider`'s track MUST move the thumb nearer it to the value nearest the press and
 focus it, and the thumb MUST follow the pointer until it lets go.
 
-51.89 `range` MUST write each change it makes to `value`.
+51.89 `slider` MUST write each change it makes to `value`.
 
-51.90 `range` MUST write `data-dragging` on its root part while a pointer holds a thumb, and place its
+51.90 `slider` MUST write `data-dragging` on its root part while a pointer holds a thumb, and place its
 thumbs, and the fill part between them, as `style`.
 
-51.91 `range` given `name` MUST submit its low and then its high value with a form its two field
+51.91 `slider` given `name` MUST submit its low and then its high value with a form its two field
 parts are in, each as a field of that name.
 
 51.92 A press on `combobox`'s input MUST open its list where it is shut, save where `search` is given
@@ -5885,22 +5885,22 @@ show, measured as the text resizes while `open` does not hold.
 
 51.124 `clamp`'s `button` part MUST be a `disclosure`'s `button` over its `text`, flipping `open`.
 
-51.125 `pages`' `items` MUST hold the same number of entries whatever `page` is: every page, in
+51.125 `pagination`'s `items` MUST hold the same number of entries whatever `page` is: every page, in
 order, where there are no more than `2 × around + 5`, and else exactly that many — the first page,
 the last, and a run of pages around `page`, with a `gap` where the pages between two of them are
 left out. The run MUST be the `2 × around + 1` pages centered on `page`, save where that would leave
 a gap standing for one page or none at an end, where the run MUST instead reach that end and hold
 `2 × around + 3` pages.
 
-51.126 A click on `pages`' `link` of a page MUST write that page to `page`, and where `href` is given
+51.126 A click on `pagination`'s `link` of a page MUST write that page to `page`, and where `href` is given
 the link MUST carry `href` naming that page's address.
 
-51.127 `pages`' `link` of the page `page` names MUST carry `aria-current="page"`.
+51.127 `pagination`'s `link` of the page `page` names MUST carry `aria-current="page"`.
 
-51.128 A click on `pages`' `previous` or `next` MUST write the page before or after to `page`, and
+51.128 A click on `pagination`'s `previous` or `next` MUST write the page before or after to `page`, and
 each MUST be disabled where there is no such page.
 
-51.129 `pages`' `nav` part MUST carry `aria-label` naming `label`, `Pages` where none is given.
+51.129 `pagination`'s `nav` part MUST carry `aria-label` naming `label`, `Pages` where none is given.
 
 51.130 While `playing` holds, `playback` MUST move `at` forward each frame by the milliseconds since
 the frame before times `rate`, and MUST ask for no frame while it does not.
@@ -7086,21 +7086,21 @@ disabled.
 
 56.28 An edit of `inlineEdit` ending MUST move focus to its `view`.
 
-56.29 `stepper`'s `input` part MUST carry `role="spinbutton"`, `aria-valuenow` naming `value`,
+56.29 `spinbutton`'s `input` part MUST carry `role="spinbutton"`, `aria-valuenow` naming `value`,
 `aria-valuemin` and `aria-valuemax` naming `min` and `max` where each is given, and `value` as its
 text.
 
-56.30 In `stepper`'s `input`, ArrowUp and ArrowDown MUST move `value` by `step`, PageUp and PageDown
+56.30 In `spinbutton`'s `input`, ArrowUp and ArrowDown MUST move `value` by `step`, PageUp and PageDown
 by ten steps, and Home and End to `min` and `max` where each is given, kept from `min` to `max`.
 
-56.31 `stepper`'s `increment` and `decrement` MUST move `value` by `step`, MUST stand outside the tab
+56.31 `spinbutton`'s `increment` and `decrement` MUST move `value` by `step`, MUST stand outside the tab
 order, and MUST be disabled where `value` is at `max` and at `min`.
 
-56.32 A `change` of `stepper`'s `input` MUST set `value` to the number its text holds, kept from `min`
+56.32 A `change` of `spinbutton`'s `input` MUST set `value` to the number its text holds, kept from `min`
 to `max` and to a whole number of steps from `min`, or from `0` where `min` is not given, and MUST
 write `value` back as the input's text, a text that is no number leaving `value` as it was.
 
-56.33 An `input` of `stepper`'s `input` MUST set `value` to the number its text holds where 56.32
+56.33 An `input` of `spinbutton`'s `input` MUST set `value` to the number its text holds where 56.32
 would keep that number as it is and would write back the text as it stands, and MUST otherwise leave
 both `value` and the text as they are until a `change`.
 

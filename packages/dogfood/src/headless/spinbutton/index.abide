@@ -10,7 +10,7 @@ import dimAtLimit from './lib/DimAtLimit.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/headless/range', '/headless/form']}
+    seeAlso={['/headless/slider', '/headless/form']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/SeatCount.test.ts',
@@ -19,7 +19,7 @@ import dimAtLimit from './lib/DimAtLimit.abide' with { type: 'text' }
             ],
         },
         {
-            path: 'packages/abide/tests/stepper.test.ts',
+            path: 'packages/abide/tests/spinbutton.test.ts',
             from: [
                 "test('a number typed is kept to its bounds and its step",
                 "test('a number is taken as it is typed",

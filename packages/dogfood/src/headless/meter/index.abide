@@ -14,7 +14,7 @@ import uploadProgress from './lib/UploadProgress.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/headless/range', '/headless/sparkline']}
+    seeAlso={['/headless/slider', '/headless/sparkline']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/QuotaMeter.test.ts',

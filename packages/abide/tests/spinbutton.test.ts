@@ -1,9 +1,9 @@
-// 56.29-56.33 and 51.141-51.144 — `stepper` and `wizard`, their parts read and pressed as a template
+// 56.29-56.33 and 51.141-51.144 — `spinbutton` and `wizard`, their parts read and pressed as a template
 // and a browser would.
 
 import { expect, test } from 'bun:test'
 
-import { flushSync, reactive, stepper, wizard } from '#shared'
+import { flushSync, reactive, spinbutton, wizard } from '#shared'
 
 const key = (part: Record<string, unknown>, name: string) => {
     ;(part.onkeydown as (event: KeyboardEvent) => void)(
@@ -18,7 +18,7 @@ const press = (part: Record<string, unknown>) => {
 
 // THE REVERT: step by one whatever `step` says, and PageUp moves 10 where 25 is due.
 test('the keys step it, a page at a time by ten, and Home and End take it to its bounds — 56.29, 56.30', () => {
-    const seats = stepper({ min: 0, max: 100, step: 2.5, label: 'Seats' })
+    const seats = spinbutton({ min: 0, max: 100, step: 2.5, label: 'Seats' })
     expect([
         seats.input.role,
         seats.input['aria-valuenow'],
@@ -39,7 +39,7 @@ test('the keys step it, a page at a time by ten, and Home and End take it to its
 
 // THE REVERT: leave the buttons in the tab order, and Tab stops on each of them.
 test('its buttons step it, out of the tab order, and are disabled at its bounds — 56.31', () => {
-    const seats = stepper({ value: reactive(1), min: 0, max: 2 })
+    const seats = spinbutton({ value: reactive(1), min: 0, max: 2 })
     expect([seats.decrement.tabindex, seats.decrement.disabled]).toEqual([
         '-1',
         false,
@@ -52,7 +52,7 @@ test('its buttons step it, out of the tab order, and are disabled at its bounds 
 
 // THE REVERT: take the typed number as it is, and 7.3 stands where steps of 0.5 allow only 7.5.
 test('a number typed is kept to its bounds and its step, and anything else is put back — 56.32', () => {
-    const rate = stepper({ value: reactive(1), min: 0, max: 10, step: 0.5 })
+    const rate = spinbutton({ value: reactive(1), min: 0, max: 10, step: 0.5 })
     const field = document.createElement('input')
     field.addEventListener('change', rate.input.onchange as EventListener)
     const type = (text: string) => {
@@ -64,7 +64,7 @@ test('a number typed is kept to its bounds and its step, and anything else is pu
     expect(type('7.3')).toEqual([7.5, '7.5'])
     expect(type('40')).toEqual([10, '10'])
     expect(type('lots')).toEqual([10, '10'])
-    const tenths = stepper({ step: 0.1 })
+    const tenths = spinbutton({ step: 0.1 })
     key(tenths.input, 'ArrowUp')
     key(tenths.input, 'ArrowUp')
     key(tenths.input, 'ArrowUp')
@@ -74,7 +74,7 @@ test('a number typed is kept to its bounds and its step, and anything else is pu
 // THE REVERT: keep every `input` that reads as a number, and the 60 still being typed is taken as 50 —
 // which a mounted field then writes back over the text under the caret.
 test('a number is taken as it is typed, where it already stands within its bounds and its step — 56.33', () => {
-    const seats = stepper({ value: reactive(5), min: 5, max: 50 })
+    const seats = spinbutton({ value: reactive(5), min: 5, max: 50 })
     const field = document.createElement('input')
     field.addEventListener('input', seats.input.oninput as EventListener)
     const type = (text: string) => {

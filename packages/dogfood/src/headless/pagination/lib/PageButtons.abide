@@ -1,7 +1,7 @@
 <script>
-import { pages } from '@abide/abide'
+import { pagination } from '@abide/abide'
 
-const list = pages({ count: 12 })
+const list = pagination({ count: 12 })
 </script>
 
 <nav class="row" {...list.nav}>

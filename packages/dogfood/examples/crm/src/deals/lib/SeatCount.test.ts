@@ -22,7 +22,9 @@ test('the seats step with the keys and the buttons, kept to the plan', async () 
     key('PageUp')
     expect(field().getAttribute('aria-valuenow')).toBe('65')
     ;(
-        document.querySelector('[data-stepper=decrement]') as HTMLButtonElement
+        document.querySelector(
+            '[data-spinbutton=decrement]',
+        ) as HTMLButtonElement
     ).click()
     flushSync()
     expect(status()).toBe('60 seats, $72,000')
@@ -34,13 +36,13 @@ test('the seats step with the keys and the buttons, kept to the plan', async () 
     expect(
         (
             document.querySelector(
-                '[data-stepper=decrement]',
+                '[data-spinbutton=decrement]',
             ) as HTMLButtonElement
         ).disabled,
     ).toBe(true)
 })
 
-// 32.113 — A FIELD TYPED IN STILL SHOWS WHAT THE ARROWS SET. The value is the stepper's, spread onto
+// 32.113 — A FIELD TYPED IN STILL SHOWS WHAT THE ARROWS SET. The value is the spinbutton's, spread onto
 // the input, and an input the reader has typed in no longer shows its `value` attribute. THE
 // REVERT: make `writeControl` return at once, and the field keeps reading 20 at 25 seats.
 test('the field follows the arrows after it is typed in', async () => {

@@ -694,7 +694,7 @@
 /* A CONTROL BELONGS WITH THE VALUE IT CHANGES. Sat inside the tile, `+` and `−` need no subject:
    the label above the value is already it, and the relationship is the layout rather than
    something to work out. */
-@utility stepper {
+@utility spinbutton {
     @apply flex items-center gap-tight;
 
     & button {
@@ -912,26 +912,26 @@
 }
 
 /* A range: a thin track, the span picked lit along it, and a round thumb at each end of the span. */
-@utility range {
+@utility slider {
     @apply py-3;
 
-    & [data-range=track] {
+    & [data-slider=track] {
         @apply relative h-1.5 touch-none rounded-full bg-rule;
     }
 
-    & [data-range=fill] {
+    & [data-slider=fill] {
         @apply absolute inset-y-0 rounded-full bg-signal;
     }
 
-    & [data-range=thumb] {
+    & [data-slider=thumb] {
         @apply absolute top-1/2 size-4 -translate-1/2 cursor-grab rounded-full border-2 border-signal bg-raised;
     }
 
-    & [data-range=thumb]:focus-visible {
+    & [data-slider=thumb]:focus-visible {
         @apply outline-2 outline-offset-2 outline-signal outline-solid;
     }
 
-    &[data-dragging] [data-range=thumb] {
+    &[data-dragging] [data-slider=thumb] {
         @apply cursor-grabbing;
     }
 }

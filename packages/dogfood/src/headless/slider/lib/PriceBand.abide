@@ -1,11 +1,11 @@
 <script>
-import { range, reactive } from '@abide/abide'
+import { reactive, slider } from '@abide/abide'
 
 let band = reactive<readonly [number, number]>([20, 80])
-const price = range({ value: band, label: 'Price band' })
+const price = slider({ value: band, label: 'Price band' })
 </script>
 
-<div {...price.root} class="range">
+<div {...price.root} class="slider">
     <div {...price.track}>
         <div {...price.fill} />
         <span {...price.end(0).thumb} />
