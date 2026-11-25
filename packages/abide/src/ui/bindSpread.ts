@@ -6,7 +6,7 @@
 // anything else pays nothing.
 
 import { BIND_ELEMENT } from '#shared/BIND_ELEMENT.ts'
-import { isControlProperty } from '#shared/isControlProperty.ts'
+import { isControl, isControlProperty } from '#shared/isControlProperty.ts'
 import type { Disposer } from '#shared/reactive/watch.ts'
 import { spreadEntries } from '#shared/spread.ts'
 
@@ -25,7 +25,7 @@ export function bindSpread(
     let written = new Set<string>()
     const listeners = new Map<string, EventListener>()
     const tag = element.localName
-    const control = tag === 'input' || tag === 'textarea' || tag === 'option'
+    const control = isControl(tag)
     scope.watch(() => {
         const wanted: [string, EventListener][] = []
         const next = new Set<string>()
