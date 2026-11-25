@@ -18,6 +18,7 @@ import { type Failed, isFailed, isFailedNamed } from './Failed.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
 import { HandlerRoute } from './HandlerRoute.ts'
 import { IN_PROCESS_ORIGIN } from './IN_PROCESS_ORIGIN.ts'
+import { isAsyncIterable } from './isAsyncIterable.ts'
 import { isServer } from './isServer.ts'
 import type { Issues } from './Issues.ts'
 import { namedLogger } from './log.ts'
@@ -57,7 +58,6 @@ import { MUTATION } from './reactive/MUTATION.ts'
 import {
     chunksOfStream,
     dropAnswered,
-    isAsyncGenerator,
     nameLoad,
     streamingOrSettled,
 } from './reactive/producer.ts'
@@ -761,7 +761,7 @@ async function answerThenRefresh(
 ): Promise<unknown> {
     const answered = await answer
     if (isFailed(answered)) return answered
-    if (isAsyncGenerator(answered))
+    if (isAsyncIterable(answered))
         return refreshedAtClose(answered, refresh, named)
     const refreshing = refreshOrWarn(refresh, named)
     if (refreshing !== undefined) await refreshing
@@ -769,7 +769,7 @@ async function answerThenRefresh(
 }
 
 async function* refreshedAtClose(
-    chunks: AsyncGenerator<unknown>,
+    chunks: AsyncIterable<unknown>,
     refresh: () => void | Promise<void>,
     named: () => string,
 ): AsyncGenerator<unknown> {

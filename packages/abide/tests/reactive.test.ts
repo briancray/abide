@@ -4711,7 +4711,7 @@ test('an async generator body streams: ready from its first chunk, busy until it
 
 // 9.6 BY WHAT THE RUN HANDS BACK. An arrow returning a generator types as a stream (the overload
 // reads the return), and runs as one: the same shape end to end, and a refresh opens the body's next
-// generator while the last accumulation stands (9.7). THE REVERT: drop the `isAsyncGenerator` arm in
+// generator while the last accumulation stands (9.7). THE REVERT: drop the `isAsyncIterable` arm in
 // `run`; the value holds the generator, and `rows()` is no array at all.
 test('a body handing back an async generator streams as one declared so — 9.6, 9.7', async () => {
     const feed = streamOf<number>()
@@ -4754,7 +4754,7 @@ test('a body that hands back a generator on a later run streams from that run �
 })
 
 // 9.6 THROUGH A PROMISE: an async body resolving to a generator is a stream once it resolves, as a
-// handler behind rungs is (16.32). THE REVERT: drop the `isAsyncGenerator` arm of `absorb`'s settle;
+// handler behind rungs is (16.32). THE REVERT: drop the `isAsyncIterable` arm of `absorb`'s settle;
 // the value holds the generator.
 test('a body whose promise resolves to an async generator streams — 9.6', async () => {
     const feed = streamOf<number>()
@@ -4767,6 +4767,52 @@ test('a body whose promise resolves to an async generator streams — 9.6', asyn
     expect(`busy: ${rows.busy()}`).toBe('busy: true')
     run.close()
     expect(await rows).toEqual([1])
+})
+
+// 9.6 FOR ANY ASYNC ITERABLE, not a generator alone: a body handing back a `ReadableStream` streams
+// its chunks, and a refresh cancels the stream it superseded — the iterator's `return` is the
+// stream's cancel. THE REVERT: test for an async generator's prototype in `run` rather than for
+// `Symbol.asyncIterator`; the value holds the stream, and `rows()` is no array.
+test('a body handing back a ReadableStream streams its chunks — 9.6', async () => {
+    const controllers: ReadableStreamDefaultController<number>[] = []
+    let cancelled = 0
+    const rows = memo(
+        () =>
+            new ReadableStream<number>({
+                start: (controller) => {
+                    controllers.push(controller)
+                },
+                cancel: () => {
+                    cancelled += 1
+                },
+            }),
+    )
+    expect(`busy: ${rows.busy()}`).toBe('busy: true')
+    const first = controllers[0] as ReadableStreamDefaultController<number>
+    first.enqueue(1)
+    first.enqueue(2)
+    await turns()
+    expect(rows()).toEqual([1, 2])
+    rows.refresh()
+    await turns()
+    expect(`cancelled: ${cancelled}`).toBe('cancelled: 1')
+    const second = controllers[1] as ReadableStreamDefaultController<number>
+    second.enqueue(3)
+    second.close()
+    await turns()
+    expect(rows()).toEqual([3])
+    expect(`busy: ${rows.busy()}`).toBe('busy: false')
+})
+
+// 9.6 READS THE BRAND FIRST: a `Reactive` carries `Symbol.asyncIterator` too (2.5), and handed back
+// it is adopted (11.12), never streamed. THE REVERT: test `Symbol.asyncIterator` on functions as well
+// as objects in `isAsyncIterable`; the source is streamed rather than adopted, and the read throws.
+test('a body handing back a Reactive adopts it rather than streaming it — 9.6, 11.12', () => {
+    const source = reactive(1)
+    const follows = memo(() => source)
+    expect(follows()).toBe(1)
+    source.set(2)
+    expect(follows()).toBe(2)
 })
 
 // 9.2 AND 9.8, ASSERTED AS THE WORK. The accumulation is pushed into per chunk and

@@ -667,8 +667,9 @@ read that asks for it.
 9.5 A `store` MUST round-trip the latest production.
 
 9.6 A `memo` body declared as an async generator function MUST be a streaming producer from
-construction, and a body whose run hands back an async generator, or a promise resolving to one,
-MUST be one from that run on.
+construction, and a body whose run hands back an async iterable that is not a `Reactive` — an async
+generator or a `ReadableStream` among them — or a promise resolving to one, MUST be one from that
+run on, and a run replaced by a later one MUST cancel the stream it was reading.
 
 9.7 `s.refresh` on a streaming producer MUST serve the held accumulation until the new stream's
 first chunk, and that stream's accumulation from then on.

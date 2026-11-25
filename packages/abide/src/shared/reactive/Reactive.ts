@@ -20,6 +20,7 @@ import {
     retryAt,
 } from '../Failed.ts'
 import { isAbort } from '../isAbort.ts'
+import { isAsyncIterable } from '../isAsyncIterable.ts'
 import { namedLogger } from '../log.ts'
 import { nextTask } from '../nextTask.ts'
 import { refuse } from '../refuse.ts'
@@ -377,16 +378,6 @@ function closeRun(cell: Cell, stream: Stream): void {
  * Taken from a literal because the constructor has no global name.
  */
 const ASYNC_GENERATOR_FUNCTION = Object.getPrototypeOf(async function* () {})
-
-/** The prototype of every async generator function's own `prototype`, which its generators have. */
-const ASYNC_GENERATOR = ASYNC_GENERATOR_FUNCTION.prototype
-
-/** Whether a run handed back an async generator, which 9.6 makes the run's stream. */
-export function isAsyncGenerator(value: unknown): value is AsyncGenerator {
-    if (typeof value !== 'object' || value === null) return false
-    const own = Object.getPrototypeOf(value)
-    return own !== null && Object.getPrototypeOf(own) === ASYNC_GENERATOR
-}
 
 /**
  * Whether a body is an async generator function, and so a streaming producer.
@@ -1623,9 +1614,9 @@ function absorb(cell: Cell, result: unknown, answered: boolean): void {
         (settled) => {
             if (cell.generation !== generation) return
             if (answered && isFailed(settled)) refusedAnswer(cell, settled)
-            // 9.6 — a run's promise resolving to an async generator hands one back too. Its
+            // 9.6 — a run's promise resolving to an async iterable hands one back too. Its
             // probes move so `streamingOrSettled` hears the value turn.
-            else if (isAsyncGenerator(settled)) {
+            else if (isAsyncIterable(settled)) {
                 promoteToStream(cell, settled)
                 probesMoved(cell)
             }
@@ -2018,8 +2009,9 @@ function run(cell: Cell): void {
         refusedAnswer(cell, produced)
         return
     }
-    // 9.6 — ON ANY RUN: `() => flag() ? rows() : 0` hands its generator back once the flag turns.
-    if (!primitive && isAsyncGenerator(produced)) {
+    // 9.6 — ON ANY RUN: `() => flag() ? rows() : 0` hands its generator back once the flag turns,
+    // and `() => log.read()` its `ReadableStream`. A `Reactive` is callable, so never one (1.6).
+    if (!primitive && isAsyncIterable(produced)) {
         promoteToStream(cell, produced)
         return
     }
@@ -2157,13 +2149,13 @@ function startStream(cell: Cell, stream: Stream): void {
 }
 
 /**
- * 9.6 — a value whose run handed back an async generator: a streaming producer from that run on,
- * the generator being the run's stream, and every start after it the body's next one.
+ * 9.6 — a value whose run handed back an async iterable: a streaming producer from that run on,
+ * the iterable being the run's stream, and every start after it the body's next one.
  */
 function promoteToStream(cell: Cell, generator: AsyncIterable<unknown>): void {
     let stream = cell.stream
     if (stream === null) stream = becomeStream(cell, null)
-    pumpRun(cell, stream, generator[Symbol.asyncIterator]())
+    pumpRun(cell, stream, chunksOf(generator))
 }
 
 /**
@@ -2220,7 +2212,27 @@ function openStream(
     body: (args: unknown) => AsyncIterable<unknown>,
     args: unknown,
 ): AsyncIterator<unknown> {
-    return body(args)[Symbol.asyncIterator]()
+    return chunksOf(body(args))
+}
+
+/**
+ * The iterator a run's chunks are pumped from.
+ *
+ * A `ReadableStream` IS READ THROUGH ITS READER: its async iterator queues `return` behind the
+ * `next` in flight, so superseding a run waiting on its next chunk would not cancel the stream
+ * until that chunk came — a ledger's read waiting on an append that may never be made. The
+ * reader's `cancel` settles the pending read at once.
+ */
+function chunksOf(iterable: AsyncIterable<unknown>): AsyncIterator<unknown> {
+    if (!(iterable instanceof ReadableStream))
+        return iterable[Symbol.asyncIterator]()
+    const reader = (iterable as ReadableStream<unknown>).getReader()
+    return {
+        next: () =>
+            reader.read() as Promise<IteratorResult<unknown, undefined>>,
+        return: () =>
+            reader.cancel().then(() => ({ done: true, value: undefined })),
+    }
 }
 
 async function pump(

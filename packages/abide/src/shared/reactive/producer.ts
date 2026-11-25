@@ -27,7 +27,6 @@ export {
     closedRun,
     dropAnswered,
     failedTransiently,
-    isAsyncGenerator,
     isSubscribed,
     keepLoads,
     nameLoad,

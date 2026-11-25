@@ -193,14 +193,18 @@ type StoredOf<Calls> =
 export type Held<Accepted> = [Accepted] extends [{ invalidate: unknown }]
     ? never
     : Accepted | (PromiseLike<Accepted> & { invalidate?: never | undefined })
-/** What a body's value is, read off what it returns: the chunks a generator yields where it streams (9.6), else what it settles to. */
+/**
+ * What a body's value is, read off what it returns: the chunks an async iterable yields where it
+ * streams (9.6), else what it settles to. A `Reactive` handed back is unwrapped by `Awaited` first,
+ * being thenable (1.4), so its own `Symbol.asyncIterator` never reads as a stream here.
+ */
 export type BodyValue<Result> =
-    Awaited<Result> extends AsyncGenerator<infer Chunk>
+    Awaited<Result> extends AsyncIterable<infer Chunk>
         ? Chunk[]
         : Awaited<Result>
 /** What a body streams, chunk by chunk, or what it adopts from a `Reactive` it hands back (11.12). */
 export type BodyProduced<Result, Otherwise> =
-    Awaited<Result> extends AsyncGenerator<infer Chunk>
+    Awaited<Result> extends AsyncIterable<infer Chunk>
         ? Chunk
         : AdoptedProduced<Result, Otherwise>
 /** What `memo` builds from a body: a `Keyed` where it takes `Args`, a `Reactive` where it takes none. */
