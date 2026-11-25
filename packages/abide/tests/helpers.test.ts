@@ -90,3 +90,39 @@ test('download saves text or bytes under a name, through a link clicked — 53.9
     expect(clicked[0]?.download).toBe('deals.csv')
     expect(clicked[0]?.href.startsWith('blob:')).toBe(true)
 })
+
+// THE REVERT: click the link without appending it, and revoke on `setTimeout(…, 0)` — the link is
+// clicked outside the document and the address is gone a turn later, before WebKit's save reads it.
+test('download clicks its link in the document and keeps the address past the click — 53.90', async () => {
+    const connected: boolean[] = []
+    const click = spyOn(
+        HTMLAnchorElement.prototype,
+        'click',
+    ).mockImplementation(function (this: HTMLAnchorElement) {
+        connected.push(this.isConnected)
+    })
+    const revoke = spyOn(URL, 'revokeObjectURL')
+    const delays: number[] = []
+    const timer = spyOn(globalThis, 'setTimeout').mockImplementation(((
+        _run: () => void,
+        delay = 0,
+    ) => {
+        delays.push(delay)
+        return 0
+    }) as unknown as typeof setTimeout)
+    try {
+        download('a,b', 'deals.csv', 'text/csv')
+    } finally {
+        timer.mockRestore()
+        click.mockRestore()
+    }
+    await Bun.sleep(1)
+    const revoked = revoke.mock.calls.length
+    revoke.mockRestore()
+    expect({
+        connected,
+        left: document.querySelector('a[download]') === null,
+        revoked,
+        releasedLate: delays.length === 1 && (delays[0] ?? 0) >= 10_000,
+    }).toEqual({ connected: [true], left: true, revoked: 0, releasedLate: true })
+})

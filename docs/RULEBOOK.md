@@ -6625,8 +6625,9 @@ takes no more than `maxBytes`, save for PNG, whose size it MUST NOT lower for by
 53.89 `shrinkImage` MUST answer a file already within `maxEdge` and `maxBytes` and of `type` as it is,
 written again by nothing.
 
-53.90 `download` MUST save `data` as a file named `name`, as a click on a link to it with that
-`download` would, text written as `type`.
+53.90 `download` MUST save `data` as a file named `name`, as a click on a link to it in the
+document with that `download` would, text written as `type`, the link's address standing until the
+save has read it.
 
 53.91 `download` MUST throw where `isServer` is true.
 
