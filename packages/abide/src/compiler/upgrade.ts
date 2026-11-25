@@ -8,6 +8,7 @@ import { toChartRoot } from './toChartRoot.ts'
 import { toJob } from './toJob.ts'
 import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
+import { toNamedParts } from './toNamedParts.ts'
 
 /** A file's text before and after `abide upgrade`. */
 export type Edit = { path: string; before: string; after: string }
@@ -92,6 +93,20 @@ const MIGRATIONS: Migration[] = [
                 const text = await read(path)
                 if (text === undefined) continue
                 const migrated = toChartRoot(text)
+                if (migrated !== text) changed[path] = migrated
+            }
+            return changed
+        },
+    },
+    {
+        // 38.221 — another component's parts handed back whole are a member named for it (49.18).
+        version: '0.144.0',
+        migrate: async (read, sources) => {
+            const changed: Record<string, string> = {}
+            for (const path of await sources()) {
+                const text = await read(path)
+                if (text === undefined) continue
+                const migrated = toNamedParts(text)
                 if (migrated !== text) changed[path] = migrated
             }
             return changed

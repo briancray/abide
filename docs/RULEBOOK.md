@@ -3930,6 +3930,11 @@ member.
 38.220 The migration keyed to 0.144.0 MUST rename to `root` every `svg` read as a member of a name
 its file binds to a `chart` call, and MUST NOT rename any other `svg`.
 
+38.221 The migration keyed to 0.144.0 MUST rename `jump` to `autoscroll.jump`, `progress` to
+`meter` and `overflow` to `menu` where each is read as a member of a name its file binds, with
+`const`, `let` or `var`, to a call of `chat`, `wizard` and `breadcrumbs` respectively, and MUST
+leave the same member read off any other name.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

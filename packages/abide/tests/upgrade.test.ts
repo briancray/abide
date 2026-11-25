@@ -417,3 +417,84 @@ job({ name: 'score', every: 300_000, run: scoreAll })
     for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
     expect(await upgrade(app, '0.143.0')).toEqual([])
 })
+
+// 38.221 — ANOTHER COMPONENT'S PARTS ARE A MEMBER NAMED FOR IT: `jump` read off a name bound to `chat`
+// is `autoscroll.jump`, `progress` off a `wizard` is `meter`, `overflow` off `breadcrumbs` is `menu`,
+// in a page's script and markup, a module and a Markdown fence. The same words read off any other
+// name, and `'overflow'` as a value, are left, and run again it changes nothing (38.200). THE REVERT:
+// drop the binding from `toNamedParts` and rename every `.jump`, and `scroller.jump` is renamed too.
+test('abide upgrade renames the parts 49.18 named for their component — 38.221, 38.200', async () => {
+    const page = `<script>
+import { breadcrumbs, chat, wizard } from '@abide/abide'
+
+const talk = chat({ ask })
+let steps = wizard<string>({ steps: STEPS })
+const crumbs = breadcrumbs({ trail, href })
+const scroller = { jump: () => {} }
+</script>
+
+<ol {...talk.transcript}></ol>
+<button {...talk.jump}>Latest</button>
+<div {...steps.progress.meter}><i {...steps.progress.fill}></i></div>
+{#for item of crumbs.items}{#if item === 'overflow'}<b {...crumbs.overflow.trigger}></b>{/if}{/for}
+<button onclick={() => scroller.jump()}>Top</button>
+<p {...talk.autoscroll.jump}></p>
+`
+    const module = `import { wizard } from '@abide/abide'
+
+export const signup = wizard({ steps: ['a', 'b'] })
+export const shown = () => signup?.progress.fraction
+export const other = task.progress
+`
+    const notes = `# Chat
+
+\`\`\`abide
+<script>
+const talk = chat({ ask })
+</script>
+<button {...talk.jump}>Latest</button>
+\`\`\`
+`
+    const app = temporaryModule({
+        'src/index.abide': page,
+        'src/lib/signup.ts': module,
+        'NOTES.md': notes,
+    })
+    const edits = await upgrade(app, '0.143.0')
+    const after = (path: string) =>
+        edits.find((edit) => edit.path === path)?.after
+    expect(after('src/index.abide')).toBe(`<script>
+import { breadcrumbs, chat, wizard } from '@abide/abide'
+
+const talk = chat({ ask })
+let steps = wizard<string>({ steps: STEPS })
+const crumbs = breadcrumbs({ trail, href })
+const scroller = { jump: () => {} }
+</script>
+
+<ol {...talk.transcript}></ol>
+<button {...talk.autoscroll.jump}>Latest</button>
+<div {...steps.meter.meter}><i {...steps.meter.fill}></i></div>
+{#for item of crumbs.items}{#if item === 'overflow'}<b {...crumbs.menu.trigger}></b>{/if}{/for}
+<button onclick={() => scroller.jump()}>Top</button>
+<p {...talk.autoscroll.jump}></p>
+`)
+    expect(after('src/lib/signup.ts'))
+        .toBe(`import { wizard } from '@abide/abide'
+
+export const signup = wizard({ steps: ['a', 'b'] })
+export const shown = () => signup?.meter.fraction
+export const other = task.progress
+`)
+    expect(after('NOTES.md')).toBe(`# Chat
+
+\`\`\`abide
+<script>
+const talk = chat({ ask })
+</script>
+<button {...talk.autoscroll.jump}>Latest</button>
+\`\`\`
+`)
+    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    expect(await upgrade(app, '0.143.0')).toEqual([])
+})
