@@ -16,7 +16,7 @@ import {
 } from '#shared/principal.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { refuse } from '#shared/refuse.ts'
-import { declare } from '#shared/rpc.ts'
+import { declare, reachOf } from '#shared/rpc.ts'
 
 import { callerOf, callerOrMint, mintCaller } from './callerOf.ts'
 import { config, positiveSetting } from './config.ts'
@@ -338,10 +338,11 @@ export const PRINCIPAL_MOUNT = mountedOwn(
     principalDocument,
 )
 
-// 21.3 — the answer is about this caller alone, and is never cached. 1.4 — the call's `Reactive` is
-// thenable, and a promise of it is the document.
+// 21.3 — the answer is about this caller alone, and is never cached. 1.4 — the handler's value for
+// the call is thenable, and a promise of it is the document, a refusal rejecting it.
 export const SERVER_PRINCIPAL: typeof PRINCIPAL = {
-    document: () => Promise.resolve(principalDocument()),
+    document: () =>
+        Promise.resolve(reachOf(principalDocument) as Promise<Principal>),
     caller: callerOrMint,
     set,
     clear,

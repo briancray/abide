@@ -13,9 +13,10 @@
 import type { Failed } from '../Failed.ts'
 import type { Issues } from '../Issues.ts'
 import { OUTBOX_SENDING } from '../OUTBOX_SENDING.ts'
-import type { Rpc } from '../rpc.ts'
+import type { Annotated, Rpc } from '../rpc.ts'
 import { RPC_SERVER } from '../RPC_SERVER.ts'
 import type { Schema } from '../Schema.ts'
+import type { CALL_ENTRY } from './CALL_ENTRY.ts'
 import { createMemo, type Memo, type MemoOptions } from './createMemo.ts'
 import { DECLARED_TAGS } from './DECLARED_TAGS.ts'
 import { isReactive } from './isReactive.ts'
@@ -166,7 +167,11 @@ export type Refusals<
 export type AdoptedFailures<Computed> =
     Computed extends Reactive<unknown, never, infer Failures, unknown>
         ? Failures
-        : never
+        : Computed extends {
+                readonly [CALL_ENTRY]?: { readonly failures: infer Failures } | undefined
+            }
+          ? Failures
+          : never
 /** The chunks a body adopts from a streaming `Reactive` it hands back, else `Otherwise` (11.12). */
 export type AdoptedProduced<Computed, Otherwise> =
     Computed extends Reactive<unknown, never, unknown, infer Produced>
@@ -174,12 +179,18 @@ export type AdoptedProduced<Computed, Otherwise> =
         : Otherwise
 
 /**
- * The `Reactive` one call of an `Rpc` hands back, for each `Rpc` in `Calls` — a union of them where
- * `Calls` is a union, which `reactive` folds into one value.
+ * The `Reactive` one call of an `Rpc` is written into (4.19), for each `Rpc` in `Calls` — a union of
+ * them where `Calls` is a union, which `reactive` folds into one value: the call's value, and the
+ * refusals its promise rejects with as its failures (16.8).
  */
-type CallOf<Calls> =
+export type CallOf<Calls> =
     Calls extends Rpc<infer Value, infer Args, infer Failures, infer Produced>
-        ? ReturnType<Rpc<Value, Args, Failures, Produced>>
+        ? Reactive<
+              Value,
+              Value,
+              Failures | Failed<'HttpError', undefined> | Annotated<Args>,
+              Produced
+          >
         : never
 /** What a `Reactive` in `Calls` stores — the union over `Calls`, distributed. */
 type StoredOf<Calls> =
@@ -201,10 +212,11 @@ export type Held<Accepted> = [Accepted] extends [{ invalidate: unknown }]
  * streams (9.6), else what it settles to. A `Reactive` handed back is unwrapped by `Awaited` first,
  * being thenable (1.4), so its own `Symbol.asyncIterator` never reads as a stream here.
  */
-export type BodyValue<Result> =
-    Awaited<Result> extends AsyncIterable<infer Chunk>
-        ? Chunk[]
-        : Awaited<Result>
+export type BodyValue<Result> = ChunksOrValue<Awaited<Result>>
+// Distributed, so a body answering a stream on one arm and a value on the other — `asked ?
+// summarize() : []` — is either's value rather than neither's.
+type ChunksOrValue<Answer> =
+    Answer extends AsyncIterable<infer Chunk> ? Chunk[] : Answer
 /** What a body streams, chunk by chunk, or what it adopts from a `Reactive` it hands back (11.12). */
 export type BodyProduced<Result, Otherwise> =
     Awaited<Result> extends AsyncIterable<infer Chunk>

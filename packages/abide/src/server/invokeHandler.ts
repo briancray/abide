@@ -11,6 +11,7 @@ import { type Failed, isFailed } from '#shared/Failed.ts'
 import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
 import { compose } from '#shared/Middleware.ts'
 import { heldGenerationOf } from '#shared/reactive/producer.ts'
+import { reachOf } from '#shared/rpc.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 
 import { argsFor } from './argsContract.ts'
@@ -129,7 +130,7 @@ export async function invokeHandler(
     const started = performance.now()
     const outcome =
         seeded === undefined
-            ? await outcomeOf(handler(args), started)
+            ? await outcomeOf(reachOf(handler, args), started)
             : await seeded
     const entry = key === undefined ? undefined : global?.at(key)
     const run: Run =
@@ -194,7 +195,7 @@ function handlerAdmits(
     args: unknown,
 ): Promise<boolean> {
     return Promise.resolve(
-        mounted.handler(args as never) as PromiseLike<unknown>,
+        reachOf(mounted.handler, args) as PromiseLike<unknown>,
     ).then(
         () => true,
         () => false,

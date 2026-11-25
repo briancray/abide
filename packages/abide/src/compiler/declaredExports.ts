@@ -678,7 +678,22 @@ async function valueOfRpc(
     rpc: Type,
 ): Promise<Type | undefined> {
     const returned = await callReturnOf(checker, rpc)
-    return returned === undefined ? undefined : callReturnOf(checker, returned)
+    if (returned === undefined) return undefined
+    // 16.3 — the value a call's answer carries, typed on its `CALL_ENTRY` member.
+    for (const member of await checker.getPropertiesOfType(returned)) {
+        if (!member.name.startsWith('__@CALL_ENTRY@')) continue
+        const typed = await checker.getTypeOfSymbol(member)
+        const carried =
+            typed === undefined
+                ? undefined
+                : await checker.getNonNullableType(typed)
+        const value =
+            carried === undefined
+                ? undefined
+                : await checker.getPropertyOfType(carried, 'value')
+        return value === undefined ? undefined : checker.getTypeOfSymbol(value)
+    }
+    return undefined
 }
 
 /**

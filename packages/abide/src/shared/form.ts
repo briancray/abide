@@ -19,7 +19,12 @@ import type { Issues } from './Issues.ts'
 import { jsonSchema } from './jsonSchema.ts'
 import type { JsonValue } from './JsonValue.ts'
 import { randomToken } from './randomToken.ts'
-import { type Reactive, reactive, watch } from './reactive/index.ts'
+import {
+    type CallOf,
+    type Reactive,
+    reactive,
+    watch,
+} from './reactive/index.ts'
 import type { Rpc } from './rpc.ts'
 import { runSchema } from './Schema.ts'
 
@@ -79,7 +84,7 @@ export type Form<Handler extends AnyRpc> = {
     /** What is wrong with the form: the check's findings, or else the last call's refusal. */
     get issues(): Issues<Handler> | undefined
     /** The last call the form made, `busy` while it is in flight. */
-    readonly call: ReturnType<Handler>
+    readonly call: CallOf<Handler>
 }
 
 /** A form whose submit calls `handler` with its fields, checked first against its args' document. */
@@ -89,7 +94,7 @@ export function form<Handler extends AnyRpc>(handler: Handler): Form<Handler> {
     ]
     const schema = document === undefined ? undefined : jsonSchema(document)
     // 56.4 — the value a call is (4.19): written each submit, so `busy` and the refusal are the last one's.
-    const call = reactive<Handler>() as unknown as ReturnType<Handler>
+    const call = reactive<Handler>() as unknown as CallOf<Handler>
     // What the check last found, `null` where it found nothing; `undefined` where it has not run since
     // the last call was made, so the call's refusal is what shows.
     const checked = reactive<Record<string, string[]> | null | undefined>(

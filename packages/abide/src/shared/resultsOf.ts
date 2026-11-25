@@ -1,6 +1,5 @@
 import type { AssistantMessage } from './AssistantEvent.ts'
 import { callsOf } from './callsOf.ts'
-import type { Reactive } from './reactive/Reactive.ts'
 import type { Rpc } from './rpc.ts'
 
 /**
@@ -13,7 +12,7 @@ import type { Rpc } from './rpc.ts'
 export function resultsOf<Value>(
     messages: readonly AssistantMessage[],
     // Any `Rpc`, whatever its `Args`: only the value is read off its call.
-    handler: ((...args: never) => Reactive<Value, never, unknown, unknown>) &
+    handler: ((...args: never) => Promise<Value> | AsyncIterable<Value>) &
         Pick<Rpc<Value, never>, 'tool'>,
 ): Value[] {
     const values: Value[] = []

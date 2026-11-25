@@ -26,6 +26,8 @@ import { compose, type Rung } from './Middleware.ts'
 import { unmounted } from './mount.ts'
 import { outbox, type QueuedCall, sendingFor } from './outbox.ts'
 import { principalRotated } from './principalRotated.ts'
+import { REACH_CALL } from './REACH_CALL.ts'
+import { answerOfCall } from './reactive/answerOfCall.ts'
 import {
     acceptedArgs,
     contractOf,
@@ -34,6 +36,7 @@ import {
     type HeldToAnnotation,
     keyOf,
 } from './reactive/argsContract.ts'
+import type { CALL_ENTRY } from './reactive/CALL_ENTRY.ts'
 import { callLoad } from './reactive/callLoad.ts'
 import { DECLARED_TAGS } from './reactive/DECLARED_TAGS.ts'
 import {
@@ -54,6 +57,7 @@ import {
     type Shaping,
     STREAMING,
 } from './reactive/index.ts'
+import { isReactive } from './reactive/isReactive.ts'
 import { isThenable } from './reactive/isThenable.ts'
 import { MUTATION } from './reactive/MUTATION.ts'
 import {
@@ -62,6 +66,7 @@ import {
     nameLoad,
     streamingOrSettled,
 } from './reactive/producer.ts'
+import { isStreamBody } from './reactive/Reactive.ts'
 import { builtHere, isForwarder } from './reactive/scoped.ts'
 import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
 import { checkArgs } from './refuse.ts'
@@ -82,10 +87,11 @@ export type CallOptions<Args = unknown, Value = unknown> = {
 }
 
 /**
- * A declared handler: callable for its `Reactive`, with the handler's own members and its mount.
+ * A declared handler: callable for what its body answers, with the handler's own members and its
+ * mount.
  *
- * 16.3 — the call hands back the handler's own `Reactive`; the members below are the handler's,
- * passed through.
+ * 16.3 — the call answers as the handler's body does (`CallAnswer`); the members below are the
+ * handler's, passed through.
  *
  * 16.8 — AND ITS FAILURES CARRY THE TRANSPORT'S `HttpError`, which no handler declares and every
  * call can be answered with: a body over `maxBodySize` (413), a closed `crossOrigin` (403), a
@@ -97,8 +103,7 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     ...args: undefined extends Args
         ? [args?: Args, options?: CallOptions<Args, NoInfer<Value>>]
         : [args: Args, options?: CallOptions<Args, NoInfer<Value>>]
-) => Reactive<
-    Value,
+) => CallAnswer<
     Value,
     Failures | Failed<'HttpError', undefined> | Annotated<Args>,
     Produced
@@ -150,6 +155,24 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
 }
 
 /**
+ * 16.3 — what one call of an `Rpc` answers, as the handler's body answers: the stream of its chunks
+ * where it streams — `Produced` is a chunk where `Value` is the chunks — and otherwise the promise of
+ * its value, rejected with its refusal (15.27).
+ */
+export type CallAnswer<Value, Failures, Produced> = ([Value] extends [Produced]
+    ? [Produced] extends [Value]
+        ? Promise<Value>
+        : AsyncIterable<Produced>
+    : AsyncIterable<Produced>) & {
+    // Typed only: the value and the refusals a `computed` adopting the answer serves as its own
+    // (11.12), and what the build reads a handler's value off (19.21).
+    readonly [CALL_ENTRY]?: {
+        readonly value: Value
+        readonly failures: Failures
+    }
+}
+
+/**
  * The `ValidationError` the wire answers args that do not hold to the schema 19.9 derives from
  * `Args`, and `never` where the derived schema is no object's and the wire holds nothing to it.
  *
@@ -158,7 +181,7 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
  * records (`anyOf`), and not `any`, `unknown` or `object`, which constrain nothing. `object` is told
  * from `{}`, the one other record with no keys, by `string`, which only `{}` takes.
  */
-type Annotated<Args> = 0 extends 1 & Args
+export type Annotated<Args> = 0 extends 1 & Args
     ? never
     : unknown extends Args
       ? never
@@ -448,6 +471,13 @@ export function declare<Declared extends Method>(
                   },
         )
         const keyed = isKeyed(value)
+        // 16.32 — a handler whose body is an async generator answers its chunks; a browser's copy is
+        // told so by the build (`streamingCopy`), since its body is the wire's.
+        let streams =
+            typeof handler === 'function' &&
+            !isReactive(handler) &&
+            !isKeyed(handler) &&
+            isStreamBody(handler as (args: never) => unknown)
         // 19.7 — the handler's `args` gate and its parameter defaults, on the `Rpc` too, for the
         // wire to coerce and key by. 11.27, 11.29 — THE DEFAULTS ARE APPLIED AT THE CALL rather than
         // left to the value's own reach: a value behind rungs is keyed ahead of the handler's, and
@@ -546,7 +576,7 @@ export function declare<Declared extends Method>(
             if (route?.address !== address) route = new HandlerRoute(address)
             return route
         }
-        const call = (given?: unknown, options?: CallOptions): unknown => {
+        const reachCall = (given?: unknown, options?: CallOptions): unknown => {
             // 15.8, 19.9 — the args every way of calling the handler is held to.
             let args: unknown
             try {
@@ -581,6 +611,11 @@ export function declare<Declared extends Method>(
             nameLoad(reached, method, rpc.address)
             return reached
         }
+        // 16.3 — WHAT A CALL ANSWERS IS WHAT THE HANDLER'S BODY ANSWERS: a promise of the value or
+        // its refusal, or the stream of its chunks. The value the call reached stays the handler's,
+        // carried on the answer for a `computed` handing it back whole to adopt (11.12).
+        const call = (given?: unknown, options?: CallOptions): unknown =>
+            answerOfCall(reachCall(given, options), streams)
         // THE HANDLER'S OWN MEMBERS, handed the pattern. A `Keyed` narrows by it and a `Reactive`'s
         // take no argument, so one spelling serves both arms and neither is a second mechanism.
         //
@@ -595,6 +630,11 @@ export function declare<Declared extends Method>(
         const faceHere = (): typeof built =>
             builtHere(value) ? built : UNREACHED
         const rpc = Object.assign(call, contract, {
+            [REACH_CALL]: reachCall,
+            // 16.32 — the build's word that a browser's copy streams, its body being the wire's.
+            [STREAMING_COPY]: (): void => {
+                streams = true
+            },
             method,
             description: options?.description,
             address: undefined as string | undefined,
@@ -833,4 +873,20 @@ function refreshEach(
     }
     if (tags !== undefined) refresh({ tags })
     if (failed !== undefined) throw failed.failure
+}
+
+/** The member a browser's copy is told it streams through, since its body is the wire's (16.32). */
+export const STREAMING_COPY = Symbol('abide.streamingCopy')
+
+/** The handler's value for `args`, as `rpc` reached it: what abide's own callers hold (`REACH_CALL`). */
+export function reachOf(
+    rpc: unknown,
+    args?: unknown,
+    options?: CallOptions,
+): unknown {
+    return (
+        rpc as {
+            [REACH_CALL]: (args?: unknown, options?: CallOptions) => unknown
+        }
+    )[REACH_CALL](args, options)
 }

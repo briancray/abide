@@ -131,7 +131,7 @@ export type ChatParts = {
         handler: ((
             args: Input,
             ...rest: never[]
-        ) => Reactive<Value, never, unknown, unknown>) &
+        ) => Promise<Value> | AsyncIterable<Value>) &
             Pick<Rpc<Value, never>, 'tool'>,
     ): ChatCall<Input, Value>[]
     /** 53.26 — the permission prompts the answer streaming asks, each with the visitor's answer. */

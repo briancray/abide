@@ -14,9 +14,9 @@ onHealth(() => ({ database: pool.connected ? 'connected' : 'closed' }))
 </script>
 
 <script>
-import { health } from '@abide/abide'
+import { computed, health } from '@abide/abide'
 
-const account = health()
+const account = computed(() => health())
 </script>
 
 <ul class="fields stacked">

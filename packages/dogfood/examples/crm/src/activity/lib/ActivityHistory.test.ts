@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 
+import { computed } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
 
 import olderActivity from '../olderActivity.handler.ts'
@@ -21,7 +22,7 @@ test('the list shows each entry as it is read', async () => {
 test('the first entry is in hand while the rest are still read', async () => {
     // Read afresh rather than the run the test above left settled.
     olderActivity.invalidate()
-    const entries = olderActivity()
+    const entries = computed(() => olderActivity())
     const stillReading: boolean[] = []
     for await (const _entry of entries) stillReading.push(entries.busy())
     expect(stillReading).toHaveLength(3)

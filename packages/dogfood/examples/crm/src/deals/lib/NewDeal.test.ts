@@ -28,9 +28,15 @@ test("a deal that does not fit shows field by field what the handler's refusal s
     using _form = await mount(NewDeal({}))
     const before = DEALS.length
     await submit()
-    const refused = createDeal({ name: 'Ledger audit', company: '', amount: 0 })
-    await Bun.sleep(20)
-    const issues = refused.issues() ?? {}
+    let refusal: unknown
+    try {
+        await createDeal({ name: 'Ledger audit', company: '', amount: 0 })
+    } catch (thrown) {
+        refusal = thrown
+    }
+    const issues = createDeal.isError(refusal, 'ValidationError')
+        ? refusal.data
+        : {}
     expect(shown()).toEqual([
         ['company', issues.company?.[0]],
         ['amount', issues.amount?.[0]],

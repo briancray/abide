@@ -27,6 +27,7 @@ import { refuse } from '../refuse.ts'
 import { type Found, runSchema, type Schema } from '../Schema.ts'
 import { UNEXPECTED } from '../UNEXPECTED.ts'
 import { WORK } from '../WORK.ts'
+import { CALL_ENTRY } from './CALL_ENTRY.ts'
 import { CELL } from './CELL.ts'
 import {
     type Adoption,
@@ -1965,6 +1966,14 @@ function run(cell: Cell): void {
     // And a guard this run did not take stops waking it.
     if (reader.probeCursor < reader.probeSources.length) truncateProbes(reader)
     cell.running = false
+    // 16.3, 11.12 — A CALL'S ANSWER HANDED BACK WHOLE IS ITS VALUE, ADOPTED: the promise or the
+    // stream an `Rpc` call answers carries the handler's value for those args, so the body keeps
+    // what that value keeps — a server's patches (18.11), a stand-in written over it (16.81), a
+    // seed taken in the same turn (41.27) — where settling the promise would hold one snapshot.
+    if (produced !== null && typeof produced === 'object') {
+        const entry = (produced as { [CALL_ENTRY]?: unknown })[CALL_ENTRY]
+        if (entry !== undefined) produced = entry
+    }
     // A VALUE THAT WAS ADOPTING AND IS NOT ANY MORE. Behind the `adoption` load so every
     // other recompute pays one field test rather than the brand read below it.
     if (cell.adoption !== null) {
@@ -3398,13 +3407,24 @@ function pullAbove(cell: Cell): void {
 }
 
 /**
+ * 16.3, 11.61 — the handler's value a call's answer carries, where `value` is one: written or opened
+ * on, it is adopted as the value itself would be, so `saving.set(save(args))` holds the call's
+ * refusal as a refusal rather than storing it as what the promise settled to.
+ */
+function valueOfCall(value: unknown): unknown {
+    if (value === null || typeof value !== 'object') return value
+    return (value as { [CALL_ENTRY]?: unknown })[CALL_ENTRY] ?? value
+}
+
+/**
  * The general `set`: adopts a `Reactive`, absorbs a load, or gates a value.
  *
  * 4.18: a refusal comes back to the caller, and only a refusal — an accepted write is `void`,
  * whatever ordinal `accept` minted for it. Behind its own frame so the settled, ungated
  * write above it stays small enough to be inlined into whatever loop calls `set`.
  */
-function setThroughGates(cell: Cell, value: unknown): unknown {
+function setThroughGates(cell: Cell, written: unknown): unknown {
+    const value = valueOfCall(written)
     // 11.61: A `Reactive` WRITTEN IS ADOPTED, never stored — the same sentence 11.12 makes about
     // one a body hands back, and the brand is read before `then` for the same reason (1.6). It is
     // off the common write path rather than in front of it: a settled primitive never reaches this
@@ -3430,7 +3450,8 @@ function setThroughGates(cell: Cell, value: unknown): unknown {
  * adopting it rather than storing it, so the two spellings agree (31.8). Stored, the value held
  * `other`'s getter, and a read handed back a function.
  */
-function open(cell: Cell, initial: unknown): void {
+function open(cell: Cell, opening: unknown): void {
+    const initial = valueOfCall(opening)
     if (!isReactive(initial)) {
         absorb(cell, initial, false)
         return
@@ -4192,7 +4213,8 @@ const FOLLOW_UP_PROTOTYPE = forwardingPrototype<FollowUp>(followedValue)
  * `ADOPTING_PROTOTYPE` instead, like any adoption.
  */
 const STREAM_PROTOTYPE = brandedPrototype({
-    set(this: Callable, value: unknown): unknown {
+    set(this: Callable, written: unknown): unknown {
+        const value = valueOfCall(written)
         const cell = this[CELL]
         // 11.61: a `Reactive` written is adopted, and on a stream that is a write following it.
         if (isReactive(value)) {
@@ -4223,7 +4245,8 @@ const STREAM_PROTOTYPE = brandedPrototype({
  * would hand that source to the one it is leaving.
  */
 const ADOPTING_PROTOTYPE = brandedPrototype({
-    set(this: Callable, value: unknown): unknown {
+    set(this: Callable, written: unknown): unknown {
+        const value = valueOfCall(written)
         const adoption = this[CELL].adoption
         if (adoption === null || isReactive(value))
             return MEMBERS.set.call(this, value)
