@@ -1,0 +1,39 @@
+<script>
+import { calendar, memo, reactive } from '@abide/abide'
+
+import listClosing from '../listClosing.handler.ts'
+
+const deals = memo(() => listClosing())
+// How many deals close on each day, by the day.
+const closing = memo(() => {
+    const byDay = new Map<string, number>()
+    for (const deal of deals)
+        if (deal.closes !== undefined)
+            byDay.set(deal.closes, (byDay.get(deal.closes) ?? 0) + 1)
+    return byDay
+})
+let month = reactive<string | undefined>('2026-12')
+const dates = calendar({ month })
+</script>
+
+{#for shown of dates.months key shown.month}
+    <div class="row">
+        <button {...dates.previous} aria-controls="closing-month">‹</button>
+        <h3>{shown.label}</h3>
+        <button {...dates.next} aria-controls="closing-month">›</button>
+    </div>
+    <table id="closing-month">
+        <tr>
+            {#for weekday of dates.weekdays key weekday.day}
+                <th abbr={weekday.name}>{weekday.short}</th>
+            {/for}
+        </tr>
+        {#for week of shown.weeks key week[0]?.date}
+            <tr>
+                {#for day of week key day.date}
+                    <td>{day.day}{#if closing.has(day.date)} · {closing.get(day.date)}{/if}</td>
+                {/for}
+            </tr>
+        {/for}
+    </table>
+{/for}

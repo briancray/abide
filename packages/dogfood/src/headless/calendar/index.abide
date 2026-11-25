@@ -3,6 +3,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import ClosingMonth from './lib/ClosingMonth.abide'
+import closingMonth from './lib/ClosingMonth.abide' with { type: 'text' }
 import LondonWeeks from './lib/LondonWeeks.abide'
 import londonWeeks from './lib/LondonWeeks.abide' with { type: 'text' }
 import OpenOnTheDay from './lib/OpenOnTheDay.abide'
@@ -33,6 +35,12 @@ import twoMonths from './lib/TwoMonths.abide' with { type: 'text' }
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/CloseCalendar.test.ts',
             from: ["test('a click picks a day, and the buttons page the month'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/ClosingMonth.test.ts',
+            from: [
+                "test('a month of close dates is a table of whole weeks, paged by the buttons'",
+            ],
         },
         {
             path: 'packages/abide/tests/calendar.test.ts',
@@ -97,5 +105,12 @@ import twoMonths from './lib/TwoMonths.abide' with { type: 'text' }
         <p>Name the <code>locale</code> and the week starts where that locale starts it, Monday in
             London.</p>
         <Example code={londonWeeks}><LondonWeeks /></Example>
+    </Section>
+    <Section level={3} title="Show a month of close dates nobody picks from">
+        <p>The weeks, the weekdays and the paging stand without the keyboard. Write a table over
+            <code>months</code> and <code>weekdays</code>, and leave <code>grid</code> and each
+            day's <code>cell</code> unspread: no day takes focus. Point the paging buttons'
+            <code>aria-controls</code> at the table, since the grids they name are not there.</p>
+        <Example code={closingMonth}><ClosingMonth /></Example>
     </Section>
 </Doc>
