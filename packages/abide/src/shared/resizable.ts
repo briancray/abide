@@ -4,6 +4,7 @@
 // answers the arrows of its own axis alone, so one `resizable` per axis spread on one grip sizes a
 // corner.
 
+import { checkParts } from './checkParts.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
@@ -49,6 +50,7 @@ export function resizable(options: ResizableOptions = {}): Resizable {
     const size = options.size ?? reactive<number | undefined>(undefined)
     const id = options.id ?? `resizable-${randomToken(4, 'hex')}`
     const panelId = `${id}-panel`
+    if (process.env.NODE_ENV !== 'production') checkParts('resizable', id)
     const min = () => live(options.min) ?? 0
     const dragging = reactive(false)
     // The size before Enter collapsed it, which the next Enter restores.

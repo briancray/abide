@@ -2,6 +2,7 @@
 // field and the buttons either side of it. The keys step it; a number typed is taken as it is typed, and kept to its
 // bounds and its step; the buttons stand outside the tab order, as the field holds the keys.
 
+import { checkParts } from './checkParts.ts'
 import { handFocus } from './handFocus.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
@@ -39,6 +40,7 @@ export type Stepper = {
 export function stepper(options: StepperOptions = {}): Stepper {
     const value = options.value ?? reactive(live(options.min) ?? 0)
     const id = options.id ?? `stepper-${randomToken(4, 'hex')}`
+    if (process.env.NODE_ENV !== 'production') checkParts('stepper', id)
     const step = () => live(options.step) ?? 1
     const min = () => live(options.min) ?? Number.NEGATIVE_INFINITY
     const max = () => live(options.max) ?? Number.POSITIVE_INFINITY

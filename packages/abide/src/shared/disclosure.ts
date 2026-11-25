@@ -3,6 +3,7 @@
 // reaches what it holds and opens it. What an `accordion` is made of, one per key, and what `clamp`'s
 // button is.
 
+import { checkParts } from './checkParts.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
@@ -32,6 +33,7 @@ export function disclosure(options: DisclosureOptions = {}): Disclosure {
     // Hydration runs setup again (41.6), and the button's `aria-controls` is bound to it.
     const id = options.id ?? `disclosure-${randomToken(4, 'hex')}`
     const regionId = `${id}-region`
+    if (process.env.NODE_ENV !== 'production') checkParts('disclosure', id)
     const isOpen = () => (open() ? '' : undefined)
     return {
         id,

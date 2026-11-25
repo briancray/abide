@@ -5,7 +5,10 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
+import { disclosure } from '#shared/disclosure.ts'
 import { menu } from '#shared/menu.ts'
+import { resizable } from '#shared/resizable.ts'
+import { stepper } from '#shared/stepper.ts'
 import { tabs } from '#shared/tabs.ts'
 import { host } from '#shared/tooltip/host.ts'
 import { tree } from '#shared/tree.ts'
@@ -83,6 +86,32 @@ test('a tab whose panel is not there warns once, however many tabs name one', as
     expect(warned[0]).toContain(
         'tabs: aria-controls names an element that is not there',
     )
+})
+
+// 49.7 — EVERY COMPONENT WRITING A REFERENCE CHECKS IT, not only those built on a listbox or a
+// popover. THE REVERT: drop the check from `disclosure`, `resizable` and `stepper`, and the three
+// buttons naming nothing warn of nothing ([] against three warnings).
+test('a disclosure, a splitter and a spin button naming an element not there each warn', async () => {
+    const warned = await warnings(() => {
+        document.body.append(
+            element('button', disclosure().button),
+            element('div', resizable().handle),
+            element('button', stepper().increment),
+        )
+    })
+    expect(
+        warned.map((line) => line.slice(line.indexOf('abide:parts'))),
+    ).toEqual([
+        expect.stringContaining(
+            'disclosure: aria-controls names an element that is not there',
+        ),
+        expect.stringContaining(
+            'resizable: aria-controls names an element that is not there',
+        ),
+        expect.stringContaining(
+            'stepper: aria-controls names an element that is not there',
+        ),
+    ])
 })
 
 // THE REVERT: drop the role check from `partsProblems`, and an item rendered outside its tree passes.
