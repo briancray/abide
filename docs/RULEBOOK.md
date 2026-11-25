@@ -4712,8 +4712,8 @@ set `step` to `waiting` and navigate the page to the status's `link`.
 44.71 2500 ms after `pairing`'s `start`, `step` MUST become `click` where the window blurred since,
 or `status` is paired, and `install` otherwise.
 
-44.72 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard as 53.54 and 53.22
-copy, and once written MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to
+44.72 `pairing`'s `copyInstall` MUST write `status`'s `install` to the clipboard through
+`copyToClipboard`, and once written MUST hold `copied` true for 1200 ms and then set `copied` false and `step` to
 `click`.
 
 44.73 A `pairing` MUST, once its `stop` or its `[Symbol.dispose]` is called, or the component whose
@@ -6402,10 +6402,10 @@ and MUST NOT once the drag leaves or drops.
 53.20 `dropzone` with `paste` MUST take a `paste` carrying files `accept` takes as a drop, and MUST
 leave a paste carrying none to the browser.
 
-53.21 `copy` MUST write its value to the clipboard on a click of its element, calling a function
-it was given at the click.
+53.21 `copy` MUST write its value to the clipboard through `copyToClipboard` on a click of its
+element, calling a function it was given at the click.
 
-53.22 `copy` MUST copy through a selected textarea where `navigator.clipboard` or `ClipboardItem`
+53.22 `copyToClipboard` MUST copy through a selected textarea where `navigator.clipboard` or `ClipboardItem`
 is absent or refuses, laying every string its value holds on the `copy` event under its type.
 
 53.23 `copy` MUST write `data-copied` on its element once a copy lands, and MUST remove it
@@ -6505,10 +6505,10 @@ and options, apart and in the order `keyLabel` writes them.
 53.53 `keyLabel` and `keyLabel.parts` MUST write for an Apple platform where `apple` is `true`, and
 for any other where it is `false`, whatever 53.3 reads.
 
-53.54 `copy` MUST write a string as `text/plain`, and a record as one clipboard item holding each
+53.54 `copyToClipboard` MUST write a string as `text/plain`, and a record as one clipboard item holding each
 MIME type the record names.
 
-53.55 `copy` MUST report a value holding no string as not copied where 53.22 copies.
+53.55 `copyToClipboard` MUST settle `false` for a value holding no string where 53.22 copies.
 
 53.56 What a drop, a paste or a pick `dropzone` takes MUST replace its `files`, and one taking none
 MUST leave them as they are.
@@ -6657,6 +6657,11 @@ leaves the host where aligning the current one does.
 
 53.101 A scroll that `scrollTo`, `reset` or a change of the item `carousel` rests on starts, and that
 leaves the `host` where it already is, MUST NOT be on its way in 53.65's sense.
+
+53.102 `copyToClipboard` MUST settle `true` once its value is on the clipboard, and `false` where
+`navigator.clipboard` and 53.22's copy both leave it off, and MUST NOT reject for a refusal.
+
+53.103 `copyToClipboard` MUST reject where `isServer` is true.
 
 # 54. Guards, fetches and jobs
 

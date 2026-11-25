@@ -915,7 +915,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `copy` | `(options?: { value?: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>); copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => Record<string, unknown>` | The part copying the element clicked, or text, or a record of MIME type to what it holds, to the clipboard on a click of the element it is spread on, or of a button inside it. | 32.99, 53.21, 53.22, 53.23, 53.43, 53.44, 53.54, 53.55, 53.79, 49.3, 49.12 |
+| `copy` | `(options?: { value?: string \| Record<string, string \| Blob> \| ((clicked: Element) => string \| Record<string, string \| Blob>); copiedFor?: number; selector?: string; oncopied?: (copied: boolean, clicked: Element) => void }) => Record<string, unknown>` | The part copying the element clicked, or text, or a record of MIME type to what it holds, to the clipboard on a click of the element it is spread on, or of a button inside it. | 32.99, 53.21, 53.23, 53.43, 53.44, 53.79, 49.3, 49.12 |
 
 ## `hotkeys`
 
@@ -991,6 +991,12 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `download` | `(data: Blob \| string, name: string, type?: string) => void` | Text or bytes made in the page, saved as a file under a name. | 53.90, 53.91 |
+
+## `copyToClipboard`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `copyToClipboard` | `(value: string \| Record<string, string \| Blob>) => Promise<boolean>` | Text, or a record of MIME type to what it holds, written to the clipboard, settling whether it landed. | 53.22, 53.54, 53.55, 53.102, 53.103 |
 
 ## `sortBy`
 

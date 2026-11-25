@@ -1,0 +1,53 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import CopyOnPick from './lib/CopyOnPick.abide'
+import copyOnPick from './lib/CopyOnPick.abide' with { type: 'text' }
+import CopyOrShow from './lib/CopyOrShow.abide'
+import copyOrShow from './lib/CopyOrShow.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/behaviors/copy', '/helpers/download']}
+    tests={[
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a record copies as one item holding each type it names, and a string as text/plain",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a page with no clipboard copies through a selected textarea, carrying every string type",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: [
+                "test('a copy the clipboard and the command both refuse settles false",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/elementBehaviors.test.ts',
+            from: ["test('copyToClipboard rejects inside a request"],
+        },
+    ]}
+>
+    <Section level={3} title="Copy from a menu pick, and only for the copy option">
+        <p>Call <code>copyToClipboard</code> from a handler when a click on one element is
+            not what copies. Here a <code>change</code> on an actions menu copies for one
+            option and does nothing for the others. Call it inside the event: Safari writes
+            the clipboard from a gesture alone.</p>
+        <Example code={copyOnPick}><CopyOnPick /></Example>
+    </Section>
+
+    <Section level={3} title="Show the link when the copy did not land">
+        <p>It settles <code>true</code> once the value is on the clipboard and
+            <code>false</code> where the browser refused it. Show the text to copy by hand
+            when it did not land.</p>
+        <Example code={copyOrShow}><CopyOrShow /></Example>
+    </Section>
+</Doc>

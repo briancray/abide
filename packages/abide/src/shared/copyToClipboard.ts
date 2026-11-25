@@ -1,14 +1,26 @@
-/** What `copy` puts on the clipboard: text, or a record of MIME type to what that type holds — `ClipboardItem`'s own input. */
+// 53.22, 53.54, 53.55, 53.102, 53.103 — WHAT REACHES THE CLIPBOARD, and whether it did: the write
+// `copy` makes on a click, for an app to make from a handler of its own.
+
+import { isServer } from './isServer.ts'
+
+/** What reaches the clipboard: text, or a record of MIME type to what that type holds — `ClipboardItem`'s own input. */
 export type Copyable = string | Record<string, string | Blob>
 
 /**
- * 53.54 — whether `value` reached the clipboard, as one item holding each type it names.
+ * Writes `value` to the clipboard — a string as `text/plain`, a record as one item holding each type
+ * it names — and settles whether it landed.
  *
  * 53.22 — `navigator.clipboard` exists in a secure context alone, and refuses a type the browser
  * does not write, so the fallback copies through a selected textarea and lays every string type
  * on the `copy` event the command fires. A Blob has no such path.
+ *
+ * @param value text, or a record of MIME type to what it holds
  */
-export async function writeClipboard(value: Copyable): Promise<boolean> {
+export async function copyToClipboard(value: Copyable): Promise<boolean> {
+    if (isServer())
+        throw new Error(
+            "copyToClipboard writes a visitor's clipboard, and a server has none: call it from a handler a browser runs. RULEBOOK 53.103.",
+        )
     const types = typeof value === 'string' ? { 'text/plain': value } : value
     if (
         navigator.clipboard !== undefined &&
