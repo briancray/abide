@@ -8,7 +8,7 @@ import Section from '#src/lib/Section.abide'
     seeAlso={[
         '/data/database',
         '/reactive/invalidate',
-        '/reactive/pipe',
+        '/orchestration/pipe',
         '/reactive/ledger',
     ]}
     tests={[

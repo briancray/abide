@@ -190,13 +190,6 @@ const WRITTEN: readonly {
                 where: 'component',
             },
             {
-                route: '/pages/worker-files',
-                title: 'Worker files',
-                description:
-                    'Run heavy work in a thread of its own by naming its file `<name>.worker.ts`, and call its exports as async functions on the server, in the browser and in a compiled executable.',
-                where: 'anywhere',
-            },
-            {
                 route: '/pages/render',
                 title: '`render`',
                 description:
@@ -260,13 +253,6 @@ const WRITTEN: readonly {
                 title: '`memo`',
                 description:
                     'Derive a value from others, or load or stream one from a handler, keyed by args where the body takes them.',
-                where: 'anywhere',
-            },
-            {
-                route: '/reactive/pipe',
-                title: '`pipe`',
-                description:
-                    'Run each item through steps in order and at once, a few at a time, retried, timed out and paused, as a function or a stream.',
                 where: 'anywhere',
             },
             {
@@ -1236,7 +1222,7 @@ const WRITTEN: readonly {
     {
         group: 'Data and I/O',
         description:
-            'The database, background jobs, and fetches of other services read as their content type says.',
+            'The database and its tables as streams of changes, and fetches of other services read as their content type says.',
         form: 'reference',
         pages: [
             {
@@ -1263,13 +1249,6 @@ const WRITTEN: readonly {
                 where: 'server',
             },
             {
-                route: '/data/job',
-                title: '`job`',
-                description:
-                    'Run work on the server on a schedule, one run at a time, with a status every page can read.',
-                where: 'server',
-            },
-            {
                 route: '/data/fetch-data',
                 title: '`fetchData`',
                 description:
@@ -1281,6 +1260,35 @@ const WRITTEN: readonly {
                 title: '`handle`',
                 description:
                     'Read a response you fetched yourself as its type says: JSON, a stream of chunks, text or bytes.',
+                where: 'anywhere',
+            },
+        ],
+    },
+    {
+        group: 'Orchestration',
+        description:
+            'Work run in steps a few items at a time, on a schedule, or in a thread of its own.',
+        form: 'authoring',
+        pages: [
+            {
+                route: '/orchestration/pipe',
+                title: '`pipe`',
+                description:
+                    'Run each item through steps in order and at once, a few at a time, retried, timed out and paused, as a function or a stream.',
+                where: 'anywhere',
+            },
+            {
+                route: '/orchestration/job',
+                title: '`job`',
+                description:
+                    'Run work on the server on a schedule, one run at a time, with a status every page can read.',
+                where: 'server',
+            },
+            {
+                route: '/orchestration/worker-files',
+                title: 'Worker files',
+                description:
+                    'Run heavy work in a thread of its own by naming its file `<name>.worker.ts`, and call its exports as async functions on the server, in the browser and in a compiled executable.',
                 where: 'anywhere',
             },
         ],

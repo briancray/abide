@@ -179,12 +179,6 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `bunfig.toml` | The file whose `[serve.static] plugins` the client is built with. | 38.43 |
 | `preload = ["@abide/abide/test"]` | The `[test]` preload a test imports the app's `.abide` files through. | 38.109 |
 
-## Worker files
-
-| Path | Meaning | Rules |
-| --- | --- | --- |
-| `**/lib/**/<name>.worker.ts` | A worker file: a module whose exports run in a thread of their own. | 55.1, 55.2, 55.3, 55.4, 55.5, 55.6, 55.7, 55.8, 55.9, 55.10, 55.11, 55.12, 55.13, 55.14 |
-
 ## `render`
 
 | Name | Signature | Meaning | Rules |
@@ -355,30 +349,6 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `memo` | `<Value = never, Args = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>>(body: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate>) => ReactiveOf<Args, Result, Shaped, Gate, ArgsGate>` | A value `body` produces, keyed where it declares a parameter and a stream where it hands back a generator. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.50, 11.51, 11.52, 11.53, 11.54, 11.57, 11.58, 41.6, 11.62, 11.63, 11.65, 11.66, 12.14, 12.17, 19.24, 41.34, 41.35, 11.73, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 11.2, 11.4, 11.6, 11.23, 11.55, 7.45, 7.46, 11.74 |
-
-## `pipe`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `pipe` | `<const Steps extends readonly [Step, ...Step[]]>(steps: Steps, options?: PipeOptions<FirstIn<Steps>>) => Pipe<FirstIn<Steps>, LastOut<Steps>, AnyFans<Steps>>` | Steps an item runs through in order, at most `concurrency` items at once, as a function to call and a stream pair to pipe through. | 57.1, 57.2, 57.3, 57.4, 57.6, 57.7, 57.8, 57.9, 57.10, 57.11, 57.12, 57.13, 57.14 |
-| `Pipe` | `Pipe<In, Out, Fanned extends boolean = false> = ((input: In, signal?: AbortSignal) => Reactive<Fanned extends true ? Out[] : Out, Fanned extends true ? Out[] : Out, Failed<string, unknown>>) & { readonly readable: ReadableStream<Out \| Failed<string, unknown>>; readonly writable: WritableStream<In>; readonly status: Reactive<PipeStatus>; stop(): Promise<void> }` | What `pipe` hands back: a call answering a `Reactive` of its item, and the stream pair. | 57.5, 57.13, 57.15, 57.16, 57.19, 57.20 |
-| `Pipe.status` | `Reactive<PipeStatus>` | Where the pipe's items stand, one value for every caller. | 57.21 |
-| `Pipe.stop` | `() => Promise<void>` | The end of the pipe, and of every attempt in flight. | 57.18 |
-| `PipeOptions` | `<In = unknown>{ concurrency?: number; key?: (input: In) => string; ordered?: boolean; retries?: number; backoff?: number \| ((retry: number) => number); timeout?: number; paused?: Reactive<boolean> \| (() => boolean) }` | How many items run at once and by what key, the order they leave in, each step's retries, their spacing and its deadline, and what holds the pipe. | 57.6, 57.7, 57.9, 57.10, 57.12, 57.16, 57.17 |
-| `PipeStatus` | `{ waiting: number; running: number; done: number; failed: number; paused: boolean }` | How many items wait, run, are done and failed, and whether the pipe is paused. | 57.21 |
-
-The aliases `pipe` reads its steps through — what one place in the steps holds, what a step hands on,
-whether one fans out, and the item a pipe takes and the answer it gives — are declared rather than
-listed, none of them being a name an app writes:
-```ts
-type Step = ((input: never, signal: AbortSignal) => unknown) | Pipe<never, unknown, boolean> | readonly (((input: never, signal: AbortSignal) => unknown) | Pipe<never, unknown, boolean>)[]
-type StepOut<S> = S extends readonly unknown[] ? { -readonly [K in keyof S]: StepOut<S[K]> } : S extends Pipe<never, infer Out, infer _Fanned> ? Exclude<Out, Failed<string, unknown>> : S extends (...given: never[]) => infer Result ? Awaited<Result> extends AsyncIterable<infer Chunk> ? Chunk : Exclude<Awaited<Result>, Failed<string, unknown>> : never
-type StepFans<S> = S extends readonly unknown[] ? false : S extends Pipe<never, unknown, infer Fanned> ? Fanned : S extends (...given: never[]) => infer Result ? Awaited<Result> extends AsyncIterable<unknown> ? true : false : false
-type AnyFans<Steps> = Steps extends readonly [infer First, ...infer Rest] ? StepFans<First> extends true ? true : AnyFans<Rest> : false
-type StepIn<S> = S extends readonly (infer Member)[] ? StepIn<Member> : S extends Pipe<infer In, unknown, boolean> ? In : S extends (input: infer In, signal: AbortSignal) => unknown ? In : never
-type LastOut<Steps> = Steps extends readonly [...unknown[], infer Last] ? StepOut<Last> : never
-type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepIn<First> : never
-```
 
 ## `ledger`
 
@@ -1452,18 +1422,6 @@ type Reached = { readonly [REACHED]: true }
 | `table` | `<Row extends Record<string, unknown>>(database: Database \| (() => Database), name: string, options?: { key?: keyof Row & string }) => { readable: ReadableStream<Change<Row>>; writable: WritableStream<Row> }` | A table of the app's `bun:sqlite` database as a stream pair, its changes read out and rows upserted in, from `@abide/abide/server`. | 47.25, 47.26, 47.27, 47.28, 47.29, 47.30, 47.31 |
 | `Change` | `<Row>{ op: 'insert' \| 'update' \| 'delete'; row: Row \| undefined; previous: Row \| undefined }` | One change to a row: what it is now and what it was. | 47.27 |
 
-## `job`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `job` | `<Input = undefined>(options: JobOptions<Input>) => Job<Input>` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38, 54.39 |
-| `Job` | `<Input = undefined>{ status: Reactive<JobStatus>; run: (input?: Input) => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
-| `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
-| `Job.run` | `(input?: Input) => Promise<JobStatus>` | A run ahead of the schedule, handed the input it is called with. | 54.20, 54.26 |
-| `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.26, 54.27 |
-| `JobOptions` | `<Input = undefined>{ name?: string; every: number \| (() => number); from?: 'end' \| 'start'; run: (input: Input \| undefined) => unknown; lastRun?: () => number \| undefined; paused?: Reactive<boolean> \| (() => boolean) }` | What a job is: its name, how often it runs and from when, the work, when it last ran before this process, and what holds it. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38 |
-| `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.22, 54.23, 54.24, 54.25, 54.27 |
-
 ## `fetchData`
 
 | Name | Signature | Meaning | Rules |
@@ -1477,6 +1435,50 @@ type Reached = { readonly [REACHED]: true }
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `handle` | `(response: Response) => Promise<unknown \| FetchFailed>` | A `Response` the app fetched itself, read as its `content-type` says: `fetch(url).then(handle)`. | 54.30, 54.31, 54.32, 54.33 |
+
+# Orchestration
+
+## `pipe`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `pipe` | `<const Steps extends readonly [Step, ...Step[]]>(steps: Steps, options?: PipeOptions<FirstIn<Steps>>) => Pipe<FirstIn<Steps>, LastOut<Steps>, AnyFans<Steps>>` | Steps an item runs through in order, at most `concurrency` items at once, as a function to call and a stream pair to pipe through. | 57.1, 57.2, 57.3, 57.4, 57.6, 57.7, 57.8, 57.9, 57.10, 57.11, 57.12, 57.13, 57.14 |
+| `Pipe` | `Pipe<In, Out, Fanned extends boolean = false> = ((input: In, signal?: AbortSignal) => Reactive<Fanned extends true ? Out[] : Out, Fanned extends true ? Out[] : Out, Failed<string, unknown>>) & { readonly readable: ReadableStream<Out \| Failed<string, unknown>>; readonly writable: WritableStream<In>; readonly status: Reactive<PipeStatus>; stop(): Promise<void> }` | What `pipe` hands back: a call answering a `Reactive` of its item, and the stream pair. | 57.5, 57.13, 57.15, 57.16, 57.19, 57.20 |
+| `Pipe.status` | `Reactive<PipeStatus>` | Where the pipe's items stand, one value for every caller. | 57.21 |
+| `Pipe.stop` | `() => Promise<void>` | The end of the pipe, and of every attempt in flight. | 57.18 |
+| `PipeOptions` | `<In = unknown>{ concurrency?: number; key?: (input: In) => string; ordered?: boolean; retries?: number; backoff?: number \| ((retry: number) => number); timeout?: number; paused?: Reactive<boolean> \| (() => boolean) }` | How many items run at once and by what key, the order they leave in, each step's retries, their spacing and its deadline, and what holds the pipe. | 57.6, 57.7, 57.9, 57.10, 57.12, 57.16, 57.17 |
+| `PipeStatus` | `{ waiting: number; running: number; done: number; failed: number; paused: boolean }` | How many items wait, run, are done and failed, and whether the pipe is paused. | 57.21 |
+
+The aliases `pipe` reads its steps through — what one place in the steps holds, what a step hands on,
+whether one fans out, and the item a pipe takes and the answer it gives — are declared rather than
+listed, none of them being a name an app writes:
+```ts
+type Step = ((input: never, signal: AbortSignal) => unknown) | Pipe<never, unknown, boolean> | readonly (((input: never, signal: AbortSignal) => unknown) | Pipe<never, unknown, boolean>)[]
+type StepOut<S> = S extends readonly unknown[] ? { -readonly [K in keyof S]: StepOut<S[K]> } : S extends Pipe<never, infer Out, infer _Fanned> ? Exclude<Out, Failed<string, unknown>> : S extends (...given: never[]) => infer Result ? Awaited<Result> extends AsyncIterable<infer Chunk> ? Chunk : Exclude<Awaited<Result>, Failed<string, unknown>> : never
+type StepFans<S> = S extends readonly unknown[] ? false : S extends Pipe<never, unknown, infer Fanned> ? Fanned : S extends (...given: never[]) => infer Result ? Awaited<Result> extends AsyncIterable<unknown> ? true : false : false
+type AnyFans<Steps> = Steps extends readonly [infer First, ...infer Rest] ? StepFans<First> extends true ? true : AnyFans<Rest> : false
+type StepIn<S> = S extends readonly (infer Member)[] ? StepIn<Member> : S extends Pipe<infer In, unknown, boolean> ? In : S extends (input: infer In, signal: AbortSignal) => unknown ? In : never
+type LastOut<Steps> = Steps extends readonly [...unknown[], infer Last] ? StepOut<Last> : never
+type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepIn<First> : never
+```
+
+## `job`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `job` | `<Input = undefined>(options: JobOptions<Input>) => Job<Input>` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38, 54.39 |
+| `Job` | `<Input = undefined>{ status: Reactive<JobStatus>; run: (input?: Input) => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
+| `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
+| `Job.run` | `(input?: Input) => Promise<JobStatus>` | A run ahead of the schedule, handed the input it is called with. | 54.20, 54.26 |
+| `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.26, 54.27 |
+| `JobOptions` | `<Input = undefined>{ name?: string; every: number \| (() => number); from?: 'end' \| 'start'; run: (input: Input \| undefined) => unknown; lastRun?: () => number \| undefined; paused?: Reactive<boolean> \| (() => boolean) }` | What a job is: its name, how often it runs and from when, the work, when it last ran before this process, and what holds it. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38 |
+| `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.22, 54.23, 54.24, 54.25, 54.27 |
+
+## Worker files
+
+| Path | Meaning | Rules |
+| --- | --- | --- |
+| `**/lib/**/<name>.worker.ts` | A worker file: a module whose exports run in a thread of their own. | 55.1, 55.2, 55.3, 55.4, 55.5, 55.6, 55.7, 55.8, 55.9, 55.10, 55.11, 55.12, 55.13, 55.14 |
 
 # Assistant
 

@@ -11,7 +11,7 @@ import Section from '#src/lib/Section.abide'
     seeAlso={[
         '/data/database',
         '/data/table',
-        '/data/job',
+        '/orchestration/job',
         '/data/fetch-data',
         '/data/handle',
         '/reactive/refresh',
@@ -107,7 +107,7 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section title="Work on the records every night with a job">
-        <p>A <a href={url('/data/job')}><code>job</code></a> runs on the server, one run at a
+        <p>A <a href={url('/orchestration/job')}><code>job</code></a> runs on the server, one run at a
             time, and nothing runs as the file loads. The CRM's digest writes a row as it goes
             out and reads the newest back as <code>lastRun</code>, so a restart waits out the
             rest of the night rather than mail the team twice.</p>
