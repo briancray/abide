@@ -1,5 +1,5 @@
-import { type FetchFailed, refuse } from '@abide/abide'
-import { fetchData, GET, isFailed } from '@abide/abide/server'
+import { refuse } from '@abide/abide'
+import { fetchData, GET } from '@abide/abide/server'
 
 import { registryOrigin } from './lib/registryOrigin.server.ts'
 
@@ -15,7 +15,10 @@ export default GET(
             )
         } catch (failed) {
             // A company the registry has never heard of is one the CRM has not either.
-            if (isFailed(failed) && (failed as FetchFailed).data.status === 404)
+            if (
+                fetchData.isError(failed, 'FetchFailed') &&
+                failed.data.status === 404
+            )
                 return refuse(404)
             throw failed
         }

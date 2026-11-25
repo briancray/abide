@@ -46,6 +46,12 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/fetchData.test.ts',
             from: [
+                "test('fetchData.isError narrows a caught failure to its FetchFailed — 54.44'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/fetchData.test.ts',
+            from: [
                 "test('a FetchFailed carries what fetch threw as its cause, and the wire carries none of it",
             ],
         },
@@ -143,14 +149,14 @@ import Section from '#src/lib/Section.abide'
             <code>cause</code> is what <code>fetch</code> threw, a refused certificate's code
             and all; it never leaves the server.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData, isFailed, log } from '@abide/abide/server'
+            import { fetchData, log } from '@abide/abide/server'
 
             try {
                 await fetchData('https://registry.example/filings/ada.txt', {
                     timeout: 2_000,
                 })
             } catch (failed) {
-                if (!isFailed(failed)) throw failed
+                if (!fetchData.isError(failed, 'FetchFailed')) throw failed
                 log.warning('registry gave up', failed.data, failed.cause)
             }
         `} />
@@ -161,16 +167,16 @@ import Section from '#src/lib/Section.abide'
             as its type says: a JSON body as its value, text as a string. Like a thrown
             <code>cause</code>, it never leaves the server unless you hand it on.</p>
         <Code language="ts" caption="server" code={`
-            import { type FetchFailed, refuse } from '@abide/abide'
-            import { fetchData, GET, isFailed } from '@abide/abide/server'
+            import { refuse } from '@abide/abide'
+            import { fetchData, GET } from '@abide/abide/server'
 
             export default GET(async ({ id }: { id: string }) => {
                 try {
                     return await fetchData(\`https://registry.example/companies/\${id}\`)
                 } catch (failed) {
-                    if (isFailed(failed) && (failed as FetchFailed).data.status === 422)
-                        return refuse(422, (failed.cause as { error: string }).error)
-                    throw failed
+                    if (!fetchData.isError(failed, 'FetchFailed')) throw failed
+                    if (failed.data.status !== 422) throw failed
+                    return refuse(422, (failed.cause as { error: string }).error)
                 }
             })
         `} />
@@ -181,8 +187,8 @@ import Section from '#src/lib/Section.abide'
             <code>data.status</code>, or <code>data.reason</code>, to answer your caller in its
             own terms.</p>
         <Code language="ts" caption="server" code={`
-            import { type FetchFailed, refuse } from '@abide/abide'
-            import { fetchData, GET, isFailed } from '@abide/abide/server'
+            import { refuse } from '@abide/abide'
+            import { fetchData, GET } from '@abide/abide/server'
 
             export default GET(async ({ id }: { id: string }) => {
                 try {
@@ -190,8 +196,8 @@ import Section from '#src/lib/Section.abide'
                         \`https://registry.example/companies/\${id}\`,
                     )
                 } catch (failed) {
-                    if (isFailed(failed) && (failed as FetchFailed).data.status === 404)
-                        return refuse(404)
+                    if (!fetchData.isError(failed, 'FetchFailed')) throw failed
+                    if (failed.data.status === 404) return refuse(404)
                     throw failed
                 }
             })

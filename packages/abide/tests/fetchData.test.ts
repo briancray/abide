@@ -8,6 +8,7 @@ import { answered } from '#server/answerFailure.ts'
 import { type Failed, problemOf } from '#shared/Failed.ts'
 import type { FetchFailed } from '#shared/fetchFailed.ts'
 import { handle } from '#shared/handle.ts'
+import { refuse } from '#shared/refuse.ts'
 
 /** `fetchData`'s answer, or the refusal it rejected with (54.16), as one value a test reads. */
 const settledFetch = ((...given: Parameters<typeof fetchData>) =>
@@ -110,6 +111,22 @@ test('a refusal rejects the fetch with its FetchFailed — 54.16', async () => {
             `${refusal.name} ${refusal.status}`,
     )
     expect(outcome).toBe('FetchFailed 502')
+})
+
+// 54.44 — A CAUGHT FAILURE IS NARROWED BY NAME, as a handler's is (`rpc.isError`): the fetch's own
+// refusal is one, and anything else thrown is not. THE REVERT: answer `isFailed` alone in `isError`;
+// the refusal of another name reads as one and `other: true`.
+test('fetchData.isError narrows a caught failure to its FetchFailed — 54.44', async () => {
+    const caught = await fetchData(at('/missing')).catch(
+        (error: unknown) => error,
+    )
+    const status = fetchData.isError(caught, 'FetchFailed')
+        ? caught.data.status
+        : undefined
+    const other = fetchData.isError(refuse(404), 'FetchFailed')
+    expect(`status: ${status}, other: ${other}`).toBe(
+        'status: 404, other: false',
+    )
 })
 
 test('a Retry-After is waited, and one past the deadline is not — 54.10', async () => {

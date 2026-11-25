@@ -6998,6 +6998,9 @@ throw where `cron` is not an expression `Bun.cron.parse` reads.
 54.43 `Job.run` MUST reject with what the run it started or joined threw, or with the refusal it
 answered, and a run answering a refusal MUST be written and logged as one that threw (54.23).
 
+54.44 `fetchData.isError` MUST answer whether a caught failure is a refusal named as it is given, and
+MUST narrow it to a `FetchFailed` where it is.
+
 # 55. Worker files
 
 55.1 An import of a worker file MUST answer each export with a function running that export in the

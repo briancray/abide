@@ -1,7 +1,12 @@
 // ANOTHER SERVICE, ASKED WITH A DEADLINE, RETRIES AND A CACHE: 54.7-54.17. A server's helper — the
 // fetch carries the server's credentials, and the cache is this process's.
 
-import { isFailed, isTransient, retryAt } from '#shared/Failed.ts'
+import {
+    isFailed,
+    isFailedNamed,
+    isTransient,
+    retryAt,
+} from '#shared/Failed.ts'
 import { type FetchFailed, fetchFailed } from '#shared/fetchFailed.ts'
 import { readBody, refusedBy } from '#shared/handle.ts'
 import { isAsyncIterable } from '#shared/isAsyncIterable.ts'
@@ -44,12 +49,12 @@ type Held = {
 const HELD = new Map<string, Held>()
 
 /** A body as text, checked against `schema` where one is given: 54.7-54.17. */
-export function fetchData<T = string>(
+function fetchBody<T = string>(
     url: string | URL,
     options: FetchOptions<T> & { as: 'text' },
 ): Promise<T>
 /** A body as a `Blob`, checked against `schema` where one is given: 54.7-54.17. */
-export function fetchData<T = Blob>(
+function fetchBody<T = Blob>(
     url: string | URL,
     options: FetchOptions<T> & { as: 'blob' },
 ): Promise<T>
@@ -57,11 +62,11 @@ export function fetchData<T = Blob>(
  * A body read as its `content-type` says, as `handle` reads one, or as JSON where `as` says so,
  * checked against `schema` where one is given: 54.7-54.17.
  */
-export function fetchData<T = unknown>(
+function fetchBody<T = unknown>(
     url: string | URL,
     options?: FetchOptions<T>,
 ): Promise<T>
-export async function fetchData<T>(
+async function fetchBody<T>(
     url: string | URL,
     options: FetchOptions<T> = {},
 ): Promise<T> {
@@ -70,6 +75,20 @@ export async function fetchData<T>(
     if (isFailed(answered)) throw answered
     return answered
 }
+
+/**
+ * Another service's answer, rejected with the `FetchFailed` it gave up with (54.16), and
+ * `fetchData.isError` to narrow a caught failure to one, as `rpc.isError` narrows a handler's (54.44).
+ */
+export const fetchData: typeof fetchBody & {
+    isError<Name extends 'FetchFailed'>(
+        error: unknown,
+        name: Name,
+    ): error is FetchFailed
+} = Object.assign(fetchBody, {
+    isError: (error: unknown, name: 'FetchFailed'): error is FetchFailed =>
+        isFailedNamed(error, name),
+})
 
 /** The body `url` answers, checked against `schema`, or the `FetchFailed` it was refused with. */
 async function answeredFor<T>(
