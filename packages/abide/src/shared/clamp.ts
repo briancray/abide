@@ -44,15 +44,11 @@ export function clamp(options: ClampOptions = {}): Clamp {
         overflowing.set(element.scrollHeight > element.clientHeight + 1)
     }
     return {
-        // 51.122 — the clamp's lines are the one value written to `style`, an option of the app's (49.5).
-        // The region the button names, clamped rather than hidden: its id and its `data-open`.
+        // 49.18 — the disclosure's region the button names, clamped rather than hidden. 51.122 — the
+        // clamp's lines are the one value written to `style`, an option of the app's (49.5).
         text: withPart(withPart({}, shown.region), {
-            // 49.18 — the disclosure's region, clamped rather than hidden.
             hidden: undefined,
             'data-clamp': 'text',
-            get 'data-open'() {
-                return open() ? '' : undefined
-            },
             get style() {
                 return open()
                     ? undefined

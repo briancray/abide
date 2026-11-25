@@ -9,6 +9,7 @@ import {
 } from '#server/placement.ts'
 import { workerExports } from '#server/workerExports.ts'
 import {
+    ABIDE_ADDRESS,
     HEALTH_ADDRESS,
     MCP_ADDRESS,
     OPENAPI_ADDRESS,
@@ -21,7 +22,7 @@ import {
     type Segment,
 } from '#shared/routePattern.ts'
 
-import { appFiles, frameworkRouteRefusal } from './appFiles.ts'
+import { appFiles } from './appFiles.ts'
 import { abideImportsOf } from './componentGraph.ts'
 import { type Diagnosis, Diagnostics } from './Diagnostics.ts'
 import type { HandlerFile } from './handlersUnder.ts'
@@ -445,8 +446,13 @@ function refuseFrameworkRoute(
     relative: string,
     refusals: Diagnostics,
 ): void {
-    const framework = frameworkRouteRefusal(route, relative)
-    if (framework !== undefined) refusals.at(relative, framework)
+    if (route === ABIDE_ADDRESS || route.startsWith(`${ABIDE_ADDRESS}/`))
+        refusals.at(
+            relative,
+            new Error(
+                `abide: ${relative} answers at ${route}, which is under ${ABIDE_ADDRESS}, where abide's own addresses are. RULEBOOK 23.17.`,
+            ),
+        )
 }
 
 /**

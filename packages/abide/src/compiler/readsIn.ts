@@ -42,7 +42,7 @@ import {
 
 import { RESHAPING } from '#shared/reactive/RESHAPING.ts'
 
-import { aliasedSymbol } from './aliasedSymbol.ts'
+import { aliasedSymbol, namesAbide } from './aliasedSymbol.ts'
 import { CheckerAnswer } from './CheckerAnswer.ts'
 import {
     classifyPropRead,
@@ -1222,10 +1222,7 @@ async function isRouteParams(
         access.name.text !== 'params'
     )
         return false
-    const [symbol] = await checker.getSymbolAtLocation([access.expression])
-    if (symbol === undefined) return false
-    const declared = await aliasedSymbol(checker, symbol)
-    return declared.valueDeclaration?.path === abide.route
+    return namesAbide(checker, access.expression, 'route', abide.route)
 }
 
 /**

@@ -30,7 +30,6 @@ import {
     PUBLIC_DIRECTORY,
     RESERVED_DIRECTORIES,
 } from '#server/RESERVED_DIRECTORIES.ts'
-import { ABIDE_ADDRESS } from '#shared/ADDRESSES.ts'
 import { NATIVE_DIRECTORY } from '#shared/NATIVE_FILES.ts'
 
 import type { Diagnostics } from './Diagnostics.ts'
@@ -181,18 +180,6 @@ function isModule(path: string): boolean {
         !isTestFile(path) &&
         !isBenchFile(path)
     )
-}
-
-/** The refusal of `source` where `route` lies in the framework's own namespace, or `undefined`. 23.17. */
-export function frameworkRouteRefusal(
-    route: string,
-    source: string,
-): Error | undefined {
-    return route === ABIDE_ADDRESS || route.startsWith(`${ABIDE_ADDRESS}/`)
-        ? new Error(
-              `abide: ${source} answers at ${route}, which is under ${ABIDE_ADDRESS}, where abide's own addresses are. RULEBOOK 23.17.`,
-          )
-        : undefined
 }
 
 // 36.11 — the directories above `public`, then the file's own path below it.

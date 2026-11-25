@@ -445,7 +445,8 @@ async function declaredCopy(
         if (name === 'identity') {
             if (
                 isIdentifier(value) &&
-                (await isAbideStructural(checker, value, abide))
+                // Abide's own comparator by its symbol: an app's of the same name is not it.
+                (await namesAbide(checker, value, 'deepEqual', abide.deepEqual))
             )
                 copy.identity = 'deepEqual'
         } else if (name === 'key' || name === 'tags') {
@@ -586,20 +587,6 @@ async function stringLiteralsOf(
         names.push(each.value)
     }
     return names
-}
-
-/**
- * Whether a name resolves to abide's own `deepEqual` comparator.
- *
- * Abide's own comparator, by its symbol rather than its spelling: an app's function of the same name
- * is not the one the browser's copy would be handed.
- */
-async function isAbideStructural(
-    checker: Checker,
-    named: Node,
-    abide: Abide,
-): Promise<boolean> {
-    return namesAbide(checker, named, 'deepEqual', abide.deepEqual)
 }
 
 /**

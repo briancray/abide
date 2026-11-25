@@ -9,13 +9,13 @@ import Terminal from '#src/lib/Terminal.abide'
     seeAlso={['/ai/pairing', '/ai/provider', '/app/on-pairing']}
     tests={[
         {
-            path: 'packages/abide/tests/bridgeLink.test.ts',
+            path: 'packages/bridge/tests/bridgeLink.test.ts',
             from: [
                 "test('a link runs with the options install kept, ahead of its tools",
             ],
         },
         {
-            path: 'packages/abide/tests/bridgeLink.test.ts',
+            path: 'packages/bridge/tests/bridgeLink.test.ts',
             from: ["test('a site is allowed per holder, and forgotten"],
         },
     ]}
