@@ -6403,16 +6403,16 @@ each word of `query` — stretches that overlap or touch carrying it as one run.
 formatter keeps, MUST NOT refuse a caller naming one bound of the fraction digits for the default of
 the other, and MUST NOT refuse a caller naming a part of a date beside a `style` `Intl` writes whole.
 
-52.114 `format.number` given a `unit` MUST write its value in that unit, as `unitDisplay` names it.
-
-52.115 `format.date`'s `'dateTime'` style MUST hand the date it writes the options naming a part of a
-date, the time it writes those naming a part of a time, and both the rest.
-
 52.113 `format.date`, `format.dateParts`, `format.relative` and `time` MUST read a value that is a
 `YYYY-MM-DD`, `YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS` string, the last with or without a
 fraction of a second, as that wall clock in the zone they write in (52.3) — the one `timeZone`
 names where their caller names one — as `instantAt` reads it (52.102), a day alone being its
 midnight; and a string with a `Z` or an offset as the instant it names.
+
+52.114 `format.number` given a `unit` MUST write its value in that unit, as `unitDisplay` names it.
+
+52.115 `format.date`'s `'dateTime'` style MUST hand the date it writes the options naming a part of a
+date, the time it writes those naming a part of a time, and both the rest.
 
 52.116 Each part `chart` hands back for a point, a column, a tick, a gridline, the zero line or the
 crosshair, and `sparkline`'s `dot`, MUST carry in its `style` where it is drawn as `--x` and `--y`,
