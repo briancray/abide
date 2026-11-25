@@ -23,7 +23,6 @@ import { isReactive } from './isReactive.ts'
 import { createKeyed, isKeyed, type Keyed } from './Keyed.ts'
 import { MEMO_BRAND } from './MEMO_BRAND.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
-import { declaresParameter } from './parameterDefaults.ts'
 import {
     busyOver,
     createReactive,
@@ -441,43 +440,24 @@ export const ambientComputed = ((body: unknown, options?: unknown) =>
     )) as unknown as typeof computed
 
 /**
- * `memo` over a handler's plain function, or `reactive` over its value, for `declare` — or the
+ * A handler's body kept per `Args` key, or `reactive` over its value, for `declare` — or the
  * `Reactive` itself, where it is one already.
  *
- * 16.5 — THE ARM IS READ OFF A BRAND. A `Keyed` and a one-parameter plain function have the same
- * shape, and only the first has already decided its own keying.
+ * 16.6 — A BODY IS KEYED WHATEVER IT DECLARES: its args are the request's, and a body declaring
+ * none is kept on `undefined`. Nothing reads its parameters, so a body is never started where the
+ * handler is declared (16.64) — an entry is computed when a call reaches it (11.4).
  *
- * 16.64 — a body declaring no parameter is not started where the handler is declared: outside a
- * request its value is built by the first call rather than by the import — and where it declares
- * `global`, built once for every request rather than once per request (11.34).
+ * 16.5 — THE ARM IS READ OFF A BRAND. A `Keyed` and a plain function have the same shape, and only
+ * the first has already decided its own keying.
  */
 export function handlerValue(body: unknown, options: unknown): unknown {
     if (isReactive(body) || isKeyed(body)) return body
     if (typeof body !== 'function') return reactive(body, options as undefined)
-    const given: [unknown, unknown] = [body, options]
-    const keyed = isKeyedBody(body)
-    if (!keyed && outsideScope(false))
-        return scoped(
-            () => buildBody(given, keyed),
-            true,
-            (options as { global?: boolean | undefined } | undefined)
-                ?.global === true,
-        )
     return keyedValue(body as (args: unknown) => unknown, options as undefined)
 }
 
-// The two body forms are told apart by WHETHER A PARAMETER IS DECLARED, which is the author saying
-// this value is keyed. Not by `length`, which counts neither a defaulted parameter nor a rest one.
-function isKeyedBody(first: unknown): boolean {
-    return (
-        typeof first === 'function' &&
-        !isReactive(first) &&
-        declaresParameter(first as (...given: never[]) => unknown)
-    )
-}
-
-// `keyed` is `isKeyedBody(first)`, decided once by the caller: a filed value is built again per
-// request from the same function, and the answer reads its source text.
+// `keyed` is decided once by the caller: a filed value is built again per request from the same
+// function.
 function buildBody(
     given: [first?: unknown, options?: unknown],
     keyed: boolean,

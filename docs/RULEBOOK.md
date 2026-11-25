@@ -1158,8 +1158,9 @@ refusal, or where the handler streams, an async iterable of its chunks.
 16.5 Which arm `GET` takes MUST be read off a brand the factory stamped, and MUST NOT be inferred
 from the shape.
 
-16.6 `GET` over a plain function MUST behave as `GET` over a `memo` of it, and over a value as `GET`
-over a `reactive` of it, each built with the options `GET` was handed; a `Reactive` or a `Keyed`
+16.6 `GET` over a plain function MUST keep the function's value per `Args` key, keying a function
+that declares no parameter on `undefined` and reading none of its parameters, and over a value MUST
+behave as `GET` over a `reactive` of it, each built with the options `GET` was handed; a `Reactive`
 handed in MUST take the address's options alone.
 
 16.7 A mutation over a plain function or a value MUST have its value's `ttl` default to 0 unless its
