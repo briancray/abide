@@ -259,7 +259,7 @@ test('chat folds an answer in place, a block keeping its identity from its first
             yield* ANSWER.slice(3)
         },
     })
-    talk.draft.set('my balance?')
+    talk.draft.set({ role: 'user', content: 'my balance?' })
     ;(talk.composer.onsubmit as (event: Event) => void)(new Event('submit'))
     while (talk.messages().length < 2) await Bun.sleep(1)
     const first = (talk.messages()[1]?.content as { text: string }[])[0]

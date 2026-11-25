@@ -4,10 +4,15 @@
 
 import { expect, test } from 'bun:test'
 
-import type { AssistantEvent, AssistantMessage } from '@abide/abide'
+import type {
+    AssistantContent,
+    AssistantEvent,
+    AssistantMessage,
+} from '@abide/abide'
 import { flushSync, reactive } from '@abide/abide'
 import { mount, settled } from '@abide/harness/abide'
 
+import { attachContactCard } from './attachContactCard.ts'
 import Chat from './Chat.abide'
 
 /** A stream the test writes to: what the chat was asked, and each event as the test pushes it. */
@@ -447,6 +452,188 @@ test('a conversation handed in as messages is shown, and asked about with what f
     expect(stream.asked[0]).toHaveLength(3)
     // Bound, the conversation it grows is the caller's.
     expect(saved.peek()).toHaveLength(3)
+    stream.end()
+    await settled()
+})
+
+const png = (name: string) =>
+    new File([new Uint8Array([137, 80, 78, 71])], name, { type: 'image/png' })
+
+const PNG_BLOCK: AssistantContent = {
+    type: 'image',
+    source: { type: 'base64', media_type: 'image/png', data: 'iVBORw==' },
+}
+
+// 53.105, 53.106 — THE DRAFT IS THE USER MESSAGE, in order: a file attached while typing goes after
+// the words, and typing on rewrites the words where they stand. THE REVERT: write the input's
+// words after every other block in `chat`'s `write`, and the card is sent ahead of the question.
+test('a file attached while typing goes after the words, and typing on keeps it there', async () => {
+    const stream = fed()
+    using _chat = await mount(Chat({ ask: stream.ask }))
+    type('Who is on')
+    await dropped([png('card.png')])
+    type('Who is on this card?')
+    expect(
+        (document.querySelector('textarea') as HTMLTextAreaElement).value,
+    ).toBe('Who is on this card?')
+    press({})
+    expect(stream.asked[0]?.[0]?.content).toEqual([
+        { type: 'text', text: 'Who is on this card?' },
+        PNG_BLOCK,
+    ])
+    stream.end()
+    await settled()
+})
+
+// 53.105 — A QUESTION PUT BACK IS THE DRAFT: its words in the input, its image attached, and sent
+// as it was. THE REVERT: drop `talk.draft = question` from the CRM's `putBack`, and the composer
+// stays empty.
+test('a question whose answer failed is put back to edit, with what was attached', async () => {
+    const asked: AssistantMessage[][] = []
+    using _chat = await mount(
+        Chat({
+            ask: ({ messages }: { messages: AssistantMessage[] }) => {
+                asked.push(structuredClone(messages))
+                return {
+                    [Symbol.asyncIterator]: () => ({
+                        next: () =>
+                            asked.length === 1
+                                ? Promise.reject(
+                                      new Error('The CRM is offline.'),
+                                  )
+                                : Promise.resolve({
+                                      value: undefined,
+                                      done: true as const,
+                                  }),
+                    }),
+                }
+            },
+        }),
+    )
+    await dropped([png('card.png')])
+    type('Who is on this card?')
+    press({})
+    await settled()
+    flushSync()
+    ;(
+        [...document.querySelectorAll('button')].find(
+            (button) => button.textContent === 'Edit the question',
+        ) as HTMLButtonElement
+    ).click()
+    flushSync()
+    expect(speakers()).toEqual([])
+    expect(
+        (document.querySelector('textarea') as HTMLTextAreaElement).value,
+    ).toBe('Who is on this card?')
+    expect(document.querySelectorAll('[data-chat=attachment]')).toHaveLength(1)
+    press({})
+    await settled()
+    expect(asked[1]).toEqual(asked[0])
+})
+
+// 49.18 — THE DROPZONE'S PARTS ARE HANDED BACK AS ITS OWN: the picker is `dropzone`'s `input`. THE
+// REVERT: hand back as `talk.dropzone` the parts of a second `dropzone` that `chat` never hears, and
+// the pick is never taken.
+test('a file picked through the dropzone input goes with the next question', async () => {
+    const stream = fed()
+    using _chat = await mount(Chat({ ask: stream.ask }))
+    const picker = document.querySelector(
+        '[data-dropzone=input]',
+    ) as HTMLInputElement
+    Object.defineProperty(picker, 'files', { value: [png('card.png')] })
+    picker.dispatchEvent(new Event('change', { bubbles: true }))
+    await settled()
+    flushSync()
+    expect(document.querySelectorAll('[data-chat=attachment]')).toHaveLength(1)
+    type('Who is on this card?')
+    press({})
+    expect(stream.asked[0]?.[0]?.content).toEqual([
+        PNG_BLOCK,
+        { type: 'text', text: 'Who is on this card?' },
+    ])
+    stream.end()
+    await settled()
+})
+
+const card = (name: string, lines: string[]) =>
+    new File([lines.join('\n')], name, { type: 'text/vcard' })
+
+// 53.37 — A FILE IS TAKEN AS THE BLOCKS `attach` ANSWERS: a vCard as words, which the input leaves
+// alone. THE REVERT: drop `fromFiles` from `chat`'s `typed`, and the card's words land in the input.
+test('a contact card is attached as words, apart from what is typed', async () => {
+    const stream = fed()
+    using _chat = await mount(
+        Chat({ ask: stream.ask, attach: attachContactCard }),
+    )
+    await dropped([
+        card('ada.vcf', ['BEGIN:VCARD', 'FN:Ada Lovelace', 'END:VCARD']),
+    ])
+    expect(
+        (document.querySelector('textarea') as HTMLTextAreaElement).value,
+    ).not.toContain('Ada')
+    expect(document.querySelectorAll('[data-chat=attachment]')).toHaveLength(1)
+    type('Which company is she at?')
+    press({})
+    expect(stream.asked[0]?.[0]?.content).toEqual([
+        { type: 'text', text: 'A contact card, ada.vcf:\nFN: Ada Lovelace' },
+        { type: 'text', text: 'Which company is she at?' },
+    ])
+    stream.end()
+    await settled()
+})
+
+// 53.37 — A FILE TURNED AWAY, AND ONE `attach` THREW ON, ARE NAMED and never sent. THE REVERT:
+// swallow what `attach` throws in `chat`'s `take`, as before `onreject`, and only the archive is
+// named.
+test('a file turned away, or one that cannot be read, is named and never sent', async () => {
+    const stream = fed()
+    using _chat = await mount(
+        Chat({ ask: stream.ask, attach: attachContactCard }),
+    )
+    await dropped([
+        new File(['PK'], 'deals.zip', { type: 'application/zip' }),
+        card('blank.vcf', ['BEGIN:VCARD', 'END:VCARD']),
+    ])
+    expect(document.querySelector('[role=status]')?.textContent).toBe(
+        'Not attached: deals.zip, blank.vcf',
+    )
+    expect(document.querySelector('[data-chat=attachment]')).toBeNull()
+})
+
+// 53.108 — A SEND WAITS ON A FILE STILL BEING TAKEN, and goes with it once it lands. THE REVERT:
+// drop the `converting` check from `chat`'s `submit`, and the question goes without the photo.
+test('a question sent while a file is still being taken waits for it', async () => {
+    const stream = fed()
+    let land: () => void = () => {}
+    const landed = new Promise<void>((resolve) => {
+        land = resolve
+    })
+    using _chat = await mount(
+        Chat({
+            ask: stream.ask,
+            attach: async () => {
+                await landed
+                return [PNG_BLOCK]
+            },
+        }),
+    )
+    type('Who is on this card?')
+    await dropped([png('card.png')])
+    expect(document.querySelector('form')?.hasAttribute('data-attaching')).toBe(
+        true,
+    )
+    expect(document.querySelector('[data-chat=send]')?.textContent).toBe(
+        'Attaching…',
+    )
+    press({})
+    expect(stream.asked).toEqual([])
+    land()
+    await settled()
+    flushSync()
+    expect(stream.asked[0]?.[0]?.content).toEqual([
+        { type: 'text', text: 'Who is on this card?' },
+        PNG_BLOCK,
+    ])
     stream.end()
     await settled()
 })

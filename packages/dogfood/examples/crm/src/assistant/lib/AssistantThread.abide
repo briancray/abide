@@ -1,6 +1,9 @@
 <script>
-import askAssistant from '../askAssistant.handler.ts'
+import { askAboutThisPage } from './askAboutThisPage.ts'
+import { attachContactCard } from './attachContactCard.ts'
 import Chat from './Chat.abide'
 </script>
 
-<Chat ask={askAssistant} placeholder="Which company is Ada at?" />
+<Chat ask={askAboutThisPage} attach={attachContactCard}
+    suggestions={['Which company is Ada at?']}
+    placeholder="Which company is Ada at?" />

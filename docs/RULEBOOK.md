@@ -5248,6 +5248,13 @@ a function of the item (49.9), not of its key.
 49.17 A part a headless component hands back MUST carry `data-current` while it carries
 `aria-current`, and `data-open` while it carries `aria-expanded="true"`.
 
+49.18 A headless component built on another MUST hand back that component's parts whole, as a member
+named for that component and laid over none of its own parts, each carrying that component's own
+`data-` attribute (49.3) — `chat`'s `dropzone` and `autoscroll` — save `menu`, `drawer`, `lightbox`,
+`combobox`, `commandPalette`, `sortableList`, `jsonInspector` and `prompts.host`, which lay them over
+parts of their own, and `wizard` and `breadcrumbs`, which hand them back as `progress` and
+`overflow`.
+
 # 50. Dialogs, toasts and popovers
 
 50.1 `dialog`'s part MUST hold the `<dialog>` it is spread on open while `open` is true, with
@@ -6536,8 +6543,9 @@ or by a message the person wrote.
 53.30 `chat`'s `permissions`, `stop_reason` and `failed` MUST be the parts' own, and none of them
 written to its messages.
 
-53.31 `chat` MUST call `ask` with its messages, the new question among them as a user message of
-what was attached and what was written, and with a `signal` of its own.
+53.31 `chat` MUST call `ask` for every answer it asks for — to a question sent, to one queued once
+the answer before it ends, and to a `retry` — with its messages as they then stand, the question
+among them as a user message, and with a `signal` of its own.
 
 53.32 `chat` MUST fold each event `ask` streams into its messages once, as it arrives, as 44.105
 accumulates it, extending the block it lands in in place.
@@ -6545,7 +6553,7 @@ accumulates it, extending the block it lands in in place.
 53.33 `chat`'s `input` part MUST send on Enter, and MUST NOT on Shift+Enter or on an Enter an input
 method is composing.
 
-53.34 `chat` MUST NOT send while `disabled` is `true`, or with neither words nor a file to send,
+53.34 `chat` MUST NOT send while `disabled` is `true`, or while `draft` holds nothing 53.107 sends,
 and what it is sent while an answer streams MUST be queued, shown in its composer until it is
 cancelled or the answer ends, and asked once the answer ends.
 
@@ -6555,16 +6563,17 @@ setting `stop_reason` to `stopped`.
 53.36 `chat` MUST set `failed` to the message of what `ask` threw, save where its `stop` part
 aborted it.
 
-53.37 `chat` MUST take a file 44.55 makes a block of, pasted into or dropped on the element carrying
-its `composer` part, as the image or document block `assistantMessage` makes of it, and MUST leave
-out one `assistantMessage` throws on.
+53.37 `chat` MUST take each file its `dropzone` takes as the blocks `attach` answers for it — the
+blocks `assistantMessage` makes of it where no `attach` is given — and MUST hand `onreject`, and
+hold as `rejected` until the next drop, paste or pick carrying files, each file its `dropzone` turns
+away (53.45) and each file `attach` throws on, adding no block for it.
 
 53.38 `chat` MUST answer a permission prompt through `permit` with the prompt's id and the
 visitor's answer, and MUST disable the prompt's buttons where `permit` is absent or the prompt is
 answered.
 
-53.39 `chat`'s `transcript` part MUST be `autoscroll`'s `host`, and its `jump` part `autoscroll`'s
-`jump`.
+53.39 `chat`'s `autoscroll` MUST be an `autoscroll`'s parts, and its `dropzone` a `dropzone`'s given
+`accept`, every file 44.55 makes a block of where none is given, and a `paste` of `true`.
 
 53.40 `chat`'s `transcript` part MUST carry `role="log"` and `aria-live="polite"`.
 
@@ -6771,6 +6780,22 @@ metadata of the file it is handed.
 `navigator.clipboard` and 53.22's copy both leave it off, and MUST NOT reject for a refusal.
 
 53.104 `copyToClipboard` MUST reject where `isServer` is true.
+
+53.105 `chat`'s `input` part MUST show the text blocks of `draft` that `attach` did not make, a line
+break between each two, and an edit of it MUST write its text to `draft` as one text block standing
+where the first of those stood, or last where there was none, leaving every other block of `draft`
+where it stood.
+
+53.106 `chat` MUST append the blocks `attach` answers for a file to the end of `draft` as they land,
+file after file in the order taken, and its `attached` MUST be every block of `draft` its `input`
+part does not show.
+
+53.107 `chat` MUST send `draft` — through its composer, an Enter (53.33) and `submit` alike — as a
+user message of its blocks in order, less each text block holding only whitespace, and MUST then set
+`draft` to a user message holding no block.
+
+53.108 `chat`'s `attaching` MUST be true while an `attach` call has not settled, and a send while it
+is true MUST be held, and made once every call has settled.
 
 # 54. Guards, fetches and jobs
 

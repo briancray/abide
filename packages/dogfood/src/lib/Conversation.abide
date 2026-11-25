@@ -35,7 +35,7 @@ const talk = chat({
 </script>
 
 <section {...talk.root} class="conversation">
-    <ol {...talk.transcript}>
+    <ol {...talk.transcript} {...talk.autoscroll.host}>
         {#for message, index of talk.messages key message}
             {#if talk.message(message, index).shown}
                 <li {...talk.message(message, index).message}>
@@ -70,17 +70,19 @@ const talk = chat({
     {#if talk.failed !== undefined}
         <p {...talk.failure}>{talk.failed}</p>
     {/if}
-    <button {...talk.jump}>↓ Latest</button>
+    <button {...talk.autoscroll.jump}>↓ Latest</button>
 
-    <form {...talk.composer}>
+    <form {...talk.composer} {...talk.dropzone.host}>
         {#if talk.attached.length > 0}
             <div {...talk.attachments}>
                 {#for piece of talk.attached key piece}
                     <span {...talk.attachment(piece).attachment}>
                         {#if piece.type === 'image'}
                             <img {...talk.attachment(piece).image} alt="an image to send">
-                        {:else}
+                        {:else if piece.type === 'document'}
                             <span>{piece.title ?? 'a document'}</span>
+                        {:else}
+                            <span>a file</span>
                         {/if}
                         <button {...talk.attachment(piece).remove}>×</button>
                     </span>

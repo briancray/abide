@@ -1,7 +1,7 @@
 <script>
 // THE CRM'S CONVERSATION, its markup over `chat`'s parts: an answer as the CRM's markdown, a tool
-// call as one line, Ask again under an answer that ended, and a prompt Claude Code asks permission
-// with.
+// call as one line, Ask again under an answer that ended, a question that failed put back to edit,
+// and a prompt Claude Code asks permission with.
 import {
     type AssistantMessage,
     type Attributes,
@@ -15,23 +15,41 @@ import Markdown from '#src/lib/Markdown.abide'
 const {
     ask,
     permit,
+    attach,
     messages = [],
+    suggestions = [],
     placeholder = 'Ask anything',
     ...rest
 } = props<
     {
         ask: ChatOptions['ask']
         permit?: ChatOptions['permit']
+        attach?: ChatOptions['attach']
         messages?: AssistantMessage[]
+        suggestions?: string[]
         placeholder?: string
     } & Attributes<'section'>
 >()
 
-const talk = chat({ ask, permit, messages })
+const talk = chat({ ask, permit, attach, messages })
+
+// A suggestion asked as if it were typed and sent.
+function suggest(question: string) {
+    talk.draft = { role: 'user', content: question }
+    talk.submit()
+}
+
+// The question the failed answer left unanswered, back in the composer to edit and send again.
+function putBack() {
+    const question = talk.messages.at(-1)
+    if (question?.role !== 'user') return
+    talk.messages = talk.messages.slice(0, -1)
+    talk.draft = question
+}
 </script>
 
 <section {...rest} {...talk.root} class="flex flex-col gap-snug">
-    <ol {...talk.transcript} class="chat">
+    <ol {...talk.transcript} {...talk.autoscroll.host} class="chat">
         {#for message, index of talk.messages key message}
             {#if talk.message(message, index).shown}
                 <li {...talk.message(message, index).message}>
@@ -70,18 +88,28 @@ const talk = chat({ ask, permit, messages })
     </ol>
     {#if talk.failed !== undefined}
         <p {...talk.failure}>{talk.failed}</p>
+        <button type="button" onclick={putBack}>Edit the question</button>
     {/if}
-    <button {...talk.jump}>↓ Latest</button>
+    <button {...talk.autoscroll.jump}>↓ Latest</button>
 
-    <form {...talk.composer} class="row">
+    {#if talk.messages.length === 0 && suggestions.length > 0}
+        <div class="row">
+            {#for question of suggestions key question}
+                <button type="button" onclick={() => suggest(question)}>{question}</button>
+            {/for}
+        </div>
+    {/if}
+    <form {...talk.composer} {...talk.dropzone.host} class="row">
         {#if talk.attached.length > 0}
             <div {...talk.attachments}>
                 {#for piece of talk.attached key piece}
                     <span {...talk.attachment(piece).attachment}>
                         {#if piece.type === 'image'}
                             <img {...talk.attachment(piece).image} alt="an image to send">
-                        {:else}
+                        {:else if piece.type === 'document'}
                             <span>{piece.title ?? 'a document'}</span>
+                        {:else}
+                            <span>a file</span>
                         {/if}
                         <button {...talk.attachment(piece).remove}>×</button>
                     </span>
@@ -98,10 +126,14 @@ const talk = chat({ ask, permit, messages })
                 <button {...talk.cancel}>Cancel</button>
             </div>
         {/if}
+        {#if talk.rejected.length > 0}
+            <p role="status">Not attached: {talk.rejected.map((file) => file.name).join(', ')}</p>
+        {/if}
         <textarea {...talk.input} placeholder={placeholder}></textarea>
+        <input {...talk.dropzone.input} aria-label="Attach files">
         {#if talk.streaming}
             <button {...talk.stop}>Stop</button>
         {/if}
-        <button {...talk.send}>{talk.streaming ? 'Queue' : 'Send'}</button>
+        <button {...talk.send}>{talk.attaching ? 'Attaching…' : talk.streaming ? 'Queue' : 'Send'}</button>
     </form>
 </section>

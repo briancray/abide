@@ -7,7 +7,7 @@ const parts = talk.message
 </script>
 
 <section {...talk.root} class="flex flex-col gap-snug">
-    <ol {...talk.transcript} class="chat">
+    <ol {...talk.transcript} {...talk.autoscroll.host} class="chat">
         {#for message, index of talk.messages key message}
             {#if parts(message, index).shown}
                 <li {...parts(message, index).message}>

@@ -1,5 +1,5 @@
-// 53.31-53.40 — A CONVERSATION OVER AN ASSISTANT HANDLER, as parts: the messages as they stream, and a
-// composer that sends on Enter. The conversation is the Messages API's own messages (44.105), and an
+// 53.31-53.40, 53.105-53.108 — A CONVERSATION OVER AN ASSISTANT HANDLER, as parts: the messages as they
+// stream, and a composer that sends its draft — the user message being written — on Enter. The conversation is the Messages API's own messages (44.105), and an
 // answer's events are folded into them one at a time, in place — 53.32 — so a delta extends the
 // block it lands in and nothing before it. What the API has no place for — a permission prompt
 // waiting, why the latest answer ended or failed — is the parts' own, never the history's. The markup
@@ -11,20 +11,19 @@ import type {
     AssistantMessage,
 } from './AssistantEvent.ts'
 import { assistantMessage, ATTACHABLE } from './assistantMessage.ts'
-import { autoscroll } from './autoscroll.ts'
-import { dropzone } from './dropzone.ts'
+import { type Autoscroll, autoscroll } from './autoscroll.ts'
+import { dropzone, type DropzoneParts } from './dropzone.ts'
 import { hotkeys } from './hotkeys.ts'
 import { type Live, live } from './live.ts'
 import { MessageAccumulator } from './MessageAccumulator.ts'
 import { messageOf } from './messageOf.ts'
 import { reactive } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
-import { withPart } from './withPart.ts'
 import { wordsOf } from './wordsOf.ts'
 
+type Text = Extract<AssistantContent, { type: 'text' }>
 type Image = Extract<AssistantContent, { type: 'image' }>
 type Document = Extract<AssistantContent, { type: 'document' }>
-type Attached = Image | Document
 type ToolUse = Extract<AssistantContent, { type: 'tool_use' }>
 type ToolResult = Extract<AssistantContent, { type: 'tool_result' }>
 
@@ -56,6 +55,14 @@ export type ChatOptions = {
     label?: Live<string | undefined>
     /** Whether the composer refuses to send: a provider not yet paired, say. */
     disabled?: Live<boolean | undefined>
+    /** 49.8, 53.105 — the user message being written: bind it to put a question back. Held by the parts, empty, where none is given. */
+    draft?: Reactive<AssistantMessage>
+    /** The files its `dropzone` takes, as an `<input accept>` writes them: every file `assistantMessage` carries by default. */
+    accept?: string
+    /** 53.37 — a file taken as the blocks it answers: `assistantMessage`'s by default. */
+    attach?: (file: File) => Promise<AssistantContent[]>
+    /** 53.37 — handed the files its `dropzone` turned away, and the files `attach` threw on. */
+    onreject?: (files: File[], event: Event) => void
 }
 
 /** A message's parts: its element, its speaker, its blocks, and what is shown under an answer. */
@@ -92,10 +99,10 @@ export type ChatParts = {
     get failed(): string | undefined
     /** The root's attributes: `data-chat="root"`, `data-streaming`, `data-stop` and `data-failed`. */
     readonly root: Record<string, unknown>
-    /** 53.39, 53.40 — the transcript: `role="log"`, kept at its bottom as `autoscroll`'s host. */
+    /** 53.40 — the transcript: `role="log"`. */
     readonly transcript: Record<string, unknown>
-    /** 53.39 — the button taking a reader who scrolled up back down. */
-    readonly jump: Record<string, unknown>
+    /** 49.18, 53.39 — what keeps the transcript at its bottom: its `host` spread with `transcript`, its `jump` the button taking a reader back down. */
+    readonly autoscroll: Autoscroll
     /** A message's parts, keyed by the message and its place in `messages`. */
     message(message: AssistantMessage, index: number): ChatMessageParts
     /** A text block's element. */
@@ -129,18 +136,26 @@ export type ChatParts = {
     }
     /** 53.36 — the element saying why the latest answer failed, `role="alert"`. */
     readonly failure: Record<string, unknown>
-    /** 53.17-53.20 — the composer: a `<form>` that sends, and takes files dropped on it or pasted into it. */
+    /** The composer: a `<form>` that sends, with `data-attaching` while a file is being taken. */
     readonly composer: Record<string, unknown>
-    /** 53.33 — the text input: Enter sends, Shift+Enter breaks the line. */
+    /** 49.18, 53.39 — where files are taken: its `host` dropped on or pasted into, its `input` a file picker. */
+    readonly dropzone: DropzoneParts
+    /** 53.33, 53.105 — the text input: Enter sends, Shift+Enter breaks the line. */
     readonly input: Record<string, unknown>
-    /** What is being written. */
-    readonly draft: Reactive<string>
-    /** The images and documents attached to what is being written. */
-    get attached(): readonly Attached[]
+    /** 53.105 — the user message being written: its words and what is attached, in order. */
+    readonly draft: Reactive<AssistantMessage>
+    /** 53.106 — the blocks of `draft` the input does not show: each file's, in order. */
+    get attached(): readonly AssistantContent[]
+    /** 53.108 — whether a file is still being taken. */
+    get attaching(): boolean
+    /** 53.37 — the files the last drop, paste or pick turned away, and those `attach` threw on. */
+    get rejected(): readonly File[]
+    /** 53.107 — sends what `draft` holds, as the composer does. */
+    submit(): void
     /** The element holding what is attached. */
     readonly attachments: Record<string, unknown>
-    /** An attachment's elements: the attachment, with `data-type`, an image's `src`, and the button taking it off. */
-    attachment(attached: Attached): {
+    /** An attachment's elements: the attachment, with `data-type`, an image's `src`, and the button taking it out of `draft`. */
+    attachment(attached: AssistantContent): {
         readonly attachment: Record<string, unknown>
         readonly image: Record<string, unknown>
         readonly remove: Record<string, unknown>
@@ -174,8 +189,9 @@ const WRITES = new Set<AssistantEvent['type']>([
     'tool_result',
 ])
 
-/** A message's content as blocks: words written as a string are one text block. */
-function blocksOf(message: AssistantMessage): AssistantContent[] {
+/** A message's content as blocks: words written as a string are one text block, and none held, none. */
+function blocksOf(message: AssistantMessage | undefined): AssistantContent[] {
+    if (message === undefined) return []
     return typeof message.content === 'string'
         ? [{ type: 'text', text: message.content }]
         : message.content
@@ -189,14 +205,34 @@ function written(message: AssistantMessage): boolean {
     return false
 }
 
+const blank = (): AssistantMessage => ({ role: 'user', content: [] })
+
+// What a file is taken as where the app names no `attach`.
+const converted = async (file: File) =>
+    (await assistantMessage('user', [file])).content
+
+/** Whether `block` holds something to send: a text block of whitespace alone does not. */
+const sendable = (block: AssistantContent) =>
+    block.type !== 'text' || /\S/.test(block.text)
+
 /** A conversation over an assistant handler, as parts: the transcript and the composer. */
 export function chat(options: ChatOptions): ChatParts {
     const messages = options.messages ?? reactive<AssistantMessage[]>([])
     const disabled = () => live(options.disabled) === true
-    const draft = reactive('')
+    const draft = options.draft ?? reactive<AssistantMessage>(blank())
+    // 53.105 — the text blocks `attach` made, which the input leaves alone. A block keeps its
+    // identity into the transcript, so a question put back into `draft` keeps its files apart.
+    const fromFiles = new WeakSet<AssistantContent>()
+    const typed = (block: AssistantContent): block is Text =>
+        block.type === 'text' && !fromFiles.has(block)
     // 53.34 — what was sent while an answer streamed, sent once it ends unless it is cancelled.
     const queued = reactive<AssistantContent[] | undefined>(undefined)
-    const attached = reactive<Attached[]>([])
+    // 53.108 — how many `attach` calls are in flight, and whether a send waits on them.
+    const converting = reactive(0)
+    let held = false
+    // 53.37 — the files `attach` threw on, for the latest drop, paste or pick.
+    const thrownOn = reactive<readonly File[]>([])
+    let transfers = 0
     const streaming = reactive(false)
     const permissions = reactive<ChatPermission[]>([])
     const outcome = reactive<{
@@ -208,15 +244,24 @@ export function chat(options: ChatOptions): ChatParts {
     // The answer in flight, which `stop` aborts.
     let asking: AbortController | undefined
 
-    const empty = () => draft().trim() === '' && attached().length === 0
+    const empty = () => {
+        if (converting() > 0) return false
+        for (const block of blocksOf(draft())) if (sendable(block)) return false
+        return true
+    }
 
-    function send() {
-        const text = draft().trim()
-        if (disabled() || empty()) return
-        const content: AssistantContent[] = [...attached()]
-        if (text !== '') content.push({ type: 'text', text })
-        draft.set('')
-        attached.set([])
+    // 53.107 — what `draft` holds goes as it stands, a blank text block left out.
+    function submit() {
+        if (disabled()) return
+        if ((converting.peek() ?? 0) > 0) {
+            held = true
+            return
+        }
+        const content: AssistantContent[] = []
+        for (const block of blocksOf(draft.peek()))
+            if (sendable(block)) content.push(block)
+        if (content.length === 0) return
+        draft.set(blank())
         if (streaming()) {
             queued.set([...(queued() ?? []), ...content])
             return
@@ -307,19 +352,52 @@ export function chat(options: ChatOptions): ChatParts {
         answerFrom()
     }
 
-    // 53.37 — each file as `assistantMessage` makes it, taken when it lands so its image shows at once.
-    async function attach(files: File[]) {
-        for (const file of files)
-            try {
-                const { content } = await assistantMessage('user', [file])
-                attached.patch((all) => {
-                    for (const block of content)
-                        if (block.type === 'image' || block.type === 'document')
-                            all.push(block)
-                })
-            } catch {
-                // A file this browser cannot draw, or none a model reads, is left out.
+    // 53.105 — the input's edit, as one text block where the first typed one stood.
+    function write(text: string) {
+        const content: AssistantContent[] = []
+        let placed = false
+        for (const block of blocksOf(draft.peek())) {
+            if (!typed(block)) content.push(block)
+            else if (!placed) {
+                placed = true
+                content.push({ type: 'text', text })
             }
+        }
+        if (!placed) content.push({ type: 'text', text })
+        draft.set({ role: 'user', content })
+    }
+
+    // 53.37, 53.106 — each file as `attach` answers it, appended as it lands so its image shows at once.
+    async function take(files: File[], event: Event) {
+        const transfer = ++transfers
+        thrownOn.set([])
+        converting.set((converting.peek() ?? 0) + files.length)
+        const threw: File[] = []
+        for (const file of files) {
+            let blocks: AssistantContent[] | undefined
+            try {
+                blocks = await (options.attach ?? converted)(file)
+            } catch {
+                threw.push(file)
+            }
+            if (blocks !== undefined && blocks.length > 0) {
+                for (const block of blocks) fromFiles.add(block)
+                draft.set({
+                    role: 'user',
+                    content: [...blocksOf(draft.peek()), ...blocks],
+                })
+            }
+            converting.set((converting.peek() ?? 0) - 1)
+        }
+        if (threw.length > 0) {
+            if (transfer === transfers) thrownOn.set(threw)
+            options.onreject?.(threw, event)
+        }
+        // 53.108 — a send pressed while files were being taken goes once the last has landed.
+        if (held && (converting.peek() ?? 0) === 0) {
+            held = false
+            submit()
+        }
     }
 
     async function answer(id: string, allow: boolean) {
@@ -344,10 +422,17 @@ export function chat(options: ChatOptions): ChatParts {
     }
 
     // 53.33 — Enter sends and Shift+Enter breaks the line; `hotkeys` leaves an input method's Enter be.
-    const keys = hotkeys({ Enter: { run: () => send(), editable: true } })
-    // 53.17-53.20 — files dropped on the composer or pasted into it.
-    const drop = dropzone({ accept: ATTACHABLE, paste: true, onfiles: attach })
-    // 53.39 — the transcript kept at its bottom.
+    const keys = hotkeys({ Enter: { run: () => submit(), editable: true } })
+    // 53.39 — files dropped, pasted or picked, and the transcript kept at its bottom.
+    const drop = dropzone({
+        accept: options.accept ?? ATTACHABLE,
+        paste: true,
+        onfiles: take,
+        onreject(files, event) {
+            thrownOn.set([])
+            options.onreject?.(files, event)
+        },
+    })
     const follow = autoscroll()
 
     const answering = (index: number) => streaming() && index >= answerStart
@@ -381,11 +466,12 @@ export function chat(options: ChatOptions): ChatParts {
                 return outcome().failed === undefined ? undefined : ''
             },
         },
-        transcript: withPart(
-            { 'data-chat': 'transcript', role: 'log', 'aria-live': 'polite' },
-            follow.host,
-        ),
-        jump: follow.jump,
+        transcript: {
+            'data-chat': 'transcript',
+            role: 'log',
+            'aria-live': 'polite',
+        },
+        autoscroll: follow,
         message(message, index) {
             const role = message.role === 'user' ? 'you' : 'assistant'
             return {
@@ -478,16 +564,17 @@ export function chat(options: ChatOptions): ChatParts {
             }
         },
         failure: { 'data-chat': 'failure', role: 'alert' },
-        composer: withPart(
-            {
-                'data-chat': 'composer',
-                onsubmit(event: SubmitEvent) {
-                    event.preventDefault()
-                    send()
-                },
+        composer: {
+            'data-chat': 'composer',
+            get 'data-attaching'() {
+                return converting() > 0 ? '' : undefined
             },
-            drop.host,
-        ),
+            onsubmit(event: SubmitEvent) {
+                event.preventDefault()
+                submit()
+            },
+        },
+        dropzone: drop,
         input: {
             'data-chat': 'input',
             get 'aria-label'() {
@@ -496,18 +583,39 @@ export function chat(options: ChatOptions): ChatParts {
             get disabled() {
                 return disabled()
             },
+            // 53.105 — the typed text blocks, a line apart.
             get value() {
-                return draft()
+                let text: string | undefined
+                for (const block of blocksOf(draft()))
+                    if (typed(block))
+                        text =
+                            text === undefined
+                                ? block.text
+                                : `${text}\n${block.text}`
+                return text ?? ''
             },
             oninput(event: Event) {
-                draft.set((event.target as HTMLTextAreaElement).value)
+                write((event.target as HTMLTextAreaElement).value)
             },
             onkeydown: keys,
         },
         draft,
         get attached() {
-            return attached()
+            const others: AssistantContent[] = []
+            for (const block of blocksOf(draft()))
+                if (!typed(block)) others.push(block)
+            return others
         },
+        get attaching() {
+            return converting() > 0
+        },
+        get rejected() {
+            const thrown = thrownOn()
+            return thrown.length === 0
+                ? drop.rejected
+                : [...drop.rejected, ...thrown]
+        },
+        submit,
         attachments: { 'data-chat': 'attachments' },
         attachment(piece) {
             return {
@@ -524,12 +632,15 @@ export function chat(options: ChatOptions): ChatParts {
                     'aria-label':
                         piece.type === 'image'
                             ? 'Remove this image'
-                            : `Remove ${piece.title ?? 'this document'}`,
-                    onclick: () =>
-                        attached.patch((all) => {
-                            const at = all.indexOf(piece)
-                            if (at >= 0) all.splice(at, 1)
-                        }),
+                            : piece.type === 'document'
+                              ? `Remove ${piece.title ?? 'this document'}`
+                              : 'Remove this attachment',
+                    onclick() {
+                        const content: AssistantContent[] = []
+                        for (const block of blocksOf(draft.peek()))
+                            if (block !== piece) content.push(block)
+                        draft.set({ role: 'user', content })
+                    },
                 },
             }
         },
