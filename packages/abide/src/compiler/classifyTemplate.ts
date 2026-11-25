@@ -1,6 +1,7 @@
 import { ASCII_WHITESPACE } from '#shared/ASCII_WHITESPACE.ts'
 import { BIND_ELEMENT } from '#shared/BIND_ELEMENT.ts'
 import { escapeAttribute, escapeQuote } from '#shared/escapeText.ts'
+import { isControlProperty } from '#shared/isControlProperty.ts'
 import { isEventName } from '#shared/isEventName.ts'
 import { safeUrl } from '#shared/safeUrl.ts'
 import { URL_ATTRIBUTES } from '#shared/URL_ATTRIBUTES.ts'
@@ -82,8 +83,9 @@ export type ClassifiedAttribute = {
     live: boolean
 } & (
     | { kind: 'static'; bytes: string | undefined }
-    // 32.3, 32.37 — a whole value from an expression, which may be absent.
-    | { kind: 'dynamic' }
+    // 32.3, 32.37 — a whole value from an expression, which may be absent. `control` where it is a
+    // form control's `value`, `checked` or `selected`, kept written into the property too (32.113).
+    | { kind: 'dynamic'; control: boolean }
     // 32.11 — a spread's attributes, less the ones the element names itself, kept written by a
     // binding of its own.
     | { kind: 'spread'; explicit: string[] }
@@ -229,7 +231,13 @@ export function classifyAttributes(
                 kind: 'handler',
                 event: attribute.lowerName.slice(2),
             })
-        else classified.push({ attribute, live, kind: 'dynamic' })
+        else
+            classified.push({
+                attribute,
+                live,
+                kind: 'dynamic',
+                control: isControlProperty(node.lowerTag, attribute.lowerName),
+            })
     }
     return classified
 }
@@ -372,6 +380,17 @@ export function refuseBinds(node: ElementNode): void {
         if (measured !== undefined)
             throw new Error(
                 `abide: <${node.tag}> has ${attribute.name}, and an element is measured by a part spread on it — ${measured}. RULEBOOK 32.91.`,
+            )
+        // 32.115 — a `<textarea>`'s `value={expr}` is its text (32.114), so text beside it is a
+        // second owner, as it is beside `bind:value`.
+        if (
+            lower === 'value' &&
+            attribute.expression &&
+            node.lowerTag === 'textarea' &&
+            node.children.length > 0
+        )
+            throw new Error(
+                `abide: <${node.tag} ${attribute.name}={…}> has text of its own — one value, two owners. The value is the text; drop what stands between the tags. RULEBOOK 32.115.`,
             )
         if (!lower.startsWith('bind:') || isElementBind(lower)) continue
         if (valueBindOf(lower) === undefined)

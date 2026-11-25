@@ -28,6 +28,10 @@ test('the keys and the scrubber move the replay, and the speeds pick its rate', 
     scrubber.dispatchEvent(new Event('input', { bubbles: true }))
     flushSync()
     expect(status()).toBe('Week 7: $54,500 won')
+    // 32.113 — the scrubber dragged still follows the keys. THE REVERT: make `writeControl` return
+    // at once, and it stays at 6500.
+    key('ArrowRight')
+    expect(scrubber.value).toBe('7500')
     const twice = [...document.querySelectorAll('[role=radio]')].find(
         (button) => button.textContent === '2×',
     ) as HTMLButtonElement

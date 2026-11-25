@@ -171,14 +171,13 @@ export function commandPalette(
             get 'aria-activedescendant'() {
                 return list.activeId
             },
-            // 51.71 — every command is listed again, the input emptied, each time the palette opens: the
-            // field's own value too, which no attribute written to it would change once something was
-            // typed in it.
-            'bind:element': (field: HTMLInputElement) =>
+            // 51.71 — every command is listed again, the input emptied, each time the palette opens.
+            get value() {
+                return query()
+            },
+            'bind:element': () =>
                 watch(() => {
-                    if (!open()) return
-                    query.set('')
-                    field.value = ''
+                    if (open()) query.set('')
                 }),
             oninput: (event: Event) =>
                 query.set((event.currentTarget as HTMLInputElement).value),

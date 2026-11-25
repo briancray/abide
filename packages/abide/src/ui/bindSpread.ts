@@ -1,15 +1,18 @@
 // 32.11 — AN ELEMENT'S SPREAD, KEPT WRITTEN. The server wrote what the value carried at render; a
 // watch keeps writing it, removing an attribute the value no longer carries, and an `on<event>`
 // listener becomes the element's, with its options (32.4), replaced when the value hands over another.
+// 32.113 — on a form control, a `value`, `checked` or `selected` it carries is written into the
+// property too; whether the element is one is asked once, so a spread on anything else pays nothing.
 
 import { BIND_ELEMENT } from '#shared/BIND_ELEMENT.ts'
+import { isControlProperty } from '#shared/isControlProperty.ts'
 import type { Disposer } from '#shared/reactive/watch.ts'
 import { spreadEntries } from '#shared/spread.ts'
 
 import { bindElement } from './bindElement.ts'
 import { listen, unlisten } from './listen.ts'
 import type { Scope } from './Scope.ts'
-import { writeAttribute } from './setAttribute.ts'
+import { writeAttribute, writeControl } from './setAttribute.ts'
 
 /** Keeps an element's spread attributes and `on<event>` listeners written as the value changes. */
 export function bindSpread(
@@ -20,15 +23,21 @@ export function bindSpread(
 ): void {
     let written = new Set<string>()
     const listeners = new Map<string, EventListener>()
+    const tag = element.localName
+    const control = tag === 'input' || tag === 'textarea' || tag === 'option'
     scope.watch(() => {
         const wanted: [string, EventListener][] = []
         const next = new Set<string>()
         for (const [name, text] of spreadEntries(read(), explicit, wanted)) {
             next.add(name)
             writeAttribute(element, name, text)
+            if (control) controlProperty(element, tag, name, text)
         }
         for (const name of written)
-            if (!next.has(name)) element.removeAttribute(name)
+            if (!next.has(name)) {
+                element.removeAttribute(name)
+                if (control) controlProperty(element, tag, name, null)
+            }
         written = next
         const seen = new Set<string>()
         for (const [event, listener] of wanted) {
@@ -45,6 +54,16 @@ export function bindSpread(
                 listeners.delete(event)
             }
     })
+}
+
+function controlProperty(
+    element: Element,
+    tag: string,
+    name: string,
+    text: string | null,
+): void {
+    const lower = name.toLowerCase()
+    if (isControlProperty(tag, lower)) writeControl(element, lower, text)
 }
 
 /**

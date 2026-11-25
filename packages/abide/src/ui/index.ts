@@ -56,7 +56,12 @@ export { fillEmpty, fillRegion, isEmptyRegion, type Region } from './regions.ts'
 export { rowKeyOf } from './rowKeyOf.ts'
 export { itemOf, noUpdate, replaceRow, rowCell, rowIndex } from './rows.ts'
 export { EMPTY_SCOPE, Scope } from './Scope.ts'
-export { addAttribute, setAttribute } from './setAttribute.ts'
+export {
+    addAttribute,
+    setAttribute,
+    setControl,
+    writeControl,
+} from './setAttribute.ts'
 export { setClass } from './setClass.ts'
 export { setClassGroup } from './setClassGroup.ts'
 export { setMarkup } from './setMarkup.ts'

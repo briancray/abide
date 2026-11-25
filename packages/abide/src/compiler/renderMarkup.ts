@@ -333,8 +333,10 @@ function renderPosition(
 
     const parts: string[] = []
     let open = `<${node.tag}`
-    // 32.61 — a `<textarea>`'s or `<select>`'s bound value, which is written inside the tag.
+    // 32.61 — a `<textarea>`'s or `<select>`'s bound value, which is written inside the tag, and
+    // 32.114 — a `<textarea>`'s `value`, named or spread.
     let within: string | undefined
+    const spreadTexts: string[] = []
     // WHAT IS NOT MARKUP IS NOT WRITTEN: a listener, `bind:element`, a refused URL, a bind whose
     // value is not an attribute, and every merge member after the one the group is written at.
     for (const one of classifyAttributes(node, lowering)) {
@@ -352,6 +354,10 @@ function renderPosition(
             continue
         }
         if (one.kind === 'spread') {
+            if (node.lowerTag === 'textarea')
+                spreadTexts.unshift(
+                    `${lowering.use('spreadText')}(${unlandable(lowering, one.attribute)}, ${JSON.stringify(one.explicit)})`,
+                )
             parts.push(
                 JSON.stringify(open),
                 `${lowering.use('spreadAttributes')}(${unlandable(lowering, one.attribute)}, ${JSON.stringify(one.explicit)})`,
@@ -361,6 +367,8 @@ function renderPosition(
         }
         // 32.37 — a whole-value attribute may be absent, so it writes its own name and quotes.
         if (one.kind === 'dynamic') {
+            if (one.control && node.lowerTag === 'textarea')
+                within = unlandable(lowering, one.attribute)
             parts.push(
                 JSON.stringify(open),
                 dynamicMarkup(one.attribute, lowering),
@@ -380,13 +388,21 @@ function renderPosition(
     }
     open += '>'
     parts.push(JSON.stringify(open))
+    // 32.114 — the last spread carrying a `value` is the text, where the element has none of its own.
+    if (
+        within === undefined &&
+        spreadTexts.length > 0 &&
+        node.children.length === 0
+    )
+        within = `(${spreadTexts.join(' ?? ')} ?? '')`
 
     // Folded for the reason `parseAbide` folds: `<BR>` is the same void element as
     // `<br>`, and a close tag written for one is markup no browser accepts.
     if (node.children.length === 0 && VOID_ELEMENTS.has(node.lowerTag))
         return parts.join(' + ')
-    // 32.61 — THE VALUE AS THE TEXT, led by the newline the parser drops after `<textarea>` so a
-    // value opening on one keeps it. The author wrote none: 32.72 refuses it beside the bind.
+    // 32.61, 32.114 — THE VALUE AS THE TEXT, led by the newline the parser drops after `<textarea>`
+    // so a value opening on one keeps it. The author wrote none: 32.72 and 32.115 refuse it beside
+    // a bind or a named `value`, and a spread's is taken only where there is none.
     if (within !== undefined && node.lowerTag === 'textarea')
         return [
             ...parts,

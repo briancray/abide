@@ -15,7 +15,7 @@ import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
 import { popoverOn } from './popover.ts'
 import { randomToken } from './randomToken.ts'
-import { busy, memo, type Reactive, reactive, watch } from './reactive/index.ts'
+import { busy, memo, type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { openingEnd } from './roving.ts'
 import type { Picked } from './Selection.ts'
@@ -270,7 +270,7 @@ export function combobox<Item, Multiple extends boolean = false>(
             get 'aria-activedescendant'() {
                 return open() ? list.activeId : undefined
             },
-            // The text a server writes; in a browser the property below is kept in step with it.
+            // 32.113 — the field's text, kept written into its property once it is typed in too.
             get value() {
                 return query()
             },
@@ -279,18 +279,9 @@ export function combobox<Item, Multiple extends boolean = false>(
             onkeydown: keydown,
             onclick: press,
             onblur: () => open.set(false),
-            // 32.5 — the field's text is its `value` property, which an attribute stops reaching once
-            // it is typed in: written whenever the query moves away from what the field holds.
             'bind:element': (element: HTMLInputElement) => {
                 input.set(element)
-                const stop = watch(() => {
-                    const text = query()
-                    if (element.value !== text) element.value = text
-                })
-                return () => {
-                    stop()
-                    input.set(undefined)
-                }
+                return () => input.set(undefined)
             },
         },
         // The list is open for the popup once there is an input to open it against.

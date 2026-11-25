@@ -837,10 +837,7 @@ if (__r${slot} !== undefined) ${SCOPE}.stops.push(__r${slot})`,
             const { write, name } =
                 one.kind === 'merged' && one.toggles !== undefined
                     ? one.toggles
-                    : {
-                          write: 'attribute' as const,
-                          name: one.attribute.name,
-                      }
+                    : wholeWrite(one)
             // 32.71 — A SHARED GROUP IS ONE WATCH over its whole value, which wakes for any member:
             // a directive cannot keep what the plain attribute holds from a watch of its own.
             const group =
@@ -937,11 +934,26 @@ const SCOPE = '__scope'
 // same three arguments, which is what makes them one site at all.
 const WRITES = {
     attribute: 'setAttribute',
+    control: 'setControl',
     class: 'setClass',
     style: 'setStyleProperty',
     classGroup: 'setClassGroup',
     styleGroup: 'setStyleGroup',
 } as const
+
+/**
+ * A whole-value attribute's write: `setAttribute`, or `setControl` on a form control's `value`,
+ * `checked` or `selected`, which keeps the property written too (32.113) — under the folded name,
+ * which is what `writeControl` matches.
+ */
+function wholeWrite(one: ClassifiedAttribute): {
+    write: 'attribute' | 'control'
+    name: string
+} {
+    return one.kind === 'dynamic' && one.control
+        ? { write: 'control', name: one.attribute.lowerName }
+        : { write: 'attribute', name: one.attribute.name }
+}
 
 /** One attribute binding's write: the element, the one name it owns, and the value. */
 function writeCall(
@@ -1100,10 +1112,14 @@ function emitBuild(row: Cursor, anchored: boolean, lowering: Lowering): string {
                     ? `${lowering.use('addAttribute')}(${at.name}, ${JSON.stringify(name)}, `
                     : `${at.name}.setAttribute(${JSON.stringify(name)}, `
             // 32.37 — a whole-value attribute may be absent, which the server wrote as nothing.
+            // 32.113 — and a control's property, which a `<textarea>` shows where the attribute
+            // shows nothing.
             lines.push(
-                one.kind === 'dynamic'
-                    ? `{ const __text = ${value}; if (__text !== null) ${set}__text) }`
-                    : `${set}${value})`,
+                one.kind !== 'dynamic'
+                    ? `${set}${value})`
+                    : one.control
+                      ? `{ const __text = ${value}; if (__text !== null) ${set}__text); ${lowering.use('writeControl')}(${at.name}, ${JSON.stringify(one.attribute.lowerName)}, __text) }`
+                      : `{ const __text = ${value}; if (__text !== null) ${set}__text) }`,
             )
         }
         lines.push(into(at, at.name))
@@ -1832,10 +1848,7 @@ function rowUpdate(
                 one.kind === 'merged'
                     ? one.toggles
                     : one.kind === 'dynamic'
-                      ? {
-                            write: 'attribute' as const,
-                            name: one.attribute.name,
-                        }
+                      ? wholeWrite(one)
                       : undefined
             if (toggles === undefined) continue
             own.push(
