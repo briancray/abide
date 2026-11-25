@@ -8,6 +8,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { spawned } from '@abide/harness/gate'
 
 import { paragraphsOf } from '#compiler/agentNotes.ts'
+import { toMemo } from '#compiler/toMemo.ts'
 import { upgrade } from '#compiler/upgrade.ts'
 import { ABIDE_DIRECTORY } from '#server/ABIDE_DIRECTORY.ts'
 
@@ -643,4 +644,23 @@ export const reset = () => {
 `)
     for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
     expect(await upgrade(app, '0.143.0')).toEqual([])
+})
+
+// 38.215 — `memo` JOINS ABIDE'S IMPORT ALONE: a module importing a `reactive` of its own from another
+// module before abide's keeps that import as it is. THE REVERT: match any `import { … reactive … }`
+// in `withMemoImported`; `./signals.ts`' import gains `memo` and abide's does not.
+test("memo is imported beside abide's reactive, never an app's own — 38.215", () => {
+    const text = `import { reactive } from './signals.ts'
+import { reactive, watch } from '@abide/abide'
+
+export const total = reactive(() => 1)
+export const kept = reactive(0)
+`
+    expect(toMemo(text, 'src/lib/total.ts'))
+        .toBe(`import { reactive } from './signals.ts'
+import { memo, reactive, watch } from '@abide/abide'
+
+export const total = memo(() => 1)
+export const kept = reactive(0)
+`)
 })

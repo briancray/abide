@@ -9,7 +9,9 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
+import { isAbideSpecifier } from './hookCalls.ts'
 import { type CodeRewrite, rewriteCode } from './rewriteCode.ts'
+import { type ImportStatement, importStatements } from './splitImports.ts'
 import {
     afterTypeArguments,
     closerOf,
@@ -43,13 +45,20 @@ const TO_MEMO: CodeRewrite = {
             const imported = withMemoImported(code, true, others.join('\n'))
             codes[index] = imported
             // The first script importing `reactive` is the one `memo` joins, even where it already has.
-            if (imported !== code || IMPORTS_REACTIVE.test(code)) break
+            if (imported !== code || importsReactive(code)) break
         }
         return codes
     },
 }
 
-const IMPORTS_REACTIVE = /import\s*\{[^}]*\breactive\b[^}]*\}\s*from/
+/** Whether `code` imports abide's `reactive`. */
+function importsReactive(code: string): boolean {
+    for (const statement of importStatements(code))
+        if (isAbideSpecifier(statement.specifier))
+            for (const binding of statement.bindings)
+                if (binding.imported === 'reactive') return true
+    return false
+}
 
 /** A module's `reactive` calls over a body renamed `memo`, and how many were. */
 function renamedToMemo(text: string): { code: string; count: number } {
@@ -162,43 +171,52 @@ function withMemoImported(
     elsewhere: string,
 ): string {
     if (!migrated) return text
-    const importPattern = /import\s*\{([^}]*)\}\s*from\s*(['"][^'"]+['"])/g
-    for (const found of text.matchAll(importPattern)) {
-        const list = found[1] as string
-        const names = list
-            .split(',')
-            .map((name) => name.trim())
-            .filter((name) => name !== '')
-        if (!names.includes('reactive') || names.includes('memo')) continue
-        const start = found.index ?? 0
-        const rest = text.slice(0, start) + text.slice(start + found[0].length)
-        const stillCalled = calls(rest) || calls(elsewhere)
-        const kept = stillCalled
-            ? names
-            : names.filter((name) => name !== 'reactive')
-        kept.push('memo')
-        kept.sort((a, b) =>
-            a
-                .replace(/^type\s+/, '')
-                .localeCompare(b.replace(/^type\s+/, ''), 'en', {
-                    sensitivity: 'base',
-                }),
-        )
-        const multiline = list.includes('\n')
-        const indent = multiline
-            ? (/\n([ \t]*)\S/.exec(list)?.[1] ?? '    ')
-            : ''
-        const rendered = multiline
-            ? `{\n${kept.map((name) => `${indent}${name},`).join('\n')}\n}`
-            : `{ ${kept.join(', ')} }`
-        const replaced = `import ${rendered} from ${found[2]}`
-        return (
-            text.slice(0, start) +
-            replaced +
-            text.slice(start + found[0].length)
-        )
+    const statement = reactiveImport(text)
+    if (statement === undefined) return text
+    const open = text.indexOf('{', statement.start)
+    const close = text.indexOf('}', open)
+    const list = text.slice(open + 1, close)
+    const names = statement.bindings.map((binding) => binding.written)
+    const rest = text.slice(0, statement.start) + text.slice(statement.end)
+    const stillCalled = calls(rest) || calls(elsewhere)
+    const kept = stillCalled
+        ? names
+        : names.filter((name) => name !== 'reactive')
+    kept.push('memo')
+    kept.sort((a, b) =>
+        a
+            .replace(/^type\s+/, '')
+            .localeCompare(b.replace(/^type\s+/, ''), 'en', {
+                sensitivity: 'base',
+            }),
+    )
+    const multiline = list.includes('\n')
+    const indent = multiline ? (/\n([ \t]*)\S/.exec(list)?.[1] ?? '    ') : ''
+    const rendered = multiline
+        ? `{\n${kept.map((name) => `${indent}${name},`).join('\n')}\n}`
+        : `{ ${kept.join(', ')} }`
+    return text.slice(0, open) + rendered + text.slice(close + 1)
+}
+
+/**
+ * The statement importing abide's `reactive` by its own name in braces alone, where `memo` is not
+ * imported beside it — the one `memo` joins. An app's own `reactive`, from any other module, is not.
+ */
+function reactiveImport(text: string): ImportStatement | undefined {
+    for (const statement of importStatements(text)) {
+        if (statement.typeOnly || !isAbideSpecifier(statement.specifier))
+            continue
+        let reactive = false
+        let other = false
+        for (const binding of statement.bindings) {
+            if (binding.imported === 'default' || binding.imported === '*')
+                other = true
+            else if (binding.imported === 'memo') other = true
+            else if (binding.written === 'reactive') reactive = true
+        }
+        if (reactive && !other) return statement
     }
-    return text
+    return undefined
 }
 
 /** Whether `text` names `reactive` in code — not in a comment or a string, nor as a member. */
