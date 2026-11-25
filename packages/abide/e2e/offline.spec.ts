@@ -128,7 +128,7 @@ import getNote from '#src/data/getNote.handler.ts'
 import getTags from '#src/data/getTags.handler.ts'
 
 const note = computed(() => getNote())
-const tags = getTags()
+const tags = computed(() => getTags())
 </script>
 
 <main id="note"><p id="text">{note().text}</p><ul id="tags">{#for tag of tags.ready() ? tags : []}<li>{tag}</li>{/for}</ul></main>`,

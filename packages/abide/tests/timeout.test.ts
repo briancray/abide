@@ -5,6 +5,7 @@
 import { afterEach, expect, test } from 'bun:test'
 
 import { GET } from '#server'
+import { computed } from '#shared'
 import { reachOf } from '#shared/rpc.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
@@ -182,4 +183,26 @@ test('a handler naming no timeout takes the environment one — 16.58', async ()
     const value = reach(never)
     await settled(value)
     expect(statusOf(value)).toBe(504)
+})
+
+// 16.107, 16.59 — A `computed` ADOPTING A CALL THAT TIMES OUT REFUSES 504 ONCE: the read the call made
+// is let go with the adoption, so the refusal does not run the body again into a new load (16.62).
+// Counted as handler runs, which the value cannot show. THE REVERT: drop the cursor step back in
+// `run`'s adoption of a call's answer; the body calls again on each 504 and `runs` climbs past 1.
+test('a computed adopting a call that times out refuses once — 16.107, 16.59', async () => {
+    let runs = 0
+    const ask = GET(
+        async function* ({ q }: { q: string }) {
+            runs += 1
+            await Bun.sleep(300)
+            yield q
+        },
+        { timeout: 40 },
+    )
+    const answer = computed(() => ask({ q: 'a' }))
+    answer.busy()
+    await Bun.sleep(200)
+    expect(
+        `busy: ${answer.busy()}, status: ${(answer.error() as { status?: number } | undefined)?.status}, runs: ${runs}`,
+    ).toBe('busy: false, status: 504, runs: 1')
 })

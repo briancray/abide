@@ -1959,6 +1959,24 @@ function run(cell: Cell): void {
     }
     BODY_RUN.cell = outerRun
     TRACKING.reader = previous
+    // 16.3, 11.12 — A CALL'S ANSWER HANDED BACK WHOLE IS ITS VALUE, ADOPTED: the promise or the
+    // stream an `Rpc` call answers carries the handler's value for those args, so the body keeps
+    // what that value keeps — a server's patches (18.11), a stand-in written over it (16.81), a
+    // seed taken in the same turn (41.27) — where settling the promise would hold one snapshot.
+    // AND THE READ THE CALL MADE IS LET GO (16.108 is for a body that awaits): kept beside the
+    // adoption, a refusal of the value ran the body again, whose call started a load anew (16.62)
+    // that refused in turn — busy for ever.
+    if (produced !== null && typeof produced === 'object') {
+        const entry = (produced as { [CALL_ENTRY]?: unknown })[CALL_ENTRY]
+        if (entry !== undefined) {
+            produced = entry
+            if (
+                reader.cursor > 0 &&
+                reader.sources[reader.cursor - 1] === cellOf(entry)
+            )
+                reader.cursor -= 1
+        }
+    }
     // A body that read FEWER values than last time leaves a tail nothing reads, and
     // that is the only thing the truncation has to do — so the test is here and the call
     // is the rare arm.
@@ -1966,14 +1984,6 @@ function run(cell: Cell): void {
     // And a guard this run did not take stops waking it.
     if (reader.probeCursor < reader.probeSources.length) truncateProbes(reader)
     cell.running = false
-    // 16.3, 11.12 — A CALL'S ANSWER HANDED BACK WHOLE IS ITS VALUE, ADOPTED: the promise or the
-    // stream an `Rpc` call answers carries the handler's value for those args, so the body keeps
-    // what that value keeps — a server's patches (18.11), a stand-in written over it (16.81), a
-    // seed taken in the same turn (41.27) — where settling the promise would hold one snapshot.
-    if (produced !== null && typeof produced === 'object') {
-        const entry = (produced as { [CALL_ENTRY]?: unknown })[CALL_ENTRY]
-        if (entry !== undefined) produced = entry
-    }
     // A VALUE THAT WAS ADOPTING AND IS NOT ANY MORE. Behind the `adoption` load so every
     // other recompute pays one field test rather than the brand read below it.
     if (cell.adoption !== null) {
