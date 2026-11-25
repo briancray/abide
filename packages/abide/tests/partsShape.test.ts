@@ -271,7 +271,7 @@ function elementParts(): Record<string, unknown> {
         'prompts.host.cancel': asked.cancel,
         'prompts.host.actions': asked.actions,
         'tooltip.host.hint': hints.hint,
-        'chart.svg': plot.svg,
+        'chart.root': plot.root,
         'chart.tip': plot.tip,
         'chart.yTicks.grid': plot.yTicks[0]?.grid,
         'chart.yTicks.text': plot.yTicks[0]?.text,

@@ -3927,6 +3927,9 @@ against, MUST read every `.ts` file as a module, one with no `import` or `export
 literal second into that object as its `name`, and MUST rename to `run` every `runNow` read as a
 member.
 
+38.220 The migration keyed to 0.144.0 MUST rename to `root` every `svg` read as a member of a name
+its file binds to a `chart` call, and MUST NOT rename any other `svg`.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -5400,7 +5403,7 @@ prompt MUST settle as confirmed once the call resolves, and stay showing with th
 in its `error` part once it rejects.
 
 50.46 The element carrying a `chart`'s `tip` MUST open against the chart's crosshair for as long as
-the crosshair stands, and the chart's `svg` part MUST name it in `aria-describedby` while it does.
+the crosshair stands, and the chart's `root` part MUST name it in `aria-describedby` while it does.
 
 50.47 The element carrying `tooltip.host`'s `hint` part, and a `chart`'s `tip`, MUST NOT be the
 target of a pointer event, so a hint open over its anchor never takes the pointer from it.

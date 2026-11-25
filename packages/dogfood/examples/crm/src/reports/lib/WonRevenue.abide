@@ -30,7 +30,7 @@ const plot = chart({
 
 <div class="pb-6 pl-12">
     <svg
-        {...plot.svg}
+        {...plot.root}
         class="block h-60 w-full overflow-visible text-chrome text-muted
             [&_[data-chart=line]]:stroke-2 [&_[data-series='0']]:text-signal
             [&_[data-series='0']]:stroke-signal

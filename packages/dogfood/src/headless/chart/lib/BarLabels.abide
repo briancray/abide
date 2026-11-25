@@ -7,7 +7,7 @@ const plot = chart({
 })
 </script>
 
-<svg {...plot.svg} class="h-48 w-full">
+<svg {...plot.root} class="h-48 w-full">
     {#for tick of plot.yTicks}
         <line {...tick.grid} />
     {/for}

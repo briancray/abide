@@ -5,7 +5,8 @@ import { mount } from '@abide/harness/abide'
 
 import ClosedByWeek from './ClosedByWeek.abide'
 
-const chart = () => document.querySelector('[data-chart=svg]') as HTMLDivElement
+const chart = () =>
+    document.querySelector('[data-chart=root]') as HTMLDivElement
 const texts = (selector: string) =>
     [...document.querySelectorAll(selector)].map((node) => node.textContent)
 // A column's place and size, read off the percentages its part carries (52.116).

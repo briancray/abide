@@ -42,14 +42,14 @@ test('the crosshair carries one binding at every x, and the chart is described b
         series: () => [{ label: 'Won', values: [10, 20, 30] }],
     })
     expect(plot.crosshair).toBeUndefined()
-    expect(plot.svg['aria-describedby']).toBeUndefined()
-    press(plot.svg, 'ArrowRight')
+    expect(plot.root['aria-describedby']).toBeUndefined()
+    press(plot.root, 'ArrowRight')
     const first = plot.crosshair?.line['bind:element']
     expect(plot.crosshair?.index).toBe(0)
-    press(plot.svg, 'ArrowRight')
+    press(plot.root, 'ArrowRight')
     expect(plot.crosshair?.index).toBe(1)
     expect(plot.crosshair?.line['bind:element']).toBe(first)
-    expect(plot.svg['aria-describedby']).toBe(plot.tip.id)
+    expect(plot.root['aria-describedby']).toBe(plot.tip.id)
     expect(plot.tip.role).toBe('tooltip')
 })
 
@@ -126,7 +126,7 @@ test('a placed mark carries where it stands as percentages of the box', () => {
     }
     for (const tick of plot.xTicks)
         expect(vars(tick.text).x).toBe(share(tick.x, 600))
-    press(plot.svg, 'ArrowRight')
+    press(plot.root, 'ArrowRight')
     expect(vars(plot.crosshair?.line)).toEqual({
         x: share(plot.crosshair?.x ?? 0, 600),
     })
@@ -148,7 +148,7 @@ test("an svg root's marks carry no vars, and a div root's do", () => {
             ],
         })
         const stop = (
-            plot.svg['bind:element'] as (element: Element) => () => void
+            plot.root['bind:element'] as (element: Element) => () => void
         )(root)
         const parts = [
             ...plot.points.map((point) => point.circle),

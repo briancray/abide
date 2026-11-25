@@ -43,8 +43,8 @@ type Bar = Point & { width: number; height: number }
 const percentOf = (part: number, whole: number) =>
     whole === 0 ? 0 : Math.round((part / whole) * 10_000) / 100
 
-const boxWidth = () => third.svg.width as number
-const boxHeight = () => third.svg.height as number
+const boxWidth = () => third.root.width as number
+const boxHeight = () => third.root.height as number
 
 // As the chart hands each part back, copied so every arm pays one spread of a fresh record.
 const same = (part: Record<string, unknown> | undefined) => ({ ...part })
@@ -90,7 +90,7 @@ const redraw = (shift: typeof shiftHanded, at: number) => () => {
 }
 </script>
 
-<svg {...first.svg} id="arm0">
+<svg {...first.root} id="arm0">
     {#for tick of first.yTicks}
         <line {...tick.grid} />
     {/for}
@@ -104,7 +104,7 @@ const redraw = (shift: typeof shiftHanded, at: number) => () => {
         <circle {...same(point.circle)} r="3" />
     {/for}
 </svg>
-<svg {...second.svg} id="arm1">
+<svg {...second.root} id="arm1">
     {#for tick of second.yTicks}
         <line {...tick.grid} />
     {/for}
@@ -118,7 +118,7 @@ const redraw = (shift: typeof shiftHanded, at: number) => () => {
         <circle {...pointWithVars(point.circle, point)} r="3" />
     {/for}
 </svg>
-<svg {...third.svg} id="arm2">
+<svg {...third.root} id="arm2">
     {#for tick of third.yTicks}
         <line {...tick.grid} />
     {/for}

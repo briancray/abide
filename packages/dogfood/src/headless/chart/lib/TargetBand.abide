@@ -9,7 +9,7 @@ const plot = chart({
 </script>
 
 <div class="pl-12">
-    <svg {...plot.svg} class="h-48 w-full overflow-visible">
+    <svg {...plot.root} class="h-48 w-full overflow-visible">
         <rect
             x="0"
             width="100%"

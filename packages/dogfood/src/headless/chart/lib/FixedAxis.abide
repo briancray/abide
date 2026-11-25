@@ -29,7 +29,7 @@ const west = chart({
 <div class="grid grid-cols-2 gap-4">
     {#for plot of [east, west]}
         <div class="pl-10">
-            <svg {...plot.svg} class="h-40 w-full overflow-visible">
+            <svg {...plot.root} class="h-40 w-full overflow-visible">
                 {#for tick of plot.yTicks}
                     <text {...tick.text} dx="-6">{tick.label}</text>
                 {/for}

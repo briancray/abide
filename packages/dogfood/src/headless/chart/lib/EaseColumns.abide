@@ -13,7 +13,7 @@ const plot = chart({
 </script>
 
 <label><input type="checkbox" bind:checked={stacked} /> Stack</label>
-<svg {...plot.svg} class="h-48 w-full">
+<svg {...plot.root} class="h-48 w-full">
     {#for bar of plot.bars key bar.key}
         <rect
             {...bar.rect}

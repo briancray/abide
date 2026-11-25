@@ -18,7 +18,7 @@ const plot = chart({
 </script>
 
 <div class="pl-8">
-    <div {...plot.svg} class="relative block h-40 w-full text-chrome text-muted">
+    <div {...plot.root} class="relative block h-40 w-full text-chrome text-muted">
         {#for tick of plot.yTicks}
             <span {...tick.text} class="absolute top-(--y) right-full -translate-y-1/2 pr-2">
                 {tick.label}

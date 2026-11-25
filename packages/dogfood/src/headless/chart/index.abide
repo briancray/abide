@@ -215,13 +215,13 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
 >
     <Section level={3} title="Plot won revenue against target by month">
         <p><code>chart</code> takes the series over one pair of axes and hands back parts to
-            spread on markup. A pointer over the <code>svg</code> moves a crosshair to
+            spread on markup. A pointer over the <code>root</code> moves a crosshair to
             the nearest month and opens every series' value there in the <code>tip</code>.</p>
         <Example code={wonAgainstTarget}><WonAgainstTarget /></Example>
     </Section>
 
     <Section level={3} title="Read the chart from the keyboard">
-        <p>The <code>svg</code> takes focus. The arrows step its crosshair one x at a time and stop
+        <p>The <code>root</code> takes focus. The arrows step its crosshair one x at a time and stop
             at the ends, Home and End go to the first and the last, Enter picks the x it stands at,
             and Escape puts it away. The readout describes the chart while it shows, and each step
             is read out through <code>announce</code>.</p>
@@ -229,7 +229,7 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
     </Section>
 
     <Section level={3} title="Fill the box a layout gives the chart">
-        <p>Size the <code>svg</code> with classes. It measures itself and redraws at the new size
+        <p>Size the <code>root</code> with classes. It measures itself and redraws at the new size
             whenever its box changes, so its labels are never stretched. The box is the plot, edge
             to edge: the labels stand outside it, so keep room for them on the element around it
             and let the <code>svg</code> show what overflows.</p>
@@ -237,7 +237,7 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
     </Section>
 
     <Section level={3} title="Draw the columns as HTML elements">
-        <p>No part asks for SVG. Spread the root part on a <code>div</code> and each bar on a
+        <p>No part asks for SVG. Spread <code>root</code> on a <code>div</code> and each bar on a
             <code>span</code>: a placed mark carries <code>--x</code> and <code>--y</code>, and a
             column <code>--width</code> and <code>--height</code>, as percentages of the box.
             Spread on an <code>svg</code>, the parts leave them out: there the attributes place

@@ -10,7 +10,7 @@ const { plot, ...rest } = props<
 </script>
 
 <div class="pb-6 pl-12">
-    <svg {...rest} {...plot.svg}>
+    <svg {...rest} {...plot.root}>
         {#for tick of plot.yTicks}
             <line {...tick.grid} />
             <text {...tick.text} dx="-6">{tick.label}</text>

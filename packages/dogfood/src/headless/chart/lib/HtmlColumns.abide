@@ -7,7 +7,7 @@ const plot = chart({
 })
 </script>
 
-<div {...plot.svg} class="relative block h-32 w-full">
+<div {...plot.root} class="relative block h-32 w-full">
     {#for bar of plot.bars key bar.key}
         <span
             {...bar.rect}

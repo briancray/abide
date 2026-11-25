@@ -164,7 +164,7 @@ export type ChartParts = {
     /** The base its parts' ids are derived from. */
     readonly id: string
     /** The root, an `<svg>` or any element: its size, measured (52.24), its name, focus, and the pointer and keys that move the crosshair (52.26, 52.69). */
-    readonly svg: Record<string, unknown>
+    readonly root: Record<string, unknown>
     /** The x of `value`, in the units of the `x` option: a time between two positions, say (52.78). */
     x(value: number): number
     /** The y of `value`. */
@@ -728,8 +728,8 @@ export function chart(options: ChartOptions): ChartParts {
 
     return {
         id: base,
-        svg: {
-            'data-chart': 'svg',
+        root: {
+            'data-chart': 'root',
             get width() {
                 return size().width
             },

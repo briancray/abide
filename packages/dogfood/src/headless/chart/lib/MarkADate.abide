@@ -12,7 +12,7 @@ const plot = chart({
 })
 </script>
 
-<svg {...plot.svg} class="h-48 w-full">
+<svg {...plot.root} class="h-48 w-full">
     {#for line of plot.lines key line.series}
         <path {...line.path} />
     {/for}

@@ -11,7 +11,7 @@ const plot = chart({
 })
 </script>
 
-<svg {...plot.svg} class="h-48 w-full">
+<svg {...plot.root} class="h-48 w-full">
     {#for bar of plot.bars key bar.key}
         <rect {...bar.rect} />
     {/for}
