@@ -4178,7 +4178,8 @@ MUST list none that writes a file or calls a handler that changes what the examp
 40.47 `Headless components` MUST list every page but its guide in runs per 40.37, and only in
 `Overlays`, `Inputs`, `Data`, `Navigation`, `Layout` and `Charts`, in that order.
 
-40.48 A headless component MUST be filed under `Overlays` where what it shows opens over the page.
+40.48 A headless component MUST be filed under `Overlays` where what it shows opens over the page, or
+where it is a bar of the controls opening what does.
 
 40.49 A headless component MUST be filed under `Inputs` where what it holds is a value a form would
 submit, any items it lists being choices for that value.
@@ -5757,12 +5758,13 @@ in, and `tree` MUST write `aria-selected` on each item and `data-selected` on ea
 
 51.84 `tree` MUST hide the element holding a node's children while the node is collapsed.
 
-51.85 `slider`'s parts MUST be a `role="group"` named by `label` and two thumbs, each `role="slider"`
-named by its entry of `labels`, with its value as `aria-valuenow`, what `format` writes for it as
-`aria-valuetext`, and the bounds the other thumb leaves it as `aria-valuemin` and `aria-valuemax`.
+51.85 `slider` given `range` MUST hand back a `role="group"` named by `label` and two thumbs, each
+`role="slider"` named by its entry of `labels`, with its value as `aria-valuenow`, what `format`
+writes for it as `aria-valuetext`, and the bounds the other thumb leaves it as `aria-valuemin` and
+`aria-valuemax`.
 
-51.86 `slider` MUST keep its low thumb at most at its high thumb and its high thumb at least at its
-low, each at a whole number of `step`s from `min`, within `min` and `max`.
+51.86 `slider` MUST keep each thumb at a whole number of `step`s from `min`, within `min` and `max`,
+and a range's low thumb at most at its high thumb and its high thumb at least at its low.
 
 51.87 A thumb of a `slider` MUST step up by `step` on ArrowUp and ArrowRight and down on ArrowDown
 and ArrowLeft, by a tenth of the way on Page Up and Page Down, and to the least and the greatest
@@ -5774,10 +5776,10 @@ focus it, and the thumb MUST follow the pointer until it lets go.
 51.89 `slider` MUST write each change it makes to `value`.
 
 51.90 `slider` MUST write `data-dragging` on its root part while a pointer holds a thumb, and place its
-thumbs, and the fill part between them, as `style`.
+thumbs, and the fill part from `min` to its one thumb or between a range's two, as `style`.
 
-51.91 `slider` given `name` MUST submit its low and then its high value with a form its two field
-parts are in, each as a field of that name.
+51.91 `slider` given `name` MUST submit its value, or a range's low and then its high value, with a
+form its field parts are in, each as a field of that name.
 
 51.92 A press on `combobox`'s input MUST open its list where it is shut, save where `search` is given
 and the input holds no text, and MUST shut it where it is open; focus reaching the input MUST NOT open
@@ -6077,6 +6079,27 @@ they enter is `multiple`, join its `selected`.
 51.183 Items moved into another `sortableList` MUST be announced as 51.149 names, naming that list
 after `moved to` by its `aria-label`, else the text of the elements its `aria-labelledby` names, else
 as `another list`.
+
+51.184 `slider` not given `range` MUST hand back one thumb, `role="slider"` named by `label`, with its
+value as `aria-valuenow`, what `format` writes for it as `aria-valuetext`, and `min` and `max` as
+`aria-valuemin` and `aria-valuemax`.
+
+51.185 `toolbar`'s `toolbar` part MUST carry `role="toolbar"`, or `role="menubar"` given that `role`,
+named by `label`, with its `orientation` as `aria-orientation`.
+
+51.186 Of the elements carrying a `toolbar`'s `item` part, exactly one MUST carry `tabindex="0"` and
+every other `tabindex="-1"`, the one being the item focus reached last while it stands, and the
+first in document order otherwise.
+
+51.187 An arrow key along a `toolbar`'s `orientation`, Home or End on one of its items MUST move focus
+to the next, the previous, the first or the last of its items that is not disabled, going round its
+ends unless `wrap` is false.
+
+51.188 A `toolbar` MUST leave a key on its item where a handler before it prevented the key's
+default, or where the item is a field the key types into.
+
+51.189 A `toolbar`'s `item` part MUST carry `role="menuitem"` given `role: 'menubar'`, and no role
+otherwise.
 
 # 52. Formatting, markdown and charts
 

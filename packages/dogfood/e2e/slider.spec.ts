@@ -13,7 +13,11 @@ test('a thumb dragged takes the keys after it — 51.88', async ({ page }) => {
     await page.goto(underMount('headless/slider'), {
         waitUntil: 'networkidle',
     })
-    const frame = page.locator('.result').first()
+    // The first example of two thumbs: the page opens on one thumb.
+    const frame = page
+        .locator('.result')
+        .filter({ has: page.locator('[data-thumb=high]') })
+        .first()
     await frame.scrollIntoViewIfNeeded()
     const track = frame.locator('[data-slider=track]')
     const box = (await track.boundingBox()) as NonNullable<

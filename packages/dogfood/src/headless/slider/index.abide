@@ -9,11 +9,31 @@ import PriceBand from './lib/PriceBand.abide'
 import priceBand from './lib/PriceBand.abide' with { type: 'text' }
 import SubmitBothEnds from './lib/SubmitBothEnds.abide'
 import submitBothEnds from './lib/SubmitBothEnds.abide' with { type: 'text' }
+import WinChance from './lib/WinChance.abide'
+import winChance from './lib/WinChance.abide' with { type: 'text' }
 </script>
 
 <Doc
     seeAlso={['/headless/form', '/helpers/format', '/headless/tabs']}
     tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/LikelyDeals.test.ts',
+            from: [
+                "test('one thumb is a slider named by the label, bounded by min and max'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/LikelyDeals.test.ts',
+            from: [
+                "test('the keys step the thumb within min and max, the fill running from min to it'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/LikelyDeals.test.ts',
+            from: [
+                "test('a form holding the slider submits its value under its name'",
+            ],
+        },
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/ProbabilityFilter.test.ts',
             from: [
@@ -48,11 +68,18 @@ import submitBothEnds from './lib/SubmitBothEnds.abide' with { type: 'text' }
         },
     ]}
 >
+    <Section level={3} title="Pick one value with a thumb">
+        <p>Spread <code>root</code> onto the slider, then the track, the span it fills and
+            <code>thumb</code>. Drag the thumb, press the track, or focus the thumb and step it
+            with the arrow keys. <code>label</code> names the thumb.</p>
+        <Example code={winChance}><WinChance /></Example>
+    </Section>
+
     <Section level={3} title="Pick a band of prices with two thumbs">
-        <p>Spread the parts onto markup: <code>root</code> onto the group, then the
-            track, the span between the thumbs, and each end's thumb, <code>end(0).thumb</code> and
-            <code>end(1).thumb</code>. Drag either thumb, or focus one and step it with the arrow
-            keys; neither passes the other.</p>
+        <p>Given <code>range: true</code>, it picks a low and a high value. <code>root</code>
+            is the group <code>label</code> names, and each end has a thumb,
+            <code>end(0).thumb</code> and <code>end(1).thumb</code>. Drag either thumb, or focus
+            one and step it with the arrow keys; neither passes the other.</p>
         <Example code={priceBand}><PriceBand /></Example>
     </Section>
 

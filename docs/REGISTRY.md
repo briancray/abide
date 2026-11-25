@@ -486,6 +486,14 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `MenuOptions` | `PopoverOptions & { group?: string \| (() => string \| undefined) }` | Where the menu opens and what opens and closes it, as a `popover` takes them, and the group it switches within. | 50.37, 49.8, 49.10, 49.11, 50.57 |
 | `Menu` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the menu's, and whether the menu is open. | 32.11, 50.37, 50.38, 49.3, 49.8, 49.9, 49.17 |
 
+## `toolbar`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `toolbar` | `(options?: ToolbarOptions) => Toolbar` | WAI-ARIA's toolbar, or its menubar, as parts an app spreads onto a container and each control of its own: one tab stop the arrow keys move along. | 51.185, 51.186, 51.187, 51.188, 51.189, 49.2, 49.4, 49.5, 49.6 |
+| `ToolbarOptions` | `{ id?: string; label?: string \| undefined \| (() => string \| undefined); orientation?: 'horizontal' \| 'vertical' \| (() => 'horizontal' \| 'vertical'); wrap?: boolean \| (() => boolean); role?: 'toolbar' \| 'menubar' }` | Its id, its accessible name, which way it runs, whether the arrows go round its ends, and whether it is a menubar. | 51.185, 51.187, 51.189, 49.8, 49.10, 49.11 |
+| `Toolbar` | `{ readonly id: string; readonly toolbar: Record<string, unknown>; readonly item: Record<string, unknown> }` | Its id, the group its menubar's menus take, the container's part, and the part each control carries. | 32.11, 32.99, 51.185, 51.186, 50.57, 49.3, 49.9 |
+
 ## `popover`
 
 | Name | Signature | Meaning | Rules |
@@ -694,10 +702,11 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `slider` | `(options: SliderOptions) => SliderParts` | WAI-ARIA's multi-thumb slider as parts an app spreads onto elements of its own: a group, a track, the span between the thumbs, two thumbs and a field for each. | 51.85, 51.86, 51.87, 51.88, 51.89, 51.90, 51.91, 49.7, 49.2, 49.4, 49.5, 49.6 |
-| `SliderOptions` | `{ id?: string; value?: Reactive<readonly [number, number]>; label: string \| (() => string); min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); labels?: readonly [string, string] \| (() => readonly [string, string]); format?: (value: number) => string; name?: string \| (() => string \| undefined) }` | The range picked, and the scale it is picked on. | 51.85, 51.86, 51.91, 49.8, 49.10, 49.11 |
-| `SliderParts` | `{ readonly id: string; readonly root: Record<string, unknown>; readonly track: Record<string, unknown>; readonly fill: Record<string, unknown>; end(which: 0 \| 1): SliderEnd; readonly value: Reactive<readonly [number, number]> }` | The group's part, the track's, the span's, an end's parts, and the range picked. | 32.11, 51.90, 49.3, 49.8, 49.9 |
-| `SliderEnd` | `{ readonly thumb: Record<string, unknown>; readonly input: Record<string, unknown> }` | An end's thumb, and the hidden field submitting it. | 51.90, 51.91, 49.3 |
+| `slider` | `<Range extends boolean = false>(options: SliderOptions<Range>) => SliderParts<Range>` | WAI-ARIA's slider as parts an app spreads onto elements of its own, picking one value or, given `range`, a low and a high one: a root, a track, the span the value covers, and a thumb and a field per value. | 51.85, 51.86, 51.87, 51.88, 51.89, 51.90, 51.91, 51.184, 49.7, 49.2, 49.4, 49.5, 49.6 |
+| `SliderOptions` | `SliderOptions<Range extends boolean = false> = { id?: string; range?: Range; value?: Reactive<SliderValue<Range>>; label: string \| (() => string); min?: number \| (() => number); max?: number \| (() => number); step?: number \| (() => number); labels?: readonly [string, string] \| (() => readonly [string, string]); format?: (value: number) => string; name?: string \| (() => string \| undefined) }` | Whether it picks a range, the value or range picked, and the scale it is picked on. | 51.85, 51.86, 51.91, 51.184, 49.8, 49.10, 49.11 |
+| `SliderParts` | `SliderParts<Range extends boolean = false> = { readonly id: string; readonly root: Record<string, unknown>; readonly track: Record<string, unknown>; readonly fill: Record<string, unknown>; readonly value: Reactive<SliderValue<Range>> } & (Range extends true ? { end(which: 0 \| 1): SliderEnd } : SliderEnd)` | The root's part, the track's, the span's, the thumb's and field's — or, for a range, an end's — and the value picked. | 32.11, 51.90, 51.184, 49.3, 49.8, 49.9 |
+| `SliderEnd` | `{ readonly thumb: Record<string, unknown>; readonly input: Record<string, unknown> }` | A thumb's part, and the hidden field submitting its value. | 51.90, 51.91, 49.3 |
+| `SliderValue` | `SliderValue<Range extends boolean> = Range extends true ? readonly [low: number, high: number] : number` | What a slider picks: a range's low and high end where it picks a range, else one value. | 51.184 |
 
 ## `listbox`
 

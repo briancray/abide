@@ -18,7 +18,7 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/headless/tooltip', '/headless/popover', '/behaviors/hotkeys']}
+    seeAlso={['/headless/toolbar', '/headless/popover', '/behaviors/hotkeys']}
     tests={[
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/DealActions.test.ts',
@@ -98,7 +98,8 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
             <code>openOnHover</code> opens one when a mouse rests on its trigger, and
             <code>closeOnLeave</code> closes a menu a pointer opened once the pointer has left it.
             A menu a key opened stays open. The menu switched to carries <code>data-from</code>,
-            the side the last one stood on, so it can slide in from there.</p>
+            the side the last one stood on, so it can slide in from there. For an app's menubar,
+            whose buttons share one tab stop, see <code>toolbar</code>.</p>
         <p>For a site's navigation links, a disclosure — a <code>popover</code> opened by a
             button — reads better to a screen reader than a menu, which announces commands.</p>
         <Example code={headerMenus}><HeaderMenus /></Example>

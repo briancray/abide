@@ -15,6 +15,7 @@ const shown = memo(() =>
     ),
 )
 const probability = slider({
+    range: true,
     value: likely,
     label: 'Win probability',
     step: 5,

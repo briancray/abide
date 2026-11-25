@@ -65,6 +65,8 @@ import {
     type TimeAt,
     type TimeParts,
     toggleGroup,
+    type Toolbar,
+    toolbar,
     type Tree,
     tree,
     type TreeNode,
@@ -136,7 +138,6 @@ test('every part is a member, a function of its item, or an action — 49.9', ()
     shaped<Listbox<string>>()
     shaped<Tree<string>>()
     shaped<TreeNode>()
-    shaped<SliderParts>()
     shaped<SliderEnd>()
     shaped<CommandPaletteParts>()
     shaped<CommandParts>()
@@ -163,6 +164,9 @@ test('every part is a member, a function of its item, or an action — 49.9', ()
     shaped<VirtualList<number>>()
     shaped<Sections<string>>()
     shaped<Carousel<string>>()
+    shaped<Toolbar>()
+    shaped<SliderParts>()
+    shaped<SliderParts<true>>()
     expect(true).toBe(true)
 })
 
@@ -171,7 +175,7 @@ function elementParts(): Record<string, unknown> {
     const view = tabs({ items: ['a'] })
     const opener = menu()
     const nodes = tree<string>({ roots: ['a'], children: () => undefined })
-    const thumbs = slider({ label: 'Amount' })
+    const thumbs = slider({ label: 'Amount', range: true })
     const palette = commandPalette({ commands: [COMMAND] })
     const box = combobox({ options: () => ['a'], multiple: true })
     const table = sortableTable({
@@ -228,6 +232,10 @@ function elementParts(): Record<string, unknown> {
         'slider.fill': thumbs.fill,
         'slider.end.thumb': thumbs.end(0).thumb,
         'slider.end.input': thumbs.end(0).input,
+        'slider.thumb': slider({ label: 'Amount' }).thumb,
+        'toolbar.toolbar': toolbar().toolbar,
+        'toolbar.item': toolbar().item,
+        'toolbar.menubar': toolbar({ role: 'menubar' }).toolbar,
         'commandPalette.dialog': palette.dialog,
         'commandPalette.input': palette.input,
         'commandPalette.listbox': palette.listbox,
@@ -347,7 +355,7 @@ test('every option an app binds is optional and handed back, and every id is mad
     const view = tabs({ items: ['a', 'b'] })
     const opener = menu()
     const nodes = tree<string>({ roots: ['a'], children: () => undefined })
-    const thumbs = slider({ label: 'Amount', min: 10, max: 40 })
+    const thumbs = slider({ label: 'Amount', range: true, min: 10, max: 40 })
     const palette = commandPalette({ commands: [COMMAND] })
     const box = combobox({ options: () => ['a', 'b'] })
     const table = sortableTable({
@@ -407,6 +415,7 @@ test('options handed as accessors are read as they are used — 33.5, 49.11', ()
     let keyOf = (item: string) => item
     const thumbs = slider({
         label: 'Amount',
+        range: true,
         get labels() {
             return labels
         },
@@ -483,6 +492,7 @@ test('an option answering undefined takes its default, as one left out does — 
     const unset = (): undefined => undefined
     const thumbs = slider({
         label: 'Amount',
+        range: true,
         labels: unset as never,
         min: unset as never,
         max: unset as never,

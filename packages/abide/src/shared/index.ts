@@ -206,6 +206,7 @@ export {
     type SliderEnd,
     type SliderOptions,
     type SliderParts,
+    type SliderValue,
     slider,
 } from './slider.ts'
 export { refuse } from './refuse.ts'
@@ -283,6 +284,7 @@ export {
     type ToggleGroupOptions,
     toggleGroup,
 } from './toggleGroup.ts'
+export { type Toolbar, type ToolbarOptions, toolbar } from './toolbar.ts'
 export { type Tree, type TreeNode, type TreeOptions, tree } from './tree.ts'
 // 51.157-51.165 — a JSON value to search and inspect, as `tree`'s parts and a search field.
 export {

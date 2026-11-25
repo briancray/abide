@@ -2,7 +2,7 @@
 import { reactive, slider } from '@abide/abide'
 
 let band = reactive<readonly [number, number]>([20, 80])
-const price = slider({ value: band, label: 'Price' })
+const price = slider({ range: true, value: band, label: 'Price' })
 </script>
 
 <div class="slider" {...price.root}>

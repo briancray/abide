@@ -10,6 +10,7 @@ const DEALS = [
 
 let amount = reactive<readonly [number, number]>([0, 50_000])
 const band = slider({
+    range: true,
     value: amount,
     label: 'Deal amount',
     max: 50_000,

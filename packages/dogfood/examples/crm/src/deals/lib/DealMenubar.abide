@@ -1,0 +1,40 @@
+<script>
+import { menu, reactive, toolbar } from '@abide/abide'
+
+import { STAGES } from '#src/pipeline/lib/STAGES.ts'
+
+let stage = reactive('proposal')
+let view = reactive('board')
+const bar = toolbar({ role: 'menubar', label: 'Deal' })
+// The menubar's id is the group its menus switch within.
+const stages = menu({ group: bar.id })
+const views = menu({ group: bar.id })
+</script>
+
+<nav {...bar.toolbar} class="row">
+    <button type="button" {...stages.trigger} {...bar.item}>Stage</button>
+    <button type="button" {...views.trigger} {...bar.item}>View</button>
+</nav>
+<div
+    {...stages.menu}
+    class="m-0 flex-col gap-hair rounded-lg border border-rule bg-raised
+    p-tight open:flex"
+>
+    {#for next of STAGES}
+        <button role="menuitem" onclick={() => (stage = next)}>{next}</button>
+    {/for}
+</div>
+<div
+    {...views.menu}
+    class="m-0 flex-col gap-hair rounded-lg border border-rule bg-raised
+    p-tight open:flex"
+>
+    {#for shown of ['board', 'list']}
+        <button
+            role="menuitemradio"
+            aria-checked={view === shown ? 'true' : 'false'}
+            onclick={() => (view = shown)}
+        >{shown}</button>
+    {/for}
+</div>
+<p class="status">{stage} on the {view}</p>

@@ -392,6 +392,14 @@ const WRITTEN: readonly {
                 subgroup: 'Overlays',
             },
             {
+                route: '/headless/toolbar',
+                title: '`toolbar`',
+                description:
+                    'Gather controls, or the menus of a menubar, behind one tab stop the arrow keys move along.',
+                where: 'component',
+                subgroup: 'Overlays',
+            },
+            {
                 route: '/headless/popover',
                 title: '`popover`',
                 description:
@@ -499,7 +507,7 @@ const WRITTEN: readonly {
                 route: '/headless/slider',
                 title: '`slider`',
                 description:
-                    'Spread a two-thumb range onto markup: the group, the track, the span and each thumb.',
+                    'Spread a slider onto markup, picking one value or a range between two thumbs.',
                 where: 'component',
                 subgroup: 'Inputs',
             },
