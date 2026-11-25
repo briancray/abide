@@ -20,9 +20,7 @@ import newDeal from './lib/NewDeal.abide' with { type: 'text' }
         },
         {
             path: 'packages/abide/tests/stepper.test.ts',
-            from: [
-                'test("a wizard\'s progress is a meter of the step on among its steps',
-            ],
+            from: ['test("a wizard\'s meter is of the step on among its steps'],
         },
     ]}
 >
@@ -30,7 +28,7 @@ import newDeal from './lib/NewDeal.abide' with { type: 'text' }
         <p>Spread <code>step(step)</code> on each step's marker: the one on carries
             <code>aria-current="step"</code>, and those before it <code>data-done</code>, a click
             going back to it. <code>next</code> waits on <code>valid</code> for the step on, and
-            <code>progress</code> is a <code>meter</code> of how far it has come.</p>
+            <code>meter</code> is a <code>meter</code>'s parts, of how far it has come.</p>
         <Example code={newDeal}><NewDeal /></Example>
     </Section>
 

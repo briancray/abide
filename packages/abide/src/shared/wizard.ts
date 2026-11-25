@@ -27,8 +27,8 @@ export type Wizard<Step> = {
     readonly next: Record<string, unknown>
     /** The button going back to the step before, disabled on the first. */
     readonly previous: Record<string, unknown>
-    /** How far it has come: a `meter` of the step on among the steps. */
-    readonly progress: Meter
+    /** How far it has come: a `meter`'s parts, of the step on among the steps (49.18). */
+    readonly meter: Meter
     /** The key of the step on, the first where none is; written, it goes there. */
     readonly current: Reactive<string | undefined>
     /** Whether the step on is the last. */
@@ -120,7 +120,7 @@ export function wizard<Step>(options: WizardOptions<Step>): Wizard<Step> {
             },
         },
         // 51.144
-        progress: meter({
+        meter: meter({
             value: () => at() + 1,
             min: 0,
             max: () => steps().length,

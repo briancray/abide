@@ -126,13 +126,13 @@ test('a wizard goes on only where its step is valid, and back to any step done �
 })
 
 // THE REVERT: count the steps done as the meter's value, and the first step reads as none of the way.
-test("a wizard's progress is a meter of the step on among its steps — 51.144", () => {
+test("a wizard's meter is of the step on among its steps — 51.144", () => {
     const signup = wizard({ steps: ['account', 'plan', 'invite', 'done'] })
-    expect(signup.progress.meter['aria-valuenow']).toBe(1)
+    expect(signup.meter.meter['aria-valuenow']).toBe(1)
     signup.current.set('invite')
     flushSync()
     expect([
-        signup.progress.meter['aria-valuenow'],
-        signup.progress.fill.style,
+        signup.meter.meter['aria-valuenow'],
+        signup.meter.fill.style,
     ]).toEqual([3, 'inline-size:75%'])
 })

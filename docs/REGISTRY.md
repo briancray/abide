@@ -686,7 +686,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- | --- |
 | `wizard` | `<Step>(options: WizardOptions<Step>) => Wizard<Step>` | A task taken in steps as parts an app spreads onto markup of its own: a marker per step, a button on and back, and a `meter` of progress. | 51.141, 51.142, 51.143, 51.144, 49.2, 49.4, 49.5, 49.6, 49.15 |
 | `WizardOptions` | `<Step>{ steps: readonly Step[] \| (() => readonly Step[]); key?: (step: Step) => string; current?: Reactive<string \| undefined>; valid?: (step: Step) => boolean }` | The steps in order, how each is told apart, the key of the one on, and whether one may be left forward. | 51.141, 51.142, 49.8, 49.10, 49.16 |
-| `Wizard` | `<Step>{ step(step: Step): Record<string, unknown>; readonly next: Record<string, unknown>; readonly previous: Record<string, unknown>; readonly progress: Meter; readonly current: Reactive<string \| undefined>; get last(): boolean }` | A step's marker, the buttons on and back, the meter of progress, the step on, and whether it is the last. | 32.11, 51.141, 51.142, 51.143, 51.144, 49.3, 49.8, 49.9, 49.17 |
+| `Wizard` | `<Step>{ step(step: Step): Record<string, unknown>; readonly next: Record<string, unknown>; readonly previous: Record<string, unknown>; readonly meter: Meter; readonly current: Reactive<string \| undefined>; get last(): boolean }` | A step's marker, the buttons on and back, the meter of progress, the step on, and whether it is the last. | 32.11, 51.141, 51.142, 51.143, 51.144, 49.3, 49.8, 49.9, 49.17, 49.18 |
 
 ## `sortableList`
 

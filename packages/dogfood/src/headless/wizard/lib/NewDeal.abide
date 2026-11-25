@@ -12,8 +12,8 @@ const setup = wizard({
 <ol class="row capitalize">
     {#for step of STEPS key step}<li {...setup.step(step)}>{step}</li>{/for}
 </ol>
-<div class="h-1 rounded-full bg-rule" {...setup.progress.meter}>
-    <div class="h-full rounded-full bg-signal" {...setup.progress.fill}></div>
+<div class="h-1 rounded-full bg-rule" {...setup.meter.meter}>
+    <div class="h-full rounded-full bg-signal" {...setup.meter.fill}></div>
 </div>
 {#if setup.current() === 'name'}
     <input aria-label="Deal name" bind:value={name} />

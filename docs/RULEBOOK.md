@@ -5928,7 +5928,7 @@ disabled on the first.
 51.143 `wizard`'s `step` of the step on MUST carry `aria-current="step"`, and of each step before it
 `data-done`, a click on which MUST move to that step; a click on a step after it MUST move nowhere.
 
-51.144 `wizard`'s `progress` MUST be a `meter` whose `value` is the place of the step on among
+51.144 `wizard`'s `meter` MUST be a `meter`'s parts, whose `value` is the place of the step on among
 `steps`, counted from one, and whose `max` is how many steps there are.
 
 51.145 `sortableList`'s `sorted` MUST be `items` in the order `order` names their keys, any item
