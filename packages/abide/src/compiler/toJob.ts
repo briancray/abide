@@ -10,7 +10,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { type CodeRewrite, rewriteCode } from './rewriteCode.ts'
-import { closerOf, nesting, type Token, tokenize } from './tokenize.ts'
+import { argumentCommas, type Token, tokenize } from './tokenize.ts'
 
 /** 38.219 — `text`, a file at `path`, with each `job`'s name moved into its options and each `runNow` named `run`. */
 export function toJob(text: string, path: string): string {
@@ -50,7 +50,9 @@ function jobsMoved(code: string): string {
         if (token.text !== 'job' || member) continue
         const open = at + 1
         if (tokens[open]?.kind !== SyntaxKind.OpenParenToken) continue
-        const comma = firstComma(tokens, open)
+        // A first argument and a comma after it, or -1.
+        const first = argumentCommas(tokens, open)[0] ?? -1
+        const comma = first > open + 1 ? first : -1
         const options = tokens[comma + 1]
         if (comma === -1 || options?.kind !== SyntaxKind.OpenBraceToken)
             continue
@@ -70,17 +72,4 @@ function jobsMoved(code: string): string {
         at = comma + 1
     }
     return out + code.slice(last)
-}
-
-/** The index of the depth-0 comma ending the first argument of the call opened at `open`, or -1. */
-function firstComma(tokens: readonly Token[], open: number): number {
-    const close = closerOf(tokens, open)
-    let depth = 0
-    for (let index = open + 1; index < close; index += 1) {
-        const kind = (tokens[index] as Token).kind
-        depth += nesting(kind)
-        if (depth === 0 && kind === SyntaxKind.CommaToken)
-            return index > open + 1 ? index : -1
-    }
-    return -1
 }

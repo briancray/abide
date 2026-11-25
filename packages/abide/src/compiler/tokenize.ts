@@ -68,6 +68,22 @@ export function nesting(kind: SyntaxKind): number {
     }
 }
 
+/** The index of each comma between the arguments of the call whose `(` is at `open`, in order. */
+export function argumentCommas(
+    tokens: readonly Token[],
+    open: number,
+): number[] {
+    const close = closerOf(tokens, open)
+    const commas: number[] = []
+    let depth = 0
+    for (let index = open + 1; index < close; index += 1) {
+        const kind = (tokens[index] as Token).kind
+        depth += nesting(kind)
+        if (depth === 0 && kind === SyntaxKind.CommaToken) commas.push(index)
+    }
+    return commas
+}
+
 /** The index of the token closing the opener at `open`, or -1 where nothing closes it. */
 export function closerOf(tokens: readonly Token[], open: number): number {
     let depth = 0

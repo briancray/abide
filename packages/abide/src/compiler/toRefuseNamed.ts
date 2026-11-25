@@ -11,8 +11,8 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import { type CodeRewrite, rewriteCode } from './rewriteCode.ts'
 import {
     afterTypeArguments,
+    argumentCommas,
     closerOf,
-    nesting,
     type Token,
     tokenize,
 } from './tokenize.ts'
@@ -103,15 +103,11 @@ function argumentsOf(
     close: number,
 ): string[] {
     const args: string[] = []
-    let depth = 0
     let from = (tokens[open] as Token).end
-    for (let index = open + 1; index < close; index += 1) {
-        const token = tokens[index] as Token
-        depth += nesting(token.kind)
-        if (depth === 0 && token.kind === SyntaxKind.CommaToken) {
-            args.push(code.slice(from, token.start).trim())
-            from = token.end
-        }
+    for (const comma of argumentCommas(tokens, open)) {
+        const token = tokens[comma] as Token
+        args.push(code.slice(from, token.start).trim())
+        from = token.end
     }
     const tail = code.slice(from, (tokens[close] as Token).start).trim()
     if (tail !== '') args.push(tail)

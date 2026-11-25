@@ -13,6 +13,7 @@ import { forSeparators } from './parseAbide.ts'
 import { type CodeRewrite, rewriteCode } from './rewriteCode.ts'
 import {
     afterTypeArguments,
+    argumentCommas,
     closerOf,
     nesting,
     slotEnd,
@@ -70,7 +71,7 @@ function optionsKeyed(code: string): string {
             continue
         const open = afterTypeArguments(tokens, at + 1)
         if (tokens[open]?.kind !== SyntaxKind.OpenParenToken) continue
-        const options = secondArgument(tokens, open)
+        const options = (argumentCommas(tokens, open)[0] ?? -2) + 1
         if (tokens[options]?.kind !== SyntaxKind.OpenBraceToken) continue
         const close = closerOf(tokens, options)
         let depth = 0
@@ -122,16 +123,4 @@ function optionsKeyed(code: string): string {
         keyed = keyed.slice(0, edit.start) + edit.text + keyed.slice(edit.end)
     }
     return keyed
-}
-
-/** The index of the token opening the call's second argument at `open`'s `(`, or -1. */
-function secondArgument(tokens: readonly Token[], open: number): number {
-    const close = closerOf(tokens, open)
-    let depth = 0
-    for (let index = open + 1; index < close; index += 1) {
-        const kind = (tokens[index] as Token).kind
-        depth += nesting(kind)
-        if (depth === 0 && kind === SyntaxKind.CommaToken) return index + 1
-    }
-    return -1
 }
