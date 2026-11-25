@@ -110,7 +110,7 @@
     "packages/abide/tests/staticProof.test.ts": 421,
     "packages/abide/tests/destructuredReactive.test.ts": 405,
     "packages/abide/tests/chosenComponent.test.ts": 392,
-    "packages/abide/tests/bridgeLink.test.ts": 384,
+    "packages/bridge/tests/bridgeLink.test.ts": 384,
     "packages/abide/tests/slot.test.ts": 375,
     "packages/abide/tests/observe.test.ts": 373,
     "packages/harness/tests/gate.test.ts": 373,

@@ -35,7 +35,8 @@
         "bun": ">=1.4.4"
     },
     "devDependencies": {
-        "@abide/abide": "workspace:*"
+        "@abide/abide": "workspace:*",
+        "@abide/harness": "workspace:*"
     },
     "scripts": {
         "typecheck": "bun check"

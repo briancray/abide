@@ -3,6 +3,7 @@
 // (44.43), built into a directory of the test's own and never registered with Launch Services.
 
 import { afterAll, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs' // bun has no sync mkdtemp/rm of its own
 import { tmpdir } from 'node:os' // bun exposes no temporary directory of its own
 
 import { spawned } from '@abide/harness/gate'
@@ -12,9 +13,9 @@ import {
     allowedAs,
     allowedSites,
     forget,
-} from '../../bridge/src/allowedSites.ts'
-import { answerAt, buttonsOf, linuxQuestion } from '../../bridge/src/desktop.ts'
-import { grantOf, visitorServers } from '../../bridge/src/grant.ts'
+} from '../src/allowedSites.ts'
+import { answerAt, buttonsOf, linuxQuestion } from '../src/desktop.ts'
+import { grantOf, visitorServers } from '../src/grant.ts'
 import {
     appIn,
     checkoutHandler,
@@ -26,18 +27,17 @@ import {
     registryCommands,
     uninstall,
     withoutDefault,
-} from '../../bridge/src/install.ts'
+} from '../src/install.ts'
 import {
     bridgeArguments,
     iconOf,
     question,
     searchPath,
     unservedOf,
-} from '../../bridge/src/opened.ts'
-import { PAIRING_SCHEME } from '../../bridge/src/PAIRING_SCHEME.ts'
-import { type Pairing, pairingOf } from '../../bridge/src/pairingLink.ts'
-import { requestedLines } from '../../bridge/src/requestedLines.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+} from '../src/opened.ts'
+import { PAIRING_SCHEME } from '../src/PAIRING_SCHEME.ts'
+import { type Pairing, pairingOf } from '../src/pairingLink.ts'
+import { requestedLines } from '../src/requestedLines.ts'
 
 const PAIRING: Pairing = {
     site: 'https://crm.example/app',
@@ -420,7 +420,7 @@ test('an MCP tool is given only where granted and its server configured — 44.2
 // 44.58 — THE VISITOR'S SERVERS, BY THE NAME THEIR TOOLS CARRY: from each `--mcp-config` they passed, a
 // file or JSON written out, never naming the bridge's own `app`.
 test('the visitor’s MCP servers are read from what they passed — 44.58', async () => {
-    const directory = temporaryModule({}, `${tmpdir()}/`)
+    const directory = scratch()
     await Bun.write(
         `${directory}/sources.json`,
         JSON.stringify({ mcpServers: { 'my.calendar': { command: 'c' } } }),
@@ -457,7 +457,7 @@ test('the question names the server of each MCP tool the visitor lacks — 44.65
 // 44.62, 44.66, 44.88 — WHAT IS ALLOWED IS KEPT PER SITE AND HOLDER, grows by the tools allowed since,
 // keeps an ask for full access as answered, and is forgotten by site or whole.
 test('a site is allowed per holder, and forgotten — 44.62, 44.66, 44.88', async () => {
-    const file = `${temporaryModule({}, `${tmpdir()}/`)}/allowed.json`
+    const file = `${scratch()}/allowed.json`
     expect(await allowedSites(file)).toEqual([])
     await allowAlways(file, 'https://a.example', 'h1', ['WebSearch'])
     await allowAlways(file, 'https://a.example', 'h1', ['mcp__calendar'])
@@ -610,7 +610,19 @@ test('each button answers what it says, Don’t Allow last — 44.86', () => {
     expect(answerAt(-1000, true)).toBe('deny')
 })
 
-afterAll(removeTemporaryModules)
+const made: string[] = []
+
+/** A fresh directory under the system's temporary one, removed after the file's tests. */
+function scratch(): string {
+    const directory = mkdtempSync(`${tmpdir()}/bridge-`)
+    made.push(directory)
+    return directory
+}
+
+afterAll(() => {
+    for (const directory of made)
+        rmSync(directory, { recursive: true, force: true })
+})
 
 // 44.43 — THE APP OPENS THE SCHEME AND NOTHING SHOWS: built here, its plist claims `abide-bridge`, it
 // keeps out of the Dock, and it is signed whole after the plist was edited. THE REVERT: drop the
@@ -618,7 +630,7 @@ afterAll(removeTemporaryModules)
 test.skipIf(process.platform !== 'darwin')(
     'install builds a signed app that opens the scheme, and uninstall removes it — 44.43',
     async () => {
-        const directory = temporaryModule({}, `${tmpdir()}/`)
+        const directory = scratch()
         const settings = { ...KEPT, bun: process.execPath }
         const app = await install(settings, { directory, register: false })
         expect(app).toBe(appIn(directory))

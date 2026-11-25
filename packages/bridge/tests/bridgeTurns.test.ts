@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import { serveTurns, type TurnReport } from '../../bridge/src/serveTurns.ts'
+import { serveTurns, type TurnReport } from '../src/serveTurns.ts'
 
 // THE REVERT: with `beforeTurn` awaited outside the `try`, as a turn once had it, a readying that fails
 // reports nothing and leaves the turn registered — 0 of the 2 reports here.
