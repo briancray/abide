@@ -46,23 +46,6 @@ export function declareDefaults(body: object, defaults: Defaults): void {
     READ.set(body, defaults)
 }
 
-/**
- * Whether `fn` declares a parameter, defaulted and rest ones included.
- *
- * 11.2 — `length` counts a parameter only up to the first with a default and never a rest one, so
- * `(args = {}) => …` and `(...args) => …` read as declaring none. The text says what was written.
- */
-export function declaresParameter(fn: (...given: never[]) => unknown): boolean {
-    if (fn.length >= 1) return true
-    const text = Function.prototype.toString.call(fn)
-    const open = text.indexOf('(')
-    // `args => …` has a `length` of one, and a function with no `(` declares nothing.
-    if (open === -1) return false
-    const reader: Reader = { text, at: open + 1 }
-    space(reader)
-    return text[reader.at] !== ')'
-}
-
 /** Where a reader stands in a function's source text. */
 type Reader = { text: string; at: number }
 

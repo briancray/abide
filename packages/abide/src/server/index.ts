@@ -14,6 +14,7 @@ export * from '#shared'
 // 18.11 — one write a patch made, as a followed `GET`'s `patch` carries it.
 export type { PatchOp } from '#shared/reactive/patchLog.ts'
 export {
+    type CallAnswer,
     type Clients,
     DELETE,
     GET,
