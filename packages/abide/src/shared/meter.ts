@@ -1,7 +1,9 @@
-// 52.106-52.109 — A VALUE SHOWN WITHIN ITS RANGE: WAI-ARIA's meter, or its progress bar, as parts an
-// app spreads onto a track and a fill of its own. The fill's width is the one value written to
-// `style`, computed from the value (49.5); a progress bar with no value is indeterminate.
+// 52.106-52.109, 52.114 — A VALUE SHOWN WITHIN ITS RANGE: WAI-ARIA's meter, or its progress bar, as
+// parts an app spreads onto a track and a fill of its own. The fill's width and the track's
+// `--fraction` are the values written to `style`, computed from the value (49.5); a progress bar with
+// no value is indeterminate.
 
+import { percentOf } from './chart/index.ts'
 import { type Live, live } from './live.ts'
 
 /** The value shown, the range it falls in, and the bands that mark it low or high. */
@@ -62,6 +64,11 @@ export function meter(options: MeterOptions): Meter {
             get 'aria-valuemax'() {
                 return max()
             },
+            // 52.114 — how far along, for a mark an app places by CSS: a needle, a marker.
+            get style() {
+                const part = fraction()
+                return part === undefined ? undefined : `--fraction: ${part}`
+            },
             get 'data-indeterminate'() {
                 return value() === undefined ? '' : undefined
             },
@@ -86,7 +93,7 @@ export function meter(options: MeterOptions): Meter {
                 const part = fraction()
                 return part === undefined
                     ? undefined
-                    : `inline-size:${Math.round(part * 10_000) / 100}%`
+                    : `inline-size:${percentOf(part, 1)}%`
             },
         },
         get fraction() {

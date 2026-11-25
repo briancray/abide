@@ -60,6 +60,12 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
             ],
         },
         {
+            path: 'packages/abide/tests/chartParts.test.ts',
+            from: [
+                "test('a placed mark carries where it stands as percentages of the box'",
+            ],
+        },
+        {
             path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
             from: [
                 "test('every month won is marked by a dot of its own, on the line'",

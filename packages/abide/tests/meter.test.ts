@@ -42,3 +42,13 @@ test('a meter says whether its value is low, high or between — 52.109', () => 
     ])
     expect(meter({ value: 0.5 }).meter['data-level']).toBeUndefined()
 })
+
+// THE REVERT: write `--fraction` from the value alone, ignoring `min` — a quota of 30 from 20 to 40
+// reads 30 where 0.5 is due.
+test('a meter carries how far along its range it is as --fraction — 52.114', () => {
+    expect(meter({ value: 30, min: 20, max: 40 }).meter.style).toBe(
+        '--fraction: 0.5',
+    )
+    expect(meter({ value: 2, max: 1 }).meter.style).toBe('--fraction: 1')
+    expect(meter({ value: undefined }).meter.style).toBeUndefined()
+})

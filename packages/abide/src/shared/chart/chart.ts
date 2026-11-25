@@ -1,4 +1,4 @@
-// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71 — A CHART AS PARTS: series over
+// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71, 52.113 — A CHART AS PARTS: series over
 // one pair of axes, handed back as the geometry each mark is drawn at and as parts an app spreads onto
 // SVG elements of its own — `{#for point of plot.points()}<circle {...point.circle} r="3" />` — with the
 // `<svg>`'s part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
@@ -20,6 +20,7 @@ import { scrub } from '../scrub.ts'
 import {
     nearest,
     path,
+    percentOf,
     scale,
     type Series,
     stack as stackSeries,
@@ -333,7 +334,15 @@ export function chart(options: ChartOptions): ChartParts {
                 ys.push(y)
                 if (y !== undefined)
                     points.push(
-                        pointOf(at, index, value as number, xs[index] ?? 0, y),
+                        pointOf(
+                            at,
+                            index,
+                            value as number,
+                            xs[index] ?? 0,
+                            y,
+                            width,
+                            height,
+                        ),
                     )
             }
             ysOf.push(ys)
@@ -375,6 +384,8 @@ export function chart(options: ChartOptions): ChartParts {
                             Math.min(top, from),
                             bandWidth,
                             Math.abs(from - top),
+                            width,
+                            height,
                         ),
                     )
                 }
@@ -422,6 +433,7 @@ export function chart(options: ChartOptions): ChartParts {
                     y2: y,
                     stroke: 'currentColor',
                     'stroke-opacity': '0.2',
+                    style: `--y: ${percentOf(y, height)}%`,
                 },
                 text: {
                     'data-chart': 'tick',
@@ -430,6 +442,7 @@ export function chart(options: ChartOptions): ChartParts {
                     y,
                     'dominant-baseline': 'middle',
                     fill: 'currentColor',
+                    style: `--x: 0%; --y: ${percentOf(y, height)}%`,
                 },
             })
         }
@@ -460,6 +473,7 @@ export function chart(options: ChartOptions): ChartParts {
                                 : 'middle',
                     'dominant-baseline': 'hanging',
                     fill: 'currentColor',
+                    style: `--x: ${percentOf(x, width)}%; --y: ${percentOf(bottom + 6, height)}%`,
                 },
             })
         }
@@ -475,6 +489,8 @@ export function chart(options: ChartOptions): ChartParts {
             yTicks: yTickList,
             xTicks: xTickList,
             frame: { left, top: TOP, right: width, bottom },
+            width,
+            height,
             toX,
             toY,
             zero: zero
@@ -487,6 +503,7 @@ export function chart(options: ChartOptions): ChartParts {
                           y1: zeroY,
                           y2: zeroY,
                           stroke: 'currentColor',
+                          style: `--y: ${percentOf(zeroY, height)}%`,
                       },
                   }
                 : undefined,
@@ -499,6 +516,8 @@ export function chart(options: ChartOptions): ChartParts {
         value: number,
         x: number,
         y: number,
+        boxWidth: number,
+        boxHeight: number,
     ): ChartPoint {
         return {
             key: `${series}:${index}`,
@@ -513,6 +532,8 @@ export function chart(options: ChartOptions): ChartParts {
                 cx: x,
                 cy: y,
                 fill: 'currentColor',
+                // 52.113 — where it stands as a share of the box, for a mark placed by CSS.
+                style: `--x: ${percentOf(x, boxWidth)}%; --y: ${percentOf(y, boxHeight)}%`,
             },
         }
     }
@@ -525,6 +546,8 @@ export function chart(options: ChartOptions): ChartParts {
         y: number,
         width: number,
         height: number,
+        boxWidth: number,
+        boxHeight: number,
     ): ChartBar {
         return {
             key: `${series}:${index}`,
@@ -542,8 +565,9 @@ export function chart(options: ChartOptions): ChartParts {
                     options.disabled?.(index) === true ? '' : undefined,
                 width: '1',
                 height: '1',
-                // 52.63 — a unit rect placed and sized by a transform, which a CSS transition eases.
-                style: `transform: translate(${x}px, ${y}px) scale(${width}, ${height})`,
+                // 52.63 — a unit rect placed and sized by a transform, which a CSS transition eases, and
+                // 52.113 — its place and size as shares of the box, for a column placed by CSS.
+                style: `transform: translate(${x}px, ${y}px) scale(${width}, ${height}); --x: ${percentOf(x, boxWidth)}%; --y: ${percentOf(y, boxHeight)}%; --width: ${percentOf(width, boxWidth)}%; --height: ${percentOf(height, boxHeight)}%`,
                 fill: 'currentColor',
             },
         }
@@ -581,6 +605,7 @@ export function chart(options: ChartOptions): ChartParts {
                               cy: y,
                               r: '3',
                               fill: 'currentColor',
+                              style: `--x: ${percentOf(at, drawn.width)}%; --y: ${percentOf(y, drawn.height)}%`,
                           },
                 text: { 'data-chart': 'readout-value', 'data-series': line },
             })
@@ -764,7 +789,7 @@ export function chart(options: ChartOptions): ChartParts {
         get crosshair() {
             const read = readout()
             if (read === undefined) return undefined
-            const { frame } = plot()
+            const { frame, width } = plot()
             return {
                 index: read.index,
                 x: read.x,
@@ -775,6 +800,7 @@ export function chart(options: ChartOptions): ChartParts {
                     y1: frame.top,
                     y2: frame.bottom,
                     stroke: 'currentColor',
+                    style: `--x: ${percentOf(read.x, width)}%`,
                     'bind:element': holdLine,
                 },
             }

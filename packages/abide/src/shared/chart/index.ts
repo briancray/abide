@@ -105,6 +105,11 @@ export function present(value: number | null | undefined): number | undefined {
         : value
 }
 
+/** `part` as a percentage of `whole`, to a hundredth: `42.5`. */
+export function percentOf(part: number, whole: number): number {
+    return whole === 0 ? 0 : Math.round((part / whole) * 10_000) / 100
+}
+
 /**
  * Round values from `min` to `max`, a step of 1, 2 or 5 times a power of ten apart, about `count`
  * intervals: the first and last enclose the range, so they double as the axis's ends.

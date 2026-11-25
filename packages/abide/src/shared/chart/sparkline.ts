@@ -1,10 +1,10 @@
-// 52.29-52.31, 52.33, 52.34 — A TREND WITH NO AXES, AS PARTS: drawn in units of its own that stretch to
+// 52.29-52.31, 52.33, 52.34, 52.113 — A TREND WITH NO AXES, AS PARTS: drawn in units of its own that stretch to
 // whatever box the caller gives the `<svg>`, with strokes that do not scale so the line and the end dot
 // keep their own width.
 
 import { type Live, live } from '../live.ts'
 import { memo } from '../reactive/index.ts'
-import { path, present, scale } from './index.ts'
+import { path, percentOf, present, scale } from './index.ts'
 
 /** What `sparkline` draws. A value is read live where a function is given. */
 export type SparklineOptions = {
@@ -96,6 +96,11 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             line: path(xs, ys, { curve }),
             area: path(xs, ys, { baseline: SIZE, curve }),
             end: last === undefined ? '' : `M${x(lastIndex)},${y(last)}Z`,
+            // 52.113 — the drawing's units are already hundredths of the box.
+            endAt:
+                last === undefined
+                    ? undefined
+                    : `--x: ${percentOf(x(lastIndex), SIZE)}%; --y: ${percentOf(y(last), SIZE)}%`,
             trend:
                 first === undefined || last === undefined || last === first
                     ? ('flat' as const)
@@ -151,6 +156,9 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             'data-sparkline': 'dot',
             get d() {
                 return drawing().end
+            },
+            get style() {
+                return drawing().endAt
             },
             fill: 'none',
             stroke: 'currentColor',

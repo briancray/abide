@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import CountBars from './lib/CountBars.abide'
 import countBars from './lib/CountBars.abide' with { type: 'text' }
+import EndDot from './lib/EndDot.abide'
+import endDot from './lib/EndDot.abide' with { type: 'text' }
 import FilledTrend from './lib/FilledTrend.abide'
 import filledTrend from './lib/FilledTrend.abide' with { type: 'text' }
 import LastValue from './lib/LastValue.abide'
@@ -30,6 +32,12 @@ import trendColors from './lib/TrendColors.abide' with { type: 'text' }
                 'test("a rep\'s deals closed draw as bars up from zero, as long as the count"',
             ],
         },
+        {
+            path: 'packages/abide/tests/chartParts.test.ts',
+            from: [
+                "test('a placed mark carries where it stands as percentages of the box'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Show each rep's trend in a table cell">
@@ -43,6 +51,13 @@ import trendColors from './lib/TrendColors.abide' with { type: 'text' }
         <p><code>sparkline</code> hands back the line as a part and the trend as a word, so the
             markup around the drawing is yours.</p>
         <Example code={lastValue}><LastValue /></Example>
+    </Section>
+
+    <Section level={3} title="Keep the end dot round on a stretched trend">
+        <p><code>dot</code> carries where the last value stands as <code>--x</code> and
+            <code>--y</code>, percentages of the box, so a <code>span</code> placed by them stays
+            round however the <code>svg</code> is stretched.</p>
+        <Example code={endDot}><EndDot /></Example>
     </Section>
 
     <Section level={3} title="Color a trend green going up and red going down">

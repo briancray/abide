@@ -6336,6 +6336,14 @@ each word of `query` — stretches that overlap or touch carrying it as one run.
 own name, over the defaults each formatter keeps, and MUST NOT refuse a caller naming one bound of
 the fraction digits for the default of the other.
 
+52.113 Each part `chart` hands back for a point, a column, a tick, a gridline, the zero line or the
+crosshair, and `sparkline`'s `dot`, MUST carry in its `style` where it is drawn as `--x` and `--y`,
+and a column its size as `--width` and `--height` besides, each a percentage of the box its root
+part is drawn at, a line across the plot carrying only the one of `--x` and `--y` it is drawn at.
+
+52.114 `meter`'s `meter` part MUST carry in its `style` as `--fraction` the share of the meter
+52.108 fills, and no `style` where `value` is `undefined`.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are

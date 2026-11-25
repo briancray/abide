@@ -81,3 +81,49 @@ test('a sparkline declaring curve draws its line and its area curved — 52.105'
     curved.set(false)
     expect(String(trend.line.d)).not.toContain('C')
 })
+
+// 52.113 — EVERY PLACED MARK CARRIES ITS PLACE AS A SHARE OF THE BOX, so an element placed by
+// `left: var(--x)` stands where the SVG one does at whatever size the box is laid out.
+// THE REVERT: write the bar's vars in px of the box rather than percentages — `--x: 33.5%` reads
+// `--x: 201px`.
+test('a placed mark carries where it stands as percentages of the box', () => {
+    const plot = chart({
+        label: 'Deals',
+        series: () => [
+            { label: 'Won', values: [4, 8], kind: 'column' },
+            { label: 'Target', values: [5, 6] },
+        ],
+    })
+    const vars = (part: Record<string, unknown> | undefined) =>
+        Object.fromEntries(
+            [...String(part?.style).matchAll(/--([a-z]+): (-?[\d.]+)%/g)].map(
+                (match) => [match[1], Number(match[2])],
+            ),
+        )
+    const share = (px: number, whole: number) =>
+        Math.round((px / whole) * 10_000) / 100
+    for (const point of plot.points)
+        expect(vars(point.circle)).toEqual({
+            x: share(point.x, 600),
+            y: share(point.y, 240),
+        })
+    for (const bar of plot.bars)
+        expect(vars(bar.rect)).toEqual({
+            x: share(bar.x, 600),
+            y: share(bar.y, 240),
+            width: share(bar.width, 600),
+            height: share(bar.height, 240),
+        })
+    for (const tick of plot.yTicks) {
+        expect(vars(tick.grid)).toEqual({ y: share(tick.y, 240) })
+        expect(vars(tick.text)).toEqual({ x: 0, y: share(tick.y, 240) })
+    }
+    for (const tick of plot.xTicks)
+        expect(vars(tick.text).x).toBe(share(tick.x, 600))
+    press(plot.svg, 'ArrowRight')
+    expect(vars(plot.crosshair?.line)).toEqual({
+        x: share(plot.crosshair?.x ?? 0, 600),
+    })
+    const trend = sparkline({ values: [3, 7, 5], label: 'Won' })
+    expect(vars(trend.dot)).toEqual({ x: 100, y: 50 })
+})
