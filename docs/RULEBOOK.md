@@ -5276,8 +5276,7 @@ that component, each carrying that component's own `data-` attribute.
 stood every state of its own that the gesture making the write would have changed, MUST NOT move
 focus for that gesture, and MUST NOT call a callback it was handed for that gesture.
 
-49.20 49.19 MUST NOT hold a `dialog` closed by its element, a command `commandPalette` runs, a
-message `chat` sends, or the `save` `inlineEdit` calls (56.25).
+49.20 49.19 MUST NOT hold the `save` `inlineEdit` calls before it writes `value` (56.25).
 
 # 50. Dialogs, toasts and popovers
 
@@ -5286,7 +5285,8 @@ message `chat` sends, or the `save` `inlineEdit` calls (56.25).
 
 50.2 Every close of a `dialog`'s `<dialog>`, whatever closed it, MUST write `false` to `open` and then call
 `onclose` with the `returnValue` that close set, and `''` where it set none, save that a close
-reported after the dialog has opened again MUST leave `open` true.
+reported after the dialog has opened again MUST leave `open` true, and a close whose write `open`
+refuses MUST show the dialog again and call no `onclose` (49.19).
 
 50.3 Escape, a click on a `dialog`'s backdrop, and a click whose target is the element its `backdrop`
 part is spread on MUST close it where `dismissible` is true, and MUST NOT where it is false.
@@ -5734,7 +5734,8 @@ included; its `dialog` part MUST be `dialog`'s, opened modal by `open`, with foc
 does, its input naming the active command as its `aria-activedescendant`.
 
 51.68 `commandPalette` MUST run a command chosen by Enter or a click after turning `open` off, so
-focus is back where it stood when the palette opened before the command moves it.
+focus is back where it stood when the palette opened before the command moves it, and MUST NOT run
+it where `open` refuses turning off (49.19).
 
 51.69 `commandPalette`'s input MUST leave Escape to the dialog it is in, which shuts on it, and Home
 and End to its caret.
@@ -6863,8 +6864,9 @@ file after file in the order taken, and its `attached` MUST be every block of `d
 part does not show.
 
 53.107 `chat` MUST send `draft` — through its composer, an Enter (53.33) and `submit` alike — as a
-user message of its blocks in order, less each text block holding only whitespace, and MUST then set
-`draft` to a user message holding no block.
+user message of its blocks in order, less each text block holding only whitespace, once it has set
+`draft` to a user message holding no block, and MUST send nothing where `draft` refuses that write
+(49.19).
 
 53.108 `chat`'s `attaching` MUST be true while an `attach` call has not settled, and a send while it
 is true MUST be held, and made once every call has settled.

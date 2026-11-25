@@ -269,7 +269,8 @@ export function chat(options: ChatOptions): ChatParts {
         for (const block of blocksOf(draft.peek()))
             if (isSendable(block)) content.push(block)
         if (content.length === 0) return
-        draft.set(blank())
+        // 53.107, 49.19
+        if (draft.set(blank()) !== undefined) return
         if (streaming()) {
             queued.set([...(queued() ?? []), ...content])
             return

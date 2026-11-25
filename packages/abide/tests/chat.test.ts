@@ -1,4 +1,4 @@
-// 53.37, 53.105, 53.106 — `chat`'s attach path, its dropzone's input driven by hand.
+// 53.37, 53.105, 53.106, 53.107 — `chat`'s attach and send paths, its parts driven by hand.
 
 import { expect, test } from 'bun:test'
 
@@ -50,4 +50,42 @@ test('a file whose blocks the draft refuses leaves them unmarked as attached —
     gate.refusing = false
     draft.set({ role: 'user', content: [made] })
     expect(talk.attached).toEqual([])
+})
+
+// THE REVERT: send whatever clearing `draft` answered, and the refused send still asks — `asked`
+// reads 1 and the message is in `messages`.
+test('a send whose clearing the draft refuses sends nothing — 53.107, 49.19', async () => {
+    const gate = { refusing: false }
+    const draft = reactive<AssistantMessage>(
+        {
+            role: 'user',
+            content: [{ type: 'text', text: 'Quote for Hopper?' }],
+        },
+        {
+            schema: {
+                '~standard': {
+                    version: 1,
+                    vendor: 'test',
+                    validate: (value: unknown) =>
+                        gate.refusing
+                            ? { issues: [{ message: 'keep the draft' }] }
+                            : { value: value as AssistantMessage },
+                },
+            },
+        },
+    )
+    let asked = 0
+    const talk = chat({
+        ask: async function* () {
+            asked += 1
+        },
+        draft,
+    })
+    gate.refusing = true
+    talk.submit()
+    await Bun.sleep(0)
+    expect([asked, talk.messages.peek()?.length ?? 0]).toEqual([0, 0])
+    expect(draft.peek()?.content).toEqual([
+        { type: 'text', text: 'Quote for Hopper?' },
+    ])
 })
