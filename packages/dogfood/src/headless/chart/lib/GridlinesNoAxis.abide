@@ -1,0 +1,20 @@
+<script>
+import { chart } from '@abide/abide'
+
+const plot = chart({
+    label: 'Calls a day',
+    series: [
+        { label: 'Calls', values: [6, 9, 4, 11, 8, 2, 7], kind: 'column' },
+    ],
+    yTicks: 3,
+})
+</script>
+
+<svg {...plot.root} class="h-24 w-full">
+    {#for tick of plot.yTicks}
+        <line {...tick.grid} stroke-dasharray="2 3" />
+    {/for}
+    {#for bar of plot.bars key bar.key}
+        <rect {...bar.rect} />
+    {/for}
+</svg>

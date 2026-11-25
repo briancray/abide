@@ -18,6 +18,8 @@ import FillTheBox from './lib/FillTheBox.abide'
 import fillTheBox from './lib/FillTheBox.abide' with { type: 'text' }
 import FixedAxis from './lib/FixedAxis.abide'
 import fixedAxis from './lib/FixedAxis.abide' with { type: 'text' }
+import GridlinesNoAxis from './lib/GridlinesNoAxis.abide'
+import gridlinesNoAxis from './lib/GridlinesNoAxis.abide' with { type: 'text' }
 import GroupedStacks from './lib/GroupedStacks.abide'
 import groupedStacks from './lib/GroupedStacks.abide' with { type: 'text' }
 import HideSeries from './lib/HideSeries.abide'
@@ -164,6 +166,10 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
             from: ["test('a click opens its month, and November takes no pick'"],
         },
         {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/CallsByDay.test.ts',
+            from: ["test('gridlines with no axis keep no room for labels'"],
+        },
+        {
             path: 'packages/dogfood/examples/crm/src/reports/lib/PipelineTrend.test.ts',
             from: [
                 "test('each stage stacks on the one before it, through a month it has no value'",
@@ -234,6 +240,12 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
             to edge: the labels stand outside it, so keep room for them on the element around it
             and let the <code>svg</code> show what overflows.</p>
         <Example code={fillTheBox}><FillTheBox /></Example>
+    </Section>
+
+    <Section level={3} title="Draw gridlines with no axis">
+        <p>Spread the gridlines and leave the labels out. The plot is the whole box, so the
+            columns run edge to edge with no room kept for an axis that is not there.</p>
+        <Example code={gridlinesNoAxis}><GridlinesNoAxis /></Example>
     </Section>
 
     <Section level={3} title="Draw the columns as HTML elements">

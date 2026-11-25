@@ -1,0 +1,39 @@
+<script>
+import { chart, format } from '@abide/abide'
+
+const DAYS = Array.from({ length: 14 }, (_, day) => Date.UTC(2026, 9, 5 + day))
+const CALLS = [6, 9, 4, 11, 8, 2, 1, 7, 12, 10, 9, 3, 2, 8]
+
+// Gridlines and no axis: the bars fill the chart edge to edge, and the readout says what a bar is.
+const plot = chart({
+    label: 'Calls a day, the last two weeks',
+    series: [{ label: 'Calls', values: CALLS, kind: 'column' }],
+    x: DAYS,
+    xFormat: (day) => format.date(day, { style: 'monthDay' }),
+    yTicks: 3,
+})
+</script>
+
+<svg {...plot.root} class="block h-24 w-full text-muted">
+    {#for tick of plot.yTicks}
+        <line {...tick.grid} stroke-dasharray="2 3" />
+    {/for}
+    {#for bar of plot.bars key bar.key}
+        <rect {...bar.rect} class="text-signal" />
+    {/for}
+    {#if plot.readout}
+        <line {...plot.crosshair?.line} />
+    {/if}
+</svg>
+{#if plot.readout}
+    <span
+        {...plot.tip}
+        class="m-0 grid w-max gap-0.5 rounded-md border border-rule bg-raised px-3 py-2
+        text-chrome text-ink shadow-sm"
+    >
+        <span {...plot.readout?.heading} class="text-muted">{plot.readout?.label}</span>
+        {#for point of plot.readout?.values ?? []}
+            <span {...point.text}>{point.label}: {point.value}</span>
+        {/for}
+    </span>
+{/if}
