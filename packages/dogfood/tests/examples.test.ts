@@ -15,8 +15,8 @@ const CRM = `${DOGFOOD}examples/crm`
 test.concurrent(
     'the CRM passes its own tests',
     async () => {
-        // Its `test` script, which isolates each file: the CRM's data lives in memory, and a file that
-        // won a lead must not leave the next one a lead short.
+        // Its `test` script, which runs the files in parallel and isolates each one: the CRM's data
+        // lives in memory, and a file that won a lead must not leave the next one a lead short.
         const tested = await spawned(['bun', 'run', 'test'], {
             cwd: CRM,
             deadline: 110_000,

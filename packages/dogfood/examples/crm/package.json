@@ -10,7 +10,7 @@
         "build": "abide build",
         "start": "abide start",
         "routes": "abide routes",
-        "test": "bun test --isolate",
+        "test": "bun test --isolate --parallel",
         "bench": "harness-bench"
     },
     "imports": {
