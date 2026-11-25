@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import ArchiveDeal from './lib/ArchiveDeal.abide'
 import archiveDeal from './lib/ArchiveDeal.abide' with { type: 'text' }
+import ContractPreview from './lib/ContractPreview.abide'
+import contractPreview from './lib/ContractPreview.abide' with { type: 'text' }
 import DealDrawer from './lib/DealDrawer.abide'
 import dealDrawer from './lib/DealDrawer.abide' with { type: 'text' }
 import StyledDialog from './lib/StyledDialog.abide'
@@ -34,6 +36,12 @@ import styledDialog from './lib/StyledDialog.abide' with { type: 'text' }
             ],
         },
         {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/ContractPreview.test.ts',
+            from: [
+                "test('a click beside the contract closes the preview, and a click on it does not'",
+            ],
+        },
+        {
             path: 'packages/dogfood/examples/crm/src/deals/lib/DealDrawer.test.ts',
             from: [
                 'test("a deal\'s details open in a modal drawer, and Close shuts it"',
@@ -54,6 +62,13 @@ import styledDialog from './lib/StyledDialog.abide' with { type: 'text' }
             <code>backdrop:</code> variant reaches the veil, and <code>data-open</code> is present
             while it shows.</p>
         <Example code={styledDialog}><StyledDialog /></Example>
+    </Section>
+
+    <Section level={3} title="Close a full-screen dialog by a click beside its content">
+        <p>A dialog that fills the screen has no backdrop outside its box to click. Spread
+            <code>backdrop</code> on the element that stands for one: a click on that element,
+            and not on what it holds, closes the dialog where it is dismissible.</p>
+        <Example code={contractPreview}><ContractPreview /></Example>
     </Section>
 
     <Section level={3} title="Slide a deal's details in from the side">

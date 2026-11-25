@@ -24,6 +24,7 @@ import grabberDragged from './lib/GrabberDragged.abide' with { type: 'text' }
             path: 'packages/abide/tests/drawer.test.ts',
             from: [
                 "test('a drawer opens as its dialog does",
+                "test(\"a drawer's backdrop is its dialog's",
                 "test('a drawer with stops let go settles at the nearest stop",
                 "test('a drawer with no stops let go rests where it was dropped",
             ],

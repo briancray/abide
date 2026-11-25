@@ -1,0 +1,20 @@
+<script>
+import { dialog } from '@abide/abide'
+
+// The dialog fills the screen, so a click beside the contract lands on the backdrop part.
+const preview = dialog()
+</script>
+
+<button onclick={() => (preview.open = true)}>Preview the contract</button>
+<dialog
+    {...preview.dialog}
+    aria-label="Contract preview"
+    class="m-0 h-dvh max-h-none w-dvw max-w-none bg-transparent p-0"
+>
+    <div {...preview.backdrop} class="grid h-full place-items-center bg-ink/40">
+        <article class="w-96 rounded-xl bg-raised p-5 text-ink">
+            <h2>Hopper &amp; Co renewal</h2>
+            <p>Twelve months of engine support, billed quarterly.</p>
+        </article>
+    </div>
+</dialog>

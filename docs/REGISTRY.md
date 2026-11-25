@@ -487,7 +487,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `dialog` | `(options?: DialogOptions) => DialogParts` | A native modal as a part an app spreads onto a `<dialog>` of its own, opened and closed by `open`. | 50.1, 50.2, 50.3, 50.4, 49.2, 49.4, 49.5, 49.6 |
 | `DialogOptions` | `{ open?: Reactive<boolean>; modal?: boolean \| (() => boolean); dismissible?: boolean \| (() => boolean); onclose?: (returnValue: string) => void }` | Whether the dialog shows, and how it opens and closes. | 50.1, 50.2, 50.3 |
-| `DialogParts` | `{ readonly dialog: Record<string, unknown>; readonly open: Reactive<boolean> }` | The `<dialog>`'s part, and whether it is showing. | 32.11, 32.99, 49.3, 49.8, 49.9 |
+| `DialogParts` | `{ readonly dialog: Record<string, unknown>; readonly backdrop: Record<string, unknown>; readonly open: Reactive<boolean> }` | The `<dialog>`'s part, the part for an element inside it standing for its backdrop, and whether it is showing. | 32.11, 32.99, 50.3, 49.3, 49.8, 49.9 |
 
 ## `prompts`
 
@@ -553,7 +553,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `drawer` | `(options?: DrawerOptions) => Drawer` | A `dialog` standing on an edge of the page, sized from a `resizable`'s handle on its inner edge and settling at its stops, as parts an app spreads onto a `<dialog>` and a handle of its own. | 50.61, 50.62, 50.63, 50.64, 49.2, 49.4, 49.5, 49.6 |
 | `DrawerOptions` | `DialogOptions & { side?: 'start' \| 'end' \| 'top' \| 'bottom'; size?: Reactive<number \| undefined>; min?: number \| (() => number); max?: number \| (() => number); label?: string \| (() => string); stops?: readonly number[] \| (() => readonly number[]) }` | How it opens, the edge it stands on, its size and the bounds of it, the handle's accessible name, and the sizes it settles at as shares of the viewport's. | 50.61, 50.62, 50.63, 50.64, 49.8, 49.10, 49.11 |
-| `Drawer` | `{ readonly drawer: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly open: Reactive<boolean>; readonly size: Reactive<number \| undefined> }` | The dialog's part, the handle's, whether it is showing, and its size. | 32.11, 50.61, 50.62, 49.3, 49.8, 49.9 |
+| `Drawer` | `{ readonly drawer: Record<string, unknown>; readonly backdrop: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly open: Reactive<boolean>; readonly size: Reactive<number \| undefined> }` | The dialog's part, its backdrop's, the handle's, whether it is showing, and its size. | 32.11, 50.61, 50.62, 49.3, 49.8, 49.9 |
 
 ## `lightbox`
 
@@ -561,7 +561,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | --- | --- | --- | --- |
 | `lightbox` | `<Item>(options: LightboxOptions<Item>) => Lightbox<Item>` | A `carousel` in a `dialog`, its arrow keys bound with `hotkeys` to the carousel's own buttons, as parts an app spreads onto a `<dialog>` and the carousel's markup of its own. | 50.65, 50.66, 50.67, 49.2, 49.4, 49.5, 49.6 |
 | `LightboxOptions` | `<Item>CarouselOptions<Item> & { open?: Reactive<boolean> }` | The carousel's options, and whether it is showing. | 50.65, 49.8 |
-| `Lightbox` | `<Item>Carousel<Item> & { readonly dialog: Record<string, unknown>; readonly open: Reactive<boolean>; show(key: string): void }` | The carousel's parts, the dialog's, whether it is showing, and what opens it on an item. | 32.11, 50.65, 50.67, 49.3, 49.8, 49.9 |
+| `Lightbox` | `<Item>Carousel<Item> & { readonly dialog: Record<string, unknown>; readonly backdrop: Record<string, unknown>; readonly open: Reactive<boolean>; show(key: string): void }` | The carousel's parts, the dialog's, its backdrop's, whether it is showing, and what opens it on an item. | 32.11, 50.65, 50.67, 49.3, 49.8, 49.9 |
 
 ## `commandPalette`
 

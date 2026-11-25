@@ -40,3 +40,26 @@ test('the arrow keys step it as its carousel buttons do, stopping at the ends â€
     key(viewer, 'ArrowLeft')
     expect(viewer.current).toBe('side')
 })
+
+// THE REVERT: leave `backdrop` off the lightbox's parts, and a viewer filling the screen has nothing
+// around its picture a click closes it by.
+test("its backdrop is its dialog's: a click on it closes the lightbox, a click inside it does not â€” 50.65, 50.3", () => {
+    const viewer = lightbox({ items: PHOTOS })
+    viewer.show('front')
+    flushSync()
+    const veil = document.createElement('div')
+    const photo = document.createElement('img')
+    veil.append(photo)
+    const click = viewer.backdrop.onclick as (event: Event) => void
+    const clickOn = (target: Element) =>
+        click({ target, currentTarget: veil } as unknown as Event)
+    clickOn(photo)
+    flushSync()
+    expect(viewer.open()).toBe(true)
+    clickOn(veil)
+    flushSync()
+    expect([viewer.open(), viewer.backdrop['data-lightbox']]).toEqual([
+        false,
+        'backdrop',
+    ])
+})

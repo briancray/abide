@@ -1,6 +1,7 @@
 <script>
 import AmountFilter from './lib/AmountFilter.abide'
 import ArchiveDeal from './lib/ArchiveDeal.abide'
+import ContractPreview from './lib/ContractPreview.abide'
 import DealActions from './lib/DealActions.abide'
 import DealCommands from './lib/DealCommands.abide'
 import DealDetail from './lib/DealDetail.abide'
@@ -37,4 +38,5 @@ import SignContract from './lib/SignContract.abide'
     <DeleteDeal />
     <ArchiveDeal />
     <SignContract />
+    <ContractPreview />
 </main>

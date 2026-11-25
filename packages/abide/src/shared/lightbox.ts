@@ -18,6 +18,8 @@ export type LightboxOptions<Item> = CarouselOptions<Item> & {
 export type Lightbox<Item> = Carousel<Item> & {
     /** The `<dialog>`'s part: `dialog`'s, with the arrow keys stepping the carousel. */
     readonly dialog: Record<string, unknown>
+    /** An element inside the `<dialog>` standing for its backdrop: `dialog`'s. */
+    readonly backdrop: Record<string, unknown>
     /** Whether it is showing — the `open` it was handed, or one of its own. */
     readonly open: Reactive<boolean>
     /** Opens it resting on the item `key` names. */
@@ -42,6 +44,9 @@ export function lightbox<Item>(options: LightboxOptions<Item>): Lightbox<Item> {
         dialog: withPart(withPart({}, shown.dialog), {
             'data-lightbox': 'dialog',
             onkeydown: keys,
+        }),
+        backdrop: withPart(withPart({}, shown.backdrop), {
+            'data-lightbox': 'backdrop',
         }),
         open: shown.open,
         // 50.67

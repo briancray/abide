@@ -5224,8 +5224,8 @@ a function of the item (49.9), not of its key.
 `onclose` with the `returnValue` that close set, and `''` where it set none, save that a close
 reported after the dialog has opened again MUST leave `open` true.
 
-50.3 Escape and a click on a `dialog`'s backdrop MUST close it where `dismissible` is true, and MUST
-NOT where it is false.
+50.3 Escape, a click on a `dialog`'s backdrop, and a click whose target is the element its `backdrop`
+part is spread on MUST close it where `dismissible` is true, and MUST NOT where it is false.
 
 50.4 A `dialog`'s `<dialog>` MUST focus the element inside it carrying `autofocus` as it opens.
 
@@ -5417,7 +5417,7 @@ and on a press outside it and outside its `trigger` or `anchor`, save where its 
 
 50.61 `drawer`'s `drawer` part MUST be `dialog`'s `dialog` part, given every option the drawer was,
 with a `resizable`'s `panel` part laid over it, and MUST carry `data-side` naming `side`, `end` where
-none is given.
+none is given; its `backdrop` part MUST be that `dialog`'s `backdrop` part.
 
 50.62 `drawer`'s `handle` part MUST be that `resizable`'s `handle`, sizing the drawer across `side`
 and growing it as the handle moves away from the edge `side` names.
@@ -5431,7 +5431,7 @@ that size than none.
 drag set it and `open` as it was.
 
 50.65 `lightbox`'s parts MUST be a `carousel`'s, given every option the lightbox was, beside a
-`dialog`'s `dialog` part opened and closed by `open`.
+`dialog`'s `dialog` and `backdrop` parts opened and closed by `open`.
 
 50.66 ArrowLeft and ArrowRight in `lightbox`'s `dialog` MUST do what a click on its carousel's
 `previous` and `next` does, and nothing where that button is disabled.
