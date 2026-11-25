@@ -8,15 +8,15 @@ const BY_REGION: Record<string, { week: string; total: string }[]> = {
     south: [{ week: 'week 1', total: '$2,140.00' }],
 }
 
-/** A row every 300 ms; the bound is on each row, not the whole report. */
+/** A row every 300 ms; the bound is on the first row, and a report that has begun keeps its pace. */
 export default GET(
     async function* ({ region }: { region: string }) {
+        // South takes too long to start.
+        if (region === 'south') await Bun.sleep(2_000)
         for (const row of BY_REGION[region] ?? []) {
             await Bun.sleep(300)
             yield row
         }
-        // South stops producing after its first row.
-        if (region === 'south') await Bun.sleep(2_000)
     },
     { timeout: 500, description: 'Sales for a region, a row at a time.' },
 )
