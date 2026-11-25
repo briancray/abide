@@ -1,0 +1,24 @@
+<script>
+import { memo, pages, reactive } from '@abide/abide'
+
+const DEALS = Array.from({ length: 23 }, (_, at) => `Deal ${at + 1}`)
+const PER_PAGE = 3
+const COUNT = Math.ceil(DEALS.length / PER_PAGE)
+let page = reactive(1)
+const list = pages({ count: COUNT, page })
+// Five pages around the one showing, slid in from the ends: no first, no last, no gaps.
+const nearby = memo(() => {
+    const from = Math.max(1, Math.min(page - 2, COUNT - 4))
+    return Array.from({ length: 5 }, (_, at) => from + at)
+})
+const shown = memo(() => DEALS.slice((page - 1) * PER_PAGE, page * PER_PAGE))
+</script>
+
+<ul>
+    {#for deal of shown key deal}<li>{deal}</li>{/for}
+</ul>
+<nav class="row" {...list.nav}>
+    <button {...list.previous}>Previous</button>
+    {#for at of nearby key at}<button {...list.link(at)}>{at}</button>{/for}
+    <button {...list.next}>Next</button>
+</nav>
