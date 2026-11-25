@@ -8,7 +8,7 @@
 
 import { REPORT_ADDRESS, REPORT_LINES_ADDRESS } from './ADDRESSES.ts'
 import { answered, answerOf } from './answerOf.ts'
-import { isFailed } from './Failed.ts'
+import { isFailed, traceOf } from './Failed.ts'
 import { log, type LogRecord, tsvLine } from './log.ts'
 import { mounted } from './mount.ts'
 import { randomToken } from './randomToken.ts'
@@ -136,13 +136,21 @@ export class ReportDraft {
     }
 }
 
-/** 48.1 — a draft of a problem, holding `trace` among its traces where given one. */
-export function report(options?: { trace?: string }): ReportDraft {
-    return new ReportDraft(
-        options?.trace === undefined || options.trace === ''
-            ? []
-            : [options.trace],
-    )
+/**
+ * 48.1 — a draft of a problem, holding among its traces `trace`, and the trace of the call `failure`
+ * refused, where given them.
+ */
+export function report(options?: {
+    trace?: string
+    /** A refusal a call was answered with — `error` off a value, or what a call refused with. */
+    failure?: unknown
+}): ReportDraft {
+    const traces: string[] = []
+    const given = options?.trace
+    if (given !== undefined && given !== '') traces.push(given)
+    const refused = traceOf(options?.failure)
+    if (refused !== undefined && refused !== given) traces.push(refused)
+    return new ReportDraft(traces)
 }
 
 function browserContext(): {

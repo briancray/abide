@@ -25,6 +25,12 @@ import Section from '#src/lib/Section.abide'
                 "test('a report of the failed call is listed by its browser alone'",
             ],
         },
+        {
+            path: 'packages/abide/tests/onRefusal.test.ts',
+            from: [
+                "test('a report of a refused call holds the trace its answer named",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Report the call that failed from its trace">
@@ -44,6 +50,27 @@ import Section from '#src/lib/Section.abide'
             <button disabled={failed === undefined}
                 onclick={() => report({ trace: failed }).open()}>
                 Report this</button>
+        `} />
+    </Section>
+
+    <Section level={3} title="Report a refused save from its toast">
+        <p>Pass the refusal as <code>failure</code>, and the draft holds the trace of the call it
+            answered: the server's lines for that call go with the report.</p>
+        <Code language="ts" caption="browser" code={`
+            import { report, toasts } from '@abide/abide'
+            import savePhone from './savePhone.handler.ts'
+
+            try {
+                await savePhone({ phone: '12' })
+            } catch (refused) {
+                toasts.notify((refused as Error).message, {
+                    tone: 'error',
+                    action: {
+                        label: 'Report',
+                        run: () => report({ failure: refused }).open(),
+                    },
+                })
+            }
         `} />
     </Section>
 

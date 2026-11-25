@@ -18,7 +18,10 @@ async function save() {
     } catch (refused) {
         toasts.notify((refused as Error).message, {
             tone: 'error',
-            action: { label: 'Report', run: () => report().open() },
+            action: {
+                label: 'Report',
+                run: () => report({ failure: refused }).open(),
+            },
         })
     }
 }

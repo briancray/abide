@@ -165,6 +165,21 @@ export function holdUntil(failure: object, at: number): void {
     RETRY_AT.set(failure, at)
 }
 
+/** 37.24 — the trace id the answer carrying a refusal named, kept beside it as `RETRY_AT` is. */
+const TRACES = new WeakMap<object, string>()
+
+/** The trace id the answer `failure` was rebuilt from named, where it named one — 48.1. */
+export function traceOf(failure: unknown): string | undefined {
+    return typeof failure === 'object' && failure !== null
+        ? TRACES.get(failure)
+        : undefined
+}
+
+/** Keeps `trace` as the one the answer carrying `failure` named. */
+export function tracedBy(failure: object, trace: string): void {
+    TRACES.set(failure, trace)
+}
+
 /** A `Retry-After` header's time in epoch ms — delay-seconds or an HTTP date — or `undefined`. */
 export function retryAtOf(header: string | null): number | undefined {
     if (header === null) return undefined

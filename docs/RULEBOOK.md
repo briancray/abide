@@ -5109,8 +5109,9 @@ and the rows written in one turn MUST be committed in one transaction.
 
 # 48. Problem reports
 
-48.1 `report` MUST answer a `ReportDraft` holding the trace it was given among its `traces`, and
-none where it was given none.
+48.1 `report` MUST answer a `ReportDraft` holding among its `traces` the trace it was given, and the
+trace id the `traceresponse` of the answer carrying the refusal it was given as `failure` named
+(37.24), once each, and none where it was given neither.
 
 48.2 A `ReportDraft` in a browser MUST hold the newest 200 of the page's `log.records`.
 
