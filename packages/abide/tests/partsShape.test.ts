@@ -623,6 +623,17 @@ test("a component built on another merges that one's part or hands its parts bac
             ['listbox', 'combobox'],
         ],
         [
+            'combobox.listbox',
+            combobox({ options: ['a'] }).listbox,
+            ['listbox', 'combobox'],
+        ],
+        [
+            'commandPalette.listbox',
+            commandPalette({ commands: [COMMAND] }).listbox,
+            ['listbox', 'command-palette'],
+        ],
+        ['clamp.text', clamp().text, ['disclosure', 'clamp']],
+        [
             'commandPalette.dialog',
             commandPalette({ commands: [COMMAND] }).dialog,
             ['dialog', 'command-palette'],

@@ -300,14 +300,15 @@ export function combobox<Item, Multiple extends boolean = false>(
                     offset: 4,
                 })(element),
         },
-        listbox: {
+        // 49.18 — the listbox's own part, with the id the input's `aria-controls` names.
+        listbox: withPart(withPart({}, list.listbox), {
             id: `${id}-listbox`,
-            role: 'listbox',
             'data-combobox': 'listbox',
+            // Its own listbox picks one at a time; the combobox's picks are many where it says so.
             get 'aria-multiselectable'() {
                 return many ? 'true' : undefined
             },
-        },
+        }),
         get items() {
             return found() as readonly Item[]
         },

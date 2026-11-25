@@ -192,15 +192,15 @@ export function commandPalette(
                 list.onkeydown(event)
             },
         },
-        listbox: {
+        // 49.18 — the listbox's own part, laid under the palette's.
+        listbox: withPart(withPart({}, list.listbox), {
             id: listId,
-            role: 'listbox',
             'data-command-palette': 'listbox',
             get 'aria-label'() {
                 return label()
             },
             onmousedown: (event: MouseEvent) => event.preventDefault(),
-        },
+        }),
         command: (command) => ({
             option: withPart(list.option(command), {
                 'data-command-palette': 'option',
