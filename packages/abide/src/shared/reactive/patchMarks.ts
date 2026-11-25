@@ -1,7 +1,7 @@
 // 32.33 — WHICH OBJECTS AN `s.patch` WROTE TO, AND WHEN. The epoch moves once per patch and each
 // object written holds the epoch it was last written at, so a row that took its item at epoch `e` is
-// stale exactly where its item was written since `e`. No imports, because `reconcile` and the
-// socket wire read it on the client and must not drag the core into the runtime chunk with it.
+// stale exactly where its item was written since `e`. No imports, so `reconcile`, the socket
+// wire and the server's `versionOf` read it without landing on the core.
 
 let epoch = 0
 const WRITTEN = new WeakMap<object, number>()

@@ -1,7 +1,5 @@
-// A LEAF OF ITS OWN for `isReactive`'s reason: `rowKeyOf` is on the `@abide/abide/runtime` barrel every
-// compiled client module resolves through, and reaching `Reactive.ts` from there puts the core in
-// the chunk every page loads. The cell is read here, in the core's folder, so its layout stays the
-// core's.
+// A LEAF OF ITS OWN for `isReactive`'s reason — one symbol, not the core it lives beside. The cell is
+// read here, in the core's folder, so its layout stays the core's.
 import { CELL } from './CELL.ts'
 import type { Callable } from './cellShape.ts'
 import { isReactive } from './isReactive.ts'

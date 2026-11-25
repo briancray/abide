@@ -2,12 +2,11 @@ import type { Reactive } from './Reactive.ts'
 // 1.6 — THE BRAND, READ ON ITS OWN. A `Reactive` is callable AND thenable, so every guard that
 // can meet one reads this before `typeof value === 'function'` or an `isThenable` probe.
 //
-// A LEAF OF ITS OWN BECAUSE AN IMPORT EDGE IS PRICED BY THE MODULE IT LANDS ON. This is one
-// symbol, and it was reached through `Reactive.ts` — the whole graph, the scheduler and the store
-// behind it. `bindElement` is on the `@abide/abide/runtime` barrel every compiled client module
-// resolves through, so that one edge put the core in the shared
-// chunk EVERY page loads: two entries built with `--splitting` shared 55,273 bytes through it and
-// 2,348 bytes without it. The `Reactive` import is TYPE-ONLY and erased, which is what lets the
+// A LEAF OF ITS OWN BECAUSE AN IMPORT EDGE IS PRICED BY THE MODULE IT LANDS ON: one symbol, where
+// `Reactive.ts` is the whole graph, the scheduler and the store behind it — so a module asking only
+// whether a value is one (`server/trace.ts`, the element measures) does not load the core for it. The
+// browser's runtime reaches the core anyway (`rows`, `TryRegion`, `Level`, `propCell`), so the leaf
+// buys no client bytes. The `Reactive` import is TYPE-ONLY and erased, which is what lets the
 // predicate keep its exact shape at no cost.
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 
