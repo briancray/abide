@@ -1,0 +1,133 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={[
+        '/pages/files',
+        '/data/job',
+        '/reactive/memo',
+        '/ambients/abort-signal',
+    ]}
+    tests={[
+        {
+            path: 'packages/abide/tests/workerFiles.test.ts',
+            from: ["test('each call runs in a thread started for it"],
+        },
+        {
+            path: 'packages/abide/tests/workerFiles.test.ts',
+            from: ["test('a stream runs one chunk per chunk read"],
+        },
+        {
+            path: 'packages/abide/tests/workerFiles.test.ts',
+            from: ["test('an AbortSignal argument aborts in the thread"],
+        },
+        {
+            path: 'packages/abide/tests/workerBuild.test.ts',
+            from: ["test('the browser bundle holds the worker file a page reaches"],
+        },
+    ]}
+>
+    <Section level={3} title="Score every deal without blocking the server">
+        <p>A file named <code>&lt;name&gt;.worker.ts</code> under <code>lib</code> runs its
+            exports in a thread of their own. Each export is an <code>async function</code> or an
+            <code>async function*</code>, and each call starts its own thread, which ends once the
+            call is done.</p>
+        <Code language="ts" caption="server" code={`
+            import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
+
+            export async function* scoreDeals(): AsyncGenerator<{
+                name: string
+                score: number
+            }> {
+                for (const deal of DEALS) {
+                    let score = 0
+                    for (let round = 0; round < 5_000_000; round += 1)
+                        score = (score * 31 + deal.amount + round) % 100
+                    yield { name: deal.name, score }
+                }
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="Stream deal scores out of the thread as they land">
+        <p>Importing the file gives you a function for each export, and you call it as you would
+            call the export. A generator export streams: the thread runs one chunk for each
+            chunk you read, so a slow reader never piles up unread scores.</p>
+        <Code language="ts" caption="server" code={`
+            import { log } from '@abide/abide/server'
+            import { scoreDeals } from './scoreDeals.worker.ts'
+
+            for await (const { name, score } of scoreDeals())
+                log.info(\`\${name} scored \${score}\`)
+        `} />
+    </Section>
+
+    <Section level={3} title="Stop scoring once a hot deal turns up">
+        <p>Leaving the loop early ends the export's generator, running its <code>finally</code>,
+            and the thread ends with it.</p>
+        <Code language="ts" caption="server" code={`
+            import { scoreDeals } from './scoreDeals.worker.ts'
+
+            let hottest: string | undefined
+            for await (const { name, score } of scoreDeals()) {
+                if (score < 90) continue
+                hottest = name
+                break
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="Rescore the pipeline every hour from a memo">
+        <p>An export is an async function, so anything that takes one can take it. A
+            <code>memo</code> over it keeps the last scoring for every page to read, and its poll
+            runs the next scoring in a fresh thread.</p>
+        <Code language="ts" caption="shared" code={`
+            import { memo } from '@abide/abide'
+            import { scoreDeals } from './scoreDeals.worker.ts'
+
+            export const dealScores = memo(scoreDeals, {
+                global: true,
+                poll: { every: 3_600_000, after: 'settle', delay: 60_000 },
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Give up on a slow forecast after five seconds">
+        <p>An <code>AbortSignal</code> passed to a call reaches the export as a signal that aborts
+            when yours does. A call made while a request is being answered also ends when that
+            request's <code>abortSignal</code> aborts.</p>
+        <Code language="ts" caption="server" code={`
+            export async function forecast(
+                amounts: number[],
+                signal: AbortSignal,
+            ): Promise<number> {
+                let total = 0
+                for (const amount of amounts) {
+                    signal.throwIfAborted()
+                    total += amount * 0.4
+                }
+                return total
+            }
+
+            // called as forecast(amounts, AbortSignal.timeout(5_000))
+        `} />
+    </Section>
+
+    <Section level={3} title="Export only async functions from a worker file">
+        <p>A call crosses to another thread, so every export must be awaited. An arrow, a plain
+            function, a constant or a default export fails the build, naming the file and the
+            export. A type is exported as usual.</p>
+        <Code language="ts" caption="server" code={`
+            export type Score = { name: string; score: number }
+
+            export async function topScore(scores: Score[]): Promise<Score> {
+                return scores.reduce((top, next) => (next.score > top.score ? next : top))
+            }
+
+            export const WEIGHT = 31 // fails the build: not an async function
+        `} />
+    </Section>
+</Doc>

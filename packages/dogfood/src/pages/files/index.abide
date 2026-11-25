@@ -8,6 +8,7 @@ import SiteTree from '#src/lib/SiteTree.abide'
 <Doc
     seeAlso={[
         '/pages/pages',
+        '/pages/worker-files',
         '/handlers/get',
         '/abide-files/blocks',
         '/cli/commands',

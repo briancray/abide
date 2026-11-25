@@ -155,7 +155,6 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `src/**` | The app's source. | 36.10, 38.25 |
 | `**/lib/**` | The app's code that is no address: components and modules. | 23.15, 23.16, 23.18, 23.22, 37.1 |
 | `**/lib/**/<name>.server.<extension>` | A server file: source the browser never loads. | 16.29, 23.23, 34.20, 36.10 |
-| `**/lib/**/<name>.worker.ts` | A worker file: a module whose exports run in a thread of their own. | 55.1, 55.2, 55.3, 55.4, 55.5, 55.6, 55.7, 55.8, 55.9, 55.10, 55.11, 55.12, 55.13, 55.14 |
 | `**/<name>.test.ts` | A test file: one of the app's tests, wherever it lies. | 23.22, 38.109 |
 | `**/<name>.bench.ts` | A bench file: benches `bun run bench` runs, wherever it lies. | 23.22, 43.29 |
 | `**/<name>.d.ts` | A declaration file: types for the checker, wherever it lies. | 23.22 |
@@ -179,6 +178,12 @@ Accepted, Failures>` is the inner value's own `Accepted`. Then `Failures`, then
 | `import '…' with { type: 'routes' }` | A package's directory mounted at the importing file's directory, its pages, layouts, error pages and handler files answering below it. | 23.19, 23.20 |
 | `bunfig.toml` | The file whose `[serve.static] plugins` the client is built with. | 38.43 |
 | `preload = ["@abide/abide/test"]` | The `[test]` preload a test imports the app's `.abide` files through. | 38.109 |
+
+## Worker files
+
+| Path | Meaning | Rules |
+| --- | --- | --- |
+| `**/lib/**/<name>.worker.ts` | A worker file: a module whose exports run in a thread of their own. | 55.1, 55.2, 55.3, 55.4, 55.5, 55.6, 55.7, 55.8, 55.9, 55.10, 55.11, 55.12, 55.13, 55.14 |
 
 ## `render`
 

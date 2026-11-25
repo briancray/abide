@@ -190,6 +190,13 @@ const WRITTEN: readonly {
                 where: 'component',
             },
             {
+                route: '/pages/worker-files',
+                title: 'Worker files',
+                description:
+                    'Run heavy work in a thread of its own by naming its file `<name>.worker.ts`, and call its exports as async functions on the server, in the browser and in a compiled executable.',
+                where: 'anywhere',
+            },
+            {
                 route: '/pages/render',
                 title: '`render`',
                 description:
