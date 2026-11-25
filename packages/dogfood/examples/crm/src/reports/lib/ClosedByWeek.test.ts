@@ -8,7 +8,7 @@ import ClosedByWeek from './ClosedByWeek.abide'
 const chart = () => document.querySelector('[data-chart=svg]') as HTMLDivElement
 const texts = (selector: string) =>
     [...document.querySelectorAll(selector)].map((node) => node.textContent)
-// A column's place and size, read off the percentages its part carries (52.113).
+// A column's place and size, read off the percentages its part carries (52.116).
 function columns() {
     return [...chart().querySelectorAll('[data-chart=bar]')].map((bar) => {
         const style = (bar as HTMLElement).style
@@ -29,7 +29,7 @@ function press(key: string) {
     flushSync()
 }
 
-// 52.81, 52.113 — A CHART DRAWN IN HTML: nothing in the parts asks for SVG, so a `div` is the chart and
+// 52.81, 52.116 — A CHART DRAWN IN HTML: nothing in the parts asks for SVG, so a `div` is the chart and
 // each column a `span` placed by percentages of it, as tall as its week's count and standing on one
 // floor. THE REVERT: write the bars' vars in px of the box — `--height: 60` where a share is due, and
 // the tallest column runs past the chart.

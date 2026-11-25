@@ -1,4 +1,4 @@
-// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71, 52.113, 52.115, 52.116 — A CHART AS PARTS: series over
+// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71, 52.116, 52.118, 52.119 — A CHART AS PARTS: series over
 // one pair of axes, handed back as the geometry each mark is drawn at and as parts an app spreads onto
 // elements, SVG or HTML — `{#for point of plot.points}<circle {...point.circle} r="3" />` — with the
 // root's part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
@@ -50,7 +50,7 @@ export type ChartOptions = {
     zero?: Live<boolean>
     /**
      * The room kept above and below the values, as a share of their span: `0.15`, or `[below, above]`
-     * (52.116). None by default.
+     * (52.119). None by default.
      */
     pad?: Live<number | readonly [number, number]>
     /** Whether a series with no `stack` of its own piles into one stack with the others (52.54). `false` by default. */
@@ -262,7 +262,7 @@ export function chart(options: ChartOptions): ChartParts {
                 }
             }
         }
-        // 52.116 — padded before zero is taken in, so zero stays the floor of a column.
+        // 52.119 — padded before zero is taken in, so zero stays the floor of a column.
         ;[low, high] = padded(low, high, live(options.pad))
         if (zero || columns) {
             low = Math.min(low, 0)
@@ -540,7 +540,7 @@ export function chart(options: ChartOptions): ChartParts {
                 cx: x,
                 cy: y,
                 fill: 'currentColor',
-                // 52.113 — where it stands as a share of the box, for a mark placed by CSS.
+                // 52.116 — where it stands as a share of the box, for a mark placed by CSS.
                 style: `--x: ${percentOf(x, boxWidth)}%; --y: ${percentOf(y, boxHeight)}%`,
             },
         }
@@ -574,7 +574,7 @@ export function chart(options: ChartOptions): ChartParts {
                 width: '1',
                 height: '1',
                 // 52.63 — a unit rect placed and sized by a transform, which a CSS transition eases, and
-                // 52.113 — its place and size as shares of the box, for a column placed by CSS.
+                // 52.116 — its place and size as shares of the box, for a column placed by CSS.
                 style: `transform: translate(${x}px, ${y}px) scale(${width}, ${height}); --x: ${percentOf(x, boxWidth)}%; --y: ${percentOf(y, boxHeight)}%; --width: ${percentOf(width, boxWidth)}%; --height: ${percentOf(height, boxHeight)}%`,
                 fill: 'currentColor',
             },
@@ -593,7 +593,7 @@ export function chart(options: ChartOptions): ChartParts {
             const each = drawn.series[line]
             const value = each?.values[index]
             const place = drawn.placed[line]
-            // 52.115 — a series' own `format` writes its value, else `yFormat`.
+            // 52.118 — a series' own `format` writes its value, else `yFormat`.
             let written =
                 value === null || value === undefined
                     ? '—'

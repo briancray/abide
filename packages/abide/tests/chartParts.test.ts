@@ -88,7 +88,7 @@ test('a sparkline declaring curve draws its line and its area curved — 52.105'
     expect(String(trend.line.d)).not.toContain('C')
 })
 
-// 52.113 — EVERY PLACED MARK CARRIES ITS PLACE AS A SHARE OF THE BOX, so an element placed by
+// 52.116 — EVERY PLACED MARK CARRIES ITS PLACE AS A SHARE OF THE BOX, so an element placed by
 // `left: var(--x)` stands where the SVG one does at whatever size the box is laid out.
 // THE REVERT: write the bar's vars in px of the box rather than percentages — `--x: 33.5%` reads
 // `--x: 201px`.
@@ -134,7 +134,7 @@ test('a placed mark carries where it stands as percentages of the box', () => {
     expect(vars(trend.dot)).toEqual({ x: 100, y: 50 })
 })
 
-// 52.116 — `pad` KEEPS THE VALUES OFF THE EDGES: the range widens by a share of its span before the
+// 52.119 — `pad` KEEPS THE VALUES OFF THE EDGES: the range widens by a share of its span before the
 // ticks round it, before zero is taken in, so a column still stands on zero, and a flat range is not
 // widened. THE REVERT: drop `padded` from `chart` and `sparkline` — the ticks end at 10 and 20, on the
 // values, and the trend's low runs along the bottom.

@@ -8,7 +8,7 @@ const CLOSED = [3, 5, 2, 6, 4, 7]
 const regions = announce.host()
 
 // Drawn in HTML rather than SVG: each column a `span` placed by the percentages its part carries
-// (52.113), so it stands right before the chart is measured, and on the server.
+// (52.116), so it stands right before the chart is measured, and on the server.
 const plot = chart({
     label: 'Deals closed by week, October to November',
     series: [{ label: 'Closed', values: CLOSED, kind: 'column' }],

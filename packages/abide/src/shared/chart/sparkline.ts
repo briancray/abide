@@ -1,4 +1,4 @@
-// 52.29-52.31, 52.33, 52.34, 52.113, 52.116 — A TREND WITH NO AXES, AS PARTS: drawn in units of its own that stretch to
+// 52.29-52.31, 52.33, 52.34, 52.116, 52.119 — A TREND WITH NO AXES, AS PARTS: drawn in units of its own that stretch to
 // whatever box the caller gives the `<svg>`, with strokes that do not scale so the line and the end dot
 // keep their own width.
 
@@ -20,7 +20,7 @@ export type SparklineOptions = {
     curve?: Live<boolean>
     /**
      * The room kept above and below the values, as a share of their span: `0.15`, or `[below, above]`
-     * to leave the area room under the line (52.116). None by default.
+     * to leave the area room under the line (52.119). None by default.
      */
     pad?: Live<number | readonly [number, number]>
 }
@@ -67,7 +67,7 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             last = value
             lastIndex = index
         }
-        // 52.116 — padded before zero is taken in.
+        // 52.119 — padded before zero is taken in.
         ;[low, high] = padded(low, high, live(options.pad))
         if (zero) {
             low = Math.min(low, 0)
@@ -107,7 +107,7 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             line: path(xs, ys, { curve }),
             area: path(xs, ys, { baseline: SIZE, curve }),
             end: last === undefined ? '' : `M${x(lastIndex)},${y(last)}Z`,
-            // 52.113 — the drawing's units are already hundredths of the box.
+            // 52.116 — the drawing's units are already hundredths of the box.
             endAt:
                 last === undefined
                     ? undefined

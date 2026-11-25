@@ -1,4 +1,4 @@
-// 52.106-52.109, 52.114 — A VALUE SHOWN WITHIN ITS RANGE: WAI-ARIA's meter, or its progress bar, as
+// 52.106-52.109, 52.117 — A VALUE SHOWN WITHIN ITS RANGE: WAI-ARIA's meter, or its progress bar, as
 // parts an app spreads onto a track and a fill of its own. The fill's width and the track's
 // `--fraction` are the values written to `style`, computed from the value (49.5); a progress bar with
 // no value is indeterminate.
@@ -64,7 +64,7 @@ export function meter(options: MeterOptions): Meter {
             get 'aria-valuemax'() {
                 return max()
             },
-            // 52.114 — how far along, for a mark an app places by CSS: a needle, a marker.
+            // 52.117 — how far along, for a mark an app places by CSS: a needle, a marker.
             get style() {
                 const part = fraction()
                 return part === undefined ? undefined : `--fraction: ${part}`

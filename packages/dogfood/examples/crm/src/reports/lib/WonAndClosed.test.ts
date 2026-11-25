@@ -15,7 +15,7 @@ function press(key: string) {
     flushSync()
 }
 
-// 52.115 — A SERIES SCALED TO SHARE AN AXIS READS IN ITS OWN UNITS: the axis is shares of each peak,
+// 52.118 — A SERIES SCALED TO SHARE AN AXIS READS IN ITS OWN UNITS: the axis is shares of each peak,
 // and the readout and what a key move announces are the dollars and the deals behind them.
 // THE REVERT: write every value by `yFormat` — 'Won: 100%' where '$42K' is due.
 test('each series reads its own units, though both are drawn as shares of their peaks', async () => {

@@ -17,7 +17,7 @@ export type Series = {
     curve?: boolean
     /**
      * Writes one of its values, given it and its index, for the readout and what a key move announces
-     * (52.115): the raw value behind a series scaled to share an axis, say. `yFormat` by default.
+     * (52.118): the raw value behind a series scaled to share an axis, say. `yFormat` by default.
      */
     format?: (value: number, index: number) => string
 }
@@ -111,7 +111,7 @@ export function present(value: number | null | undefined): number | undefined {
 }
 
 /**
- * 52.116 — `low` and `high` widened by `pad` times their span below and above, or by a pair's first
+ * 52.119 — `low` and `high` widened by `pad` times their span below and above, or by a pair's first
  * below and its second above; a range with no width is not widened.
  */
 export function padded(

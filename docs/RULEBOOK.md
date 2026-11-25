@@ -6338,18 +6338,18 @@ each word of `query` — stretches that overlap or touch carrying it as one run.
 own name, over the defaults each formatter keeps, and MUST NOT refuse a caller naming one bound of
 the fraction digits for the default of the other.
 
-52.113 Each part `chart` hands back for a point, a column, a tick, a gridline, the zero line or the
+52.116 Each part `chart` hands back for a point, a column, a tick, a gridline, the zero line or the
 crosshair, and `sparkline`'s `dot`, MUST carry in its `style` where it is drawn as `--x` and `--y`,
 and a column its size as `--width` and `--height` besides, each a percentage of the box its root
 part is drawn at, a line across the plot carrying only the one of `--x` and `--y` it is drawn at.
 
-52.114 `meter`'s `meter` part MUST carry in its `style` as `--fraction` the share of the meter
+52.117 `meter`'s `meter` part MUST carry in its `style` as `--fraction` the share of the meter
 52.108 fills, and no `style` where `value` is `undefined`.
 
-52.115 `chart` MUST write a series' value in its readout by the series' `format`, given the value and
+52.118 `chart` MUST write a series' value in its readout by the series' `format`, given the value and
 its index, where the series gives one, and by `yFormat` where it does not.
 
-52.116 `chart` and `sparkline` given `pad` MUST widen the range of their values by `pad` times its
+52.119 `chart` and `sparkline` given `pad` MUST widen the range of their values by `pad` times its
 span below it and above it — by a pair's first below and its second above — before taking zero into
 the range (52.34, 52.37) and before `chart.ticks` rounds it, and MUST NOT widen a range with no width
 or a range `bounds` gives.
