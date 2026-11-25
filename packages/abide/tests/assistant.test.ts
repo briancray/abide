@@ -29,7 +29,6 @@ import type { AssistantEvent } from '../src/shared/AssistantEvent.ts'
 import { assistantMessage } from '../src/shared/assistantMessage.ts'
 import { BRIDGE_SCHEME } from '../src/shared/BRIDGE_SCHEME.ts'
 import { resultsOf } from '../src/shared/resultsOf.ts'
-import type { Rpc } from '../src/shared/rpc.ts'
 import { handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { CITED_EVENTS } from './fixtures/assistant/CITED_EVENTS.ts'
 import { calling, said, writing } from './fixtures/assistant/runs.ts'
@@ -156,7 +155,8 @@ export const ask = POST(
 `
 
 // The handler `post_invoices_whoami` calls, as its `Rpc` reads it (44.48).
-const WHOAMI = { method: 'POST' as const, address: '/invoices/whoami' }
+const WHOAMI = POST((): string => '')
+WHOAMI.address = '/invoices/whoami'
 
 let app = ''
 let base = ''
@@ -458,15 +458,12 @@ test('an answer carries its value, and resultsOf finds a handler’s calls by it
         d: undefined,
     })
     expect(
-        resultsOf(
-            assistantMessage('assistant', seen),
-            WHOAMI as unknown as Rpc<string, never>,
-        ),
+        resultsOf(assistantMessage('assistant', seen), WHOAMI),
     ).toStrictEqual(['ada'])
 }, 30_000)
 
 // 44.51 — ANY HANDLER IS ONE `resultsOf` TAKES, whatever it is called with: it reads the handler's
-// method and address, and its value's type off the call. Types only: `setHome` takes args, and the
+// tool (20.24), and its value's type off the call. Types only: `setHome` takes args, and the
 // value read back is a `string`. THE REVERT: type the parameter `Rpc<Value, never, unknown, unknown>`
 // — an `Rpc` is contravariant in its `Args`, and `setHome` is refused.
 test('a handler that takes args is one resultsOf reads — 44.51', () => {

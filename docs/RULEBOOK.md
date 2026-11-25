@@ -1769,6 +1769,9 @@ refused, its text naming the tool and the image's type, and MUST be logged per 2
 tool's input declares, a rest's on each of its items, MUST carry the pattern its segment takes a part
 by, anchored, and a matcher's name MUST be no part of the path, the operation or the tool.
 
+20.24 `rpc.tool` MUST be the name 20.13 gives its handler, read from its `rpc.address` with the mount
+(16.10) taken off, and MUST be `undefined` while its `rpc.address` is.
+
 # 21. Generated headers
 
 21.1 Every response MUST carry `x-content-type-options: nosniff`.
@@ -5128,8 +5131,9 @@ and the rows written in one turn MUST be committed in one transaction.
 
 # 48. Problem reports
 
-48.1 `report` MUST answer a `ReportDraft` holding the trace it was given among its `traces`, and
-none where it was given none.
+48.1 `report` MUST answer a `ReportDraft` holding among its `traces` the trace it was given, and the
+trace id the `traceresponse` of the answer carrying the refusal it was given as `failure` named
+(37.24), once each, and none where it was given neither.
 
 48.2 A `ReportDraft` in a browser MUST hold the newest 200 of the page's `log.records`.
 
@@ -6354,9 +6358,15 @@ each word of `query` — stretches that overlap or touch carrying it as one run.
 52.111 `highlight` given a `query` that is blank MUST answer `text` as one run carrying no `match`.
 
 52.112 `format.money`, `format.percent`, `format.number` and `format.bytes` MUST hand
-`Intl.NumberFormat`, and `format.list` `Intl.ListFormat`, every option their caller names, under its
-own name, over the defaults each formatter keeps, and MUST NOT refuse a caller naming one bound of
-the fraction digits for the default of the other.
+`Intl.NumberFormat`, `format.list` `Intl.ListFormat`, and `format.date` and `format.dateParts`
+`Intl.DateTimeFormat`, every option their caller names, under its own name, over the defaults each
+formatter keeps, MUST NOT refuse a caller naming one bound of the fraction digits for the default of
+the other, and MUST NOT refuse a caller naming a part of a date beside a `style` `Intl` writes whole.
+
+52.114 `format.number` given a `unit` MUST write its value in that unit, as `unitDisplay` names it.
+
+52.115 `format.date`'s `'dateTime'` style MUST hand the date it writes the options naming a part of a
+date, the time it writes those naming a part of a time, and both the rest.
 
 52.113 `format.date`, `format.dateParts`, `format.relative` and `time` MUST read a value that is a
 `YYYY-MM-DD`, `YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS` string, the last with or without a
@@ -6794,8 +6804,10 @@ looks MUST be spaced from when each started rather than from the end of the run 
 a type ending `+json`, as its parsed value, and a type 54.32 and 54.33 do not name as a `Blob`.
 
 54.31 `handle` MUST answer a `Response` outside 2xx with a `FetchFailed` carrying its status, the
-reason `status`, and its body canceled, and JSON that does not parse with one for the reason
-`shape` whose `cause` is what the parse threw.
+reason `status`, and as its `cause` its body read as 54.30 and 54.33 read one — a stream, and JSON
+that does not parse, as its text — where the body is 65,536 bytes or fewer, and no `cause` where it is
+longer; and MUST answer a 2xx `Response` whose JSON does not parse with one for the reason `shape`
+whose `cause` is what the parse threw.
 
 54.32 `handle` MUST answer a JSON Lines or event stream `Response` with an async iterable of its
 chunks, each yielded as the frame carrying it completes.
@@ -6804,7 +6816,8 @@ chunks, each yielded as the frame carrying it completes.
 a `Response` with no body as `undefined`.
 
 54.34 A `FetchFailed` that `fetchData` settles to for a thrown attempt MUST carry what
-was thrown as its `cause`, and Problem Details MUST NOT carry a `cause`.
+was thrown as its `cause`, one for an attempt answered outside 2xx the body 54.31 reads, and Problem
+Details MUST NOT carry a `cause`.
 
 54.35 `trustedIdentity` MUST sign in, for the request it runs in, the caller its `header` names on a
 request from one of its `proxies`, as the claims `claims` makes of the header's value, as `App.run`'s

@@ -4,7 +4,13 @@
 // ONE CLASSIFIER. The early-call script (41.20) records the `Response` and nothing it decides, so
 // an answer the page started and one fetched here are read by `answerFrom` alike.
 
-import { failedFrom, holdUntil, isProblem, retryAtOf } from './Failed.ts'
+import {
+    failedFrom,
+    holdUntil,
+    isProblem,
+    retryAtOf,
+    tracedBy,
+} from './Failed.ts'
 import {
     carriesBytes,
     type Framed,
@@ -227,6 +233,8 @@ export function answered(
         : refuse(answer.status, answer.statusText || undefined)
     // 15.23 — the wait the answer named stays with the refusal it rebuilt.
     if (answer.retryAt !== undefined) holdUntil(refusal, answer.retryAt)
+    // 48.1 — and the trace it named, so a report of the refusal holds it.
+    if (answer.trace !== undefined) tracedBy(refusal, answer.trace)
     refused(refusal, {
         method: call.method,
         url: call.url,

@@ -7,6 +7,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { flushSync, reactive } from '#shared'
 import { onRefusal } from '#shared/onRefusal.ts'
+import { report, REPORTING } from '#shared/report.ts'
 import { wire } from '#ui/wire.ts'
 
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -110,6 +111,23 @@ test('a call refused at 401 reaches every onRefusal standing once, nearest first
         `outer:401 GET ${BOARD}?n=${calls} ${TRACE}`,
     ])
     expect(error?.status).toBe(401)
+})
+
+// THE REVERT: drop `tracedBy` from `answered` in `answerOf.ts` — the draft of the refused call holds
+// no trace where the one its answer named is due.
+test('a report of a refused call holds the trace its answer named — 48.1', async () => {
+    const error = await refusedCall()
+    heard()
+    // The server's lines for a trace, which a page asks the server for, are not this test's.
+    const lines = REPORTING.lines
+    REPORTING.lines = () => []
+    try {
+        expect(report({ failure: error }).traces).toEqual([TRACE])
+        expect(report({ trace: TRACE, failure: error }).traces).toEqual([TRACE])
+        expect(report({ failure: new Error('not a call') }).traces).toEqual([])
+    } finally {
+        REPORTING.lines = lines
+    }
 })
 
 // THE REVERT: drop the `try` around each hook in `BrowserHooks.hand`, and the inner hook's throw

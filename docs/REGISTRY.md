@@ -963,11 +963,11 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `format` | `{ money; percent; number; plural; list; date; duration; relative; bytes }` | The formatters abide ships, as one namespace. | 52.1, 52.2, 52.6 |
 | `format.money` | `(value: unknown, options?: Omit<Intl.NumberFormatOptions, 'style'> & { locale?: string }) => string` | An amount of money as it is written. | 52.1, 52.2, 52.6, 52.35, 52.112 |
 | `format.percent` | `(value: unknown, options?: Omit<Intl.NumberFormatOptions, 'style'> & { locale?: string }) => string` | A fraction written as a percent. | 52.1, 52.2, 52.6, 52.35, 52.112 |
-| `format.number` | `(value: unknown, options?: Omit<Intl.NumberFormatOptions, 'style'> & { locale?: string }) => string` | A number with its thousands grouped. | 52.1, 52.2, 52.6, 52.112 |
+| `format.number` | `(value: unknown, options?: Omit<Intl.NumberFormatOptions, 'style'> & { locale?: string }) => string` | A number with its thousands grouped. | 52.1, 52.2, 52.6, 52.112, 52.114 |
 | `format.plural` | `(value: unknown, one: string, many?: string, options?: { locale?: string }) => string` | A count and the word for what it counts. | 52.1, 52.2, 52.6 |
 | `format.list` | `(value: unknown, options?: Intl.ListFormatOptions & { locale?: string }) => string` | A list of items as a sentence says it. | 52.1, 52.2, 52.6, 52.112 |
-| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101, 52.113 |
-| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101, 52.113 |
+| `format.date` | `(value: unknown, options?: Omit<Intl.DateTimeFormatOptions, 'dateStyle' \| 'timeStyle' \| 'timeZone'> & { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101, 52.112, 52.113, 52.115 |
+| `format.dateParts` | `(value: unknown, options?: Omit<Intl.DateTimeFormatOptions, 'dateStyle' \| 'timeStyle' \| 'timeZone'> & { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101, 52.112, 52.113, 52.115 |
 | `format.timeZone` | `Reactive<string \| undefined>` | The zone the app pins every date to where its caller names none, or `undefined` for the visitor's own. | 52.3, 52.44, 52.45 |
 | `format.duration` | `(value: unknown, options?: { locale?: string }) => string` | A length of time in milliseconds, in its two largest units. | 52.1, 52.2, 52.4, 52.6 |
 | `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow'; numeric?: 'auto' \| 'always' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32, 52.113 |
@@ -1068,6 +1068,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `rpc.method` | `string` | The HTTP method. | 16.2 |
 | `rpc.url` | `(args?: Args) => string` | The address, resolved against the mount. | 16.9, 16.10, 30.28 |
 | `rpc.address` | `string \| undefined` | Where the handler answers. | 16.88 |
+| `rpc.tool` | `string \| undefined` | The name MCP and OpenAPI list the handler by. | 20.13, 20.24 |
 | `rpc.description` | `string \| undefined` | The human description. | 16.28 |
 | `PatchOp` | `{ op: 'add' \| 'replace' \| 'test'; path: string; value: unknown } \| { op: 'remove'; path: string } \| { op: 'move' \| 'copy'; from: string; path: string }` | One JSON Patch operation (RFC 6902), its paths JSON Pointers, as a followed `GET` is sent what an `s.patch` wrote. | 18.11, 18.13 |
 
@@ -1455,7 +1456,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `fetchData` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T \| FetchFailed>` | Another service's answer, read as its type says or as `as` names, asked with a deadline, retries and an optional cache, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.34 |
+| `fetchData` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T \| FetchFailed>` | Another service's answer, read as its type says or as `as` names, asked with a deadline, retries and an optional cache, from `@abide/abide/server`. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.14, 54.15, 54.16, 54.17, 54.31, 54.34 |
 | `FetchOptions<T>` | `RequestInit & { as?: 'json' \| 'text' \| 'blob'; timeout?: number; retries?: number; backoff?: number \| ((retry: number) => number); ttl?: number; schema?: Schema<T> }` | `fetch`'s own options, with the reading, the deadline, the retries and their spacing, the cache and the gate beside them. | 54.7, 54.8, 54.9, 54.10, 54.12, 54.15, 54.17 |
 | `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'timeout' \| 'network' \| 'status' \| 'shape' }>` | The refusal a fetch that gave up, or a `Response` `handle` read outside 2xx, settles to. | 15.9, 54.14, 54.16, 54.17, 54.31, 54.34 |
 
@@ -1487,7 +1488,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `resultsOf` | `<Value>(messages: readonly AssistantMessage[], handler: ((...args: never) => Reactive<Value, never, unknown, unknown>) & { method: string; address: string \| undefined }) => Value[]` | What a conversation's calls to one handler answered. | 20.13, 44.51 |
+| `resultsOf` | `<Value>(messages: readonly AssistantMessage[], handler: ((...args: never) => Reactive<Value, never, unknown, unknown>) & { tool: string \| undefined }) => Value[]` | What a conversation's calls to one handler answered. | 20.13, 20.24, 44.51 |
 
 ## `assistantMessage`
 
@@ -1585,7 +1586,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `report` | `(options?: { trace?: string }) => ReportDraft` | A problem report a person can read, write and send. | 48.1, 48.2, 48.3, 48.4, 48.5 |
+| `report` | `(options?: { trace?: string; failure?: unknown }) => ReportDraft` | A problem report a person can read, write and send. | 37.24, 48.1, 48.2, 48.3, 48.4, 48.5 |
 | `ReportDraft` | `class ReportDraft { id: string; summary: Reactive<string>; description: Reactive<string>; traces: string[]; lines: Reactive<LogRecord[]>; markdown: Reactive<string>; open(): Promise<boolean>; send(): Promise<string> }` | A report not yet sent. | 48.6, 48.7, 48.8, 48.9, 48.12, 48.13 |
 | `Report` | `{ id: string; summary: string; description: string; version: string; platform: string; route: string; traces: string[]; lines: LogRecord[]; markdown: string }` | What `onReport` is handed. | 48.7, 48.10, 48.11, 48.12 |
 

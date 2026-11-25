@@ -68,7 +68,7 @@ test('a formatter writes en-US where no locale is named — 52.2', () => {
 // THE REVERT: build the formatter from abide's defaults alone, leaving out the caller's options —
 // `5` where `05` is due, and `$1,234.50` where `USD 1,234.50` is. Asking for a minimum above the
 // default maximum without moving the maximum throws instead.
-test("a number formatter takes Intl.NumberFormat's own options under their own names — 52.37", () => {
+test("a number formatter takes Intl.NumberFormat's own options under their own names — 52.112", () => {
     expect(number(5, { minimumIntegerDigits: 2 })).toBe('05')
     expect(money(1234.5, { currencyDisplay: 'code' })).toBe('USD 1,234.50')
     expect(percent(0.123, { minimumFractionDigits: 2 })).toBe('12.30%')
@@ -77,6 +77,51 @@ test("a number formatter takes Intl.NumberFormat's own options under their own n
     expect(list(['Ada', 'Grace'], { type: 'unit', style: 'narrow' })).toBe(
         'Ada Grace',
     )
+})
+
+// THE REVERT: build the date formatter from its style alone, leaving out the caller's options —
+// `Nov 18, 2026, 3:04 PM` where `Wed, Nov 18, 2026, 3:04 PM` is due. Keeping `dateStyle` beneath a
+// named part throws instead.
+test("a date takes Intl.DateTimeFormat's own options under their own names — 52.112", () => {
+    const at = '2026-11-18T15:04:00Z'
+    expect(date(at, { style: 'dateTime', weekday: 'short' })).toBe(
+        'Wed, Nov 18, 2026, 3:04 PM',
+    )
+    expect(date(at, { weekday: 'long' })).toBe('Wednesday, Nov 18, 2026')
+    expect(date(at, { style: 'monthDay', month: 'long' })).toBe('November 18')
+    expect(date(at, { style: 'time', hour12: false })).toBe('15:04')
+    expect(date(at, { style: 'dateTime', hourCycle: 'h23' })).toBe(
+        'Nov 18, 2026, 15:04',
+    )
+    let joined = ''
+    for (const part of dateParts(at, { style: 'dateTime', weekday: 'short' }))
+        joined += part.value
+    expect(joined).toBe('Wed, Nov 18, 2026, 3:04 PM')
+})
+
+// THE REVERT: key a date formatter by its style alone — the second weekday reads `Wed` where
+// `Wednesday` is due, the formatter built for the first answering it.
+test('a date formatter is keyed by every option it is handed — 52.6', () => {
+    const at = '2026-11-18T15:04:00Z'
+    expect(date(at, { weekday: 'short' })).toBe('Wed, Nov 18, 2026')
+    expect(date(at, { weekday: 'long' })).toBe('Wednesday, Nov 18, 2026')
+    date(at, { weekday: 'short', month: 'long' })
+    const built = spyOn(Intl, 'DateTimeFormat')
+    date(at, { month: 'long', weekday: 'short' })
+    const calls = built.mock.calls.length
+    built.mockRestore()
+    expect({ built: calls }).toEqual({ built: 0 })
+})
+
+// THE REVERT: keep `format.number`'s style `decimal` whatever it is handed — `26,000` where
+// `26,000 mi` is due.
+test('a number given a unit is written in it — 52.114', () => {
+    expect(number(26_000, { unit: 'mile' })).toBe('26,000 mi')
+    expect(number(1, { unit: 'mile', unitDisplay: 'long' })).toBe('1 mile')
+    expect(number(65, { unit: 'mile-per-hour', unitDisplay: 'narrow' })).toBe(
+        '65mph',
+    )
+    expect(number(null, { unit: 'mile' })).toBe('—')
 })
 
 // THE REVERT: key the formatter by the options in the order given — the same two options written

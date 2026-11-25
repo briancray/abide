@@ -22,6 +22,7 @@ import { isServer } from './isServer.ts'
 import type { Issues } from './Issues.ts'
 import { namedLogger } from './log.ts'
 import { compose, type Rung } from './Middleware.ts'
+import { unmounted } from './mount.ts'
 import { outbox, type QueuedCall, sendingFor } from './outbox.ts'
 import { principalRotated } from './principalRotated.ts'
 import {
@@ -66,6 +67,7 @@ import { checkArgs } from './refuse.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
 import { rpcRequest } from './rpcRequest.ts'
 import type { Schema } from './Schema.ts'
+import { surfaceName } from './surfaceName.ts'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -131,6 +133,8 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     raw(args?: Args, init?: RequestInit): Promise<Response>
     /** Where the handler answers: its route under the mount, once its file has loaded (16.88). */
     address: string | undefined
+    /** What MCP and OpenAPI name the handler, once it has an address (20.13, 20.24). */
+    readonly tool: string | undefined
     keyed: boolean
     timeout: number | undefined
     crossOrigin: boolean | string[]
@@ -620,6 +624,16 @@ export function declare<Declared extends Method>(
             },
         }) satisfies Gated<unknown>
         const members = rpc as unknown as Record<string, unknown>
+        // 20.24 — read as it is asked for: the address is given once the file has loaded (16.88).
+        Object.defineProperty(rpc, 'tool', {
+            get: (): string | undefined =>
+                rpc.address === undefined
+                    ? undefined
+                    : surfaceName(
+                          method,
+                          unmounted(rpc.address) ?? rpc.address,
+                      ),
+        })
         // 7.10, 7.18 — A TRIGGER ON A SERVER REACHES EVERY BROWSER HOLDING WHAT IT NAMES, through the
         // mux (18.3) — 18.37, or the one browser `caller` names. None follow in a browser, where the
         // trigger is the copy's own, and a copy cannot tell whose caller it is (18.38, 26.22).
