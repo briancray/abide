@@ -345,3 +345,75 @@ const deals = reactive([], { key: 'id' })
     for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
     expect(await upgrade(app, '0.142.0')).toEqual([])
 })
+
+// 38.219 — A JOB'S NAME IS ONE OF ITS OPTIONS, AND `run` RUNS IT AHEAD OF SCHEDULE, in a module, a
+// page and a Markdown fence, on its own line where the options' first property is. A `job` read as
+// a member, one already handed its options alone, and a `runNow` that is not read as a member are
+// left, and run again the migration changes nothing (38.200). THE REVERT: drop the `toJob`
+// migration from `MIGRATIONS`; nothing is changed and `upgrade` answers no edits.
+test('abide upgrade moves a job name into its options and renames runNow to run — 38.219, 38.200', async () => {
+    const module = `import { job, POST } from '@abide/abide/server'
+
+export const digest = job('digest', { every: 60_000, run: mail })
+export const nightly = job(\`nightly\`, {
+    every: 86_400_000,
+    run: (signal) => sweep(signal),
+})
+export const named = job(NAME, { every: 0, run: mail })
+export const queued = queue.job('kept', { run: mail })
+export const moved = job({ name: 'moved', every: 0, run: mail })
+const { runNow } = legacy
+export default POST(() => digest.runNow(), { tags: ['digest'] })
+export const maybe = () => nightly?.runNow()
+`
+    const page = `<script>
+import { digest } from './lib/digest.server.ts'
+</script>
+
+<button onclick={() => digest.runNow()}>Send</button>
+`
+    const notes = `# Jobs
+
+\`\`\`ts
+job('score', { every: 300_000, run: scoreAll })
+\`\`\`
+`
+    const app = temporaryModule({
+        'src/lib/digest.server.ts': module,
+        'src/index.abide': page,
+        'NOTES.md': notes,
+    })
+    const edits = await upgrade(app, '0.143.0')
+    const after = (path: string) =>
+        edits.find((edit) => edit.path === path)?.after
+    expect(after('src/lib/digest.server.ts'))
+        .toBe(`import { job, POST } from '@abide/abide/server'
+
+export const digest = job({ name: 'digest', every: 60_000, run: mail })
+export const nightly = job({
+    name: \`nightly\`,
+    every: 86_400_000,
+    run: (signal) => sweep(signal),
+})
+export const named = job({ name: NAME, every: 0, run: mail })
+export const queued = queue.job('kept', { run: mail })
+export const moved = job({ name: 'moved', every: 0, run: mail })
+const { runNow } = legacy
+export default POST(() => digest.run(), { tags: ['digest'] })
+export const maybe = () => nightly?.run()
+`)
+    expect(after('src/index.abide')).toBe(`<script>
+import { digest } from './lib/digest.server.ts'
+</script>
+
+<button onclick={() => digest.run()}>Send</button>
+`)
+    expect(after('NOTES.md')).toBe(`# Jobs
+
+\`\`\`ts
+job({ name: 'score', every: 300_000, run: scoreAll })
+\`\`\`
+`)
+    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    expect(await upgrade(app, '0.143.0')).toEqual([])
+})

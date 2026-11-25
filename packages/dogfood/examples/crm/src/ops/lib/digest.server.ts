@@ -4,7 +4,8 @@ import { crmDatabase } from '../../pipeline/lib/crmDatabase.server.ts'
 import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
 /** Every night: the leads still waiting on a follow-up, mailed to the team. */
-export const digest = job('digest', {
+export const digest = job({
+    name: 'digest',
     every: 24 * 60 * 60_000,
     run: async () => {
         const leads = DEALS.filter((deal) => deal.stage === 'lead')

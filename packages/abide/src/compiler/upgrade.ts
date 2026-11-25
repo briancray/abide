@@ -4,6 +4,7 @@
 // app already moved finds nothing left to move.
 
 import { withoutRestatedNotes } from './agentNotes.ts'
+import { toJob } from './toJob.ts'
 import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
 
@@ -62,6 +63,20 @@ const MIGRATIONS: Migration[] = [
                 const text = await read(path)
                 if (text === undefined) continue
                 const migrated = toKey(text, path)
+                if (migrated !== text) changed[path] = migrated
+            }
+            return changed
+        },
+    },
+    {
+        // 38.219 — a `job`'s name is one of its options, and `run` is what runs it ahead of schedule.
+        version: '0.144.0',
+        migrate: async (read, sources) => {
+            const changed: Record<string, string> = {}
+            for (const path of await sources()) {
+                const text = await read(path)
+                if (text === undefined) continue
+                const migrated = toJob(text, path)
                 if (migrated !== text) changed[path] = migrated
             }
             return changed

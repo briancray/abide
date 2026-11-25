@@ -13,7 +13,7 @@ const importRunning = refuse.named(
 export default POST(
     (options: { stage?: string } = {}) => {
         if (dealImport.status.peek()?.running) return importRunning()
-        void dealImport.runNow(options)
+        void dealImport.run(options)
         return dealImport.status.peek()
     },
     {

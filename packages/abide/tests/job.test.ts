@@ -34,19 +34,20 @@ function until(
     return reached.promise.finally(stop)
 }
 
-// THE REVERT: start a run per `runNow` rather than joining the one in flight, and `handed` is
+// THE REVERT: start a run per `Job.run` rather than joining the one in flight, and `handed` is
 // [1, 2, 3].
 test('a run asked for while one is in flight joins it, and its input reaches no run — 54.20', async () => {
     const handed: (number | undefined)[] = []
     const release = Promise.withResolvers<void>()
-    const digest = job('joined', {
+    const digest = job({
+        name: 'joined',
         every: 3_600_000,
         run: async (input?: number) => {
             handed.push(input)
             await release.promise
         },
     })
-    const asked = [digest.runNow(1), digest.runNow(2), digest.runNow(3)]
+    const asked = [digest.run(1), digest.run(2), digest.run(3)]
     expect(digest.status.peek()?.running).toBe(true)
     release.resolve()
     const [first, second, third] = await Promise.all(asked)
@@ -60,9 +61,10 @@ test('a run asked for while one is in flight joins it, and its input reaches no 
 })
 
 // THE REVERT: call `run` with `undefined` whoever started it, and `handed` reads `undefined` twice.
-test('runNow hands the run its input, and a look hands it undefined — 54.26', async () => {
+test('Job.run hands the run its input, and a look hands it undefined — 54.26', async () => {
     const handed: ({ limit: number } | undefined)[] = []
-    const imported = job('handed', {
+    const imported = job({
+        name: 'handed',
         every: 3_600_000,
         run: (options?: { limit: number }) => {
             handed.push(options)
@@ -70,7 +72,7 @@ test('runNow hands the run its input, and a look hands it undefined — 54.26', 
     })
     await serving(async () => {
         await until(imported.status, (status) => status.lastRun !== null)
-        await imported.runNow({ limit: 3 })
+        await imported.run({ limit: 3 })
         await imported.stop()
     })
     expect(handed).toEqual([undefined, { limit: 3 }])
@@ -79,12 +81,13 @@ test('runNow hands the run its input, and a look hands it undefined — 54.26', 
 // THE REVERT: measure from the end under `from: 'start'` too, and the next run is a full hour after
 // the last one ended rather than after it started.
 test('a job measured from the start names its next run an interval after the last run started — 54.29', async () => {
-    const digest = job('fromStart', {
+    const digest = job({
+        name: 'fromStart',
         every: 3_600_000,
         from: 'start',
         run: () => Bun.sleep(30),
     })
-    const ran = await digest.runNow()
+    const ran = await digest.run()
     const fromEnd =
         Date.parse(ran.nextRun ?? '') - Date.parse(ran.lastRun ?? '')
     expect(fromEnd).toBeLessThanOrEqual(3_600_000 - 25)
@@ -92,29 +95,46 @@ test('a job measured from the start names its next run an interval after the las
 
 // THE REVERT: drop `global` from the status, and the request's run is the request's alone.
 test('a run in a request writes the status every caller reads — 54.22', async () => {
-    const digest = job('requested', { every: 3_600_000, run: () => {} })
+    const digest = job({ name: 'requested', every: 3_600_000, run: () => {} })
     await using app = await inMemoryApp({})
-    const ran = await app.run(() => digest.runNow())
+    const ran = await app.run(() => digest.run())
     expect(digest.status.peek()).toEqual(ran)
     expect(ran.lastRun).not.toBe(null)
 })
 
 test('a failed run is logged under job:<name> and kept, and the next run clears it — 54.23', async () => {
     let fail = true
-    const digest = job('failing', {
+    const digest = job({
+        name: 'failing',
         every: 3_600_000,
         run: () => {
             if (fail) throw new Error('the mail server refused')
         },
     })
     const before = (log.records.peek() ?? []).length
-    expect((await digest.runNow()).lastError).toBe('the mail server refused')
+    expect((await digest.run()).lastError).toBe('the mail server refused')
     const logged = (log.records.peek() ?? [])
         .slice(before)
         .filter((record) => record.namespace.endsWith('job:failing'))
     expect(logged.map((record) => record.level)).toEqual(['error'])
     fail = false
-    expect((await digest.runNow()).lastError).toBe(null)
+    expect((await digest.run()).lastError).toBe(null)
+})
+
+test('a failed run of a job given no name is logged under job — 54.23', async () => {
+    const unnamed = job({
+        every: 3_600_000,
+        run: () => {
+            throw new Error('the mail server refused')
+        },
+    })
+    const before = (log.records.peek() ?? []).length
+    await unnamed.run()
+    const logged = (log.records.peek() ?? [])
+        .slice(before)
+        .map((record) => record.namespace)
+    await unnamed.stop()
+    expect(logged).toEqual(['app:job'])
 })
 
 // THE REVERT: hand each look a run of its own rather than joining the one in flight, and `most` is 2.
@@ -123,7 +143,8 @@ test('a job never run runs once the app opens, and again each interval, one at a
     let most = 0
     let runs = 0
     const ran = Promise.withResolvers<void>()
-    const looked = job('looked', {
+    const looked = job({
+        name: 'looked',
         every: 5,
         run: async () => {
             inFlight += 1
@@ -137,7 +158,7 @@ test('a job never run runs once the app opens, and again each interval, one at a
     })
     await serving(async () => {
         // A run asked for between the clock's looks.
-        void looked.runNow()
+        void looked.run()
         await ran.promise
     })
     await looked.stop()
@@ -146,14 +167,16 @@ test('a job never run runs once the app opens, and again each interval, one at a
 
 test('a last run within the interval is waited out, and an older one is run at once — 54.21', async () => {
     let runs = 0
-    const recent = job('recent', {
+    const recent = job({
+        name: 'recent',
         every: 3_600_000,
         run: () => {
             runs += 1
         },
         lastRun: () => Date.now() - 60_000,
     })
-    const stale = job('stale', {
+    const stale = job({
+        name: 'stale',
         every: 3_600_000,
         run: () => {
             runs += 10
@@ -174,7 +197,8 @@ test('a last run within the interval is waited out, and an older one is run at o
 test('an interval of 0 runs nothing, and names no next run — 54.25', async () => {
     let runs = 0
     const looked = Promise.withResolvers<void>()
-    const paused = job('paused', {
+    const paused = job({
+        name: 'paused',
         every: () => 0,
         run: () => {
             runs += 1
@@ -192,11 +216,12 @@ test('an interval of 0 runs nothing, and names no next run — 54.25', async () 
 })
 
 // THE REVERT: drop `stopping.signal` from the run's signal, and the run is never told — the stop
-// waits on a run that never ends; drop the check in `runNow`, and `runs` is 2.
+// waits on a run that never ends; drop the check in `Job.run`, and `runs` is 2.
 test('stop aborts the run in flight, waits on it, and starts no run after — 54.24, 54.26, 54.27', async () => {
     let runs = 0
     const started = Promise.withResolvers<void>()
-    const digest = job('stopped', {
+    const digest = job({
+        name: 'stopped',
         every: 3_600_000,
         run: () => {
             const signal = abortSignal()
@@ -209,7 +234,7 @@ test('stop aborts the run in flight, waits on it, and starts no run after — 54
             )
         },
     })
-    void digest.runNow()
+    void digest.run()
     await started.promise
     const stopped = await digest.stop()
     expect(stopped).toMatchObject({
@@ -218,7 +243,7 @@ test('stop aborts the run in flight, waits on it, and starts no run after — 54
         nextRun: null,
         lastError: null,
     })
-    await digest.runNow()
+    await digest.run()
     expect(runs).toBe(1)
 })
 
@@ -229,7 +254,8 @@ test('stop aborts the run in flight, waits on it, and starts no run after — 54
 test('a run that overruns its interval is not aborted by the looks after it — 54.26, 54.29', async () => {
     const release = Promise.withResolvers<void>()
     let told: AbortSignal | undefined
-    const scrape = job('overrun', {
+    const scrape = job({
+        name: 'overrun',
         every: 5,
         from: 'start',
         run: async () => {
@@ -247,12 +273,13 @@ test('a run that overruns its interval is not aborted by the looks after it — 
     })
 })
 
-// 54.38 — WHILE `paused` READS TRUE A LOOK STARTS NO RUN, and `runNow` still does. THE REVERT: drop
+// 54.38 — WHILE `paused` READS TRUE A LOOK STARTS NO RUN, and `Job.run` still does. THE REVERT: drop
 // the pause from `look`, and `runs while paused: 1` or more.
-test('a paused job starts no run from a look, and runNow still runs — 54.38', async () => {
+test('a paused job starts no run from a look, and Job.run still runs — 54.38', async () => {
     const paused = reactive(true)
     let runs = 0
-    const sweep = job('paused', {
+    const sweep = job({
+        name: 'paused',
         every: 5,
         paused,
         run: () => {
@@ -262,7 +289,7 @@ test('a paused job starts no run from a look, and runNow still runs — 54.38', 
     await serving(async () => {
         await Bun.sleep(30)
         const whilePaused = runs
-        await sweep.runNow()
+        await sweep.run()
         const asked = runs
         paused.set(false)
         await until(sweep.status, () => runs > asked)
@@ -274,12 +301,13 @@ test('a paused job starts no run from a look, and runNow still runs — 54.38', 
 })
 
 // 54.39 — A RUN IS ITS OWN OWNER: `abortSignal()` inside it, after an `await` included, answers the
-// run's signal — not the request `runNow` was called from, which ends as its caller hangs up.
+// run's signal — not the request `Job.run` was called from, which ends as its caller hangs up.
 test('abortSignal in a run asked for from a request outlives the request, and ends at stop — 54.39', async () => {
     const release = Promise.withResolvers<void>()
     const started = Promise.withResolvers<void>()
     let inside: AbortSignal | undefined
-    const exporting = job('owned', {
+    const exporting = job({
+        name: 'owned',
         every: 3_600_000,
         run: async () => {
             await Bun.sleep(0)
@@ -294,7 +322,7 @@ test('abortSignal in a run asked for from a request outlives the request, and en
         undefined,
         undefined,
     )
-    const ran = inOpenScope(scope, () => exporting.runNow())
+    const ran = inOpenScope(scope, () => exporting.run())
     await started.promise
     hangUp.abort()
     const afterHangUp = inside?.aborted
@@ -310,7 +338,8 @@ test('abortSignal in a run asked for from a request outlives the request, and en
 test('abortSignal in a run that overruns its interval is not aborted by the looks after it — 54.39', async () => {
     const release = Promise.withResolvers<void>()
     let inside: AbortSignal | undefined
-    const scrape = job('owned overrun', {
+    const scrape = job({
+        name: 'owned overrun',
         every: 5,
         from: 'start',
         run: async () => {
@@ -345,11 +374,12 @@ test('a pipe called in a run is told to stop when the job stops — 54.39, 57.13
                 })
             }),
     ])
-    const scheduled = job('piped', {
+    const scheduled = job({
+        name: 'piped',
         every: 3_600_000,
         run: () => nightly(undefined),
     })
-    void scheduled.runNow()
+    void scheduled.run()
     await started.promise
     await scheduled.stop()
     expect(`step told: ${told}`).toBe('step told: true')

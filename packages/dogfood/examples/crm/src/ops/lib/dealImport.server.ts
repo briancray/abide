@@ -9,7 +9,8 @@ export const importedDeals = reactive<number | undefined>(undefined, {
 })
 
 /** The deals pulled in from the old CRM, every one or those at one stage, run only when someone asks. */
-export const dealImport = job('dealImport', {
+export const dealImport = job({
+    name: 'dealImport',
     every: 0,
     run: async (options?: { stage?: string }) => {
         const stage = options?.stage

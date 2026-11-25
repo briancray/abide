@@ -154,7 +154,8 @@ import Section from '#src/lib/Section.abide'
             import { abortSignal, job } from '@abide/abide/server'
             import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
-            export const exporting = job('export', {
+            export const exporting = job({
+                name: 'export',
                 every: 0,
                 run: async () => {
                     for (const deal of DEALS) {

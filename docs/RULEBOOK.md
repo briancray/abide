@@ -3923,6 +3923,10 @@ argument of a `reactive` or a `memo`.
 38.218 The `tsconfig.json` `abide scaffold` writes, and the default project 38.30 types an app
 against, MUST read every `.ts` file as a module, one with no `import` or `export` among them.
 
+38.219 The migration keyed to 0.144.0 MUST move the first argument of a `job` call handed an object
+literal second into that object as its `name`, and MUST rename to `run` every `runNow` read as a
+member.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -6833,8 +6837,8 @@ first run, and MUST stop looking where 7.26 stops a poll.
 54.19 A look MUST start a run of a `job` where no run has ended, or where `every` milliseconds have
 passed since the last one ended, or since it started under 54.29.
 
-54.20 `runNow`, and a look, MUST join a run of the `job` in flight, and MUST NOT start a second; the
-input a `runNow` that joined one was called with MUST NOT reach any run.
+54.20 `Job.run`, and a look, MUST join a run of the `job` in flight, and MUST NOT start a second; the
+input a `Job.run` that joined one was called with MUST NOT reach any run.
 
 54.21 A `job` MUST ask `lastRun` once, on its first look, for when its last run ended before this
 process, and MUST read the answer as a run that ended then.
@@ -6842,20 +6846,20 @@ process, and MUST read the answer as a run that ended then.
 54.22 `Job.status` MUST be one `global` value, written as a run starts and as it ends.
 
 54.23 A run that throws MUST be written through `log.error` under the namespace `log.named` builds
-from `job` and the job's name, and its message MUST stand as `lastError` until a run ends without
-throwing.
+from `job` and, where it is given, the job's `name`, and its message MUST stand as `lastError`
+until a run ends without throwing.
 
 54.24 A run whose signal 54.26 aborted MUST NOT move `lastRun` or `lastError`.
 
 54.25 A `job` whose `every` is not a positive number MUST start no run from a look, and its
 `nextRun` MUST be null while it is not.
 
-54.26 `run` MUST be handed the input the `runNow` that started it was called with, and `undefined`
+54.26 `run` MUST be handed the input the `Job.run` that started it was called with, and `undefined`
 where a look started it, and a run's signal MUST be one aborted where 7.38's is, and where `Job.stop`
 is called.
 
 54.27 `Job.stop` MUST settle once a run in flight has ended, and a `job` it stopped MUST start no
-run, from a look or from `runNow`, and MUST hold `nextRun` null.
+run, from a look or from `Job.run`, and MUST hold `nextRun` null.
 
 54.28 `authorize` given `status: 404` MUST answer an authenticated caller it does not admit with
 the refusal 15.7 answers an address nothing serves, naming the path and method of the request.
@@ -6893,7 +6897,7 @@ process.
 54.37 `trustedIdentity` MUST seal no cookie, and MUST pass a request whose `header` is absent or
 empty as it came.
 
-54.38 A look MUST NOT start a run of a `job` while its `paused` reads true, and `runNow` MUST run
+54.38 A look MUST NOT start a run of a `job` while its `paused` reads true, and `Job.run` MUST run
 it all the same.
 
 54.39 A `job`'s run MUST run outside every request and every `memo` run, whichever started it, and

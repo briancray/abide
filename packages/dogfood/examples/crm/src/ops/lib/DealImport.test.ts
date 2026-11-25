@@ -23,15 +23,15 @@ test('an import asked for while one is running is refused 409', async () => {
         status: 409,
     })
     // Once it ends, the next press starts another.
-    await dealImport.runNow()
+    await dealImport.run()
     expect(await app.run(pressImport)).toMatchObject({ running: true })
 })
 
-// THE REVERT: call `dealImport.runNow()` with nothing in the handler, and all 7 deals are imported.
+// THE REVERT: call `dealImport.run()` with nothing in the handler, and all 7 deals are imported.
 test('an import asked for one stage imports only the deals at it', async () => {
     await using app = await createApp()
-    await dealImport.runNow()
+    await dealImport.run()
     await app.run(() => pressImport({ stage: 'lead' }))
-    await dealImport.runNow()
+    await dealImport.run()
     expect(`imported: ${importedDeals.peek()}`).toBe('imported: 3')
 })
