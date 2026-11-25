@@ -8,6 +8,12 @@ import { fetchData } from '#server'
 import { retryWait } from '#shared/retryWait.ts'
 import { RetryTimer } from '#ui/RetryTimer.ts'
 
+/** `fetchData`'s answer, or the refusal it rejected with (54.16), as one value a test reads. */
+const settledFetch = ((...given: Parameters<typeof fetchData>) =>
+    fetchData(...given).catch((refusal: unknown) => refusal)) as unknown as (
+    ...given: Parameters<typeof fetchData>
+) => Promise<any>
+
 const service = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
@@ -65,7 +71,7 @@ test('the floor doubles per retry, stops at the ceiling, and waits out a later R
 // its own doubling with the floor tripled — the two sequences part.
 test('fetchData and RetryTimer wait the same sequence from the same floor — 54.10, 46.8', async () => {
     const slept = sleptBy()
-    await fetchData(`${service.url.origin}/down`, {
+    await settledFetch(`${service.url.origin}/down`, {
         retries: 3,
         timeout: 5_000,
     })
@@ -80,7 +86,7 @@ test('fetchData and RetryTimer wait the same sequence from the same floor — 54
 // 250 is due, while `RetryTimer` arms 250 for the same answer.
 test('a Retry-After sooner than the step waits the step, in both — 54.10', async () => {
     const slept = sleptBy()
-    await fetchData(`${service.url.origin}/soon`, {
+    await settledFetch(`${service.url.origin}/soon`, {
         retries: 1,
         timeout: 5_000,
     })
@@ -96,14 +102,14 @@ test('a Retry-After sooner than the step waits the step, in both — 54.10', asy
 // `backoff` from `fetchData`'s `backoffWait` call, and `[250, 500, 1000]` is slept both times.
 test('backoff moves the floor, or names each wait — 54.10', async () => {
     const slept = sleptBy()
-    await fetchData(`${service.url.origin}/down`, {
+    await settledFetch(`${service.url.origin}/down`, {
         retries: 3,
         timeout: 50_000,
         backoff: 1_000,
     })
     expect(slept).toEqual([1_000, 2_000, 4_000])
     slept.length = 0
-    await fetchData(`${service.url.origin}/down`, {
+    await settledFetch(`${service.url.origin}/down`, {
         retries: 3,
         timeout: 50_000,
         backoff: (retry) => retry ** 2 * 100,

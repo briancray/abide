@@ -79,8 +79,8 @@ import Section from '#src/lib/Section.abide'
         <p>A thrown attempt, a timeout or a 408, 425, 429 or 5xx is asked again, twice by default.
             The body is read as its <code>content-type</code> says, as
             <code>handle</code> reads one: JSON as its value, text as a string, anything else as
-            a <code>Blob</code>. A service that gives up is a <code>FetchFailed</code> at 502,
-            and returning it from the handler refuses.</p>
+            a <code>Blob</code>. A service that gives up rejects with a <code>FetchFailed</code>
+            at 502, and a handler that lets it reject refuses with it.</p>
         <Code language="ts" caption="server" code={`
             import { fetchData, GET } from '@abide/abide/server'
 
@@ -120,7 +120,8 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Check the body's shape before trusting the body">
         <p>Without a <code>schema</code>, the type you name is a promise nothing checks. With one, a
-            body it refuses is a <code>FetchFailed</code> whose reason is <code>shape</code>.</p>
+            body it refuses rejects with a <code>FetchFailed</code> whose reason is
+            <code>shape</code>.</p>
         <Code language="ts" caption="server" code={`
             import { fetchData } from '@abide/abide/server'
 
@@ -144,11 +145,14 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { fetchData, isFailed, log } from '@abide/abide/server'
 
-            const filing = await fetchData('https://registry.example/filings/ada.txt', {
-                timeout: 2_000,
-            })
-            if (isFailed(filing))
-                log.warning('registry gave up', filing.data, filing.cause)
+            try {
+                await fetchData('https://registry.example/filings/ada.txt', {
+                    timeout: 2_000,
+                })
+            } catch (failed) {
+                if (!isFailed(failed)) throw failed
+                log.warning('registry gave up', failed.data, failed.cause)
+            }
         `} />
     </Section>
 
@@ -157,13 +161,17 @@ import Section from '#src/lib/Section.abide'
             as its type says: a JSON body as its value, text as a string. Like a thrown
             <code>cause</code>, it never leaves the server unless you hand it on.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData, GET, isFailed, refuse } from '@abide/abide/server'
+            import { type FetchFailed, refuse } from '@abide/abide'
+            import { fetchData, GET, isFailed } from '@abide/abide/server'
 
             export default GET(async ({ id }: { id: string }) => {
-                const entry = await fetchData(\`https://registry.example/companies/\${id}\`)
-                if (isFailed(entry) && entry.data.status === 422)
-                    return refuse(422, (entry.cause as { error: string }).error)
-                return entry
+                try {
+                    return await fetchData(\`https://registry.example/companies/\${id}\`)
+                } catch (failed) {
+                    if (isFailed(failed) && (failed as FetchFailed).data.status === 422)
+                        return refuse(422, (failed.cause as { error: string }).error)
+                    throw failed
+                }
             })
         `} />
     </Section>
@@ -173,16 +181,19 @@ import Section from '#src/lib/Section.abide'
             <code>data.status</code>, or <code>data.reason</code>, to answer your caller in its
             own terms.</p>
         <Code language="ts" caption="server" code={`
-            import { refuse } from '@abide/abide'
+            import { type FetchFailed, refuse } from '@abide/abide'
             import { fetchData, GET, isFailed } from '@abide/abide/server'
 
             export default GET(async ({ id }: { id: string }) => {
-                const registration = await fetchData<Registration>(
-                    \`https://registry.example/companies/\${id}\`,
-                )
-                if (isFailed(registration) && registration.data.status === 404)
-                    return refuse(404)
-                return registration
+                try {
+                    return await fetchData<Registration>(
+                        \`https://registry.example/companies/\${id}\`,
+                    )
+                } catch (failed) {
+                    if (isFailed(failed) && (failed as FetchFailed).data.status === 404)
+                        return refuse(404)
+                    throw failed
+                }
             })
         `} />
     </Section>
@@ -191,20 +202,22 @@ import Section from '#src/lib/Section.abide'
         <p>Where an answer is nice to have, ask once and give up fast: <code>retries: 0</code>
             and a short <code>timeout</code>, with a fallback for the <code>FetchFailed</code>.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData, GET, isFailed } from '@abide/abide/server'
+            import { fetchData, GET } from '@abide/abide/server'
 
-            export default GET(async ({ id }: { id: string }) => {
-                const registration = await fetchData<{ employees: number }>(
+            export default GET(({ id }: { id: string }) =>
+                fetchData<{ employees: number }>(
                     \`https://registry.example/companies/\${id}\`,
                     { retries: 0, timeout: 500 },
-                )
-                return isFailed(registration) ? null : registration.employees
-            })
+                ).then(
+                    (registration) => registration.employees,
+                    () => null,
+                ),
+            )
         `} />
     </Section>
 
     <Section level={3} title="Keep serving the last registry answer while the registry is down">
-        <p>Return the <code>FetchFailed</code> from a <code>computed</code> that polls, one per
+        <p>Ask from a <code>computed</code> that polls, one per
             company in a <code>global</code> <code>memo</code>. An ask that fails leaves the last
             answer served to every caller, with the failure in <code>error</code> beside it.</p>
         <Code language="ts" caption="server" code={`

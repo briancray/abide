@@ -7,12 +7,16 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={['/reactive/memo', '/ambients/abort-signal', '/orchestration/job']}
+    seeAlso={[
+        '/reactive/computed',
+        '/ambients/abort-signal',
+        '/orchestration/job',
+    ]}
     tests={[
         {
             path: 'packages/abide/tests/pipe.test.ts',
             from: [
-                "test('a call resolves to its answer or its refusal, and a memo over it fails with the refusal — 57.5, 15.5'",
+                "test('a call resolves to its answer and rejects with a refusal, and a computed over it fails with it — 57.5, 15.5'",
             ],
         },
         {
@@ -43,8 +47,8 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Tidy a deal's name and save the deal">
         <p>Each step is handed what the one before it answered. A pipe is an async function:
-            call it with a deal, and it resolves to what the last step answered, or to the refusal
-            a step answered, as <code>fetchData</code> does.</p>
+            call it with a deal, and it resolves to what the last step answered, and rejects with
+            the refusal a step answered, as a handler's call does.</p>
         <Code language="ts" caption="shared" code={`
             import { pipe } from '@abide/abide'
             import getDeal from './getDeal.handler.ts'
@@ -60,9 +64,9 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Show a save in progress">
-        <p>Call the pipe in a <a href={url('/reactive/memo')}><code>memo</code></a> to hold its
-            answer as a value: it is <code>busy()</code> while the item runs, and a refusal is its
-            <code>error()</code>. A run the memo replaces aborts its item.</p>
+        <p>Call the pipe in a <a href={url('/reactive/computed')}><code>computed</code></a> to
+            hold its answer as a value: it is <code>busy()</code> while the item runs, and a refusal
+            is its <code>error()</code>. A run the computed replaces aborts its item.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import { computed, pipe } from '@abide/abide'

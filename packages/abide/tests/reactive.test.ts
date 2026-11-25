@@ -339,10 +339,10 @@ test('a computed calling a memo runs again when the key it called is refreshed �
 })
 
 // 11.2, 11.76 — A MEMO HANDS BACK WHAT ITS FUNCTION ANSWERED: one promise for every call with one key,
-// and an async iterable to one caller alone, since it is read once. THE REVERT: drop the
-// `isAsyncIterable` arm from `createMemo`'s call; the second call is handed the first's stream and
-// `streams: 1`.
-test('a memo keeps a promise per key, and never an async iterable — 11.2, 11.76', async () => {
+// and for a stream, one run that every call reads through a cursor of its own from its start. THE
+// REVERT: box an async iterable in `createMemo` as any answer is; the two calls share one iterator,
+// the second reads nothing the first took, and `two: ` is empty.
+test('a memo keeps a promise per key, and shares a stream with a cursor per call — 11.2, 11.76', async () => {
     let loads = 0
     const load = memo(async (args: { id: number }) => {
         loads += 1
@@ -357,17 +357,18 @@ test('a memo keeps a promise per key, and never an async iterable — 11.2, 11.7
     let streams = 0
     const feed = memo(async function* () {
         streams += 1
-        yield streams
+        yield 1
+        yield 2
     })
     const read = async (stream: AsyncIterable<number>): Promise<number[]> => {
         const seen: number[] = []
         for await (const chunk of stream) seen.push(chunk)
         return seen
     }
-    const one = await read(feed())
-    const two = await read(feed())
-    expect(`one: ${one}, two: ${two}, streams: ${streams}`).toBe(
-        'one: 1, two: 2, streams: 2',
+    const [one, two] = await Promise.all([read(feed()), read(feed())])
+    const late = await read(feed())
+    expect(`one: ${one}, two: ${two}, late: ${late}, streams: ${streams}`).toBe(
+        'one: 1,2, two: 1,2, late: 1,2, streams: 1',
     )
 })
 

@@ -8,11 +8,14 @@ import { ownOrigin } from './ownOrigin.server.ts'
 export async function pageMarkdown(
     route: string,
 ): Promise<string | FetchFailed> {
-    const page = await fetchData(
-        new URL(url(route as RouteLiteral), ownOrigin()),
-        {
-            as: 'text',
-        },
-    )
-    return isFailed(page) ? page : markdownOf(page)
+    try {
+        const page = await fetchData(
+            new URL(url(route as RouteLiteral), ownOrigin()),
+            { as: 'text' },
+        )
+        return markdownOf(page)
+    } catch (refusal) {
+        if (isFailed(refusal)) return refusal as FetchFailed
+        throw refusal
+    }
 }

@@ -3,6 +3,7 @@
 // 7.30). What this adds is the bookkeeping written once: a status a handler can answer, one run at
 // a time, and when the last run ended.
 
+import { isFailed } from '#shared/Failed.ts'
 import { log } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
 import { computed, type Reactive, reactive } from '#shared/reactive/index.ts'
@@ -21,6 +22,9 @@ export type JobStatus = {
     /** The last run's failure, or `null` where it ended without throwing. */
     lastError: string | null
 }
+
+/** One run's ending: the status it wrote, and what it threw or refused, where it failed. */
+type Ran = { status: JobStatus; failure: unknown }
 
 /** 54.18 — a job's status beside the ways to run it ahead of its schedule and to end it. */
 export type Job<Input = undefined> = {
@@ -101,7 +105,7 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
     // What the next run is measured from: the last run's end, its start under 54.29, or a cron job's first look.
     let measuredFrom: number | undefined
     let remembered = false
-    let running: Promise<JobStatus> | undefined
+    let running: Promise<Ran> | undefined
     // 54.27 — aborted by `stop`, beside the app's own stop.
     const stopping = new AbortController()
 
@@ -120,28 +124,32 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         return at === undefined ? null : new Date(at).toISOString()
     }
 
-    const runOnce = async (input: Input | undefined): Promise<JobStatus> => {
+    const runOnce = async (input: Input | undefined): Promise<Ran> => {
         // 54.26 — the app's signal, not the look's: a run outlives the look that started it (7.45).
         const signal = AbortSignal.any([appStopSignal(), stopping.signal])
         const startedAt = Date.now()
         write({ running: true })
         let lastError = current.lastError
+        let failure: unknown
         try {
             // 54.39 — its own owner, whichever request asked for it or look started it.
-            await ownedBy(signal, () => work(input))
+            const answered = await ownedBy(signal, () => work(input))
+            // 54.23 — a run answering a refusal failed, as one throwing did.
+            if (isFailed(answered)) throw answered
             lastError = null
         } catch (error) {
             // 54.24 — a run told to stop has not failed.
             if (!signal.aborted) {
                 lastError = messageOf(error)
                 logger.error('run failed', error)
+                failure = error
             }
         }
         if (!signal.aborted) {
             lastRunAt = Date.now()
             measuredFrom = from === 'start' ? startedAt : lastRunAt
         }
-        return write({
+        const status = write({
             running: false,
             lastRun:
                 lastRunAt === undefined
@@ -150,19 +158,32 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
             nextRun: nextRunOf(),
             lastError,
         })
+        return { status, failure }
     }
 
     // 54.20 — a run asked for while one is in flight joins it, its input unread. Cleared once
     // settled rather than inside the run, which may settle before it is filed as in flight.
-    const run = (input?: Input): Promise<JobStatus> => {
+    const ran = (input?: Input): Promise<Ran> => {
         if (running !== undefined) return running
-        if (stopping.signal.aborted) return Promise.resolve(current)
+        if (stopping.signal.aborted)
+            return Promise.resolve({ status: current, failure: undefined })
         const started = runOnce(input)
         running = started
         started.then(() => {
             if (running === started) running = undefined
         })
         return started
+    }
+    // 54.43 — `Job.run` rejects with what the run threw or refused, as a handler's call does (16.3);
+    // the status still records it, and a look's run, which nobody awaits, is logged alone (54.23).
+    // A run asked for and not awaited — `void digest.run()` — is not reported twice: its failure is
+    // logged and kept, and only whoever awaits it is handed the rejection.
+    const run = (input?: Input): Promise<JobStatus> => {
+        const settled = ran(input).then(({ status, failure }) =>
+            failure === undefined ? status : Promise.reject(failure),
+        )
+        settled.then(undefined, () => undefined)
+        return settled
     }
 
     const look = async (): Promise<void> => {
@@ -185,8 +206,8 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
             // 54.29 — the clock spaces its looks from when one settles, so a look waiting on the run
             // would measure from its end. A look made while it runs joins it (54.20): a run due
             // while the last one overran starts at the look after that one ends.
-            if (from === 'start') void run()
-            else await run()
+            if (from === 'start') void ran()
+            else await ran()
             return
         }
         const nextRun = nextRunOf()

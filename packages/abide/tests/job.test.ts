@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 import { job, type JobStatus, log, watch } from '#server'
 import type { App, BootedApp } from '#server/createApp.ts'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
-import { abortSignal, pipe, type Reactive, reactive } from '#shared'
+import { abortSignal, pipe, type Reactive, reactive, refuse } from '#shared'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -102,7 +102,7 @@ test('a run in a request writes the status every caller reads — 54.22', async 
     expect(ran.lastRun).not.toBe(null)
 })
 
-test('a failed run is logged under job:<name> and kept, and the next run clears it — 54.23', async () => {
+test('a failed run rejects, is logged under job:<name> and kept, and the next run clears it — 54.23, 54.43', async () => {
     let fail = true
     const digest = job({
         name: 'failing',
@@ -112,7 +112,10 @@ test('a failed run is logged under job:<name> and kept, and the next run clears 
         },
     })
     const before = (log.records.peek() ?? []).length
-    expect((await digest.run()).lastError).toBe('the mail server refused')
+    const thrown = await digest.run().catch((error: Error) => error.message)
+    expect(
+        `rejected: ${thrown}, kept: ${digest.status.peek()?.lastError}`,
+    ).toBe('rejected: the mail server refused, kept: the mail server refused')
     const logged = (log.records.peek() ?? [])
         .slice(before)
         .filter((record) => record.namespace.endsWith('job:failing'))
@@ -129,7 +132,7 @@ test('a failed run of a job given no name is logged under job — 54.23', async 
         },
     })
     const before = (log.records.peek() ?? []).length
-    await unnamed.run()
+    await unnamed.run().catch(() => undefined)
     const logged = (log.records.peek() ?? [])
         .slice(before)
         .map((record) => record.namespace)
@@ -455,4 +458,21 @@ test('a job given both every and cron, neither, or a cron that does not parse th
     ).toThrow(TypeError)
     expect(() => job({ run } as never)).toThrow(TypeError)
     expect(() => job({ cron: 'every night', run })).toThrow()
+})
+
+// 54.43 — A RUN ANSWERING A REFUSAL FAILED, as one throwing did: `Job.run` rejects with it, and the
+// status keeps its message. THE REVERT: drop the `isFailed` test from `runOnce`; the run resolves and
+// `lastError: null`.
+test('a run answering a refusal rejects and is kept as a failure — 54.43', async () => {
+    const digest = job({
+        every: 3_600_000,
+        run: () => refuse(503, 'the mail server is down'),
+    })
+    const status = await digest
+        .run()
+        .catch((refusal: { status?: number }) => refusal.status)
+    expect(
+        `rejected: ${status}, lastError: ${digest.status.peek()?.lastError}`,
+    ).toBe('rejected: 503, lastError: the mail server is down')
+    await digest.stop()
 })

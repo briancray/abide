@@ -53,13 +53,13 @@ export type PipeOptions<In = unknown> = {
 }
 
 /**
- * A pipe: an async function from an item to its answer or its refusal, and a stream pair an item
- * stream is piped through. A value a page reads is a `memo` calling it.
+ * A pipe: an async function from an item to its answer, rejected with a step's refusal, and a stream
+ * pair an item stream is piped through. A value a page reads is a `computed` calling it.
  */
 export type Pipe<In, Out, Fanned extends boolean = false> = ((
     input: In,
     signal?: AbortSignal,
-) => Promise<(Fanned extends true ? Out[] : Out) | Failed<string, unknown>>) & {
+) => Promise<Fanned extends true ? Out[] : Out>) & {
     readonly readable: ReadableStream<Out | Failed<string, unknown>>
     readonly writable: WritableStream<In>
     readonly status: Reactive<PipeStatus>
@@ -249,12 +249,12 @@ class Runner {
         for (const resumer of this.resumers.splice(0)) resumer()
     }
 
-    /** 57.5, 57.13 — one item, called: its answer, every answer where a step fanned out, or its refusal. */
+    /** 57.5, 57.13 — one item, called: its answer, or every answer where a step fanned out; a refusal rejects. */
     async call(input: unknown, signal?: AbortSignal): Promise<unknown> {
         // 57.13 — read where the call is made: inside a `memo` body, the run's own (7.45).
         const told = abortSignal()
         const walked = await this.item(input, signal, told)
-        if (walked.refusal !== undefined) return walked.refusal
+        if (walked.refusal !== undefined) throw walked.refusal
         return walked.fanned ? walked.answers : walked.answers[0]
     }
 
@@ -465,8 +465,13 @@ class Runner {
             } catch (thrown) {
                 // 57.13 — the item's end is not a failure to try again.
                 if (ended.aborted) throw ended.reason
-                failed = true
-                failure = thrown
+                // 57.5 — A REFUSAL REJECTED IS THE STEP'S ANSWER, as one returned is: a handler call or a
+                // pipe called as a step rejects with what it refused.
+                if (isFailed(thrown)) answer = thrown
+                else {
+                    failed = true
+                    failure = thrown
+                }
             }
             if (!failed && !(isFailed(answer) && isTransient(answer.status)))
                 return answer

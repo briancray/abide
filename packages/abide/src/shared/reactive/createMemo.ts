@@ -9,17 +9,20 @@
 // is never handed out: the call reads it, which is what subscribes a `computed` calling the memo to
 // the key it called (11.75), so a trigger on the key runs that `computed` again.
 //
-// AN ASYNC ITERABLE IS NOT KEPT (11.76). It is read once, so a second caller handed the same one
-// would take the chunks the first had not, and a stream two callers share is a `computed` the memo
-// answers: `memo((args) => computed(async function* () { … }))`.
+// AN ASYNC ITERABLE IS SHARED (11.76): the entry runs it once and keeps its chunks, and each call is
+// a cursor of its own over that run from its start — so two callers each read every chunk, where
+// handing both one iterator split the chunks between them.
 
 import { isFailed, isTransient } from '../Failed.ts'
 import { isAsyncIterable } from '../isAsyncIterable.ts'
 import type { Schema } from '../Schema.ts'
+import { answerOfCall } from './answerOfCall.ts'
 import { ARGS_GATE, type Gated, PARAMETER_DEFAULTS } from './argsContract.ts'
 import { isThenable } from './isThenable.ts'
 import { createKeyed, type Keyed } from './Keyed.ts'
 import { MEMO_BRAND } from './MEMO_BRAND.ts'
+import { isStreaming } from './producer.ts'
+import { isStreamBody } from './Reactive.ts'
 
 /** What `memo` takes: how long an entry lives, what selects it, where it is kept, what its args must be. */
 export type MemoOptions<Args> = {
@@ -57,9 +60,12 @@ export function createMemo<Args, Result>(
     fn: (args: Args) => Result,
     options: MemoOptions<Args> | undefined,
 ): Memo<Args, Result> & Gated<Args> {
-    const boxed = (args: Args): Answer => {
-        const answer = new Answer(fn(args))
-        const result = answer.result
+    // 11.76 — AN ASYNC ITERABLE IS THE ENTRY'S STREAM, unboxed: the cell runs it once and keeps its
+    // chunks, and every call reads it through a cursor of its own (2.6, 5.10).
+    const boxed = (args: Args): unknown => {
+        const result = fn(args)
+        if (isAsyncIterable(result)) return result
+        const answer = new Answer(result)
         if (isThenable(result))
             (result as PromiseLike<unknown>).then(
                 (settled) => {
@@ -74,20 +80,15 @@ export function createMemo<Args, Result>(
     }
     const keyed = createKeyed<Answer, Args, Answer, never>(
         label,
-        boxed,
+        // A generator function is handed whole, so its entry streams from construction (9.6).
+        (isStreamBody(fn) ? fn : boxed) as (args: Args) => Answer,
         options as never,
     ) as Keyed<Answer, Args, Answer, never> & Gated<Args>
     const call = (...given: [args?: Args]): unknown => {
         const entry = keyed(...(given as [Args]))
-        // 11.76 — LOOKED AT BEFORE IT IS READ: an async iterable is handed to this caller and the entry
-        // let go of without a wake, where a read would subscribe the caller to an entry that is then
-        // dropped under it — and a `computed` woken by that drop calls again for ever.
-        const held = entry.peek()
-        if (held !== undefined && isAsyncIterable(held.result)) {
-            for (const [key, standing] of keyed.entries)
-                if (standing === entry) keyed.entries.delete(key)
-            return held.result
-        }
+        // 11.76 — a stream's entry is answered as a call of a streaming handler is: a cursor of this
+        // caller's own over the one run, carrying the entry for a `computed` to adopt.
+        if (isStreaming(entry)) return answerOfCall(entry, true)
         let answer: Answer
         try {
             answer = entry()

@@ -47,12 +47,12 @@ const HELD = new Map<string, Held>()
 export function fetchData<T = string>(
     url: string | URL,
     options: FetchOptions<T> & { as: 'text' },
-): Promise<T | FetchFailed>
+): Promise<T>
 /** A body as a `Blob`, checked against `schema` where one is given: 54.7-54.17. */
 export function fetchData<T = Blob>(
     url: string | URL,
     options: FetchOptions<T> & { as: 'blob' },
-): Promise<T | FetchFailed>
+): Promise<T>
 /**
  * A body read as its `content-type` says, as `handle` reads one, or as JSON where `as` says so,
  * checked against `schema` where one is given: 54.7-54.17.
@@ -60,10 +60,21 @@ export function fetchData<T = Blob>(
 export function fetchData<T = unknown>(
     url: string | URL,
     options?: FetchOptions<T>,
-): Promise<T | FetchFailed>
+): Promise<T>
 export async function fetchData<T>(
     url: string | URL,
     options: FetchOptions<T> = {},
+): Promise<T> {
+    // 54.16 — a refusal rejects, as a handler's call does (16.3): `await` hands back the body alone.
+    const answered = await answeredFor(url, options)
+    if (isFailed(answered)) throw answered
+    return answered
+}
+
+/** The body `url` answers, checked against `schema`, or the `FetchFailed` it was refused with. */
+async function answeredFor<T>(
+    url: string | URL,
+    options: FetchOptions<T>,
 ): Promise<T | FetchFailed> {
     let asking: FetchOptions<T> = options
     if (options.as === 'json') {

@@ -904,8 +904,8 @@ throw at construction.
 11.75 A `computed` that called a `memo` MUST run again where the `memo`'s entry for the key it called
 is refreshed or invalidated, and MUST NOT run again for another key's.
 
-11.76 A `memo` MUST NOT keep an async iterable its function answered: each call MUST run the function
-again.
+11.76 A `memo` whose function answers an async iterable MUST run it once per `Args` key and keep its
+chunks, and each call MUST answer a stream handing on every chunk of that run from its start.
 
 # 12. Effects
 
@@ -6899,9 +6899,9 @@ NOT be shared under 54.13: a `GET` that joined one in flight MUST ask for its ow
 
 54.15 `ttl` MUST be inert on a method other than `GET`.
 
-54.16 `fetchData` MUST settle to a `FetchFailed` at status 502 where it gives up,
-carrying the status the last attempt was answered at, or null where none answered, and why, and MUST
-throw nothing but 54.11's abort.
+54.16 `fetchData` MUST reject with a `FetchFailed` at status 502 where it gives up, carrying the
+status the last attempt was answered at, or null where none answered, and why, and MUST reject with
+nothing else but 54.11's abort.
 
 54.17 `fetchData` MUST read a 2xx body as `handle` does under 54.30, 54.31, 54.32 and 54.33, save
 where `as` names a reading — `json` parsed as JSON, `text` as its text, `blob` as a `Blob`, whatever
@@ -6962,7 +6962,7 @@ chunks, each yielded as the frame carrying it completes.
 54.33 `handle` MUST answer a `text/` type, and a `Response` naming no type, as its text, and a 204 or
 a `Response` with no body as `undefined`.
 
-54.34 A `FetchFailed` that `fetchData` settles to for a thrown attempt MUST carry what
+54.34 A `FetchFailed` that `fetchData` rejects with for a thrown attempt MUST carry what
 was thrown as its `cause`, one for an attempt answered outside 2xx the body 54.31 reads, and Problem
 Details MUST NOT carry a `cause`.
 
@@ -6994,6 +6994,9 @@ none.
 
 54.42 `job` MUST throw a `TypeError` where it is given both `every` and `cron`, or neither, and MUST
 throw where `cron` is not an expression `Bun.cron.parse` reads.
+
+54.43 `Job.run` MUST reject with what the run it started or joined threw, or with the refusal it
+answered, and a run answering a refusal MUST be written and logged as one that threw (54.23).
 
 # 55. Worker files
 
@@ -7145,9 +7148,9 @@ answer the list of their answers in its members' order, or the first refusal one
 it as an item of its own, in the order yielded.
 
 57.5 A `Pipe` called MUST answer a promise of its last step's answer, or where a step 57.4 reads
-ran, of the list of every answer its last step made, in order; a step answering a refusal MUST end
-the item and resolve the promise to that refusal, and a step that threw past 57.9 MUST end it and
-reject the promise with what it threw.
+ran, of the list of every answer its last step made, in order; a step answering a refusal, or
+rejecting with one, MUST end the item and reject the promise with that refusal, and a step that threw
+past 57.9 MUST end it and reject the promise with what it threw.
 
 57.6 A `pipe` MUST run at most `concurrency` items at once, 1 where none is given, starting a
 waiting item in the order it came.

@@ -27,16 +27,16 @@ test('a pipe hands each step the answer before it — 57.1, 57.5', async () => {
     expect(`answer: ${await steps(3)}`).toBe('answer: 40')
 })
 
-// 57.5 — A CALL IS AN ASYNC FUNCTION: it resolves to its item's answer, and to a step's refusal
-// rather than rejecting with it, as `fetchData` does. A value a page reads is a `memo` calling it,
-// whose error the refusal becomes (15.5). THE REVERT: throw `walked.refusal` in `call`, and
-// `resolved: rejected`.
-test('a call resolves to its answer or its refusal, and a memo over it fails with the refusal — 57.5, 15.5', async () => {
+// 57.5 — A CALL IS AN ASYNC FUNCTION: it resolves to its item's answer, and rejects with a step's
+// refusal, as a handler's call does (16.3). A value a page reads is a `computed` calling it, whose
+// error the refusal becomes (15.5). THE REVERT: return `walked.refusal` in `call`, and
+// `rejected: resolved`.
+test('a call resolves to its answer and rejects with a refusal, and a computed over it fails with it — 57.5, 15.5', async () => {
     const tidy = pipe([async (name: string) => name.trim()])
     const refusing = pipe([() => refuse(409, 'taken')])
     const resolved = await refusing(undefined).then(
-        (answer) => (isFailed(answer) ? answer.status : 'answer'),
-        () => 'rejected',
+        () => 'resolved',
+        (refusal) => (isFailed(refusal) ? refusal.status : 'thrown'),
     )
     const shown = computed(() => refusing(undefined))
     shown.peek()
@@ -45,13 +45,13 @@ test('a call resolves to its answer or its refusal, and a memo over it fails wit
         () => undefined,
     )
     expect(
-        `${await tidy(' Acme ')} | resolved: ${resolved} | memo error: ${shown.error()?.status}`,
+        `${await tidy(' Acme ')} | resolved: ${resolved} | memo error: ${(shown.error() as { status?: number } | undefined)?.status}`,
     ).toBe('Acme | resolved: 409 | memo error: 409')
 })
 
-// 57.5, 57.9 — A PIPE THAT IS A STEP HANDS ON ITS REFUSAL AS AN ANSWER, read for transience: one that
-// is not transient ends the item at once. THE REVERT: reject with the refusal in `call`, and the
-// outer pipe retries it as a throw — `asked: 3`.
+// 57.5, 57.9 — A PIPE THAT IS A STEP REJECTS WITH ITS REFUSAL, read as the step's answer for
+// transience: one that is not transient ends the item at once. THE REVERT: drop the `isFailed` arm
+// from `attempts`' catch, and the outer pipe retries it as a throw — `asked: 3`.
 test('a refusal from a pipe step is an answer, not retried unless transient — 57.5, 57.9', async () => {
     let asked = 0
     const inner = pipe([
@@ -61,7 +61,7 @@ test('a refusal from a pipe step is an answer, not retried unless transient — 
         },
     ])
     const outer = pipe([inner], { retries: 2, backoff: 1 })
-    const answer = await outer(undefined)
+    const answer = await outer(undefined).catch((refusal: unknown) => refusal)
     expect(
         `asked: ${asked}, answer: ${isFailed(answer) ? answer.status : answer}`,
     ).toBe('asked: 1, answer: 404')
@@ -228,8 +228,8 @@ test('a failed attempt is made again up to retries, and a final refusal is not �
         ],
         { retries: 3, backoff: 1 },
     )
-    // 57.5 — the final refusal is what the call resolves to.
-    const answer = await missing(1)
+    // 57.5 — the final refusal is what the call rejects with.
+    const answer = await missing(1).catch((refusal: unknown) => refusal)
     expect(
         `asked: ${asked}, answer: ${isFailed(answer) ? answer.status : answer}`,
     ).toBe('asked: 1, answer: 404')

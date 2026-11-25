@@ -5,12 +5,12 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={['/helpers/refuse', '/orchestration/pipe', '/data/fetch-data']}
+    seeAlso={['/helpers/refuse', '/data/fetch-data', '/orchestration/pipe']}
     tests={[
         {
-            path: 'packages/abide/tests/pipe.test.ts',
+            path: 'packages/abide/tests/handle.test.ts',
             from: [
-                "test('a call resolves to its answer or its refusal, and a memo over it fails with the refusal — 57.5, 15.5'",
+                "test('a status outside 2xx, and JSON that does not parse, are a FetchFailed — 54.31'",
             ],
         },
         {
@@ -23,22 +23,17 @@ import Section from '#src/lib/Section.abide'
         },
     ]}
 >
-    <Section level={3} title="Tell a pipe's refusal from its answer">
-        <p>A <code>pipe</code> resolves to what its last step answered, or to the refusal a
-            step answered. Check with <code>isFailed</code> before reading the deal.</p>
-        <Code language="ts" caption="shared" code={`
-            import { isFailed, pipe } from '@abide/abide'
-            import getDeal from './getDeal.handler.ts'
-            import saveDeal from './saveDeal.handler.ts'
+    <Section level={3} title="Tell a response's refusal from its body">
+        <p><code>handle</code> reads a response's body, or answers the <code>FetchFailed</code>
+            a status outside 2xx is. Check with <code>isFailed</code> before reading the body.</p>
+        <Code language="ts" caption="server" code={`
+            import { handle, isFailed } from '@abide/abide'
 
-            const rename = pipe([
-                (id: string) => getDeal({ id }),
-                (deal) => ({ ...deal, name: deal.name.trim() }),
-                (deal) => saveDeal(deal),
-            ])
-
-            const saved = await rename('d2')
-            const notice = isFailed(saved) ? saved.message : \`Saved \${saved.name}\`
+            const registry = 'https://registry.example/companies/hopper-co'
+            const read = await handle(await fetch(registry))
+            const founded = isFailed(read)
+                ? 'unknown'
+                : (read as { founded: number }).founded
         `} />
     </Section>
 
