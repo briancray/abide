@@ -16,6 +16,7 @@
 import { contractOf, type Gated } from './argsContract.ts'
 import type { Callable } from './cellShape.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
+import { MEMO_BRAND } from './MEMO_BRAND.ts'
 import { forwardingPrototype, signalMoved } from './Reactive.ts'
 import { currentScope, runInScope, SCOPING } from './scoping.ts'
 import { SELECTION_MEMBERS } from './SELECTION_MEMBERS.ts'
@@ -179,6 +180,35 @@ export function scoped(
             get: (): unknown => instanceOf(filed).entries,
         })
         return keyed
+    }
+    if (
+        !lazy &&
+        (home as { [MEMO_BRAND]?: true | undefined })[MEMO_BRAND] === true
+    ) {
+        // A MEMO: the call with its args, and the two triggers, each the current instance's.
+        return Object.assign(
+            (...args: unknown[]): unknown =>
+                (
+                    instanceOf(filed) as unknown as (
+                        ...args: unknown[]
+                    ) => unknown
+                )(...args),
+            contractOf(home),
+            {
+                [MEMO_BRAND]: true,
+                [FILED]: filed,
+                refresh: (pattern?: unknown): void =>
+                    (instanceOf(filed).refresh as (pattern?: unknown) => void)(
+                        pattern,
+                    ),
+                invalidate: (pattern?: unknown): void =>
+                    (
+                        instanceOf(filed).invalidate as (
+                            pattern?: unknown,
+                        ) => void
+                    )(pattern),
+            },
+        )
     }
     const read = function readScoped(): unknown {
         return (instanceOf(filed) as unknown as () => unknown)()

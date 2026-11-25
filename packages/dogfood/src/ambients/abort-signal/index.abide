@@ -56,7 +56,7 @@ import Section from '#src/lib/Section.abide'
             the search a keystroke made obsolete stops rather than finishing for nobody.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { abortSignal, computed, memo, reactive } from '@abide/abide'
+            import { abortSignal, computed, reactive } from '@abide/abide'
 
             let q = reactive('')
             const found = computed(() =>
@@ -92,7 +92,7 @@ import Section from '#src/lib/Section.abide'
         <p>On the server the run is carried across every <code>await</code>, so a helper the body
             calls later is still handed that run's signal, without it being passed down.</p>
         <Code language="ts" caption="server" code={`
-            import { abortSignal, computed, memo } from '@abide/abide'
+            import { abortSignal, computed } from '@abide/abide'
             import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
             function stillWanted(): boolean {
@@ -130,10 +130,10 @@ import Section from '#src/lib/Section.abide'
         <p>A job on a clock can run for a while. Read <code>abortSignal()</code> in its run and
             stop early, rather than holding the shutdown until the sweep ends.</p>
         <Code language="ts" caption="server" code={`
-            import { abortSignal, computed, memo } from '@abide/abide'
+            import { abortSignal, computed } from '@abide/abide'
             import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
-            export const followUps = memo(
+            export const followUps = computed(
                 async function* () {
                     const stopping = abortSignal()
                     for (const deal of DEALS) {

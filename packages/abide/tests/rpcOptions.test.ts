@@ -13,15 +13,12 @@ const HANDLERS = `import { GET, jsonSchema, memo, POST, refuse } from '@abide/ab
 const order: string[] = []
 let innerRuns = 0
 
-const lookup = memo(async ({ id, flags }: { id: number; flags?: boolean[] }) => ({ id, type: typeof id, flags }), {
+export const guarded = GET(async ({ id, flags }: { id: number; flags?: boolean[] }) => ({ id, type: typeof id, flags }), {
     args: jsonSchema({
         type: 'object',
         properties: { id: { type: 'integer' }, flags: { type: 'array', items: { type: 'boolean' } } },
         required: ['id'],
     }),
-})
-
-export const guarded = GET(lookup, {
     middleware: [
         async (next, ctx) => {
             order.length = 0
@@ -38,21 +35,13 @@ export const guarded = GET(lookup, {
 
 export const seenOrder = GET(() => order)
 
-export const tagged = GET(
-    memo(async ({ tags }: { tags: string[] }) => tags, {
-        args: jsonSchema({
+export const tagged = GET(async ({ tags }: { tags: string[] }) => tags, { args: jsonSchema({
             type: 'object',
             properties: { tags: { type: 'array', items: { type: 'string' } } },
             required: ['tags'],
-        }),
-    }),
-)
+        }) })
 
-export const searched = GET(
-    memo(async ({ q }: { q: string }) => q, {
-        args: jsonSchema({ type: 'object', properties: { q: { type: 'string' } }, required: ['q'] }),
-    }),
-)
+export const searched = GET(async ({ q }: { q: string }) => q, { args: jsonSchema({ type: 'object', properties: { q: { type: 'string' } }, required: ['q'] }) })
 
 const inner = GET(() => 'inner value', {
     middleware: [
@@ -110,17 +99,13 @@ export const joinedStream = GET(async () => {
     return [first === second, await first, await second]
 })
 
-export const annotated = GET(
-    memo(
-        ({ id, kind, tags, page = 1 }: { id: number; kind: 'movie' | 'series'; tags?: string[]; page: number }) => ({
+export const annotated = GET(({ id, kind, tags, page = 1 }: { id: number; kind: 'movie' | 'series'; tags?: string[]; page: number }) => ({
             id,
             type: typeof id,
             kind,
             tags,
             page,
-        }),
-    ),
-)
+        }))
 
 export const optionallyAnnotated = GET(
     async (args?: { kind?: 'movie' | 'series'; page?: number }) => args ?? 'none',

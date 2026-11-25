@@ -5,7 +5,8 @@
 
 import { expect, test } from 'bun:test'
 
-import { computed, flushSync, memo, reactive, synced, watch } from '#shared'
+import { computed, flushSync, reactive, synced, watch } from '#shared'
+import { keyedValue } from '#shared/reactive/index.ts'
 import { produceInto } from '#shared/reactive/producer.ts'
 
 // 3.12 — NOTHING TO BE OUT OF STEP WITH: a value with no body is the producer of what it holds.
@@ -104,7 +105,7 @@ test('a guard reading synced is woken as it moves each way — 3.3', () => {
 
 // 13.18 — OVER A SELECTION, ALL: one entry written here is one the producer has not made.
 test('synced over a keyed value is true only where every matching entry is — 13.18', () => {
-    const doubled = memo((args: { n: number }) => args.n * 2)
+    const doubled = keyedValue((args: { n: number }) => args.n * 2)
     doubled({ n: 1 })()
     doubled({ n: 2 })()
     expect(synced(doubled)).toBe(true)

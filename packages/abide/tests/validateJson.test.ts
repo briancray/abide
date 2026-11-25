@@ -6,7 +6,8 @@ import { expect, test } from 'bun:test'
 
 import { GET, POST } from '#server'
 import type { Issues, JsonValue, StandardSchemaV1 } from '#shared'
-import { computed, jsonSchema, memo, reactive, validateJson } from '#shared'
+import { computed, jsonSchema, reactive, validateJson } from '#shared'
+import { keyedValue } from '#shared/reactive/index.ts'
 
 // THE TYPE ARGUMENT IS NOT DECORATION. `Issues<T>` answers a bare `string[]` where `T` is
 // not an object, and `unknown` is not — so `validateJson(…)` with none types its own result
@@ -602,7 +603,7 @@ test('a schema types its ValidationError into error(), and only a schema does', 
 // below (`Property 'data' does not exist on type 'never'`, `SchemaIssuesSearch.abide`'s complaint
 // under `abide check`). Answering the refusal whatever the gate leaves the ungated line unused.
 test('an args gate types its ValidationError into a keyed error(), and only a gate does', () => {
-    const invoice = memo((args: { id: number }) => args.id * 2, {
+    const invoice = keyedValue((args: { id: number }) => args.id * 2, {
         args: jsonSchema<{ id: number }>({
             type: 'object',
             properties: { id: { type: 'integer', minimum: 0 } },
@@ -611,7 +612,7 @@ test('an args gate types its ValidationError into a keyed error(), and only a ga
     const ids: string[] | undefined = invoice({ id: -1 }).error()?.data.id
     expect(ids).toEqual(['must be at least 0'])
 
-    const plain = memo((args: { id: number }) => args.id * 2)
+    const plain = keyedValue((args: { id: number }) => args.id * 2)
     // @ts-expect-error — no gate declared, so no refusal to read.
     expect(plain({ id: -1 }).error()?.data).toBeUndefined()
 })
@@ -629,7 +630,7 @@ test('an args gate types its ValidationError into a keyed error(), and only a ga
 // promise is not).
 test('a body is typed from the body, whatever schema gates it — 19.23, 19.24', async () => {
     const invoice = GET(
-        memo(async ({ id }: { id: number }) => ({ id, total: id * 10 }), {
+        keyedValue(async ({ id }: { id: number }) => ({ id, total: id * 10 }), {
             args: jsonSchema({
                 type: 'object',
                 properties: { id: { type: 'integer' } },
@@ -715,7 +716,7 @@ test('a member left undefined is absent — 19.25', async () => {
         validateJson<Anywhere>(schema, { title: 't', tags: ['a', undefined] }),
     ).not.toBeNull()
 
-    const noted = memo(
+    const noted = keyedValue(
         ({ title, note }: { title: string; note?: string | undefined }) =>
             `${title}:${note ?? '-'}`,
         { args: jsonSchema(schema) },

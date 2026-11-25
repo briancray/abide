@@ -39,9 +39,7 @@ export const touch = POST(({ id, refresh }: { id: number; refresh?: boolean }) =
 })
 
 let priced = 0
-const prices = memo(({ id }: { id: number }) => ({ id, priced: priced++ }), { global: true })
-
-export const price = GET(prices)
+export const price = GET(({ id }: { id: number }) => ({ id, priced: priced++ }), { global: true })
 
 export const reprice = POST(({ id, refresh }: { id?: number; refresh?: boolean }) => {
     const pattern = id === undefined ? undefined : { id }

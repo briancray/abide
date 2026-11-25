@@ -11,11 +11,11 @@ import {
     flushSync,
     isFailed,
     jsonSchema,
-    memo,
     reactive,
     refuse,
     watch,
 } from '#shared'
+import { keyedValue } from '#shared/reactive/index.ts'
 
 // 15.3. The status an app gets without asking, and it is the one that says "what you sent
 // cannot be worked with" — which is what a declared refusal almost always is.
@@ -365,7 +365,7 @@ test('a body that returns a refusal refuses — 15.5', async () => {
     await loaded.catch(() => {})
     expect(summary(loaded)).toBe('error: NotFound, ready: false')
 
-    const keyed = memo(async ({ id }: { id: string }) =>
+    const keyed = keyedValue(async ({ id }: { id: string }) =>
         id === '42' ? { id } : refuse.notFound(),
     )
     const missing = keyed({ id: 'nope' })

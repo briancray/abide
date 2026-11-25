@@ -16,9 +16,11 @@ import { OUTBOX_SENDING } from '../OUTBOX_SENDING.ts'
 import type { Rpc } from '../rpc.ts'
 import { RPC_SERVER } from '../RPC_SERVER.ts'
 import type { Schema } from '../Schema.ts'
+import { createMemo, type Memo, type MemoOptions } from './createMemo.ts'
 import { DECLARED_TAGS } from './DECLARED_TAGS.ts'
 import { isReactive } from './isReactive.ts'
 import { createKeyed, isKeyed, type Keyed } from './Keyed.ts'
+import { MEMO_BRAND } from './MEMO_BRAND.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import { declaresParameter } from './parameterDefaults.ts'
 import {
@@ -36,6 +38,7 @@ import { SCOPING } from './scoping.ts'
 import { share } from './share.ts'
 
 export { isReactive } from './isReactive.ts'
+export { type Memo, type MemoOptions } from './createMemo.ts'
 export { isKeyed, type Keyed } from './Keyed.ts'
 export { NotLanded } from './NotLanded.ts'
 export { abortSignal } from './poll.ts'
@@ -307,13 +310,27 @@ export function computed(body: unknown, options?: unknown): unknown {
 }
 
 /**
- * One value per `Args` key `body` produces (11.2), computed when that key is reached (11.4).
+ * `fn`, remembered: what it answers for each `Args` key is kept and handed back as it answered — a
+ * value, a promise, a refusal — to every later call with those args (11.2, 11.4). A `computed`
+ * calling it holds the answer as a value, and runs again when the key it called is refreshed or
+ * invalidated (11.75).
  *
- * NO PARAMETER IS SNIFFED: a body declaring none is keyed on `undefined`, called as `m()`. Which form
- * a value is was read off the body's source text, and a function written elsewhere — a ledger's read
- * handed whole — turned keyed by what its author never meant as a key.
+ * NO PARAMETER IS SNIFFED: a function declaring none is kept on `undefined`, called as `m()`.
  */
-export function memo<
+export function memo<Args = undefined, Result = unknown>(
+    fn: (args: Args) => Result,
+    options?: MemoOptions<Args>,
+): Memo<Args, Result>
+export function memo(fn: unknown, options?: unknown): unknown {
+    refuseValue(fn, 'memo')
+    return filed([fn, options], true, buildMemo)
+}
+
+/**
+ * The keyed form an `Rpc` and the wire's copies are built on: one `Reactive` per `Args` key. Not app
+ * surface — only `reactive` and `computed` hand an app a `Reactive`.
+ */
+export function keyedValue<
     Value = never,
     Args = undefined,
     Result = Value,
@@ -331,15 +348,27 @@ export function memo<
     | Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args>,
     BodyProduced<Result, Kept<Shaped>>
 >
-export function memo(body: unknown, options?: unknown): unknown {
-    refuseValue(body, 'memo')
+export function keyedValue(body: unknown, options?: unknown): unknown {
     return filed([body, options], true, buildBody)
+}
+
+function buildMemo(given: [first?: unknown, options?: unknown]): unknown {
+    return createMemo(
+        'memo',
+        given[0] as (args: unknown) => unknown,
+        given[1] as MemoOptions<unknown> | undefined,
+    )
 }
 
 // 11.74 — at construction, the earliest moment there is: a value handed where a body belongs would
 // otherwise be read as one by every later call.
 function refuseValue(body: unknown, name: string): void {
-    if (typeof body !== 'function' || isReactive(body) || isKeyed(body))
+    if (
+        typeof body !== 'function' ||
+        isReactive(body) ||
+        isKeyed(body) ||
+        (body as { [MEMO_BRAND]?: true | undefined })[MEMO_BRAND] === true
+    )
         throw new TypeError(
             `abide: ${name} takes a body, a function it runs. A value to hold is reactive(value). RULEBOOK 11.74.`,
         )
@@ -421,7 +450,7 @@ export function handlerValue(body: unknown, options: unknown): unknown {
             (options as { global?: boolean | undefined } | undefined)
                 ?.global === true,
         )
-    return memo(body as () => unknown, options as undefined)
+    return keyedValue(body as (args: unknown) => unknown, options as undefined)
 }
 
 // The two body forms are told apart by WHETHER A PARAMETER IS DECLARED, which is the author saying

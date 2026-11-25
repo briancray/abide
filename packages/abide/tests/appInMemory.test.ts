@@ -4,10 +4,11 @@
 
 import { afterAll, expect, test } from 'bun:test'
 
-import { GET, jsonSchema, memo, POST, refuse, request } from '#server'
+import { GET, jsonSchema, POST, refuse, request } from '#server'
 import { config } from '#server/config.ts'
 import type { McpSurface } from '#server/generatedSurfaces.ts'
 import { currentRequestScope, LISTENING } from '#server/requestScope.ts'
+import { keyedValue } from '#shared/reactive/index.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -17,13 +18,16 @@ const RPC = '/invoices'
 const INVOICES = {
     'invoices/getInvoice.handler.ts': {
         default: GET(
-            memo(async ({ id }: { id: number }) => ({ id, total: id * 10 }), {
-                args: jsonSchema<{ id: number }>({
-                    type: 'object',
-                    properties: { id: { type: 'integer' } },
-                    required: ['id'],
-                }),
-            }),
+            keyedValue(
+                async ({ id }: { id: number }) => ({ id, total: id * 10 }),
+                {
+                    args: jsonSchema<{ id: number }>({
+                        type: 'object',
+                        properties: { id: { type: 'integer' } },
+                        required: ['id'],
+                    }),
+                },
+            ),
         ),
     },
     'invoices/untimed.handler.ts': { default: GET(() => 1) },

@@ -21,13 +21,12 @@ import {
     computed,
     flushSync,
     invalidate,
-    memo,
     reactive,
     refresh,
     watch,
 } from '#shared'
 import { cellOf } from '#shared/reactive/cellShape.ts'
-import { ambient, ambientComputed } from '#shared/reactive/index.ts'
+import { ambient, ambientComputed, keyedValue } from '#shared/reactive/index.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
 import { GET, POST } from '#shared/rpc.ts'
 
@@ -376,7 +375,7 @@ test('a value handler is one value per request, and one value under global — 1
 // entry and the body runs 1 time where 2 are due.
 test('a keyed load coalesces within a request and not across two — 11.38', async () => {
     let loads = 0
-    const invoice = memo(async ({ id }: { id: string }) => {
+    const invoice = keyedValue(async ({ id }: { id: string }) => {
         loads += 1
         return { id }
     })
@@ -544,7 +543,7 @@ test('a refresh by tag inside a request reaches a global value and its entries �
         },
         { tags: ['prices'], global: true },
     )
-    const price = memo(
+    const price = keyedValue(
         (args: { id: number }) => {
             loads += 1
             return args.id
@@ -610,7 +609,7 @@ test('a bare invalidate and a bare refresh reach every global load in the proces
         },
         { global: true },
     )
-    const rate = memo(
+    const rate = keyedValue(
         async (args: { id: number }) => {
             loads += 1
             return args.id
@@ -669,7 +668,7 @@ test('request and response read the request being served, and throw outside one 
 // the onion's center; the two spellings land on 1 entry rather than 2.
 test('a handler with rungs keys its value by the args as sent — 11.26, 11.68', async () => {
     const seen: string[] = []
-    const invoice = memo(
+    const invoice = keyedValue(
         (args: { id: string }) => {
             seen.push(args.id)
             return args.id
@@ -697,7 +696,7 @@ test('a handler with rungs keys its value by the args as sent — 11.26, 11.68',
 // outside every request, so it is `scoped`'s keyed face that carries the gate: dropped there, 0.
 test('a rung that caught the args refusal and asks again is refused again — 16.18, 16.19', async () => {
     const refusals: string[] = []
-    const invoice = memo((args: { id: string }) => args.id, {
+    const invoice = keyedValue((args: { id: string }) => args.id, {
         args: (given: unknown) => {
             if (typeof (given as { id: unknown }).id !== 'string')
                 throw new Error('id is text')

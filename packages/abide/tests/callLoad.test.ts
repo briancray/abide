@@ -5,9 +5,10 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { computed, flushSync, memo, reactive } from '#shared'
+import { computed, flushSync, reactive } from '#shared'
 import { startingLoadCall } from '#shared/loadCall.ts'
 import { callLoad } from '#shared/reactive/callLoad.ts'
+import { keyedValue } from '#shared/reactive/index.ts'
 
 type Loading = (() => unknown) & {
     busy(): boolean
@@ -20,7 +21,7 @@ type Loading = (() => unknown) & {
 // A keyed value whose loads finish only when the test says so, one release per load started.
 function held() {
     const releases: (() => void)[] = []
-    const value = memo(
+    const value = keyedValue(
         ({ id }: { id: string }) =>
             new Promise<string>((done) => {
                 releases.push(() => done(`invoice ${id}`))
@@ -82,7 +83,7 @@ test('a call after an aborted load starts another — 16.62', async () => {
 // `ending?.abort()` in `Attended.handleEvent`; the body's signal reads `aborted: false`.
 test('the body a call starts is handed the load own signal — 16.49', () => {
     let handed: AbortSignal | undefined
-    const value = memo(({ id }: { id: string }) => {
+    const value = keyedValue(({ id }: { id: string }) => {
         handed = startingLoadCall().signal
         return new Promise<string>(() => id)
     }) as unknown as (args: unknown) => Loading

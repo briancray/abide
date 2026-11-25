@@ -10,12 +10,7 @@ const HANDLERS = `import { GET, jsonSchema, log, memo, POST, refuse } from '@abi
 
 export const listInvoices = GET(() => [{ id: 1 }], { description: 'Every invoice.' })
 
-export const getInvoice = GET(
-    memo(async ({ id }: { id: number }) => ({ id, total: id * 10 }), {
-        args: jsonSchema({ type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] }),
-    }),
-    { description: 'One invoice.' },
-)
+export const getInvoice = GET(async ({ id }: { id: number }) => ({ id, total: id * 10 }), { args: jsonSchema({ type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] }), description: 'One invoice.' })
 
 export const pay = POST(({ amount }: { amount: number }) => ({ paid: amount }), { description: 'Pay.' })
 

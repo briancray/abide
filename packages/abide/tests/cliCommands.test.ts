@@ -23,11 +23,7 @@ export const faulted = GET((): string => {
 })
 
 // A gate whose schema declares what the annotation leaves open.
-export const kindOf = POST(
-    memo((args: { n: unknown }) => typeof args.n, {
-        args: jsonSchema({ type: 'object', properties: { n: { type: 'number' } } }),
-    }),
-)
+export const kindOf = POST((args: { n: unknown }) => typeof args.n, { args: jsonSchema({ type: 'object', properties: { n: { type: 'number' } } }) })
 `
 
 let base = ''

@@ -46,7 +46,7 @@ import {
     isKeyed,
     type Kept,
     type Keyed,
-    memo,
+    keyedValue,
     type Reactive,
     refresh,
     type Refusals,
@@ -509,7 +509,7 @@ export function declare<Declared extends Method>(
         const wrapped =
             onion === null && refreshes === undefined
                 ? null
-                : memo(
+                : keyedValue(
                       refreshes === undefined
                           ? answer
                           : (args: unknown) =>

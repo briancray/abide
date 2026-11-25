@@ -5,18 +5,10 @@
 
 import { expect, test } from 'bun:test'
 
-import {
-    computed,
-    GET,
-    log,
-    memo,
-    POST,
-    principal,
-    refuse,
-    watch,
-} from '#server'
+import { computed, GET, log, POST, principal, refuse, watch } from '#server'
 import type { BootedApp } from '#server/createApp.ts'
 import type { Selection } from '#shared'
+import { keyedValue } from '#shared/reactive/index.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -29,7 +21,7 @@ const boats = computed(async () => ++runs.boats, {
     global: true,
     tags: ['refreshes:boats'],
 })
-const car = memo(
+const car = keyedValue(
     async ({ id }: { id: number }) => (id === 1 ? ++runs.car1 : ++runs.car2),
     { global: true, tags: ({ id }) => [`refreshes:car:${id}`] },
 )
@@ -197,7 +189,7 @@ test('a GET declared with refreshes is refused — 16.92', () => {
 // 1 1 0` is due; drop the thenable arm, and the promise is walked as a list, which fails (16.102) —
 // `ada +0; frames 0 0 0` where `ada +1; frames 1 1 0` is due.
 const boardRuns: Record<string, number> = { ada: 0, grace: 0 }
-const boards = memo(
+const boards = keyedValue(
     async ({ personId }: { personId: string }) => ({
         personId,
         run: ++boardRuns[personId]!,

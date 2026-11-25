@@ -21,25 +21,16 @@ export const sharedForever = GET(computed(() => ({ n: 1 }), { global: true }))
 
 export const aging = GET(computed(() => ({ n: 1 }), { global: true, ttl: 60_500 }))
 
-export const agingKeyed = GET(
-    memo((args: { n: number }) => ({ n: args.n }), { global: true, ttl: 60_500 }),
-)
+export const agingKeyed = GET((args: { n: number }) => ({ n: args.n }), { global: true, ttl: 60_500 })
 
-export const agingGuarded = GET(
-    memo((args: { n: number }) => ({ n: args.n }), { global: true, ttl: 60_500 }),
-    { middleware: [async (next) => next()] },
-)
+export const agingGuarded = GET((args: { n: number }) => ({ n: args.n }), { global: true, ttl: 60_500, middleware: [async (next) => next()] })
 
 export const sharedWrite = POST(computed(() => ({ n: 1 }), { global: true, ttl: 90_000 }))
 
 export const local = GET(computed(() => ({ n: 1 }), { ttl: 90_000 }))
 
-export const sharedRefused = GET(
-    memo((args: { n: number }) => (args.n > 0 ? { n: args.n } : refuse(404, 'none')), {
-        global: true,
-        ttl: 90_000,
-    }),
-)
+export const sharedRefused = GET((args: { n: number }) => (args.n > 0 ? { n: args.n } : refuse(404, 'none')), { global: true,
+        ttl: 90_000 })
 
 export const feed = GET(async function* () {
     yield { n: 1 }

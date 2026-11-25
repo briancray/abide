@@ -204,17 +204,23 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Keep serving the last registry answer while the registry is down">
-        <p>Return the <code>FetchFailed</code> from a <code>global</code> <code>memo</code> that
-            polls. An ask that fails leaves the last answer served to every caller, with the
-            failure in <code>error</code> beside it.</p>
+        <p>Return the <code>FetchFailed</code> from a <code>computed</code> that polls, one per
+            company in a <code>global</code> <code>memo</code>. An ask that fails leaves the last
+            answer served to every caller, with the failure in <code>error</code> beside it.</p>
         <Code language="ts" caption="server" code={`
-            import { memo } from '@abide/abide'
+            import { computed, memo } from '@abide/abide'
             import { fetchData } from '@abide/abide/server'
 
             export const registrations = memo(
                 ({ id }: { id: string }) =>
-                    fetchData<Registration>(\`https://registry.example/companies/\${id}\`),
-                { global: true, poll: 3_600_000 },
+                    computed(
+                        () =>
+                            fetchData<Registration>(
+                                \`https://registry.example/companies/\${id}\`,
+                            ),
+                        { poll: 3_600_000 },
+                    ),
+                { global: true },
             )
         `} />
     </Section>

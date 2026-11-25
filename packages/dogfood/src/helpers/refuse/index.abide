@@ -47,8 +47,8 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Say whether a refusal is worth asking again">
         <p>The <code>status</code> says what kind of refusal it is, and it is 400 where none
             is given. 408, 425, 429 and anything from 500 up are worth asking again: a
-            <code>pipe</code> retries the step, and a keyed <code>memo</code> runs its body
-            again on the next read. Any other status is the answer, and stays one.</p>
+            <code>pipe</code> retries the step, and a <code>memo</code> runs its function
+            again on the next call. Any other status is the answer, and stays one.</p>
         <Code language="ts" caption="shared" code={`
             import { pipe, refuse } from '@abide/abide'
 

@@ -58,13 +58,9 @@ const shelf = reactive([{ id: 'a' }], {
 
 const bound = GET(shelf)
 const inline = GET(computed(() => [{ isbn: '1' }], { key: 'isbn' }))
-const keyedCopy = GET(
-    memo(({ id }: { id: string }) => [{ id }], {
-        key: (row) => row.id,
+const keyedCopy = GET(({ id }: { id: string }) => [{ id }], { key: (row) => row.id,
         tags: ({ id }) => [id],
-        identity: (next, previous) => next === previous,
-    }),
-)
+        identity: (next, previous) => next === previous })
 const plain = GET(() => [1])
 const optioned = GET(() => [{ isbn: '1' }], {
     key: 'isbn',
@@ -232,7 +228,7 @@ test("the build writes a handler's parameter defaults into its wrapper, and refu
 import { GET, memo, POST } from '@abide/abide/server'
 
 const list = GET(async ({ page = 1, q = 'all' }: { page?: number; q?: string }) => [page, q])
-const kept = GET(memo(({ size = 20 }: { size?: number }) => size, { key: 'id' }))
+const kept = GET(({ size = 20 }: { size?: number }) => size, { key: 'id' })
 const save = POST(async ({ draft = true }: { draft?: boolean }) => draft)
 const plain = GET(async ({ id }: { id: string }) => id)
 </script>

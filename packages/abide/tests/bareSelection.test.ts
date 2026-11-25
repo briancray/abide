@@ -14,7 +14,6 @@ import {
     computed,
     flushSync,
     invalidate,
-    memo,
     reactive,
     ready,
     refresh,
@@ -22,6 +21,7 @@ import {
 } from '#shared'
 import { online } from '#shared/online.ts'
 import { cellOf } from '#shared/reactive/cellShape.ts'
+import { keyedValue } from '#shared/reactive/index.ts'
 import { followServed } from '#shared/reactive/producer.ts'
 import { unfileProducers } from '#shared/reactive/selections.ts'
 
@@ -235,7 +235,7 @@ test('refreshing on reconnect reloads what is read and marks the rest', async ()
 // `unread entry loads before a read: 2`.
 test('a bare refresh marks a keyed ttl entry nothing reads rather than reloading it — 13.7', async () => {
     let loads = 0
-    const keyed = memo(
+    const keyed = keyedValue(
         async (args: { id: number }) => {
             loads += 1
             return args.id * 10 + loads

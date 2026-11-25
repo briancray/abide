@@ -7,14 +7,14 @@ import { expect, test } from 'bun:test'
 
 import { GET } from '#server'
 import { inScope } from '#server/requestScope.ts'
-import { memo } from '#shared'
+import { keyedValue } from '#shared/reactive/index.ts'
 import { defaultsInSource } from '#shared/reactive/parameterDefaults.ts'
 
 // THE REVERT: key `reach` on `given` rather than on `normalized(self, given)` in `Keyed.ts`;
 // this reports `runs: 2`, with `{}`, `{"page":1}` and no args three entries where one is due.
 test('a call leaving a member to its parameter default reaches the entry of one that wrote it — 11.29', () => {
     let runs = 0
-    const pages = memo(({ page = 1 }: { page?: number | undefined }) => {
+    const pages = keyedValue(({ page = 1 }: { page?: number | undefined }) => {
         runs += 1
         return page
     })
@@ -38,7 +38,7 @@ test('a call leaving a member to its parameter default reaches the entry of one 
 // nothing — `runs: 1` where 2 are due.
 test('a trigger naming the default reaches the entry a call left to it — 11.29', () => {
     let runs = 0
-    const pages = memo(({ page = 1 }: { page?: number }) => {
+    const pages = keyedValue(({ page = 1 }: { page?: number }) => {
         runs += 1
         return page
     })
@@ -135,6 +135,6 @@ test('a default the key cannot read is refused at construction, naming the membe
         "A keyed body's parameter defaults `t` to ``a${b}``",
     ])
     expect(() =>
-        memo(({ since = Date.now() }: { since?: number }) => since),
+        keyedValue(({ since = Date.now() }: { since?: number }) => since),
     ).toThrow('RULEBOOK 11.29')
 })

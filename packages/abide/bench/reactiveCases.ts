@@ -9,14 +9,9 @@
 // `harness/measure` has no abide in its graph at all — the property `lanes.test.ts`
 // walks by resolution, and the reason the harness is a package.
 
-import {
-    computed,
-    deepEqual,
-    flushSync,
-    memo,
-    reactive,
-    watch,
-} from '@abide/abide'
+import { computed, deepEqual, flushSync, reactive, watch } from '@abide/abide'
+
+import { keyedValue } from '#shared/reactive/index.ts'
 
 import { carelessSignal } from './carelessSignal.ts'
 import { signal } from './signal.ts'
@@ -1302,7 +1297,7 @@ function constructKeyed(): Case {
         handBuilt += entries.size
     }
     const abide = (): void => {
-        sink = memo((args: { id: number }) => {
+        sink = keyedValue((args: { id: number }) => {
             abideBuilt += 1
             return args.id
         })
@@ -1328,7 +1323,7 @@ function reachKeyed(): Case {
         { args: { id: number }; value: number }
     >()
     let abideBuilt = 0
-    const keyed = memo((args: { id: number }) => {
+    const keyed = keyedValue((args: { id: number }) => {
         abideBuilt += 1
         return args.id
     })
@@ -1375,7 +1370,7 @@ function probeKeyed(): Case {
         { args: { id: number }; ready: boolean; busy: boolean }
     >()
     let abideBuilt = 0
-    const keyed = memo((args: { id: number }) => {
+    const keyed = keyedValue((args: { id: number }) => {
         abideBuilt += 1
         return args.id
     })

@@ -204,10 +204,11 @@ test('retain keeps the last entries, and under one is refused — 58.10, 58.11',
 // 58.14 — `ttl` IS AN ENTRY'S LIFE FROM ITS APPEND: past it the entry goes, and a read hands on none
 // it let go. THE REVERT: drop `expire` from `append` and the read's pull, and `kept: a, b, c`.
 test('ttl lets an entry go once its life from the append has passed — 58.14', async () => {
-    const recent = ledger<string>({ ttl: 30 })
+    // A life long enough that a loaded worker cannot let `c` go before the read reaches it.
+    const recent = ledger<string>({ ttl: 500 })
     await recent.append('a')
     await recent.append('b')
-    await Bun.sleep(60)
+    await Bun.sleep(600)
     await recent.append('c')
     const kept = await taken(recent(0), 1)
     expect(

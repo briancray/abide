@@ -720,18 +720,19 @@ inferred from the thunk.
 
 11.1 `computed` MUST produce an unkeyed, tracked `Reactive`.
 
-11.2 `memo` MUST produce a keyed, untracked `Keyed`, keyed on `undefined` where its body declares no
-parameter.
+11.2 A `memo` called MUST answer what its function answered for that call's `Args` key — a value, a
+promise or a refusal, kept rather than awaited — running the function only for a key it holds no
+answer for, and keying a function that declares no parameter on `undefined`.
 
 11.3 `memo` and `computed` MUST NOT read a body's parameters to decide what they produce.
 
-11.4 A `Keyed` MUST hold one entry per `Args` key, computed when that key is reached.
+11.4 A `memo` MUST hold one entry per `Args` key, computed when that key is first called.
 
 11.5 A `computed` MUST recompute on the first read that follows a change to a value its
 body read.
 
-11.6 A `Keyed` MUST NOT recompute for that reason, and `ttl`, `invalidate`, `refresh` and
-eviction MUST be its only ways back.
+11.6 A `memo` MUST NOT run its function again for that reason, and `ttl`, `invalidate`, `refresh`
+and eviction MUST be its only ways back.
 
 11.7 Both `memo` forms MUST accept a write.
 
@@ -770,7 +771,7 @@ it.
 11.22 An implementation MUST derive a propagated probe on the read that asks for it, and MUST NOT
 hold a subscription per source for it.
 
-11.23 A `Keyed` MUST propagate nothing.
+11.23 An `Rpc`'s entry for one `Args` key MUST propagate nothing.
 
 11.24 An `Args` object MUST become a key by its canonical wire form: members sorted by name,
 `undefined` members dropped, `Date` written ISO, and an object left with no members keyed as an
@@ -846,7 +847,7 @@ refusal.
 
 11.54 A `memo` MUST NOT report `s.ready` before its body has run for the value being probed.
 
-11.55 A probe over a key a `Keyed` has not computed MUST allocate no entry.
+11.55 A probe over a key an `Rpc` has not been called with MUST allocate no entry.
 
 11.56 An implementation MUST NOT warn where two `Args` keys differ only in the case of a value.
 
@@ -895,8 +896,14 @@ once per entry.
 11.73 A body's first run in a scope that reads the `memo` it is building MUST fail with a
 `ReferenceError`.
 
-11.74 `memo` given anything but a function, or given a `Reactive` or a `Keyed`, MUST throw at
-construction.
+11.74 `computed` or `memo` given anything but a function, or given a `Reactive` or a `memo`, MUST
+throw at construction.
+
+11.75 A `computed` that called a `memo` MUST run again where the `memo`'s entry for the key it called
+is refreshed or invalidated, and MUST NOT run again for another key's.
+
+11.76 A `memo` MUST NOT keep an async iterable its function answered: each call MUST run the function
+again.
 
 # 12. Effects
 

@@ -248,7 +248,6 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Reactive` | `Reactive<Stored = undefined, Accepted = Stored, Failures = never, Produced = Stored>` | The value type every producer in this design hands back. | 1.1, 1.2, 1.3, 1.4, 1.6, 1.7, 1.8, 9.1, 9.14 |
-| `Keyed` | `Keyed<Stored, Args, Accepted = Stored, Failures = never, Produced = Stored>` | What a body declaring a parameter hands back: a factory carrying the probes and the triggers. | 4.13, 11.2, 11.4, 11.6, 11.23, 11.55 |
 | `Accepted` | `unknown` | What a factory and a write take, before the gates run. | 4.1, 4.2 |
 | `Stored` | `unknown` | What is held, and what a read returns. | 4.7, 5.2 |
 | `Failures` | union of `Failed` | What a read hands back in place of a value. | 1.3 |
@@ -340,16 +339,6 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- | --- |
 | `s.watch` | `(effect: (value: Stored) => void \| Disposer) => () => void` | `watch` narrowed to this value. | 5.1, 12.9 |
 
-### The keyed face
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `k.busy` | `(pattern?: Partial<Args>) => boolean` | `busy` narrowed to matching entries. | 13.2, 13.3, 13.12 |
-| `k.ready` | `(pattern?: Partial<Args>) => boolean` | `ready` narrowed to matching entries. | 13.11, 13.12 |
-| `k.synced` | `(pattern?: Partial<Args>) => boolean` | `synced` narrowed to matching entries. | 13.12, 13.18 |
-| `k.invalidate` | `(pattern?: Partial<Args>) => void` | `invalidate` narrowed to matching entries. | 7.2, 7.3, 13.4, 13.12 |
-| `k.refresh` | `(pattern?: Partial<Args>) => void` | `refresh` narrowed to matching entries. | 7.4, 7.5, 13.4, 13.12 |
-
 ## `computed`
 
 | Name | Signature | Meaning | Rules |
@@ -360,7 +349,9 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `memo` | `<Value = never, Args = undefined, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>>(body: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate>) => Keyed<Kept<Shaped>, Args, BodyValue<Result>, AdoptedFailures<Result> \| Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args>, BodyProduced<Result, Kept<Shaped>>>` | One value per `Args` key `body` produces, computed when that key is reached. | 11.2, 11.3, 11.4, 11.6, 11.23, 11.55, 14.4, 7.45, 9.6, 11.12, 11.74 |
+| `memo` | `<Args = undefined, Result = unknown>(fn: (args: Args) => Result, options?: MemoOptions<Args>) => Memo<Args, Result>` | `fn`, remembered: what it answers for each set of args, handed back to every later call with them. | 11.2, 11.3, 11.4, 11.6, 11.74, 11.75, 11.76, 14.4, 15.19 |
+| `Memo` | `<Args, Result>((...args: undefined extends Args ? [args?: Args] : [args: Args]) => Result) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void }` | What `memo` hands back: the function, and the triggers over the keys it holds. | 11.2, 11.24, 11.27, 13.12 |
+| `MemoOptions` | `<Args>{ ttl?: number; tags?: string[] \| ((args: Args) => string[]); global?: boolean; args?: Schema<Args> }` | How long an entry lives, what selects it, where it is kept, and what its args must be. | 11.32, 11.34, 11.40, 11.44, 11.45 |
 
 ## `watch`
 
@@ -393,7 +384,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Selection` | `Reactive<any, any, any, any> \| Keyed<any, any, any, any> \| Rpc<any, any, any, any> \| { tags: string[] }` | What `busy`, `ready`, `synced`, `refresh` and `invalidate` take: a value, a keyed value, a handler, or a set of tags. | 13.1, 13.8, 13.9, 13.13, 31.13 |
+| `Selection` | `Reactive<any, any, any, any> \| Rpc<any, any, any, any> \| { tags: string[] }` | What `busy`, `ready`, `synced`, `refresh` and `invalidate` take: a value, a handler, or a set of tags. | 13.1, 13.8, 13.9, 13.13, 31.13 |
 | `refresh` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Stale-while-revalidate over the selection. | 13.4, 13.7, 13.10, 13.12, 13.14, 13.15, 13.16, 13.17, 13.20, 26.24, 7.40 |
 
 ## `invalidate`
@@ -1026,7 +1017,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures = never, Produced = Value>(args?: Args, options?: { signal?: AbortSignal; offline?: (args: Args) => Value }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, Produced>` | A handler reached over http, or in process on a server. | 16.3, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27, 41.33, 16.79, 16.80, 16.85, 16.106 |
+| `Rpc` | `<Value, Args, Failures = never, Produced = Value>(args?: Args, options?: { signal?: AbortSignal; offline?: (args: Args) => Value }) => Reactive<Value, Value, Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, Produced>` | A handler reached over http, or in process on a server. | 11.23, 11.55, 16.3, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27, 41.33, 16.79, 16.80, 16.85, 16.106 |
 | `offline` | `(args: Args) => Value` | What a call settles to where a browser could not get its answer. | 16.81, 16.82, 16.83, 16.84 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.30 |
 | `Produced` | `unknown` | What the handler yields per production, per the unit rule. | 1.2, 16.3 |

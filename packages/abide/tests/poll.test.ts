@@ -7,7 +7,8 @@ import { expect, test } from 'bun:test'
 import { spawned } from '@abide/harness/gate'
 
 import type { App, BootedApp } from '#server/createApp.ts'
-import { abortSignal, computed, log, memo, refresh } from '#shared'
+import { abortSignal, computed, log, refresh } from '#shared'
+import { keyedValue } from '#shared/reactive/index.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -88,7 +89,7 @@ test('poll does not refresh a value whose load is still in flight — 7.21', asy
 test('poll on a keyed value refreshes every entry it holds, and stops with it — 7.20, 7.23', async () => {
     const runs = new Map<number, number>()
     const end = inSetup(() => {
-        const row = memo(
+        const row = keyedValue(
             (args: { id: number }) => {
                 runs.set(args.id, (runs.get(args.id) ?? 0) + 1)
                 return args.id
@@ -114,9 +115,9 @@ test('a poll that is not a positive number is refused at construction — 7.25',
     expect(() => computed(() => 1, { poll: 0 })).toThrow(
         'A poll is a positive number of milliseconds',
     )
-    expect(() => memo((args: { id: number }) => args.id, { poll: -1 })).toThrow(
-        'A poll is a positive number of milliseconds',
-    )
+    expect(() =>
+        keyedValue((args: { id: number }) => args.id, { poll: -1 }),
+    ).toThrow('A poll is a positive number of milliseconds')
 })
 
 // 7.22: A POLLED VALUE NOBODY ENDS DOES NOT KEEP THE PROCESS ALIVE. A module-level value polls for
@@ -124,9 +125,10 @@ test('a poll that is not a positive number is refused at construction — 7.25',
 //
 // THE REVERT: drop the `unref` from `ownedPoll`, and the child never exits — `did not finish in 5000 ms`.
 test('a poll does not hold the process open — 7.22', async () => {
-    const source = `import { computed, memo } from '${import.meta.dir}/../src/shared/index.ts'
+    const source = `import { computed } from '${import.meta.dir}/../src/shared/index.ts'
+import { keyedValue } from '${import.meta.dir}/../src/shared/reactive/index.ts'
 computed(() => 1, { poll: 50, global: true })()
-memo((args: { id: number }) => args.id, { poll: 50 })({ id: 1 })()`
+keyedValue((args: { id: number }) => args.id, { poll: 50 })({ id: 1 })()`
     const ran = await spawned(['bun', '-e', source], { deadline: 5_000 })
     expect(`exit: ${ran.exitCode}`, ran.stderr).toBe('exit: 0')
 }, 10_000)
@@ -231,7 +233,7 @@ for (const [arm, start] of Object.entries(ARMS))
 test('a keyed polled entry whose first run fails is warned on abide:reactive — 7.28', () => {
     const before = (log.records.peek() ?? []).length
     const end = inSetup(() => {
-        const row = memo(
+        const row = keyedValue(
             (args: { id: number }): number => {
                 throw new Error(`row ${args.id} could not be read`)
             },

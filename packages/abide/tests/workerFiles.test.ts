@@ -12,7 +12,8 @@ import { afterAll, expect, test } from 'bun:test'
 import { job } from '#server'
 import { serveCompilation } from '#server/abideModules.ts'
 import { workerExports } from '#server/workerExports.ts'
-import { abortSignal, computed, memo } from '#shared'
+import { abortSignal, computed } from '#shared'
+import { keyedValue } from '#shared/reactive/index.ts'
 import type { WorkerExport } from '#shared/worker/WorkerMessage.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -270,7 +271,7 @@ test('the app stopping aborts a call in flight — 55.8, 37.28', async () => {
 test('a reactive reads a stand-in as it reads the export: keyed where it declares a parameter, by its defaults — 55.14', async () => {
     const unkeyed = computed(thread.counted) as unknown as { error: unknown }
     expect(typeof unkeyed.error).toBe('function')
-    const pages = memo(thread.page) as unknown as (args: {
+    const pages = keyedValue(thread.page) as unknown as (args: {
         at?: number
     }) => PromiseLike<number>
     expect(await pages({})).toBe(1)

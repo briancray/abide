@@ -20,31 +20,21 @@ middleware(async (next) => {
 const HANDLERS = `import { memo } from '@abide/abide'
 import { GET, trace } from '@abide/abide/server'
 
-export const held = GET(
-    memo(
-        async (args: { n: number }) => {
+export const held = GET(async (args: { n: number }) => {
             await Bun.sleep(50)
             return { n: args.n }
-        },
-        { global: true, ttl: 60_000 },
-    ),
-)
+        }, { global: true, ttl: 60_000 })
 
 function spin(milliseconds: number): void {
     const until = performance.now() + milliseconds
     while (performance.now() < until) {}
 }
 
-export const primed = GET(
-    memo(
-        async (args: { n: number }) => {
+export const primed = GET(async (args: { n: number }) => {
             spin(50)
             await Promise.resolve()
             return { n: args.n }
-        },
-        { global: true, ttl: 60_000 },
-    ),
-)
+        }, { global: true, ttl: 60_000 })
 
 export const guarded = GET(
     async () => {

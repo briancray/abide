@@ -30,7 +30,7 @@ import { holdUntil } from '#shared/Failed.ts'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { CELL } from '#shared/reactive/CELL.ts'
 import { cellOf } from '#shared/reactive/cellShape.ts'
-import { isKeyed } from '#shared/reactive/index.ts'
+import { isKeyed, keyedValue } from '#shared/reactive/index.ts'
 import { chunksOfStream, isStreaming } from '#shared/reactive/producer.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'
 import { CLEAN } from '#shared/reactive/tracking.ts'
@@ -289,23 +289,105 @@ test('a watched derived value reruns on the write, not on a later read', async (
     stop()
 })
 
-// 11.1, 11.2, 11.3 — THE NAME IS THE FORM, never the body's parameters: a `memo` whose body declares
-// none is keyed on `undefined`, called `m()` for its one entry. THE REVERT: read `declaresParameter`
-// in `memo` again; `m()` is then `7` itself rather than the entry holding it.
+// 11.1, 11.2, 11.3 — THE NAME IS THE FORM, never the body's parameters: a `memo` whose function
+// declares none is kept on `undefined`, and runs once for every call of `m()`. THE REVERT: drop the
+// entry lookup from `createMemo`'s call; `runs: 2` after the second `once()`.
 test('computed is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3', () => {
     const unkeyed = computed(() => 7)
     expect(unkeyed()).toBe(7)
 
-    const once = memo(() => 7)
-    expect(`entry: ${isReactive(once())}, value: ${once()()}`).toBe(
-        'entry: true, value: 7',
+    let runs = 0
+    const once = memo(() => {
+        runs += 1
+        return 7
+    })
+    expect(`value: ${once()}, again: ${once()}, runs: ${runs}`).toBe(
+        'value: 7, again: 7, runs: 1',
     )
 
-    const keyed = memo((args: { id: number }) => args.id * 2)
-    expect(keyed({ id: 4 })()).toBe(8)
+    const keyed = memo((args: { id: number; region: string }) => {
+        runs += 1
+        return args.id * 2
+    })
+    expect(keyed({ id: 4, region: 'north' })).toBe(8)
     // 11.24: members sorted, so two spellings of one key are one entry.
-    expect(keyed.entries.size).toBe(1)
-    expect(keyed({ id: 4 })).toBe(keyed({ id: 4 }))
+    expect(keyed({ region: 'north', id: 4 })).toBe(8)
+    expect(`runs: ${runs}`).toBe('runs: 2')
+})
+
+// 11.75 — A `computed` CALLING A MEMO FOLLOWS THE KEY IT CALLED, and no other: refreshing that key
+// runs it again, and refreshing another key wakes nothing. Counted as body runs, which the values
+// cannot show. THE REVERT: read the entry with `peek` rather than calling it in `createMemo`; the
+// refresh reaches no reader and `runs: 1` where 2 is due.
+test('a computed calling a memo runs again when the key it called is refreshed — 11.75', () => {
+    let answer = 1
+    const score = memo((args: { id: number }) => answer * args.id)
+    let runs = 0
+    const shown = computed(() => {
+        runs += 1
+        return score({ id: 2 })
+    })
+    expect(`shown: ${shown()}, runs: ${runs}`).toBe('shown: 2, runs: 1')
+    answer = 5
+    score.refresh({ id: 3 })
+    expect(`shown: ${shown()}, runs: ${runs}`).toBe('shown: 2, runs: 1')
+    score.refresh({ id: 2 })
+    expect(`shown: ${shown()}, runs: ${runs}`).toBe('shown: 10, runs: 2')
+    score.invalidate()
+    answer = 7
+    expect(`shown: ${shown()}, runs: ${runs}`).toBe('shown: 14, runs: 3')
+})
+
+// 11.2, 11.76 — A MEMO HANDS BACK WHAT ITS FUNCTION ANSWERED: one promise for every call with one key,
+// and an async iterable to one caller alone, since it is read once. THE REVERT: drop the
+// `isAsyncIterable` arm from `createMemo`'s call; the second call is handed the first's stream and
+// `streams: 1`.
+test('a memo keeps a promise per key, and never an async iterable — 11.2, 11.76', async () => {
+    let loads = 0
+    const load = memo(async (args: { id: number }) => {
+        loads += 1
+        return args.id
+    })
+    const first = load({ id: 1 })
+    expect(load({ id: 1 })).toBe(first)
+    expect(`answer: ${await first}, loads: ${loads}`).toBe(
+        'answer: 1, loads: 1',
+    )
+
+    let streams = 0
+    const feed = memo(async function* () {
+        streams += 1
+        yield streams
+    })
+    const read = async (stream: AsyncIterable<number>): Promise<number[]> => {
+        const seen: number[] = []
+        for await (const chunk of stream) seen.push(chunk)
+        return seen
+    }
+    const one = await read(feed())
+    const two = await read(feed())
+    expect(`one: ${one}, two: ${two}, streams: ${streams}`).toBe(
+        'one: 1, two: 2, streams: 2',
+    )
+})
+
+// 15.19 — A MEMO'S REJECTED PROMISE IS RUN AGAIN by the next call, where a settled answer is kept.
+// THE REVERT: drop the `stale` arm from `createMemo`'s call; the second call is handed the rejection
+// and `loads: 1`.
+test('a memo runs again for a key whose promise rejected — 15.19', async () => {
+    let loads = 0
+    const load = memo(async () => {
+        loads += 1
+        if (loads === 1) throw new Error('down')
+        return 'up'
+    })
+    await load().then(
+        () => undefined,
+        () => undefined,
+    )
+    expect(`answer: ${await load()}, loads: ${loads}`).toBe(
+        'answer: up, loads: 2',
+    )
 })
 
 // 11.64: WHAT THE CANONICAL WIRE FORM CANNOT WRITE IS REFUSED AT THE REACH. `JSON.stringify`
@@ -338,7 +420,7 @@ test('a reach runs a body again after a refusal for now or a throw, and holds a 
         ],
         missing: [() => refuse(404), () => 'found'],
     }
-    const record = memo(
+    const record = keyedValue(
         async ({ path }: { path: string }) => {
             runs.push(path)
             const next = answers[path]?.shift() as () => unknown
@@ -375,7 +457,7 @@ test('a reach runs a body again after a refusal for now or a throw, and holds a 
 // reach inside the wait runs the body — `let through` where `429` is due.
 test('a refusal for now is served, not run, until its Retry-After — 15.23', async () => {
     let runs = 0
-    const record = memo(
+    const record = keyedValue(
         async (_args: { path: string }) => {
             runs += 1
             if (runs > 1) return 'let through'
@@ -405,7 +487,7 @@ test('a refusal for now is served, not run, until its Retry-After — 15.23', as
 
 test('an Args member the canonical key cannot carry is refused at the reach', () => {
     let runs = 0
-    const bySet = memo((args: { f: Set<string> }) => {
+    const bySet = keyedValue((args: { f: Set<string> }) => {
         runs += 1
         return [...args.f].join()
     })
@@ -425,7 +507,7 @@ test('an Args member the canonical key cannot carry is refused at the reach', ()
 
     // `Number(input)` that failed, against a member the app left null — `JSON.stringify` writes
     // both `null`, so the failed coercion reaches the entry the app asked for deliberately.
-    const byPage = memo((args: { page: number | null }) => args.page)
+    const byPage = keyedValue((args: { page: number | null }) => args.page)
     byPage({ page: null })
     let nonFinite = 'accepted'
     let served = 'nothing'
@@ -443,7 +525,7 @@ test('an Args member the canonical key cannot carry is refused at the reach', ()
 // per re-render.
 test('reaching a key twice runs the body once', () => {
     let runs = 0
-    const keyed = memo((args: { id: number }) => {
+    const keyed = keyedValue((args: { id: number }) => {
         runs += 1
         return args.id
     })
@@ -457,7 +539,7 @@ test('reaching a key twice runs the body once', () => {
 // reaching an entry creates and starts it. This is bought out of a
 // shared get-or-create; here it is visible in the spelling.
 test('a static probe over a keyed value allocates no entry', () => {
-    const keyed = memo((args: { id: number }) => args.id)
+    const keyed = keyedValue((args: { id: number }) => args.id)
     expect(busy(keyed)).toBe(false)
     expect(keyed.entries.size).toBe(0)
     keyed({ id: 1 })
@@ -2788,7 +2870,7 @@ test('a cap on the key spares the call a superseded key would have made', async 
     const LONG = 100
     let calls = 0
     const region = reactive<string>('north', { debounce: LONG })
-    const countOrders = memo((args: { region: string }) => {
+    const countOrders = keyedValue((args: { region: string }) => {
         calls += 1
         return `orders in ${args.region}`
     })
@@ -2843,7 +2925,7 @@ function searchRig(options: Record<string, number>): {
     const keys: string[] = []
     let woken = 0
     const region = reactive<string>('north')
-    const countOrders = memo((args: { region: string }) => {
+    const countOrders = keyedValue((args: { region: string }) => {
         keys.push(args.region)
         return `n=${args.region}`
     })
@@ -3194,7 +3276,7 @@ test('an await after the ttl dropped the production reloads it', async () => {
 test('a keyed entry does not recompute when a value its body read changes', () => {
     const rate = reactive(2)
     let runs = 0
-    const price = memo((args: { amount: number }) => {
+    const price = keyedValue((args: { amount: number }) => {
         runs += 1
         return args.amount * rate()
     })
@@ -3218,7 +3300,7 @@ test('a keyed body aborted on a value that had not landed reruns when it lands, 
         }),
     )
     let runs = 0
-    const price = memo((args: { amount: number }) => {
+    const price = keyedValue((args: { amount: number }) => {
         runs += 1
         return args.amount * rate()
     })
@@ -3238,7 +3320,7 @@ test('a keyed entry is not busy because a value its body read is', async () => {
     let answer = 1
     const source = computed(() => Promise.resolve(answer))
     await source
-    const keyed = memo((args: { times: number }) => source() * args.times)
+    const keyed = keyedValue((args: { times: number }) => source() * args.times)
     const entry = keyed({ times: 3 })
     expect(entry()).toBe(3)
     answer = 2
@@ -3257,7 +3339,7 @@ test('a keyed entry is not busy because a value its body read is', async () => {
 // file the refusal under its key, and `entries: 1` where 0 are due.
 test('an args gate refuses before the body runs, and the refusal is no entry — 11.72', () => {
     let runs = 0
-    const invoice = memo(
+    const invoice = keyedValue(
         (args: { id: number }) => {
             runs += 1
             return args.id * 2
@@ -3295,7 +3377,7 @@ test('an args gate refuses before the body runs, and the refusal is no entry —
 // ValidationError is due, with a watch nothing stops.
 test('a refused args reads its refusal, not a value its store holds — 11.72', () => {
     let watches = 0
-    const invoice = memo((args: { id: number }) => args.id * 2, {
+    const invoice = keyedValue((args: { id: number }) => args.id * 2, {
         args: (value: unknown) => {
             if ((value as { id: number }).id < 0)
                 throw new Error('id must not be negative')
@@ -3327,7 +3409,7 @@ test('a refused args reads its refusal, not a value its store holds — 11.72', 
 // THE REVERT is gating the body itself, as each run's wrapper: `gate runs: 3` where 1 is due.
 test('a refresh does not run the args gate again — 11.72', async () => {
     let gateRuns = 0
-    const invoice = memo((args: { id: number }) => args.id * 2, {
+    const invoice = keyedValue((args: { id: number }) => args.id * 2, {
         args: (value: unknown) => {
             gateRuns += 1
             return value as { id: number }
@@ -3347,7 +3429,7 @@ test('a refresh does not run the args gate again — 11.72', async () => {
 // THE REVERT is handing the body the args the caller sent: `body saw: string`.
 test("an args gate that normalizes decides the body's args but not the entry", () => {
     const seen: string[] = []
-    const keyed = memo(
+    const keyed = keyedValue(
         (args: { id: string | number }) => {
             seen.push(typeof args.id)
             return args.id
@@ -3390,7 +3472,7 @@ test('args on a value with no parameter refuses at construction', () => {
 // rather than `['eu-1']`.
 test('an args gate on a keyed stream keeps it a stream, and refuses before it starts', async () => {
     let started = 0
-    const rows = memo(
+    const rows = keyedValue(
         async function* (args: { region: string }) {
             started += 1
             yield `${args.region}-1`
@@ -3424,7 +3506,7 @@ test('an args gate on a keyed stream keeps it a stream, and refuses before it st
 // the map still reports `entries: 1`.
 test('a keyed entry past its ttl is evicted whole, and the next reach starts again', async () => {
     let runs = 0
-    const keyed = memo(
+    const keyed = keyedValue(
         (args: { id: number }) => {
             runs += 1
             return args.id * 10
@@ -3450,7 +3532,7 @@ test('a keyed entry past its ttl is evicted whole, and the next reach starts aga
 test('a keyed entry is kept while its load is in flight, and lives a ttl from its end — 11.69', async () => {
     let finish = (_: number): void => {}
     let loads = 0
-    const equal = memo(
+    const equal = keyedValue(
         async (_args: { id: number }) => {
             loads += 1
             if (loads === 1) return 5
@@ -3472,7 +3554,7 @@ test('a keyed entry is kept while its load is in flight, and lives a ttl from it
     expect(`landed equal: ${equal.entries.size}`).toBe('landed equal: 0')
 
     let fail = (_: Error): void => {}
-    const failing = memo(
+    const failing = keyedValue(
         (_args: { id: number }) =>
             new Promise<number>((_done, reject) => {
                 fail = reject
@@ -3495,7 +3577,7 @@ test('a keyed entry is kept while its load is in flight, and lives a ttl from it
 //
 // THE REVERT is `touch` ignoring productions after the first: `a: false`.
 test('an entry that produces takes the newest position and outlives one that does not', async () => {
-    const keyed = memo((args: { id: string }) => reactive(args.id), {
+    const keyed = keyedValue((args: { id: string }) => reactive(args.id), {
         ttl: 100,
     })
     const a = keyed({ id: 'a' })
@@ -3515,7 +3597,7 @@ test('an entry that produces takes the newest position and outlives one that doe
 // THE REVERT is the entry's lifetime follower counting only a moved ordinal, which a patch never
 // moves (5.7): `a: false`.
 test('an entry patched in place takes the newest position and outlives one that is not', async () => {
-    const rooms = memo((_args: { id: string }): string[] => [], {
+    const rooms = keyedValue((_args: { id: string }): string[] => [], {
         ttl: 100,
     })
     const a = rooms({ id: 'a' })
@@ -3540,7 +3622,7 @@ test('a keyed ttl holds one timer however many entries it reaches', () => {
         return realSetTimeout(...args)
     }) as typeof setTimeout
     try {
-        const keyed = memo((args: { id: number }) => args.id, {
+        const keyed = keyedValue((args: { id: number }) => args.id, {
             ttl: 60_000,
         })
         for (let id = 0; id < 50; id += 1) keyed({ id })
@@ -4211,7 +4293,7 @@ test('a failed revalidation warns once on abide:reactive naming the value, and g
         yield 'held'
         if (fail) failing()
     })
-    const row = memo((args: { id: number }) =>
+    const row = keyedValue((args: { id: number }) =>
         fail
             ? Promise.reject(new Error('the reload failed'))
             : Promise.resolve(`held ${args.id}`),
@@ -5160,7 +5242,7 @@ test('a stream that fails keeps what it accumulated, and one with nothing throws
 
 // 9.6 PER ENTRY. A keyed body declared as an async generator streams each key on its own.
 test('a keyed async generator body streams each entry', async () => {
-    const keyed = memo(async function* (args: { id: number }) {
+    const keyed = keyedValue(async function* (args: { id: number }) {
         yield args.id
         yield args.id * 10
     })
@@ -5856,7 +5938,7 @@ test('a debounced stream releases once the chunks stop, and its close releases w
 test('busy and ready over tags answer ANY and EVERY across the values carrying them', async () => {
     const loads = deferredLoads()
     // The parameter is the declaration that this is keyed; the body has no use for it.
-    const orders = memo((_args: { customer: number }) => loads.load(), {
+    const orders = keyedValue((_args: { customer: number }) => loads.load(), {
         tags: (args) => [`customer:${args?.customer}`],
     })
     const profile = computed(() => Promise.resolve(7), { tags: ['customer:1'] })
@@ -6016,7 +6098,7 @@ test('a guard over a tag selection subscribes once and comes back when the loads
 // was once the whole of this gate, green with the eviction reverted.
 test('an evicted keyed entry leaves every selection', async () => {
     let runs = 0
-    const keyed = memo(
+    const keyed = keyedValue(
         async (args: { id: number }) => {
             runs += 1
             return args.id
@@ -6393,15 +6475,18 @@ test('a restored stream is a run that closed, not a run in flight', () => {
 // store, and they clobber each other silently.
 test('a keyed store is built per entry from its args', () => {
     const stores = new Map<number, ReturnType<typeof memoryStore<string>>>()
-    const profile = memo((args: { id: number }) => `computed ${args.id}`, {
-        store: (args) => {
-            const memory = memoryStore<string>({
-                answer: () => (args?.id === 1 ? 'stored 1' : undefined),
-            })
-            stores.set(args?.id as number, memory)
-            return memory.store
+    const profile = keyedValue(
+        (args: { id: number }) => `computed ${args.id}`,
+        {
+            store: (args) => {
+                const memory = memoryStore<string>({
+                    answer: () => (args?.id === 1 ? 'stored 1' : undefined),
+                })
+                stores.set(args?.id as number, memory)
+                return memory.store
+            },
         },
-    })
+    )
     expect(profile({ id: 1 })()).toBe('stored 1')
     expect(profile({ id: 2 })()).toBe('computed 2')
     expect(`entry 2 wrote: ${stores.get(2)?.sets[0]?.value}`).toBe(
@@ -6529,7 +6614,7 @@ test('a store watch stops with the owner that built its value, keyed or not — 
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
     computed(() => 'body', { store: watching(0) })()
-    memo((args: { id: number }) => `body ${args.id}`, {
+    keyedValue((args: { id: number }) => `body ${args.id}`, {
         store: () => watching(1),
     })({ id: 1 })()
     collectWatches(previous)
@@ -6861,7 +6946,7 @@ test('set and patch on an adopting value reach the adopted value', () => {
 test('a body answering undefined is loaded, and is not shaped', () => {
     type Turn = { speaker: string; text: string }
     let transformed = 0
-    const turns = memo(
+    const turns = keyedValue(
         (_: { conversation: string }): Turn | undefined => undefined,
         {
             transform: (turn) => {
@@ -6896,7 +6981,7 @@ test('reactive(initial) accepts the undefined its initial value may be', () => {
 // optional-parameter overload; the checker types `tags` unkeyed, and `bun run typecheck` refuses the
 // call that passes a record (TS2554) — while at run time it was keyed all along.
 test('a body with an optional parameter is typed keyed — 11.2', async () => {
-    const tags = memo(
+    const tags = keyedValue(
         async (args?: { type?: 'genre' | 'mood' }) => args?.type ?? 'all',
     )
     expect(isKeyed(tags)).toBe(true)
@@ -6906,7 +6991,7 @@ test('a body with an optional parameter is typed keyed — 11.2', async () => {
     void tags({ type: 'color' })
     const count = computed(() => 1)
     const counted: number = count()
-    const invoice = memo(({ id }: { id: number }) => id)
+    const invoice = keyedValue(({ id }: { id: number }) => id)
     // @ts-expect-error — a required parameter stays required.
     void invoice()
     expect({ counted, keyed: isKeyed(invoice) }).toEqual({
@@ -6920,13 +7005,13 @@ test('a body with an optional parameter is typed keyed — 11.2', async () => {
 // `isKeyedBody`; the defaulted and the rest bodies are built unkeyed — `isKeyed` answers false for
 // both where true is due.
 test('a defaulted, a rest and a streaming optional parameter are all keyed — 11.2', async () => {
-    const paged = memo(
+    const paged = keyedValue(
         (args: { page: number } = { page: 1 }) => `page ${args.page}`,
     )
-    const forwarded = memo(
+    const forwarded = keyedValue(
         (...given: [{ n: number }?]) => `rest ${given.length}`,
     )
-    const streamed = memo(async function* (args?: { from: number }) {
+    const streamed = keyedValue(async function* (args?: { from: number }) {
         yield args?.from ?? 0
     })
     expect([isKeyed(paged), isKeyed(forwarded), isKeyed(streamed)]).toEqual([
@@ -6962,7 +7047,7 @@ test('reactive() is empty and reactive(undefined) is loaded', () => {
 // THE REVERT is the factory starting each entry as it is reached: `calls: n,no,nor`.
 test('a debounce on a keyed value starts only the key the reaches stopped at', async () => {
     const calls: string[] = []
-    const search = memo(
+    const search = keyedValue(
         (args: { query: string }) => {
             calls.push(args.query)
             return args.query.length
@@ -6988,7 +7073,7 @@ test('a debounce on a keyed value starts only the key the reaches stopped at', a
 // window, and starts the latest of those when the window ends.
 test('a throttle on a keyed value starts the first key at once and the latest at the window end', async () => {
     const calls: string[] = []
-    const region = memo(
+    const region = keyedValue(
         (args: { name: string }) => {
             calls.push(args.name)
             return args.name
@@ -7006,7 +7091,7 @@ test('a throttle on a keyed value starts the first key at once and the latest at
 // A KEYED STREAM IS WHERE THIS PAYS MOST: a started key is a connection, not one request.
 test('a debounce on a keyed stream opens one stream for a burst of reaches', async () => {
     const opened: string[] = []
-    const rows = memo(
+    const rows = keyedValue(
         async function* (args: { region: string }) {
             opened.push(args.region)
             yield args.region
@@ -7283,7 +7368,9 @@ test('a stream whose close throws refuses the run rather than rejecting into not
 // `signalMoved(membership)` from `reach` in `Keyed.ts`: the guard runs 1 time against 2, and
 // reads `[false]` while `search.busy()` is true.
 test('a keyed guard asked before a key is reached wakes when that key starts loading', () => {
-    const search = memo((_args: { q: string }) => new Promise<string>(() => {}))
+    const search = keyedValue(
+        (_args: { q: string }) => new Promise<string>(() => {}),
+    )
     const sawBusy: boolean[] = []
     const sawReady: boolean[] = []
     const stopBusy = watch(() => {
@@ -7312,7 +7399,7 @@ test('a keyed guard asked before a key is reached wakes when that key starts loa
 // dropping the `signalMoved(membership)` from `release` in `Keyed.ts`: `seen` ends `false` against
 // `true`.
 test('a keyed guard wakes when an entry it was answering from is released', async () => {
-    const lookup = memo(
+    const lookup = keyedValue(
         (_args: { id: number }): number => {
             throw new Error('no')
         },
