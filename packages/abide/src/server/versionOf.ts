@@ -11,8 +11,11 @@
 // 18.11 — A VERSION ONLY PATCHES MOVED TO keeps what they wrote, and the versions they were written
 // over, back through the last `RECENT_PATCHES` of them, so a follower standing anywhere on that chain
 // is sent the writes since rather than the value — a reconnect a few lines behind a log, or a burst a
-// slow tab missed. A production that was not a patch breaks the chain.
+// slow tab missed. A production that replaced the value is a step too, as the diff from the value it
+// replaced (18.41); only one whose diff would say more than the value breaks the chain.
 
+import { diffOps } from '#shared/reactive/diffOps.ts'
+import { elementKeyOf } from '#shared/reactive/elementKeyOf.ts'
 import { drainLog, type PatchOp } from '#shared/reactive/patchLog.ts'
 import { writtenAt } from '#shared/reactive/patchMarks.ts'
 import { servedCellOf } from '#shared/reactive/producer.ts'
@@ -50,14 +53,17 @@ export function versionOf(value: unknown): number {
         stamp.patched === patched
     )
         return stamp.version
-    // THE WRITES SINCE THE LAST STAMP stand for the change only where nothing else moved it.
+    // THE WRITES SINCE THE LAST STAMP stand for the change where nothing else moved it; a value
+    // replaced is diffed against the one it replaced (18.41), so the chain carries on through it.
     const drained = drainLog(cell)
     const ops =
-        stamp !== undefined &&
-        stamp.ordinal === cell.ordinal &&
-        stamp.held === held
-            ? drained
-            : null
+        stamp === undefined
+            ? null
+            : stamp.ordinal === cell.ordinal && stamp.held === held
+              ? drained
+              : stamp.held === undefined || held === undefined
+                ? null
+                : diffOps(stamp.held, held, elementKeyOf(value))
     next += 1
     // The chain carries on from the stamp this replaces, whose array it takes over.
     const recent = ops === null || stamp === undefined ? [] : stamp.recent

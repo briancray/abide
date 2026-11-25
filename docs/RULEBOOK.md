@@ -1641,6 +1641,10 @@ that request carries none.
 18.40 A subscription to a `global` `GET` for `Args` no entry holds MUST build the entry for them, and
 MUST be fed from it, as a call for them would build it.
 
+18.41 A production that replaces a followed value MUST be sent to a subscription standing at the
+version it replaced as the JSON Patch from that value to the new one, an array its `key` tells apart
+matched element by element, and MUST NOT be sent as the value.
+
 # 19. Mount paths and schemas
 
 19.1 A route MUST be answered for each method by one file at most, a page answering `GET` and `HEAD`
