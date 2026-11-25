@@ -9,6 +9,7 @@ import { toJob } from './toJob.ts'
 import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
 import { toNamedParts } from './toNamedParts.ts'
+import { toRefuseNamed } from './toRefuseNamed.ts'
 
 /** A file's text before and after `abide upgrade`. */
 export type Edit = { path: string; before: string; after: string }
@@ -107,6 +108,20 @@ const MIGRATIONS: Migration[] = [
                 const text = await read(path)
                 if (text === undefined) continue
                 const migrated = toNamedParts(text)
+                if (migrated !== text) changed[path] = migrated
+            }
+            return changed
+        },
+    },
+    {
+        // 38.222 — a refusal is declared by its name and its options, its status among them.
+        version: '0.144.0',
+        migrate: async (read, sources) => {
+            const changed: Record<string, string> = {}
+            for (const path of await sources()) {
+                const text = await read(path)
+                if (text === undefined) continue
+                const migrated = toRefuseNamed(text, path)
                 if (migrated !== text) changed[path] = migrated
             }
             return changed

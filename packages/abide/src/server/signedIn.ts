@@ -7,7 +7,10 @@ import { principal } from '#shared/principal.ts'
 import { refuse } from '#shared/refuse.ts'
 
 /** 54.1 — the refusal every guard answers a caller nobody signed in as. */
-export const signedOut = refuse.named('SignedOut', 401, 'Sign in first.')
+export const signedOut = refuse.named('SignedOut', {
+    status: 401,
+    message: 'Sign in first.',
+})
 
 /** 54.1 — a rung admitting a caller the server authenticated, and refusing anyone else `SignedOut`. */
 export const signedIn: Middleware<

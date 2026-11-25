@@ -3935,6 +3935,11 @@ its file binds to a `chart` call, and MUST NOT rename any other `svg`.
 `const`, `let` or `var`, to a call of `chat`, `wizard` and `breadcrumbs` respectively, and MUST
 leave the same member read off any other name.
 
+38.222 The migration keyed to 0.144.0 MUST move the status, the message and the options handed
+`refuse.named` after its name into one options object handed second, MUST drop an argument written
+`undefined`, MUST spread options not written in place as an object literal, and MUST leave a call
+handed an object literal second.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

@@ -69,14 +69,15 @@ type Declared<Name extends string, Data> = ((
 type Named = {
     <Name extends string>(
         name: Name,
-        status?: number,
-        message?: string,
+        options?: { status?: number; message?: string },
     ): Declared<Name, undefined>
     <Name extends string, Data extends JsonValue>(
         name: Name,
-        status: number | undefined,
-        message: string | ((data: Data) => string) | undefined,
-        options: { schema: Schema<Data> },
+        options: {
+            status?: number
+            message?: string | ((data: Data) => string)
+            schema: Schema<Data>
+        },
     ): Declared<Name, Data>
 }
 
@@ -90,10 +91,13 @@ refuse.named = named as Named
  */
 function named<Name extends string, Data>(
     name: Name,
-    status = 400,
-    message?: string | ((data: Data) => string),
-    options?: { schema?: Schema<Data> },
+    options: {
+        status?: number
+        message?: string | ((data: Data) => string)
+        schema?: Schema<Data>
+    } = {},
 ): Declared<Name, Data> {
+    const { status = 400, message, schema } = options
     // 15.13 — resolved once, here, rather than on every construction.
     const fallback = FAILURE_STATUS_TEXT[status] ?? name
     const make = (data?: Data): Failed<Name, Data> => {
@@ -117,9 +121,9 @@ function named<Name extends string, Data>(
         // BOTH EXITS WARN, which is the rest of 15.15. Wrapped and discarded, the call had no
         // observable effect at all: an app whose refusal payload does not match its own schema
         // paid the walk and was told nothing, and neither did a schema this cannot run.
-        if (options?.schema !== undefined && data !== undefined)
+        if (schema !== undefined && data !== undefined)
             try {
-                const checked = runSchema(options.schema, data)
+                const checked = runSchema(schema, data)
                 if (checked.issues !== null)
                     REFUSE_LOG.warning(name, checked.issues)
             } catch (thrown) {
@@ -177,7 +181,9 @@ function messageFor<Data>(
  */
 refuse.notFound = named<'NotFound', { path: string; method: string }>(
     'NotFound',
-    404,
+    {
+        status: 404,
+    },
 )
 
 /**
@@ -186,7 +192,7 @@ refuse.notFound = named<'NotFound', { path: string; method: string }>(
  * 16.49: a load every caller of which aborted. 499 is the status a server logs for a request its
  * client closed, and the one thing true of this refusal is that nobody is waiting for the answer.
  */
-refuse.aborted = named<'Aborted', undefined>('Aborted', 499)
+refuse.aborted = named<'Aborted', undefined>('Aborted', { status: 499 })
 
 /**
  * The shared `ValidationError` factory, at 422.
@@ -202,7 +208,9 @@ refuse.aborted = named<'Aborted', undefined>('Aborted', 499)
  */
 const validationFactory = named<'ValidationError', JsonValue>(
     'ValidationError',
-    422,
+    {
+        status: 422,
+    },
 )
 
 /** A `ValidationError` refusal at 422, carrying the issues it found. */

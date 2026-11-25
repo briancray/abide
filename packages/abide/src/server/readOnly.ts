@@ -19,11 +19,10 @@ export function readOnly(
         message?: string
     } = {},
 ): Middleware<never, object, Failed<'ReadOnly', undefined>> {
-    const refused = refuse.named(
-        'ReadOnly',
-        403,
-        options.message ?? 'This copy takes no changes.',
-    )
+    const refused = refuse.named('ReadOnly', {
+        status: 403,
+        message: options.message ?? 'This copy takes no changes.',
+    })
     const allowed = options.allow ?? []
     return (next, { request }) => {
         if (SAFE_METHODS.has(request.method)) return next()

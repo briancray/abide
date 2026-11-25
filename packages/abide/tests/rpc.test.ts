@@ -204,8 +204,13 @@ test('a refusal lands on the value and narrows by name — 16.8', async () => {
 // plain-function arm in `rpc.ts` — `Names` is `"HttpError" | "Stale" | "ValidationError"` and the
 // `.data.owner` read fails typecheck on `never`.
 test("a rung's named refusal is on the Rpc's failures, and narrows by name — 16.8, 16.86", async () => {
-    const stale = refuse.named('Stale', 409, 'Changed since read.')
-    const notYours = refuse.named('NotYours', 403, 'Not yours.', {
+    const stale = refuse.named('Stale', {
+        status: 409,
+        message: 'Changed since read.',
+    })
+    const notYours = refuse.named('NotYours', {
+        status: 403,
+        message: 'Not yours.',
         schema: (data: unknown) => data as { owner: string },
     })
     const owned: Middleware<
@@ -225,7 +230,9 @@ test("a rung's named refusal is on the Rpc's failures, and narrows by name — 1
                 open,
                 owned,
                 async (next, ctx) =>
-                    ctx.args().fresh ? next() : refuse.named('Late', 410)(),
+                    ctx.args().fresh
+                        ? next()
+                        : refuse.named('Late', { status: 410 })(),
             ],
         },
     )
@@ -281,7 +288,7 @@ test("a helper's rungs carry their refusals, and take the handler's args — 16.
     ) => unknown)[] => []
     const realms = memo((args: { home: string }) => args.home)
     const names: string[] = []
-    const failure: unknown = refuse.named('NotYours', 403)()
+    const failure: unknown = refuse.named('NotYours', { status: 403 })()
     for (const handler of [
         POST(({ home }: { home: string }) => home, { middleware: listed() }),
         POST(({ home }: { home: string }) => home, { middleware: tupled() }),

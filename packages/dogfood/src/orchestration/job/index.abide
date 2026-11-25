@@ -140,11 +140,10 @@ import Section from '#src/lib/Section.abide'
                 run: importDeals,
             })
 
-            const importRunning = refuse.named(
-                'ImportRunning',
-                409,
-                'An import is already running.',
-            )
+            const importRunning = refuse.named('ImportRunning', {
+                status: 409,
+                message: 'An import is already running.',
+            })
 
             export default POST(() => {
                 if (dealImport.status.peek()?.running) return importRunning()

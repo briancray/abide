@@ -27,12 +27,11 @@ import Section from '#src/lib/Section.abide'
             import { PATCH } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            const dealClosed = refuse.named(
-                'DealClosed',
-                409,
-                'A closed deal does not move.',
-                { schema: jsonSchema<{ stage: string }>({ type: 'object' }) },
-            )
+            const dealClosed = refuse.named('DealClosed', {
+                status: 409,
+                message: 'A closed deal does not move.',
+                schema: jsonSchema<{ stage: string }>({ type: 'object' }),
+            })
 
             export default PATCH(({ id, stage }: { id: string; stage: string }) => {
                 const deal = DEALS.find((each) => each.id === id)

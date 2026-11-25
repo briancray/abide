@@ -4,12 +4,11 @@ import { PATCH } from '@abide/abide/server'
 import { DEALS } from './lib/DEALS.server.ts'
 
 // A refusal with a name and typed data, which the page can match.
-const dealClosed = refuse.named(
-    'DealClosed',
-    409,
-    'A closed deal does not move.',
-    { schema: jsonSchema<{ stage: string }>({ type: 'object' }) },
-)
+const dealClosed = refuse.named('DealClosed', {
+    status: 409,
+    message: 'A closed deal does not move.',
+    schema: jsonSchema<{ stage: string }>({ type: 'object' }),
+})
 
 export default PATCH(
     ({ id, stage }: { id: string; stage: string }) => {

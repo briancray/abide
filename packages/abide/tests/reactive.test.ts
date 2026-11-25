@@ -4082,7 +4082,8 @@ test('a released value still reads servable implies landed', async () => {
 // `value: TooBig: Content Too Large` — the refusal stored as though it were the new value, minting a
 // production for it and waking every reader with an `Error` where a number belongs.
 test('a transform that refuses stores nothing and mints nothing', () => {
-    const tooBig = refuse.named('TooBig', 413, undefined, {
+    const tooBig = refuse.named('TooBig', {
+        status: 413,
         schema: (value: unknown) => value as { n: number },
     })
     // NO TYPE ARGUMENTS. The transform's return is inferred whole and split: the kept `number`
@@ -4119,7 +4120,8 @@ test('a transform that refuses stores nothing and mints nothing', () => {
 //
 // THE REVERT: dropping `cell.failure = undefined` from `produce` reports `error: TooBig`.
 test('an accepted write clears the standing refusal', () => {
-    const tooBig = refuse.named('TooBig', 413, undefined, {
+    const tooBig = refuse.named('TooBig', {
+        status: 413,
         schema: (value: unknown) => value as { n: number },
     })
     const bounded = reactive(1, {
@@ -4548,7 +4550,8 @@ test('a predicate is refused as a schema', () => {
 // THE REVERT is `refused` returning `cell.ordinal`: `set refused: false`, with the ordinal
 // unmoved behind it.
 test('a refused write hands its refusal back, and an accepted one does not', () => {
-    const tooBig = refuse.named('TooBig', 413, undefined, {
+    const tooBig = refuse.named('TooBig', {
+        status: 413,
         schema: (value: unknown) => value as { n: number },
     })
     const bounded = reactive(1, {

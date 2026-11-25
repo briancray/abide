@@ -86,15 +86,14 @@ test('a declared refusal narrows on its own name and no other', () => {
 // strings, which is the thing a refusal crossing a wire cannot afford.
 test('a message function runs at construction on the data', () => {
     let ran = 0
-    const tooBig = refuse.named(
-        'TooBig',
-        413,
-        (data) => {
+    const tooBig = refuse.named('TooBig', {
+        status: 413,
+        message: (data) => {
             ran += 1
             return `over ${data.limit}`
         },
-        { schema: (value: unknown) => value as { limit: number } },
-    )
+        schema: (value: unknown) => value as { limit: number },
+    })
     const refusal = tooBig({ limit: 10 })
     expect(refusal.message).toBe('over 10')
     // Read it twice: a formatter that ran per read would count again here.
@@ -114,8 +113,16 @@ test('a message function that throws falls back to the reason phrase, then the n
     const formatter = (data: { n: number }): string => {
         throw new Error(`formatter is wrong about ${data.n}`)
     }
-    const broken = refuse.named('Broken', 400, formatter, shape)
-    const unregistered = refuse.named('Unregistered', 599, formatter, shape)
+    const broken = refuse.named('Broken', {
+        status: 400,
+        message: formatter,
+        ...shape,
+    })
+    const unregistered = refuse.named('Unregistered', {
+        status: 599,
+        message: formatter,
+        ...shape,
+    })
     let threw: unknown
     let refusal: { name: string; message: string } | undefined
     try {
@@ -134,8 +141,8 @@ test('a named refusal with no message takes its reason phrase, or its name — 1
     expect(
         [
             refuse.named('Mine')().message,
-            refuse.named('Mine', 409)().message,
-            refuse.named('Mine', 599)().message,
+            refuse.named('Mine', { status: 409 })().message,
+            refuse.named('Mine', { status: 599 })().message,
         ].join(' | '),
     ).toBe('Bad Request | Conflict | Mine')
 })
@@ -144,7 +151,9 @@ test('a named refusal with no message takes its reason phrase, or its name — 1
 // `@ts-expect-error` is the assertion: typecheck fails if a refusal with no schema starts taking
 // data, or if the message function stops being accepted only beside one.
 test('a refusal carries data only through its schema, and infers both from it — 15.18', () => {
-    const tooBig = refuse.named('TooBig', 413, (data) => `over ${data.limit}`, {
+    const tooBig = refuse.named('TooBig', {
+        status: 413,
+        message: (data) => `over ${data.limit}`,
         schema: (value: unknown) => value as { limit: number },
     })
     const refusal: Failed<'TooBig', { limit: number }> = tooBig({ limit: 10 })
@@ -152,7 +161,10 @@ test('a refusal carries data only through its schema, and infers both from it �
     // @ts-expect-error no schema declares no data
     refuse.named('Plain')({ n: 1 })
     // @ts-expect-error a message function needs a schema to be typed by
-    refuse.named('Plain', 400, (data: { n: number }) => `${data.n}`)
+    refuse.named('Plain', {
+        status: 400,
+        message: (data: { n: number }) => `${data.n}`,
+    })
 })
 
 // 17.8 — no message is the status's reason phrase, and a status with none is still named.
@@ -197,18 +209,12 @@ test('abide declares four refusal names and no more', () => {
 //
 // THE REVERT: letting `runSchema`'s throw escape `make` reports `built: no`.
 test('a refusal schema that refuses still builds the Failed', () => {
-    const tooBig = refuse.named<'TooBig', { limit: number }>(
-        'TooBig',
-        413,
-        undefined,
-        {
-            schema: (value: unknown) => {
-                throw new Error(
-                    `the payload is wrong: ${JSON.stringify(value)}`,
-                )
-            },
+    const tooBig = refuse.named<'TooBig', { limit: number }>('TooBig', {
+        status: 413,
+        schema: (value: unknown) => {
+            throw new Error(`the payload is wrong: ${JSON.stringify(value)}`)
         },
-    )
+    })
     let refusal: { name: string; status: number } | undefined
     try {
         refusal = tooBig({ limit: 10 })
@@ -227,20 +233,17 @@ test('a refusal schema that refuses still builds the Failed', () => {
 // `message, schema`.
 test('a refusal schema runs before the message function', () => {
     const order: string[] = []
-    const mine = refuse.named<'Mine', { n: number }>(
-        'Mine',
-        400,
-        (data) => {
+    const mine = refuse.named<'Mine', { n: number }>('Mine', {
+        status: 400,
+        message: (data) => {
             order.push('message')
             return `about ${data.n}`
         },
-        {
-            schema: (value: unknown) => {
-                order.push('schema')
-                return value as { n: number }
-            },
+        schema: (value: unknown) => {
+            order.push('schema')
+            return value as { n: number }
         },
-    )
+    })
     mine({ n: 1 })
     expect(order.join(', ')).toBe('schema, message')
 })
@@ -269,14 +272,10 @@ test('a refusal survives a schema that is itself wrong', () => {
     ]
     const built: string[] = []
     for (const [what, schema] of schemas) {
-        const mine = refuse.named<'Mine', { n: number }>(
-            'Mine',
-            400,
-            undefined,
-            {
-                schema: schema as never,
-            },
-        )
+        const mine = refuse.named<'Mine', { n: number }>('Mine', {
+            status: 400,
+            schema: schema as never,
+        })
         let refusal: { name: string; status: number } | undefined
         try {
             refusal = mine({ n: 1 })
@@ -328,7 +327,8 @@ test('a refusal survives JSON and is still a refusal', () => {
 // the save/restore from `runSchema` in `#shared/Schema.ts`; `runs` below reports 2.
 test("a refusal's schema runs untracked", () => {
     const other = reactive(1)
-    const mine = refuse.named<'Mine', { n: number }>('Mine', 400, undefined, {
+    const mine = refuse.named<'Mine', { n: number }>('Mine', {
+        status: 400,
         schema: (value: unknown) => {
             other()
             return value as { n: number }

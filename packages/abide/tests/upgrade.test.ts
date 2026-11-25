@@ -498,3 +498,63 @@ const talk = chat({ ask })
     for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
     expect(await upgrade(app, '0.143.0')).toEqual([])
 })
+
+// 38.222 — A REFUSAL IS DECLARED BY ITS NAME AND ITS OPTIONS, its status beside its message and its
+// schema: in a module and a Markdown fence, on one line where the call was and one property to a
+// line where it was one argument to a line, past any type arguments. An argument written `undefined` is dropped, options
+// held by a name are spread, and a call already handed its options or its name alone is left — run
+// again, the migration changes nothing (38.200). THE REVERT: drop the `toRefuseNamed` migration from
+// `MIGRATIONS`; nothing is changed and `upgrade` answers no edits.
+test('abide upgrade moves a refusal status and message into its options — 38.222, 38.200', async () => {
+    const module = `import { jsonSchema, refuse } from '@abide/abide'
+
+export const signedOut = refuse.named('SignedOut', 401, 'Sign in first.')
+export const late = refuse.named('Late', 410)
+export const typed = refuse.named<'Typed'>('Typed', 409)
+export const shaped = refuse.named('Shaped', 422, undefined, shape)
+export const closed = refuse.named(
+    'DealClosed',
+    409,
+    'A closed deal does not move.',
+    { schema: jsonSchema<{ stage: string }>({ type: 'object' }) },
+)
+export const plain = refuse.named('Plain')
+export const moved = refuse.named('Moved', { status: 409 })
+`
+    const notes = `# Refusals
+
+\`\`\`ts
+const busy = refuse.named('Busy', 409, 'Try again.')
+\`\`\`
+`
+    const app = temporaryModule({
+        'src/lib/refusals.ts': module,
+        'NOTES.md': notes,
+    })
+    const edits = await upgrade(app, '0.143.0')
+    const after = (path: string) =>
+        edits.find((edit) => edit.path === path)?.after
+    expect(after('src/lib/refusals.ts'))
+        .toBe(`import { jsonSchema, refuse } from '@abide/abide'
+
+export const signedOut = refuse.named('SignedOut', { status: 401, message: 'Sign in first.' })
+export const late = refuse.named('Late', { status: 410 })
+export const typed = refuse.named<'Typed'>('Typed', { status: 409 })
+export const shaped = refuse.named('Shaped', { status: 422, ...shape })
+export const closed = refuse.named('DealClosed', {
+    status: 409,
+    message: 'A closed deal does not move.',
+    schema: jsonSchema<{ stage: string }>({ type: 'object' }),
+})
+export const plain = refuse.named('Plain')
+export const moved = refuse.named('Moved', { status: 409 })
+`)
+    expect(after('NOTES.md')).toBe(`# Refusals
+
+\`\`\`ts
+const busy = refuse.named('Busy', { status: 409, message: 'Try again.' })
+\`\`\`
+`)
+    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    expect(await upgrade(app, '0.143.0')).toEqual([])
+})

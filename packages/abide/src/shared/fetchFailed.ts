@@ -19,12 +19,11 @@ const MESSAGES: Record<FetchFailed['data']['reason'], string> = {
     shape: 'The service answered with a body this could not read.',
 }
 
-export const fetchFailed = refuse.named(
-    'FetchFailed',
-    502,
-    ({ status, reason }: FetchFailed['data']) =>
+export const fetchFailed = refuse.named('FetchFailed', {
+    status: 502,
+    message: ({ status, reason }: FetchFailed['data']) =>
         reason === 'status'
             ? `The service answered ${status}.`
             : MESSAGES[reason],
-    { schema: (value) => value as FetchFailed['data'] },
-)
+    schema: (value) => value as FetchFailed['data'],
+})

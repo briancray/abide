@@ -34,7 +34,9 @@ const SERVER = `import { GET, POST, refuse, request, response } from '@abide/abi
 const INVOICES: Record<string, string> = {
     'invoices/lib/shared.ts': `import { refuse } from '@abide/abide/server'
 
-export const notYours = refuse.named('NotYours', 403, 'That invoice belongs to someone else.', {
+export const notYours = refuse.named('NotYours', {
+    status: 403,
+    message: 'That invoice belongs to someone else.',
     schema: (value: unknown) => value as { owner: string },
 })
 

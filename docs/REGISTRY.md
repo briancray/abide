@@ -387,8 +387,8 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `refuse.named` | `<Name extends string>(name: Name, status?: number, message?: string) => ((data?: undefined) => Failed<Name, undefined>) & { is: (error: unknown) => error is Failed<Name, undefined> }` | A reusable factory for a named, narrowable failure. | 15.3, 15.13, 15.18 |
-| `refuse.named` | `<Name extends string, Data extends JsonValue>(name: Name, status: number \| undefined, message: string \| ((data: Data) => string) \| undefined, options: { schema: Schema<Data> }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | A reusable factory for a named failure whose data its schema declares and checks. | 15.3, 15.11, 15.12, 15.13, 15.14, 15.15, 15.18 |
+| `refuse.named` | `<Name extends string>(name: Name, options?: { status?: number; message?: string }) => ((data?: undefined) => Failed<Name, undefined>) & { is: (error: unknown) => error is Failed<Name, undefined> }` | A reusable factory for a named, narrowable failure. | 15.3, 15.13, 15.18 |
+| `refuse.named` | `<Name extends string, Data extends JsonValue>(name: Name, options: { status?: number; message?: string \| ((data: Data) => string); schema: Schema<Data> }) => ((data?: Data) => Failed<Name, Data>) & { is: (error: unknown) => error is Failed<Name, Data> }` | A reusable factory for a named failure whose data its schema declares and checks. | 15.3, 15.11, 15.12, 15.13, 15.14, 15.15, 15.18 |
 | `return myError(data)` | `Failed<Name, Data>` | The one spelling for every refusal. | 15.4, 15.5 |
 | `refuse.notFound` | `(data?: { path: string; method: string }) => Failed<'NotFound', { path: string; method: string }>` | abide's own refusal for an address nothing answers. | 15.7, 15.9, 15.22 |
 | `refuse.validation` | `<T>(data?: Issues<T>) => Failed<'ValidationError', Issues<T>>` | abide's own refusal for a schema or an `args` gate that refused, or a call's route parameter no segment can spell. | 15.8, 15.9 |
@@ -1887,7 +1887,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97, 38.123, 38.136, 38.181 |
 | `abide native [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 38.175, 38.176, 38.178, 38.179, 38.180, 38.181, 38.182, 38.186, 38.187, 38.188, 38.189, 38.190, 38.191, 38.192, 38.193, 38.194, 44.77, 44.80 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118, 38.130 |
-| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215, 38.217, 38.219, 38.220, 38.221 |
+| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215, 38.217, 38.219, 38.220, 38.221, 38.222 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |
 

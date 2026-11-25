@@ -19,7 +19,8 @@ import {
 
 type Balance = { account: string; amount: number }
 
-const AccountClosed = refuse.named('AccountClosed', 409, undefined, {
+const AccountClosed = refuse.named('AccountClosed', {
+    status: 409,
     schema: jsonSchema<{ account: string }>({ type: 'object' }),
 })
 
@@ -356,7 +357,7 @@ let reported = 0
 process.on('unhandledRejection', () => {
     reported += 1
 })
-const Closed = refuse.named('Closed', 409)
+const Closed = refuse.named('Closed', { status: 409 })
 const save = POST(async ({ ok }) => (ok ? { ok } : Closed()))
 const saving = reactive()
 const keep = (call) => {
