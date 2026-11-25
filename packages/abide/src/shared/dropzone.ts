@@ -66,12 +66,11 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
             if (at === -1) away.push(file)
             else unmatched.splice(at, 1)
         }
+        // 49.19 — a refused write is a drop that took nothing and turned nothing away.
+        if (kept.length > 0 && files.set(kept) !== undefined) return kept
         turnedAway.set(away)
         if (away.length > 0) options.onreject?.(away, event)
-        if (kept.length > 0) {
-            files.set(kept)
-            options.onfiles?.(kept, event)
-        }
+        if (kept.length > 0) options.onfiles?.(kept, event)
         return kept
     }
 

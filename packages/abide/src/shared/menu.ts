@@ -45,14 +45,20 @@ type Member = {
     isOpen(): boolean
     /** Whether focus is in its menu. */
     holdsFocus(): boolean
-    switchTo(from: 'start' | 'end', focused: Focus, pointer: boolean): void
-    /** Marks it leaving toward `to`, and closes it. */
-    leaving(to: 'start' | 'end'): void
+    /** Opens it, then has `leave` close the one it switched from — both or neither (49.19). */
+    switchTo(
+        from: 'start' | 'end',
+        focused: Focus,
+        pointer: boolean,
+        leave: () => boolean,
+    ): void
+    /** Marks it leaving toward `to`, and closes it; false where its `open` refused. */
+    leaving(to: 'start' | 'end'): boolean
     /** The id of its menu, by which a submenu finds the menu its trigger is an item of. */
     menuId: string
     /** The menu its trigger is an item of, where it is a submenu. */
     parent(): Member | undefined
-    hide(): void
+    hide(): boolean
     closeToTrigger(): void
     /** 50.57 — opens the groupmate a step away, where it is in a group of two or more. */
     switchBy(step: 1 | -1): boolean
@@ -120,19 +126,18 @@ export function menu(options: MenuOptions = {}): Menu {
     const goingTo = reactive<'start' | 'end' | undefined>(undefined)
 
     const isOpen = (): boolean => open.peek() === true
-    const show = (focused: Focus, pointer: boolean): void => {
-        if (isOpen()) return
+    const show = (focused: Focus, pointer: boolean): boolean => {
+        if (isOpen()) return true
         focusOnOpen = focused
         // 50.56 — a pointer switching menus opened this one, so a leave closes it.
-        layer.show(pointer ? 'hover' : undefined)
+        if (layer.show(pointer ? 'hover' : undefined)) return true
+        focusOnOpen = undefined
+        return false
     }
-    const hide = (): void => {
-        if (isOpen()) open.set(false)
-    }
+    const hide = layer.hide
     // 50.31 — a pick or an Escape closes the menu and hands focus back to its trigger.
     const closeToTrigger = (): void => {
-        hide()
-        triggerOf()?.focus()
+        if (hide()) triggerOf()?.focus()
     }
 
     const self: Member = {
@@ -153,11 +158,11 @@ export function menu(options: MenuOptions = {}): Menu {
             const at = mates.indexOf(self)
             if (mates.length < 2 || at === -1) return false
             const to = mates[(at + step + mates.length) % mates.length]
-            self.leaving(step === 1 ? 'end' : 'start')
             ;(to as Member).switchTo(
                 step === 1 ? 'start' : 'end',
                 'first',
                 false,
+                () => self.leaving(step === 1 ? 'end' : 'start'),
             )
             return true
         },
@@ -165,13 +170,23 @@ export function menu(options: MenuOptions = {}): Menu {
         element: triggerOf,
         isOpen,
         holdsFocus: () => menuOf()?.contains(document.activeElement) === true,
-        switchTo: (from, focused, pointer) => {
-            show(focused, pointer)
-            cameFrom.set(from)
+        switchTo: (from, focused, pointer, leave) => {
+            const wasOpen = isOpen()
+            if (!show(focused, pointer)) return
+            if (leave()) {
+                cameFrom.set(from)
+                return
+            }
+            if (wasOpen) return
+            focusOnOpen = undefined
+            hide()
         },
         leaving: (to) => {
+            const was = goingTo.peek()
             goingTo.set(to)
-            hide()
+            if (hide()) return true
+            goingTo.set(was)
+            return false
         },
     }
     join(members, self)
@@ -186,8 +201,9 @@ export function menu(options: MenuOptions = {}): Menu {
         // A pointer on a trigger is the one switch that comes here; the keys switch in the menu's own.
         const mates = inGroup(members, self.group() as string)
         const ahead = mates.indexOf(to) > mates.indexOf(from)
-        from.leaving(ahead ? 'end' : 'start')
-        to.switchTo(ahead ? 'start' : 'end', focused, true)
+        to.switchTo(ahead ? 'start' : 'end', focused, true, () =>
+            from.leaving(ahead ? 'end' : 'start'),
+        )
     }
 
     // The popover's own state is the truth: every way it opens or closes arrives here, its trigger, a

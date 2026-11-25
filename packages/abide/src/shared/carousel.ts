@@ -515,10 +515,10 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     const pressed = reactiveOver(
         () => playing(),
         (on: boolean) => {
-            const first = keys()[0]
-            if (on && beside(1) === undefined && first !== undefined)
-                scrollTo(first)
-            playing.set(on)
+            const first = on && beside(1) === undefined ? keys()[0] : undefined
+            const refused = playing.set(on)
+            if (refused === undefined && first !== undefined) scrollTo(first)
+            return refused
         },
     )
     const play = withPart(withPart({}, toggle({ pressed }).button), {

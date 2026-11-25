@@ -83,9 +83,12 @@ export function listbox<Option, Multiple extends boolean = false>(
     const pointed = reactive<
         { key: string; over: string | undefined } | undefined
     >(undefined)
-    function moveKey(each: string): void {
+    // 49.19 — where it selects one, the move is the write to `selected`, and a refused one leaves the
+    // pointer as it stood.
+    function moveKey(each: string): boolean {
+        if (chosen.set(each) !== undefined) return false
         pointed.set(undefined)
-        chosen.set(each)
+        return true
     }
     const active = memo(() => {
         const moved = chosen()
@@ -122,10 +125,9 @@ export function listbox<Option, Multiple extends boolean = false>(
         const option = list[at]
         if (option === undefined) return
         const each = key(option)
-        const from = active.peek()
-        moveKey(each)
         // 51.103 — Shift carries the selection along with the move.
-        if (extend) selection.extend(from, each, order)
+        if (extend && !selection.extend(active.peek(), each, order)) return
+        if (!moveKey(each)) return
         // The active option kept in view as the arrows step through a list longer than its box.
         globalThis.document
             ?.getElementById(idOf(each))
@@ -224,12 +226,11 @@ export function listbox<Option, Multiple extends boolean = false>(
                 // 51.99, 51.105.
                 onclick: (event: MouseEvent) => {
                     if (many) {
-                        selection.press(each, event, active.peek(), order)
-                        moveKey(each)
+                        if (selection.press(each, event, active.peek(), order))
+                            moveKey(each)
                         return
                     }
-                    moveKey(each)
-                    given.onpick?.(option)
+                    if (moveKey(each)) given.onpick?.(option)
                 },
             }
         },

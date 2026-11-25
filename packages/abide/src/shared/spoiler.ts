@@ -33,7 +33,8 @@ export function spoiler(options: SpoilerOptions = {}): Spoiler {
                 return open()
             },
             onclick: () => {
-                open.set(true)
+                // 49.19 — refused, the cover stays and keeps focus.
+                if (open.set(true) !== undefined) return
                 // The pressed cover is hidden by the write, and focus would drop to the page.
                 queueMicrotask(() => content?.focus())
             },

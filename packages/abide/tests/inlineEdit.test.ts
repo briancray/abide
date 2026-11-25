@@ -131,3 +131,29 @@ test('Escape puts the value back and hands focus to the text, and leaving saves 
     await settle()
     expect(name.value()).toBe('Hopper expansion')
 })
+
+// THE REVERT: finish the edit whatever the write answered, and the Enter whose text the value refused
+// leaves edit mode — `editing` reads false — and hands focus to the text.
+test('Enter whose text the value refuses stays in the field, focus where it was — 49.19', async () => {
+    const value = reactive<string>('Engine renewal', {
+        schema: {
+            '~standard': {
+                version: 1,
+                vendor: 'test',
+                validate: (text: unknown) =>
+                    text === ''
+                        ? { issues: [{ message: 'needs a name' }] }
+                        : { value: text as string },
+            },
+        },
+    })
+    const { name, view, input, type } = standing({ value })
+    view.click()
+    await settle()
+    await type('', 'Enter')
+    expect([name.value(), name.editing(), document.activeElement]).toEqual([
+        'Engine renewal',
+        true,
+        input,
+    ])
+})

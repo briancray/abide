@@ -218,7 +218,7 @@ export function tree<Node, Multiple extends boolean = false>(
             event.preventDefault()
             const next = shown[to]
             if (next === undefined) return
-            if (extending) selection.extend(each, next, shownKeys)
+            if (extending && !selection.extend(each, next, shownKeys)) return
             focus(next)
         },
     }
@@ -272,8 +272,8 @@ export function tree<Node, Multiple extends boolean = false>(
                     hit.id !== itemId(each)
                 )
                     return
-                selection.press(each, event, current.peek(), shownKeys)
-                focus(each)
+                if (selection.press(each, event, current.peek(), shownKeys))
+                    focus(each)
             },
         }
     }

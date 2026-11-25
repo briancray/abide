@@ -65,7 +65,10 @@ export function popover(options: PopoverOptions = {}): PopoverParts {
  */
 export function popoverLayer(options: PopoverOptions): PopoverParts & {
     openedBy(): OpenedBy | undefined
-    show(by: OpenedBy | undefined): void
+    /** Opens it as `by` opened it; false where its `open` refused the write (49.19). */
+    show(by: OpenedBy | undefined): boolean
+    /** Closes it; false where its `open` refused the write. */
+    hide(): boolean
 } {
     const open = options.open ?? reactive(false)
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the ids are
@@ -78,13 +81,19 @@ export function popoverLayer(options: PopoverOptions): PopoverParts & {
     let openAtPress = false
     // 50.56, 50.76 — how the open popover was opened, which decides what a leave and a blur close.
     let openedBy: OpenedBy | undefined
-    const show = (by: OpenedBy | undefined): void => {
-        if (open.peek() === true) return
+    const show = (by: OpenedBy | undefined): boolean => {
+        if (open.peek() === true) return true
+        const was = openedBy
         openedBy = by
-        open.set(true)
+        if (open.set(true) === undefined) return true
+        openedBy = was
+        return false
     }
-    const hide = (): void => {
-        if (open.peek() === true) open.set(false)
+    const hide = (): boolean => {
+        if (open.peek() !== true) return true
+        if (open.set(false) !== undefined) return false
+        openedBy = undefined
+        return true
     }
     const opens = hoverAndFocus(options, {
         isOpen: () => open.peek() === true,
@@ -129,6 +138,7 @@ export function popoverLayer(options: PopoverOptions): PopoverParts & {
         anchor: anchoring('anchor'),
         openedBy: () => openedBy,
         show,
+        hide,
         popover: {
             id,
             popover: 'manual',

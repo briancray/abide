@@ -5272,6 +5272,13 @@ own part for the same element, the part carrying both components' `data-` attrib
 MUST hand back that component's parts for elements it hands no part for whole, as a member named for
 that component, each carrying that component's own `data-` attribute.
 
+49.19 A headless component whose write to a `Reactive` it binds is refused (4.18) MUST leave as it
+stood every state of its own that the gesture making the write would have changed, MUST NOT move
+focus for that gesture, and MUST NOT call a callback it was handed for that gesture.
+
+49.20 49.19 MUST NOT hold a `dialog` closed by its element, a command `commandPalette` runs, a
+message `chat` sends, or the `save` `inlineEdit` calls (56.25).
+
 # 50. Dialogs, toasts and popovers
 
 50.1 `dialog`'s part MUST hold the `<dialog>` it is spread on open while `open` is true, with
@@ -6125,9 +6132,6 @@ for its input's text with the whitespace at either end taken off, where that lea
 item it lists or holds carries that text as its `label`, ignoring case.
 
 51.191 `combobox`'s `creating` MUST be the item 51.190 lists, and `undefined` where it lists none.
-
-51.192 A `combobox` whose write to `value` is refused (4.18) MUST leave its input's text and whether
-its list is open as they stood.
 
 # 52. Formatting, markdown and charts
 

@@ -140,8 +140,8 @@ export function toggleGroup<Item, Multiple extends boolean = false>(
                 ]
             if (next === undefined) return
             event.preventDefault()
-            picks.pick(next)
-            globalThis.document?.getElementById(itemId(next))?.focus()
+            if (picks.pick(next))
+                globalThis.document?.getElementById(itemId(next))?.focus()
         },
     }
 

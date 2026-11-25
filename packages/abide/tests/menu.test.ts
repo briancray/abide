@@ -4,7 +4,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { flushSync, menu } from '#shared'
+import { flushSync, menu, reactive } from '#shared'
 import type { MenuOptions } from '#shared/menu.ts'
 
 import { bindPart } from './bindPart.ts'
@@ -218,4 +218,85 @@ test('Tab in a submenu standing apart closes it and the menu it opened from — 
     flushSync()
     expect(list.matches(':popover-open')).toBe(false)
     expect(outer.isOpen()).toBe(false)
+})
+
+// An `open` whose gate refuses every write while `refusing` holds.
+function gated() {
+    const gate = { refusing: false }
+    const open = reactive<boolean>(false, {
+        schema: {
+            '~standard': {
+                version: 1,
+                vendor: 'test',
+                validate: (value: unknown) =>
+                    gate.refusing
+                        ? { issues: [{ message: 'held' }] }
+                        : { value: value as boolean },
+            },
+        },
+    })
+    return { open, gate }
+}
+
+// THE REVERT: focus the trigger whatever the close answered, and the Escape whose close was refused
+// moves focus out of the menu still open — the active element reads as the trigger.
+test('Escape whose close is refused leaves the menu open and focus on its item — 49.19', () => {
+    const { open, gate } = gated()
+    const { list, isOpen } = standing({ open })
+    open.set(true)
+    flushSync()
+    gate.refusing = true
+    ;(document.activeElement as HTMLElement).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    )
+    flushSync()
+    expect(isOpen()).toBe(true)
+    expect(document.activeElement).toBe(list.firstElementChild)
+})
+
+// THE REVERT: focus the trigger whatever the close answered, and the pick whose close was refused
+// moves focus to the trigger.
+test('a pick whose close is refused leaves the menu open and focus where it was — 49.19', () => {
+    const { open, gate } = gated()
+    const { list, isOpen } = standing({ open })
+    open.set(true)
+    flushSync()
+    gate.refusing = true
+    ;(list.firstElementChild as HTMLElement).click()
+    flushSync()
+    expect(isOpen()).toBe(true)
+    expect(document.activeElement).toBe(list.firstElementChild)
+})
+
+// THE REVERT: close the menu switched from before opening the one switched to, unchecked, and the
+// switch whose opening was refused leaves no menu of the group open — [false, false] — marked leaving.
+test('a pointer switch whose opening is refused leaves the open menu open and unmarked — 49.19', () => {
+    const held = gated()
+    const first = standing({ group: 'header' })
+    const second = standing({ group: 'header', open: held.open })
+    first.click(1)
+    held.gate.refusing = true
+    second.enter(second.trigger)
+    flushSync()
+    expect([first.isOpen(), second.isOpen()]).toEqual([true, false])
+    expect(first.parts.menu['data-to']).toBeUndefined()
+})
+
+// THE REVERT: open the menu switched to whatever the close of the one switched from answered, and
+// the arrow whose close was refused leaves both menus of the group open — [true, true].
+test('an arrow switch whose close is refused leaves the one menu open and unmarked — 49.19', () => {
+    const held = gated()
+    const first = standing({ group: 'header', open: held.open })
+    const second = standing({ group: 'header' })
+    first.click(1)
+    held.gate.refusing = true
+    first.list.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }),
+    )
+    flushSync()
+    expect([first.isOpen(), second.isOpen()]).toEqual([true, false])
+    expect([
+        first.parts.menu['data-to'],
+        second.parts.menu['data-from'],
+    ]).toEqual([undefined, undefined])
 })

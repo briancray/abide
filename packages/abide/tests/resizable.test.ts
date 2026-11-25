@@ -4,7 +4,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { flushSync, resizable } from '#shared'
+import { flushSync, reactive, resizable } from '#shared'
 import type { ResizableOptions } from '#shared/resizable.ts'
 
 afterEach(() => document.body.replaceChildren())
@@ -120,4 +120,47 @@ test('a double click gives the panel back its own size, and the handle reads as 
     expect([side.size(), side.panel.style]).toEqual([undefined, undefined])
     on('pointerdown', new PointerEvent('pointerdown', { button: 0 }))
     expect(side.handle['data-dragging']).toBe('')
+})
+
+// A gate refusing every size `accepts` turns down (4.18).
+const refusing = (accepts: (value: number | undefined) => boolean) => ({
+    '~standard': {
+        version: 1 as const,
+        vendor: 'test',
+        validate: (value: unknown) =>
+            accepts(value as number | undefined)
+                ? { value: value as number | undefined }
+                : { issues: [{ message: 'no' }] },
+    },
+})
+
+// THE REVERT: set `collapsedFrom` before the `size` write, and the refused collapse is remembered — the
+// next Enter restores 200 over the 260 an arrow left it at, so size reads 200 rather than 50.
+test('an Enter its size refuses remembers nothing to restore — 49.19', () => {
+    let refuse = true
+    const size = reactive<number | undefined>(undefined, {
+        schema: refusing((value) => !(refuse && value === 50)),
+    })
+    const { side, key } = standing({ size, step: 60, min: 50 })
+    key('Enter')
+    expect(side.size()).toBeUndefined()
+    key('ArrowRight')
+    refuse = false
+    key('Enter')
+    expect(side.size()).toBe(50)
+})
+
+// THE REVERT: clear `collapsedFrom` before the `size` write, and the refused double click forgets the
+// collapse — the next Enter collapses again, so size reads 50 rather than 200.
+test('a double click its size refuses keeps what Enter restores — 49.19', () => {
+    const size = reactive<number | undefined>(undefined, {
+        schema: refusing((value) => value !== undefined),
+    })
+    const { side, key, on } = standing({ size, min: 50 })
+    key('Enter')
+    expect(side.size()).toBe(50)
+    on('dblclick', new MouseEvent('dblclick'))
+    expect(side.size()).toBe(50)
+    key('Enter')
+    expect(side.size()).toBe(200)
 })

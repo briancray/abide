@@ -125,18 +125,23 @@ export function sortableTable<Row>(
         const keys = (event.shiftKey && anchor !== undefined
             ? runOf(order.map(key), anchor, key(row))
             : undefined) ?? [key(row)]
-        anchor = key(row)
         const next = new Set(holding)
         for (const each of keys) {
             if (checked) next.add(each)
             else next.delete(each)
         }
-        // 51.73 — the selection keeps the rows' order.
-        selected.set(
+        // 51.73 — the selection keeps the rows' order. 49.19 — a refused write leaves the anchor, and the
+        // box the browser has already flipped is put back.
+        const refused = selected.set(
             rows()
                 .map(key)
                 .filter((each) => next.has(each)),
         )
+        if (refused !== undefined) {
+            event.preventDefault()
+            return
+        }
+        anchor = key(row)
     }
 
     return {
@@ -196,7 +201,10 @@ export function sortableTable<Row>(
                     return every()
                 },
                 // 51.75 — the header's box, toggling every row.
-                onclick: () => selected.set(every() ? [] : rows().map(key)),
+                onclick: (event: MouseEvent) => {
+                    const refused = selected.set(every() ? [] : rows().map(key))
+                    if (refused !== undefined) event.preventDefault()
+                },
                 // Mixed is a property with no attribute, so it is set on the element itself.
                 'bind:element': (input: HTMLInputElement) =>
                     watch(() => {

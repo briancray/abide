@@ -53,8 +53,8 @@ export function inlineEdit(options: InlineEditOptions = {}): InlineEdit {
         try {
             const saved = options.save?.(text)
             if (isThenable(saved)) await saved
-            value.set(text)
-            finish()
+            // 49.19 — a refused write leaves the edit open, as it stood.
+            if (value.set(text) === undefined) finish()
         } catch (failure) {
             error.set(messageOf(failure))
         } finally {

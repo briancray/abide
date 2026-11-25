@@ -4,7 +4,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { carousel, flushSync, reactive, watch } from '#shared'
+import { carousel, flushSync, jsonSchema, reactive, watch } from '#shared'
 import { media } from '#shared/media.ts'
 
 // The shared resize observer is made by the first bind (32.81), so the stand-in is installed at load,
@@ -541,4 +541,18 @@ test('play is a toggle over playing, and playing from the last item starts at th
         'Pause',
     ])
     expect(view.play['aria-controls']).toBe('deck')
+})
+
+// THE REVERT: scroll to the first item before writing `playing`, and a refused play still moves the
+// carousel — current reads 'lead' rather than 'won'.
+test('a play its playing refuses leaves the carousel on the item it rests on — 49.19', () => {
+    const playing = reactive<boolean>(false, {
+        schema: jsonSchema<boolean>({ enum: [false] }),
+    })
+    const view = carousel({ items: STAGES, behavior: 'auto', playing })
+    laidOut(view)
+    view.scrollTo('won')
+    ;(view.play.onclick as () => void)()
+    flushSync()
+    expect([view.playing(), view.current]).toEqual([false, 'won'])
 })

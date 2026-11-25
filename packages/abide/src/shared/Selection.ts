@@ -64,20 +64,30 @@ export class Selection {
         return now === undefined ? [] : [now as string]
     }
 
+    // 49.19 — each gesture answers whether its write landed, and moves the anchor only where it did.
+
     /** Selects `key` alone. */
-    pick(key: string): void {
+    pick(key: string): boolean {
+        if (this.selected.set(this.many ? [key] : key) !== undefined)
+            return false
         this.anchor = key
-        this.selected.set(this.many ? [key] : key)
+        return true
     }
 
     /** Adds `key` to the selection, or takes it out where it is in it already. */
-    toggle(key: string): void {
+    toggle(key: string): boolean {
         if (!this.many) return this.pick(key)
-        this.anchor = key
         const now =
             (this.selected.peek() as readonly string[] | undefined) ?? []
         const kept = now.filter((each) => each !== key)
-        this.selected.set(kept.length === now.length ? [...now, key] : kept)
+        if (
+            this.selected.set(
+                kept.length === now.length ? [...now, key] : kept,
+            ) !== undefined
+        )
+            return false
+        this.anchor = key
+        return true
     }
 
     /** 51.100 — selects the run of `order` from the anchor to `to`, the anchor being `from` where there is none listed. */
@@ -85,19 +95,23 @@ export class Selection {
         from: string | undefined,
         to: string,
         order: () => readonly string[],
-    ): void {
+    ): boolean {
         if (!this.many) return this.pick(to)
         const list = order()
-        if (this.anchor === undefined || !list.includes(this.anchor))
-            this.anchor = from ?? to
-        const run = runOf(list, this.anchor, to)
+        const anchor =
+            this.anchor === undefined || !list.includes(this.anchor)
+                ? (from ?? to)
+                : this.anchor
+        const run = runOf(list, anchor, to)
         if (run === undefined) return this.pick(to)
-        this.selected.set(run)
+        if (this.selected.set(run) !== undefined) return false
+        this.anchor = anchor
+        return true
     }
 
     /** 51.101 — selects every key of `order`, where it picks many. */
-    all(order: () => readonly string[]): void {
-        if (this.many) this.selected.set([...order()])
+    all(order: () => readonly string[]): boolean {
+        return this.many && this.selected.set([...order()]) === undefined
     }
 
     /** 51.99 — a press on `key`: Shift extends to it from `from`, `mod` toggles it, and a bare press picks it alone. */
@@ -106,10 +120,10 @@ export class Selection {
         event: MouseEvent,
         from: string | undefined,
         order: () => readonly string[],
-    ): void {
-        if (event.shiftKey) this.extend(from, key, order)
-        else if (isApplePlatform() ? event.metaKey : event.ctrlKey)
-            this.toggle(key)
-        else this.pick(key)
+    ): boolean {
+        if (event.shiftKey) return this.extend(from, key, order)
+        if (isApplePlatform() ? event.metaKey : event.ctrlKey)
+            return this.toggle(key)
+        return this.pick(key)
     }
 }

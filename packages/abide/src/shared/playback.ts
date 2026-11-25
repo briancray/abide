@@ -66,10 +66,14 @@ export function playback(options: PlaybackOptions): Playback {
             const passed = last === undefined ? 0 : now - last
             last = now
             const next = (at.peek() ?? 0) + passed * (rate.peek() ?? 1)
-            if (next < duration()) at.set(next)
-            else if (live(options.loop) === true) at.set(0)
-            else {
-                at.set(duration())
+            const end = duration()
+            const ended = next >= end && live(options.loop) !== true
+            // 49.19 — a refused `at` would recompute the same frame forever, so it stops the clock as
+            // the end does; the loop ends even where `playing` refuses false.
+            if (
+                at.set(next < end ? next : ended ? end : 0) !== undefined ||
+                ended
+            ) {
                 playing.set(false)
                 return
             }
@@ -83,8 +87,10 @@ export function playback(options: PlaybackOptions): Playback {
     const pressed = reactiveOver(
         () => playing(),
         (on: boolean) => {
-            if (on && (at.peek() ?? 0) >= duration()) at.set(0)
-            playing.set(on)
+            const fromEnd = on && (at.peek() ?? 0) >= duration()
+            const refused = playing.set(on)
+            if (refused === undefined && fromEnd) at.set(0)
+            return refused
         },
     )
     const play = withPart(withPart({}, toggle({ pressed }).button), {
@@ -100,7 +106,7 @@ export function playback(options: PlaybackOptions): Playback {
         value: reactiveOver(
             () => String(rate()),
             (key: string | undefined) => {
-                if (key !== undefined) rate.set(Number(key))
+                if (key !== undefined) return rate.set(Number(key))
             },
         ),
         label: 'Speed',

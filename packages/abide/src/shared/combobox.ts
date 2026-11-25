@@ -1,4 +1,4 @@
-// 51.13-51.29, 51.55, 51.56, 51.57, 51.106, 51.190-51.192 — A FIELD THAT LISTS WHAT MATCHES AS IT IS TYPED IN, as parts an app
+// 51.13-51.29, 51.55, 51.56, 51.57, 51.106, 51.190, 51.191, 49.19 — A FIELD THAT LISTS WHAT MATCHES AS IT IS TYPED IN, as parts an app
 // spreads onto an input, a popup and options of its own: WAI-ARIA's combobox with a list popup. Focus
 // stays in the input, which names the active option as its `aria-activedescendant`; the list is a
 // `listbox` the input's keys move through, opened in the top layer against the input as `popover`
@@ -180,7 +180,7 @@ export function combobox<Item, Multiple extends boolean = false>(
         open.set(true)
     }
 
-    // 51.192 — a refused write leaves the typed text and the list as they stood.
+    // 49.19 — a refused write leaves the typed text and the list as they stood.
     function pick(item: Item) {
         const held = picks.peek()
         if (held === undefined) {

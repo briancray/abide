@@ -4,7 +4,7 @@
 
 import { afterEach, expect, setSystemTime, test } from 'bun:test'
 
-import { calendar, flushSync, reactive, watch } from '#shared'
+import { calendar, flushSync, jsonSchema, reactive, watch } from '#shared'
 
 const zoneBefore = process.env.TZ
 
@@ -220,6 +220,29 @@ test('Enter picks the day focused, and a click the day clicked', () => {
     expect(selected.peek()).toBe('2026-12-02')
     expect(view.month()).toBe('2026-12')
     expect(focused()).toBe('2026-12-02')
+})
+
+// 49.19 — A REFUSED WRITE MOVES NOTHING: an arrow whose page is refused, and a click whose pick is.
+// THE REVERT: set `focused` before the month write, and ArrowDown lands focus on February 4th's
+// outside cell under January; move focus whatever `pick` answered, and the refused click takes it.
+test('a refused page or pick leaves the active day and focus where they were — 49.19', () => {
+    const selected = reactive<string | undefined>('2027-01-28', {
+        schema: jsonSchema<string | undefined>({ enum: ['2027-01-28'] }),
+    })
+    const month = reactive<string | undefined>('2027-01', {
+        schema: jsonSchema<string | undefined>({ enum: ['2027-01'] }),
+    })
+    const view = calendar({ selected, month })
+    const grid = render(view)
+    ;(grid.querySelector('[tabindex="0"]') as HTMLElement).focus()
+    press('ArrowDown')
+    expect(view.month()).toBe('2027-01')
+    expect(focused()).toBe('2027-01-28')
+    ;(document.getElementById(`${view.id}-2027-01-10`) as HTMLElement).click()
+    flushSync()
+    expect(selected.peek()).toBe('2027-01-28')
+    expect(focused()).toBe('2027-01-28')
+    expect(view.active).toBe('2027-01-28')
 })
 
 // 52.93 — THE BUTTONS PAGE THE MONTH and leave focus on themselves.

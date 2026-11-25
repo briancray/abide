@@ -219,8 +219,8 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
                 : searching.holding
         },
         (next) => {
-            if (found.peek() === undefined) expanded.set(next)
-            else searched.set({ query: query.peek() ?? '', open: next })
+            if (found.peek() === undefined) return expanded.set(next)
+            return searched.set({ query: query.peek() ?? '', open: next })
         },
     )
 

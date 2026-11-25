@@ -3,7 +3,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { flushSync, listbox, reactive } from '#shared'
+import { flushSync, jsonSchema, listbox, reactive } from '#shared'
 import { isApplePlatform } from '#shared/isApplePlatform.ts'
 
 function press(
@@ -231,4 +231,43 @@ test('selecting one, the selection is the key last moved to, and a click picks i
         list.option('a')['data-selected'],
         list.option('c')['data-selected'],
     ]).toEqual(['', undefined])
+})
+
+// THE REVERT: clear the pointer before the write in `moveKey`, and the refused ArrowDown takes the
+// active option off `c` to `a`, the key moved to; call `onpick` whatever the write answered, and the refused click
+// reports `['b']`; move `chosen` whatever `press` or `extend` answered, and the refused Shift+arrow
+// and Shift-click take the active option to `y` and `z`.
+test('a refused write leaves the active option, the pointer and onpick as they stood — 49.19', () => {
+    const picked: string[] = []
+    const one = listbox({
+        options: ['a', 'b', 'c', 'd'],
+        key: (letter) => letter,
+        selected: reactive<string | undefined>('a', {
+            schema: jsonSchema<string | undefined>({ enum: ['a'] }),
+        }),
+        onpick: (letter) => picked.push(letter),
+    })
+    ;(one.option('c').onpointermove as () => void)()
+    flushSync()
+    expect(one.active).toBe('c')
+    press(one.onkeydown, 'ArrowDown')
+    expect([one.selected(), one.active]).toEqual(['a', 'c'])
+    click(one.option('b'))
+    expect([one.selected(), one.active, picked]).toEqual(['a', 'c', []])
+
+    const many = listbox({
+        options: ['x', 'y', 'z'],
+        key: (letter) => letter,
+        multiple: true,
+        selected: reactive<readonly string[]>(['x'], {
+            schema: jsonSchema<readonly string[]>({
+                type: 'array',
+                maxItems: 1,
+            }),
+        }),
+    })
+    press(many.onkeydown, 'ArrowDown', { shiftKey: true })
+    expect([many.selected(), many.active]).toEqual([['x'], 'x'])
+    click(many.option('z'), { shiftKey: true })
+    expect([many.selected(), many.active]).toEqual([['x'], 'x'])
 })
