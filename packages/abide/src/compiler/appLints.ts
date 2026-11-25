@@ -1,4 +1,4 @@
-import { AMBIENT_SOURCES, ambientReadsIn } from './ambientReadsIn.ts'
+import { ambientPathsIn, ambientReadsIn } from './ambientReadsIn.ts'
 import { argsDefaultsIn } from './argsDefaultsIn.ts'
 import {
     byPlace,
@@ -33,18 +33,7 @@ export async function appLints(
     await host.ask(async (project) => {
         const checker = project.checker
         const abide = await abideIn(project)
-        // As the checker names them, for `Abide`'s reason (`reactiveTypes.ts`).
-        const ambientPaths = new Map<string, string>()
-        const declared = await Promise.all(
-            AMBIENT_SOURCES.map((source) =>
-                project.program.getSourceFile(source),
-            ),
-        )
-        for (let at = 0; at < AMBIENT_SOURCES.length; at += 1) {
-            const found = declared[at]?.path
-            if (found !== undefined)
-                ambientPaths.set(AMBIENT_SOURCES[at] as string, found)
-        }
+        const ambientPaths = await ambientPathsIn(project)
         const authored = new Map<
             string,
             { source: (typeof sources)[number]; map: ShadowMap }

@@ -9,7 +9,7 @@ import {
     isPropertyAccessExpression,
     isPropertyAssignment,
 } from 'typescript/unstable/ast/is'
-import type { Checker } from 'typescript/unstable/async'
+import type { Checker, Project } from 'typescript/unstable/async'
 
 import { aliasedSymbol } from './aliasedSymbol.ts'
 import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
@@ -51,15 +51,33 @@ const AMBIENTS: { path: string; name: string; nonce: boolean }[] = [
 ]
 
 /** The modules that declare abide's per-request ambients, each once. */
-export const AMBIENT_SOURCES: string[] = [
+const AMBIENT_SOURCES: string[] = [
     ...new Set(AMBIENTS.map((ambient) => ambient.path)),
 ]
 
 /**
+ * Each module declaring an ambient, to the path `project`'s checker names it by — `Abide` in
+ * `reactiveTypes.ts` has the reason: the checker folds case on a case-insensitive disk. Empty where
+ * the project reaches none of them.
+ */
+export async function ambientPathsIn(
+    project: Project,
+): Promise<Map<string, string>> {
+    const paths = new Map<string, string>()
+    const declared = await Promise.all(
+        AMBIENT_SOURCES.map((source) => project.program.getSourceFile(source)),
+    )
+    for (let at = 0; at < AMBIENT_SOURCES.length; at += 1) {
+        const found = declared[at]?.path
+        if (found !== undefined) paths.set(AMBIENT_SOURCES[at] as string, found)
+    }
+    return paths
+}
+
+/**
  * Where a `global` memo's body reads a per-request ambient, in source order.
  *
- * `paths` maps each of `AMBIENT_SOURCES` to the path the checker names it by (`Abide` in
- * `reactiveTypes.ts` has the reason: the checker folds case on a case-insensitive disk).
+ * `paths` is `ambientPathsIn`'s answer.
  */
 export async function ambientReadsIn(
     checker: Checker,
