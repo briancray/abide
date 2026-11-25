@@ -1,7 +1,7 @@
-// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71 — A CHART AS PARTS: series over
+// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71, 52.116, 52.118, 52.119 — A CHART AS PARTS: series over
 // one pair of axes, handed back as the geometry each mark is drawn at and as parts an app spreads onto
-// SVG elements of its own — `{#for point of plot.points()}<circle {...point.circle} r="3" />` — with the
-// `<svg>`'s part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
+// elements, SVG or HTML — `{#for point of plot.points}<circle {...point.circle} r="3" />` — with the
+// root's part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
 // against the crosshair in an element of the app's own. Callable, with the
 // arithmetic it draws with as its members, as `reactive` carries `reactive.share`: `chart.ticks` and the
 // rest are what a chart of one's own draws with where even these parts are too much.
@@ -19,7 +19,9 @@ import type { Disposer } from '../reactive/watch.ts'
 import { scrub } from '../scrub.ts'
 import {
     nearest,
+    padded,
     path,
+    percentOf,
     scale,
     type Series,
     stack as stackSeries,
@@ -38,7 +40,7 @@ export type ChartOptions = {
     x?: Live<readonly number[] | undefined>
     /** Writes an x for its tick and the readout: `format.date`, say. `format.number` by default. */
     xFormat?: (x: number) => string
-    /** Writes a value for the y ticks and the readout: `format.money`, say. `format.number` by default. */
+    /** Writes a value for the y ticks, and the readout of a series with no `format` of its own: `format.money`, say. `format.number` by default. */
     yFormat?: (y: number) => string
     /** The most x positions labeled under the plot. 5 by default. */
     xTicks?: Live<number>
@@ -46,6 +48,11 @@ export type ChartOptions = {
     yTicks?: Live<number>
     /** Whether the y range takes in zero, with a line drawn there. `false` by default. */
     zero?: Live<boolean>
+    /**
+     * The room kept above and below the values, as a share of their span: `0.15`, or `[below, above]`
+     * (52.119). None by default.
+     */
+    pad?: Live<number | readonly [number, number]>
     /** Whether a series with no `stack` of its own piles into one stack with the others (52.54). `false` by default. */
     stack?: Live<boolean>
     /** Whether each stack is drawn as shares of its total at each x (52.56, 52.59). `false` by default. */
@@ -58,9 +65,9 @@ export type ChartOptions = {
           }
         | undefined
     >
-    /** The width drawn at before the `<svg>` is measured. 600 by default. */
+    /** The width drawn at before the root is measured. 600 by default. */
     width?: number
-    /** The height drawn at before the `<svg>` is measured. 240 by default. */
+    /** The height drawn at before the root is measured. 240 by default. */
     height?: number
     /** Called with the x position nearest a click, or the crosshair's on Enter, where `disabled` does not hold for it (52.38, 52.70). */
     onpick?: (index: number) => void
@@ -164,10 +171,10 @@ export type ChartReadout = {
 export type ChartParts = {
     /** The base its parts' ids are derived from. */
     readonly id: string
-    /** The `<svg>`: its size, measured (52.24), its name, focus, and the pointer and keys that move the crosshair (52.26, 52.69). */
+    /** The root, an `<svg>` or any element: its size, measured (52.24), its name, focus, and the pointer and keys that move the crosshair (52.26, 52.69). */
     readonly svg: Record<string, unknown>
-    /** The x of position `index`. */
-    x(index: number): number
+    /** The x of `value`, in the units of the `x` option: a time between two positions, say (52.78). */
+    x(value: number): number
     /** The y of `value`. */
     y(value: number): number
     /** The edges of the plot. */
@@ -194,7 +201,7 @@ export type ChartParts = {
     get crosshair():
         { index: number; x: number; line: Record<string, unknown> } | undefined
     /**
-     * 50.46 — the readout's popover, spread onto an element of the app's own outside the `<svg>` and
+     * 50.46 — the readout's popover, spread onto an element of the app's own outside the root and
      * rendered while `readout` stands: opened against the crosshair, describing the chart.
      */
     readonly tip: Record<string, unknown>
@@ -221,7 +228,7 @@ export function chart(options: ChartOptions): ChartParts {
         height: options.height ?? 240,
     })
     const hovered = reactive(-1)
-    // The width the `<svg>` was last measured at, read without following it.
+    // The width the root was last measured at, read without following it.
     const measuredWidth = () => size.peek()?.width ?? 0
 
     const plot = memo(() => {
@@ -255,6 +262,8 @@ export function chart(options: ChartOptions): ChartParts {
                 }
             }
         }
+        // 52.119 — padded before zero is taken in, so zero stays the floor of a column.
+        ;[low, high] = padded(low, high, live(options.pad))
         if (zero || columns) {
             low = Math.min(low, 0)
             high = Math.max(high, 0)
@@ -333,7 +342,15 @@ export function chart(options: ChartOptions): ChartParts {
                 ys.push(y)
                 if (y !== undefined)
                     points.push(
-                        pointOf(at, index, value as number, xs[index] ?? 0, y),
+                        pointOf(
+                            at,
+                            index,
+                            value as number,
+                            xs[index] ?? 0,
+                            y,
+                            width,
+                            height,
+                        ),
                     )
             }
             ysOf.push(ys)
@@ -375,6 +392,8 @@ export function chart(options: ChartOptions): ChartParts {
                             Math.min(top, from),
                             bandWidth,
                             Math.abs(from - top),
+                            width,
+                            height,
                         ),
                     )
                 }
@@ -422,6 +441,7 @@ export function chart(options: ChartOptions): ChartParts {
                     y2: y,
                     stroke: 'currentColor',
                     'stroke-opacity': '0.2',
+                    style: `--y: ${percentOf(y, height)}%`,
                 },
                 text: {
                     'data-chart': 'tick',
@@ -430,6 +450,7 @@ export function chart(options: ChartOptions): ChartParts {
                     y,
                     'dominant-baseline': 'middle',
                     fill: 'currentColor',
+                    style: `--x: 0%; --y: ${percentOf(y, height)}%`,
                 },
             })
         }
@@ -460,6 +481,7 @@ export function chart(options: ChartOptions): ChartParts {
                                 : 'middle',
                     'dominant-baseline': 'hanging',
                     fill: 'currentColor',
+                    style: `--x: ${percentOf(x, width)}%; --y: ${percentOf(bottom + 6, height)}%`,
                 },
             })
         }
@@ -475,6 +497,8 @@ export function chart(options: ChartOptions): ChartParts {
             yTicks: yTickList,
             xTicks: xTickList,
             frame: { left, top: TOP, right: width, bottom },
+            width,
+            height,
             toX,
             toY,
             zero: zero
@@ -487,6 +511,7 @@ export function chart(options: ChartOptions): ChartParts {
                           y1: zeroY,
                           y2: zeroY,
                           stroke: 'currentColor',
+                          style: `--y: ${percentOf(zeroY, height)}%`,
                       },
                   }
                 : undefined,
@@ -499,6 +524,8 @@ export function chart(options: ChartOptions): ChartParts {
         value: number,
         x: number,
         y: number,
+        boxWidth: number,
+        boxHeight: number,
     ): ChartPoint {
         return {
             key: `${series}:${index}`,
@@ -513,6 +540,8 @@ export function chart(options: ChartOptions): ChartParts {
                 cx: x,
                 cy: y,
                 fill: 'currentColor',
+                // 52.116 — where it stands as a share of the box, for a mark placed by CSS.
+                style: `--x: ${percentOf(x, boxWidth)}%; --y: ${percentOf(y, boxHeight)}%`,
             },
         }
     }
@@ -525,6 +554,8 @@ export function chart(options: ChartOptions): ChartParts {
         y: number,
         width: number,
         height: number,
+        boxWidth: number,
+        boxHeight: number,
     ): ChartBar {
         return {
             key: `${series}:${index}`,
@@ -542,8 +573,9 @@ export function chart(options: ChartOptions): ChartParts {
                     options.disabled?.(index) === true ? '' : undefined,
                 width: '1',
                 height: '1',
-                // 52.63 — a unit rect placed and sized by a transform, which a CSS transition eases.
-                style: `transform: translate(${x}px, ${y}px) scale(${width}, ${height})`,
+                // 52.63 — a unit rect placed and sized by a transform, which a CSS transition eases, and
+                // 52.116 — its place and size as shares of the box, for a column placed by CSS.
+                style: `transform: translate(${x}px, ${y}px) scale(${width}, ${height}); --x: ${percentOf(x, boxWidth)}%; --y: ${percentOf(y, boxHeight)}%; --width: ${percentOf(width, boxWidth)}%; --height: ${percentOf(height, boxHeight)}%`,
                 fill: 'currentColor',
             },
         }
@@ -558,17 +590,23 @@ export function chart(options: ChartOptions): ChartParts {
         const normalize = live(options.normalize) === true
         const values: ChartReadout['values'] = []
         for (let line = 0; line < drawn.series.length; line += 1) {
-            const value = drawn.series[line]?.values[index]
+            const each = drawn.series[line]
+            const value = each?.values[index]
             const place = drawn.placed[line]
+            // 52.118 — a series' own `format` writes its value, else `yFormat`.
             let written =
-                value === null || value === undefined ? '—' : yFormat(value)
+                value === null || value === undefined
+                    ? '—'
+                    : each?.format === undefined
+                      ? yFormat(value)
+                      : each.format(value, index)
             // 52.60 — a stacked value under `normalize` reads its share beside it.
             if (normalize && place?.stack !== undefined && written !== '—')
                 written += ` (${percent(Math.abs((place.high[index] ?? 0) - (place.low[index] ?? 0)))})`
             const y = drawn.ysOf[line]?.[index]
             values.push({
                 series: line,
-                label: drawn.series[line]?.label ?? '',
+                label: each?.label ?? '',
                 value: written,
                 y,
                 circle:
@@ -581,6 +619,7 @@ export function chart(options: ChartOptions): ChartParts {
                               cy: y,
                               r: '3',
                               fill: 'currentColor',
+                              style: `--x: ${percentOf(at, drawn.width)}%; --y: ${percentOf(y, drawn.height)}%`,
                           },
                 text: { 'data-chart': 'readout-value', 'data-series': line },
             })
@@ -719,7 +758,7 @@ export function chart(options: ChartOptions): ChartParts {
             onkeydown: key,
             onclick: (event: MouseEvent) => pick(scrubbing.indexAt(event)),
         },
-        x: (index) => plot().xs[index] ?? plot().toX(index),
+        x: (value) => plot().toX(value),
         y: (value) => plot().toY(value),
         get frame() {
             return plot().frame
@@ -764,7 +803,7 @@ export function chart(options: ChartOptions): ChartParts {
         get crosshair() {
             const read = readout()
             if (read === undefined) return undefined
-            const { frame } = plot()
+            const { frame, width } = plot()
             return {
                 index: read.index,
                 x: read.x,
@@ -775,6 +814,7 @@ export function chart(options: ChartOptions): ChartParts {
                     y1: frame.top,
                     y2: frame.bottom,
                     stroke: 'currentColor',
+                    style: `--x: ${percentOf(read.x, width)}%`,
                     'bind:element': holdLine,
                 },
             }

@@ -1,10 +1,10 @@
-// 52.29-52.31, 52.33, 52.34 — A TREND WITH NO AXES, AS PARTS: drawn in units of its own that stretch to
+// 52.29-52.31, 52.33, 52.34, 52.116, 52.119 — A TREND WITH NO AXES, AS PARTS: drawn in units of its own that stretch to
 // whatever box the caller gives the `<svg>`, with strokes that do not scale so the line and the end dot
 // keep their own width.
 
 import { type Live, live } from '../live.ts'
 import { memo } from '../reactive/index.ts'
-import { path, present, scale } from './index.ts'
+import { padded, path, percentOf, present, scale } from './index.ts'
 
 /** What `sparkline` draws. A value is read live where a function is given. */
 export type SparklineOptions = {
@@ -18,6 +18,11 @@ export type SparklineOptions = {
     kind?: Live<'line' | 'bar'>
     /** Whether the line and the area under it curve through the values (52.105). `false` by default. */
     curve?: Live<boolean>
+    /**
+     * The room kept above and below the values, as a share of their span: `0.15`, or `[below, above]`
+     * to leave the area room under the line (52.119). None by default.
+     */
+    pad?: Live<number | readonly [number, number]>
 }
 
 /** The parts `sparkline` hands back, each spread onto an element of its own. */
@@ -48,8 +53,8 @@ export function sparkline(options: SparklineOptions): SparklineParts {
         const zero = live(options.zero) === true
         const kind = live(options.kind) ?? 'line'
         const curve = live(options.curve) === true
-        let low = zero ? 0 : Number.POSITIVE_INFINITY
-        let high = zero ? 0 : Number.NEGATIVE_INFINITY
+        let low = Number.POSITIVE_INFINITY
+        let high = Number.NEGATIVE_INFINITY
         let first: number | undefined
         let last: number | undefined
         let lastIndex = -1
@@ -61,6 +66,12 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             first ??= value
             last = value
             lastIndex = index
+        }
+        // 52.119 — padded before zero is taken in.
+        ;[low, high] = padded(low, high, live(options.pad))
+        if (zero) {
+            low = Math.min(low, 0)
+            high = Math.max(high, 0)
         }
         // 52.34 — a range of zero alone has no width, and is drawn as zero to one.
         if (zero && low === high) high = 1
@@ -96,6 +107,11 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             line: path(xs, ys, { curve }),
             area: path(xs, ys, { baseline: SIZE, curve }),
             end: last === undefined ? '' : `M${x(lastIndex)},${y(last)}Z`,
+            // 52.116 — the drawing's units are already hundredths of the box.
+            endAt:
+                last === undefined
+                    ? undefined
+                    : `--x: ${percentOf(x(lastIndex), SIZE)}%; --y: ${percentOf(y(last), SIZE)}%`,
             trend:
                 first === undefined || last === undefined || last === first
                     ? ('flat' as const)
@@ -151,6 +167,9 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             'data-sparkline': 'dot',
             get d() {
                 return drawing().end
+            },
+            get style() {
+                return drawing().endAt
             },
             fill: 'none',
             stroke: 'currentColor',

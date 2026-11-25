@@ -1,0 +1,12 @@
+<script>
+import { meter } from '@abide/abide'
+
+const quota = meter({ value: 410_000, max: 500_000, label: 'Quota' })
+</script>
+
+<div {...quota.meter} class="relative h-2 rounded-full bg-rule">
+    <span
+        class="absolute top-1/2 left-[calc(var(--fraction)*100%)] size-3
+            -translate-1/2 rounded-full bg-signal"
+    ></span>
+</div>

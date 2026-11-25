@@ -3,6 +3,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import QuotaMarker from './lib/QuotaMarker.abide'
+import quotaMarker from './lib/QuotaMarker.abide' with { type: 'text' }
 import RedWhileLow from './lib/RedWhileLow.abide'
 import redWhileLow from './lib/RedWhileLow.abide' with { type: 'text' }
 import TeamQuota from './lib/TeamQuota.abide'
@@ -23,6 +25,7 @@ import uploadProgress from './lib/UploadProgress.abide' with { type: 'text' }
             from: [
                 "test('a progress bar with no value is indeterminate",
                 "test('a meter says whether its value is low, high or between",
+                "test('a meter carries how far along its range it is as --fraction",
             ],
         },
     ]}
@@ -45,5 +48,11 @@ import uploadProgress from './lib/UploadProgress.abide' with { type: 'text' }
         <p>The track carries <code>data-level="low"</code> while the value is under
             <code>low</code>.</p>
         <Example code={redWhileLow}><RedWhileLow /></Example>
+    </Section>
+
+    <Section level={3} title="Mark where the quota stands with a marker">
+        <p>The track carries <code>--fraction</code>, how far along its range the value is from
+            0 to 1, so a marker inside it stands there by <code>calc()</code>.</p>
+        <Example code={quotaMarker}><QuotaMarker /></Example>
     </Section>
 </Doc>

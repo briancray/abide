@@ -15,6 +15,11 @@ export type Series = {
     stack?: string | false
     /** Whether a line or an area is drawn as a curve through its values (52.105). `false` by default. */
     curve?: boolean
+    /**
+     * Writes one of its values, given it and its index, for the readout and what a key move announces
+     * (52.118): the raw value behind a series scaled to share an axis, say. `yFormat` by default.
+     */
+    format?: (value: number, index: number) => string
 }
 
 /**
@@ -103,6 +108,28 @@ export function present(value: number | null | undefined): number | undefined {
     return value === null || value === undefined || !Number.isFinite(value)
         ? undefined
         : value
+}
+
+/**
+ * 52.119 — `low` and `high` widened by `pad` times their span below and above, or by a pair's first
+ * below and its second above; a range with no width is not widened.
+ */
+export function padded(
+    low: number,
+    high: number,
+    pad: number | readonly [number, number] | undefined,
+): readonly [number, number] {
+    const span = high - low
+    if (pad === undefined || !(span > 0) || !Number.isFinite(span))
+        return [low, high]
+    const below = typeof pad === 'number' ? pad : pad[0]
+    const above = typeof pad === 'number' ? pad : pad[1]
+    return [low - span * below, high + span * above]
+}
+
+/** `part` as a percentage of `whole`, to a hundredth: `42.5`. */
+export function percentOf(part: number, whole: number): number {
+    return whole === 0 ? 0 : Math.round((part / whole) * 10_000) / 100
 }
 
 /**

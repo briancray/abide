@@ -1,0 +1,58 @@
+<script>
+import { announce, chart, format } from '@abide/abide'
+
+const WEEKS = [0, 7, 14, 21, 28, 35].map((day) => Date.UTC(2026, 9, 5 + day))
+const CLOSED = [3, 5, 2, 6, 4, 7]
+
+// Where a move the keys make is read out (50.49).
+const regions = announce.host()
+
+// Drawn in HTML rather than SVG: each column a `span` placed by the percentages its part carries
+// (52.116), so it stands right before the chart is measured, and on the server.
+const plot = chart({
+    label: 'Deals closed by week, October to November',
+    series: [{ label: 'Closed', values: CLOSED, kind: 'column' }],
+    x: WEEKS,
+    xFormat: (week) => `Week of ${format.date(week, { style: 'monthDay' })}`,
+})
+</script>
+
+<div {...plot.svg} class="relative block h-40 w-full text-chrome text-muted">
+    {#for tick of plot.yTicks}
+        <span {...tick.text} class="absolute top-(--y) left-0 -translate-y-1/2">
+            {tick.label}
+        </span>
+    {/for}
+    {#for bar of plot.bars key bar.key}
+        <span
+            {...bar.rect}
+            class="absolute top-(--y) left-(--x) h-(--height) w-(--width)
+                transform-none! rounded-t-sm bg-signal"
+        ></span>
+    {/for}
+    {#if plot.readout}
+        <span
+            {...plot.crosshair?.line}
+            class="absolute inset-y-0 left-(--x) w-px bg-current"
+        ></span>
+    {/if}
+</div>
+{#if plot.readout}
+    <span
+        {...plot.tip}
+        class="m-0 grid w-max gap-0.5 rounded-md border border-rule bg-raised px-3 py-2
+        text-chrome text-ink shadow-sm"
+    >
+        <span {...plot.readout?.heading} class="text-muted">{plot.readout?.label}</span>
+        {#for point of plot.readout?.values ?? []}
+            <span {...point.text}>{point.label}: {point.value}</span>
+        {/for}
+    </span>
+{/if}
+<div class="sr-only">
+    <div {...regions.polite}>
+        {#for message of regions.said('polite') key message.count}
+            <span>{message.text}</span>
+        {/for}
+    </div>
+</div>

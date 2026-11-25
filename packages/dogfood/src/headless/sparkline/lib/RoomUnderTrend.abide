@@ -1,0 +1,14 @@
+<script>
+import { sparkline } from '@abide/abide'
+
+const trend = sparkline({
+    label: 'Won revenue, 6 months',
+    values: [12, 18, 15, 24, 21, 27],
+    pad: [0.5, 0.1],
+})
+</script>
+
+<svg {...trend.svg} class="h-10 w-40">
+    <path {...trend.area} />
+    <path {...trend.line} />
+</svg>

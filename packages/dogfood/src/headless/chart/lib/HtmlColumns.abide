@@ -1,0 +1,31 @@
+<script>
+import { chart } from '@abide/abide'
+
+const plot = chart({
+    label: 'Deals closed by week',
+    series: [{ label: 'Closed', values: [3, 5, 2, 6], kind: 'column' }],
+})
+</script>
+
+<div {...plot.svg} class="relative block h-32 w-full">
+    {#for bar of plot.bars key bar.key}
+        <span
+            {...bar.rect}
+            class="absolute top-(--y) left-(--x) h-(--height) w-(--width)
+                transform-none! bg-signal"
+        ></span>
+    {/for}
+    {#if plot.readout}
+        <span
+            {...plot.crosshair?.line}
+            class="absolute inset-y-0 left-(--x) w-px bg-current"
+        ></span>
+    {/if}
+</div>
+{#if plot.readout}
+    <span {...plot.tip} class="m-0 rounded-md border px-3 py-2">
+        {#for point of plot.readout?.values ?? []}
+            <span {...point.text}>{point.label}: {point.value}</span>
+        {/for}
+    </span>
+{/if}

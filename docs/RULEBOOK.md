@@ -6281,8 +6281,10 @@ page is shown.
 hydrates at in a browser, a label a boundary passed between the two being written as changed text and
 not as a hydration mismatch.
 
-52.78 `chart` MUST hand back a point for each present value of each series, at the x `x` answers for
-its index and the y `y` answers for the value it is drawn at, and none for a missing value.
+52.78 `chart` MUST hand back a point for each present value of each series, at the x its part `x`
+answers for its position — the value its option `x` holds at its index, or the index where that
+option is not given — and the y `y` answers for the value it is drawn at, and none for a missing
+value; and its part `x` MUST map any value in those units as it maps a position.
 
 52.79 `chart`'s crosshair part MUST carry the same binding at every x position it stands at, and
 its `tip` MUST be placed again against the crosshair at each x the crosshair moves to.
@@ -6411,6 +6413,22 @@ date, the time it writes those naming a part of a time, and both the rest.
 fraction of a second, as that wall clock in the zone they write in (52.3) — the one `timeZone`
 names where their caller names one — as `instantAt` reads it (52.102), a day alone being its
 midnight; and a string with a `Z` or an offset as the instant it names.
+
+52.116 Each part `chart` hands back for a point, a column, a tick, a gridline, the zero line or the
+crosshair, and `sparkline`'s `dot`, MUST carry in its `style` where it is drawn as `--x` and `--y`,
+and a column its size as `--width` and `--height` besides, each a percentage of the box its root
+part is drawn at, a line across the plot carrying only the one of `--x` and `--y` it is drawn at.
+
+52.117 `meter`'s `meter` part MUST carry in its `style` as `--fraction` the share of the meter
+52.108 fills, and no `style` where `value` is `undefined`.
+
+52.118 `chart` MUST write a series' value in its readout by the series' `format`, given the value and
+its index, where the series gives one, and by `yFormat` where it does not.
+
+52.119 `chart` and `sparkline` given `pad` MUST widen the range of their values by `pad` times its
+span below it and above it — by a pair's first below and its second above — before taking zero into
+the range (52.34, 52.37) and before `chart.ticks` rounds it, and MUST NOT widen a range with no width
+or a range `bounds` gives.
 
 # 53. Keys, element behaviors and chat
 

@@ -11,17 +11,23 @@ const press = (svg: Record<string, unknown>, key: string) =>
     )
 
 // 52.78 — A POINT STANDS WHERE THE PLOT'S OWN SCALE PUTS ITS VALUE, one per present value, so a mark an
-// app draws with `plot.x` and `plot.y` lines up with the ones the parts hand back.
-// THE REVERT: push a point for a missing value too — four points where three are due.
+// app draws with `plot.x` and `plot.y` lines up with the ones the parts hand back, and `plot.x` places a
+// value between two positions — a date no value was recorded on.
+// THE REVERTS: push a point for a missing value too — four points where three are due; and map `x` by
+// index — `plot.x(2)` stands at the third position, 30, where a fifth of the way to 10 is due.
 test("every present value is a point at the plot's own x and y", () => {
+    const POSITIONS = [0, 10, 30, 40]
     const plot = chart({
         label: 'Won',
         series: () => [{ label: 'Won', values: [10, null, 30, 20] }],
+        x: POSITIONS,
     })
     const points = plot.points
     expect(points.map((point) => point.index)).toEqual([0, 2, 3])
+    expect(plot.x(20)).toBeCloseTo((plot.x(10) + plot.x(30)) / 2)
+    expect(plot.x(2)).toBeCloseTo(plot.x(0) + (plot.x(10) - plot.x(0)) / 5)
     for (const point of points) {
-        expect(point.x).toBe(plot.x(point.index))
+        expect(point.x).toBe(plot.x(POSITIONS[point.index] ?? 0))
         expect(point.y).toBe(plot.y(point.value))
         expect(point.circle.cx).toBe(point.x)
     }
@@ -80,4 +86,70 @@ test('a sparkline declaring curve draws its line and its area curved — 52.105'
     expect(String(trend.area.d).match(/C/g)).toHaveLength(4)
     curved.set(false)
     expect(String(trend.line.d)).not.toContain('C')
+})
+
+// 52.116 — EVERY PLACED MARK CARRIES ITS PLACE AS A SHARE OF THE BOX, so an element placed by
+// `left: var(--x)` stands where the SVG one does at whatever size the box is laid out.
+// THE REVERT: write the bar's vars in px of the box rather than percentages — `--x: 33.5%` reads
+// `--x: 201px`.
+test('a placed mark carries where it stands as percentages of the box', () => {
+    const plot = chart({
+        label: 'Deals',
+        series: () => [
+            { label: 'Won', values: [4, 8], kind: 'column' },
+            { label: 'Target', values: [5, 6] },
+        ],
+    })
+    const vars = (part: Record<string, unknown> | undefined) =>
+        Object.fromEntries(
+            [...String(part?.style).matchAll(/--([a-z]+): (-?[\d.]+)%/g)].map(
+                (match) => [match[1], Number(match[2])],
+            ),
+        )
+    const share = (px: number, whole: number) =>
+        Math.round((px / whole) * 10_000) / 100
+    for (const point of plot.points)
+        expect(vars(point.circle)).toEqual({
+            x: share(point.x, 600),
+            y: share(point.y, 240),
+        })
+    for (const bar of plot.bars)
+        expect(vars(bar.rect)).toEqual({
+            x: share(bar.x, 600),
+            y: share(bar.y, 240),
+            width: share(bar.width, 600),
+            height: share(bar.height, 240),
+        })
+    for (const tick of plot.yTicks) {
+        expect(vars(tick.grid)).toEqual({ y: share(tick.y, 240) })
+        expect(vars(tick.text)).toEqual({ x: 0, y: share(tick.y, 240) })
+    }
+    for (const tick of plot.xTicks)
+        expect(vars(tick.text).x).toBe(share(tick.x, 600))
+    press(plot.svg, 'ArrowRight')
+    expect(vars(plot.crosshair?.line)).toEqual({
+        x: share(plot.crosshair?.x ?? 0, 600),
+    })
+    const trend = sparkline({ values: [3, 7, 5], label: 'Won' })
+    expect(vars(trend.dot)).toEqual({ x: 100, y: 50 })
+})
+
+// 52.119 — `pad` KEEPS THE VALUES OFF THE EDGES: the range widens by a share of its span before the
+// ticks round it, before zero is taken in, so a column still stands on zero, and a flat range is not
+// widened. THE REVERT: drop `padded` from `chart` and `sparkline` — the ticks end at 10 and 20, on the
+// values, and the trend's low runs along the bottom.
+test('pad widens the range of the values by a share of its span, before zero is taken in', () => {
+    const ticks = (pad: number, kind: 'line' | 'column' = 'line') =>
+        chart({
+            label: 'Won',
+            series: () => [{ label: 'Won', values: [10, 20], kind }],
+            pad,
+        }).yTicks.map((tick) => tick.value)
+    expect(ticks(0)).toEqual([10, 12, 14, 16, 18, 20])
+    expect(ticks(0.15)).toEqual([5, 10, 15, 20, 25])
+    expect(ticks(0.5, 'column')[0]).toBe(0)
+    const trend = sparkline({ values: [0, 10], label: 'Won', pad: [0.5, 0] })
+    expect(String(trend.line.d)).toBe('M0,66.67L100,0')
+    const flat = sparkline({ values: [4, 4], label: 'Won', pad: 0.2 })
+    expect(String(flat.line.d)).toBe('M0,50L100,50')
 })
