@@ -17,18 +17,18 @@ const moveAcme = POST(() => {
 </script>
 
 <script>
-import { busy, computed, refresh } from '@abide/abide'
+import { computed } from '@abide/abide'
 
 const leads = computed(() => getStage({ stage: 'lead' }))
 const won = computed(() => getStage({ stage: 'won' }))
 
 async function move() {
     await moveAcme()
-    refresh(getStage)
+    getStage.refresh()
 }
 </script>
 
-<div class={busy(getStage) ? 'tiles opacity-40' : 'tiles'}>
+<div class={leads.busy() || won.busy() ? 'tiles opacity-40' : 'tiles'}>
     <p>lead: ${leads.value}</p>
     <p>won: ${won.value}</p>
 </div>

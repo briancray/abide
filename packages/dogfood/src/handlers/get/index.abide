@@ -12,6 +12,7 @@ import Section from '#src/lib/Section.abide'
         '/helpers/validate-json',
         '/reactive/refresh',
         '/handlers/clients',
+        '/data/store',
     ]}
     tests={[
         {
@@ -34,6 +35,18 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/url.test.ts',
             from: [
                 "test('a record or a list of records rides the query as its canonical JSON — 30.28'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/diffOps.test.ts',
+            from: [
+                "test('a keyed list is changed row by row, and the ops rebuild it — 18.41'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/durableFollow.test.ts',
+            from: [
+                "test('a restart over the same store keeps the version, and the patches since — 18.42, 18.43'",
             ],
         },
         {
@@ -65,8 +78,9 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Show the deal a page picks">
-        <p>Import the handler file and call it. The call hands back a reactive value, so the page
-            reads <code>deal.name</code> by name and loads again when <code>id</code> changes.</p>
+        <p>Import the handler file and call it inside a <code>computed</code>. The call answers a
+            promise, and the <code>computed</code> makes it live: the page reads
+            <code>deal.name</code> by name and loads again when <code>id</code> changes.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import { computed, reactive } from '@abide/abide'
@@ -82,8 +96,9 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Send the activity archive an entry at a time">
-        <p>Write the handler as an async generator and it streams. A page reading it holds every
-            entry that has arrived, and <code>busy()</code> stays true until the stream closes.</p>
+        <p>Write the handler as an async generator and it streams. A <code>computed</code>
+            reading it holds every entry that has arrived, and its <code>busy()</code> stays true
+            until the stream closes.</p>
         <Code language="ts" caption="server" code={`
             import { GET } from '@abide/abide/server'
 
@@ -147,8 +162,8 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Reload only the pipeline stages a win changed">
-        <p>Pass <code>refresh</code> a pattern of the handler's args, and the entries matching it
-            load again while every other stage stays as it is.</p>
+        <p>Pass the handler's <code>refresh</code> a pattern of its args, and the entries matching
+            it load again while every other stage stays as it is.</p>
         <Code language="ts" caption="browser" code={`
             import getStage from './getStage.handler.ts'
             import winDeal from './winDeal.handler.ts'
@@ -156,6 +171,43 @@ import Section from '#src/lib/Section.abide'
             await winDeal()
             getStage.refresh({ stage: 'lead' })
             getStage.refresh({ stage: 'won' })
+        `} />
+    </Section>
+
+    <Section level={3} title="Send every tab the call just logged, and nothing else">
+        <p>Make the read <code>global</code> and write it on the server with
+            <code>patch</code>. Every page reading it follows it, and a change reaches each one as
+            the JSON Patch from the value it replaced, so a logged call is one row on the wire
+            rather than the list again. <code>key</code> says which row is which.</p>
+        <Code language="ts" caption="server" code={`
+            import { POST } from '@abide/abide/server'
+            import listCalls, { type Call } from './listCalls.handler.ts'
+
+            export default POST(({ id, note }: Call) => {
+                listCalls.patch((held) => {
+                    if (!held.some((call) => call.id === id)) held.push({ id, note })
+                })
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep the call log's versions across a restart">
+        <p>Give the read a <code>store</code> that keeps a log, <code>store.sqlite</code> or
+            <code>store.redis</code>, and each change is a numbered record in it. A restarted
+            server stands at the same version, so a page that reconnects is sent only the patches
+            it missed. A second server on the same store applies the first one's records and sends
+            them to its own followers.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET, store } from '@abide/abide/server'
+            import { crmDatabase } from '../pipeline/lib/crmDatabase.server.ts'
+
+            export type Call = { id: string; note: string }
+
+            export default GET((): Call[] => [], {
+                global: true,
+                key: 'id',
+                store: store.sqlite<Call[]>(crmDatabase, 'calls'),
+            })
         `} />
     </Section>
 </Doc>

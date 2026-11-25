@@ -918,6 +918,9 @@ each change, in order, each a copy no later change mutates.
 11.79 A `memo` given a `store` MUST open an entry on the value the store keeps for its `Args` without
 running its function, and MUST keep there what the entry produces and what its owner writes.
 
+11.80 A `memo` given a `schema`, a `transform` or an `identity` MUST apply each to every entry's value
+as 4.3, 4.6 and 5.3 apply them to a `reactive`'s.
+
 # 12. Effects
 
 12.1 A `Disposer` MUST run before each rerun of its `Effect`, and once more at teardown.
@@ -972,15 +975,16 @@ others, the opener MUST run, or be found to read nothing that changed, before th
 
 # 13. Selections
 
-13.1 A `Selection` MUST be one `Reactive`, one `Keyed`, one `Rpc`, or a set of `tags`.
+13.1 A `Selection` MUST be one `Reactive` or a set of `tags`, and `busy`, `ready` and `synced` MUST NOT
+take a `memo` or an `Rpc`.
 
 13.2 `busy` over a `Selection` MUST answer whether ANY entry in it is busy.
 
 13.3 An implementation MUST hold one signal per `Selection`, and MUST NOT hold one per entry.
 
-13.4 `s.refresh`, `s.invalidate`, `k.refresh`, `k.invalidate`, `rpc.refresh` and `rpc.invalidate`
-MUST be defined as `refresh` and `invalidate` over a `Selection`, and MUST NOT be a second
-mechanism.
+13.4 `s.refresh` and `s.invalidate` MUST be `refresh` and `invalidate` over `s`, and a `memo`'s and an
+`Rpc`'s `refresh` and `invalidate` MUST be the same mechanism over the entries they match, and none
+of them MUST be a second mechanism.
 
 13.5 An implementation MUST NOT provide a free `done`, `success`, `error` or `issues` over a `Selection`.
 
@@ -1001,8 +1005,8 @@ and `memo` in the process.
 
 13.11 `ready` over a `Selection` MUST answer whether EVERY entry in it is ready.
 
-13.12 A pattern given beside a `Keyed` or an `Rpc` MUST narrow it to the entries whose `Args`
-hold the pattern: an object holds another where it holds every member the other names, an array
+13.12 A pattern given to a `memo`'s or an `Rpc`'s `refresh` or `invalidate`, or to `outbox`, MUST
+narrow it to the entries whose `Args` hold the pattern: an object holds another where it holds every member the other names, an array
 holds another where it holds each of the other's items in any order beside any others, and any
 other value holds only itself.
 
@@ -1027,9 +1031,8 @@ mutation's `declare` built while its write is in flight.
 13.18 `synced` over a selection MUST be true where every entry in it is synced, and a bare `synced`
 where every value it sweeps is.
 
-13.19 `busy`, `ready`, `synced`, `refresh` and `invalidate` over an `Rpc` no call has reached in the
-current scope MUST answer as over a `Selection` with no entries, and reading `busy`, `ready` or
-`synced` there MUST subscribe the reader to the first call that reaches it in that scope.
+13.19 `refresh` and `invalidate` over an `Rpc` no call has reached in the current scope MUST do
+nothing, and MUST NOT build its value.
 
 13.20 `refresh` over a set of `tags` MUST NOT rerun a synchronous derivation that carries none of
 them, which MUST recompute from the load it reads.
@@ -1497,6 +1500,9 @@ one, MUST adopt the handler's value for those `Args` (11.12), as it would the va
 
 16.109 A handler declared over a `Reactive` MUST throw at construction, naming a `memo`'s value, written
 with `rpc.set` and `rpc.patch`, as the way to serve a value the server writes.
+
+16.110 A handler MUST take a `memo`'s value options, and MUST NOT take `throttle` or `debounce`, which
+pace the reader of a value and are the `computed`'s that reads it.
 
 # 17. Response helpers
 
@@ -5105,8 +5111,7 @@ and after a send that got no answer, waiting from one second to sixty, doubling.
 46.10 A call queued in `outbox` MUST carry one `idempotency-key` header on every send, its first
 included.
 
-46.11 `busy` over a handler MUST be true while a call `outbox` sends for it is in flight, and a bare
-`busy` while any call `outbox` sends is.
+46.11 A bare `busy` MUST be true while any call `outbox` sends is in flight.
 
 46.12 A queued call's `retry` MUST send it again at once, and MUST clear its `value`'s refusal as a
 write made here (3.10).
@@ -5117,7 +5122,7 @@ write made here (3.10).
 
 46.15 On a server `outbox` MUST answer no calls.
 
-46.16 `outbox` over a selection that names no handler MUST answer no calls.
+46.16 `outbox` handed a handler MUST answer only the calls for that handler.
 
 46.17 Reading `outbox` MUST subscribe the reader to the calls it answers.
 

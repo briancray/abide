@@ -40,9 +40,7 @@ function sharedLog() {
         append: (entry, _key, at) => later(() => appended(entry, at)),
         appendAt: (entry, expected, at) =>
             later(() =>
-                records.length === expected
-                    ? appended(entry, at)
-                    : undefined,
+                records.length === expected ? appended(entry, at) : undefined,
             ),
         since: (seq) => later(() => records.slice(seq, seq + 256)),
         last: () => later(() => records.length),
@@ -134,9 +132,7 @@ test('two processes naming one version meet as a conflict, and both stand at the
     const sorted = (values: unknown) => [...(values as string[])].sort()
     expect(
         `named: ${hereNamed},${thereNamed}; here: ${sorted(hereEntry.peek())}; there: ${sorted(thereEntry.peek())}; at: ${versionOf(hereEntry)},${versionOf(thereEntry)}`,
-    ).toBe(
-        'named: 2,2; here: clay,dune,emma; there: clay,dune,emma; at: 3,3',
-    )
+    ).toBe('named: 2,2; here: clay,dune,emma; there: clay,dune,emma; at: 3,3')
     // A follower standing at the number the loser named is sent the value, not the winner's patch.
     const loser =
         (records[1]?.entry as { ops: { value: string }[] }).ops[0]?.value ===

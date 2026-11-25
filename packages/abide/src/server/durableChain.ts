@@ -190,10 +190,7 @@ export class DurableChain {
                 }
                 this.pending.shift()
                 this.confirm(next)
-                if (
-                    next.record.snapshot !== undefined &&
-                    next.seq > WINDOW * 2
-                )
+                if (next.record.snapshot !== undefined && next.seq > WINDOW * 2)
                     void this.log.trim(next.seq - WINDOW * 2)
                 this.idle()
             },

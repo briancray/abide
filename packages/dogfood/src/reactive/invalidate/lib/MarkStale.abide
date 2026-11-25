@@ -8,14 +8,14 @@ const getForecast = GET(async () => {
 </script>
 
 <script>
-import { computed, invalidate, reactive } from '@abide/abide'
+import { computed, reactive } from '@abide/abide'
 
 let open = reactive(true)
 const forecast = computed(() => getForecast())
 </script>
 
 <div class="row">
-    <button onclick={() => invalidate(getForecast)}>Mark stale</button>
+    <button onclick={() => getForecast.invalidate()}>Mark stale</button>
     <button onclick={() => (open = !open)}>
         {open ? 'Hide' : 'Show'} forecast
     </button>

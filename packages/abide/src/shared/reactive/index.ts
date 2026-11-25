@@ -22,6 +22,7 @@ import {
     type Memo,
     type MemoOptions,
     memoOver,
+    type MemoValue,
 } from './createMemo.ts'
 import { DECLARED_TAGS } from './DECLARED_TAGS.ts'
 import { isReactive } from './isReactive.ts'
@@ -74,11 +75,11 @@ export { deepEqual } from './deepEqual.ts'
 export { type Disposer, type Effect, watch } from './watch.ts'
 
 /**
- * What a static probe or trigger may be asked about: a value, a keyed face, or `{ tags }`.
+ * What a free probe or trigger may be asked about: one `Reactive`, or `{ tags }`.
  *
- * Both result types already carry the four members, and a `Keyed` already applies the right
- * quantifier over its entries — ANY for `busy`, ALL for `ready` — so the selection is the shape
- * rather than a union, and the statics have no arm to pick.
+ * 13.1 — A `memo` AND AN `Rpc` ARE NOT ONE. Their calls answer promises, which the language already
+ * waits on; whether one is loading is asked of the `computed` that reads it. Their own `refresh` and
+ * `invalidate` are methods, narrowed by a pattern (13.12).
  *
  * 13.1'S LAST ARM IS `{ tags }`: every value carrying any of those tags, across values.
  */
@@ -335,10 +336,14 @@ export function computed(body: unknown, options?: unknown): unknown {
  *
  * NO PARAMETER IS SNIFFED: a function declaring none is kept on `undefined`, called as `m()`.
  */
-export function memo<Args = undefined, Result = unknown>(
+export function memo<
+    Args = undefined,
+    Result = unknown,
+    Shaped = MemoValue<Result>,
+>(
     fn: (args: Args) => Result,
-    options?: MemoOptions<Args>,
-): Memo<Args, Result>
+    options?: MemoOptions<Args, MemoValue<NoInfer<Result>>, Shaped>,
+): Memo<Args, Result, Kept<Shaped>>
 export function memo(fn: unknown, options?: unknown): unknown {
     refuseValue(fn, 'memo')
     return memoOver(
@@ -499,38 +504,23 @@ function buildValue(given: [first?: unknown, options?: unknown]): unknown {
     )
 }
 
-// What a pattern beside a selection is typed as: the `Args` the selection's OWN member narrows by
-// (13.12), read off the member being called rather than off `refresh` for all four — the four take
-// the same two arguments, and deriving three of them from a fourth is one member's signature
-// standing in for another's. A `Reactive`'s members take none, so a pattern there is inert; the
-// tag arm takes none at all.
-type PatternOf<
-    Chosen,
-    Member extends 'busy' | 'ready' | 'synced' | 'refresh' | 'invalidate',
-> =
-    Chosen extends Record<Member, (pattern?: infer Pattern) => unknown>
-        ? Pattern
-        : never
-
 /**
  * Whether any entry in the selection has work in flight — ANY, against `ready`'s ALL.
  *
  * THE FREE PROBES AND TRIGGERS. 3.2 keeps a probe from starting work beyond what a read would run, and 1.7 has reaching an
  * instance start it, so the allocate/do-not-allocate split is visible in the spelling rather than
- * remembered as a rule. A pattern is handed to the selection's own face, which is what narrows a
- * `Keyed` and an `Rpc` over one — so `refresh(s, pattern)` and `s.refresh(pattern)` are one call
- * (13.4, 13.12).
+ * remembered as a rule. One `Reactive` answers through its own members, so `refresh(s)` and
+ * `s.refresh()` are one call (13.4).
  */
-export function busy<Chosen extends Selection>(
-    selection?: Chosen,
-    pattern?: PatternOf<Chosen, 'busy'>,
-): boolean {
+// 31.13 — a type parameter constrained by `Selection`, which is how the compiler knows the position
+// holds the `Reactive`: an optional `Selection` is a union that no longer carries the alias.
+export function busy<Chosen extends Selection>(selection?: Chosen): boolean {
     const sweep = sweepOf(selection)
     // 46.11 — a bare `busy` hears a call the outbox is sending, which no value holds.
     if (sweep === null)
         return busyOver(sweep) || OUTBOX_SENDING.any?.() === true
     if (sweep !== undefined) return busyOver(sweep)
-    return (selection as { busy(pattern: unknown): boolean }).busy(pattern)
+    return (selection as { busy(): boolean }).busy()
 }
 /**
  * Whether every entry in the selection has a value to serve — ALL, against `busy`'s ANY.
@@ -538,24 +528,18 @@ export function busy<Chosen extends Selection>(
  * The ambiguity stood declared rather than resolved for a long time; these are the quantifiers
  * under which `busy && !ready` reads as one sentence.
  */
-export function ready<Chosen extends Selection>(
-    selection?: Chosen,
-    pattern?: PatternOf<Chosen, 'ready'>,
-): boolean {
+export function ready<Chosen extends Selection>(selection?: Chosen): boolean {
     const sweep = sweepOf(selection)
     if (sweep !== undefined) return readyOver(sweep)
-    return (selection as { ready(pattern: unknown): boolean }).ready(pattern)
+    return (selection as { ready(): boolean }).ready()
 }
 /**
  * Whether every entry in the selection holds what its producer made — ALL, as `ready` asks (13.18).
  */
-export function synced<Chosen extends Selection>(
-    selection?: Chosen,
-    pattern?: PatternOf<Chosen, 'synced'>,
-): boolean {
+export function synced<Chosen extends Selection>(selection?: Chosen): boolean {
     const sweep = sweepOf(selection)
     if (sweep !== undefined) return syncedOver(sweep)
-    return (selection as { synced(pattern: unknown): boolean }).synced(pattern)
+    return (selection as { synced(): boolean }).synced()
 }
 /**
  * Stale-while-revalidate over the selection: reloads it while serving what it holds.
@@ -563,13 +547,9 @@ export function synced<Chosen extends Selection>(
  * 13.15 — ON A SERVER A SWEEP REACHES THE COPIES BROWSERS FOLLOW TOO, bare or by tag: a handler built
  * per request holds no value here for the sweep to find, and its copies are the point.
  */
-export function refresh<Chosen extends Selection>(
-    selection?: Chosen,
-    pattern?: PatternOf<Chosen, 'refresh'>,
-): void {
+export function refresh<Chosen extends Selection>(selection?: Chosen): void {
     const sweep = sweepOf(selection)
-    if (sweep === undefined)
-        (selection as { refresh(pattern: unknown): void }).refresh(pattern)
+    if (sweep === undefined) (selection as { refresh(): void }).refresh()
     else {
         refreshOver(sweep)
         for (const followers of RPC_SERVER.following)
@@ -577,15 +557,9 @@ export function refresh<Chosen extends Selection>(
     }
 }
 /** Marks the selection stale: drops the cache behind it, never the value. */
-export function invalidate<Chosen extends Selection>(
-    selection?: Chosen,
-    pattern?: PatternOf<Chosen, 'invalidate'>,
-): void {
+export function invalidate<Chosen extends Selection>(selection?: Chosen): void {
     const sweep = sweepOf(selection)
-    if (sweep === undefined)
-        (selection as { invalidate(pattern: unknown): void }).invalidate(
-            pattern,
-        )
+    if (sweep === undefined) (selection as { invalidate(): void }).invalidate()
     else {
         invalidateOver(sweep)
         for (const followers of RPC_SERVER.following)

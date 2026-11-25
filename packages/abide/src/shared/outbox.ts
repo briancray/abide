@@ -1,4 +1,4 @@
-// 46 — THE CALLS A BROWSER HAS NOT DELIVERED YET, asked of a selection as a probe is: `outbox()` for
+// 46 — THE CALLS A BROWSER HAS NOT DELIVERED YET: `outbox()` for
 // every one, `outbox(logCall)` and `logCall.outbox(pattern)` for one handler's. What it answers is a
 // plain list, so a page counts, filters and walks it as it would any other, and each call carries
 // what can be done with it.
@@ -9,7 +9,7 @@
 
 import type { Failed } from './Failed.ts'
 import type { JsonValue } from './JsonValue.ts'
-import { ambient, type Reactive, type Selection } from './reactive/index.ts'
+import { ambient, type Reactive } from './reactive/index.ts'
 import { matchesPattern } from './reactive/matchesPattern.ts'
 import type { Method } from './rpc.ts'
 
@@ -43,10 +43,10 @@ type ValueOf<Chosen> = Chosen extends {
     ? Value
     : unknown
 
-/** A handler as a selection names it: its method and the address it is mounted at. */
+/** A handler as `outbox` is handed one: its method and the address it is mounted at. */
 type Handler = { method: Method; address: string | undefined }
 
-/** A call as a selection is matched against it: its handler, and the args a pattern narrows. */
+/** A call as a handler is matched against it: its handler, and the args a pattern narrows. */
 type Matched = Pick<ShownCall, 'method' | 'address' | 'args'>
 
 const LINE = ambient<ShownCall[]>([])
@@ -74,30 +74,19 @@ export function showSending(call: Matched | undefined): void {
 }
 
 /**
- * The calls waiting to be delivered and the ones refused, oldest first: every one, or the ones a
- * handler names, narrowed by `pattern` as its own members narrow (46.1, 46.16).
+ * The calls waiting to be delivered and the ones refused, oldest first: every one, or the ones for
+ * `handler`, narrowed by `pattern` as its own triggers narrow (46.1, 46.16).
  */
-export function outbox<Chosen extends Selection>(
-    selection?: Chosen,
+export function outbox<Chosen extends Handler = Handler>(
+    handler?: Chosen,
     pattern?: Record<string, unknown>,
 ): QueuedCall<ValueOf<Chosen>>[] {
     const line = LINE() as QueuedCall<ValueOf<Chosen>>[]
-    if (selection === undefined) return line
-    const handler = handlerOf(selection)
+    if (handler === undefined) return line
     const named: QueuedCall<ValueOf<Chosen>>[] = []
-    if (handler === undefined) return named
     for (const call of line)
         if (forHandler(call as ShownCall, handler, pattern)) named.push(call)
     return named
-}
-
-/** 46.11 — whether a call `outbox` holds for `handler`, matching `pattern`, is in flight. */
-export function sendingFor(
-    handler: Handler,
-    pattern: Record<string, unknown> | undefined,
-): boolean {
-    const call = SENDING()
-    return call !== undefined && forHandler(call, handler, pattern)
 }
 
 function forHandler(
@@ -110,13 +99,4 @@ function forHandler(
         call.address === handler.address &&
         matchesPattern(call.args, pattern)
     )
-}
-
-/** The handler a selection names, or `undefined` where it names none — a value, a key, or tags. */
-function handlerOf(selection: object): Handler | undefined {
-    const handler = selection as Partial<Handler>
-    return typeof handler.method === 'string' &&
-        typeof handler.address === 'string'
-        ? (handler as Handler)
-        : undefined
 }

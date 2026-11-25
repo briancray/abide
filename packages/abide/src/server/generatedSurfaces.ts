@@ -18,6 +18,7 @@ import { essenceOf } from '#shared/framing.ts'
 import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
+import { gateOf } from '#shared/reactive/argsContract.ts'
 import { computed, type Reactive } from '#shared/reactive/index.ts'
 import { parseRoutePattern } from '#shared/routePattern.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
@@ -34,8 +35,9 @@ import { type Listed, surfaceOf } from './surfaceOf.ts'
 const OPENAPI_LOG = namedLogger('abide:openapi')
 const MCP_LOG = namedLogger('abide:mcp')
 
-// What OpenAPI adds to a listing: whether the handler is keyed.
-type Published = Listed & { keyed: boolean }
+// What OpenAPI adds to a listing: whether the handler gates its args, so a gate with no JSON Schema
+// to publish is said aloud rather than published as nothing (20.11).
+type Published = Listed & { gated: boolean }
 
 /** Every handler `surface` lists (`surfaceOf`). */
 function listed(
@@ -51,7 +53,7 @@ function listed(
         }
         found.push({
             ...one,
-            keyed: mounted.handler.keyed,
+            gated: gateOf(mounted.handler) !== undefined,
         })
     }
     return found
@@ -124,7 +126,7 @@ function openApiOf(handlers: Map<string, Mounted>): {
         }
         if (each.description !== undefined)
             operation.description = each.description
-        if (each.keyed && each.schema === undefined)
+        if (each.gated && each.schema === undefined)
             OPENAPI_LOG.warning(
                 `${each.address} has no JSON Schema to publish for its args.`,
             )

@@ -27,8 +27,8 @@ import markStale from './lib/MarkStale.abide' with { type: 'text' }
 >
     <Section level={3} title="Mark the forecast stale without reloading it now">
         <p><code>invalidate</code> starts nothing, so marking the forecast stale does no work at
-            all. The next read loads it again: hide the forecast and show it, and a new figure
-            arrives.</p>
+            all. Call the handler's own <code>invalidate</code>, and the next read loads it again:
+            hide the forecast and show it, and a new figure arrives.</p>
         <Example code={markStale}><MarkStale /></Example>
     </Section>
 

@@ -14,7 +14,7 @@ import winLead from './lib/WinLead.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/rpc.test.ts',
             from: [
-                "test('a pattern narrows an rpc to the entries it matches, in each spelling — 13.12'",
+                "test('a pattern narrows an rpc to the entries it matches — 13.12'",
             ],
         },
         {
@@ -26,8 +26,9 @@ import winLead from './lib/WinLead.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Reload the two stages a won deal moved between">
-        <p>Winning a lead changes <code>lead</code> and <code>won</code>. Refresh those two
-            entries and leave every other stage alone: <code>proposal</code> never reloads.</p>
+        <p>Winning a lead changes <code>lead</code> and <code>won</code>. Call the handler's own
+            <code>refresh</code> with a pattern of its args to reload those two entries, and every
+            other stage stays as it is: <code>proposal</code> never reloads.</p>
         <Example code={winLead}><WinLead /></Example>
     </Section>
 

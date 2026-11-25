@@ -25,27 +25,32 @@ import dimBoard from './lib/DimBoard.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/outbox.test.ts',
             from: [
-                "test('busy is true over a handler while the outbox sends its call — 46.11'",
+                "test('a bare busy is true while the outbox sends a call — 46.11'",
             ],
         },
     ]}
 >
     <Section level={3} title="Dim the board while any stage reloads">
-        <p>Pass a handler, and <code>busy</code> answers for every entry the tiles called it
-            with, so reloading one stage dims the whole board.</p>
+        <p>Tag the tiles, and <code>busy</code> over the tag answers for every one of them, so
+            reloading one stage dims the whole board.</p>
         <Example code={dimBoard}><DimBoard /></Example>
     </Section>
 
-    <Section level={3} title="Ask about one stage, or one tag">
-        <p>A pattern narrows a keyed handler to the entries it matches. A set of
-            <code>tags</code> asks across every value carrying one.</p>
+    <Section level={3} title="Ask the computed that reads a handler, not the handler">
+        <p>A handler's call answers a promise, which has no status to ask. Read it inside a
+            <code>computed</code> and ask that: one value, a set of <code>tags</code>, or with
+            nothing, every load in this scope and any call the outbox is sending.</p>
         <Code language="ts" caption="shared" code={`
-            import { busy } from '@abide/abide'
+            import { busy, computed } from '@abide/abide'
             import getStage from './getStage.handler.ts'
 
-            busy(getStage, { stage: 'won' })
+            const won = computed(() => getStage({ stage: 'won' }), {
+                tags: ['stage:won'],
+            })
+
+            busy(won) // won.busy()
             busy({ tags: ['stage:won'] })
-            busy() // every load in this scope
+            busy()
         `} />
     </Section>
 </Doc>

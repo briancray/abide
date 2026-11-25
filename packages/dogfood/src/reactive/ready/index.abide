@@ -16,7 +16,7 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/rpc.test.ts',
             from: [
-                "test('a pattern is checked against Args on every one of the four — 13.12'",
+                "test('a probe takes no rpc, and a trigger checks its pattern against Args — 13.1, 13.12'",
             ],
         },
     ]}
@@ -39,14 +39,19 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Ask about one stage of a keyed handler">
-        <p>A pattern narrows a keyed handler to the entries whose args match it.</p>
-        <Code language="ts" caption="shared" code={`
-            import { ready } from '@abide/abide'
+    <Section level={3} title="Ask the computed that reads a handler, not the handler">
+        <p>A handler's call answers a promise, which has no status to ask. Read the stage inside
+            a <code>computed</code>, and <code>ready</code> over it is true once that stage has a
+            figure to show.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { computed, ready } from '@abide/abide'
             import getStage from './getStage.handler.ts'
 
-            ready(getStage, { stage: 'won' })
-            ready(getStage) // every stage this scope has called
+            const won = computed(() => getStage({ stage: 'won' }))
+            </script>
+
+            <p>{ready(won) ? \`\${won.count} won\` : 'loading…'}</p>
         `} />
     </Section>
 </Doc>

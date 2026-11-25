@@ -273,7 +273,7 @@ const WRITTEN: readonly {
                 route: '/reactive/busy',
                 title: '`busy`',
                 description:
-                    'Ask whether any value, keyed entry, handler call or tagged value in a selection has work in flight.',
+                    'Ask whether a value, or any value carrying a tag, has work in flight, or a call is being sent.',
                 where: 'anywhere',
             },
             {
@@ -294,7 +294,7 @@ const WRITTEN: readonly {
                 route: '/reactive/refresh',
                 title: '`refresh`',
                 description:
-                    'Reload a value, a keyed entry, a handler or everything carrying a tag, keeping what is held on screen meanwhile.',
+                    "Reload a value, a handler's entries or everything carrying a tag, keeping what is held on screen meanwhile.",
                 where: 'anywhere',
             },
             {
@@ -902,7 +902,7 @@ const WRITTEN: readonly {
                 route: '/handlers/get',
                 title: '`GET`',
                 description:
-                    'Declare a read in a handler file and call it from a page as a reactive value, a stream or a link.',
+                    'Declare a read in a handler file, call it from a page for its value, its stream or its link, and keep every reader following it.',
                 where: 'server',
             },
             {

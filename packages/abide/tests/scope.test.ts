@@ -254,105 +254,34 @@ test('a home first reached inside an owner outlives it — 12.17', async () => {
     )
 })
 
-// 13.19, 16.64 — A HANDLER NO CALL HAS REACHED ANSWERS AS ONE WITH NO ENTRIES, and asking builds
-// nothing: building an unkeyed value starts its body (1.7), so a `disabled={save.busy()}` ran the
-// write on every server render and painted it in flight. Asked outside every request and inside one,
-// for a mutation and a read alike. THE REVERT: have `faceHere` in `declare` answer `built` always;
-// the never-called `POST` reports busy true and ready false, and the probes have run 4 bodies where
-// 0 are due — each handler's, once outside every request and once inside one.
-test('a handler no call has reached is not busy, and asking runs nothing — 13.19, 16.64', async () => {
+// 13.19, 16.64 — A HANDLER NO CALL HAS REACHED IS TRIGGERED AS ONE WITH NO ENTRIES, and triggering
+// builds nothing: building an unkeyed value starts its body (1.7), so a `refresh` over a mutation no
+// one had called would run the write. Outside every request and inside one, for a mutation and a read
+// alike. THE REVERT: have `faceHere` in `declare` answer `built` always; the triggers run 4 bodies
+// where 0 are due — each handler's, once outside every request and once inside one.
+test('a handler no call has reached runs nothing when triggered — 13.19, 16.64', async () => {
     let runs = 0
-    let release = (): void => {}
     const save = POST(async () => {
         runs += 1
-        await new Promise<void>((done) => {
-            release = done
-        })
         return runs
     })
     const feed = GET(() => {
         runs += 1
         return runs
     })
-    const probes = (): string =>
-        `${save.busy()} ${save.ready()} ${save.synced()} ${feed.busy()}`
-    const outside = probes()
+    const trigger = (): void => {
+        save.refresh()
+        save.invalidate()
+        feed.refresh()
+    }
+    trigger()
     await inScope(new Request('http://app/a'), async () => {
-        const inside = probes()
+        trigger()
         await Bun.sleep(0)
-        expect(`${outside} | ${inside} | body runs: ${runs}`).toBe(
-            'false true true false | false true true false | body runs: 0',
-        )
-        const call = save()
-        expect(save.busy()).toBe(true)
-        release()
-        await call
-        expect(save.busy()).toBe(false)
+        expect(`body runs: ${runs}`).toBe('body runs: 0')
+        await save()
     })
     expect(`body runs: ${runs}`).toBe('body runs: 1')
-})
-
-// 3.3, 13.19 — A READER THAT PROBED BEFORE THE FIRST CALL IS WOKEN BY IT: the unreached answer
-// subscribes it to the build of the value in its own scope, and from then it follows the value's
-// probes. Outside every request and inside one, as a `disabled={save.busy()}` reads it. THE REVERT:
-// have `builtHere` subscribe nothing — each reader stays at its first run and reads `busy` false
-// through the whole call, 1 run each where 3 are due ("false, probing ran 0" twice).
-test('a reader that probed before the first call wakes when it starts and settles — 3.3, 13.19', async () => {
-    let runs = 0
-    let release = (): void => {}
-    const slow = () =>
-        POST(async () => {
-            runs += 1
-            await new Promise<void>((done) => {
-                release = done
-            })
-        })
-    const watched = async (save: ReturnType<typeof slow>): Promise<string> => {
-        const seen: boolean[] = []
-        const stop = watch(() => {
-            seen.push(save.busy())
-        })
-        await Bun.sleep(0)
-        const probing = runs
-        const call = save()
-        await Bun.sleep(0)
-        release()
-        await call
-        await Bun.sleep(0)
-        stop()
-        return `${seen.join(' ')}, probing ran ${probing}`
-    }
-    // Both declared outside every request, as a module's handlers are.
-    const home = slow()
-    const perRequest = slow()
-    const outside = await watched(home)
-    runs = 0
-    const inside = await inScope(new Request('http://app/a'), () =>
-        watched(perRequest),
-    )
-    expect(`${outside} | ${inside}`).toBe(
-        'false true false, probing ran 0 | false true false, probing ran 0',
-    )
-})
-
-// 3.14, 13.16 — A PROBE OVER A MUTATION A SWEEP INVALIDATED DOES NOT SEND THE WRITE AGAIN. THE REVERT:
-// have `probe` bring a mutation's cell current as it does any other; the `busy` after the `refresh`
-// reruns the handler and reads true, 2 writes where 1 is due.
-test('a probe over a mutation a sweep invalidated runs nothing — 3.14', async () => {
-    let writes = 0
-    const save = POST(async () => {
-        writes += 1
-        return writes
-    })
-    await inScope(new Request('http://app/a'), async () => {
-        await save()
-        refresh()
-        const busy = save.busy()
-        await Bun.sleep(0)
-        expect(`busy: ${busy}, writes: ${writes}`).toBe(
-            'busy: false, writes: 1',
-        )
-    })
 })
 
 // 16.1 THROUGH 16.6 — A HANDLER THAT IS A VALUE IS FILED AS A BODY IS: one value per request, and one

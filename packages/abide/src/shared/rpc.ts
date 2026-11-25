@@ -24,7 +24,7 @@ import type { Issues } from './Issues.ts'
 import { namedLogger } from './log.ts'
 import { compose, type Rung } from './Middleware.ts'
 import { unmounted } from './mount.ts'
-import { outbox, type QueuedCall, sendingFor } from './outbox.ts'
+import { outbox, type QueuedCall } from './outbox.ts'
 import { principalRotated } from './principalRotated.ts'
 import { REACH_CALL } from './REACH_CALL.ts'
 import { answerOfCall } from './reactive/answerOfCall.ts'
@@ -60,6 +60,7 @@ import {
     type Refusals,
     type Selection,
     type Shaping,
+    type Store,
     STREAMING,
 } from './reactive/index.ts'
 import { isReactive } from './reactive/isReactive.ts'
@@ -75,7 +76,6 @@ import {
 } from './reactive/producer.ts'
 import { isStreamBody } from './reactive/Reactive.ts'
 import { builtHere, isForwarder } from './reactive/scoped.ts'
-import { SELECTION_MEMBERS } from './reactive/SELECTION_MEMBERS.ts'
 import { checkArgs } from './refuse.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
 import { rpcRequest } from './rpcRequest.ts'
@@ -117,14 +117,6 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
 >) & {
     method: Method
     description: string | undefined
-    /**
-     * The handler's own probe, narrowed by a pattern where the handler is keyed.
-     *
-     * 13.4, 13.12 — the handler's own face. An `Rpc` is a `Selection` by having it (13.1).
-     */
-    busy(pattern?: Partial<Args>): boolean
-    ready(pattern?: Partial<Args>): boolean
-    synced(pattern?: Partial<Args>): boolean
     /** 11.77 — the owner's write of the value for `args`, past every rung; `set(value)` where it takes none. */
     set(
         ...given: undefined extends Args
@@ -165,7 +157,6 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     address: string | undefined
     /** What MCP and OpenAPI name the handler, once it has an address (20.13, 20.24). */
     readonly tool: string | undefined
-    keyed: boolean
     timeout: number | undefined
     crossOrigin: boolean | string[]
     maxBodySize: number | undefined
@@ -307,22 +298,18 @@ export type RpcOptions<
 }
 
 /**
- * 16.89 — what `refreshes` names, each entry what `refresh` is handed: a tag, a `Selection`, or a
- * `Selection` beside its pattern (13.12) — `[boards, { personId }]` is `refresh(boards, { personId })`.
- * 16.104 — or an `Rpc` beside its pattern and its trigger's options: `[whoAmI, undefined, { caller:
- * true }]` is `whoAmI.refresh(undefined, { caller: true })`, the calling browser's copies alone.
+ * 16.89 — what `refreshes` names: a tag, a `Selection`, or a `memo` or an `Rpc` beside its pattern
+ * (13.12) — `[boards, { personId }]` is `boards.refresh({ personId })`. 16.104 — and an `Rpc`'s
+ * trigger options: `[whoAmI, undefined, { caller: true }]` is `whoAmI.refresh(undefined, { caller:
+ * true })`, the calling browser's copies alone.
  */
 type Refreshed = readonly (
     | string
     | Selection
-    | readonly [Selection, Record<string, unknown>]
     | readonly [
-          {
-              method: Method
-              refresh(pattern: never, options: TriggerOptions): void
-          },
+          { refresh(pattern: never, options?: TriggerOptions): void },
           Record<string, unknown> | undefined,
-          TriggerOptions,
+          TriggerOptions?,
       ]
 )[]
 
@@ -367,6 +354,23 @@ type OptionsOf<
  *
  * 16.92 — `Writes` is false for `GET` alone, whose options have no `refreshes`.
  */
+/**
+ * 16.110 — A HANDLER'S VALUE OPTIONS ARE A `memo`'S. `throttle` and `debounce` pace a reader's
+ * wake-ups (5.8), and the `computed` reading a handler is the reader that takes them. And its `store`
+ * is a memo's, any store a value can be kept in: typed by the value, `store.sqlite(db, 'calls')`
+ * infers its own `Stored` as `unknown` and no longer fits.
+ */
+type HandlerShaping<Shaping> = Omit<
+    Shaping,
+    'throttle' | 'debounce' | 'store'
+> & {
+    throttle?: undefined
+    debounce?: undefined
+}
+type HandlerStore<Args> = {
+    store?: Store<unknown> | ((args: Args) => Store<unknown>) | undefined
+}
+
 type Declare<Writes extends boolean> = {
     // 11.2 — keyed where the body declares a parameter, an optional one included; 16.87 — `Args`
     // read off the `args` the options declare where the parameter carries no annotation. A body
@@ -383,13 +387,10 @@ type Declare<Writes extends boolean> = {
         Answers extends readonly unknown[] = unknown[],
     >(
         handler: ((args: Args) => Result) & Plain,
-        options?: Shaping<
-            BodyValue<NoInfer<Result>>,
-            Shaped,
-            Args,
-            Gate,
-            ArgsGate
+        options?: HandlerShaping<
+            Shaping<BodyValue<NoInfer<Result>>, Shaped, Args, Gate, ArgsGate>
         > &
+            HandlerStore<NoInfer<Args>> &
             OptionsOf<Writes, Args, Answers>,
     ): Rpc<
         Kept<Shaped>,
@@ -420,7 +421,8 @@ type Declare<Writes extends boolean> = {
         handler: [Accepted] extends [(...given: never[]) => unknown]
             ? never
             : Held<Accepted>,
-        options?: Shaping<Accepted, Shaped, never, Gate> &
+        options?: HandlerShaping<Shaping<Accepted, Shaped, never, Gate>> &
+            HandlerStore<undefined> &
             OptionsOf<Writes, undefined, Answers>,
     ): Rpc<
         Kept<Shaped>,
@@ -429,16 +431,10 @@ type Declare<Writes extends boolean> = {
     >
 }
 
-/** What a handler's selection members answer before a call has built its value: no entries' answers. */
-const UNREACHED: Record<
-    (typeof SELECTION_MEMBERS)[number],
-    (pattern?: unknown) => unknown
-> = {
-    busy: () => false,
-    ready: () => true,
-    synced: () => true,
-    refresh: () => undefined,
-    invalidate: () => undefined,
+/** What a handler's triggers do before a call has built its value: nothing, there being no entry (13.19). */
+const UNREACHED = {
+    refresh: (): void => undefined,
+    invalidate: (): void => undefined,
 }
 
 /** Builds the handler declarer for one method — what `GET`, `POST` and the rest are. */
@@ -618,16 +614,14 @@ export function declare<Declared extends Method>(
         // carried on the answer for a `computed` handing it back whole to adopt (11.12).
         const call = (given?: unknown, options?: CallOptions): unknown =>
             answerOfCall(reachCall(given, options), streams)
-        // THE HANDLER'S OWN MEMBERS, handed the pattern. A `Keyed` narrows by it and a `Reactive`'s
-        // take no argument, so one spelling serves both arms and neither is a second mechanism.
+        // THE HANDLER'S OWN TRIGGERS, handed the pattern, which a `Keyed` narrows by.
         //
-        // 13.19 — AND NOT YET BUILT, NONE OF THEM BUILDS IT: building an unkeyed value starts its body
-        // (1.7), so `save.busy()` over a server's never-called `POST(async () => …)` ran the write and
-        // reported it in flight. Until a call reaches it the handler has no entry, and answers as one
-        // with no entries does — the asking reader subscribed to the call that builds it (`builtHere`).
+        // 13.19 — AND NOT YET BUILT, NEITHER BUILDS IT: building an unkeyed value starts its body
+        // (1.7), so a trigger over a server's never-called `POST(async () => …)` would run the write.
+        // Until a call reaches it the handler has no entry, and a trigger does nothing.
         const built = value as Record<
-            (typeof SELECTION_MEMBERS)[number],
-            (pattern?: unknown) => unknown
+            'refresh' | 'invalidate',
+            (pattern?: unknown) => void
         >
         const faceHere = (): typeof built =>
             builtHere(value) ? built : UNREACHED
@@ -644,8 +638,6 @@ export function declare<Declared extends Method>(
             method,
             description: options?.description,
             address: undefined as string | undefined,
-            // 20.9 — which arm the handler took, which is what MCP lists it by.
-            keyed,
             timeout: options?.timeout,
             crossOrigin: options?.crossOrigin ?? false,
             maxBodySize: options?.maxBodySize,
@@ -695,31 +687,20 @@ export function declare<Declared extends Method>(
         // 7.10, 7.18 — A TRIGGER ON A SERVER REACHES EVERY BROWSER HOLDING WHAT IT NAMES, through the
         // mux (18.3) — 18.37, or the one browser `caller` names. None follow in a browser, where the
         // trigger is the copy's own, and a copy cannot tell whose caller it is (18.38, 26.22).
-        for (const name of SELECTION_MEMBERS) {
-            if (name === 'busy') continue
-            members[name] =
-                name === 'invalidate' || name === 'refresh'
-                    ? (
-                          pattern?: unknown,
-                          options?: TriggerOptions,
-                      ): unknown => {
-                          const caller = options?.caller
-                          if (caller !== undefined && !isServer())
-                              throw new Error(
-                                  `abide: \`${name}\` was given a \`caller\` in a browser, which cannot tell whose browser it is. Trigger it from the server. RULEBOOK 18.38.`,
-                              )
-                          const done = faceHere()[name](pattern)
-                          for (const followers of RPC_SERVER.following)
-                              followers.broadcast(rpc, name, pattern, caller)
-                          return done
-                      }
-                    : (pattern?: unknown): unknown => faceHere()[name](pattern)
-        }
-        // 46.11 — BUSY TOO WHILE A CALL THE OUTBOX HOLDS FOR IT IS IN FLIGHT: a queued call sent is work
-        // in flight for this handler, as a call made now is. 46.1 — and the calls it holds for it.
-        members.busy = (pattern?: unknown): boolean =>
-            (faceHere().busy(pattern) as boolean) ||
-            sendingFor(rpc, pattern as Record<string, unknown> | undefined)
+        for (const name of ['refresh', 'invalidate'] as const)
+            members[name] = (
+                pattern?: unknown,
+                options?: TriggerOptions,
+            ): void => {
+                const caller = options?.caller
+                if (caller !== undefined && !isServer())
+                    throw new Error(
+                        `abide: \`${name}\` was given a \`caller\` in a browser, which cannot tell whose browser it is. Trigger it from the server. RULEBOOK 18.38.`,
+                    )
+                faceHere()[name](pattern)
+                for (const followers of RPC_SERVER.following)
+                    followers.broadcast(rpc, name, pattern, caller)
+            }
         // 11.77, 11.78 — A HANDLER IS A MEMO WITH AN ADDRESS (16.6): its owner writes and follows the
         // value for some args as a memo's does — reached past every rung, since the owner is no caller.
         // The handler's own value takes the owner's write as what it produced, and its followers are
@@ -887,11 +868,8 @@ function refreshEach(
             continue
         }
         try {
-            // 16.104 — options are the `Rpc`'s own trigger's, which the free `refresh` does not take.
             if (Array.isArray(entry))
-                entry.length === 3
-                    ? entry[0].refresh(entry[1] as never, entry[2])
-                    : refresh(entry[0], entry[1] as never)
+                entry[0].refresh(entry[1] as never, entry[2])
             else refresh(entry as Selection)
         } catch (failure) {
             failed ??= { failure }

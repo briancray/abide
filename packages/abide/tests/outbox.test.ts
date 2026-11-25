@@ -309,10 +309,10 @@ test("a call's discard drops it alone — 46.13", async () => {
     expect(outbox().map((call) => call.args?.text)).toEqual(['two'])
 })
 
-// 46.11 — A QUEUED CALL SENT IS WORK IN FLIGHT FOR ITS HANDLER, as a call made now is: `busy` over the
-// handler, and a bare `busy`, say so until it lands. THE REVERT: drop `sendingFor` from the handler's
-// `busy` in `declare`; `busy(addNote)` reads false while its call is in flight.
-test('busy is true over a handler while the outbox sends its call — 46.11', async () => {
+// 46.11 — A QUEUED CALL SENT IS WORK IN FLIGHT, as a call made now is: a bare `busy` says so until it
+// lands. THE REVERT: drop `OUTBOX_SENDING` from the bare `busy`; it reads false while the call is in
+// flight.
+test('a bare busy is true while the outbox sends a call — 46.11', async () => {
     const addNote = wire('POST', '/rpc/addNote') as Caller
     network = false
     await addNote({ text: 'one' }, { offline: () => ({ from: 'device' }) })
@@ -331,20 +331,18 @@ test('busy is true over a handler while the outbox sends its call — 46.11', as
     try {
         deliver()
         await Bun.sleep(10)
-        expect(busy(addNote as never)).toBe(true)
         expect(busy()).toBe(true)
         release()
         await Bun.sleep(30)
-        expect(busy(addNote as never)).toBe(false)
+        expect(busy()).toBe(false)
     } finally {
         globalThis.fetch = unstubbed
     }
 })
 
-// 46.1, 46.16 — `outbox` IS ASKED OF A SELECTION AS A PROBE IS: every call, one handler's, one
-// handler's narrowed by its args, and none for a selection naming no handler. THE REVERT: return the
-// whole line from `outbox` whatever it is handed; `outbox(tagNote as never)` reads both calls.
-test('outbox answers the calls a selection names — 46.1, 46.16', async () => {
+// 46.1, 46.16 — `outbox` ANSWERS EVERY CALL, OR ONE HANDLER'S, narrowed by its args. THE REVERT: return
+// the whole line from `outbox` whatever it is handed; `outbox(tagNote)` reads both calls.
+test("outbox answers every call, or one handler's — 46.1, 46.16", async () => {
     const addNote = wire('POST', '/rpc/addNote') as Caller & {
         outbox(pattern?: Record<string, unknown>): { args: unknown }[]
     }
@@ -356,13 +354,13 @@ test('outbox answers the calls a selection names — 46.1, 46.16', async () => {
     await tagNote({ tag: 'x' }, offline)
     await Bun.sleep(10)
     expect(outbox().length).toBe(2)
-    expect(outbox(tagNote as never).map((call) => call.args)).toEqual([
-        { tag: 'x' },
-    ])
+    expect(
+        outbox(tagNote as never as Parameters<typeof outbox>[0]).map(
+            (call) => call.args,
+        ),
+    ).toEqual([{ tag: 'x' }])
     expect(addNote.outbox({ text: 'a' }).length).toBe(1)
     expect(addNote.outbox({ text: 'b' }).length).toBe(0)
-    const { reactive } = await import('#shared')
-    expect(outbox(reactive(0))).toEqual([])
 })
 
 // 46.17 — READING `outbox` SUBSCRIBES, as a probe does: a badge counting the calls waiting is told

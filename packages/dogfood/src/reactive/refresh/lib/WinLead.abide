@@ -21,7 +21,7 @@ const winDeal = POST(() => {
 </script>
 
 <script>
-import { computed, refresh } from '@abide/abide'
+import { computed } from '@abide/abide'
 
 const lead = computed(() => getStage({ stage: 'lead' }))
 const won = computed(() => getStage({ stage: 'won' }))
@@ -29,8 +29,8 @@ const proposal = computed(() => getStage({ stage: 'proposal' }))
 
 async function win() {
     await winDeal()
-    refresh(getStage, { stage: 'lead' })
-    refresh(getStage, { stage: 'won' })
+    getStage.refresh({ stage: 'lead' })
+    getStage.refresh({ stage: 'won' })
 }
 </script>
 

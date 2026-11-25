@@ -349,9 +349,9 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `memo` | `<Args = undefined, Result = unknown>(fn: (args: Args) => Result, options?: MemoOptions<Args>) => Memo<Args, Result>` | `fn`'s value kept per set of args: a call answers its promise, or its stream, and its owner writes and follows it per key. | 11.2, 11.3, 11.4, 11.6, 11.74, 11.75, 11.76, 14.4, 15.19 |
-| `Memo` | `<Args, Result>((...args: undefined extends Args ? [args?: Args] : [args: Args]) => Promise<Awaited<Result>> \| AsyncIterable<unknown>) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void; set(args: Args, value): void; patch(args: Args, mutate: (value) => void): void; readable(args: Args): ReadableStream }` | What `memo` hands back: the call, the triggers over the keys it holds, and the owner's writes and stream per key. | 11.2, 11.24, 11.27, 11.77, 11.78, 13.12 |
-| `MemoOptions` | `<Args>{ ttl?: number; tags?: string[] \| ((args: Args) => string[]); global?: boolean; args?: Schema<Args>; key?: string \| ((element) => unknown); poll?: number; store?: Store<unknown> \| ((args: Args) => Store<unknown>) }` | How long an entry lives, what selects it, where it is kept, what its args must be, what tells one element of its value from another, how often an entry reloads, and where its value is stored. | 11.32, 11.34, 11.40, 11.44, 11.45, 5.22, 7.20, 11.79 |
+| `memo` | `<Args = undefined, Result = unknown, Shaped = Awaited<Result>>(fn: (args: Args) => Result, options?: MemoOptions<Args, Awaited<Result>, Shaped>) => Memo<Args, Result, Kept<Shaped>>` | `fn`'s value kept per set of args: a call answers its promise, or its stream, and its owner writes and follows it per key. | 11.2, 11.3, 11.4, 11.6, 11.74, 11.75, 11.76, 14.4, 15.19 |
+| `Memo` | `<Args, Result, Value = Awaited<Result>>((...args: undefined extends Args ? [args?: Args] : [args: Args]) => Promise<Value> \| AsyncIterable<unknown>) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void; set(args: Args, value): void; patch(args: Args, mutate: (value) => void): void; readable(args: Args): ReadableStream }` | What `memo` hands back: the call, the triggers over the keys it holds, and the owner's writes and stream per key. | 11.2, 11.24, 11.27, 11.77, 11.78, 13.12 |
+| `MemoOptions` | `<Args, Accepted = unknown, Shaped = Accepted>{ ttl?: number; tags?: string[] \| ((args: Args) => string[]); global?: boolean; args?: Schema<Args>; key?: string \| ((element) => unknown); poll?: number; store?: Store<unknown> \| ((args: Args) => Store<unknown>); schema?: Schema<Accepted>; transform?: (value: Accepted) => Shaped; identity?: (next: Kept<Shaped>, previous: Kept<Shaped>) => unknown }` | How long an entry lives, what selects it, where it is kept, what its args must be, what tells one element of its value from another, how often an entry reloads, and where its value is stored. | 11.32, 11.34, 11.40, 11.44, 11.45, 5.22, 7.20, 11.79, 11.80 |
 
 ## `watch`
 
@@ -366,32 +366,32 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `busy` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether any entry in the selection has work in flight. | 13.2, 13.3, 13.5, 13.12, 41.28, 41.31, 46.11 |
+| `busy` | `<Chosen extends Selection>(selection?: Chosen) => boolean` | Whether any entry in the selection has work in flight. | 13.2, 13.3, 13.5, 41.28, 41.31, 46.11 |
 
 ## `ready`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `ready` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether every entry in the selection has a value to serve. | 13.3, 13.5, 13.11, 13.12, 41.28, 41.31 |
+| `ready` | `<Chosen extends Selection>(selection?: Chosen) => boolean` | Whether every entry in the selection has a value to serve. | 13.3, 13.5, 13.11, 41.28, 41.31 |
 
 ## `synced`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `synced` | `(selection?: Selection, pattern?: Partial<Args>) => boolean` | Whether every entry in the selection holds what its producer made. | 13.12, 13.18 |
+| `synced` | `<Chosen extends Selection>(selection?: Chosen) => boolean` | Whether every entry in the selection holds what its producer made. | 13.18 |
 
 ## `refresh`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Selection` | `Reactive<any, any, any, any> \| Rpc<any, any, any, any> \| { tags: string[] }` | What `busy`, `ready`, `synced`, `refresh` and `invalidate` take: a value, a handler, or a set of tags. | 13.1, 13.8, 13.9, 13.13, 31.13 |
-| `refresh` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Stale-while-revalidate over the selection. | 13.4, 13.7, 13.10, 13.12, 13.14, 13.15, 13.16, 13.17, 13.20, 26.24, 7.40 |
+| `Selection` | `Reactive<any, any, any, any> \| { tags: string[] }` | What `busy`, `ready`, `synced`, `refresh` and `invalidate` take: a value, or a set of tags. | 13.1, 13.8, 13.9, 13.13, 31.13 |
+| `refresh` | `<Chosen extends Selection>(selection?: Chosen) => void` | Stale-while-revalidate over the selection. | 13.4, 13.7, 13.10, 13.14, 13.15, 13.16, 13.17, 13.20, 26.24, 7.40 |
 
 ## `invalidate`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `invalidate` | `(selection?: Selection, pattern?: Partial<Args>) => void` | Marks the selection stale. | 13.4, 13.6, 13.10, 13.12, 13.15, 13.17 |
+| `invalidate` | `<Chosen extends Selection>(selection?: Chosen) => void` | Marks the selection stale. | 13.4, 13.6, 13.10, 13.15, 13.17 |
 
 ## `isReactive`
 
@@ -1024,12 +1024,9 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `Produced` | `unknown` | What the handler yields per production, per the unit rule. | 1.2, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.18, 19.15, 19.27, 30.28 |
 | `Middleware` | `Middleware<Answer = never, Extra extends object = object, Refused extends Failed<string, unknown> = Failed<string, unknown>> = <Given extends { request: Request } & Extra, Result extends {} \| null \| undefined>(next: (ctx?: Given) => Promise<Result>, ctx: Given) => Result \| Answer \| Refused \| Promise<Result \| Answer \| Refused>` | One rung, written once for every lane whose context carries `Extra`. | 16.8, 16.14, 16.15, 16.16, 16.21, 16.86, 37.14, 37.15 |
-| `GET` | `<Args = undefined, Result = unknown, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>, Answers extends readonly unknown[] = unknown[]>(handler: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate> & Omit<RpcOptions<Args, Answers>, 'refreshes'>) => Rpc<Kept<Shaped>, Args, AdoptedFailures<Result> \| Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args> \| RungRefusals<Answers>, BodyProduced<Result, Kept<Shaped>>>` | Declares a read any surface may call, from a body: keyed where it declares a parameter, a stream where it hands back a generator, its options (`ttl`, `global`, `debounce` and the rest) building the value it becomes beside its address. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.68, 16.76, 16.34, 16.35, 16.36, 16.37, 16.39, 16.105, 16.44, 16.45, 16.46, 16.47, 16.75, 16.50, 16.51, 16.52, 16.64, 12.17, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24, 18.27, 16.92, 16.93, 16.94, 16.95, 16.96, 16.97, 16.98, 16.99, 16.100, 16.7, 11.2, 16.87, 16.109, 18.40, 18.41, 18.42, 18.43, 18.44, 18.45, 18.46, 18.47 |
+| `GET` | `<Args = undefined, Result = unknown, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>, Answers extends readonly unknown[] = unknown[]>(handler: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate> & Omit<RpcOptions<Args, Answers>, 'refreshes'>) => Rpc<Kept<Shaped>, Args, AdoptedFailures<Result> \| Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args> \| RungRefusals<Answers>, BodyProduced<Result, Kept<Shaped>>>` | Declares a read any surface may call, from a body or a `memo`: a value kept per args, a stream where it hands back an async iterable, its options (`ttl`, `global`, `store` and the rest, a `memo`'s) building the value it becomes beside its address. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.68, 16.76, 16.34, 16.35, 16.36, 16.37, 16.39, 16.105, 16.44, 16.45, 16.46, 16.47, 16.75, 16.50, 16.51, 16.52, 16.64, 12.17, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24, 18.27, 16.92, 16.93, 16.94, 16.95, 16.96, 16.97, 16.98, 16.99, 16.100, 16.7, 11.2, 16.87, 16.109, 18.40, 18.41, 18.42, 18.43, 18.44, 18.45, 18.46, 18.47, 16.110 |
 | `GET` | `<Built extends ((args: never) => unknown) & { invalidate: unknown }, Answers extends readonly unknown[] = unknown[]>(handler: Built, options?: Omit<RpcOptions<BuiltArgs<Built>, Answers>, 'refreshes'>) => BuiltRpc<Built, Answers>` | The built form, for a `Reactive` or a `Keyed` given an address and served as it is. | 11.2, 16.1, 16.3, 16.6 |
 | `GET` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>, Answers extends readonly unknown[] = unknown[]>(handler: Held<Accepted>, options?: Shaping<Accepted, Shaped, never, Gate> & Omit<RpcOptions<undefined, Answers>, 'refreshes'>) => Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Accepted> \| RungRefusals<Answers>>` | The value form, for what the handler owns outright, whose options build the value it becomes. | 16.1, 16.6, 16.7 |
-| `rpc.busy` | `(pattern?: Partial<Args>) => boolean` | `busy` narrowed to the handler's matching entries. | 13.2, 13.3, 13.12, 13.19, 46.11 |
-| `rpc.ready` | `(pattern?: Partial<Args>) => boolean` | `ready` narrowed to the handler's matching entries. | 13.11, 13.12, 13.19 |
-| `rpc.synced` | `(pattern?: Partial<Args>) => boolean` | `synced` narrowed to the handler's matching entries. | 13.12, 13.18, 13.19 |
 | `rpc.invalidate` | `(pattern?: Partial<Args>, options?: { caller?: string \| true }) => void` | `invalidate` narrowed to the handler's matching entries. | 7.2, 7.3, 13.4, 13.12, 13.19, 18.37, 18.38, 18.39 |
 | `rpc.refresh` | `(pattern?: Partial<Args>, options?: { caller?: string \| true }) => void` | `refresh` narrowed to the handler's matching entries. | 7.4, 7.5, 13.4, 13.12, 13.19, 18.37, 18.38, 18.39 |
 | `rpc.isError` | `<Name extends string>(error: unknown, name: Name) => error is Extract<Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, { name: Name }>` | Whether a caught failure is the one named. | 16.8 |
@@ -1276,7 +1273,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `outbox` | `<Chosen extends Selection>(selection?: Chosen, pattern?: Partial<Args>) => QueuedCall[]` | The calls a browser has queued and not delivered, the refused ones included. | 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.8, 46.9, 46.10, 46.14, 46.15, 46.16, 46.17, 46.20, 46.21, 18.35 |
+| `outbox` | `(handler?: Rpc<any, any, any, any>, pattern?: Partial<Args>) => QueuedCall[]` | The calls a browser has queued and not delivered, the refused ones included. | 46.1, 46.2, 46.3, 46.4, 46.5, 46.6, 46.7, 46.8, 46.9, 46.10, 46.14, 46.15, 46.16, 46.17, 13.12, 46.20, 46.21, 18.35 |
 | `rpc.outbox` | `(pattern?: Partial<Args>) => QueuedCall[]` | `outbox` narrowed to the handler's calls. | 46.1, 13.12 |
 | `QueuedCall` | `{ id: string; method: 'GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE'; url: string; args: Record<string, JsonValue> \| undefined; queuedAt: number; attempts: number; value: Reactive<Value, Value, Failed<string, unknown>>; retry: () => void; discard: () => void }` | One call `outbox` holds. | 46.1, 46.10 |
 | `call.value` | `Reactive<Value, Value, Failed<string, unknown>>` | The value a queued call settled. | 46.5, 46.7, 46.18, 46.19 |

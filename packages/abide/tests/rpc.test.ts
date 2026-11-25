@@ -7,11 +7,9 @@ import {
     computed,
     type Failed,
     flushSync,
-    invalidate,
     type Middleware,
     type Reactive,
     ready,
-    refresh,
     refuse,
     watch,
 } from '#shared'
@@ -508,12 +506,11 @@ test('an rpc carries its method and description', () => {
     expect(write.description).toBeUndefined()
 })
 
-// 13.1, 13.4, 13.12 — AN `Rpc` IS A SELECTION, and a pattern narrows it to the entries it matches,
-// whichever of the three spellings asks. Each is asserted by which shelves RELOADED, because a
-// refresh that reloaded every shelf still shows every shelf the right stock. THE REVERT: have the
-// `Rpc`'s `refresh` call `face.refresh()` without the pattern; the first spelling reloads `west`
-// as well — `east,west` where `east` is due.
-test('a pattern narrows an rpc to the entries it matches, in each spelling — 13.12', async () => {
+// 13.4, 13.12 — AN `Rpc`'S TRIGGERS TAKE A PATTERN, which narrows them to the entries it matches. Each
+// is asserted by which shelves RELOADED, because a refresh that reloaded every shelf still shows
+// every shelf the right stock. THE REVERT: have the `Rpc`'s `refresh` call `face.refresh()` without
+// the pattern; the first reloads `west` as well — `east,west` where `east` is due.
+test('a pattern narrows an rpc to the entries it matches — 13.12', async () => {
     const loads: string[] = []
     const getStock = GET(({ warehouse }: { warehouse: string }) => {
         loads.push(warehouse)
@@ -531,13 +528,14 @@ test('a pattern narrows an rpc to the entries it matches, in each spelling — 1
     expect(loads.join()).toBe('east')
 
     loads.length = 0
-    refresh(getStock, { warehouse: 'west' })
+    getStock.invalidate({ warehouse: 'west' })
+    getStock.refresh({ warehouse: 'west' })
     flushSync()
     expect(loads.join()).toBe('west')
 
     // And unnarrowed, the whole handler.
     loads.length = 0
-    refresh(getStock)
+    getStock.refresh()
     flushSync()
     expect(loads.sort().join()).toBe('east,west')
 })
@@ -565,35 +563,31 @@ test('a pattern matches args holding its arrays and nested members — 13.12', a
         })
     loads.length = 0
 
-    refresh(getDeals, { stages: ['lost'], owner: { team: 'sales' } })
+    getDeals.refresh({ stages: ['lost'], owner: { team: 'sales' } })
     flushSync()
     expect(loads.join()).toBe('won-lost')
 })
 
-// THE FOUR TAKE THE SAME TWO ARGUMENTS, and the pattern is checked against `Args` on each. The
-// `@ts-expect-error` lines are the assertion: typecheck fails if any of the four stops refusing a
-// pattern it has no entry for. THE REVERT: type each pattern as `unknown` — the three lines below
-// compile, and every `@ts-expect-error` over them becomes an unused-directive error instead.
-test('a pattern is checked against Args on every one of the four — 13.12', () => {
+// 13.1, 13.12 — AN `Rpc` IS NO SELECTION: whether one is loading is asked of the `computed` that reads
+// it, and its triggers' pattern is checked against `Args`. The `@ts-expect-error` lines are the
+// assertion: typecheck fails if a probe starts taking an `Rpc`, or a trigger a pattern outside
+// `Args`. THE REVERT: put `busy` back on `Rpc`; the first directive is unused, a typecheck error.
+test('a probe takes no rpc, and a trigger checks its pattern against Args — 13.1, 13.12', () => {
     const getStock = GET(({ warehouse }: { warehouse: string }) => warehouse)
-    busy(getStock, { warehouse: 'east' })
-    ready(getStock, { warehouse: 'east' })
-    refresh(getStock, { warehouse: 'east' })
-    invalidate(getStock, { warehouse: 'east' })
-    // @ts-expect-error a pattern outside Args, on a probe as much as on a trigger
-    busy(getStock, { nope: 1 })
-    // @ts-expect-error
-    ready(getStock, { nope: 1 })
-    // @ts-expect-error
-    invalidate(getStock, { nope: 1 })
-    expect(getStock.ready()).toBe(true)
-})
-
-test('an rpc answers the free probes as its handler does', () => {
-    const settled = GET(() => 1)
-    ;(reachOf(settled) as () => number)()
-    expect(busy(settled)).toBe(false)
-    expect(settled.ready()).toBe(true)
+    // Typed, never run: a probe handed an `Rpc` has no member to ask.
+    const typed = (): void => {
+        getStock.refresh({ warehouse: 'east' })
+        getStock.invalidate({ warehouse: 'east' })
+        // @ts-expect-error a probe is asked of the computed reading the rpc
+        busy(getStock)
+        // @ts-expect-error
+        ready(getStock)
+        // @ts-expect-error a pattern outside Args
+        getStock.refresh({ nope: 1 })
+        // @ts-expect-error
+        getStock.invalidate({ nope: 1 })
+    }
+    expect(`${typeof typed}, ${'busy' in getStock}`).toBe('function, false')
 })
 
 // 15.19 — A REFUSAL FOR NOW IS RUN AGAIN BY THE NEXT CALL, NOT BY THE CALL IT ANSWERS. An unkeyed

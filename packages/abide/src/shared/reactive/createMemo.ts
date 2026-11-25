@@ -10,14 +10,20 @@
 import type { Schema } from '../Schema.ts'
 import { answerOfCall } from './answerOfCall.ts'
 import { ARGS_GATE, type Gated, PARAMETER_DEFAULTS } from './argsContract.ts'
+import type { Kept } from './index.ts'
 import type { Keyed } from './Keyed.ts'
 import { MEMO_BRAND } from './MEMO_BRAND.ts'
 import type { Poll } from './poll.ts'
 import { isStreaming, patchInto, produceInto } from './producer.ts'
-import type { Reactive, Store } from './Reactive.ts'
+import type { Identity, Reactive, Store } from './Reactive.ts'
 
-/** What `memo` takes: how long an entry lives, what selects it, where it is kept, what its args must be, how its elements are told apart, and how often an entry reloads. */
-export type MemoOptions<Args> = {
+/**
+ * What `memo` takes: how long an entry lives, what selects it, where it is kept, what its args and its
+ * value must be, what it is shaped into, what makes a write a repeat, how its elements are told apart,
+ * and how often an entry reloads. `Accepted` is what `fn` settles to; `Shaped` is read from
+ * `transform` alone, the rest naming the value it keeps without inferring it.
+ */
+export type MemoOptions<Args, Accepted = unknown, Shaped = Accepted> = {
     ttl?: number | undefined
     tags?: string[] | ((args: Args) => string[]) | undefined
     global?: boolean | undefined
@@ -26,6 +32,11 @@ export type MemoOptions<Args> = {
     poll?: Poll | undefined
     // 11.79 — where each entry's value is kept, so a restart opens on it rather than running `fn`.
     store?: Store<unknown> | ((args: Args) => Store<unknown>) | undefined
+    // 4.3, 4.6 — the gate on what `fn` settles to, then the shaping of it, as a `reactive`'s are.
+    schema?: Schema<Accepted> | undefined
+    transform?: ((value: Accepted) => Shaped) | undefined
+    // 5.3 — what makes a write or a production a repeat, which reaches no reader and no follower.
+    identity?: Identity<NoInfer<Kept<Shaped>>> | undefined
 }
 
 /**
@@ -36,7 +47,7 @@ export type Memo<Args, Result, Value = MemoValue<Result>> = ((
     ...args: undefined extends Args ? [args?: Args] : [args: Args]
 ) => Awaited<Result> extends AsyncIterable<infer Chunk>
     ? AsyncIterable<Chunk>
-    : Promise<Awaited<Result>>) & {
+    : Promise<Value>) & {
     invalidate(pattern?: Partial<Args>): void
     refresh(pattern?: Partial<Args>): void
     set(
