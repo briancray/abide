@@ -67,6 +67,21 @@ test('what onLauncher answers fills its defaults and refuses what it does not ta
     )
 })
 
+// THE REVERT: drop launcherOf's undefined skip and the first expect gets the refusal string
+// "`width` is not a launcher option" instead of a launcher.
+test('a launcher option given undefined is one not given — 59.1', () => {
+    expect(
+        launcherOf({
+            width: undefined,
+            vibrancy: undefined,
+            update: undefined,
+        }),
+    ).toMatchObject({ width: 1100, vibrancy: undefined, update: undefined })
+    expect(launcherOf({ name: undefined })).toContain(
+        '`name` is not a launcher option',
+    )
+})
+
 test('the window options take their own values and default to a standard window — 38.150-38.163, 38.165', () => {
     expect(launcherOf({})).toMatchObject({
         titlebar: 'standard',

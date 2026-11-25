@@ -149,6 +149,8 @@ export function launcherOf(answered: unknown): Launcher | string {
         return '`onLauncher` answers an object. RULEBOOK 38.80'
     const set = launcher as Record<string, unknown>
     for (const [key, value] of Object.entries(answered)) {
+        // 59.1 — a known option given `undefined` keeps its default; an unknown one is still refused.
+        if (value === undefined && Object.hasOwn(launcher, key)) continue
         if (
             (SIZES as readonly string[]).includes(key) &&
             typeof value === 'number' &&
