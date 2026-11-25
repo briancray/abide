@@ -24,16 +24,11 @@ import { appStopSignal } from './reactive/poll.ts'
 import { refuse } from './refuse.ts'
 import { type Backoff, backoffWait } from './retryWait.ts'
 
-const PIPE_BRAND: unique symbol = Symbol('abide.pipe')
-
 /** A step's function: the item, and the signal that says its attempt is over. */
 type StepFunction = (input: never, signal: AbortSignal) => unknown
 
-/** What one place in a pipe's steps holds: a function, a pipe, or several of those run at once. */
-export type Step =
-    | StepFunction
-    | Pipe<never, unknown, boolean>
-    | readonly (StepFunction | Pipe<never, unknown, boolean>)[]
+/** What one place in a pipe's steps holds: a function — a pipe is one — or several run at once. */
+export type Step = StepFunction | readonly StepFunction[]
 
 /** Where a pipe's items stand. */
 export type PipeStatus = {
@@ -56,43 +51,35 @@ export type PipeOptions<In = unknown> = {
 }
 
 /**
- * A pipe: a function from an item to a `Reactive` of its answer, as an `Rpc` is, and a stream pair an
- * item stream is piped through.
+ * A pipe: an async function from an item to its answer or its refusal, and a stream pair an item
+ * stream is piped through. A value a page reads is a `memo` calling it.
  */
 export type Pipe<In, Out, Fanned extends boolean = false> = ((
     input: In,
     signal?: AbortSignal,
-) => Reactive<
-    Fanned extends true ? Out[] : Out,
-    Fanned extends true ? Out[] : Out,
-    Failed<string, unknown>
->) & {
+) => Promise<(Fanned extends true ? Out[] : Out) | Failed<string, unknown>>) & {
     readonly readable: ReadableStream<Out | Failed<string, unknown>>
     readonly writable: WritableStream<In>
     readonly status: Reactive<PipeStatus>
     stop(): Promise<void>
 }
 
-/** What a step hands on: a pipe's answer, a function's settled answer, a chunk where it streams. */
+/** What a step hands on: a function's settled answer, or a chunk where it streams. */
 type StepOut<S> = S extends readonly unknown[]
     ? { -readonly [K in keyof S]: StepOut<S[K]> }
-    : S extends Pipe<never, infer Out, infer _Fanned>
-      ? Exclude<Out, Failed<string, unknown>>
-      : S extends (...given: never[]) => infer Result
-        ? Awaited<Result> extends AsyncIterable<infer Chunk>
-            ? Chunk
-            : Exclude<Awaited<Result>, Failed<string, unknown>>
-        : never
+    : S extends (...given: never[]) => infer Result
+      ? Awaited<Result> extends AsyncIterable<infer Chunk>
+          ? Chunk
+          : Exclude<Awaited<Result>, Failed<string, unknown>>
+      : never
 /** Whether a step hands on more than one answer per item. */
 type StepFans<S> = S extends readonly unknown[]
     ? false
-    : S extends Pipe<never, unknown, infer Fanned>
-      ? Fanned
-      : S extends (...given: never[]) => infer Result
-        ? Awaited<Result> extends AsyncIterable<unknown>
-            ? true
-            : false
-        : false
+    : S extends (...given: never[]) => infer Result
+      ? Awaited<Result> extends AsyncIterable<unknown>
+          ? true
+          : false
+      : false
 type AnyFans<Steps> = Steps extends readonly [infer First, ...infer Rest]
     ? StepFans<First> extends true
         ? true
@@ -100,11 +87,9 @@ type AnyFans<Steps> = Steps extends readonly [infer First, ...infer Rest]
     : false
 type StepIn<S> = S extends readonly (infer Member)[]
     ? StepIn<Member>
-    : S extends Pipe<infer In, unknown, boolean>
+    : S extends (input: infer In, signal: AbortSignal) => unknown
       ? In
-      : S extends (input: infer In, signal: AbortSignal) => unknown
-        ? In
-        : never
+      : never
 type LastOut<Steps> = Steps extends readonly [...unknown[], infer Last]
     ? StepOut<Last>
     : never
@@ -132,12 +117,9 @@ export function pipe<const Steps extends readonly [Step, ...Step[]]>(
         steps as readonly Step[],
         (options ?? {}) as PipeOptions<unknown>,
     )
-    // 57.5 — ONE `Reactive` PER CALL, its item's answer: a refusal is its `error` (2.8), as an `Rpc`'s
-    // is. `global`, so a call outside a request is not filed for one per request (11.32).
-    const call = (input: unknown, signal?: AbortSignal): unknown =>
-        reactive(runner.call(input, signal, true), { global: true })
+    const call = (input: unknown, signal?: AbortSignal): Promise<unknown> =>
+        runner.call(input, signal)
     return Object.defineProperties(call, {
-        [PIPE_BRAND]: { value: runner },
         status: { get: () => runner.status },
         readable: { get: () => runner.streams().readable },
         writable: { get: () => runner.streams().writable },
@@ -265,23 +247,12 @@ class Runner {
         for (const resumer of this.resumers.splice(0)) resumer()
     }
 
-    /**
-     * 57.5, 57.13 — one item, called: its answer, every answer where a step fanned out. A refusal is
-     * the answer for a pipe that is a step (57.9 reads its transience), and `rejects` for an app's
-     * call — rejecting here rather than in a `then` after was a quarter of the call's own cost.
-     */
-    async call(
-        input: unknown,
-        signal?: AbortSignal,
-        rejects = false,
-    ): Promise<unknown> {
+    /** 57.5, 57.13 — one item, called: its answer, every answer where a step fanned out, or its refusal. */
+    async call(input: unknown, signal?: AbortSignal): Promise<unknown> {
         // 57.13 — read where the call is made: inside a `memo` body, the run's own (7.45).
         const told = abortSignal()
         const walked = await this.item(input, signal, told)
-        if (walked.refusal !== undefined) {
-            if (rejects) throw walked.refusal
-            return walked.refusal
-        }
+        if (walked.refusal !== undefined) return walked.refusal
         return walked.fanned ? walked.answers : walked.answers[0]
     }
 
@@ -531,16 +502,10 @@ class Runner {
             for (const answer of answers) if (isFailed(answer)) return answer
             return answers
         }
-        // 57.9 — A PIPE STEP IS ITS RUNNER, whose refusal is an answer to read for transience: called
-        // as an app calls it, the refusal would reject its `Reactive` and be retried as a throw.
-        const runner = (step as { [PIPE_BRAND]?: Runner })[PIPE_BRAND]
-        let answer =
-            runner !== undefined
-                ? runner.call(input, signal)
-                : (step as (input: unknown, signal: AbortSignal) => unknown)(
-                      input,
-                      signal,
-                  )
+        let answer = (step as (input: unknown, signal: AbortSignal) => unknown)(
+            input,
+            signal,
+        )
         // 1.6 — a `Reactive` is thenable and iterable: its value is the step's answer, read first.
         if (isReactive(answer)) answer = await answer
         else if (isThenable(answer)) answer = await answer

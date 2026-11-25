@@ -1443,7 +1443,7 @@ type Reached = { readonly [REACHED]: true }
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `pipe` | `<const Steps extends readonly [Step, ...Step[]]>(steps: Steps, options?: PipeOptions<FirstIn<Steps>>) => Pipe<FirstIn<Steps>, LastOut<Steps>, AnyFans<Steps>>` | Steps an item runs through in order, at most `concurrency` items at once, as a function to call and a stream pair to pipe through. | 57.1, 57.2, 57.3, 57.4, 57.6, 57.7, 57.8, 57.9, 57.10, 57.11, 57.12, 57.13, 57.14 |
-| `Pipe` | `Pipe<In, Out, Fanned extends boolean = false> = ((input: In, signal?: AbortSignal) => Reactive<Fanned extends true ? Out[] : Out, Fanned extends true ? Out[] : Out, Failed<string, unknown>>) & { readonly readable: ReadableStream<Out \| Failed<string, unknown>>; readonly writable: WritableStream<In>; readonly status: Reactive<PipeStatus>; stop(): Promise<void> }` | What `pipe` hands back: a call answering a `Reactive` of its item, and the stream pair. | 57.5, 57.13, 57.15, 57.16, 57.19, 57.20 |
+| `Pipe` | `Pipe<In, Out, Fanned extends boolean = false> = ((input: In, signal?: AbortSignal) => Promise<(Fanned extends true ? Out[] : Out) \| Failed<string, unknown>>) & { readonly readable: ReadableStream<Out \| Failed<string, unknown>>; readonly writable: WritableStream<In>; readonly status: Reactive<PipeStatus>; stop(): Promise<void> }` | What `pipe` hands back: an async function answering its item or its refusal, and the stream pair. | 57.5, 57.13, 57.15, 57.16, 57.19, 57.20 |
 | `Pipe.status` | `Reactive<PipeStatus>` | Where the pipe's items stand, one value for every caller. | 57.21 |
 | `Pipe.stop` | `() => Promise<void>` | The end of the pipe, and of every attempt in flight. | 57.18 |
 | `PipeOptions` | `<In = unknown>{ concurrency?: number; key?: (input: In) => string; ordered?: boolean; retries?: number; backoff?: number \| ((retry: number) => number); timeout?: number; paused?: Reactive<boolean> \| (() => boolean) }` | How many items run at once and by what key, the order they leave in, each step's retries, their spacing and its deadline, and what holds the pipe. | 57.6, 57.7, 57.9, 57.10, 57.12, 57.16, 57.17 |
@@ -1453,11 +1453,11 @@ The aliases `pipe` reads its steps through — what one place in the steps holds
 whether one fans out, and the item a pipe takes and the answer it gives — are declared rather than
 listed, none of them being a name an app writes:
 ```ts
-type Step = ((input: never, signal: AbortSignal) => unknown) | Pipe<never, unknown, boolean> | readonly (((input: never, signal: AbortSignal) => unknown) | Pipe<never, unknown, boolean>)[]
-type StepOut<S> = S extends readonly unknown[] ? { -readonly [K in keyof S]: StepOut<S[K]> } : S extends Pipe<never, infer Out, infer _Fanned> ? Exclude<Out, Failed<string, unknown>> : S extends (...given: never[]) => infer Result ? Awaited<Result> extends AsyncIterable<infer Chunk> ? Chunk : Exclude<Awaited<Result>, Failed<string, unknown>> : never
-type StepFans<S> = S extends readonly unknown[] ? false : S extends Pipe<never, unknown, infer Fanned> ? Fanned : S extends (...given: never[]) => infer Result ? Awaited<Result> extends AsyncIterable<unknown> ? true : false : false
+type Step = ((input: never, signal: AbortSignal) => unknown) | readonly ((input: never, signal: AbortSignal) => unknown)[]
+type StepOut<S> = S extends readonly unknown[] ? { -readonly [K in keyof S]: StepOut<S[K]> } : S extends (...given: never[]) => infer Result ? Awaited<Result> extends AsyncIterable<infer Chunk> ? Chunk : Exclude<Awaited<Result>, Failed<string, unknown>> : never
+type StepFans<S> = S extends readonly unknown[] ? false : S extends (...given: never[]) => infer Result ? Awaited<Result> extends AsyncIterable<unknown> ? true : false : false
 type AnyFans<Steps> = Steps extends readonly [infer First, ...infer Rest] ? StepFans<First> extends true ? true : AnyFans<Rest> : false
-type StepIn<S> = S extends readonly (infer Member)[] ? StepIn<Member> : S extends Pipe<infer In, unknown, boolean> ? In : S extends (input: infer In, signal: AbortSignal) => unknown ? In : never
+type StepIn<S> = S extends readonly (infer Member)[] ? StepIn<Member> : S extends (input: infer In, signal: AbortSignal) => unknown ? In : never
 type LastOut<Steps> = Steps extends readonly [...unknown[], infer Last] ? StepOut<Last> : never
 type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepIn<First> : never
 ```

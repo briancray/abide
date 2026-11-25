@@ -7053,10 +7053,10 @@ answer the list of their answers in its members' order, or the first refusal one
 57.4 A `pipe` step that answers an async iterable MUST hand each value it yields to the steps after
 it as an item of its own, in the order yielded.
 
-57.5 A `Pipe` called MUST answer a `Reactive` of its last step's answer, or where a step 57.4 reads
+57.5 A `Pipe` called MUST answer a promise of its last step's answer, or where a step 57.4 reads
 ran, of the list of every answer its last step made, in order; a step answering a refusal MUST end
-the item with that refusal as the `Reactive`'s error, and a step that threw past 57.9 MUST end it with
-what it threw — save where the `Pipe` is itself a step, whose refusal MUST be its answer to 57.9.
+the item and resolve the promise to that refusal, and a step that threw past 57.9 MUST end it and
+reject the promise with what it threw.
 
 57.6 A `pipe` MUST run at most `concurrency` items at once, 1 where none is given, starting a
 waiting item in the order it came.

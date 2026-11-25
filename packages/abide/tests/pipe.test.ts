@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { flushSync, memo, pipe, reactive, refuse } from '#shared'
+import { flushSync, isFailed, memo, pipe, reactive, refuse } from '#shared'
 import { holdUntil } from '#shared/Failed.ts'
 
 const turn = (): Promise<void> => Bun.sleep(1)
@@ -27,40 +27,31 @@ test('a pipe hands each step the answer before it — 57.1, 57.5', async () => {
     expect(`answer: ${await steps(3)}`).toBe('answer: 40')
 })
 
-// 57.2 — A LIST IS ONE STEP RUN AT ONCE, each member handed the same input, answering in their order
-
-// 57.5 — A CALL ANSWERS A `Reactive` OF ITS ITEM, as an `Rpc` call does: busy while the item runs,
-// its answer once done, and a refusal as its `error`. THE REVERT: hand back `runner.call` itself, and
-// `busy` is not a member of the promise.
-test('a call answers a Reactive: busy while it runs, its answer once done, a refusal its error — 57.5', async () => {
-    let finish!: () => void
-    const held = new Promise<void>((done) => {
-        finish = done
-    })
-    const tidy = pipe([
-        async (name: string) => {
-            await held
-            return name.trim()
-        },
-    ])
-    const tidied = tidy(' Acme ')
-    const before = `busy: ${tidied.busy()}, ready: ${tidied.ready()}`
-    finish()
-    await tidied
+// 57.5 — A CALL IS AN ASYNC FUNCTION: it resolves to its item's answer, and to a step's refusal
+// rather than rejecting with it, as `fetchData` does. A value a page reads is a `memo` calling it,
+// whose error the refusal becomes (15.5). THE REVERT: throw `walked.refusal` in `call`, and
+// `resolved: rejected`.
+test('a call resolves to its answer or its refusal, and a memo over it fails with the refusal — 57.5, 15.5', async () => {
+    const tidy = pipe([async (name: string) => name.trim()])
     const refusing = pipe([() => refuse(409, 'taken')])
-    const refused = refusing(undefined)
-    await refused.then(
+    const resolved = await refusing(undefined).then(
+        (answer) => (isFailed(answer) ? answer.status : 'answer'),
+        () => 'rejected',
+    )
+    const shown = memo(() => refusing(undefined))
+    shown.peek()
+    await shown.then(
         () => undefined,
         () => undefined,
     )
     expect(
-        `${before} | ${tidied()}, busy: ${tidied.busy()} | error: ${refused.error()?.status}`,
-    ).toBe('busy: true, ready: false | Acme, busy: false | error: 409')
+        `${await tidy(' Acme ')} | resolved: ${resolved} | memo error: ${shown.error()?.status}`,
+    ).toBe('Acme | resolved: 409 | memo error: 409')
 })
 
 // 57.5, 57.9 — A PIPE THAT IS A STEP HANDS ON ITS REFUSAL AS AN ANSWER, read for transience: one that
-// is not transient ends the item at once. THE REVERT: call the step pipe as an app does, and its
-// `Reactive` rejects — a throw, retried — so `asked: 3`.
+// is not transient ends the item at once. THE REVERT: reject with the refusal in `call`, and the
+// outer pipe retries it as a throw — `asked: 3`.
 test('a refusal from a pipe step is an answer, not retried unless transient — 57.5, 57.9', async () => {
     let asked = 0
     const inner = pipe([
@@ -70,16 +61,13 @@ test('a refusal from a pipe step is an answer, not retried unless transient — 
         },
     ])
     const outer = pipe([inner], { retries: 2, backoff: 1 })
-    const answer = outer(undefined)
-    await answer.then(
-        () => undefined,
-        () => undefined,
-    )
-    expect(`asked: ${asked}, error: ${answer.error()?.status}`).toBe(
-        'asked: 1, error: 404',
-    )
+    const answer = await outer(undefined)
+    expect(
+        `asked: ${asked}, answer: ${isFailed(answer) ? answer.status : answer}`,
+    ).toBe('asked: 1, answer: 404')
 })
 
+// 57.2 — A LIST IS ONE STEP RUN AT ONCE, each member handed the same input, answering in their order
 // whatever order they finish in. THE REVERT: chain the members, and `[4, 40]` is `[4, 41]`.
 test('a step that is a list runs its members at once on the same input — 57.2', async () => {
     const order: string[] = []
@@ -240,15 +228,11 @@ test('a failed attempt is made again up to retries, and a final refusal is not �
         ],
         { retries: 3, backoff: 1 },
     )
-    // 57.5 — the final refusal is the call's `error`, and awaiting it rejects (2.8).
-    const answer = missing(1)
-    const rejected = await answer.then(
-        () => 'resolved',
-        (failure) => (failure as { status: number }).status,
-    )
+    // 57.5 — the final refusal is what the call resolves to.
+    const answer = await missing(1)
     expect(
-        `asked: ${asked}, rejected: ${rejected}, error: ${answer.error()?.status}`,
-    ).toBe('asked: 1, rejected: 404, error: 404')
+        `asked: ${asked}, answer: ${isFailed(answer) ? answer.status : answer}`,
+    ).toBe('asked: 1, answer: 404')
 })
 
 // 57.11 — A `Retry-After` HOLDS THE STEP FOR EVERY ITEM: the second item's first attempt waits for
