@@ -837,6 +837,9 @@ function attach(bridge: Bridge, request: Request): Response {
     return framed(frames[Symbol.asyncIterator](), 'sse', new Headers(), 200)
 }
 
+// A line a bridge posts, as it is read: cast from JSON and never checked, so every field is optional
+// and `delivered` defaults what it reads. Not `@abide/bridge`'s `TurnReport`, which says what a
+// well-behaved bridge sends rather than what arrives.
 type BridgeReport = {
     type: TurnItem['kind'] | 'missing'
     turn: string
