@@ -25,6 +25,7 @@ import type {
     AssistantMessage,
 } from '#shared/AssistantEvent.ts'
 import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
+import { isSendable } from '#shared/isSendable.ts'
 import { namedLogger } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
 import { parsedJson } from '#shared/parsedJson.ts'
@@ -550,8 +551,7 @@ function refusalOf(
  */
 export function blocksOf(content: AssistantContent[]): AssistantContent[] {
     const blocks: AssistantContent[] = []
-    for (const piece of content)
-        if (piece.type !== 'text' || /\S/.test(piece.text)) blocks.push(piece)
+    for (const piece of content) if (isSendable(piece)) blocks.push(piece)
     return blocks
 }
 

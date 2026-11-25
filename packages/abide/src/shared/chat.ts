@@ -15,6 +15,7 @@ import { type Autoscroll, autoscroll } from './autoscroll.ts'
 import { callsOf, type ChatCall } from './callsOf.ts'
 import { dropzone, type DropzoneParts } from './dropzone.ts'
 import { hotkeys } from './hotkeys.ts'
+import { isSendable } from './isSendable.ts'
 import { type Live, live } from './live.ts'
 import { MessageAccumulator } from './MessageAccumulator.ts'
 import { messageOf } from './messageOf.ts'
@@ -221,10 +222,6 @@ const blank = (): AssistantMessage => ({ role: 'user', content: [] })
 const converted = async (file: File) =>
     (await assistantMessage('user', [file])).content
 
-/** Whether `block` holds something to send: a text block of whitespace alone does not. */
-const sendable = (block: AssistantContent) =>
-    block.type !== 'text' || /\S/.test(block.text)
-
 /** A conversation over an assistant handler, as parts: the transcript and the composer. */
 export function chat(options: ChatOptions): ChatParts {
     const messages = options.messages ?? reactive<AssistantMessage[]>([])
@@ -256,7 +253,8 @@ export function chat(options: ChatOptions): ChatParts {
 
     const empty = () => {
         if (converting() > 0) return false
-        for (const block of blocksOf(draft())) if (sendable(block)) return false
+        for (const block of blocksOf(draft()))
+            if (isSendable(block)) return false
         return true
     }
 
@@ -269,7 +267,7 @@ export function chat(options: ChatOptions): ChatParts {
         }
         const content: AssistantContent[] = []
         for (const block of blocksOf(draft.peek()))
-            if (sendable(block)) content.push(block)
+            if (isSendable(block)) content.push(block)
         if (content.length === 0) return
         draft.set(blank())
         if (streaming()) {
