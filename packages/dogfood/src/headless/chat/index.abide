@@ -14,6 +14,8 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
         '/ai/assistant-message',
         '/ai/pairing',
         '/ai/provider',
+        '/headless/autoscroll',
+        '/headless/dropzone',
         '/helpers/markdown',
     ]}
     tests={[
@@ -58,6 +60,62 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
             from: [
                 "test('a conversation handed in as messages is shown, and asked about with what follows'",
             ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: [
+                "test('the transcript follows its bottom until the reader scrolls up'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: [
+                "test('a file picked through the dropzone input goes with the next question'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: [
+                "test('a file attached while typing goes after the words, and typing on keeps it there'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: [
+                "test('a question whose answer failed is put back to edit, with what was attached'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: [
+                "test('a file turned away, or one that cannot be read, is named and never sent'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: [
+                "test('a contact card is attached as words, apart from what is typed'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: [
+                "test('a question sent while a file is still being taken waits for it'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/AssistantThread.test.ts',
+            from: ["test('a suggestion is asked as if it were typed and sent'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/askAboutThisPage.test.ts',
+            from: [
+                "test('the model is sent the page asked on, and earlier tool results cut short'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/askAboutThisPage.test.ts',
+            from: ["test('the conversation keeps every tool result whole'"],
         },
     ]}
 >
@@ -154,6 +212,133 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
                     <button {...talk.cancel}>Cancel</button>
                 </div>
             {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep the transcript at its newest message">
+        <p><code>autoscroll</code> is an <code>autoscroll</code>'s parts, handed back whole.
+            Spread its <code>host</code> with <code>transcript</code> to follow an answer as it
+            streams, and its <code>jump</code> is the button taking a reader who scrolled up
+            back down.</p>
+        <Code language="abide" caption="abide" code={`
+            <ol {...talk.transcript} {...talk.autoscroll.host}>…</ol>
+            <button {...talk.autoscroll.jump}>↓ Latest</button>
+        `} />
+    </Section>
+
+    <Section level={3} title="Take files dropped, pasted or picked">
+        <p><code>dropzone</code> is a <code>dropzone</code>'s parts, handed back whole. Spread
+            its <code>host</code> where files land, the composer or the whole panel, and its
+            <code>input</code> on a file picker.</p>
+        <Code language="abide" caption="abide" code={`
+            <form {...talk.composer} {...talk.dropzone.host}>
+                <textarea {...talk.input}></textarea>
+                <input {...talk.dropzone.input} aria-label="Attach files">
+                <button {...talk.send}>Send</button>
+            </form>
+        `} />
+    </Section>
+
+    <Section level={3} title="Attach a file where the words stop">
+        <p><code>draft</code> is the user message being written, its words and files in order.
+            The input edits its words, and a file goes after them. <code>attached</code> is
+            every block the input does not show, each with a button taking it out.</p>
+        <Code language="abide" caption="abide" code={`
+            {#for piece of talk.attached key piece}
+                <span {...talk.attachment(piece).attachment}>
+                    {#if piece.type === 'image'}
+                        <img {...talk.attachment(piece).image} alt="an image to send">
+                    {/if}
+                    <button {...talk.attachment(piece).remove}>×</button>
+                </span>
+            {/for}
+        `} />
+    </Section>
+
+    <Section level={3} title="Put a failed question back to edit">
+        <p>Write a message to <code>draft</code> and the composer holds it: its words in the
+            input, its files attached. The question keeps its files apart from its words, so it
+            goes again as it went.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            function putBack() {
+                const question = talk.messages.at(-1)
+                if (question?.role !== 'user') return
+                talk.messages = talk.messages.slice(0, -1)
+                talk.draft = question
+            }
+            </script>
+
+            {#if talk.failed !== undefined}
+                <button type="button" onclick={putBack}>Edit the question</button>
+            {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Say which files were not attached">
+        <p><code>rejected</code> holds the files the last drop, paste or pick turned away, and
+            the ones that could not be read. <code>onreject</code> hears them too.</p>
+        <Code language="abide" caption="abide" code={`
+            {#if talk.rejected.length > 0}
+                <p role="status">
+                    Not attached: {talk.rejected.map((file) => file.name).join(', ')}
+                </p>
+            {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Attach a contact card as words">
+        <p>Pass <code>attach</code> to decide what a file is sent as. The CRM sends a vCard as
+            the contact's fields in words, and every other file as
+            <code>assistantMessage</code> makes it. A throw turns the file away, and an empty
+            list drops it.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { chat } from '@abide/abide'
+            import askAssistant from '../askAssistant.handler.ts'
+            import { attachContactCard } from './attachContactCard.ts'
+
+            const talk = chat({ ask: askAssistant, attach: attachContactCard })
+            </script>
+        `} />
+    </Section>
+
+    <Section level={3} title="Send a question while a photo is still loading">
+        <p>A send while <code>attaching</code> waits, and goes once every file has landed.
+            The composer carries <code>data-attaching</code> meanwhile.</p>
+        <Code language="abide" caption="abide" code={`
+            <button {...talk.send}>{talk.attaching ? 'Attaching…' : 'Send'}</button>
+        `} />
+    </Section>
+
+    <Section level={3} title="Ask a suggested question in one click">
+        <p><code>submit</code> sends what <code>draft</code> holds, as the composer does.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            function suggest(question: string) {
+                talk.draft = { role: 'user', content: question }
+                talk.submit()
+            }
+            </script>
+
+            <button type="button" onclick={() => suggest('Which company is Ada at?')}>
+                Which company is Ada at?</button>
+        `} />
+    </Section>
+
+    <Section level={3} title="Send the model more, or less, than the conversation holds">
+        <p>Every answer is asked through <code>ask</code>: a question sent, one queued, and Ask
+            again. Wrap your handler to tell the model which page the question was asked on and
+            cut earlier tool results short. The conversation keeps everything. The cost is that
+            the model cannot read a cut result again, and calls the tool again where it needs
+            it.</p>
+        <Code language="ts" caption="browser" code={`
+            import type { ChatOptions } from '@abide/abide'
+            import askAssistant from '../askAssistant.handler.ts'
+            import { sentFor } from './askAboutThisPage.ts'
+
+            export const askAboutThisPage: ChatOptions['ask'] = ({ messages }, options) =>
+                askAssistant({ messages: sentFor(messages, location.pathname) }, options)
         `} />
     </Section>
 
