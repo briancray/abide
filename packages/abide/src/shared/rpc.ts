@@ -166,10 +166,12 @@ export type CallAnswer<Value, Failures, Produced> = ([Value] extends [Produced]
     : AsyncIterable<Produced>) & {
     // Typed only: the value and the refusals a `computed` adopting the answer serves as its own
     // (11.12), and what the build reads a handler's value off (19.21).
-    readonly [CALL_ENTRY]?: {
-        readonly value: Value
-        readonly failures: Failures
-    }
+    readonly [CALL_ENTRY]?:
+        | {
+              readonly value: Value
+              readonly failures: Failures
+          }
+        | undefined
 }
 
 /**
