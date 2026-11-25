@@ -10,10 +10,18 @@ import { Mux, type MuxConnection } from '#server/answerSocket.ts'
 import { Followers } from '#server/Followers.ts'
 import type { FollowedHandler } from '#server/mountHandlers.ts'
 import { flushSync, invalidate, refresh } from '#shared'
+import { applyPatch } from '#shared/applyPatch.ts'
 import { keyedValue } from '#shared/reactive/index.ts'
 import { GET } from '#shared/rpc.ts'
 
 const FOLLOWERS = 20
+
+/** `held` with `ops` applied, as a follower standing at it would take them — 18.11, 18.41. */
+function patched(held: unknown, ops: unknown): unknown {
+    const copy = structuredClone(held)
+    applyPatch(copy, ops as Parameters<typeof applyPatch>[1])
+    return copy
+}
 
 /** `rpc`'s row as a browser follows it, with no rungs over its route. */
 function followedRow(rpc: { address: string }): FollowedHandler {
@@ -51,7 +59,9 @@ test('a change is serialized once for every follower of a value, and each is sen
         op: string
         id: number
         version?: number
+        base?: number
         value?: unknown
+        ops?: unknown
     }[][] = []
     const connections: MuxConnection[] = []
     for (let at = 0; at < FOLLOWERS; at++) {
@@ -59,7 +69,9 @@ test('a change is serialized once for every follower of a value, and each is sen
             op: string
             id: number
             version?: number
+            base?: number
             value?: unknown
+            ops?: unknown
         }[] = []
         sent.push(frames)
         const connection = mux.connect(
@@ -90,12 +102,18 @@ test('a change is serialized once for every follower of a value, and each is sen
     value.set(shelf(['dune', 'emma']))
     flushSync()
     expect(serialized).toBe(1)
-    for (let at = 0; at < FOLLOWERS; at++)
-        expect(sent[at]?.at(-1)).toMatchObject({
-            op: 'value',
+    // 18.41 — each stood at the version it was sent, so the replacement reaches it as the patch from it.
+    for (let at = 0; at < FOLLOWERS; at++) {
+        const [first, last] = sent[at] ?? []
+        expect(last).toMatchObject({
+            op: 'patch',
             id: at + 1,
-            value: { titles: ['dune', 'emma'] },
+            base: first?.version,
         })
+        expect(patched(first?.value, last?.ops)).toEqual({
+            titles: ['dune', 'emma'],
+        })
+    }
     for (const connection of connections) connection.close()
     value.set(shelf(['gone']))
     flushSync()
@@ -114,7 +132,7 @@ test('a free invalidate and refresh over a tag reach the followers of the GET se
     const rpc = value as unknown as { address: string }
     rpc.address = '/stock'
     const mux = muxOver(rpc)
-    const frames: { op: string; value?: unknown }[] = []
+    const frames: { op: string; value?: unknown; ops?: unknown }[] = []
     const connection = mux.connect(
         new Request('http://app.test/__abide/socket'),
         {
@@ -133,11 +151,13 @@ test('a free invalidate and refresh over a tag reach the followers of the GET se
     flushSync()
     for (let turn = 0; turn < 5; turn++) await Promise.resolve()
     flushSync()
+    // 18.41 — the refresh replaced the value the follower stood at, so it is sent as the patch from it.
     expect(frames.map((frame) => frame.op)).toEqual([
         'value',
         'invalidate',
-        'value',
+        'patch',
     ])
+    expect(patched(frames[0]?.value, frames[2]?.ops)).toEqual({ built: 1 })
     connection.close()
 })
 
@@ -186,8 +206,9 @@ test('a subscription builds the entry for its own args and is fed from it — 18
     connection.close()
 })
 
-// 18.6, 18.20 — AN EVENT STREAM IS SENT THE BODY SERIALIZED FOR EVERY FOLLOWER, not one of its own:
-// a write to a value twenty event streams follow serializes it once and parses nothing. THE REVERT:
+// 18.6, 18.20, 18.41 — AN EVENT STREAM IS SENT THE BODY SERIALIZED FOR EVERY FOLLOWER, not one of its
+// own: a write to a value twenty event streams follow serializes it once and parses nothing — here the
+// patch from the value each stood at. THE REVERT:
 // have `Followers.events`' peer write its event from `frame.body` parsed and stringified again — 20
 // parses and 21 stringifies a write, against 0 and 1.
 test('a write reaches every event stream following a value with one serialization and no parse — 18.6, 18.20', async () => {
@@ -229,7 +250,7 @@ test('a write reaches every event stream following a value with one serializatio
             text += decoder.decode(chunk)
         }
         expect(text).toMatch(
-            /event: value\nid: \d+\ndata: \{"titles":\["dune","emma"\]\}\n\n$/,
+            /event: patch\nid: \d+\ndata: \[\{"op":"add","path":"\/titles\/-","value":"emma"\}\]\n\n$/,
         )
         await reader.cancel()
     }

@@ -11,6 +11,7 @@ import {
     type Memo,
     memo,
     type Reactive,
+    type Store,
 } from '#shared/reactive/index.ts'
 import { appStopSignal } from '#shared/reactive/poll.ts'
 
@@ -48,8 +49,8 @@ export type JobOptions<Input = undefined> = {
     name?: string | undefined
     /** 54.22, 54.35 — the work, handed what `Job.run` was given and `undefined` where a look started it; `abortSignal()` in it says stop. */
     run: (input: Input | undefined) => unknown
-    /** 54.17 — when the last run ended before this process, in epoch milliseconds, or `undefined` where none has. */
-    lastRun?: (() => number | undefined) | undefined
+    /** 54.17 — where the status is kept, so a restart resumes the schedule and keeps the last run's result. */
+    store?: Store<JobStatus> | undefined
     /** 54.34 — what holds the schedule: while it reads true, a look starts no run. */
     paused?:
         Reactive<boolean, never, never, boolean> | (() => boolean) | undefined
@@ -106,7 +107,10 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         lastError: null,
     }
     // 54.18 — A MEMO THE JOB WRITES, one value for every caller: the server owns no `Reactive` (16.109).
-    const status = memo((): JobStatus => current, { global: true })
+    const status = memo((): JobStatus => current, {
+        global: true,
+        store: options.store as Store<unknown> | undefined,
+    })
     const write = (changed: Partial<JobStatus>): JobStatus => {
         current = { ...current, ...changed }
         status.set(current)
@@ -212,7 +216,20 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         if (options.paused?.() === true) return
         if (!remembered) {
             remembered = true
-            lastRunAt = options.lastRun?.()
+            // 54.17 — WHAT THE STORE KEPT: the last run's end, result and error resume, and a process
+            // that is starting runs nothing — a run a crash cut off moved no `lastRun`, so it is due
+            // again (54.42).
+            if (options.store !== undefined) {
+                const kept = await status()
+                if (kept !== current) {
+                    current = { ...kept, running: false }
+                    write({})
+                }
+                lastRunAt =
+                    current.lastRun === null
+                        ? undefined
+                        : Date.parse(current.lastRun)
+            }
             // 54.36 — a cron job's first look is where its first time is counted from.
             measuredFrom =
                 lastRunAt ?? (cronAfter === undefined ? undefined : Date.now())

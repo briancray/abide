@@ -5,6 +5,8 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
+import { applyPatch } from '#shared/applyPatch.ts'
+
 import { addressOf, BIN, lastLinePrinted } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -126,12 +128,13 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-// THE REVERT: send every request to the worker in `serveDev`'s `fetch`; the upgrade is answered as a
-// page request, the client never opens, and it prints no frames.
+// The follower named the version it was answered, so the shelve reaches it as the change from that shelf
+// (18.41). THE REVERT: send every request to the worker in `serveDev`'s `fetch`; the upgrade is answered
+// as a page request, the client never opens, and it prints no frames.
 test('a GET is followed over the mux under abide dev', async () => {
     const frames = await followed(base)
-    expect(frames.map((frame) => frame.op)).toEqual(['value'])
-    expect((frames[0] as { value: string[] }).value).toEqual(['dune', 'emma'])
+    expect(frames.map((frame) => frame.op)).toEqual(['patch'])
+    expect(shelfAfter(frames[0])).toEqual(['dune', 'emma'])
 }, 20_000)
 
 // 16.10 — THE MUX STANDS UNDER THE MOUNT, which only the worker's configuration knows. THE REVERT:
@@ -148,8 +151,8 @@ test('a GET is followed over the mux under abide dev on a sub-path', async () =>
     )
     const mountedBase = await addressOf(mountedServer)
     const frames = await followed(mountedBase, '/docs')
-    expect(frames.map((frame) => frame.op)).toEqual(['value'])
-    expect((frames[0] as { value: string[] }).value).toEqual(['dune', 'emma'])
+    expect(frames.map((frame) => frame.op)).toEqual(['patch'])
+    expect(shelfAfter(frames[0])).toEqual(['dune', 'emma'])
 }, 30_000)
 
 // 37.3 — THE MUX OPENS ONLY AT ITS OWN ADDRESS, whatever status some other address answered an upgrade
@@ -264,10 +267,17 @@ console.log(JSON.stringify([answer.status, answer.headers.get('x-content-type-op
     ).toEqual([400, 'nosniff', 'private, no-store'])
 }, 20_000)
 
+/** The shelf a follower answered `['dune']` holds once it applies `frame`'s ops — 18.41. */
+function shelfAfter(frame: { ops?: unknown } | undefined): string[] {
+    const shelf = ['dune']
+    applyPatch(shelf, frame?.ops as Parameters<typeof applyPatch>[1])
+    return shelf
+}
+
 async function followed(
     at: string,
     mount = '',
-): Promise<{ op: string; value: string[] }[]> {
+): Promise<{ op: string; ops?: unknown }[]> {
     const dir = temporaryModule({
         'client.ts': `const base = process.argv[2] + process.argv[3]
 const frames: { op: string }[] = []

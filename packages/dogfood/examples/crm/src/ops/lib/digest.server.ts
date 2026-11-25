@@ -1,4 +1,4 @@
-import { job, log } from '@abide/abide/server'
+import { job, log, store } from '@abide/abide/server'
 
 import { crmDatabase } from '../../pipeline/lib/crmDatabase.server.ts'
 import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
@@ -16,11 +16,6 @@ export const digest = job({
         ])
         log.info(`digest sent: ${leads.length} leads to follow up`)
     },
-    // When the last one went out, so a restart sends a morning it missed once, and never twice.
-    lastRun: () =>
-        crmDatabase()
-            .query<{ sentAt: number | null }, []>(
-                'SELECT max(sentAt) AS sentAt FROM digests',
-            )
-            .get()?.sentAt ?? undefined,
+    // Its status kept beside the CRM's tables, so a restart sends a morning it missed once, never twice.
+    store: store.sqlite(crmDatabase, 'digest'),
 })

@@ -14,7 +14,7 @@ import type { Keyed } from './Keyed.ts'
 import { MEMO_BRAND } from './MEMO_BRAND.ts'
 import type { Poll } from './poll.ts'
 import { isStreaming, patchInto, produceInto } from './producer.ts'
-import type { Reactive } from './Reactive.ts'
+import type { Reactive, Store } from './Reactive.ts'
 
 /** What `memo` takes: how long an entry lives, what selects it, where it is kept, what its args must be, how its elements are told apart, and how often an entry reloads. */
 export type MemoOptions<Args> = {
@@ -24,6 +24,8 @@ export type MemoOptions<Args> = {
     args?: Schema<Args> | undefined
     key?: string | ((element: never) => unknown) | undefined
     poll?: Poll | undefined
+    // 11.79 — where each entry's value is kept, so a restart opens on it rather than running `fn`.
+    store?: Store<unknown> | ((args: Args) => Store<unknown>) | undefined
 }
 
 /**

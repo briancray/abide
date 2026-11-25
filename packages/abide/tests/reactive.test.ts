@@ -7623,3 +7623,31 @@ test('memo refuses anything but a body at construction — 11.74', () => {
         `value: ${refusal(5)}, reactive: ${refusal(reactive(1))}, body: ${refusal(() => 1)}`,
     ).toBe('value: refused, reactive: refused, body: built')
 })
+
+// 11.79 — A MEMO GIVEN A STORE OPENS AN ENTRY ON WHAT IT KEPT, without running its function, and keeps
+// what the owner writes. THE REVERT: drop `store` from the options `memo` hands its keyed value; the
+// function runs and `runs: 1`.
+test('a memo entry opens on its store, and keeps what is written — 11.79', async () => {
+    const kept = new Map<string, unknown>([['a', ['from the store']]])
+    let runs = 0
+    const feed = memo(
+        (_args: { account: string }) => {
+            runs += 1
+            return ['fresh']
+        },
+        {
+            store: ({ account }) => ({
+                get: () => kept.get(account) as string[] | undefined,
+                set: (value) => {
+                    kept.set(account, value)
+                },
+            }),
+        },
+    )
+    const opened = await feed({ account: 'a' })
+    feed.set({ account: 'a' }, ['written'])
+    await Bun.sleep(1)
+    expect(`opened: ${opened}, runs: ${runs}, kept: ${kept.get('a')}`).toBe(
+        'opened: from the store, runs: 0, kept: written',
+    )
+})

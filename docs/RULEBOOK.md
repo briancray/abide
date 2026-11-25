@@ -914,6 +914,9 @@ function, and MUST stand until the next write, `ttl`, `refresh` or `invalidate`.
 11.78 `m.readable(args)` MUST answer a stream handing on the entry's value now and its value after
 each change, in order, each a copy no later change mutates.
 
+11.79 A `memo` given a `store` MUST open an entry on the value the store keeps for its `Args` without
+running its function, and MUST keep there what the entry produces and what its owner writes.
+
 # 12. Effects
 
 12.1 A `Disposer` MUST run before each rerun of its `Effect`, and once more at teardown.
@@ -6929,8 +6932,8 @@ passed since the last one ended, or since it started under 54.25.
 54.16 `Job.run`, and a look, MUST join a run of the `job` in flight, and MUST NOT start a second; the
 input a `Job.run` that joined one was called with MUST NOT reach any run.
 
-54.17 A `job` MUST ask `lastRun` once, on its first look, for when its last run ended before this
-process, and MUST read the answer as a run that ended then.
+54.17 A `job` given a `store` MUST keep its status there, and MUST read it once, on its first look,
+reading the `lastRun` it holds as a run that ended then.
 
 54.18 `Job.status` MUST be one `global` `memo` entry the job writes, as a run starts and as it ends.
 
@@ -7013,6 +7016,9 @@ MUST narrow it to a `FetchFailed` where it is.
 54.41 A run of a `job` that ends MUST record in its status how long it took, in milliseconds, and a run
 that did not fail MUST record what it answered as `lastResult`, which a failed run MUST leave as it
 was; a run told to stop MUST record neither.
+
+54.42 A `job` opening on a status its `store` kept MUST read it as no run going, and MUST keep the
+`lastResult` and `lastError` it holds.
 
 # 55. Worker files
 

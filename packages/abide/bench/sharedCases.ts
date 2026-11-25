@@ -4,10 +4,11 @@
 // the validateJson case carry SHARE rows pricing the layer against the whole op somebody waits on. JSC with
 // `bun run bench:shared`, V8 with `bun run bench` — `shared.spec.ts`, which
 // the e2e gate runs only as a one-rep smoke.
-import { jsonSchema, memo, reactive, validateJson } from '@abide/abide'
+import { jsonSchema, reactive, validateJson } from '@abide/abide'
 
 import { putOwn } from '#shared/putOwn.ts'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
+import { keyedValue } from '#shared/reactive/index.ts'
 
 // Defeats dead-code elimination without allocating: every arm writes here.
 let sink: unknown
@@ -91,7 +92,7 @@ function keyCase(name: string, args: Record<string, unknown>): SharedCase {
     ])
         if (made !== expected)
             throw new Error(`${name}: an arm keys ${made}, not ${expected}`)
-    const keyed = memo((held: Record<string, unknown>) => held)
+    const keyed = keyedValue((held: Record<string, unknown>) => held)
     keyed(args)
     return {
         name,
@@ -121,8 +122,8 @@ function keyCase(name: string, args: Record<string, unknown>): SharedCase {
 // whose caller wrote every member pays a walk that allocates nothing, and one whose caller left a
 // member out pays a copy of its args.
 function defaultsReachCase(): SharedCase {
-    const plain = memo((held: { page?: number }) => held.page)
-    const defaulted = memo(({ page = 1 }: { page?: number }) => page)
+    const plain = keyedValue((held: { page?: number }) => held.page)
+    const defaulted = keyedValue(({ page = 1 }: { page?: number }) => page)
     const written = { page: 1 }
     const leftOut = {}
     plain(written)
@@ -151,10 +152,10 @@ function defaultsBuildCase(): SharedCase {
         name: 'keyed build — parameter defaults',
         arms: {
             'body with no default': (): void => {
-                sink = memo((held: { page?: number }) => held.page)
+                sink = keyedValue((held: { page?: number }) => held.page)
             },
             'body with a default': (): void => {
-                sink = memo(({ page = 1 }: { page?: number }) => page)
+                sink = keyedValue(({ page = 1 }: { page?: number }) => page)
             },
         },
     }

@@ -6,6 +6,8 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { spawned } from '@abide/harness/gate'
 
+import { applyPatch } from '#shared/applyPatch.ts'
+
 import { BIN, handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
@@ -170,20 +172,32 @@ process.exit(0)
 const ops = (frames: Record<string, unknown>[]): unknown[] =>
     frames.map((frame) => frame.op)
 
-// 18.5, 18.6 — THE ANSWER NAMES ITS VERSION, and a follower naming it is sent nothing until the value
-// moves. THE REVERT: send the value in `follow` whatever version was named; the follower is handed the
-// shelf it already has as well, 2 values where 1 is due.
+/** `held` with a patch frame's ops applied, as a follower standing at it takes them — 18.11, 18.41. */
+function patched(
+    held: unknown,
+    frame: Record<string, unknown> | undefined,
+): unknown {
+    const copy = structuredClone(held)
+    applyPatch(copy, frame?.ops as Parameters<typeof applyPatch>[1])
+    return copy
+}
+
+// 18.5, 18.6, 18.41 — THE ANSWER NAMES ITS VERSION, and a follower naming it is sent nothing until the
+// value moves, and then the change from the shelf it holds. THE REVERT: send the value in `follow`
+// whatever version was named; the follower is handed the shelf it already has as well, a value frame
+// where none is due.
 test('a follower naming the answered version is sent only what changes after it', async () => {
     const frames = await client(`const answered = await get('books')
 const version = Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, ''))
+frames.push({ op: 'answered', value: await answered.json() })
 send({ op: 'sub', id: 1, address: '/library/books', version })
 await settled()
 await post('shelve', { title: 'emma' })
-await until((frames) => frames.some((frame) => frame.op === 'value'))
+await until((frames) => frames.some((frame) => frame.op === 'patch'))
 `)
-    const values = frames.filter((frame) => frame.op === 'value')
-    expect(values.map((frame) => frame.value)).toHaveLength(1)
-    expect((values.at(-1) as { value: string[] }).value.at(-1)).toBe('emma')
+    expect(ops(frames)).toEqual(['answered', 'patch'])
+    const held = frames[0]?.value as string[]
+    expect(patched(held, frames[1])).toEqual([...held, 'emma'])
 })
 
 // 18.19 — A READER HOLDING THE VERSION STANDING IS ANSWERED 304 AND NO BODY, and one holding an older
@@ -318,7 +332,8 @@ test('abide watch follows a GET over its event stream — 38.69, 18.20', async (
 
 // 18.8 OVER SSE — A GUARDED GET IS FOLLOWED once the request opening the stream passes its rungs, and
 // a request they refuse is answered the refusal, not a stream. THE REVERT: withhold the \`ETag\` from a
-// guarded \`GET\` in \`answerOutcome\`; the admitted reader is answered the shelf once, as JSON.
+// guarded \`GET\` in \`answerOutcome\`; the admitted reader is answered the shelf once, as JSON. The write
+// reaches the stream standing at the shelf it was sent as the change from it (18.41).
 test('a guarded GET streams to a reader its rungs admit, and refuses the rest — 18.8, 18.20', async () => {
     const frames = await client(`const decoder = new TextDecoder()
 const admitted = await get('locked', { accept: 'text/event-stream', 'x-token': 'ok' })
@@ -344,30 +359,29 @@ frames.push({ op: 'probe', type: admitted.headers.get('content-type'), events: e
         {
             op: 'probe',
             type: 'text/event-stream',
-            events: ['event: value', 'event: value'],
+            events: ['event: value', 'event: patch'],
             refused: 401,
         },
     ])
 })
 
 // 18.8 OVER THE MUX — A GUARDED GET'S RUNGS RUN ONCE AS THE SUBSCRIPTION OPENS, in the connection's
-// request: an upgrade they admit is fed the value, as an unguarded follower is. THE REVERT: leave every
-// guarded follower unadmitted in \`answerFrame\`; the admitted connection is sent triggers alone, and
-// no value.
+// request: an upgrade they admit is fed the value, and then the change to it (18.41), as an unguarded
+// follower is. THE REVERT: leave every guarded follower unadmitted in \`answerFrame\`; the admitted
+// connection is sent triggers alone, and no value.
 test('a guarded GET feeds a subscription its rungs admitted when it opened — 18.8', async () => {
     const frames = await client(
         `send({ op: 'sub', id: 1, address: '/library/locked' })
 await until((frames) => frames.some((frame) => frame.op === 'value'))
 await post('shelve', { title: 'admitted' })
-await until((frames) => frames.filter((frame) => frame.op === 'value').length >= 2)
+await until((frames) => frames.some((frame) => frame.op === 'patch'))
 `,
         { 'x-token': 'ok' },
     )
-    const values = frames.filter((frame) => frame.op === 'value') as {
-        value: string[]
-    }[]
-    expect(values.length).toBe(2)
-    expect(values[1]?.value.at(-1)).toBe('admitted')
+    expect(ops(frames)).toEqual(['value', 'patch'])
+    expect((patched(frames[0]?.value, frames[1]) as string[]).at(-1)).toBe(
+        'admitted',
+    )
 })
 
 // 18.11 — A FOLLOWER SEVERAL PATCHES BEHIND IS SENT THE WRITES SINCE, while the value stays fed: three
@@ -525,6 +539,7 @@ await until((frames) => frames.length >= 4)
 // 13.15 — A FED COPY IS REFRESHED BY THE PRODUCTION THE SWEEP'S RELOAD MINTS, and sent nothing
 // else: a trigger beside it is the browser reading the same value a second time. THE REVERT: send a
 // sweep to every follower, fed or not; the browser is sent the refresh as well, 2 frames where 1 is due.
+// The reload reaches it, standing at the production it replaced, as the change from it (18.41).
 test('a sweep by tag on the server sends a fed copy its reload, and no trigger — 13.15', async () => {
     const frames = await client(`const answered = await get('films')
 send({ op: 'sub', id: 1, address: '/library/films', version: Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, '')) })
@@ -532,7 +547,7 @@ await settled()
 await post('recatalog', {})
 await until((frames) => frames.length > 0)
 `)
-    expect(ops(frames)).toEqual(['value'])
+    expect(ops(frames)).toEqual(['patch'])
 })
 
 // 16.89 — A HANDLER'S `refreshes` REACHES EVERY BROWSER FOLLOWING A COPY CARRYING ONE OF ITS TAGS,
@@ -593,7 +608,8 @@ await until((frames) => frames.length > 0)
 
 // 7.10, 7.18, 13.12 — A `global` `GET` TRIGGERED FROM INSIDE ANOTHER REQUEST, by its args: a request-local
 // handler reaches the browsers following the entries its pattern names, and no others — the refreshed
-// entry's copy is fed its reload, and the invalidated one is told. THE REVERT: drop the `FOLLOWED` call
+// entry's copy is fed its reload — the change from the value it held, 18.41 — and the invalidated one is
+// told. THE REVERT: drop the `FOLLOWED` call
 // from `invalidateOne`; the second follower is sent nothing.
 test('a global GET triggered by args from inside another request reaches the followers its pattern names', async () => {
     const frames = await client(`const one = await get('price?id=1')
@@ -609,7 +625,7 @@ await until((frames) => frames.some((frame) => frame.id === 2))
     const seen: unknown[] = []
     for (const frame of frames) seen.push([frame.op, frame.id])
     expect(seen).toEqual([
-        ['value', 1],
+        ['patch', 1],
         ['invalidate', 2],
     ])
 }, 15_000)
@@ -634,17 +650,27 @@ await until((frames) => frames.length >= 2)
     ])
 })
 
-// 18.8 — A FOLLOWER SUBSCRIBED BEFORE ITS ENTRY EXISTED is fed from the entry once an answer makes
-// it, rather than told of every change and left to fetch it. THE REVERT: decide what a follower is
-// fed from once, at `follow`; it is sent the refresh trigger alone (['refresh'] against two values).
-test('a follower of args no entry held yet is fed once an answer makes one', async () => {
+// 18.40, 18.41 — A FOLLOWER OF ARGS NO ENTRY HELD YET BUILDS IT, as a call would: it is fed the value
+// before anything calls, a call for the same args is answered from the entry it built, and a refresh is
+// sent as the change from what it holds. THE REVERT: look the entry up without reaching it in
+// `Followers.attach`; nothing is fed until the call builds the entry, so the answer lands ahead of the
+// value (['answered', 'value', 'patch'] against ['value', 'answered', 'patch']).
+test('a follower of args no entry held yet builds it, and is fed from it — 18.40', async () => {
     const frames =
         await client(`send({ op: 'sub', id: 1, address: '/library/price', args: { id: 9 } })
-await settled()
-await get('price?id=9')
 await until((frames) => frames.length >= 1)
+frames.push({ op: 'answered', value: await (await get('price?id=9')).json() })
 await post('reprice', { id: 9, refresh: true })
-await until((frames) => frames.length >= 2)
+await until((frames) => frames.length >= 3)
 `)
-    expect(ops(frames)).toEqual(['value', 'value'])
+    expect(ops(frames)).toEqual(['value', 'answered', 'patch'])
+    const fed = frames[0]?.value as { id: number; priced: number }
+    expect(frames[1]?.value).toEqual(fed)
+    expect(patched(fed, frames[2])).toEqual({
+        id: 9,
+        priced: expect.any(Number),
+    })
+    expect((patched(fed, frames[2]) as { priced: number }).priced).not.toBe(
+        fed.priced,
+    )
 }, 15_000)

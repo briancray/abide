@@ -14,11 +14,7 @@ type Key = string | ((element: unknown) => unknown) | null
  * follower (18.6), and a value nothing in common with the last is one `replace` of the root, which is
  * the value whole.
  */
-export function diffOps(
-    before: unknown,
-    after: unknown,
-    key: Key,
-): PatchOp[] {
+export function diffOps(before: unknown, after: unknown, key: Key): PatchOp[] {
     const ops: PatchOp[] = []
     diffInto(ops, '', before, after, key)
     return ops
@@ -28,7 +24,8 @@ export function diffOps(
 function isRecord(value: unknown): value is Record<string, unknown> {
     if (value === null || typeof value !== 'object' || Array.isArray(value))
         return false
-    if (typeof (value as { toJSON?: unknown }).toJSON === 'function') return false
+    if (typeof (value as { toJSON?: unknown }).toJSON === 'function')
+        return false
     const prototype = Object.getPrototypeOf(value)
     return prototype === Object.prototype || prototype === null
 }
@@ -53,10 +50,12 @@ function diffInto(
     }
     if (isRecord(before) && isRecord(after)) {
         for (const name of Object.keys(before))
-            if (!(name in after)) ops.push({ op: 'remove', path: `${path}/${token(name)}` })
+            if (!(name in after))
+                ops.push({ op: 'remove', path: `${path}/${token(name)}` })
         for (const name of Object.keys(after)) {
             const at = `${path}/${token(name)}`
-            if (!(name in before)) ops.push({ op: 'add', path: at, value: after[name] })
+            if (!(name in before))
+                ops.push({ op: 'add', path: at, value: after[name] })
             else diffInto(ops, at, before[name], after[name], null)
         }
         return
@@ -119,7 +118,11 @@ function diffByKey(
             continue
         }
         if (from !== at) {
-            ops.push({ op: 'move', from: `${path}/${from}`, path: `${path}/${at}` })
+            ops.push({
+                op: 'move',
+                from: `${path}/${from}`,
+                path: `${path}/${at}`,
+            })
             current.splice(at, 0, ...current.splice(from, 1))
         }
         diffInto(ops, `${path}/${at}`, current[at], target, null)

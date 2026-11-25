@@ -7,7 +7,14 @@ import { expect, test } from 'bun:test'
 import { job, type JobStatus, log } from '#server'
 import type { App, BootedApp } from '#server/createApp.ts'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
-import { abortSignal, type Memo, pipe, reactive, refuse } from '#shared'
+import {
+    abortSignal,
+    type Memo,
+    pipe,
+    reactive,
+    refuse,
+    type Store,
+} from '#shared'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -23,6 +30,30 @@ async function serving(body: () => Promise<void>): Promise<void> {
 }
 
 /** Settles once `status` holds a status `holds` passes. */
+/** A store holding a job's status as a last run that ended at `lastRun`, calling `asked` as it is read. */
+function kept(
+    lastRun: number | undefined,
+    asked: () => void = () => undefined,
+): Store<JobStatus> {
+    return {
+        get: () => {
+            asked()
+            return {
+                running: false,
+                lastRun:
+                    lastRun === undefined
+                        ? null
+                        : new Date(lastRun).toISOString(),
+                lastTook: null,
+                lastResult: undefined,
+                nextRun: null,
+                lastError: null,
+            }
+        },
+        set: () => undefined,
+    }
+}
+
 async function until(
     status: Memo<undefined, JobStatus>,
     holds: (status: JobStatus) => boolean,
@@ -180,7 +211,7 @@ test('a last run within the interval is waited out, and an older one is run at o
         run: () => {
             runs += 1
         },
-        lastRun: () => Date.now() - 60_000,
+        store: kept(Date.now() - 60_000),
     })
     const stale = job({
         name: 'stale',
@@ -188,7 +219,7 @@ test('a last run within the interval is waited out, and an older one is run at o
         run: () => {
             runs += 10
         },
-        lastRun: () => Date.now() - 7_200_000,
+        store: kept(Date.now() - 7_200_000),
     })
     await serving(async () => {
         await until(recent.status, (status) => status.nextRun !== null)
@@ -210,11 +241,8 @@ test('an interval of 0 runs nothing, and names no next run — 54.21', async () 
         run: () => {
             runs += 1
         },
-        // Asked on the first look, which goes on to run the job where it is due.
-        lastRun: () => {
-            looked.resolve()
-            return undefined
-        },
+        // Read on the first look, which goes on to run the job where it is due.
+        store: kept(undefined, () => looked.resolve()),
     })
     await serving(() => looked.promise)
     expect(runs).toBe(0)
@@ -412,7 +440,7 @@ test('a cron job never run waits for its first time, and missed times run once �
         run: () => {
             caughtUp += 1
         },
-        lastRun: () => Date.now() - 3 * 366 * 86_400_000,
+        store: kept(Date.now() - 3 * 366 * 86_400_000),
     })
     await serving(async () => {
         await until(waiting.status, (status) => status.nextRun !== null)
@@ -503,4 +531,44 @@ test('a run records how long it took, and the last good answer survives a failur
         `took: ${(ok.lastTook ?? 0) >= 20}, result: ${failed.lastResult}, error: ${failed.lastError}`,
     ).toBe('took: true, result: report 1, error: down')
     await report.stop()
+})
+
+// 54.17, 54.42 — A JOB OPENS ON WHAT ITS STORE KEPT: a status written while a run was going is read as no
+// run going, a last run inside the interval is waited out rather than run again at once, and the last
+// good result comes back. THE REVERT: drop the store read from the first look; the job counts from no
+// last run, runs at once, and `runs: 1`.
+test('a job opens on its stored status and waits out its stored last run — 54.17, 54.42', async () => {
+    let runs = 0
+    const stored: { value: JobStatus } = {
+        value: {
+            running: true,
+            lastRun: new Date(Date.now() - 60_000).toISOString(),
+            lastTook: 12,
+            lastResult: 'sent 3',
+            nextRun: null,
+            lastError: null,
+        },
+    }
+    const resumed = job({
+        name: 'resumed',
+        every: 3_600_000,
+        run: () => {
+            runs += 1
+            return `sent ${runs}`
+        },
+        store: {
+            get: () => stored.value,
+            set: (value) => {
+                stored.value = value
+            },
+        },
+    })
+    await serving(() =>
+        until(resumed.status, (status) => status.nextRun !== null),
+    )
+    const now = await resumed.status()
+    expect(
+        `result: ${now.lastResult}, runs: ${runs}, running: ${now.running}, waits: ${Date.parse(now.nextRun ?? '') - Date.now() > 3_400_000}`,
+    ).toBe('result: sent 3, runs: 0, running: false, waits: true')
+    await resumed.stop()
 })

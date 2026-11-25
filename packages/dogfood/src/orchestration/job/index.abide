@@ -186,11 +186,11 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Keep a restart from sending the digest again">
         <p>A job that has not run waits for its next time, so a morning missed while the server
-            was down is lost. <code>lastRun</code> says when the last run ended, in epoch
-            milliseconds: a restart that missed a morning sends it once, however many it missed,
-            and one that missed none waits for the next.</p>
+            was down is lost. Give it a <code>store</code>, and its status is kept there: a restart
+            reads when the last run ended, sends a missed morning once however many it missed,
+            waits for the next where it missed none, and keeps the last run's result.</p>
         <Code language="ts" caption="server" code={`
-            import { job } from '@abide/abide/server'
+            import { job, store } from '@abide/abide/server'
             import { crmDatabase } from '../../pipeline/lib/crmDatabase.server.ts'
 
             job({
@@ -198,12 +198,7 @@ import Section from '#src/lib/Section.abide'
                 cron: '0 8 * * 1-5',
                 timeZone: 'America/New_York',
                 run: mailDigest,
-                lastRun: () =>
-                    crmDatabase()
-                        .query<{ sentAt: number | null }, []>(
-                            'SELECT max(sentAt) AS sentAt FROM digests',
-                        )
-                        .get()?.sentAt ?? undefined,
+                store: store.sqlite(crmDatabase, 'digest'),
             })
         `} />
     </Section>
