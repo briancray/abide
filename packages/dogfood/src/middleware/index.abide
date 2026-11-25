@@ -36,7 +36,7 @@ const callTool = (name: string) =>
     <Section title="A rung answers in the handler's place, or lets the request through">
         <p>A rung is a function handed <code>next</code>. Return <code>next()</code> and the
             request goes on to the handler. Return a
-            <a href={url('/reactive/refuse')}><code>refuse</code></a> and the refusal is the
+            <a href={url('/helpers/refuse')}><code>refuse</code></a> and the refusal is the
             answer, so the handler never runs. The CRM's commission lists
             <a href={url('/middleware/signed-in')}><code>signedIn</code></a> in its own
             <code>middleware</code> option.</p>

@@ -270,27 +270,6 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
-                route: '/reactive/store',
-                title: '`store`',
-                description:
-                    'Keep a reactive value somewhere that outlives the process: Web Storage, a cookie, IndexedDB, SQLite, Redis, or your own.',
-                where: 'anywhere',
-            },
-            {
-                route: '/reactive/refuse',
-                title: '`refuse`',
-                description:
-                    'Declare a named refusal with typed data, return it from a handler, and match it by name where the call is made.',
-                where: 'anywhere',
-            },
-            {
-                route: '/reactive/is-failed',
-                title: '`isFailed`',
-                description:
-                    'Tell a refusal from any other value or thrown error, including one read back from JSON.',
-                where: 'anywhere',
-            },
-            {
                 route: '/reactive/busy',
                 title: '`busy`',
                 description:
@@ -801,9 +780,23 @@ const WRITTEN: readonly {
     {
         group: 'Helpers',
         description:
-            'Plain functions over data: formatting, sorting, markdown, wall-clock times, key labels and JSON Schema validation.',
+            'Plain functions over data: refusals and telling them apart, formatting, sorting, markdown, wall-clock times, key labels and JSON Schema validation.',
         form: 'reference',
         pages: [
+            {
+                route: '/helpers/refuse',
+                title: '`refuse`',
+                description:
+                    'Declare a named refusal with typed data, return it from any body, a memo, a pipe step or a handler, and match it by name where it lands.',
+                where: 'anywhere',
+            },
+            {
+                route: '/helpers/is-failed',
+                title: '`isFailed`',
+                description:
+                    'Tell a refusal from any other value or thrown error, including one read back from JSON.',
+                where: 'anywhere',
+            },
             {
                 route: '/helpers/format',
                 title: '`format`',
@@ -1222,7 +1215,7 @@ const WRITTEN: readonly {
     {
         group: 'Data and I/O',
         description:
-            'The database and its tables as streams of changes, and fetches of other services read as their content type says.',
+            'Where a value is kept past the process, the database and its tables as streams of changes, and fetches of other services read as their content type says.',
         form: 'reference',
         pages: [
             {
@@ -1233,6 +1226,13 @@ const WRITTEN: readonly {
                     "Keep records in a database behind a handler, work on them on a schedule, and read other services, with each step shown on the CRM's own data.",
                 where: 'server',
                 guide: true,
+            },
+            {
+                route: '/data/store',
+                title: '`store`',
+                description:
+                    'Keep a reactive value somewhere that outlives the process: Web Storage, a cookie, IndexedDB, SQLite, Redis, or your own.',
+                where: 'anywhere',
             },
             {
                 route: '/data/database',

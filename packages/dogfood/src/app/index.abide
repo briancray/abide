@@ -125,7 +125,7 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section title="A refusal is an answer, so no error hook hears the refusal">
-        <p>A handler that returns <a href={url('/reactive/refuse')}><code>refuse</code></a>
+        <p>A handler that returns <a href={url('/helpers/refuse')}><code>refuse</code></a>
             answers with that status as Problem Details. Nothing threw, so
             <code>onError</code> stays quiet. The CRM's mailer is down, and its statement
             refuses <code>502</code>.</p>

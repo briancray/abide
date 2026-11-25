@@ -33,7 +33,7 @@ const callTool = (name: string, args: Record<string, string>) =>
         <p>Declare it with <a href={url('/handlers/get')}><code>GET</code></a> in
             <code>src/deals/getDeal.handler.ts</code>. The parameter's annotation is the schema
             every surface checks, and <code>description</code> is the sentence every surface
-            shows. A missing deal is a <a href={url('/reactive/refuse')}><code>refuse</code></a>,
+            shows. A missing deal is a <a href={url('/helpers/refuse')}><code>refuse</code></a>,
             not a thrown error.</p>
         <Code language="ts" caption="server" code={`
             import { refuse } from '@abide/abide'

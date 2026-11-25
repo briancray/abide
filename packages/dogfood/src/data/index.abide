@@ -15,7 +15,7 @@ import Section from '#src/lib/Section.abide'
         '/data/fetch-data',
         '/data/handle',
         '/reactive/refresh',
-        '/reactive/is-failed',
+        '/helpers/is-failed',
     ]}
 >
     <Section title="Open the CRM's database once, in a server file">
@@ -185,7 +185,7 @@ import Section from '#src/lib/Section.abide'
 
     <Section title="Check for a FetchFailed before reading the body">
         <p>The answer is a body or a <code>FetchFailed</code>, so test it with
-            <a href={url('/reactive/is-failed')}><code>isFailed</code></a> first. The one thing
+            <a href={url('/helpers/is-failed')}><code>isFailed</code></a> first. The one thing
             <code>fetchData</code> throws is the abort of a <code>signal</code> you passed.
             <code>as</code> reads the body as <code>'text'</code>, <code>'json'</code> or a
             <code>'blob'</code> whatever its type says.</p>

@@ -17,7 +17,7 @@ import seats from './lib/Seats.abide' with { type: 'text' }
     seeAlso={[
         '/reactive/memo',
         '/reactive/watch',
-        '/reactive/store',
+        '/data/store',
         '/helpers/deep-equal',
     ]}
     tests={[

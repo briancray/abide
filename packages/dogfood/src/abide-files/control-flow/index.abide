@@ -20,7 +20,7 @@ import removeDeal from './lib/RemoveDeal.abide' with { type: 'text' }
         '/abide-files/expressions',
         '/abide-files/components',
         '/reactive/ready',
-        '/reactive/refuse',
+        '/helpers/refuse',
         '/pages/sinks',
     ]}
     tests={[

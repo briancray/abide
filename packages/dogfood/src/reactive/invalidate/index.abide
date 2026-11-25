@@ -9,7 +9,7 @@ import markStale from './lib/MarkStale.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/reactive/refresh', '/reactive/store', '/reactive/reactive']}
+    seeAlso={['/reactive/refresh', '/data/store', '/reactive/reactive']}
     tests={[
         {
             path: 'packages/abide/tests/bareSelection.test.ts',

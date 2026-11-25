@@ -23,7 +23,7 @@ import whatASaveChanges from './lib/WhatASaveChanges.abide' with { type: 'text' 
     seeAlso={[
         '/handlers/post',
         '/helpers/json-schema',
-        '/reactive/refuse',
+        '/helpers/refuse',
         '/browser/outbox',
     ]}
     tests={[

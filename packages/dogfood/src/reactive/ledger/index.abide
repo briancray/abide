@@ -9,7 +9,7 @@ import callLog from './lib/CallLog.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/orchestration/pipe', '/reactive/store', '/reactive/reactive']}
+    seeAlso={['/orchestration/pipe', '/data/store', '/reactive/reactive']}
     tests={[
         {
             path: 'packages/abide/tests/ledger.test.ts',

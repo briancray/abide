@@ -1,0 +1,75 @@
+<script>
+import Code from '#src/lib/Code.abide'
+import Doc from '#src/lib/Doc.abide'
+import Section from '#src/lib/Section.abide'
+</script>
+
+<Doc
+    seeAlso={['/helpers/refuse', '/orchestration/pipe', '/data/fetch-data']}
+    tests={[
+        {
+            path: 'packages/abide/tests/pipe.test.ts',
+            from: [
+                "test('a call resolves to its answer or its refusal, and a memo over it fails with the refusal — 57.5, 15.5'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/refuse.test.ts',
+            from: ["test('a refusal that crossed a wire is still one'"],
+        },
+        {
+            path: 'packages/abide/tests/refuse.test.ts',
+            from: ["test('constructing a Failed is inert'"],
+        },
+    ]}
+>
+    <Section level={3} title="Tell a pipe's refusal from its answer">
+        <p>A <code>pipe</code> resolves to what its last step answered, or to the refusal a
+            step answered. Check with <code>isFailed</code> before reading the deal.</p>
+        <Code language="ts" caption="shared" code={`
+            import { isFailed, pipe } from '@abide/abide'
+            import getDeal from './getDeal.handler.ts'
+            import saveDeal from './saveDeal.handler.ts'
+
+            const rename = pipe([
+                (id: string) => getDeal({ id }),
+                (deal) => ({ ...deal, name: deal.name.trim() }),
+                (deal) => saveDeal(deal),
+            ])
+
+            const saved = await rename('d2')
+            const notice = isFailed(saved) ? saved.message : \`Saved \${saved.name}\`
+        `} />
+    </Section>
+
+    <Section level={3} title="Show a refusal and rethrow anything else">
+        <p>A refused handler call throws its refusal. Anything else that reaches the
+            <code>catch</code> went wrong, so let it go on.</p>
+        <Code language="ts" caption="browser" code={`
+            import { isFailed } from '@abide/abide'
+            import saveDeal from './saveDeal.handler.ts'
+
+            let notice = ''
+            try {
+                await saveDeal({ id: 'd2', name: 'Acme', company: 'Acme', amount: 9 })
+            } catch (error) {
+                if (!isFailed(error)) throw error
+                notice = error.message
+            }
+        `} />
+    </Section>
+
+    <Section level={3} title="Recognize a refusal read back from JSON">
+        <p>A <code>Failed</code> is known by its shape, not by its class. A refusal parsed from a
+            log line or a queue is still one.</p>
+        <Code language="ts" caption="shared" code={`
+            import { isFailed } from '@abide/abide'
+
+            const parsed: unknown = JSON.parse(
+                '{"name":"NotFound","status":404,"message":"Not Found","data":null}',
+            )
+            isFailed(parsed) // true
+            parsed instanceof Error // false
+        `} />
+    </Section>
+</Doc>
