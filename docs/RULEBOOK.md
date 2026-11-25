@@ -6833,7 +6833,8 @@ first run, and MUST stop looking where 7.26 stops a poll.
 54.19 A look MUST start a run of a `job` where no run has ended, or where `every` milliseconds have
 passed since the last one ended, or since it started under 54.29.
 
-54.20 `runNow`, and a look, MUST join a run of the `job` in flight, and MUST NOT start a second.
+54.20 `runNow`, and a look, MUST join a run of the `job` in flight, and MUST NOT start a second; the
+input a `runNow` that joined one was called with MUST NOT reach any run.
 
 54.21 A `job` MUST ask `lastRun` once, on its first look, for when its last run ended before this
 process, and MUST read the answer as a run that ended then.
@@ -6849,8 +6850,9 @@ throwing.
 54.25 A `job` whose `every` is not a positive number MUST start no run from a look, and its
 `nextRun` MUST be null while it is not.
 
-54.26 `run` MUST be handed a signal aborted where 7.38's is, and where
-`Job.stop` is called.
+54.26 `run` MUST be handed the input the `runNow` that started it was called with, and `undefined`
+where a look started it, and a run's signal MUST be one aborted where 7.38's is, and where `Job.stop`
+is called.
 
 54.27 `Job.stop` MUST settle once a run in flight has ended, and a `job` it stopped MUST start no
 run, from a look or from `runNow`, and MUST hold `nextRun` null.
@@ -6896,7 +6898,7 @@ it all the same.
 
 54.39 A `job`'s run MUST run outside every request and every `memo` run, whichever started it, and
 `abortSignal` called in it, outside every run 7.45 and 7.47 name and every request entered in it,
-MUST answer a signal aborted where 54.26's is.
+MUST answer the run's signal 54.26 names.
 
 # 55. Worker files
 

@@ -1456,10 +1456,10 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined; paused?: Reactive<boolean> \| (() => boolean) }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38, 54.39 |
-| `Job` | `{ status: Reactive<JobStatus>; runNow: () => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
+| `job` | `<Input = undefined>(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (input: Input \| undefined) => unknown; lastRun?: () => number \| undefined; paused?: Reactive<boolean> \| (() => boolean) }) => Job<Input>` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38, 54.39 |
+| `Job` | `<Input = undefined>{ status: Reactive<JobStatus>; runNow: (input?: Input) => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
 | `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
-| `Job.runNow` | `() => Promise<JobStatus>` | A run ahead of the schedule. | 54.20 |
+| `Job.runNow` | `(input?: Input) => Promise<JobStatus>` | A run ahead of the schedule, handed the input it is called with. | 54.20, 54.26 |
 | `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.26, 54.27 |
 | `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.22, 54.23, 54.24, 54.25, 54.27 |
 

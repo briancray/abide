@@ -12,7 +12,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { job } from '#server'
 import { serveCompilation } from '#server/abideModules.ts'
 import { workerExports } from '#server/workerExports.ts'
-import { memo } from '#shared'
+import { abortSignal, memo } from '#shared'
 import type { WorkerExport } from '#shared/worker/WorkerMessage.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -221,9 +221,9 @@ test('a worker file the thread imports is the module itself, run in that thread 
     expect(imported).toBe(own as number)
 })
 
-// A job's `run` is any function handed the job's signal, and a worker export is one: each run is a
-// thread of its own, and the call is made where `abortSignal` answers the run's signal (54.39), so
-// `stop` ends the thread and rejects the call with the stop (55.8).
+// A worker export is a function a job's `run` can call: each run is a thread of its own, and the call
+// is made where `abortSignal` answers the run's signal (54.39), so `stop` ends the thread and rejects
+// the call with the stop (55.8) — the call handed no signal of its own.
 test('a job whose run is a worker export runs it off the main thread, and stopping it ends the thread — 54.26, 54.39, 55.8', async () => {
     let onMain: boolean | undefined
     const offloaded = job('offloaded', {
@@ -238,8 +238,9 @@ test('a job whose run is a worker export runs it off the main thread, and stoppi
     let ended: string | undefined
     const waiting = job('waiting', {
         every: 3_600_000,
-        run: async (signal) => {
-            ended = await thread.untilAborted(signal).then(
+        run: async () => {
+            const signal = abortSignal()
+            ended = await thread.never().then(
                 (answered) => `answered ${answered}`,
                 (thrown: unknown) =>
                     thrown === signal.reason

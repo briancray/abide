@@ -23,9 +23,9 @@ export type JobStatus = {
 }
 
 /** 54.18 — a job's status beside the ways to run it ahead of its schedule and to end it. */
-export type Job = {
+export type Job<Input = undefined> = {
     status: Reactive<JobStatus>
-    runNow: () => Promise<JobStatus>
+    runNow: (input?: Input) => Promise<JobStatus>
     stop: () => Promise<JobStatus>
 }
 
@@ -33,21 +33,21 @@ export type Job = {
 const LONGEST_LOOK = 60_000
 
 /** Work run every `every` milliseconds on the server, one run at a time: 54.18-54.27. */
-export function job(
+export function job<Input = undefined>(
     name: string,
     options: {
         /** 54.18, 54.19, 54.25 — the milliseconds between the end of one run and the next, or between their starts under `from`, read at each look where a function. */
         every: number | (() => number)
         /** 54.29 — whether `every` is measured from when the last run `'end'`ed, the default, or from when it `'start'`ed. */
         from?: 'end' | 'start'
-        /** 54.26, 54.39 — the work, handed the signal that says stop, which `abortSignal()` in it answers too. */
-        run: (signal: AbortSignal) => unknown
+        /** 54.26, 54.39 — the work, handed what `runNow` was given and `undefined` where a look started it; `abortSignal()` in it says stop. */
+        run: (input: Input | undefined) => unknown
         /** 54.21 — when the last run ended before this process, in epoch milliseconds, or `undefined` where none has. */
         lastRun?: () => number | undefined
         /** 54.38 — what holds the schedule: while it reads true, a look starts no run. */
         paused?: Reactive<boolean, never, never, boolean> | (() => boolean)
     },
-): Job {
+): Job<Input> {
     const { every, run, from = 'end' } = options
     const intervalOf = typeof every === 'function' ? every : () => every
     const logger = log.named('job').named(name)
@@ -78,7 +78,7 @@ export function job(
         return new Date((measuredFrom ?? Date.now()) + interval).toISOString()
     }
 
-    const runOnce = async (): Promise<JobStatus> => {
+    const runOnce = async (input: Input | undefined): Promise<JobStatus> => {
         // 54.26 — the app's signal, not the look's: a run outlives the look that started it (7.45).
         const signal = AbortSignal.any([appStopSignal(), stopping.signal])
         const startedAt = Date.now()
@@ -86,7 +86,7 @@ export function job(
         let lastError = current.lastError
         try {
             // 54.39 — its own owner, whichever request asked for it or look started it.
-            await ownedBy(signal, () => run(signal))
+            await ownedBy(signal, () => run(input))
             lastError = null
         } catch (error) {
             // 54.24 — a run told to stop has not failed.
@@ -110,12 +110,12 @@ export function job(
         })
     }
 
-    // 54.20 — a run asked for while one is in flight joins it. Cleared once settled rather than
-    // inside the run, which may settle before it is filed as in flight.
-    const runNow = (): Promise<JobStatus> => {
+    // 54.20 — a run asked for while one is in flight joins it, its input unread. Cleared once
+    // settled rather than inside the run, which may settle before it is filed as in flight.
+    const runNow = (input?: Input): Promise<JobStatus> => {
         if (running !== undefined) return running
         if (stopping.signal.aborted) return Promise.resolve(current)
-        const started = runOnce()
+        const started = runOnce(input)
         running = started
         started.then(() => {
             if (running === started) running = undefined

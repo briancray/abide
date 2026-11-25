@@ -1,12 +1,24 @@
+import { reactive } from '@abide/abide'
 import { job, log } from '@abide/abide/server'
 
 import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
-/** The deals pulled in from the old CRM, run only when someone asks. */
+/** How many deals the last import pulled in, or `undefined` before one has. */
+export const importedDeals = reactive<number | undefined>(undefined, {
+    global: true,
+})
+
+/** The deals pulled in from the old CRM, every one or those at one stage, run only when someone asks. */
 export const dealImport = job('dealImport', {
     every: 0,
-    run: async () => {
+    run: async (options?: { stage?: string }) => {
+        const stage = options?.stage
+        const deals =
+            stage === undefined
+                ? DEALS
+                : DEALS.filter((deal) => deal.stage === stage)
         await Bun.sleep(300) // the old CRM paging out its deals
-        log.info(`imported: ${DEALS.length} deals checked against the old CRM`)
+        importedDeals.set(deals.length)
+        log.info(`imported: ${deals.length} deals checked against the old CRM`)
     },
 })

@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 import { job, type JobStatus, log, watch } from '#server'
 import type { App, BootedApp } from '#server/createApp.ts'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
-import { abortSignal, type Reactive, reactive } from '#shared'
+import { abortSignal, pipe, type Reactive, reactive } from '#shared'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -34,28 +34,46 @@ function until(
     return reached.promise.finally(stop)
 }
 
-// THE REVERT: start a run per `runNow` rather than joining the one in flight, and `runs` is 3.
-test('a run asked for while one is in flight joins it — 54.20', async () => {
-    let runs = 0
+// THE REVERT: start a run per `runNow` rather than joining the one in flight, and `handed` is
+// [1, 2, 3].
+test('a run asked for while one is in flight joins it, and its input reaches no run — 54.20', async () => {
+    const handed: (number | undefined)[] = []
     const release = Promise.withResolvers<void>()
     const digest = job('joined', {
         every: 3_600_000,
-        run: async () => {
-            runs += 1
+        run: async (input?: number) => {
+            handed.push(input)
             await release.promise
         },
     })
-    const asked = [digest.runNow(), digest.runNow(), digest.runNow()]
+    const asked = [digest.runNow(1), digest.runNow(2), digest.runNow(3)]
     expect(digest.status.peek()?.running).toBe(true)
     release.resolve()
     const [first, second, third] = await Promise.all(asked)
-    expect(runs).toBe(1)
+    expect(`handed: ${handed.join(', ')}`).toBe('handed: 1')
     expect(second).toBe(first)
     expect(third).toBe(first)
     expect(first?.running).toBe(false)
     expect(
         Date.parse(first?.nextRun ?? '') - Date.parse(first?.lastRun ?? ''),
     ).toBe(3_600_000)
+})
+
+// THE REVERT: call `run` with `undefined` whoever started it, and `handed` reads `undefined` twice.
+test('runNow hands the run its input, and a look hands it undefined — 54.26', async () => {
+    const handed: ({ limit: number } | undefined)[] = []
+    const imported = job('handed', {
+        every: 3_600_000,
+        run: (options?: { limit: number }) => {
+            handed.push(options)
+        },
+    })
+    await serving(async () => {
+        await until(imported.status, (status) => status.lastRun !== null)
+        await imported.runNow({ limit: 3 })
+        await imported.stop()
+    })
+    expect(handed).toEqual([undefined, { limit: 3 }])
 })
 
 // THE REVERT: measure from the end under `from: 'start'` too, and the next run is a full hour after
@@ -180,7 +198,8 @@ test('stop aborts the run in flight, waits on it, and starts no run after — 54
     const started = Promise.withResolvers<void>()
     const digest = job('stopped', {
         every: 3_600_000,
-        run: (signal) => {
+        run: () => {
+            const signal = abortSignal()
             runs += 1
             started.resolve()
             return new Promise((_, fail) =>
@@ -204,17 +223,17 @@ test('stop aborts the run in flight, waits on it, and starts no run after — 54
 })
 
 // 54.26, 7.45 — A RUN OUTLIVES THE LOOK THAT STARTED IT: under `from: 'start'` a look does not wait
-// on the run, so the looks after it are new runs of the job's own value — and a run handed that
-// value's signal was aborted by the next look. THE REVERT: hand the run `abortSignal()` read in the
-// look, and `aborted by a look: true`.
+// on the run, so the looks after it are new runs of the job's own value — and a run whose signal
+// was that value's was aborted by the next look. THE REVERT: call `run` outside `ownedBy`, so
+// `abortSignal()` in it is the look's, and `aborted by a look: true`.
 test('a run that overruns its interval is not aborted by the looks after it — 54.26, 54.29', async () => {
     const release = Promise.withResolvers<void>()
     let told: AbortSignal | undefined
     const scrape = job('overrun', {
         every: 5,
         from: 'start',
-        run: async (signal) => {
-            told ??= signal
+        run: async () => {
+            told ??= abortSignal()
             await release.promise
         },
     })
@@ -308,4 +327,30 @@ test('abortSignal in a run that overruns its interval is not aborted by the look
         await scrape.stop()
         expect(`aborted by a look: ${aborted}`).toBe('aborted by a look: false')
     })
+})
+
+// 54.39, 57.13 — A PIPE CALLED IN A RUN IS HANDED NO SIGNAL and still ends with the job: it reads
+// `abortSignal` where it is called, and that is the run's. THE REVERT: call `run` outside `ownedBy`,
+// and the step is told nothing at stop — `stop` waits on it past the test's deadline.
+test('a pipe called in a run is told to stop when the job stops — 54.39, 57.13', async () => {
+    const started = Promise.withResolvers<void>()
+    let told = false
+    const nightly = pipe([
+        (_item: undefined, signal: AbortSignal) =>
+            new Promise<void>((resolve) => {
+                started.resolve()
+                signal.addEventListener('abort', () => {
+                    told = true
+                    resolve()
+                })
+            }),
+    ])
+    const scheduled = job('piped', {
+        every: 3_600_000,
+        run: () => nightly(undefined),
+    })
+    void scheduled.runNow()
+    await started.promise
+    await scheduled.stop()
+    expect(`step told: ${told}`).toBe('step told: true')
 })

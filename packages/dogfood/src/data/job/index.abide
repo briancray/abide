@@ -26,6 +26,18 @@ import Section from '#src/lib/Section.abide'
             ],
         },
         {
+            path: 'packages/dogfood/examples/crm/src/ops/lib/DealImport.test.ts',
+            from: [
+                "test('an import asked for one stage imports only the deals at it'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/job.test.ts',
+            from: [
+                "test('runNow hands the run its input, and a look hands it undefined",
+            ],
+        },
+        {
             path: 'packages/abide/tests/job.test.ts',
             from: [
                 "test('a last run within the interval is waited out, and an older one is run at once",
@@ -51,6 +63,12 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/workerFiles.test.ts',
             from: [
                 "test('a job whose run is a worker export runs it off the main thread, and stopping it ends the thread",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/job.test.ts',
+            from: [
+                "test('a pipe called in a run is told to stop when the job stops",
             ],
         },
     ]}
@@ -119,6 +137,33 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
+    <Section level={3} title="Import only the deals at one stage">
+        <p>What <code>runNow</code> is given is what <code>run</code> is handed, so a press can say
+            what to import. A run the schedule starts is handed <code>undefined</code>, and the input
+            of a <code>runNow</code> that joins a run in flight is never read.</p>
+        <Code language="ts" caption="server" code={`
+            import { job, log, POST } from '@abide/abide/server'
+            import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
+
+            export const dealImport = job('dealImport', {
+                every: 0,
+                run: async (options?: { stage?: string }) => {
+                    const deals = DEALS.filter(
+                        (deal) =>
+                            options?.stage === undefined ||
+                            deal.stage === options.stage,
+                    )
+                    await Bun.sleep(300) // the old CRM paging out its deals
+                    log.info(\`imported: \${deals.length} deals\`)
+                },
+            })
+
+            export default POST((options: { stage?: string } = {}) =>
+                dealImport.runNow(options),
+            )
+        `} />
+    </Section>
+
     <Section level={3} title="Keep a restart from sending the digest again">
         <p>A job never run is due at once. <code>lastRun</code> says when the last run ended, in
             epoch milliseconds, so a restart waits out the rest of the night.</p>
@@ -150,13 +195,14 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Run the scoring in a thread of its own">
         <p>A worker file's export is a function a job's <code>run</code> can be: each run is a
-            thread of its own, and stopping the job ends the thread.</p>
+            thread of its own, and the call answers the run's <code>abortSignal()</code>, so
+            stopping the job ends the thread.</p>
         <Code language="ts" caption="server" code={`
             import { job } from '@abide/abide/server'
 
             import { scoreDeals } from './scoreDeals.worker.ts'
 
-            job('score', { every: 300_000, run: (signal) => scoreDeals(signal) })
+            job('score', { every: 300_000, run: scoreDeals })
         `} />
     </Section>
 
@@ -174,9 +220,8 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Run a pipe of steps on a schedule">
-        <p>A job's <code>run</code> is handed the signal alone, and a <code>pipe</code> takes the
-            item first: hand it no item and the signal second, and the job's stop ends the steps in
-            flight.</p>
+        <p>A <code>pipe</code> called in a run reads the run's <code>abortSignal()</code>, so the
+            job's stop ends the steps in flight with no signal handed to it.</p>
         <Code language="ts" caption="server" code={`
             import { job, pipe } from '@abide/abide/server'
             import getDeal from '../deals/getDeal.handler.ts'
@@ -184,7 +229,7 @@ import Section from '#src/lib/Section.abide'
             const nightly = pipe([() => getDeal({ id: 'd2' }), (deal) => deal.name])
             job('nightly', {
                 every: 86_400_000,
-                run: (signal) => nightly(undefined, signal),
+                run: () => nightly(undefined),
             })
         `} />
     </Section>
