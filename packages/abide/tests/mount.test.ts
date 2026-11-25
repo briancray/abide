@@ -64,7 +64,7 @@ import { url } from '@abide/abide'
             'invoices/getInvoice.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n`,
             // a segment named as the mount, which an address missing the mount is mistaken for
             'docs/getDoc.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, title: 'a doc' }), { description: 'A doc.' })\n`,
-            'invoices/count.handler.ts': `import { GET, reactive } from '@abide/abide/server'\n\nexport default GET(reactive({ open: 3 }, { global: true }))\n`,
+            'invoices/count.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ open: 3 }), { global: true })\n`,
         },
         { ...process.env, APP_URL: 'http://example.test/docs/' },
     ))

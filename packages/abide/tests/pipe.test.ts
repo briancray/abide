@@ -435,9 +435,9 @@ test('status counts what waits, runs, is done and failed — 57.21', async () =>
     ])
     const runs = [counted(1), counted(2), counted(3).catch(() => 0)]
     await turn()
-    const during = counted.status()
+    const during = await counted.status()
     await Promise.all(runs)
-    const after = counted.status()
+    const after = await counted.status()
     expect(`${during.running} running, ${during.waiting} waiting`).toBe(
         '1 running, 2 waiting',
     )

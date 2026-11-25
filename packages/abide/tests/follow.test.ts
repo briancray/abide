@@ -9,24 +9,24 @@ import { spawned } from '@abide/harness/gate'
 import { BIN, handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { computed, GET, invalidate, memo, POST, reactive, refresh, refuse } from '@abide/abide/server'
+const HANDLERS = `import { GET, invalidate, memo, POST, refresh, refuse } from '@abide/abide/server'
 
-const shelf = reactive<string[]>(['dune'], { global: true })
+export const books = GET((): string[] => ['dune'], { global: true })
 
-export const books = GET(shelf)
-
-export const shelve = POST(({ title }: { title: string }) => {
-    shelf.set([...shelf(), title])
+export const shelve = POST(async ({ title }: { title: string }) => {
+    const titles = [...(await books()), title]
+    books.set(titles)
+    locked.set([...titles])
 })
 
 export const rename = POST(({ at, title }: { at: number; title: string }) => {
-    shelf.patch((titles) => {
+    books.patch((titles) => {
         titles[at] = title
     })
 })
 
 export const shuffle = POST(() => {
-    shelf.patch((titles) => {
+    books.patch((titles) => {
         titles.sort((a, b) => b.localeCompare(a))
     })
 })
@@ -47,7 +47,9 @@ export const reprice = POST(({ id, refresh }: { id?: number; refresh?: boolean }
     else price.invalidate(pattern)
 })
 
-export const locked = GET(shelf, {
+// The shelf behind a token: a value of its own, which \`shelve\` writes beside \`books\`'s.
+export const locked = GET(async (): Promise<string[]> => [...(await books())], {
+    global: true,
     middleware: [
         async (next, { request }) => {
             if (request.headers.get('x-token') !== 'ok') throw refuse(401, 'no token')
@@ -61,12 +63,10 @@ export const touchLocked = POST(() => {
 })
 
 let restocked = 0
-const stock = computed(() => ({ restocked: restocked++ }), { global: true })
-
-export const level = GET(stock)
+export const level = GET(() => ({ restocked: restocked++ }), { global: true })
 
 export const restock = POST(() => {
-    stock.invalidate()
+    level.invalidate()
 })
 
 export const shows = GET(() => ({ at: Date.now() }), { tags: ['library'] })

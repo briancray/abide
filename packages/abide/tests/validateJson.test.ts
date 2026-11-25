@@ -630,13 +630,14 @@ test('an args gate types its ValidationError into a keyed error(), and only a ga
 // promise is not).
 test('a body is typed from the body, whatever schema gates it — 19.23, 19.24', async () => {
     const invoice = GET(
-        keyedValue(async ({ id }: { id: number }) => ({ id, total: id * 10 }), {
+        async ({ id }: { id: number }) => ({ id, total: id * 10 }),
+        {
             args: jsonSchema({
                 type: 'object',
                 properties: { id: { type: 'integer' } },
                 required: ['id'],
             }),
-        }),
+        },
     )
     const total: number = (await invoice({ id: 2 })).total
     expect(total).toBe(20)

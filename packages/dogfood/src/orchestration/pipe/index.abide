@@ -130,7 +130,7 @@ import Section from '#src/lib/Section.abide'
             const byId = (id: string) => getDeal({ id })
             export const fetched = pipe([byId], { concurrency: 4 })
             export const sync = pipe([fetched, saveDeal], { concurrency: 4 })
-            fetched.status().running // deals being fetched
+            (await fetched.status()).running // deals being fetched
         `} />
     </Section>
 

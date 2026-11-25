@@ -17,7 +17,7 @@ import {
     requestCookies,
 } from '#server/requestScope.ts'
 import { response } from '#server/response.ts'
-import { reactive, watch } from '#shared'
+import { watch } from '#shared'
 import type { Rung } from '#shared/Middleware.ts'
 import { GET } from '#shared/rpc.ts'
 
@@ -31,7 +31,8 @@ type Frame = { op: string; id?: number; error?: { status: number } }
 
 /** A `GET` over a `global` value behind `middleware`, mounted at `ADDRESS` on a mux of its own. */
 function guarded(middleware: Rung<never, unknown>[]): Mux {
-    const handler = GET(reactive<string>('secret', { global: true }), {
+    const handler = GET((): string => 'secret', {
+        global: true,
         middleware: middleware as never,
     }) as unknown as { address: string }
     handler.address = ADDRESS

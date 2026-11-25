@@ -76,10 +76,10 @@ import Section from '#src/lib/Section.abide'
             pick the id, so a resend whose answer was lost writes nothing twice.</p>
         <Code language="ts" caption="server" code={`
             import { POST } from '@abide/abide/server'
-            import { type Call, calls } from './lib/calls.ts'
+            import listCalls, { type Call } from './listCalls.handler.ts'
 
             export default POST(({ id, note }: Call) => {
-                calls.patch((held) => {
+                listCalls.patch((held) => {
                     if (!held.some((call) => call.id === id)) held.push({ id, note })
                 })
             })

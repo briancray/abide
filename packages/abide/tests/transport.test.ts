@@ -11,23 +11,23 @@ import { chunksOfStream } from '#shared/reactive/producer.ts'
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { computed, memo, refuse } from '@abide/abide'
+const HANDLERS = `import { memo, refuse } from '@abide/abide'
 import { GET, POST, request, response } from '@abide/abide/server'
 import { reported } from '../../lib/reported.server.ts'
 
-export const shared = GET(computed(() => ({ n: 1 }), { global: true, ttl: 90_500 }))
+export const shared = GET(() => ({ n: 1 }), { global: true, ttl: 90_500 })
 
-export const sharedForever = GET(computed(() => ({ n: 1 }), { global: true }))
+export const sharedForever = GET(() => ({ n: 1 }), { global: true })
 
-export const aging = GET(computed(() => ({ n: 1 }), { global: true, ttl: 60_500 }))
+export const aging = GET(() => ({ n: 1 }), { global: true, ttl: 60_500 })
 
 export const agingKeyed = GET((args: { n: number }) => ({ n: args.n }), { global: true, ttl: 60_500 })
 
 export const agingGuarded = GET((args: { n: number }) => ({ n: args.n }), { global: true, ttl: 60_500, middleware: [async (next) => next()] })
 
-export const sharedWrite = POST(computed(() => ({ n: 1 }), { global: true, ttl: 90_000 }))
+export const sharedWrite = POST(() => ({ n: 1 }), { global: true, ttl: 90_000 })
 
-export const local = GET(computed(() => ({ n: 1 }), { ttl: 90_000 }))
+export const local = GET(() => ({ n: 1 }), { ttl: 90_000 })
 
 export const sharedRefused = GET((args: { n: number }) => (args.n > 0 ? { n: args.n } : refuse(404, 'none')), { global: true,
         ttl: 90_000 })

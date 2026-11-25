@@ -680,7 +680,10 @@ test('a handler with rungs keys its value by the args as sent — 11.26, 11.68',
             }),
         },
     )
-    const getInvoice = GET(invoice, { middleware: [async (next) => next()] })
+    const getInvoice = GET(
+        invoice as unknown as (args: { id: string }) => { id: string },
+        { middleware: [async (next) => next()] },
+    )
     const entries = await inScope(new Request('http://app/'), async () => {
         await getInvoice({ id: 'ABC' })
         await getInvoice({ id: 'abc' })
@@ -704,19 +707,22 @@ test('a rung that caught the args refusal and asks again is refused again — 16
             return given as { id: string }
         },
     })
-    const getInvoice = GET(invoice, {
-        middleware: [
-            async (next, ctx) => {
-                for (let ask = 0; ask < 2; ask += 1)
-                    try {
-                        ctx.args()
-                    } catch (refusal) {
-                        refusals.push((refusal as { name: string }).name)
-                    }
-                return next()
-            },
-        ],
-    })
+    const getInvoice = GET(
+        invoice as unknown as (args: { id: string }) => { id: string },
+        {
+            middleware: [
+                async (next, ctx) => {
+                    for (let ask = 0; ask < 2; ask += 1)
+                        try {
+                            ctx.args()
+                        } catch (refusal) {
+                            refusals.push((refusal as { name: string }).name)
+                        }
+                    return next()
+                },
+            ],
+        },
+    )
     await inScope(new Request('http://app/'), async () => {
         await getInvoice({ id: 7 } as never).catch(() => {})
     })

@@ -1788,8 +1788,13 @@ test('a {#for} over a followed GET adopts the rows the server painted, over the 
     // process-wide, keyed by address.
     const address = 'http://list-follow.test/transcript'
     const turns = ['ask', 'answer', 'follow-up']
-    const owner = reactive<string[]>([...turns], { global: true })
-    const handler = GET(owner as never) as unknown as { address: string }
+    const handler = GET((): string[] => [...turns], {
+        global: true,
+    }) as unknown as {
+        (): Promise<string[]>
+        address: string
+        patch(mutate: (list: string[]) => void): void
+    }
     handler.address = '/transcript'
     const row = {
         address: handler.address,
@@ -1851,7 +1856,8 @@ test('a {#for} over a followed GET adopts the rows the server painted, over the 
         WebSocket: unknown
         fetch: unknown
     }
-    side.transcriptSubject = owner
+    // WHAT THE SERVER PAINTED: the handler's rows as its call in the render answers them.
+    side.transcriptSubject = reactive<string[]>(await handler())
     const { mount } = await renderPage(`<script>
 const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
 </script>
@@ -1890,7 +1896,7 @@ const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
         flushSync()
         answered.resolve()
         await settle()
-        owner.patch((list) => {
+        handler.patch((list) => {
             list.push('more')
         })
         flushSync()

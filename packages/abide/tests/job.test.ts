@@ -4,10 +4,10 @@
 
 import { expect, test } from 'bun:test'
 
-import { job, type JobStatus, log, watch } from '#server'
+import { job, type JobStatus, log } from '#server'
 import type { App, BootedApp } from '#server/createApp.ts'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
-import { abortSignal, pipe, type Reactive, reactive, refuse } from '#shared'
+import { abortSignal, type Memo, pipe, reactive, refuse } from '#shared'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -23,15 +23,19 @@ async function serving(body: () => Promise<void>): Promise<void> {
 }
 
 /** Settles once `status` holds a status `holds` passes. */
-function until(
-    status: Reactive<JobStatus>,
+async function until(
+    status: Memo<undefined, JobStatus>,
     holds: (status: JobStatus) => boolean,
 ): Promise<void> {
-    const reached = Promise.withResolvers<void>()
-    const stop = watch(() => {
-        if (holds(status())) reached.resolve()
-    })
-    return reached.promise.finally(stop)
+    const reader = status.readable().getReader()
+    try {
+        for (;;) {
+            const { value, done } = await reader.read()
+            if (done || holds(value)) return
+        }
+    } finally {
+        await reader.cancel()
+    }
 }
 
 // THE REVERT: start a run per `Job.run` rather than joining the one in flight, and `handed` is
@@ -48,7 +52,7 @@ test('a run asked for while one is in flight joins it, and its input reaches no 
         },
     })
     const asked = [digest.run(1), digest.run(2), digest.run(3)]
-    expect(digest.status.peek()?.running).toBe(true)
+    expect((await digest.status())?.running).toBe(true)
     release.resolve()
     const [first, second, third] = await Promise.all(asked)
     expect(`handed: ${handed.join(', ')}`).toBe('handed: 1')
@@ -98,7 +102,7 @@ test('a run in a request writes the status every caller reads — 54.18', async 
     const digest = job({ name: 'requested', every: 3_600_000, run: () => {} })
     await using app = await inMemoryApp({})
     const ran = await app.run(() => digest.run())
-    expect(digest.status.peek()).toEqual(ran)
+    expect(await digest.status()).toEqual(ran)
     expect(ran.lastRun).not.toBe(null)
 })
 
@@ -114,7 +118,7 @@ test('a failed run rejects, is logged under job:<name> and kept, and the next ru
     const before = (log.records.peek() ?? []).length
     const thrown = await digest.run().catch((error: Error) => error.message)
     expect(
-        `rejected: ${thrown}, kept: ${digest.status.peek()?.lastError}`,
+        `rejected: ${thrown}, kept: ${(await digest.status())?.lastError}`,
     ).toBe('rejected: the mail server refused, kept: the mail server refused')
     const logged = (log.records.peek() ?? [])
         .slice(before)
@@ -191,7 +195,7 @@ test('a last run within the interval is waited out, and an older one is run at o
         await until(stale.status, (status) => status.lastRun !== null)
     })
     expect(runs).toBe(10)
-    const nextRun = Date.parse(recent.status.peek()?.nextRun ?? '')
+    const nextRun = Date.parse((await recent.status())?.nextRun ?? '')
     expect(nextRun - Date.now()).toBeGreaterThan(3_400_000)
     await recent.stop()
 })
@@ -214,7 +218,7 @@ test('an interval of 0 runs nothing, and names no next run — 54.21', async () 
     })
     await serving(() => looked.promise)
     expect(runs).toBe(0)
-    expect(paused.status.peek()?.nextRun).toBe(null)
+    expect((await paused.status())?.nextRun).toBe(null)
     await paused.stop()
 })
 
@@ -417,11 +421,11 @@ test('a cron job never run waits for its first time, and missed times run once �
         await Bun.sleep(2_100)
     })
     expect(runs).toBe(0)
-    expect(waiting.status.peek()?.nextRun).toBe(
+    expect((await waiting.status()).nextRun as string | null | undefined).toBe(
         Bun.cron.parse('0 0 1 1 *', Date.now())?.toISOString(),
     )
     expect(caughtUp).toBe(1)
-    expect(behind.status.peek()?.nextRun).toBe(
+    expect((await behind.status()).nextRun as string | null | undefined).toBe(
         Bun.cron.parse('0 0 1 1 *', Date.now())?.toISOString(),
     )
     await waiting.stop()
@@ -440,7 +444,7 @@ test('a cron job reads its times in its timeZone — 54.37', async () => {
     await serving(async () => {
         await until(nightly.status, (status) => status.nextRun !== null)
     })
-    const nextRun = new Date(nightly.status.peek()?.nextRun ?? '')
+    const nextRun = new Date((await nightly.status())?.nextRun ?? '')
     const hour = new Intl.DateTimeFormat('en-US', {
         timeZone: 'Pacific/Kiritimati',
         hour: 'numeric',
@@ -472,7 +476,31 @@ test('a run answering a refusal rejects and is kept as a failure — 54.39', asy
         .run()
         .catch((refusal: { status?: number }) => refusal.status)
     expect(
-        `rejected: ${status}, lastError: ${digest.status.peek()?.lastError}`,
+        `rejected: ${status}, lastError: ${(await digest.status())?.lastError}`,
     ).toBe('rejected: 503, lastError: the mail server is down')
     await digest.stop()
+})
+
+// 54.41 — A RUN RECORDS HOW LONG IT TOOK AND WHAT IT ANSWERED, and a failed run keeps the last good
+// answer beside its error. THE REVERT: write `lastResult` from every run in `runOnce`; the failed run
+// leaves `lastResult: undefined` where `report 1` is due.
+test('a run records how long it took, and the last good answer survives a failure — 54.41', async () => {
+    let fail = false
+    const report = job({
+        every: 3_600_000,
+        run: async () => {
+            await Bun.sleep(20)
+            if (fail) throw new Error('down')
+            return 'report 1'
+        },
+    })
+    await report.run()
+    const ok = await report.status()
+    fail = true
+    await report.run().catch(() => undefined)
+    const failed = await report.status()
+    expect(
+        `took: ${(ok.lastTook ?? 0) >= 20}, result: ${failed.lastResult}, error: ${failed.lastError}`,
+    ).toBe('took: true, result: report 1, error: down')
+    await report.stop()
 })

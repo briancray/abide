@@ -84,14 +84,12 @@ const scores = computed(() => getScores())
 <main><p>{total.busy()}</p><p>{missing.error()}</p><p>{lines.busy()}</p><p>{scores.busy()}</p></main>`
 
 // 18.5, 41.13 — A `global` VALUE A RENDER READ, and a write that moves it before the browser's call.
-const SHELF = `import { GET, POST, reactive } from '@abide/abide/server'
+const SHELF = `import { GET, POST } from '@abide/abide/server'
 
-const shelf = reactive<string[]>(['dune'], { global: true })
+export const books = GET((): string[] => ['dune'], { global: true })
 
-export const books = GET(shelf)
-
-export const shelve = POST(({ title }: { title: string }) => {
-    shelf.set([...shelf(), title])
+export const shelve = POST(async ({ title }: { title: string }) => {
+    books.set([...(await books()), title])
 })
 `
 
@@ -116,11 +114,9 @@ const lines = computed(() => getFeed())
 <main><p>{lines.busy()}</p></main>`
 
 // 18.23 — A `global` VALUE HOLDING A BINARY.
-const COVERS = `import { GET, reactive } from '@abide/abide/server'
+const COVERS = `import { GET } from '@abide/abide/server'
 
-const cover = reactive(new Blob(['png'], { type: 'image/png' }), { global: true })
-
-export const art = GET(cover)
+export const art = GET(() => new Blob(['png'], { type: 'image/png' }), { global: true })
 `
 
 const SHELF_PAGE = `<script>

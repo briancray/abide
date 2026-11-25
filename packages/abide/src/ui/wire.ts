@@ -40,7 +40,7 @@ import {
     type Defaults,
 } from '#shared/reactive/parameterDefaults.ts'
 import { closedRun, standIn } from '#shared/reactive/producer.ts'
-import { declare, type Method, STREAMING_COPY } from '#shared/rpc.ts'
+import { declare, type Method, STREAMING_COPY, WIRE_COPY } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import { startedEarly, takeLandedCall } from '#shared/takeEarlyCall.ts'
 
@@ -261,6 +261,7 @@ export function wire(
     // 16.32 — a call of a copy whose handler streams answers its chunks, as the server's call does.
     if (options?.stream === true)
         (rpc as unknown as { [STREAMING_COPY]: () => void })[STREAMING_COPY]()
+    ;(rpc as unknown as { [WIRE_COPY]: () => void })[WIRE_COPY]()
     // 16.9 — the address `rpc.url` and `rpc.raw` build on.
     rpc.address = address
     if (document !== undefined)

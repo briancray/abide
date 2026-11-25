@@ -1491,6 +1491,9 @@ one, MUST adopt the handler's value for those `Args` (11.12), as it would the va
 16.108 An `Rpc` called in a `computed` body MUST subscribe the body to the handler's value for those
 `Args`, so a body that awaits the answer runs again where that value moves.
 
+16.109 A handler declared over a `Reactive` MUST throw at construction, naming a `memo`'s value, written
+with `rpc.set` and `rpc.patch`, as the way to serve a value the server writes.
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.
@@ -1634,6 +1637,9 @@ the server holds as they would given none.
 18.39 A `caller` of `true` given to `rpc.refresh` or `rpc.invalidate` MUST stand for the
 `principal.caller` of the request it is given in, and MUST send the trigger to no subscription where
 that request carries none.
+
+18.40 A subscription to a `global` `GET` for `Args` no entry holds MUST build the entry for them, and
+MUST be fed from it, as a call for them would build it.
 
 # 19. Mount paths and schemas
 
@@ -6922,7 +6928,7 @@ input a `Job.run` that joined one was called with MUST NOT reach any run.
 54.17 A `job` MUST ask `lastRun` once, on its first look, for when its last run ended before this
 process, and MUST read the answer as a run that ended then.
 
-54.18 `Job.status` MUST be one `global` value, written as a run starts and as it ends.
+54.18 `Job.status` MUST be one `global` `memo` entry the job writes, as a run starts and as it ends.
 
 54.19 A run that throws MUST be written through `log.error` under the namespace `log.named` builds
 from `job` and, where it is given, the job's `name`, and its message MUST stand as `lastError`
@@ -6999,6 +7005,10 @@ answered, and a run answering a refusal MUST be written and logged as one that t
 
 54.40 `fetchAndHandle.isError` MUST answer whether a caught failure is a refusal named as it is given, and
 MUST narrow it to a `FetchFailed` where it is.
+
+54.41 A run of a `job` that ends MUST record in its status how long it took, in milliseconds, and a run
+that did not fail MUST record what it answered as `lastResult`, which a failed run MUST leave as it
+was; a run told to stop MUST record neither.
 
 # 55. Worker files
 
@@ -7195,7 +7205,7 @@ and settle once the attempts in flight have ended.
 
 57.20 A write to a `Pipe`'s `writable` MUST settle only once the item has started under 57.6.
 
-57.21 `status` MUST be one `global` value counting the items waiting, running, done and failed, and
+57.21 `status` MUST be one `global` `memo` entry counting the items waiting, running, done and failed, and
 whether `paused` reads true.
 
 # 58. Ledgers

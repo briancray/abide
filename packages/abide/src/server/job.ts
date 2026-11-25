@@ -6,7 +6,12 @@
 import { isFailed } from '#shared/Failed.ts'
 import { log } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
-import { computed, type Reactive, reactive } from '#shared/reactive/index.ts'
+import {
+    computed,
+    type Memo,
+    memo,
+    type Reactive,
+} from '#shared/reactive/index.ts'
 import { appStopSignal } from '#shared/reactive/poll.ts'
 
 import { ownedBy } from './requestScope.ts'
@@ -19,6 +24,10 @@ export type JobStatus = {
     lastRun: string | null
     /** When the next run is due, as an ISO time, or `null` while none is. */
     nextRun: string | null
+    /** How long the last run took, in milliseconds, or `null` before one has ended. */
+    lastTook: number | null
+    /** What the last run that did not fail answered, or `undefined` before one has. */
+    lastResult: unknown
     /** The last run's failure, or `null` where it ended without throwing. */
     lastError: string | null
 }
@@ -28,7 +37,7 @@ type Ran = { status: JobStatus; failure: unknown }
 
 /** 54.14 — a job's status beside the ways to run it ahead of its schedule and to end it. */
 export type Job<Input = undefined> = {
-    status: Reactive<JobStatus>
+    status: Memo<undefined, JobStatus>
     run: (input?: Input) => Promise<JobStatus>
     stop: () => Promise<JobStatus>
 }
@@ -91,10 +100,13 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
     let current: JobStatus = {
         running: false,
         lastRun: null,
+        lastTook: null,
+        lastResult: undefined,
         nextRun: null,
         lastError: null,
     }
-    const status = reactive<JobStatus>(current, { global: true })
+    // 54.18 — A MEMO THE JOB WRITES, one value for every caller: the server owns no `Reactive` (16.109).
+    const status = memo((): JobStatus => current, { global: true })
     const write = (changed: Partial<JobStatus>): JobStatus => {
         current = { ...current, ...changed }
         status.set(current)
@@ -130,6 +142,7 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         const startedAt = Date.now()
         write({ running: true })
         let lastError = current.lastError
+        let lastResult = current.lastResult
         let failure: unknown
         try {
             // 54.35 — its own owner, whichever request asked for it or look started it.
@@ -137,6 +150,8 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
             // 54.19 — a run answering a refusal failed, as one throwing did.
             if (isFailed(answered)) throw answered
             lastError = null
+            // 54.41 — what a run that did not fail answered; a failed one leaves the last good one.
+            lastResult = answered
         } catch (error) {
             // 54.20 — a run told to stop has not failed.
             if (!signal.aborted) {
@@ -145,16 +160,21 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
                 failure = error
             }
         }
+        // 54.41 — a run told to stop moves none of what it would have recorded (54.20).
+        let lastTook = current.lastTook
         if (!signal.aborted) {
             lastRunAt = Date.now()
+            lastTook = lastRunAt - startedAt
             measuredFrom = from === 'start' ? startedAt : lastRunAt
-        }
+        } else lastResult = current.lastResult
         const status = write({
             running: false,
             lastRun:
                 lastRunAt === undefined
                     ? null
                     : new Date(lastRunAt).toISOString(),
+            lastTook,
+            lastResult,
             nextRun: nextRunOf(),
             lastError,
         })

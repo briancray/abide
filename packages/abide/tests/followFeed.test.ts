@@ -9,8 +9,7 @@ import { expect, test } from 'bun:test'
 import { Mux, type MuxConnection } from '#server/answerSocket.ts'
 import { Followers } from '#server/Followers.ts'
 import type { FollowedHandler } from '#server/mountHandlers.ts'
-import { computed, flushSync, invalidate, reactive, refresh } from '#shared'
-import { GLOBAL_GETS } from '#shared/GLOBAL_GETS.ts'
+import { flushSync, invalidate, refresh } from '#shared'
 import { keyedValue } from '#shared/reactive/index.ts'
 import { GET } from '#shared/rpc.ts'
 
@@ -44,8 +43,8 @@ test('a change is serialized once for every follower of a value, and each is sen
             return { titles }
         },
     })
-    const value = reactive(shelf(['dune']), { global: true })
-    const rpc = GET(value as never) as unknown as { address: string }
+    const value = GET(() => shelf(['dune']), { global: true })
+    const rpc = value as unknown as { address: string }
     rpc.address = '/shelf'
     const mux = muxOver(rpc)
     const sent: {
@@ -108,11 +107,11 @@ test('a change is serialized once for every follower of a value, and each is sen
 // sends no frame.
 test('a free invalidate and refresh over a tag reach the followers of the GET serving it — 7.10, 7.18', async () => {
     let built = 0
-    const value = computed(() => ({ built: built++ }), {
+    const value = GET(() => ({ built: built++ }), {
         global: true,
         tags: ['stock'],
     })
-    const rpc = GET(value as never) as unknown as { address: string }
+    const rpc = value as unknown as { address: string }
     rpc.address = '/stock'
     const mux = muxOver(rpc)
     const frames: { op: string; value?: unknown }[] = []
@@ -142,12 +141,10 @@ test('a free invalidate and refresh over a tag reach the followers of the GET se
     connection.close()
 })
 
-// 18.8 — AN ENTRY ANSWERED REACHES THE FOLLOWERS OF ITS OWN ARGS, and walks no other: an answer of a
-// keyed `global` GET nobody was fed from looks up the entry of each follower filed under its key,
-// and of none of the thousand following other keys. THE REVERT: walk every follower of the handler
-// in `Followers.served`, as before the followers were filed by key — 1000 entry lookups an answer,
-// against 1, and a request that pays ~60 µs at 1000 followers and ~600 µs at 10000.
-test('an entry answered looks up the followers of its own key alone — 18.8', async () => {
+// 18.40 — A FOLLOW IS A READ: each of a thousand subscriptions to a keyed `global` GET for args nothing
+// has answered builds the entry for its own args and is fed from it, and from no other. THE REVERT:
+// look the entry up without reaching it in `Followers.attach`; nothing is answered, so no frame is sent.
+test('a subscription builds the entry for its own args and is fed from it — 18.40', async () => {
     const KEYS = 1000
     const value = keyedValue(({ id }: { id: number }) => ({ id }), {
         global: true,
@@ -180,30 +177,12 @@ test('an entry answered looks up the followers of its own key alone — 18.8', a
             }),
         )
     flushSync()
-    // Nothing was answered yet, so nothing is fed.
-    expect(frames).toEqual([])
-    ;(value as unknown as (args: { id: number }) => unknown)({ id: 0 })
-    const global = GLOBAL_GETS.get(rpc) as NonNullable<
-        ReturnType<typeof GLOBAL_GETS.get>
-    >
-    const key = global.key({ id: 0 })
-    const serving = global.at(key)
-    const at = global.at
-    let looked = 0
-    global.at = (asked) => {
-        looked += 1
-        return at(asked)
-    }
-    try {
-        mux.followers.served(rpc, serving, key)
-    } finally {
-        global.at = at
-    }
-    flushSync()
-    expect(`looked: ${looked}`).toBe('looked: 1')
-    expect(frames).toEqual([
-        { op: 'value', id: 1, version: expect.any(Number), value: { id: 0 } },
-    ])
+    // 18.40 — each subscription built the entry for its own args and is fed from it alone.
+    expect(`frames: ${frames.length}`).toBe(`frames: ${KEYS}`)
+    let own = 0
+    for (const frame of frames)
+        if ((frame.value as { id: number }).id === frame.id - 1) own += 1
+    expect(`fed its own: ${own}`).toBe(`fed its own: ${KEYS}`)
     connection.close()
 })
 
@@ -213,8 +192,8 @@ test('an entry answered looks up the followers of its own key alone — 18.8', a
 // parses and 21 stringifies a write, against 0 and 1.
 test('a write reaches every event stream following a value with one serialization and no parse — 18.6, 18.20', async () => {
     const STREAMS = 20
-    const value = reactive({ titles: ['dune'] }, { global: true })
-    const rpc = GET(value as never) as unknown as { address: string }
+    const value = GET(() => ({ titles: ['dune'] }), { global: true })
+    const rpc = value as unknown as { address: string }
     rpc.address = '/events'
     const row = followedRow(rpc)
     const followers = new Followers()

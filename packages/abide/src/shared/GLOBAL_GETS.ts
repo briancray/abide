@@ -9,5 +9,10 @@
  */
 export const GLOBAL_GETS = new WeakMap<
     object,
-    { key(args: unknown): string; at(key: string): unknown }
+    {
+        key(args: unknown): string
+        at(key: string): unknown
+        // 18.40 — the entry for `args`, built where none is held: a follow is a read (1.7).
+        reach(args: unknown): unknown
+    }
 >()

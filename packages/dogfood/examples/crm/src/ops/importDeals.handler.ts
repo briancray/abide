@@ -10,10 +10,10 @@ const importRunning = refuse.named('ImportRunning', {
 
 /** Starts the import from the old CRM, every deal or those at one stage, and answers at once with where it stands. */
 export default POST(
-    (options: { stage?: string } = {}) => {
-        if (dealImport.status.peek()?.running) return importRunning()
+    async (options: { stage?: string } = {}) => {
+        if ((await dealImport.status()).running) return importRunning()
         void dealImport.run(options)
-        return dealImport.status.peek()
+        return dealImport.status()
     },
     {
         description:

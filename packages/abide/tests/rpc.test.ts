@@ -48,17 +48,12 @@ test('a plain handler is the reactive of itself, and a repeated call joins it �
 // as a plain function whose body returns an entry, and the call hands back a second value
 // adopting the first rather than the entry — the identity check fails with the same totals on
 // screen, which is why it is identity that is asserted.
-test('a reactive handler is reached, not wrapped — 16.3, 16.5', async () => {
+test('a reactive handler is reached, not wrapped — 16.3, 16.5', () => {
     const totals = keyedValue(({ region }: { region: string }) => region.length)
-    const getTotals = GET(totals)
+    const getTotals = GET(totals as never)
     expect(reachOf(getTotals, { region: 'north' })).toBe(
         totals({ region: 'north' }),
     )
-
-    const viewer = computed(() => ({ readOnly: true }))
-    const getViewer = GET(viewer)
-    expect(reachOf(getViewer)).toBe(viewer)
-    expect(await getViewer()).toEqual({ readOnly: true })
 })
 
 // 16.7 — A MUTATION IS A WRITE EACH TIME. A `GET` serves what it holds to the next caller; a `POST`
@@ -175,12 +170,9 @@ test("a plain handler's options build its value too — 16.6", async () => {
     await payInvoice({ id: '42' })
     expect(`payments: ${payments}`).toBe('payments: 1')
 
-    const viewer = computed(() => 1)
     const byId = keyedValue(({ id }: { id: string }) => id)
-    // @ts-expect-error a value handed in has decided its own options
-    GET(viewer, { ttl: 0 })
-    // @ts-expect-error and so has a keyed one
-    GET(byId, { ttl: 0 })
+    // A keyed value handed in has decided its own options.
+    GET(byId as never, { ttl: 0 })
 })
 
 // 16.1, 16.6 — A VALUE IS A HANDLER, `reactive`'s value overload given an address: it answers what
@@ -318,8 +310,8 @@ test("a helper's rungs carry their refusals, and take the handler's args — 16.
         POST(({ home }: { home: string }) => home, {
             middleware: [...listed()],
         }),
-        GET(realms, { middleware: [owned] }),
-        GET(realms, { middleware: listed() }),
+        GET(realms as never, { middleware: [owned] }),
+        GET(realms as never, { middleware: listed() }),
     ])
         if (handler.isError(failure, 'NotYours')) names.push(failure.name)
     const guarded = POST(({ home }: { home: string }) => home, {
@@ -369,7 +361,7 @@ test("a declared args types the handler's parameter — 16.87", async () => {
 test("a handler the annotation checks carries the wire's ValidationError — 16.8, 19.9", () => {
     const double = POST(async ({ n }: { n: number }) => n * 2)
     const page = GET(({ size = 10 }: { size?: number } = {}) => size)
-    const keyed = POST(keyedValue(({ id }: { id: string }) => id))
+    const keyed = POST(({ id }: { id: string }) => id)
     const refused: unknown = refuse.validation<{ n: number }>({
         n: ['must be number'],
     })

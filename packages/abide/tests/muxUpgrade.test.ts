@@ -11,9 +11,9 @@ import { BIN, handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 // A `GET` over a `global` value, so the app has a handler for the mux to carry (37.3).
-const HANDLERS = `import { GET, reactive } from '@abide/abide/server'
+const HANDLERS = `import { GET } from '@abide/abide/server'
 
-export const books = GET(reactive<string[]>(['dune'], { global: true }))
+export const books = GET((): string[] => ['dune'], { global: true })
 
 // Answers anything, an upgrade included, with the status the lane admits the mux with.
 export const nothing = GET(() => new Response(null, { status: 204 }))

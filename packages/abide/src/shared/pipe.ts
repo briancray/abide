@@ -15,8 +15,9 @@ import { messageOf } from './messageOf.ts'
 import {
     abortSignal,
     isReactive,
+    type Memo,
+    memo,
     type Reactive,
-    reactive,
     watch,
 } from './reactive/index.ts'
 import { isThenable } from './reactive/isThenable.ts'
@@ -62,7 +63,7 @@ export type Pipe<In, Out, Fanned extends boolean = false> = ((
 ) => Promise<Fanned extends true ? Out[] : Out>) & {
     readonly readable: ReadableStream<Out | Failed<string, unknown>>
     readonly writable: WritableStream<In>
-    readonly status: Reactive<PipeStatus>
+    readonly status: Memo<undefined, PipeStatus>
     stop(): Promise<void>
 }
 
@@ -174,7 +175,7 @@ class Runner {
     stopping: AbortController
     inFlight: Set<Promise<unknown>>
     counts: PipeStatus
-    status: Reactive<PipeStatus>
+    status: Memo<undefined, PipeStatus>
     pair:
         | {
               readable: ReadableStream<unknown>
@@ -212,7 +213,9 @@ class Runner {
             paused: this.pausedBy?.() ?? false,
         }
         // 57.21 — ONE VALUE for every caller in the process, written from whichever turn moves it.
-        this.status = reactive<PipeStatus>({ ...this.counts }, { global: true })
+        // 57.21 — A MEMO THE PIPE WRITES, one value for every caller: no `Reactive` is the pipe's own (1.1).
+        const counts = this.counts
+        this.status = memo((): PipeStatus => ({ ...counts }), { global: true })
         this.pair = undefined
         this.unwatch = undefined
         this.publishing = false

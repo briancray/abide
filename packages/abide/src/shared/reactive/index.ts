@@ -452,7 +452,12 @@ export const ambientComputed = ((body: unknown, options?: unknown) =>
  * the first has already decided its own keying.
  */
 export function handlerValue(body: unknown, options: unknown): unknown {
-    if (isReactive(body) || isKeyed(body)) return body
+    // 16.109 — at construction: the server owns no `Reactive`; a value it writes is a memo's entry.
+    if (isReactive(body))
+        throw new TypeError(
+            'abide: a handler serves a function or a memo, not a reactive value. Serve the value a memo keeps, and write it with handler.set or handler.patch. RULEBOOK 16.109.',
+        )
+    if (isKeyed(body)) return body
     // 16.6 — a memo handed in is served as the keyed value it is a face over.
     const memoed = (body as { [KEYED_OF]?: unknown } | null)?.[KEYED_OF]
     if (memoed !== undefined) return memoed

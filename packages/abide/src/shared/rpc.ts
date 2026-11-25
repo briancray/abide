@@ -38,7 +38,12 @@ import {
 } from './reactive/argsContract.ts'
 import type { CALL_ENTRY } from './reactive/CALL_ENTRY.ts'
 import { callLoad } from './reactive/callLoad.ts'
-import { readableOf } from './reactive/createMemo.ts'
+import {
+    type Memo,
+    type MemoValue,
+    readableOf,
+    writeOf,
+} from './reactive/createMemo.ts'
 import { DECLARED_TAGS } from './reactive/DECLARED_TAGS.ts'
 import {
     type AdoptedFailures,
@@ -49,7 +54,6 @@ import {
     type Held,
     isKeyed,
     type Kept,
-    type Keyed,
     keyedValue,
     type Reactive,
     refresh,
@@ -65,6 +69,8 @@ import {
     chunksOfStream,
     dropAnswered,
     nameLoad,
+    patchInto,
+    produceInto,
     streamingOrSettled,
 } from './reactive/producer.ts'
 import { isStreamBody } from './reactive/Reactive.ts'
@@ -119,12 +125,23 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     busy(pattern?: Partial<Args>): boolean
     ready(pattern?: Partial<Args>): boolean
     synced(pattern?: Partial<Args>): boolean
-    /** 11.77 — the owner's write of the value for `args`, past every rung. */
-    set(args: Args, value: Value): void
-    /** 11.77 — the owner's mutation of the value for `args` in place, past every rung. */
-    patch(args: Args, mutate: (value: Value) => void): void
+    /** 11.77 — the owner's write of the value for `args`, past every rung; `set(value)` where it takes none. */
+    set(
+        ...given: undefined extends Args
+            ? [value: Value] | [args: Args, value: Value]
+            : [args: Args, value: Value]
+    ): void
+    /** 11.77 — the owner's mutation of the value for `args` in place, past every rung; `patch(mutate)` where it takes none. */
+    patch(
+        ...given: undefined extends Args
+            ? | [mutate: (value: Value) => void]
+              | [args: Args, mutate: (value: Value) => void]
+            : [args: Args, mutate: (value: Value) => void]
+    ): void
     /** 11.78 — the value for `args` now, then after each change. */
-    readable(args: Args): ReadableStream<Value>
+    readable(
+        ...args: undefined extends Args ? [args?: Args] : [args: Args]
+    ): ReadableStream<Value>
     /** 46.1 — the calls the outbox holds for this handler, narrowed by a pattern. */
     outbox(pattern?: Partial<Args>): QueuedCall<Value>[]
     refresh(pattern?: Partial<Args>, options?: TriggerOptions): void
@@ -335,34 +352,6 @@ type OptionsOf<
     : Omit<RpcOptions<Args, Answers>, 'refreshes'>
 
 /**
- * The `Rpc` a `Reactive` or a `Keyed` handed in is served as: as it is, keyed or not, its own options
- * decided (16.6).
- */
-type BuiltRpc<Built, Answers extends readonly unknown[]> =
-    Built extends Keyed<
-        infer Stored,
-        infer Args,
-        never,
-        infer Failures,
-        infer Produced
-    >
-        ? Rpc<Stored, Args, Failures | RungRefusals<Answers>, Produced>
-        : Built extends Reactive<
-                infer Stored,
-                never,
-                infer Failures,
-                infer Produced
-            >
-          ? Rpc<Stored, undefined, Failures | RungRefusals<Answers>, Produced>
-          : never
-
-/** The key a `Reactive` or a `Keyed` handed in is called with. */
-type BuiltArgs<Built> =
-    Built extends Keyed<unknown, infer Args, never, unknown, unknown>
-        ? Args
-        : undefined
-
-/**
  * The signature `GET` and the four mutations share: a handler in, its `Rpc` out.
  *
  * THREE SIGNATURES, ONE PER IDEA, where each shape of handler was an overload of its own: a value, a
@@ -410,13 +399,16 @@ type Declare<Writes extends boolean> = {
         | RungRefusals<Answers>,
         BodyProduced<Result, Kept<Shaped>>
     >
-    <
-        Built extends ((args: never) => unknown) & { invalidate: unknown },
-        Answers extends readonly unknown[] = unknown[],
-    >(
-        handler: Built,
-        options?: OptionsOf<Writes, BuiltArgs<Built>, Answers>,
-    ): BuiltRpc<Built, Answers>
+    // 16.6 — a memo, served as the keyed value it is: `GET(digest.status)`.
+    <Args, Result, Answers extends readonly unknown[] = unknown[]>(
+        handler: Memo<Args, Result>,
+        options?: OptionsOf<Writes, Args, Answers>,
+    ): Rpc<
+        MemoValue<Result>,
+        Args,
+        RungRefusals<Answers>,
+        BodyProduced<Result, MemoValue<Result>>
+    >
     // 16.1 — a value, `reactive` given an address, which takes its options beside the address's
     // (16.6). Never a function: a handler's function is its body, the first signature's (16.1).
     <
@@ -482,6 +474,7 @@ export function declare<Declared extends Method>(
         const keyed = isKeyed(value)
         // 16.32 — a handler whose body is an async generator answers its chunks; a browser's copy is
         // told so by the build (`streamingCopy`), since its body is the wire's.
+        let wireCopy = false
         let streams =
             typeof handler === 'function' &&
             !isReactive(handler) &&
@@ -644,6 +637,10 @@ export function declare<Declared extends Method>(
             [STREAMING_COPY]: (): void => {
                 streams = true
             },
+            // A browser's copy of the handler, whose value is the wire's rather than its own.
+            [WIRE_COPY]: (): void => {
+                wireCopy = true
+            },
             method,
             description: options?.description,
             address: undefined as string | undefined,
@@ -725,16 +722,22 @@ export function declare<Declared extends Method>(
             sendingFor(rpc, pattern as Record<string, unknown> | undefined)
         // 11.77, 11.78 — A HANDLER IS A MEMO WITH AN ADDRESS (16.6): its owner writes and follows the
         // value for some args as a memo's does — reached past every rung, since the owner is no caller.
-        members.set = (args: unknown, written: unknown): void => {
-            ;(reach(args) as Reactive<unknown>).set(written)
+        // The handler's own value takes the owner's write as what it produced, and its followers are
+        // sent it; a browser's copy takes it as a write to this page's copy, not synced until the
+        // server's answer (3.10).
+        members.set = (...given: unknown[]): void => {
+            const [args, written] = writeOf(given)
+            const entry = reach(args) as Reactive<unknown>
+            if (!wireCopy) produceInto(entry, written)
+            else entry.set(written)
         }
-        members.patch = (
-            args: unknown,
-            mutate: (value: unknown) => void,
-        ): void => {
-            ;(reach(args) as Reactive<unknown>).patch(mutate)
+        members.patch = (...given: unknown[]): void => {
+            const [args, mutate] = writeOf(given)
+            const entry = reach(args) as Reactive<unknown>
+            if (!wireCopy) patchInto(entry, mutate as (value: unknown) => void)
+            else entry.patch(mutate as (value: unknown) => void)
         }
-        members.readable = (args: unknown): ReadableStream<unknown> =>
+        members.readable = (args?: unknown): ReadableStream<unknown> =>
             readableOf(reach(args) as Reactive<unknown>)
         members.outbox = (pattern?: unknown): QueuedCall[] =>
             outbox(rpc as never, pattern as Record<string, unknown> | undefined)
@@ -755,8 +758,9 @@ export function declare<Declared extends Method>(
                               (
                                   value as { entries: Map<string, unknown> }
                               ).entries.get(key),
+                          reach: (args) => reach(args),
                       }
-                    : { key: () => '', at: () => value },
+                    : { key: () => '', at: () => value, reach: () => value },
             )
         // 13.15 — the tags its followers carry: a handed value's own, as the build reads them (18.4),
         // or the `GET`'s where it built the value itself.
@@ -899,6 +903,9 @@ function refreshEach(
 
 /** The member a browser's copy is told it streams through, since its body is the wire's (16.32). */
 export const STREAMING_COPY = Symbol('abide.streamingCopy')
+
+/** The member a browser's copy is marked through: an owner's write to it is this page's (11.77). */
+export const WIRE_COPY = Symbol('abide.wireCopy')
 
 /** The handler's value for `args`, as `rpc` reached it: what abide's own callers hold (`REACH_CALL`). */
 export function reachOf(

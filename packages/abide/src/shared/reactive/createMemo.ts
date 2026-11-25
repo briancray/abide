@@ -13,7 +13,7 @@ import { ARGS_GATE, type Gated, PARAMETER_DEFAULTS } from './argsContract.ts'
 import type { Keyed } from './Keyed.ts'
 import { MEMO_BRAND } from './MEMO_BRAND.ts'
 import type { Poll } from './poll.ts'
-import { isStreaming } from './producer.ts'
+import { isStreaming, patchInto, produceInto } from './producer.ts'
 import type { Reactive } from './Reactive.ts'
 
 /** What `memo` takes: how long an entry lives, what selects it, where it is kept, what its args must be, how its elements are told apart, and how often an entry reloads. */
@@ -37,13 +37,32 @@ export type Memo<Args, Result, Value = MemoValue<Result>> = ((
     : Promise<Awaited<Result>>) & {
     invalidate(pattern?: Partial<Args>): void
     refresh(pattern?: Partial<Args>): void
-    set(args: Args, value: Value): void
-    patch(args: Args, mutate: (value: Value) => void): void
-    readable(args: Args): ReadableStream<Value>
+    set(
+        ...given: undefined extends Args
+            ? [value: Value] | [args: Args, value: Value]
+            : [args: Args, value: Value]
+    ): void
+    patch(
+        ...given: undefined extends Args
+            ? | [mutate: (value: Value) => void]
+              | [args: Args, mutate: (value: Value) => void]
+            : [args: Args, mutate: (value: Value) => void]
+    ): void
+    readable(
+        ...args: undefined extends Args ? [args?: Args] : [args: Args]
+    ): ReadableStream<Value>
+}
+
+/**
+ * A write's args and what it writes: `(args, written)`, or `(written)` alone for a memo whose args are
+ * absent — the one-argument spelling a call without args has (11.77).
+ */
+export function writeOf(given: unknown[]): [args: unknown, written: unknown] {
+    return given.length === 1 ? [undefined, given[0]] : [given[0], given[1]]
 }
 
 /** What a memo's entry holds: a stream's chunks, else what its function settles to (9.1). */
-type MemoValue<Result> =
+export type MemoValue<Result> =
     Awaited<Result> extends AsyncIterable<infer Chunk>
         ? Chunk[]
         : Awaited<Result>
@@ -73,14 +92,21 @@ export function memoOver<Args, Value>(
         invalidate: (pattern?: Partial<Args>): void => face.invalidate(pattern),
         refresh: (pattern?: Partial<Args>): void => face.refresh(pattern),
         // 11.77 — the owner's writes, standing until the next write, `ttl`, `refresh` or `invalidate`.
-        set: (args: Args, value: Value): void => {
-            entryOf(args).set(value)
+        // AN OWNER'S WRITE IS A PRODUCTION: the memo's value has no source but its function and its
+        // owner, so what the owner writes is what the entry produced (`synced` stays true, 3.11).
+        set: (...given: unknown[]): void => {
+            const [args, value] = writeOf(given)
+            produceInto(entryOf(args as Args) as Reactive<unknown>, value)
         },
-        patch: (args: Args, mutate: (value: Value) => void): void => {
-            entryOf(args).patch(mutate)
+        patch: (...given: unknown[]): void => {
+            const [args, mutate] = writeOf(given)
+            patchInto(
+                entryOf(args as Args) as Reactive<unknown>,
+                mutate as (value: unknown) => void,
+            )
         },
-        readable: (args: Args): ReadableStream<Value> =>
-            readableOf(entryOf(args)),
+        readable: (args?: Args): ReadableStream<Value> =>
+            readableOf(entryOf(args as Args)),
     }) as unknown as Memo<Args, unknown, Value> & Gated<Args>
 }
 

@@ -3,8 +3,8 @@ import { expect, test } from 'bun:test'
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
 
+import listCalls from '../listCalls.handler.ts'
 import CallLog from './CallLog.abide'
-import { calls } from './calls.ts'
 
 test('a call logged with the network is saved, and nothing waits', async () => {
     using _log = await mount(CallLog({}))
@@ -14,7 +14,9 @@ test('a call logged with the network is saved, and nothing waits', async () => {
     document.querySelector('button')?.click()
     await Bun.sleep(10)
     flushSync()
-    expect(calls().map((call) => call.note)).toContain('Sent the quote')
+    expect((await listCalls()).map((call) => call.note)).toContain(
+        'Sent the quote',
+    )
     const tiles = [...document.querySelectorAll('.tiles strong')]
     expect(tiles.map((tile) => tile.textContent)).toEqual(['0', 'yes'])
 })
@@ -24,5 +26,7 @@ test('a call sent twice under one id is logged once', async () => {
     const call = { id: 'again', note: 'Asked twice' }
     await logCall(call)
     await logCall(call)
-    expect(calls().filter((each) => each.id === 'again').length).toBe(1)
+    expect(
+        (await listCalls()).filter((each) => each.id === 'again').length,
+    ).toBe(1)
 })

@@ -196,7 +196,7 @@ const boards = keyedValue(
     }),
     { global: true, tags: ({ personId }) => [`refreshes:board:${personId}`] },
 )
-const board = GET(boards)
+const board = GET(boards as never)
 const personId = async (): Promise<string> =>
     String((await principal.resolved).name)
 // Neither handler reads `principal` itself, so nothing has resolved it by the time `refreshes` runs.

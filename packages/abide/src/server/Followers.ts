@@ -321,9 +321,12 @@ export class Followers {
      */
     private attach(rpc: object, follower: Follower): unknown {
         // 18.8, 18.26 — what its own rungs or its route's refused is sent its triggers alone.
+        // 18.40 — AND BUILT WHERE NONE IS HELD: a follow is a read, so a follower of args nothing has
+        // answered yet is fed from the entry its subscription reaches, as a call's would be (1.7).
+        const global = GLOBAL_GETS.get(rpc)
         const serving = !follower.admitted
             ? undefined
-            : GLOBAL_GETS.get(rpc)?.at(follower.key)
+            : (global?.at(follower.key) ?? global?.reach(follower.args))
         if (serving === follower.serving) return serving
         follower.stopFeed?.()
         // A version is one entry's count, so what it was sent of another says nothing about this one.

@@ -8,18 +8,16 @@ import { expect, test } from 'bun:test'
 import { Followers, Frame, type Peer } from '#server/Followers.ts'
 import type { FollowedHandler } from '#server/mountHandlers.ts'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
-import { keyedValue, refresh } from '#shared/reactive/index.ts'
+import { refresh } from '#shared/reactive/index.ts'
 import { GET } from '#shared/rpc.ts'
 
 // The function form on the `GET`'s own options, on a value handed to it, and the list form beside.
 const stage = GET(({ home }: { home: string }) => ({ home }), {
     tags: ({ home }) => ['access', `home:${home}`],
 })
-const visits = GET(
-    keyedValue(({ id }: { id: number }) => ({ id }), {
-        tags: ({ id }) => ['access', `visit:${id}`],
-    }),
-)
+const visits = GET(({ id }: { id: number }) => ({ id }), {
+    tags: ({ id }) => ['access', `visit:${id}`],
+})
 const fixed = GET(() => ({ fixed: true }), { tags: ['access'] })
 
 function rowOf(handler: unknown, address: string): FollowedHandler {

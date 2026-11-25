@@ -14,14 +14,12 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 // Past the moment bun reaps an idle connection, which its four-second tick puts up to four late.
 const PAST_REAPING = (IDLE_TIMEOUT_SECONDS + 5) * 1000
 
-const HANDLERS = `import { GET, POST, reactive, response } from '@abide/abide/server'
+const HANDLERS = `import { GET, POST, response } from '@abide/abide/server'
 
-const quote = reactive(1, { global: true })
+export const price = GET((): number => 1, { global: true })
 
-export const price = GET(quote)
-
-export const reprice = POST(() => {
-    quote.set(quote() + 1)
+export const reprice = POST(async () => {
+    price.set((await price()) + 1)
 })
 
 export const report = GET(async () => {

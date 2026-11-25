@@ -10,11 +10,7 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 // ONE HANDLER FILE A HANDLER (16.73), and what two of them share in a module under `lib` beside them.
 const HANDLERS: Record<string, string> = {
-    'library/lib/state.ts': `import { reactive } from '@abide/abide/server'
-
-export const shelf = reactive<string[]>(['dune'], { global: true })
-
-// Held after its first line until \`release\` is called, so a client that reads the first line before
+    'library/lib/state.ts': `// Held after its first line until \`release\` is called, so a client that reads the first line before
 // releasing it proves the line was sent before the body was done.
 let open = (): void => {}
 export function held(): Promise<void> {
@@ -29,15 +25,14 @@ export function release(): void {
 export const pulled = { count: 0 }
 `,
     'library/books.handler.ts': `import { GET } from '@abide/abide/server'
-import { shelf } from './lib/state.ts'
 
-export default GET(shelf)
+export default GET((): string[] => ['dune'], { global: true })
 `,
     'library/shelve.handler.ts': `import { POST } from '@abide/abide/server'
-import { shelf } from './lib/state.ts'
+import books from './books.handler.ts'
 
-export default POST(({ title }: { title: string }) => {
-    shelf.set([...shelf(), title])
+export default POST(async ({ title }: { title: string }) => {
+    books.set([...(await books()), title])
 })
 `,
     'library/held.handler.ts': `import { GET } from '@abide/abide/server'
