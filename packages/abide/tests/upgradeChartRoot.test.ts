@@ -12,7 +12,7 @@ afterAll(removeTemporaryModules)
 // A NAME BOUND TO `chart(` HAS ITS `svg` READ AS `root`, in its script and its markup, typed or not,
 // read through `?.` too. A `pie`'s and a `sparkline`'s `svg` are left, as is one read off a name the
 // file binds to anything else, and one read off a longer path; run again the migration changes
-// nothing (38.200). THE REVERT: drop the `toChartRoot` migration from `MIGRATIONS` — nothing is
+// nothing (38.200). THE REVERT: drop the `chart` row from `toNamedParts`' `RENAMES` — nothing is
 // changed and `upgrade` answers no edits.
 test('abide upgrade renames a chart svg part to root — 38.220, 38.200', async () => {
     const page = `<script>

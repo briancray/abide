@@ -4,7 +4,6 @@
 // app already moved finds nothing left to move.
 
 import { withoutRestatedNotes } from './agentNotes.ts'
-import { toChartRoot } from './toChartRoot.ts'
 import { toJob } from './toJob.ts'
 import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
@@ -65,9 +64,8 @@ const MIGRATIONS: Migration[] = [
     { version: '0.143.0', migrate: eachSource(toKey) },
     // 38.219 — a `job`'s name is one of its options, and `run` is what runs it ahead of schedule.
     { version: '0.144.0', migrate: eachSource(toJob) },
-    // 38.220 — the part spread on a `chart`'s root is `root`, where it was `svg`.
-    { version: '0.144.0', migrate: eachSource(toChartRoot) },
-    // 38.221 — another component's parts handed back whole are a member named for it (49.18).
+    // 38.220, 38.221 — a `chart`'s `svg` part is `root`, and another component's parts handed back
+    // whole are a member named for it (49.18).
     { version: '0.144.0', migrate: eachSource(toNamedParts) },
     // 38.222 — a refusal is declared by its name and its options, its status among them.
     { version: '0.144.0', migrate: eachSource(toRefuseNamed) },

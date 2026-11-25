@@ -1,8 +1,8 @@
-// 38.221 — THE MIGRATION ONTO PARTS NAMED FOR THE COMPONENT THEY ARE: a headless component hands back
-// another's parts whole under that component's name (49.18), from the release this migration is keyed
-// to on — `chat`'s `jump` is its `autoscroll`'s, `wizard`'s `progress` its `meter`, `breadcrumbs`'
-// `overflow` its `menu`, `playback`'s `speed` its `toggleGroup`, and every member `lightbox` laid flat
-// from its `carousel` that carousel's.
+// 38.220, 38.221 — THE MIGRATION ONTO PARTS NAMED FOR WHAT THEY ARE: a `chart`'s `svg` is its
+// `root`, and a headless component hands back another's parts whole under that component's name
+// (49.18), from the release this migration is keyed to on — `chat`'s `jump` is its `autoscroll`'s,
+// `wizard`'s `progress` its `meter`, `breadcrumbs`' `overflow` its `menu`, `playback`'s `speed` its
+// `toggleGroup`, and every member `lightbox` laid flat from its `carousel` that carousel's.
 //
 // A MEMBER IS RENAMED ONLY ON A NAME THE FILE BINDS TO THE CALL, since `jump`, `progress`, `next` and
 // the rest are common words a member of anything else may be. The scan is a pattern over the whole
@@ -24,6 +24,9 @@ const CAROUSEL_MEMBERS = [
 ]
 
 const RENAMES: { factory: string; members: Record<string, string> }[] = [
+    // 38.220 — a `chart`'s root may be any element, so the part spread on it is `root`. `pie` and
+    // `sparkline` keep `svg`, and their calls are other factories.
+    { factory: 'chart', members: { svg: 'root' } },
     { factory: 'chat', members: { jump: 'autoscroll.jump' } },
     { factory: 'wizard', members: { progress: 'meter' } },
     { factory: 'breadcrumbs', members: { overflow: 'menu' } },
