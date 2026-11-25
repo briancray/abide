@@ -670,7 +670,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- | --- |
 | `breadcrumbs` | `<Crumb>(options: BreadcrumbsOptions<Crumb>) => Breadcrumbs<Crumb>` | A trail of links to the page as parts an app spreads onto a nav and links of its own, its middle folded into a `menu` past `max`. | 51.136, 51.137, 51.138, 51.139, 51.140, 49.2, 49.4, 49.5, 49.6 |
 | `BreadcrumbsOptions` | `<Crumb>{ trail: readonly Crumb[] \| (() => readonly Crumb[]); href: (crumb: Crumb) => string; max?: number \| (() => number); label?: string \| (() => string) }` | The crumbs from the top down, where each leads, how many show before the middle folds, and the nav's accessible name. | 51.136, 51.138, 51.140, 49.10, 49.11 |
-| `Breadcrumbs` | `<Crumb>{ readonly nav: Record<string, unknown>; get items(): readonly (Crumb \| 'overflow')[]; get folded(): readonly Crumb[]; link(crumb: Crumb): Record<string, unknown>; readonly overflow: Menu; menuItem(crumb: Crumb): Record<string, unknown> }` | The nav's part, the crumbs shown, the crumbs folded, a crumb's link, the overflow's menu, and a folded crumb's menu item. | 32.11, 51.136, 51.137, 51.138, 51.139, 49.3, 49.9, 49.17 |
+| `Breadcrumbs` | `<Crumb>{ readonly nav: Record<string, unknown>; get items(): readonly (Crumb \| 'overflow')[]; get folded(): readonly Crumb[]; link(crumb: Crumb): Record<string, unknown>; readonly menu: Menu; menuItem(crumb: Crumb): Record<string, unknown> }` | The nav's part, the crumbs shown, the crumbs folded, a crumb's link, the folded crumbs' menu, and a folded crumb's menu item. | 32.11, 51.136, 51.137, 51.138, 51.139, 49.3, 49.9, 49.17, 49.18 |
 
 ## `scrollSpy`
 

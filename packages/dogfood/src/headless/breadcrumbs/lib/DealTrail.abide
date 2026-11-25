@@ -17,13 +17,13 @@ const crumbs = breadcrumbs({
 <nav class="row" {...crumbs.nav}>
     {#for item of crumbs.items}
         {#if item === 'overflow'}
-            <button {...crumbs.overflow.trigger}>…</button>
+            <button {...crumbs.menu.trigger}>…</button>
         {:else}
             <a {...crumbs.link(item)}>{item.name}</a>
         {/if}
     {/for}
 </nav>
-<div {...crumbs.overflow.menu}>
+<div {...crumbs.menu.menu}>
     {#for crumb of crumbs.folded key crumb.path}
         <a {...crumbs.menuItem(crumb)}>{crumb.name}</a>
     {/for}

@@ -25,8 +25,8 @@ import dealTrail from './lib/DealTrail.abide' with { type: 'text' }
     <Section level={3} title="Show where a deal stands, its middle folded">
         <p>Walk <code>items</code>: a crumb gets <code>link(crumb)</code>, the last of them the
             page itself, and an <code>overflow</code> stands where the middle folds past
-            <code>max</code>. The overflow is a <code>menu</code>: spread its
-            <code>trigger</code> there and its <code>menu</code> around the
+            <code>max</code>. The folded crumbs are a <code>menu</code>, handed back whole as
+            <code>menu</code>: spread its <code>trigger</code> there and its <code>menu</code> around the
             <code>folded</code> crumbs, each a <code>menuItem</code>.</p>
         <Example code={dealTrail}><DealTrail /></Example>
     </Section>

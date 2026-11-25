@@ -56,6 +56,6 @@ test('each crumb links to its address, the page itself current, and the folded o
         role: 'menuitem',
         href: '/companies',
     })
-    expect(crumbs.overflow.trigger['aria-haspopup']).toBe('menu')
+    expect(crumbs.menu.trigger['aria-haspopup']).toBe('menu')
     expect(crumbs.nav['aria-label']).toBe('Breadcrumb')
 })

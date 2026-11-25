@@ -1,6 +1,6 @@
 // 51.136-51.140 — WHERE THE PAGE STANDS IN WHAT HOLDS IT: a trail of links, the last the page itself,
-// as parts an app spreads onto a nav and links of its own. Past `max`, the middle folds into an
-// overflow that is a `menu`'s parts, its crumbs the menu's items.
+// as parts an app spreads onto a nav and links of its own. Past `max`, the middle folds into a
+// `menu`, handed back whole under its name (49.18), its crumbs the menu's items.
 
 import { type Live, live } from './live.ts'
 import { type Menu, menu } from './menu.ts'
@@ -11,7 +11,7 @@ export type BreadcrumbsOptions<Crumb> = {
     trail: Live<readonly Crumb[]>
     /** The address a crumb leads to. */
     href: (crumb: Crumb) => string
-    /** How many crumbs show before the middle folds into the overflow. Every one by default; a function is read live. */
+    /** How many crumbs show before the middle folds into the menu. Every one by default; a function is read live. */
     max?: Live<number>
     /** The nav's accessible name. `'Breadcrumb'` by default; a function is read live. */
     label?: Live<string>
@@ -23,13 +23,13 @@ export type Breadcrumbs<Crumb> = {
     readonly nav: Record<string, unknown>
     /** The crumbs shown, in order, an `'overflow'` standing where the middle folds. */
     get items(): readonly (Crumb | 'overflow')[]
-    /** The crumbs folded into the overflow, in order. */
+    /** The crumbs folded into the menu, in order. */
     get folded(): readonly Crumb[]
     /** A crumb's link: its address, and `aria-current` on the page itself. */
     link(crumb: Crumb): Record<string, unknown>
-    /** The overflow: a `menu`'s parts, its trigger standing where the middle folds. */
-    readonly overflow: Menu
-    /** A folded crumb's link inside the overflow's menu: a menu item. */
+    /** The folded crumbs' `menu`, its parts whole (49.18), its trigger standing where the middle folds. */
+    readonly menu: Menu
+    /** A folded crumb's link inside the menu: a menu item. */
     menuItem(crumb: Crumb): Record<string, unknown>
 }
 
@@ -50,7 +50,7 @@ export function breadcrumbs<Crumb>(
             folded: all.slice(1, kept),
         }
     }
-    const overflow = menu({ align: 'start' })
+    const folds = menu({ align: 'start' })
     return {
         // 51.140
         nav: {
@@ -78,7 +78,7 @@ export function breadcrumbs<Crumb>(
             },
         }),
         // 51.139
-        overflow,
+        menu: folds,
         menuItem: (crumb) => ({
             role: 'menuitem',
             'data-breadcrumbs': 'item',

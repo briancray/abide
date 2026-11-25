@@ -5912,7 +5912,7 @@ back and forward by `step`, kept from `0` to `duration`, as `hotkeys` binds them
 51.138 `breadcrumbs`' `link` of a crumb MUST carry `href` naming the address `href` answers for it,
 and the link of the last crumb of `trail` MUST carry `aria-current="page"`.
 
-51.139 `breadcrumbs`' `overflow` MUST be a `menu`'s parts, and its `menuItem` of a crumb MUST carry
+51.139 `breadcrumbs`' `menu` MUST be a `menu`'s parts, and its `menuItem` of a crumb MUST carry
 `role="menuitem"` and `href` naming the crumb's address.
 
 51.140 `breadcrumbs`' `nav` part MUST carry `aria-label` naming `label`, `Breadcrumb` where none is
