@@ -16,7 +16,6 @@ import { PRIVATE_HANDLERS_ADDRESS } from '#shared/ADDRESSES.ts'
 import { parseRoutePattern } from '#shared/routePattern.ts'
 import { surfaceName } from '#shared/surfaceName.ts'
 
-import { frameworkRouteRefusal } from './appFiles.ts'
 import type { PlacedHandler, PlacedSource } from './appLayout.ts'
 import { declaredExports } from './declaredExports.ts'
 import type { Diagnostics } from './Diagnostics.ts'
@@ -85,8 +84,6 @@ export async function handlersUnder(
                 throw new Error(
                     `abide: ${relative} is a handler file — a <name>.handler.ts directly in an address directory — and exports no handler as its default. Export one (\`export default GET(…)\`), or move the file into a lib directory. RULEBOOK 16.73, 23.22.`,
                 )
-            const framework = frameworkRouteRefusal(address, relative)
-            if (framework !== undefined) throw framework
             refuseUndeclaredParameters(address, handler.args, relative)
             // 20.13 — one name per handler on every generated surface.
             const surface = surfaceName(handler.method, address)

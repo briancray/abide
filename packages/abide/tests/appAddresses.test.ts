@@ -250,7 +250,7 @@ test('a server block under a public directory, and one exporting default, are re
 // abide's own namespace, a page where nothing has an address, a file directly in an address
 // directory that is neither a `.abide`, a handler file (`<name>.handler.ts`) nor a test file, and a
 // server file outside a `lib` directory. THE REVERTS: drop each `refusals.at` in `appFiles`'s `walk` (or
-// `frameworkRouteRefusal`'s refusal); its build succeeds.
+// `appLayout`'s `refuseFrameworkRoute`); its build succeeds.
 test('a fence under another, a page under one, an __abide route, a stray file and a stray server file are refused — 23.16, 23.17, 23.18, 23.22, 23.23', async () => {
     const nested = await refusal(
         compileApp(

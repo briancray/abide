@@ -24,7 +24,6 @@ import {
     isServerFile,
     isTestFile,
     placeOf,
-    routeOf,
     skipped,
 } from '#server/placement.ts'
 import {
@@ -156,9 +155,6 @@ function walk(
                 continue
             }
             if (!abide) files.handlers.push(path)
-            // 23.17 — anything that could answer here would answer in abide's own namespace.
-            const framework = frameworkRouteRefusal(routeOf(path), path)
-            if (framework !== undefined) refusals.at(path, framework)
             continue
         }
         // Any other place is a fence's, and the walk passed through it.

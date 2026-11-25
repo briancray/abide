@@ -160,6 +160,32 @@ import '../elsewhere' with { type: 'routes' }
     expect(own).toContain('23.20')
 })
 
+// 23.17, 23.19 — A MOUNTED PAGE IN ABIDE'S NAMESPACE IS REFUSED BY ITS POSITION, as the app's own is.
+// THE REVERT: drop `refuseFrameworkRoute` from `appLayout`'s placed sources; the package's page at
+// `/__abide/status` builds, and the refusal is `undefined`.
+test("a mounted package's page placed under /__abide is refused — 23.17, 23.19", async () => {
+    const thrown = await refusal(
+        compileApp(
+            appFixture({
+                'layout.abide': `<script module>
+import 'status-kit/pages' with { type: 'routes' }
+</script>
+
+<html><head></head><body><slot/></body></html>
+`,
+                'index.abide': '<p>home</p>',
+                'node_modules/status-kit/package.json': JSON.stringify({
+                    name: 'status-kit',
+                    type: 'module',
+                }),
+                'node_modules/status-kit/pages/__abide/status/index.abide':
+                    '<p>mine</p>',
+            }),
+        ),
+    )
+    expect(thrown).toContain('23.17')
+})
+
 // 16.29, 23.19 — A MOUNTED PACKAGE'S SERVER FILE IS FENCED FROM THE BROWSER, as the app's own is:
 // the fence reads the file's name, wherever the package lies. THE REVERT: skip a path under
 // `node_modules` in `fenceServer`'s load; the secret is bundled — the build exits 0.

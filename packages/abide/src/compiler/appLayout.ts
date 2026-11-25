@@ -21,7 +21,7 @@ import {
     type Segment,
 } from '#shared/routePattern.ts'
 
-import { appFiles } from './appFiles.ts'
+import { appFiles, frameworkRouteRefusal } from './appFiles.ts'
 import { abideImportsOf } from './componentGraph.ts'
 import { type Diagnosis, Diagnostics } from './Diagnostics.ts'
 import type { HandlerFile } from './handlersUnder.ts'
@@ -156,11 +156,13 @@ export async function appLayout(root: string): Promise<AppLayout> {
     const sources: PlacedSource[] = []
     for (const source of found.sources) {
         const relative = relativeTo(root, source.path)
-        const placed = placement(
-            relative,
-            found.positions.get(source.path) ?? relative,
-        )
+        const position = found.positions.get(source.path) ?? relative
+        const placed = placement(relative, position)
         refusePlace(source, placed, resolve, refusals)
+        // By where the file stands, not the route placement gives it: the menu bar extra's page is
+        // placed in abide's namespace by abide (38.167).
+        if (placed.route !== undefined)
+            refuseFrameworkRoute(routeOf(position), relative, refusals)
         sources.push(
             placedSource(source, placed, found.invoked.has(source.path)),
         )
@@ -170,9 +172,11 @@ export async function appLayout(root: string): Promise<AppLayout> {
     for (let at = 0; at < found.handlers.length; at += 1) {
         const file = found.handlers[at] as HandlerFile
         const { text } = texts[at] as { text: string }
+        const route = routeOf(file.position)
+        refuseFrameworkRoute(route, file.relative, refusals)
         placedHandlers.push({
             ...file,
-            route: routeOf(file.position),
+            route,
             scope: placement(file.relative, file.position).scope,
             text,
             hooks: hooksIn([text]),
@@ -430,6 +434,19 @@ function refusePlace(
                 `abide: ${relative} writes <html>, and of the pages, layouts and error pages only the root layout.abide writes the document. RULEBOOK 35.16.`,
             ),
         )
+}
+
+/**
+ * 23.17 — refuses a page, a layout, an error page or a handler that answers in abide's own namespace,
+ * by the position it is placed at: an app's own file, or one a mounted package places there (23.19).
+ */
+function refuseFrameworkRoute(
+    route: string,
+    relative: string,
+    refusals: Diagnostics,
+): void {
+    const framework = frameworkRouteRefusal(route, relative)
+    if (framework !== undefined) refusals.at(relative, framework)
 }
 
 /**
