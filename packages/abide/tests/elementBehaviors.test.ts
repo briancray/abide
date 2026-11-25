@@ -1,4 +1,4 @@
-// 53.12-53.23, 53.50, 53.54, 53.55, 53.79, 53.102, 53.103 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
+// 53.12-53.23, 53.50, 53.54, 53.55, 53.79, 53.103, 53.104 — THE `bind:element` ADAPTORS that close, take files, copy and follow a bottom, each bound to a bare
 // element the way `bind:element` binds one: called with the node, and stopped by what it hands back;
 // and `copyToClipboard`, the write `copy` makes, called alone.
 
@@ -459,7 +459,7 @@ test('a click copies, marks the element copied, and the mark wears off — 53.21
 
 // THE REVERT: write `navigator.clipboard.writeText` with the plain text alone, as `copyText` did —
 // this reports `[["text/plain: Grace Hopper"]]`, and the html never reaches the clipboard.
-test('a record copies as one item holding each type it names, and a string as text/plain — 53.54, 53.102', async () => {
+test('a record copies as one item holding each type it names, and a string as text/plain — 53.54, 53.103', async () => {
     const written = clipboardWrites()
     const copied = await copyToClipboard({
         'text/html': '<a href="mailto:grace@hopper.example">Grace Hopper</a>',
@@ -536,7 +536,7 @@ test('a page with no clipboard copies through a selected textarea, carrying ever
 
 // THE REVERT: drop the `try` around `execCommand` — a page whose clipboard refuses and whose command
 // throws rejects, where it settles `false`.
-test('a copy the clipboard and the command both refuse settles false, and rejects for none — 53.102', async () => {
+test('a copy the clipboard and the command both refuse settles false, and rejects for none — 53.103', async () => {
     Object.defineProperty(navigator, 'clipboard', {
         configurable: true,
         value: {
@@ -559,10 +559,10 @@ test('a copy the clipboard and the command both refuse settles false, and reject
 
 // THE REVERT: drop the `isServer` check from `copyToClipboard`, and a request reaches for a document's
 // textarea and a clipboard no visitor holds.
-test('copyToClipboard rejects inside a request — 53.103', async () => {
+test('copyToClipboard rejects inside a request — 53.104', async () => {
     await inScope(new Request('http://app/'), async () => {
         await expect(copyToClipboard('Saved')).rejects.toThrow(
-            'RULEBOOK 53.103',
+            'RULEBOOK 53.104',
         )
     })
 })

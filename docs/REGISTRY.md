@@ -996,7 +996,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `copyToClipboard` | `(value: string \| Record<string, string \| Blob>) => Promise<boolean>` | Text, or a record of MIME type to what it holds, written to the clipboard, settling whether it landed. | 53.22, 53.54, 53.55, 53.102, 53.103 |
+| `copyToClipboard` | `(value: string \| Record<string, string \| Blob>) => Promise<boolean>` | Text, or a record of MIME type to what it holds, written to the clipboard, settling whether it landed. | 53.22, 53.54, 53.55, 53.103, 53.104 |
 
 ## `sortBy`
 

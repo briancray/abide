@@ -6668,10 +6668,10 @@ leaves the host where aligning the current one does.
 53.101 A scroll that `scrollTo`, `reset` or a change of the item `carousel` rests on starts, and that
 leaves the `host` where it already is, MUST NOT be on its way in 53.65's sense.
 
-53.102 `copyToClipboard` MUST settle `true` once its value is on the clipboard, and `false` where
+53.103 `copyToClipboard` MUST settle `true` once its value is on the clipboard, and `false` where
 `navigator.clipboard` and 53.22's copy both leave it off, and MUST NOT reject for a refusal.
 
-53.103 `copyToClipboard` MUST reject where `isServer` is true.
+53.104 `copyToClipboard` MUST reject where `isServer` is true.
 
 # 54. Guards, fetches and jobs
 

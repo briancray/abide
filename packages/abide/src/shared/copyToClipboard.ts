@@ -1,4 +1,4 @@
-// 53.22, 53.54, 53.55, 53.102, 53.103 — WHAT REACHES THE CLIPBOARD, and whether it did: the write
+// 53.22, 53.54, 53.55, 53.103, 53.104 — WHAT REACHES THE CLIPBOARD, and whether it did: the write
 // `copy` makes on a click, for an app to make from a handler of its own.
 
 import { isServer } from './isServer.ts'
@@ -19,7 +19,7 @@ export type Copyable = string | Record<string, string | Blob>
 export async function copyToClipboard(value: Copyable): Promise<boolean> {
     if (isServer())
         throw new Error(
-            "copyToClipboard writes a visitor's clipboard, and a server has none: call it from a handler a browser runs. RULEBOOK 53.103.",
+            "copyToClipboard writes a visitor's clipboard, and a server has none: call it from a handler a browser runs. RULEBOOK 53.104.",
         )
     const types = typeof value === 'string' ? { 'text/plain': value } : value
     if (
