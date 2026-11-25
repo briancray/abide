@@ -6332,9 +6332,15 @@ each word of `query` — stretches that overlap or touch carrying it as one run.
 52.111 `highlight` given a `query` that is blank MUST answer `text` as one run carrying no `match`.
 
 52.112 `format.money`, `format.percent`, `format.number` and `format.bytes` MUST hand
-`Intl.NumberFormat`, and `format.list` `Intl.ListFormat`, every option their caller names, under its
-own name, over the defaults each formatter keeps, and MUST NOT refuse a caller naming one bound of
-the fraction digits for the default of the other.
+`Intl.NumberFormat`, `format.list` `Intl.ListFormat`, and `format.date` and `format.dateParts`
+`Intl.DateTimeFormat`, every option their caller names, under its own name, over the defaults each
+formatter keeps, MUST NOT refuse a caller naming one bound of the fraction digits for the default of
+the other, and MUST NOT refuse a caller naming a part of a date beside a `style` `Intl` writes whole.
+
+52.113 `format.number` given a `unit` MUST write its value in that unit, as `unitDisplay` names it.
+
+52.114 `format.date`'s `'dateTime'` style MUST hand the date it writes the options naming a part of a
+date, the time it writes those naming a part of a time, and both the rest.
 
 # 53. Keys, element behaviors and chat
 

@@ -17,10 +17,11 @@ export const BUILTIN_TYPES = new Set([
     'Exclude',
     'Extract',
     'Function',
-    // `Intl.DateTimeFormatPart`, `Intl.NumberFormatOptions` and `Intl.ListFormatOptions`, each read
-    // as its two names
+    // `Intl.DateTimeFormatPart`, `Intl.DateTimeFormatOptions`, `Intl.NumberFormatOptions` and
+    // `Intl.ListFormatOptions`, each read as its two names
     'Intl',
     'DateTimeFormatPart',
+    'DateTimeFormatOptions',
     'NumberFormatOptions',
     'ListFormatOptions',
     'Iterable',

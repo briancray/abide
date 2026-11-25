@@ -58,6 +58,16 @@ const NUMBER_OPTIONS = [
     'trailingZeroDisplay',
 ] as const
 
+/** The options among `names` that `options` sets, written in the order `names` lists them. */
+function keyOf(names: readonly string[], options: object): string {
+    let key = ''
+    for (const name of names) {
+        const given = (options as Record<string, unknown>)[name]
+        if (given !== undefined) key += ` ${name}=${String(given)}`
+    }
+    return key
+}
+
 /**
  * The `Intl.NumberFormat` for `kind` over `options`, abide's `defaults` beneath the caller's. A
  * caller naming one bound of the fraction digits keeps the default of the other only where the two
@@ -70,12 +80,7 @@ function numberFormat(
     defaults: Intl.NumberFormatOptions,
 ): Intl.NumberFormat {
     const locale = options.locale ?? LOCALE
-    let key = `${kind} ${locale}`
-    for (const name of NUMBER_OPTIONS) {
-        const given = (options as Record<string, unknown>)[name]
-        if (given !== undefined) key += ` ${name}=${String(given)}`
-    }
-    return cached(key, () => {
+    return cached(`${kind} ${locale}${keyOf(NUMBER_OPTIONS, options)}`, () => {
         const { locale: _locale, ...given } = options
         const asked: Intl.NumberFormatOptions = { ...defaults, ...given, style }
         const least = given.minimumFractionDigits
@@ -140,12 +145,14 @@ export function percent(value: unknown, options: NumberOptions = {}): string {
 
 /**
  * A number with its thousands grouped: `format.number(1200)` is `1,200`. Takes `Intl.NumberFormat`'s
- * options — `notation: 'compact'` for `1.2K`.
+ * options — `notation: 'compact'` for `1.2K`, and `unit: 'mile'` for `1,200 mi`.
  */
 export function number(value: unknown, options: NumberOptions = {}): string {
     const amount = numeric(value)
     if (amount === undefined) return MISSING
-    return numberFormat('number', 'decimal', options, {}).format(amount)
+    // 52.113 — a number given a unit is written in it.
+    const style = options.unit === undefined ? 'decimal' : 'unit'
+    return numberFormat('number', style, options, {}).format(amount)
 }
 
 /** A count and the word for what it counts: `format.plural(3, 'deal')` is `3 deals`. */
@@ -204,8 +211,52 @@ const DATE_STYLES = {
     hour: { hour: 'numeric' },
 } as const
 
-/** What `format.date` and `format.dateParts` take. */
-type DateOptions = {
+// 52.112 — `day` and `time` as the parts they write, for a caller naming a part of the date: `Intl`
+// refuses a part beside a `dateStyle` or a `timeStyle`.
+const DATE_STYLE_PARTS = {
+    ...DATE_STYLES,
+    day: { year: 'numeric', month: 'short', day: 'numeric' },
+    time: { hour: 'numeric', minute: '2-digit' },
+} as const
+
+// 52.6 — every `Intl.DateTimeFormat` option a date formatter is keyed by, in a fixed order: those
+// `'dateTime'` hands both its halves, then its date's alone, then its time's alone.
+const EITHER_HALF = [
+    'localeMatcher',
+    'formatMatcher',
+    'calendar',
+    'numberingSystem',
+] as const
+const DATE_HALF = [
+    ...EITHER_HALF,
+    'weekday',
+    'era',
+    'year',
+    'month',
+    'day',
+] as const
+const TIME_HALF = [
+    ...EITHER_HALF,
+    'hour12',
+    'hourCycle',
+    'dayPeriod',
+    'hour',
+    'minute',
+    'second',
+    'fractionalSecondDigits',
+    'timeZoneName',
+] as const
+const DATE_OPTIONS = [...DATE_HALF, ...TIME_HALF.slice(EITHER_HALF.length)]
+
+/**
+ * What `format.date` and `format.dateParts` take: `Intl.DateTimeFormat`'s own options under their
+ * own names — `weekday: 'short'` for `Wed, Nov 18, 2026` — less the `dateStyle` and `timeStyle`
+ * `style` fixes, and the locale.
+ */
+type DateOptions = Omit<
+    Intl.DateTimeFormatOptions,
+    'dateStyle' | 'timeStyle' | 'timeZone'
+> & {
     /**
      * What of the time to write: `'day'` is `Nov 18, 2026`, `'monthDay'` is `Nov 18`, `'month'` is
      * `Nov 2026`, `'time'` is `3:04 PM`, `'hour'` is `3 PM`, and `'dateTime'` is
@@ -268,18 +319,48 @@ export function dateParts(
     // different words.
     if (style === 'dateTime')
         return [
-            ...dateParts(time, { style: 'day', timeZone: zone, locale }),
+            ...dateFormat(
+                'day',
+                zone,
+                locale,
+                options,
+                DATE_HALF,
+            ).formatToParts(time),
             { type: 'literal', value: ', ' },
-            ...dateParts(time, { style: 'time', timeZone: zone, locale }),
+            ...dateFormat(
+                'time',
+                zone,
+                locale,
+                options,
+                TIME_HALF,
+            ).formatToParts(time),
         ]
-    return cached(
-        `date ${locale} ${zone} ${style}`,
-        () =>
-            new Intl.DateTimeFormat(locale, {
-                ...DATE_STYLES[style],
-                timeZone: zone,
-            }),
-    ).formatToParts(time)
+    return dateFormat(style, zone, locale, options, DATE_OPTIONS).formatToParts(
+        time,
+    )
+}
+
+/** The `Intl.DateTimeFormat` for `style`, the options of `options` that `names` lists over it. */
+function dateFormat(
+    style: keyof typeof DATE_STYLES,
+    zone: string,
+    locale: string,
+    options: DateOptions,
+    names: readonly string[],
+): Intl.DateTimeFormat {
+    const asked = keyOf(names, options)
+    return cached(`date ${locale} ${zone} ${style}${asked}`, () => {
+        const written: Intl.DateTimeFormatOptions = {
+            ...(asked === '' ? DATE_STYLES : DATE_STYLE_PARTS)[style],
+            timeZone: zone,
+        }
+        for (const name of names) {
+            const given = (options as Record<string, unknown>)[name]
+            if (given !== undefined)
+                (written as Record<string, unknown>)[name] = given
+        }
+        return new Intl.DateTimeFormat(locale, written)
+    })
 }
 
 const DURATION_UNITS = [

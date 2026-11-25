@@ -57,6 +57,16 @@ import visitorTime from './lib/VisitorTime.abide' with { type: 'text' }
             path: 'packages/abide/tests/format.test.ts',
             from: ["test('a relative time is written in the style it is handed"],
         },
+        {
+            path: 'packages/abide/tests/format.test.ts',
+            from: [
+                'test("a date takes Intl.DateTimeFormat\'s own options under their own names',
+            ],
+        },
+        {
+            path: 'packages/abide/tests/format.test.ts',
+            from: ["test('a number given a unit is written in it"],
+        },
     ]}
 >
     <Section level={3} title="Write deal amounts and chances in a table column">
@@ -91,6 +101,19 @@ import visitorTime from './lib/VisitorTime.abide' with { type: 'text' }
             pieces, so the hour can carry a style of its own.</p>
         <Example code={meetingHour}><MeetingHour /></Example>
     </Section>
+    <Section level={3} title="Put the weekday on a meeting time">
+        <p>Pass any of <code>Intl.DateTimeFormat</code>'s options beside <code>style</code>, and
+            the style keeps every part you leave alone.</p>
+        <Code language="ts" caption="shared" code={`
+            import { format } from '@abide/abide'
+
+            const meeting = { at: Date.UTC(2026, 11, 15, 14, 30) }
+
+            // 'Tue, Dec 15, 2026, 2:30 PM'
+            format.date(meeting.at, { style: 'dateTime', weekday: 'short' })
+        `} />
+    </Section>
+
     <Section level={3} title="Show a meeting in the visitor's own time">
         <p>A date with no <code>timeZone</code> is written in the visitor's zone: UTC on the
             server and while the page hydrates, so the two agree, and the browser's own once it
@@ -107,6 +130,15 @@ import visitorTime from './lib/VisitorTime.abide' with { type: 'text' }
 
             format.timeZone.set(rep.timeZone)
             </script>
+        `} />
+    </Section>
+    <Section level={3} title="Write a rep's mileage in miles">
+        <p>Pass a <code>unit</code> to <code>format.number</code>. A rep with no mileage logged
+            still reads as <code>—</code>.</p>
+        <Code language="ts" caption="shared" code={`
+            import { format } from '@abide/abide'
+
+            format.number(rep.miles, { unit: 'mile' }) // '1,200 mi'
         `} />
     </Section>
     <Section level={3} title="Fit how long ago into a narrow column">
