@@ -12,12 +12,16 @@ const viewer = lightbox({ items: PAGES, loop: true })
     {/for}
 </div>
 <dialog aria-label="Contract" {...viewer.dialog}>
-    <ul class="flex w-80 snap-x snap-mandatory overflow-x-auto" {...viewer.host}>
+    <ul
+        class="flex w-80 snap-x snap-mandatory overflow-x-auto"
+        {...viewer.carousel.host}
+    >
         {#for page of PAGES key page}
-            <li class="shrink-0 basis-full snap-center p-8" {...viewer.item(page)}>
-                {page}
-            </li>
+            <li
+                class="shrink-0 basis-full snap-center p-8"
+                {...viewer.carousel.item(page)}
+            >{page}</li>
         {/for}
     </ul>
-    <p class="status">{viewer.current}</p>
+    <p class="status">{viewer.carousel.current}</p>
 </dialog>

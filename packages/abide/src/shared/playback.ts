@@ -1,7 +1,8 @@
 // 51.130-51.135 — A CLOCK AND ITS CONTROLS: what drives a replay, an animation or a timeline, as parts
 // an app spreads onto a play button, a scrubber, a row of speeds and a host for its keys. Composed of
-// public parts: the play button is a `toggle` over `playing`, the speeds a `toggleGroup` over `rates`,
-// and the keys `hotkeys`. The clock is one `requestAnimationFrame` loop, running only while it plays.
+// public parts: the play button is a `toggle` over `playing`, the speeds a `toggleGroup` over `rates`
+// handed back whole under its name (49.18), and the keys `hotkeys`. The clock is one
+// `requestAnimationFrame` loop, running only while it plays.
 
 import { hotkeys } from './hotkeys.ts'
 import { type Live, live } from './live.ts'
@@ -21,7 +22,7 @@ export type PlaybackOptions = {
     playing?: Reactive<boolean>
     /** How fast it plays, `1` being real time: a `Reactive` to read and set. Held by the parts, and handed back as `rate`, where none is given. */
     rate?: Reactive<number>
-    /** The speeds `speed` offers. `[0.5, 1, 2]` by default; a function is read live. */
+    /** The speeds its `toggleGroup` offers. `[0.5, 1, 2]` by default; a function is read live. */
     rates?: Live<readonly number[]>
     /** Whether it starts over at its end rather than stopping. `false` by default; a function is read live. */
     loop?: Live<boolean>
@@ -37,8 +38,8 @@ export type Playback = {
     readonly play: Record<string, unknown>
     /** The scrubber, an `<input type="range">` from the start to `duration`. */
     readonly scrubber: Record<string, unknown>
-    /** The speeds: a `toggleGroup` over `rates`, each key the rate written as text. */
-    readonly speed: ToggleGroup<number>
+    /** The speeds: a `toggleGroup` over `rates`, handed back whole, each key the rate written as text. */
+    readonly toggleGroup: ToggleGroup<number>
     /** Where it is, in milliseconds; written, it moves there. */
     readonly at: Reactive<number>
     /** Whether it is playing; written, it plays or pauses. */
@@ -94,7 +95,7 @@ export function playback(options: PlaybackOptions): Playback {
     })
 
     // 51.134 — the rate picked, as the key its button carries.
-    const speed = toggleGroup({
+    const speeds = toggleGroup({
         items: () => live(options.rates) ?? [0.5, 1, 2],
         value: reactiveOver(
             () => String(rate()),
@@ -130,7 +131,7 @@ export function playback(options: PlaybackOptions): Playback {
             oninput: (event: Event) =>
                 move(Number((event.currentTarget as HTMLInputElement).value)),
         },
-        speed,
+        toggleGroup: speeds,
         at,
         playing,
         rate,

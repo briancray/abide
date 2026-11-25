@@ -19,11 +19,11 @@ test('show opens the lightbox resting on the item picked â€” 50.65, 50.67', () =
     expect(viewer.open()).toBe(false)
     viewer.show('side')
     flushSync()
-    expect([viewer.open(), viewer.selected(), viewer.current]).toEqual([
-        true,
-        'side',
-        'side',
-    ])
+    expect([
+        viewer.open(),
+        viewer.carousel.selected(),
+        viewer.carousel.current,
+    ]).toEqual([true, 'side', 'side'])
     expect(viewer.dialog['data-dialog']).toBe('dialog')
 })
 
@@ -33,12 +33,12 @@ test('the arrow keys step it as its carousel buttons do, stopping at the ends â€
     viewer.show('front')
     flushSync()
     key(viewer, 'ArrowRight')
-    expect(viewer.current).toBe('side')
+    expect(viewer.carousel.current).toBe('side')
     key(viewer, 'ArrowRight')
     key(viewer, 'ArrowRight')
-    expect(viewer.current).toBe('back')
+    expect(viewer.carousel.current).toBe('back')
     key(viewer, 'ArrowLeft')
-    expect(viewer.current).toBe('side')
+    expect(viewer.carousel.current).toBe('side')
 })
 
 // THE REVERT: leave `backdrop` off the lightbox's parts, and a viewer filling the screen has nothing

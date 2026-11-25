@@ -1,6 +1,7 @@
 // 50.65-50.67 — A VIEWER OVER A SET OF PICTURES: a `carousel` inside a `dialog`, its arrow keys bound
-// with `hotkeys` to the carousel's own buttons, as parts an app spreads onto a `<dialog>` and the
-// carousel's markup of its own. `show` opens it resting on the one picked.
+// with `hotkeys` to the carousel's own buttons. The `<dialog>`'s part is the lightbox's; the carousel's
+// go on elements of their own inside it, so they are handed back whole as `carousel` (49.18). `show`
+// opens it resting on the one picked.
 
 import { type Carousel, carousel, type CarouselOptions } from './carousel.ts'
 import { dialog } from './dialog.ts'
@@ -14,12 +15,14 @@ export type LightboxOptions<Item> = CarouselOptions<Item> & {
     open?: Reactive<boolean>
 }
 
-/** A carousel's parts, the dialog's, whether it is showing, and what opens it on an item. */
-export type Lightbox<Item> = Carousel<Item> & {
+/** The dialog's parts, the carousel's, whether it is showing, and what opens it on an item. */
+export type Lightbox<Item> = {
     /** The `<dialog>`'s part: `dialog`'s, with the arrow keys stepping the carousel. */
     readonly dialog: Record<string, unknown>
     /** An element inside the `<dialog>` standing for its backdrop: `dialog`'s. */
     readonly backdrop: Record<string, unknown>
+    /** The carousel inside the `<dialog>`, handed back whole. */
+    readonly carousel: Carousel<Item>
     /** Whether it is showing — the `open` it was handed, or one of its own. */
     readonly open: Reactive<boolean>
     /** Opens it resting on the item `key` names. */
@@ -38,8 +41,7 @@ export function lightbox<Item>(options: LightboxOptions<Item>): Lightbox<Item> {
         arrowleft: press(pictures.previous),
         arrowright: press(pictures.next),
     })
-    // Laid over the carousel's parts, so its `current` stays the getter it is (49.9).
-    return withPart(withPart({}, pictures), {
+    return {
         // 50.65
         dialog: withPart(withPart({}, shown.dialog), {
             'data-lightbox': 'dialog',
@@ -48,11 +50,12 @@ export function lightbox<Item>(options: LightboxOptions<Item>): Lightbox<Item> {
         backdrop: withPart(withPart({}, shown.backdrop), {
             'data-lightbox': 'backdrop',
         }),
+        carousel: pictures,
         open: shown.open,
         // 50.67
         show: (key: string) => {
             pictures.selected.set(key)
             shown.open.set(true)
         },
-    })
+    }
 }

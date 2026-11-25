@@ -502,9 +502,9 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `lightbox` | `<Item>(options: LightboxOptions<Item>) => Lightbox<Item>` | A `carousel` in a `dialog`, its arrow keys bound with `hotkeys` to the carousel's own buttons, as parts an app spreads onto a `<dialog>` and the carousel's markup of its own. | 50.65, 50.66, 50.67, 49.2, 49.4, 49.5, 49.6 |
+| `lightbox` | `<Item>(options: LightboxOptions<Item>) => Lightbox<Item>` | A `carousel` in a `dialog`, its arrow keys bound with `hotkeys` to the carousel's own buttons, as parts an app spreads onto a `<dialog>` and the carousel handed back whole. | 50.65, 50.66, 50.67, 49.2, 49.4, 49.5, 49.6, 49.18 |
 | `LightboxOptions` | `<Item>CarouselOptions<Item> & { open?: Reactive<boolean> }` | The carousel's options, and whether it is showing. | 50.65, 49.8 |
-| `Lightbox` | `<Item>Carousel<Item> & { readonly dialog: Record<string, unknown>; readonly backdrop: Record<string, unknown>; readonly open: Reactive<boolean>; show(key: string): void }` | The carousel's parts, the dialog's, its backdrop's, whether it is showing, and what opens it on an item. | 32.11, 50.65, 50.67, 49.3, 49.8, 49.9 |
+| `Lightbox` | `<Item>{ readonly dialog: Record<string, unknown>; readonly backdrop: Record<string, unknown>; readonly carousel: Carousel<Item>; readonly open: Reactive<boolean>; show(key: string): void }` | The dialog's part, its backdrop's, the carousel, whether it is showing, and what opens it on an item. | 32.11, 50.65, 50.67, 49.3, 49.8, 49.9, 49.18 |
 
 ## `commandPalette`
 
@@ -628,9 +628,9 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `playback` | `(options: PlaybackOptions) => Playback` | A clock and its controls as parts an app spreads onto a play button, a scrubber, a row of speeds and a host for its keys, composed of `toggle`, `toggleGroup` and `hotkeys`. | 51.130, 51.131, 51.132, 51.133, 51.134, 51.135, 49.2, 49.4, 49.5, 49.6 |
+| `playback` | `(options: PlaybackOptions) => Playback` | A clock and its controls as parts an app spreads onto a play button, a scrubber, a row of speeds and a host for its keys, composed of `toggle`, `toggleGroup` and `hotkeys`. | 51.130, 51.131, 51.132, 51.133, 51.134, 51.135, 49.2, 49.4, 49.5, 49.6, 49.18 |
 | `PlaybackOptions` | `{ duration: number \| (() => number); at?: Reactive<number>; playing?: Reactive<boolean>; rate?: Reactive<number>; rates?: readonly number[] \| (() => readonly number[]); loop?: boolean \| (() => boolean); step?: number \| (() => number) }` | How long it runs, where it is, whether and how fast it plays, the speeds offered, whether it starts over, and what an arrow key moves it by. | 51.130, 51.131, 51.134, 51.135, 49.8, 49.10, 49.11 |
-| `Playback` | `{ readonly root: Record<string, unknown>; readonly play: Record<string, unknown>; readonly scrubber: Record<string, unknown>; readonly speed: ToggleGroup<number>; readonly at: Reactive<number>; readonly playing: Reactive<boolean>; readonly rate: Reactive<number> }` | The key host's part, the play button's, the scrubber's, the speeds, where it is, whether it plays, and how fast. | 32.11, 51.132, 51.133, 51.134, 49.3, 49.8, 49.9 |
+| `Playback` | `{ readonly root: Record<string, unknown>; readonly play: Record<string, unknown>; readonly scrubber: Record<string, unknown>; readonly toggleGroup: ToggleGroup<number>; readonly at: Reactive<number>; readonly playing: Reactive<boolean>; readonly rate: Reactive<number> }` | The key host's part, the play button's, the scrubber's, the speeds' toggle group, where it is, whether it plays, and how fast. | 32.11, 51.132, 51.133, 51.134, 49.3, 49.8, 49.9, 49.18 |
 
 ## `breadcrumbs`
 

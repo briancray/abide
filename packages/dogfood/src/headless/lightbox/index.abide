@@ -34,8 +34,9 @@ import fullScreenPages from './lib/FullScreenPages.abide' with { type: 'text' }
         <p>A lightbox is a <code>carousel</code> inside a <code>dialog</code>, its arrow keys
             bound with <code>hotkeys</code> to the carousel's own <code>previous</code> and
             <code>next</code>. Spread <code>dialog</code> on a <code>&lt;dialog&gt;</code> and
-            the carousel's parts inside it, and call <code>show(key)</code> to open it resting on
-            that item. Escape and the backdrop close it, as they do any dialog.</p>
+            the parts of its <code>carousel</code> inside it, and call <code>show(key)</code> to
+            open it resting on that item. Escape and the backdrop close it, as they do any
+            dialog.</p>
         <Example code={contractPages}><ContractPages /></Example>
     </Section>
 
@@ -47,7 +48,8 @@ import fullScreenPages from './lib/FullScreenPages.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Dim the arrow that has no page beyond">
-        <p><code>previous</code> is disabled on the first page and <code>next</code> on the last.</p>
+        <p><code>carousel.previous</code> is disabled on the first page and
+            <code>carousel.next</code> on the last.</p>
         <Example code={dimLastArrow}><DimLastArrow /></Example>
     </Section>
 </Doc>

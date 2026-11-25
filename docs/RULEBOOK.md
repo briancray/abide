@@ -3931,9 +3931,10 @@ member.
 its file binds to a `chart` call, and MUST NOT rename any other `svg`.
 
 38.221 The migration keyed to 0.144.0 MUST rename `jump` to `autoscroll.jump`, `progress` to
-`meter` and `overflow` to `menu` where each is read as a member of a name its file binds, with
-`const`, `let` or `var`, to a call of `chat`, `wizard` and `breadcrumbs` respectively, and MUST
-leave the same member read off any other name.
+`meter`, `overflow` to `menu`, `speed` to `toggleGroup`, and each member of `Carousel` to the same
+member of `carousel`, where each is read as a member of a name its file binds, with `const`, `let`
+or `var`, to a call of `chat`, `wizard`, `breadcrumbs`, `playback` and `lightbox` respectively, and
+MUST leave the same member read off any other name.
 
 38.222 The migration keyed to 0.144.0 MUST move the status, the message and the options handed
 `refuse.named` after its name into one options object handed second, MUST drop an argument written
@@ -5487,8 +5488,8 @@ that size than none.
 50.64 A pointer let go of `drawer`'s `handle`, where no `stops` is given, MUST leave `size` where the
 drag set it and `open` as it was.
 
-50.65 `lightbox`'s parts MUST be a `carousel`'s, given every option the lightbox was, beside a
-`dialog`'s `dialog` and `backdrop` parts opened and closed by `open`.
+50.65 `lightbox`'s `carousel` MUST be a `carousel` given every option the lightbox was, and its
+`dialog` and `backdrop` parts a `dialog`'s, opened and closed by `open`.
 
 50.66 ArrowLeft and ArrowRight in `lightbox`'s `dialog` MUST do what a click on its carousel's
 `previous` and `next` does, and nothing where that button is disabled.
@@ -5911,8 +5912,8 @@ where `at` is at `duration` MUST set `at` to `0` first.
 51.133 `playback`'s `scrubber` part MUST be an `<input type="range">` from `0` to `duration` whose
 value is `at`, and its `input` MUST move `at` to its value, kept from `0` to `duration`.
 
-51.134 `playback`'s `speed` MUST be a `toggleGroup` over `rates`, each key the rate as text, picking
-`rate`.
+51.134 `playback`'s `toggleGroup` MUST be a `toggleGroup` over `rates`, each key the rate as text,
+picking `rate`.
 
 51.135 On `playback`'s `root`, Space MUST press `play`, and ArrowLeft and ArrowRight MUST move `at`
 back and forward by `step`, kept from `0` to `duration`, as `hotkeys` binds them.

@@ -558,3 +558,89 @@ const busy = refuse.named('Busy', { status: 409, message: 'Try again.' })
     for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
     expect(await upgrade(app, '0.143.0')).toEqual([])
 })
+
+// 38.221 — `playback`'s `speed` is its `toggleGroup`, and every member `lightbox` laid flat from its
+// carousel is its `carousel`'s, read in a page's markup and script and a module; its own `dialog`,
+// `backdrop`, `open` and `show` stay, as do the same words read off any other name — `stage.next`,
+// `speed` off a plain object — and run again it changes nothing (38.200). THE REVERT: drop the
+// `lightbox` row from `toNamedParts`, and `viewer.previous` is left flat.
+test("abide upgrade hands playback's toggleGroup and lightbox's carousel back by name — 38.221, 38.200", async () => {
+    const page = `<script>
+import { lightbox, playback } from '@abide/abide'
+
+const viewer = lightbox({ items: PAGES })
+const replay = playback({ duration: 12_000 })
+const stage = { next: () => {}, speed: 1 }
+</script>
+
+<button onclick={() => viewer.show('Terms')}>Read</button>
+<dialog {...viewer.dialog}>
+    <div {...viewer.backdrop}>
+        <ul {...viewer.host}>
+            {#for page of PAGES key page}<li {...viewer.item(page)}>{page}</li>{/for}
+        </ul>
+        <button {...viewer.previous}>‹</button>
+        <button {...viewer.next}>›</button>
+        <p>{viewer.current} {viewer.playing() ? 'on' : 'off'}</p>
+    </div>
+</dialog>
+<div {...replay.speed.group}>
+    {#for rate of [0.5, 1, 2] key rate}<button {...replay.speed.item(rate)}>{rate}×</button>{/for}
+</div>
+<button onclick={() => stage.next()}>{stage.speed}</button>
+`
+    const module = `import { lightbox } from '@abide/abide'
+
+export const viewer = lightbox({ items: ['a', 'b'] })
+export const reset = () => {
+    viewer.selected.set('a')
+    viewer.scrollTo(viewer.id)
+    viewer.reset()
+    viewer.open.set(false)
+}
+`
+    const app = temporaryModule({
+        'src/index.abide': page,
+        'src/lib/viewer.ts': module,
+    })
+    const edits = await upgrade(app, '0.143.0')
+    const after = (path: string) =>
+        edits.find((edit) => edit.path === path)?.after
+    expect(after('src/index.abide')).toBe(`<script>
+import { lightbox, playback } from '@abide/abide'
+
+const viewer = lightbox({ items: PAGES })
+const replay = playback({ duration: 12_000 })
+const stage = { next: () => {}, speed: 1 }
+</script>
+
+<button onclick={() => viewer.show('Terms')}>Read</button>
+<dialog {...viewer.dialog}>
+    <div {...viewer.backdrop}>
+        <ul {...viewer.carousel.host}>
+            {#for page of PAGES key page}<li {...viewer.carousel.item(page)}>{page}</li>{/for}
+        </ul>
+        <button {...viewer.carousel.previous}>‹</button>
+        <button {...viewer.carousel.next}>›</button>
+        <p>{viewer.carousel.current} {viewer.carousel.playing() ? 'on' : 'off'}</p>
+    </div>
+</dialog>
+<div {...replay.toggleGroup.group}>
+    {#for rate of [0.5, 1, 2] key rate}<button {...replay.toggleGroup.item(rate)}>{rate}×</button>{/for}
+</div>
+<button onclick={() => stage.next()}>{stage.speed}</button>
+`)
+    expect(after('src/lib/viewer.ts'))
+        .toBe(`import { lightbox } from '@abide/abide'
+
+export const viewer = lightbox({ items: ['a', 'b'] })
+export const reset = () => {
+    viewer.carousel.selected.set('a')
+    viewer.carousel.scrollTo(viewer.carousel.id)
+    viewer.carousel.reset()
+    viewer.open.set(false)
+}
+`)
+    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    expect(await upgrade(app, '0.143.0')).toEqual([])
+})

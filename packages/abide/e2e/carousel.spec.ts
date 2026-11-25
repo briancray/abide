@@ -58,12 +58,12 @@ const viewer = lightbox({ items: STAGES })
         <button id={'open-' + stage} onclick={() => viewer.show(stage)}>{stage}</button>
     {/for}
     <dialog {...viewer.dialog}>
-        <p id="current">{viewer.current}</p>
-        <button id="previous" {...viewer.previous}>previous</button>
-        <button id="next" {...viewer.next}>next</button>
-        <ul id="host" {...viewer.host}>
+        <p id="current">{viewer.carousel.current}</p>
+        <button id="previous" {...viewer.carousel.previous}>previous</button>
+        <button id="next" {...viewer.carousel.next}>next</button>
+        <ul id="host" {...viewer.carousel.host}>
             {#for stage of STAGES key stage}
-                <li id={stage} {...viewer.item(stage)}>{stage}</li>
+                <li id={stage} {...viewer.carousel.item(stage)}>{stage}</li>
             {/for}
         </ul>
     </dialog>

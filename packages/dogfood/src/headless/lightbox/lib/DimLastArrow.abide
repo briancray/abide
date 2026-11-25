@@ -9,15 +9,15 @@ const viewer = lightbox({ items: PAGES })
 <dialog aria-label="Contract" {...viewer.dialog}>
     <ul
         class="flex w-80 snap-x snap-mandatory overflow-x-auto"
-        {...viewer.host}
+        {...viewer.carousel.host}
     >
         {#for page of PAGES key page}
             <li
                 class="shrink-0 basis-full snap-center p-8"
-                {...viewer.item(page)}
+                {...viewer.carousel.item(page)}
             >{page}</li>
         {/for}
     </ul>
-    <button class="disabled:opacity-40" {...viewer.previous}>‹</button>
-    <button class="disabled:opacity-40" {...viewer.next}>›</button>
+    <button class="disabled:opacity-40" {...viewer.carousel.previous}>‹</button>
+    <button class="disabled:opacity-40" {...viewer.carousel.next}>›</button>
 </dialog>

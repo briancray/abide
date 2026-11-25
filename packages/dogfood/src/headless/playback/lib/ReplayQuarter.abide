@@ -9,9 +9,9 @@ const replay = playback({ duration: WEEKS * 1000 })
     <div class="row">
         <button {...replay.play}>{replay.playing() ? '❚❚' : '▶'}</button>
         <input {...replay.scrubber} />
-        <div {...replay.speed.group}>
+        <div {...replay.toggleGroup.group}>
             {#for rate of [0.5, 1, 2] key rate}
-                <button {...replay.speed.item(rate)}>{rate}×</button>
+                <button {...replay.toggleGroup.item(rate)}>{rate}×</button>
             {/for}
         </div>
     </div>

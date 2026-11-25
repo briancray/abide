@@ -596,9 +596,13 @@ test('a part carrying aria-current or aria-expanded carries data-current or data
 
 // 49.18 — A COMPONENT BUILT ON ANOTHER MERGES THAT ONE'S PART WHERE THEY SHARE AN ELEMENT, and hands
 // its parts back whole, under its name, where they go on elements of their own: a merged part carries
-// both `data-` attributes, a handed-back one the other's own. THE REVERT: hand back `menu`'s trigger
-// as the menu's own part alone, not laid over the popover's, and `menu.trigger` is named for
-// `data-popover`.
+// both `data-` attributes, a handed-back one the other's own, and no member of the one built on it
+// holds the other's parts flat or under another name. THE REVERT: hand back `menu`'s trigger as the
+// menu's own part alone, not laid over the popover's, and `menu.trigger` is named for `data-popover`;
+// lay `lightbox`'s carousel flat again, `withPart({}, pictures)` under its own parts, and ten are
+// named — its four element parts flat, `lightbox.carousel` missing and its five parts; hand
+// `playback`'s toggle group back as `speed`, and four are — that name, the missing
+// `playback.toggleGroup` and its two parts.
 test("a component built on another merges that one's part or hands its parts back under its name — 49.18", () => {
     const inspected = jsonInspector({ value: { a: 1 } })
     const asked = standing(() => promptsHost())
@@ -658,19 +662,66 @@ test("a component built on another merges that one's part or hands its parts bac
         href: (crumb) => `/${crumb}`,
     })
     const steps = wizard({ steps: ['plan'] })
-    const handedBack: [string, Record<string, unknown>, string][] = [
-        ['breadcrumbs.menu.trigger', crumbs.menu.trigger, 'menu'],
-        ['breadcrumbs.menu.menu', crumbs.menu.menu, 'menu'],
-        ['wizard.meter.meter', steps.meter.meter, 'meter'],
-        ['wizard.meter.fill', steps.meter.fill, 'meter'],
+    const viewer = lightbox({ items: ['a'] })
+    const replay = playback({ duration: 1 })
+    // `?.` so a component missing the member reports it below rather than throwing here.
+    const handedBack: [string, unknown, string][] = [
+        ['breadcrumbs.menu.trigger', crumbs.menu?.trigger, 'menu'],
+        ['breadcrumbs.menu.menu', crumbs.menu?.menu, 'menu'],
+        ['wizard.meter.meter', steps.meter?.meter, 'meter'],
+        ['wizard.meter.fill', steps.meter?.fill, 'meter'],
+        ['lightbox.carousel.host', viewer.carousel?.host, 'carousel'],
+        ['lightbox.carousel.item', viewer.carousel?.item('a'), 'carousel'],
+        ['lightbox.carousel.previous', viewer.carousel?.previous, 'carousel'],
+        ['lightbox.carousel.next', viewer.carousel?.next, 'carousel'],
+        ['lightbox.carousel.play', viewer.carousel?.play, 'carousel'],
+        [
+            'playback.toggleGroup.group',
+            replay.toggleGroup?.group,
+            'toggle-group',
+        ],
+        [
+            'playback.toggleGroup.item',
+            replay.toggleGroup?.item(1),
+            'toggle-group',
+        ],
+    ]
+    // Each component built on another, and the other's attribute: a member holding a part of the
+    // other's alone is that part laid flat, and one holding the other's parts is named for it.
+    const builtOn: [string, Record<string, unknown>, string][] = [
+        ['breadcrumbs', crumbs, 'menu'],
+        ['wizard', steps, 'meter'],
+        ['lightbox', viewer, 'carousel'],
+        ['playback', replay, 'toggle-group'],
     ]
     const missing: string[] = []
+    const isPart = (value: unknown, component: string) =>
+        typeof value === 'object' &&
+        value !== null &&
+        `data-${component}` in value
+    for (const [owner, parts, component] of builtOn) {
+        const name = component.replace(/-(\w)/g, (_, letter) =>
+            letter.toUpperCase(),
+        )
+        if (!(name in parts)) missing.push(`${owner}.${name}`)
+        for (const [key, value] of Object.entries(parts)) {
+            if (isPart(value, component) && !isPart(value, owner))
+                missing.push(`${owner}.${key}: data-${owner}`)
+            else if (
+                key !== name &&
+                !isPart(value, component) &&
+                typeof value === 'object' &&
+                value !== null &&
+                Object.values(value).some((part) => isPart(part, component))
+            )
+                missing.push(`${owner}.${key}: named ${name}`)
+        }
+    }
     for (const [name, part, components] of merged)
         for (const component of components)
             if (part[`data-${component}`] === undefined)
                 missing.push(`${name}: data-${component}`)
     for (const [name, part, component] of handedBack)
-        if (part[`data-${component}`] === undefined)
-            missing.push(`${name}: data-${component}`)
+        if (!isPart(part, component)) missing.push(`${name}: data-${component}`)
     expect(missing).toEqual([])
 })
