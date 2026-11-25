@@ -114,7 +114,7 @@ test('a date formatter is keyed by every option it is handed — 52.6', () => {
 
 // THE REVERT: keep `format.number`'s style `decimal` whatever it is handed — `26,000` where
 // `26,000 mi` is due.
-test('a number given a unit is written in it — 52.113', () => {
+test('a number given a unit is written in it — 52.114', () => {
     expect(number(26_000, { unit: 'mile' })).toBe('26,000 mi')
     expect(number(1, { unit: 'mile', unitDisplay: 'long' })).toBe('1 mile')
     expect(number(65, { unit: 'mile-per-hour', unitDisplay: 'narrow' })).toBe(

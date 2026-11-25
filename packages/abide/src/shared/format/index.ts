@@ -150,7 +150,7 @@ export function percent(value: unknown, options: NumberOptions = {}): string {
 export function number(value: unknown, options: NumberOptions = {}): string {
     const amount = numeric(value)
     if (amount === undefined) return MISSING
-    // 52.113 — a number given a unit is written in it.
+    // 52.114 — a number given a unit is written in it.
     const style = options.unit === undefined ? 'decimal' : 'unit'
     return numberFormat('number', style, options, {}).format(amount)
 }

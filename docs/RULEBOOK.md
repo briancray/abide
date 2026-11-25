@@ -6341,9 +6341,9 @@ each word of `query` — stretches that overlap or touch carrying it as one run.
 formatter keeps, MUST NOT refuse a caller naming one bound of the fraction digits for the default of
 the other, and MUST NOT refuse a caller naming a part of a date beside a `style` `Intl` writes whole.
 
-52.113 `format.number` given a `unit` MUST write its value in that unit, as `unitDisplay` names it.
+52.114 `format.number` given a `unit` MUST write its value in that unit, as `unitDisplay` names it.
 
-52.114 `format.date`'s `'dateTime'` style MUST hand the date it writes the options naming a part of a
+52.115 `format.date`'s `'dateTime'` style MUST hand the date it writes the options naming a part of a
 date, the time it writes those naming a part of a time, and both the rest.
 
 # 53. Keys, element behaviors and chat
