@@ -181,3 +181,19 @@ export function mapForward(
             return origin.at + position - origin.source
     return undefined
 }
+
+/**
+ * Where the lowered text resumes after a source span that ends at `position`: inside a copied run,
+ * or where the run after a rewrite starts — a rewritten read copies nothing of itself, so its end
+ * is the one place of it both texts share.
+ */
+export function mapEndForward(
+    origins: readonly Origin[],
+    position: number,
+): number | undefined {
+    const copied = mapForward(origins, position)
+    if (copied !== undefined) return copied
+    for (const origin of origins)
+        if (origin.source === position) return origin.at
+    return undefined
+}

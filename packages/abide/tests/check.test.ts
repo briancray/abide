@@ -965,6 +965,31 @@ function clear() {
     expect(await checkApp(opened)).toEqual([])
 }, 60_000)
 
+// 31.15 — A MEMBER A READ BUILT IS CHECKED AS THE VALUE IT HOLDS: `{ view }` in a memo's body is
+// `{ view: view() }` as it runs, so `glance.view.x` is a number and `glance` is the record a
+// function declaring plain members takes. THE REVERT: drop `membersOfReads` from `readsIn`'s
+// suspects; each of the four accesses is a `View` called (TS2349, 4).
+test('a member a read built is checked as its value — 31.15', async () => {
+    const built = appFixture({
+        'index.abide': `<script>
+import { memo, reactive } from '@abide/abide'
+
+type View = { x: number }
+let view = reactive<View>({ x: 1 })
+let hero = reactive({ frame: 0 })
+const glance = memo(() => ({ view, hero }))
+const longhand = memo(() => ({ view: view, list: [hero] }))
+const x: number = glance.view.x
+const frame: number = glance.hero.frame
+const y: number = longhand.view.x + longhand.list[0].frame
+function take(seen: { view: View; hero: { frame: number } }) { return seen }
+take(glance)
+</script>
+<p>{x} {frame} {y}</p>`,
+    })
+    expect(await checkApp(built)).toEqual([])
+}, 60_000)
+
 // 32.78 — AN ELEMENT'S `bind:` IS HELD TO WHAT THE ELEMENT WRITES BACK: a numeric input writes a
 // number or `undefined` (32.58), a text field a string — or a number where its value is one — a
 // `<select>` one of the value's own strings and a `<select multiple>` a list of them, `checked` and

@@ -8,7 +8,7 @@ import { tokenize } from '#compiler/tokenize.ts'
 import { reactive } from '#shared'
 import { writePath } from '#shared/writePath.ts'
 
-import { closeTyped, lower, refusal, typed } from './typed.ts'
+import { clientOf, closeTyped, lower, refusal, typed } from './typed.ts'
 
 afterAll(closeTyped)
 
@@ -175,6 +175,83 @@ out.push(later)
             "import { reactive, type Reactive } from '@abide/abide'\nlet a = reactive(1)\nlet b = reactive(2)\na = b",
         ),
     ).toEndWith('\na.set(b())')
+})
+
+// 31.15 — A MEMBER IS TYPED AS THE PROGRAM RUNS: a reactive name in a literal's value is a read
+// (31.1), so `{ view }` holds the `View`, and an access of it is the plain member. As written, the
+// projection types it `Reactive<View>`, and the access lowered to `g().view()` — a call on a `View`.
+// A member a type declares a `Reactive` is 31.3's hold, and one a read built a `Reactive` from is
+// one as it runs. THE REVERT: drop `membersOfReads` from `readsIn`'s suspects; all seven above the
+// 31.3 line lower with a call after the member (`g().view().x`, `g()[0]().x`), and the script throws
+// that `o.view` is not a function.
+const INFERRED =
+    "import { memo, reactive, type Reactive } from '@abide/abide'\ntype View = { x: number }\nlet view = reactive<View>({ x: 1 })\n"
+test('a member a read built is the value it holds — 31.15', async () => {
+    const lowered = async (line: string): Promise<string> =>
+        (await lower(`${INFERRED}${line}`)).slice(INFERRED.length)
+    expect(
+        await lowered('const g = memo(() => ({ view }))\nconst a = g.view.x'),
+    ).toBe('const g = memo(() => ({ view: view() }))\nconst a = g().view.x')
+    expect(
+        await lowered('const g = memo(() => ({ v: view }))\nconst a = g.v.x'),
+    ).toBe('const g = memo(() => ({ v: view() }))\nconst a = g().v.x')
+    expect(
+        await lowered('const g = memo(() => [view])\nconst a = g[0].x'),
+    ).toBe('const g = memo(() => [view()])\nconst a = g()[0].x')
+    expect(
+        await lowered(
+            'const g = memo(() => ({ inner: { view } }))\nconst a = g.inner.view.x',
+        ),
+    ).toBe(
+        'const g = memo(() => ({ inner: { view: view() } }))\nconst a = g().inner.view.x',
+    )
+    expect(
+        await lowered('const o = (() => ({ view }))()\nconst a = o.view.x'),
+    ).toBe('const o = (() => ({ view: view() }))()\nconst a = o.view.x')
+    expect(
+        await lowered(
+            'function glance() { return { view } }\nconst o = glance()\nconst a = o.view.x',
+        ),
+    ).toBe(
+        'function glance() { return { view: view() } }\nconst o = glance()\nconst a = o.view.x',
+    )
+    expect(
+        await lowered(
+            'const g = memo(() => ({ view }))\nconst v = g.view\nconst a = v.x',
+        ),
+    ).toBe(
+        'const g = memo(() => ({ view: view() }))\nconst v = g().view\nconst a = v.x',
+    )
+    // 31.3 — declared a `Reactive`, by a binding's annotation or a parameter's, it is held.
+    expect(
+        await lowered(
+            'const o: { view: Reactive<View> } = { view }\nconst a = o.view.x',
+        ),
+    ).toBe('const o: { view: Reactive<View> } = { view }\nconst a = o.view().x')
+    expect(
+        await lowered(
+            'function f(p: { view: Reactive<View> }) { return p.view.x }',
+        ),
+    ).toBe('function f(p: { view: Reactive<View> }) { return p.view().x }')
+    // A `Reactive` a read was handed to is one as it runs.
+    expect(
+        await lowered(
+            'const store = { count: reactive(view.x) }\nconst a = store.count + 1',
+        ),
+    ).toBe(
+        'const store = { count: reactive(view().x) }\nconst a = store.count() + 1',
+    )
+    expect(
+        await ran(`${INFERRED}const o = (() => ({ view, v: view, list: [view] }))()
+out.push(o.view.x, o.v.x, o.list[0].x)
+`),
+    ).toEqual([1, 1, 1])
+    // A template slot is lowered from the same answer.
+    const client = await clientOf(
+        `<script>${INFERRED}const g = memo(() => ({ view }))</script>\n<p>{g.view.x}</p>`,
+    )
+    expect(client).toContain('g().view.x')
+    expect(client).not.toContain('view().x')
 })
 
 // 31.21 — A READ OF WHAT MAY HOLD NO `Reactive` READS `undefined` THERE: an option a caller left out.

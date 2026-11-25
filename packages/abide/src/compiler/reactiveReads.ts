@@ -1,15 +1,29 @@
-import { getTouchingPropertyName } from 'typescript/unstable/ast'
-import type { Project } from 'typescript/unstable/async'
+import {
+    getTouchingPropertyName,
+    type Node,
+    type SourceFile,
+} from 'typescript/unstable/ast'
+import {
+    isCallExpression,
+    isElementAccessExpression,
+    isPropertyAccessExpression,
+} from 'typescript/unstable/ast/is'
+import { type Project, TypeFlags } from 'typescript/unstable/async'
 
 import { checkedShadow } from './checkedShadow.ts'
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { byPlace, type Diagnosis, placedFindings } from './Diagnostics.ts'
 import { type Projection, projectShadow } from './projectShadow.ts'
-import { type Abide, abideIn, isReactiveSymbol } from './reactiveTypes.ts'
-import { readsIn } from './readsIn.ts'
+import {
+    type Abide,
+    abideIn,
+    isReactiveSymbol,
+    isReactiveType,
+} from './reactiveTypes.ts'
+import { readsIn, type Suspect } from './readsIn.ts'
 import type { ParsedSource } from './readSources.ts'
 import type { ShadowEdit, ShadowHost } from './ShadowHost.ts'
-import { mapForward, ShadowMap } from './ShadowMap.ts'
+import { mapEndForward, mapForward, ShadowMap } from './ShadowMap.ts'
 import { templateWarnings } from './templateWarnings.ts'
 
 /** Whether a script can bind a name at all — a file that cannot is never handed to the checker. */
@@ -114,6 +128,10 @@ export async function reactiveReads(
  * there is one in the projection too. A binding typed from one that just turned out to be a
  * `Reactive` is asked again, until a round turns none. Nothing is asked, and no second snapshot
  * taken, where no file holds one (`readsIn`'s `suspects`).
+ *
+ * 31.15 — SO IS A MEMBER, the other way: an access the projection typed a `Reactive` from a read
+ * that is none in the program it runs as is RELEASED, and read as the plain member it is there.
+ * Each position is decided once — held or released — so the rounds end.
  */
 async function fixedPoint(
     host: ShadowHost,
@@ -126,11 +144,12 @@ async function fixedPoint(
     )[],
 ): Promise<{ answers: CheckerAnswer[]; warnings: Diagnosis[] }> {
     const answers = sources.map(() => UNCHECKED)
-    // Per source, its compiler warnings, the bindings the projection could not type, and those the
-    // lowered program proved a `Reactive`.
+    // Per source, its compiler warnings, the bindings and members the projection could not type,
+    // the bindings the lowered program proved a `Reactive`, and the members it proved none.
     const warned: Diagnosis[][] = sources.map(() => [])
-    const suspects: number[][] = sources.map(() => [])
+    const suspects: Suspect[][] = sources.map(() => [])
     const held: Set<number>[] = sources.map(() => new Set())
+    const released: Set<number>[] = sources.map(() => new Set())
     const answer = async (
         asked: Project,
         abide: Abide,
@@ -152,7 +171,10 @@ async function fixedPoint(
             query.map.shadowPath,
             query.projection,
             source.file,
-            held[at] as Set<number>,
+            {
+                held: held[at] as Set<number>,
+                released: released[at] as Set<number>,
+            },
         )
         answers[at] = read.answer
         suspects[at] = read.suspects
@@ -170,7 +192,7 @@ async function fixedPoint(
     await Promise.all(every.map((at) => answer(first, firstAbide, at)))
     for (;;) {
         const asking = every.filter(
-            (at) => (suspects[at] as number[]).length > 0,
+            (at) => (suspects[at] as Suspect[]).length > 0,
         )
         if (asking.length === 0) break
         const edit: ShadowEdit = { created: [], changed: [] }
@@ -194,8 +216,24 @@ async function fixedPoint(
                         const sourceFile =
                             await asked.program.getSourceFile(path)
                         if (sourceFile === undefined) return
-                        for (const start of suspects[at] as number[]) {
-                            const position = mapForward(origins, start)
+                        for (const suspect of suspects[at] as Suspect[]) {
+                            if (suspect.member) {
+                                if (
+                                    await isReleased(
+                                        asked.checker,
+                                        abide,
+                                        sourceFile,
+                                        mapEndForward(origins, suspect.at),
+                                    )
+                                ) {
+                                    ;(released[at] as Set<number>).add(
+                                        suspect.at,
+                                    )
+                                    turning.add(at)
+                                }
+                                continue
+                            }
+                            const position = mapForward(origins, suspect.at)
                             if (position === undefined) continue
                             const symbol =
                                 await asked.checker.getSymbolAtLocation(
@@ -212,7 +250,7 @@ async function fixedPoint(
                                     symbol,
                                 ))
                             ) {
-                                ;(held[at] as Set<number>).add(start)
+                                ;(held[at] as Set<number>).add(suspect.at)
                                 turning.add(at)
                             }
                         }
@@ -233,4 +271,40 @@ async function fixedPoint(
         for (const at of asking) if (!turned.has(at)) suspects[at] = []
     }
     return { answers, warnings: warned.flat() }
+}
+
+/**
+ * 31.15 — whether the access that ends at `end` in the lowered program is typed as none of a
+ * `Reactive`: a plain member there, which the projection's answer must read as one. A read the
+ * lowering rewrote ends where its call does, `glance.view` as `…glance.view()`, so the access is the
+ * one that call makes. An access the checker cannot type is nothing it can vouch for, and is left as
+ * the projection answered.
+ */
+async function isReleased(
+    checker: Project['checker'],
+    abide: Abide,
+    sourceFile: SourceFile,
+    end: number | undefined,
+): Promise<boolean> {
+    if (end === undefined) return false
+    let node: Node = getTouchingPropertyName(sourceFile, end - 1)
+    while (
+        node.parent !== undefined &&
+        node.parent.end === end &&
+        (isCallExpression(node.parent) || isAccess(node.parent))
+    )
+        node = node.parent
+    if (isCallExpression(node) && node.arguments.length === 0)
+        node = node.expression
+    if (!isAccess(node) || node.end > end) return false
+    const type = await checker.getTypeAtLocation(node)
+    return (
+        type !== undefined &&
+        (type.flags & TypeFlags.Any) === 0 &&
+        !(await isReactiveType(checker, abide, type, false))
+    )
+}
+
+function isAccess(node: Node): boolean {
+    return isPropertyAccessExpression(node) || isElementAccessExpression(node)
 }
