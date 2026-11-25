@@ -220,6 +220,9 @@ function imageBlock(mediaType: Shown, data: string): Image {
  * a type a model is shown — save a JPEG, which is drawn at any size so its EXIF (a phone's GPS among
  * it) is left behind and its orientation applied. A photo stays a JPEG, and anything else becomes a
  * PNG, sharp text and all — but a type a model is not shown (a HEIC) is a photo.
+ *
+ * NOT `shrinkImage`, which writes every picture as the one type it is asked for: 44.53 hands a WebP
+ * on as it is where it fits and draws one that does not as a PNG.
  */
 async function drawnDown(
     image: Blob,
