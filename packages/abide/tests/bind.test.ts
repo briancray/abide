@@ -224,6 +224,39 @@ test('a spread writes attributes, and keeps them in step with the value — 32.1
     expect(card.hasAttribute('data-kind')).toBe(false)
 })
 
+const SPREAD_BUTTON = `<script>
+import { props } from '@abide/abide'
+const { ...rest } = props<{ value?: string; type?: string }>()
+</script>
+<button {...rest}><slot/></button>`
+
+const SPREAD_TWICE = `<script>
+import Button from './Button.abide'
+const ok = { type: 'submit', value: 'confirm' }
+const no = { type: 'button', value: 'cancel' }
+</script>
+
+{#if ok.type}<div><Button {...ok}>Okay</Button><Button {...no}>Cancel</Button></div>{/if}`
+
+// 32.11 — TWO COMPONENT SPREADS IN ONE ARM share the arm's function body, so the region each is found
+// at is named apart. THE REVERT: name it `__spreadAt` for every spread in `emitComponent`; the arm
+// declares the one `const` twice and the module does not parse.
+test('two component spreads in one {#if} arm each hand their record — 32.11', async () => {
+    const { client } = await mountPage(SPREAD_TWICE, { Button: SPREAD_BUTTON })
+    expect(() =>
+        new Bun.Transpiler({ loader: 'js' }).transformSync(client),
+    ).not.toThrow()
+    const buttons = [...document.querySelectorAll('button')]
+    expect(buttons.map((button) => button.getAttribute('value'))).toEqual([
+        'confirm',
+        'cancel',
+    ])
+    expect(buttons.map((button) => button.getAttribute('type'))).toEqual([
+        'submit',
+        'button',
+    ])
+})
+
 const SPREAD_LISTENERS = `<script>
 import { reactive } from '@abide/abide'
 

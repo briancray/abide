@@ -1382,22 +1382,25 @@ function emitInvocation(
     // landed the invocation waits for it rather than aborting the mount around it (`invokeLanded`).
     // The region is found first, while the walk stands at it.
     const spread = hasSpread(node)
+    // CLAIMED PER SPREAD, never a fixed name: two spread invocations in one arm share its function
+    // body, and a second `const` of one name there is a module that does not parse.
+    const spreadAt = spread ? region.claim('sa') : ''
     const found = `${lowering.use('regionFound')}(${at.name})`
     const handed = spread ? SPREAD_RECORD : record
     let invocation: string
     if (chosen === undefined)
-        invocation = `${SCOPE}.own(${node.tag}(${spread ? SPREAD_REGION : found}, ${handed}))`
+        invocation = `${SCOPE}.own(${node.tag}(${spread ? spreadAt : found}, ${handed}))`
     else {
         // 32.34, 32.35 — A TAG CHOOSING BY A VALUE IS AN `{#if}` WHOSE ARMS ARE COMPONENTS
         // (`ChosenRegion`): the watch reads which, and the region swaps.
         const name = region.claim('dc')
-        invocation = `const ${name} = new ${lowering.use('ChosenRegion')}(${spread ? SPREAD_REGION : found}, ${SCOPE}, ${handed}, ${SHARE_AT})
+        invocation = `const ${name} = new ${lowering.use('ChosenRegion')}(${spread ? spreadAt : found}, ${SCOPE}, ${handed}, ${SHARE_AT})
 ${SCOPE}.watch(() => ${name}.show(${chosen}))`
     }
     // One line, so the region found and the call made from it share the block each line stands in.
     region.lines.push(
         spread
-            ? `const ${SPREAD_REGION} = ${found}
+            ? `const ${spreadAt} = ${found}
 ${lowering.use('invokeLanded')}(${SCOPE}, ${SHARE_AT}, () => (${record}), (${SPREAD_RECORD}) => {
 ${invocation}
 })`
@@ -1405,8 +1408,8 @@ ${invocation}
     )
 }
 
-// The region a spread invocation stands at, and the record `invokeLanded` hands it once made.
-const SPREAD_REGION = '__spreadAt'
+// The record `invokeLanded` hands a spread invocation once made — a parameter, so one name serves
+// every invocation.
 const SPREAD_RECORD = '__record'
 
 /**
