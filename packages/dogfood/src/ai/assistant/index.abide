@@ -66,9 +66,9 @@ import Section from '#src/lib/Section.abide'
             import { computed } from '@abide/abide'
             import askAssistant from './askAssistant.handler.ts'
 
-            const events = askAssistant({
+            const events = computed(() => askAssistant({
                 messages: [{ role: 'user', content: 'Where does Ada work?' }],
-            })
+            }))
             const answer = computed(() => {
                 let text = ''
                 for (const event of events)

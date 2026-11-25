@@ -9,6 +9,7 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from 'bun:test'
 import { buildFiles } from '#server/appBuild.ts'
 import { takeParked } from '#server/parkedAnswers.ts'
 import { beginHydration, endHydration } from '#shared/hydrating.ts'
+import { reachOf } from '#shared/rpc.ts'
 import { paintedCallsLanded } from '#shared/takeEarlyCall.ts'
 import { resetSocketWire } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
@@ -273,20 +274,19 @@ test('a 429 runs again on the next reach, and not before its Retry-After — 15.
         const limited = wire(
             'GET',
             `${base}${RPC}/limited`,
-        ) as () => PromiseLike<unknown> & {
-            error(): unknown
-            catch(onFailed: () => void): Promise<unknown>
-        }
-        const first = limited()
-        await first.catch(() => {})
+        ) as () => Promise<unknown>
+        const reach = (): PromiseLike<unknown> & { error(): unknown } =>
+            reachOf(limited) as PromiseLike<unknown> & { error(): unknown }
+        const first = reach()
+        await limited().catch(() => {})
         expect((first.error() as { status: number }).status).toBe(429)
         expect(calls).toEqual(['30'])
         // Before the wait it named, the refusal is served and nothing is asked.
         await limited().catch(() => {})
         expect(calls.length).toBe(1)
         setSystemTime(new Date(Date.now() + 31_000))
-        const second = limited()
-        await second.catch(() => {})
+        const second = reach()
+        await limited().catch(() => {})
         expect((second.error() as { status: number }).status).toBe(429)
         expect(calls.length).toBe(2)
         // Named no wait, so the next reach calls at once.
@@ -502,22 +502,22 @@ test('the wire is the same Rpc: coalesced, narrowable, and a mutation calls agai
     try {
         const getInvoice = wire('GET', `${base}${RPC}/getInvoice`) as (args: {
             id: string
-        }) => PromiseLike<unknown> & {
-            error(): unknown
-            catch(onFailed: () => void): Promise<unknown>
-        }
+        }) => Promise<unknown>
         const first = getInvoice({ id: '4021' })
-        expect(getInvoice({ id: '4021' })).toBe(first)
+        expect(reachOf(getInvoice, { id: '4021' })).toBe(
+            reachOf(getInvoice, { id: '4021' }),
+        )
         expect(await first).toEqual({ number: 'INV-4021', total: '$82.40' })
         expect(calls).toEqual([`GET ${RPC}/getInvoice`])
 
-        const refused = getInvoice({ id: '4311' })
-        await refused.catch(() => {})
+        const refused = await getInvoice({ id: '4311' }).catch(
+            (error: unknown) => error,
+        )
         const narrowing = getInvoice as unknown as {
             isError(error: unknown, name: string): boolean
         }
-        expect(narrowing.isError(refused.error(), 'NotYours')).toBe(true)
-        expect((refused.error() as { data: unknown }).data).toEqual({
+        expect(narrowing.isError(refused, 'NotYours')).toBe(true)
+        expect((refused as { data: unknown }).data).toEqual({
             owner: 'Grace Hopper',
         })
 
@@ -587,26 +587,26 @@ test('the wire takes a call the page already started, and fetches after that —
         'GET /rpc/getInvoice?id=8 ': later,
     }
     try {
-        const getInvoice = wire('GET', '/rpc/getInvoice') as (args: {
-            id: string
-        }) => (() => unknown) & {
-            ready(): boolean
-            refresh(): void
-        } & PromiseLike<unknown>
+        const getInvoice = wire('GET', '/rpc/getInvoice')
+        const reach = (args: { id: string }) =>
+            reachOf(getInvoice, args) as (() => unknown) & {
+                ready(): boolean
+                refresh(): void
+            } & PromiseLike<unknown>
         // Arrived: the value lands in the same run, with nothing fetched.
-        const arrived = getInvoice({ id: '7' })
+        const arrived = reach({ id: '7' })
         expect(arrived.ready()).toBe(true)
         expect(arrived()).toEqual({ id: '7' })
 
         // 41.25 — painted in flight: in flight at adopt, however early its answer arrived, and
         // landed from what arrived. THE REVERT: settle every arrived answer at once; this reads
         // `ready()` true here.
-        const painted = getInvoice({ id: '9' })
+        const painted = reach({ id: '9' })
         expect(painted.ready()).toBe(false)
         expect(await painted).toEqual({ id: '9' })
 
         // In flight: waited on, not sent twice.
-        const waiting = getInvoice({ id: '8' })
+        const waiting = reach({ id: '8' })
         later.response = json('{"id":"8"}')
         arrive()
         expect(await waiting).toEqual({ id: '8' })
@@ -648,15 +648,17 @@ test('a stream painted closed lands closed at the reach, and one painted in flig
         },
     }
     try {
-        const words = wire('GET', '/rpc/words', { stream: true }) as (args: {
-            id: string
-        }) => (() => unknown) & { busy(): boolean } & PromiseLike<unknown>
-        const closed = words({ id: 'x' })
+        const words = wire('GET', '/rpc/words', { stream: true })
+        const reach = (args: { id: string }) =>
+            reachOf(words, args) as (() => unknown) & {
+                busy(): boolean
+            } & PromiseLike<unknown>
+        const closed = reach({ id: 'x' })
         expect([closed.busy(), closed()]).toEqual([
             false,
             ['one ', 'two ', 'x'],
         ])
-        const flowing = words({ id: 'y' })
+        const flowing = reach({ id: 'y' })
         expect(flowing.busy()).toBe(true)
         expect(await flowing).toEqual(['one '])
     } finally {
@@ -683,10 +685,10 @@ test('a call painted in flight stays in flight until the page has hydrated, howe
     }
     beginHydration()
     try {
-        const whoami = wire('GET', '/rpc/whoami') as () => (() => unknown) & {
+        const whoami = wire('GET', '/rpc/whoami')
+        const me = reachOf(whoami) as (() => unknown) & {
             ready(): boolean
         } & PromiseLike<unknown>
-        const me = whoami()
         await Bun.sleep(5)
         expect(me.ready()).toBe(false)
         endHydration()
@@ -732,9 +734,9 @@ test('a call painted settled that a reader took in flight holds the wait, and is
     const b = inFlight('b')
     const calls: Record<string, unknown> = { 'GET /rpc/slow?id=a ': a.early }
     window.__abideCalls = calls
-    const slow = wire('GET', '/rpc/slow') as (args: {
-        id: string
-    }) => (() => unknown) & { ready(): boolean }
+    const slowRpc = wire('GET', '/rpc/slow')
+    const slow = (args: { id: string }) =>
+        reachOf(slowRpc, args) as (() => unknown) & { ready(): boolean }
     try {
         const early = slow({ id: 'a' })
         beginHydration()
@@ -785,19 +787,20 @@ test('a GET is sent force-cache until the page has an answer for its args, no-ca
         controlled({})
         const getInvoice = wire('GET', '/rpc/getInvoice') as (args: {
             id: string
-        }) => PromiseLike<unknown> & {
-            refresh(): void
-            invalidate(): void
-            catch(onFailed: () => void): Promise<unknown>
-        }
+        }) => Promise<unknown>
+        const reach = (args: { id: string }) =>
+            reachOf(getInvoice, args) as {
+                refresh(): void
+                invalidate(): void
+            }
         await getInvoice({ id: '1' }).catch(() => {})
         online = true
         asked.push('online')
-        getInvoice({ id: '1' }).refresh()
+        reach({ id: '1' }).refresh()
         await Bun.sleep(0)
-        getInvoice({ id: '1' }).refresh()
+        reach({ id: '1' }).refresh()
         await Bun.sleep(0)
-        getInvoice({ id: '1' }).invalidate()
+        reach({ id: '1' }).invalidate()
         await getInvoice({ id: '1' })
         await getInvoice({ id: '2' })
         controlled(null)
@@ -878,14 +881,14 @@ test('a copy the build marked as streaming holds each chunk as it lands — 16.3
         },
     })) as unknown
     try {
-        const rows = (
+        const rows = reachOf(
             wire('GET', '/rpc/rows', {
                 stream: true,
-            }) as () => (() => unknown) & {
-                ready(): boolean
-                busy(): boolean
-            } & PromiseLike<unknown>
-        )()
+            }),
+        ) as (() => unknown) & {
+            ready(): boolean
+            busy(): boolean
+        } & PromiseLike<unknown>
         send('{"n":1}\n{"n"')
         const landed = await Promise.race([
             (async () => {
@@ -930,9 +933,9 @@ test('a streaming mutation coalesces until its stream closes, then calls again �
         }
     }) as unknown
     try {
-        const send = wire('POST', '/rpc/send', {
-            stream: true,
-        }) as () => PromiseLike<unknown> & { busy(): boolean }
+        const sendRpc = wire('POST', '/rpc/send', { stream: true })
+        const send = () =>
+            reachOf(sendRpc) as PromiseLike<unknown> & { busy(): boolean }
         const first = send()
         await Bun.sleep(0)
         expect(first.busy()).toBe(true)
@@ -1103,13 +1106,13 @@ test('a streaming copy over binary chunks holds each as a Uint8Array as it lands
         takeParked(fromLoopbackBrowser(new Request(input, init))) ??
         Bun.fetch(input, init)) as typeof fetch
     try {
-        const rows = (
+        const rows = reachOf(
             wire('GET', `${base}${RPC}/binaryRows`, {
                 stream: true,
-            }) as () => (() => unknown) & {
-                ready(): boolean
-            } & PromiseLike<unknown>
-        )()
+            }),
+        ) as (() => unknown) & {
+            ready(): boolean
+        } & PromiseLike<unknown>
         const landed = await Promise.race([
             (async () => {
                 while (!rows.ready()) await Bun.sleep(5)

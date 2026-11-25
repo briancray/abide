@@ -6,6 +6,7 @@
 import { afterAll, expect, test } from 'bun:test'
 
 import { flushSync, invalidate, watch } from '#shared'
+import { reachOf } from '#shared/rpc.ts'
 import { rowKeyOf } from '#ui/rowKeyOf.ts'
 import { resetSocketWire } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
@@ -141,8 +142,8 @@ const unread = GET(computed(() => [{ isbn: '1' }], { key: grown }))
 test('a copy the wrapper keys is what a {#for} over it keys by', () => {
     const books = wire('GET', '/library/keyed', {
         key: 'id',
-    }) as (args?: unknown) => unknown
-    const key = rowKeyOf(books(), (_item, at) => at)
+    })
+    const key = rowKeyOf(reachOf(books), (_item, at) => at)
     expect(key({ id: 'dune' }, 3)).toBe('dune')
 })
 
@@ -165,11 +166,13 @@ test('a selection by the tags a GET declares reaches its copy', async () => {
 // compare calls every parse new, and the reader is woken 1 time where 0 are due.
 test('a copy compared structurally wakes nobody for a load that answers the same', async () => {
     answer = { body: [{ id: 'dune' }], life: 'private, no-store' }
-    const shelf = wire('GET', '/library/compared', {
+    const shelfRpc = wire('GET', '/library/compared', {
         identity: 'deepEqual',
-    }) as (args?: unknown) => (() => unknown) & {
-        refresh(): void
-    } & PromiseLike<unknown>
+    })
+    const shelf = () =>
+        reachOf(shelfRpc) as (() => unknown) & {
+            refresh(): void
+        } & PromiseLike<unknown>
     await shelf()
     let woken = 0
     const stop = watch(() => {
@@ -286,12 +289,12 @@ test("a copy keys a call leaving a member to the handler's default with one that
 // is fetched: the call has no address to be made at. THE REVERT: throw a plain `Error` from
 // `rpcRequest`'s path; the copy holds that `Error`, not a `ValidationError`.
 test('a call whose path parameter has no spelling is a ValidationError, and fetches nothing', async () => {
-    const thread = wire('GET', '/comments/[id]/list') as (args?: unknown) => {
-        error(): unknown
-    } & PromiseLike<unknown>
+    const thread = wire('GET', '/comments/[id]/list')
     const before = loads
     for (const id of ['', '..', undefined]) {
-        const refused = thread({ id })
+        const refused = reachOf(thread, { id }) as {
+            error(): unknown
+        } & PromiseLike<unknown>
         await Promise.resolve(refused).catch(() => {})
         const error = refused.error() as { name?: string; status?: number }
         expect(`${id}: ${error?.name} ${error?.status}`).toBe(
@@ -301,9 +304,7 @@ test('a call whose path parameter has no spelling is a ValidationError, and fetc
     expect(loads - before).toBe(0)
 })
 
-type Copy = (args?: unknown) => (() => unknown) & {
-    error: () => unknown
-} & PromiseLike<unknown>
+type Copy = (args?: unknown) => Promise<unknown>
 
 const outcome = (copy: PromiseLike<unknown>): Promise<string> =>
     Promise.resolve(copy).then(
@@ -337,7 +338,8 @@ test('a stale copy whose reload reaches no server goes on serving what it held â
         const before = loads
         expect(await outcome(offline())).toBe('served ["kept"]')
         expect(loads - before).toBe(1)
-        const error = offline().error() as { status?: number } | undefined
+        const error = (reachOf(offline) as { error(): unknown }).error() as
+            { status?: number } | undefined
         expect(`error: ${error?.status}`).toBe('error: 503')
     } finally {
         unreachable = false

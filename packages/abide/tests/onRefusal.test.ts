@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { flushSync, reactive } from '#shared'
 import { onRefusal } from '#shared/onRefusal.ts'
 import { report, REPORTING } from '#shared/report.ts'
+import { reachOf } from '#shared/rpc.ts'
 import { wire } from '#ui/wire.ts'
 
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -72,16 +73,14 @@ afterAll(() => {
     globalThis.fetch = unstubbedFetch
 })
 
-const readBoard = wire('GET', BOARD) as (args: { n: number }) => {
-    error(): unknown
-}
+const readBoard = wire('GET', BOARD)
 
 let calls = 0
 
 /** One call, answered at `status`, settled; what its value's `error` holds after. */
 async function refusedCall(): Promise<{ status?: number } | undefined> {
     calls += 1
-    const value = readBoard({ n: calls })
+    const value = reachOf(readBoard, { n: calls }) as { error(): unknown }
     // A read subscribes nothing here; it starts the load.
     value.error()
     await Bun.sleep(10)

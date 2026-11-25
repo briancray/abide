@@ -5,6 +5,7 @@
 import { afterEach, expect, test } from 'bun:test'
 
 import { GET } from '#server'
+import { reachOf } from '#shared/rpc.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
 type Loading = (() => unknown) & {
@@ -14,6 +15,8 @@ type Loading = (() => unknown) & {
     peek(): unknown
     refresh(): void
 } & PromiseLike<unknown>
+
+const reach = (rpc: unknown): Loading => reachOf(rpc) as Loading
 
 const settled = (value: Loading): Promise<unknown> =>
     Promise.resolve(value).then(
@@ -33,8 +36,8 @@ afterEach(() => {
 test('a load that goes its timeout without settling refuses 504 — 16.59', async () => {
     const never = GET(() => new Promise<string>(() => {}), {
         timeout: 40,
-    }) as unknown as () => Loading
-    const value = never()
+    })
+    const value = reach(never)
     expect(value.busy()).toBe(true)
     await settled(value)
     expect(value.busy()).toBe(false)
@@ -50,8 +53,8 @@ test('a timeout past what a timer holds does not end the load at once — 16.59'
             return 'answered'
         },
         { timeout: Number.MAX_SAFE_INTEGER },
-    ) as unknown as () => Loading
-    const value = slow()
+    )
+    const value = reach(slow)
     await settled(value)
     expect(statusOf(value)).toBeUndefined()
     expect(value.peek()).toBe('answered')
@@ -69,8 +72,8 @@ test('a stream quiet after its first chunk outlives its timeout — 16.59', asyn
             yield 'second'
         },
         { timeout: 40 },
-    ) as unknown as () => Loading
-    const value = rows()
+    )
+    const value = reach(rows)
     await settled(value)
     expect(value.error()).toBeUndefined()
     expect(value.peek()).toEqual(['first', 'second'])
@@ -90,8 +93,8 @@ test('a stream behind a rung quiet after its first chunk outlives its timeout �
                 yield 'second'
             },
             { timeout: 40, middleware: [(next) => next()] },
-        ) as unknown as () => Loading
-        const value = rows()
+        )
+        const value = reach(rows)
         await settled(value)
         expect(value.error()).toBeUndefined()
         expect(value.peek()).toEqual(['first', 'second'])
@@ -112,8 +115,8 @@ test('a stream with no first chunk inside its timeout is ended — 16.59, 16.60'
             yield 'late'
         },
         { timeout: 40 },
-    ) as unknown as () => Loading
-    const value = rows()
+    )
+    const value = reach(rows)
     await settled(value)
     expect(value.busy()).toBe(false)
     expect(statusOf(value)).toBe(504)
@@ -134,11 +137,11 @@ test('a reload that times out keeps serving what the value held — 16.60', asyn
                 : new Promise<string>(() => {})
         },
         { timeout: 40 },
-    ) as unknown as () => Loading
-    const value = invoice()
+    )
+    const value = reach(invoice)
     expect(await value).toBe('invoice 1')
     value.refresh()
-    expect(invoice()).toBe(value)
+    expect(reach(invoice)).toBe(value)
     await settled(value)
     expect(value.busy()).toBe(false)
     expect(value()).toBe('invoice 1')
@@ -157,10 +160,10 @@ test('a reload that times out keeps serving what the value held — 16.60', asyn
 test('a call joining a load does not extend its timeout — 16.61', async () => {
     const never = GET(() => new Promise<string>(() => {}), {
         timeout: 200,
-    }) as unknown as () => Loading
-    const value = never()
+    })
+    const value = reach(never)
     await Bun.sleep(150)
-    expect(never()).toBe(value)
+    expect(reach(never)).toBe(value)
     const busyAtCheckpoint = await new Promise((done) =>
         setTimeout(() => done(value.busy()), 100),
     )
@@ -172,13 +175,11 @@ test('a call joining a load does not extend its timeout — 16.61', async () => 
 })
 
 // 16.58 — the environment's `timeout`, which a server fills through `RPC_SERVER`, for a handler that
-// names none. THE REVERT: time the load by `rpc.timeout` alone in `call`; nothing ends it.
+// names none. THE REVERT: time the load by `rpc.timeout` alone in `reachCall`; nothing ends it.
 test('a handler naming no timeout takes the environment one — 16.58', async () => {
     RPC_SERVER.timeout = () => 40
-    const never = GET(
-        () => new Promise<string>(() => {}),
-    ) as unknown as () => Loading
-    const value = never()
+    const never = GET(() => new Promise<string>(() => {}))
+    const value = reach(never)
     await settled(value)
     expect(statusOf(value)).toBe(504)
 })

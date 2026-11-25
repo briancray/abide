@@ -131,6 +131,12 @@ affected code saying what it did, and tell the user.
   it read being a derived value. What a timer or a call it started hands back is written when that
   lands, the way an event handler writes. A user action's effect belongs in its event handler. A `watch` runs during a server render too (RULEBOOK 12.5), so one that starts a
   timer or touches a browser global returns a `Disposer`.
+- A handler call answers what its body answers — a promise of the value that rejects with the
+  refusal, or a stream — never a `Reactive` (RULEBOOK 1.1, 16.3). A page reads one as a value with
+  `const deal = computed(() => getDeal({ id }))`, which follows the server and is busy, ready and
+  refused as the call is (16.107); an event handler awaits it, catching a refusal with
+  `getDeal.isError(error, 'Name')`. `memo(fn)` keeps what a function answered per set of args, and
+  a value per key is `memo((args) => computed(…))`.
 - A listener on the window or the document is `<window onkeydown={…}/>` or `<document …/>` at the
   top of the component: added when it mounts, removed when it leaves, never run on the server
   (RULEBOOK 39.21, 39.23) — not an `addEventListener` in a `watch` behind `isServer()` with a

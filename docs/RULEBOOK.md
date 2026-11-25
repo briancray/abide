@@ -150,7 +150,8 @@ RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**
 
 # 1. The reactive value
 
-1.1 Every producer in this design MUST hand back a `Reactive`.
+1.1 `reactive` and `computed` MUST hand back a `Reactive`, and a call of an `Rpc`, a `memo`, a
+`ledger` or a `pipe` MUST NOT hand back one of its own making.
 
 1.2 `Produced` MUST be the unit the producer yielded: `Stored` for every producer but a streaming one,
 and one chunk for a streaming producer.
@@ -306,7 +307,8 @@ escape the write.
 4.18 `s.set` MUST hand back the refusal a gate refused it with, and nothing where it was accepted.
 
 4.19 `reactive` called with no argument and an `Rpc`, or a union of `Rpc`s, as its type argument
-MUST be typed as one `Reactive` over what a call of each of them hands back.
+MUST be typed as one `Reactive` over the value a call of each of them answers, its refusals as its
+failures.
 
 4.20 `reactive` given a function that is neither a `Reactive` nor a `Keyed` MUST hold it as its
 value.
@@ -1148,7 +1150,8 @@ a wire again under 15.21.
 16.2 `GET`, `POST`, `PUT`, `PATCH` and `DELETE` MUST give the handler a handler file exports as its
 default an address over http: that file's route, per 23.14.
 
-16.3 An `Rpc` MUST hand back the same `Reactive` shape the handler had, `Produced` included.
+16.3 An `Rpc` called MUST answer a promise of the handler's value for those `Args`, rejected with its
+refusal, or where the handler streams, an async iterable of its chunks.
 
 16.4 An `Rpc` MUST be callable in both arms, the call being what issues the request.
 
@@ -1473,6 +1476,12 @@ naming the handler and the path to it.
 
 16.106 A release that changes the shape of a request an `Rpc` sends MUST, in that release and each
 one before the next minor release after it, answer a request sent in the shape before the change.
+
+16.107 A `computed` body handing back an `Rpc` call's answer whole, and a `Reactive` set or opened on
+one, MUST adopt the handler's value for those `Args` (11.12), as it would the value itself.
+
+16.108 An `Rpc` called in a `computed` body MUST subscribe the body to the handler's value for those
+`Args`, so a body that awaits the answer runs again where that value moves.
 
 # 17. Response helpers
 
@@ -3955,6 +3964,10 @@ handed an object literal second.
 38.223 The migration keyed to 0.144.0 MUST rename to `computed` every `memo` handed a body written in
 place that declares no parameter, MUST leave a `memo` whose body declares one, and MUST import
 `computed` where it renames one.
+
+38.224 The migration keyed to 0.144.0 MUST hand to a `computed`, as its body's answer, the call of a `.abide` page's
+`const` or `let` initialized by one call of a handler the page imports by default from a
+`.handler.ts` file, or of `health`, and MUST import `computed` where it wraps one.
 
 # 39. Head and view transitions
 

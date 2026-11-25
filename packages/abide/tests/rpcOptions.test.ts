@@ -90,13 +90,19 @@ export const streamed = GET(async function* ({ n }: { n: number }) {
     yield* lines(n)
 }, unlucky)
 
-export const arrowStreamed = GET(({ n }: { n: number }) => lines(n), unlucky)
+const arrowRuns: Record<number, number> = {}
+
+export const arrowStreamed = GET(({ n }: { n: number }) => {
+    arrowRuns[n] = (arrowRuns[n] ?? 0) + 1
+    return lines(n)
+}, unlucky)
 
 export const joinedStream = GET(async () => {
     const first = arrowStreamed({ n: 2 })
     const second = arrowStreamed({ n: 2 })
     setTimeout(() => release(), 10)
-    return [first === second, await first, await second]
+    const chunks = [await first, await second]
+    return [arrowRuns[2] === 1, ...chunks]
 })
 
 export const annotated = GET(({ id, kind, tags, page = 1 }: { id: number; kind: 'movie' | 'series'; tags?: string[]; page: number }) => ({
@@ -582,8 +588,10 @@ test.each(['streamed', 'arrowStreamed'])(
 
 // 1.8 BEHIND A RUNG — A SECOND CALL WITH THE SAME ARGS JOINS THE STREAM, and both read every chunk:
 // the value the call reaches is a stream of its own (9.6), not the one-shot generator the center
-// hands it. THE REVERT: drop the `isAsyncIterable` arm of `absorb`'s settle; the value holds the
-// generator, and neither await is the chunks.
+// hands it. Joined is the body run once for those args — counted rather than compared, since each
+// call answers a promise of its own (16.3), and the handler awaiting them reruns as their value
+// moves (11.75). THE REVERT: drop the `isAsyncIterable` arm of `absorb`'s settle; the value holds
+// the generator, and neither await is the chunks.
 test('two calls with the same args behind a rung join one stream and read all of it — 1.8, 9.6', async () => {
     expect(
         await (await Bun.fetch(`${base}${RPC}/joinedStream`)).json(),

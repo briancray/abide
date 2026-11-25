@@ -8,6 +8,7 @@ import { flushSync, invalidate, refresh, watch } from '#shared'
 import { answerOf } from '#shared/answerOf.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import type { Reactive } from '#shared/reactive/index.ts'
+import { reachOf } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import { resetSocketWire } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
@@ -94,9 +95,9 @@ afterAll(() => {
 // copy's. THE REVERT: skip `followRpc` in `wire`'s settle; nothing is sent over the mux and the copy
 // keeps ['dune'] where ['dune', 'emma'] is due.
 test('a GET loaded is followed at the version it was answered with, and takes what it is sent', async () => {
-    const books = wire('GET', `${LIBRARY}/books`) as (
-        args?: unknown,
-    ) => (() => string[]) & PromiseLike<string[]>
+    const booksRpc = wire('GET', `${LIBRARY}/books`)
+    const books = (args?: unknown) =>
+        reachOf(booksRpc, args) as (() => string[]) & PromiseLike<string[]>
     expect(await books()).toEqual(['dune'])
     await Bun.sleep(10)
 
@@ -144,9 +145,9 @@ test('an invalidate the server sends makes the next read fetch', async () => {
 // \`Following.receive\`; the copy keeps ['dune'].
 test('a patch over the version held is written into the copy', async () => {
     shelf = ['dune']
-    const shelved = wire('GET', `${LIBRARY}/shelved`) as (
-        args?: unknown,
-    ) => (() => string[]) & PromiseLike<string[]>
+    const shelvedRpc = wire('GET', `${LIBRARY}/shelved`)
+    const shelved = (args?: unknown) =>
+        reachOf(shelvedRpc, args) as (() => string[]) & PromiseLike<string[]>
     await shelved()
     await Bun.sleep(10)
     const socket = muxSocket()
@@ -177,9 +178,9 @@ test('a patch over the version held is written into the copy', async () => {
 // read is made.
 test('a patch over a version the copy does not hold makes it read again', async () => {
     shelf = ['dune']
-    const archived = wire('GET', `${LIBRARY}/archived`) as (
-        args?: unknown,
-    ) => (() => string[]) & PromiseLike<string[]>
+    const archivedRpc = wire('GET', `${LIBRARY}/archived`)
+    const archived = (args?: unknown) =>
+        reachOf(archivedRpc, args) as (() => string[]) & PromiseLike<string[]>
     await archived()
     await Bun.sleep(10)
     const socket = muxSocket()
@@ -210,9 +211,9 @@ test('a patch over a version the copy does not hold makes it read again', async 
 test('a copy written to locally reads again rather than take a patch over it', async () => {
     const followed = async (name: string) => {
         shelf = ['dune', 'emma']
-        const copy = wire('GET', `${LIBRARY}/${name}`) as (
-            args?: unknown,
-        ) => Reactive<string[]> & PromiseLike<string[]>
+        const copyRpc = wire('GET', `${LIBRARY}/${name}`)
+        const copy = () =>
+            reachOf(copyRpc) as Reactive<string[]> & PromiseLike<string[]>
         await copy()
         await Bun.sleep(10)
         const follow = muxSocket().sent.find(
@@ -278,9 +279,9 @@ test("a frame the follow takes does not keep a page's load going — 16.48", asy
     const reading = wire('GET', `${LIBRARY}/reading`) as (
         args?: unknown,
         options?: { signal?: AbortSignal },
-    ) => (() => unknown) &
+    ) => Promise<unknown>
+    const value = reachOf(reading) as (() => unknown) &
         PromiseLike<unknown> & { refresh(): void; busy(): boolean }
-    const value = reading()
     await value
     await Bun.sleep(10)
     const socket = muxSocket()
@@ -608,13 +609,13 @@ test('a mux that closed while offline is not opened again until the browser is o
 // its call is still waiting.
 test('a copy written here takes nothing sent while its calls wait, and reads again once they are delivered — 18.35', async () => {
     shelf = ['dune']
-    const stacked = wire('GET', `${LIBRARY}/stacked`) as (
-        args?: unknown,
-    ) => (() => string[]) &
-        PromiseLike<string[]> & {
-            synced(): boolean
-            patch(mutate: (held: string[]) => void): void
-        }
+    const stackedRpc = wire('GET', `${LIBRARY}/stacked`)
+    const stacked = (args?: unknown) =>
+        reachOf(stackedRpc, args) as (() => string[]) &
+            PromiseLike<string[]> & {
+                synced(): boolean
+                patch(mutate: (held: string[]) => void): void
+            }
     await stacked()
     await Bun.sleep(10)
     const socket = muxSocket()

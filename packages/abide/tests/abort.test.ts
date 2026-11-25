@@ -7,6 +7,7 @@ import { expect, test } from 'bun:test'
 
 import { GET } from '#server'
 import { flushSync } from '#shared'
+import { reachOf } from '#shared/rpc.ts'
 import { wire } from '#ui/wire.ts'
 
 type Loading = (() => unknown) & {
@@ -20,15 +21,16 @@ type Loading = (() => unknown) & {
 // A handler whose loads finish only when the test says so, one release per load started.
 function held() {
     const releases: (() => void)[] = []
-    const rpc = GET(
+    const getInvoice = GET(
         ({ id }: { id: string }) =>
             new Promise<string>((done) => {
                 releases.push(() => done(`invoice ${id}`))
             }),
-    ) as unknown as (
+    )
+    const rpc = (
         args: { id: string },
         options?: { signal?: AbortSignal },
-    ) => Loading
+    ): Loading => reachOf(getInvoice, args, options) as Loading
     return { rpc, releases }
 }
 
@@ -128,12 +130,11 @@ test('an aborted stream keeps the chunks it had and runs no further — 16.49', 
         yield 'second'
         finished = true
         yield 'third'
-    }) as unknown as (
-        args?: undefined,
-        options?: { signal?: AbortSignal },
-    ) => Loading
+    })
     const leaving = new AbortController()
-    const value = rows(undefined, { signal: leaving.signal })
+    const value = reachOf(rows, undefined, {
+        signal: leaving.signal,
+    }) as Loading
     await Bun.sleep(0)
     expect(value.peek()).toEqual(['first'])
     leaving.abort()
@@ -158,12 +159,13 @@ test('a load every caller aborted aborts its request — 16.49', async () => {
         return new Promise(() => {})
     }) as unknown
     try {
-        const getInvoice = wire('GET', '/rpc/getInvoice') as (
-            args: { id: string },
-            options?: { signal?: AbortSignal },
-        ) => Loading
+        const getInvoice = wire('GET', '/rpc/getInvoice')
         const leaving = new AbortController()
-        const value = getInvoice({ id: '9' }, { signal: leaving.signal })
+        const value = reachOf(
+            getInvoice,
+            { id: '9' },
+            { signal: leaving.signal },
+        ) as Loading
         expect(handed?.aborted).toBe(false)
         leaving.abort()
         flushSync()

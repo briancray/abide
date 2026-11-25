@@ -168,7 +168,8 @@ export type AdoptedFailures<Computed> =
     Computed extends Reactive<unknown, never, infer Failures, unknown>
         ? Failures
         : Computed extends {
-                readonly [CALL_ENTRY]?: { readonly failures: infer Failures } | undefined
+                readonly [CALL_ENTRY]?:
+                    { readonly failures: infer Failures } | undefined
             }
           ? Failures
           : never

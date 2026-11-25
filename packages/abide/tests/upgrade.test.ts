@@ -9,6 +9,7 @@ import { spawned } from '@abide/harness/gate'
 
 import { paragraphsOf } from '#compiler/agentNotes.ts'
 import { toComputed } from '#compiler/toComputed.ts'
+import { toComputedCall } from '#compiler/toComputedCall.ts'
 import { toMemo } from '#compiler/toMemo.ts'
 import { upgrade } from '#compiler/upgrade.ts'
 import { ABIDE_DIRECTORY } from '#server/ABIDE_DIRECTORY.ts'
@@ -690,4 +691,48 @@ export const named = computed(function () { return 1 })
 export const streamed = computed(async function* () { yield 1 })
 export const byId = memo(({ id }: { id: string }) => id)
 `)
+})
+
+// 38.224 — A HANDLER CALL A PAGE HOLDS AS A VALUE IS HELD THROUGH `computed`: a declaration whose whole
+// initializer calls a `.handler.ts` default or abide's `health`, and nothing else — an awaited call,
+// one inside an event handler, and a call of anything else stay. THE REVERT: drop the "whole
+// initializer" test from `wrapCalls`; `const amount = getDeal({ id }).amount` is wrapped too.
+test('a handler call a page holds is wrapped in computed — 38.224', () => {
+    const page = `<script>
+import { health, reactive } from '@abide/abide'
+import getDeal from './getDeal.handler.ts'
+import { format } from './format.ts'
+
+let id = reactive('d2')
+const deal = getDeal({ id })
+const account = health()
+const label = format(id)
+const amount = getDeal({ id }).amount
+async function reload() {
+    const fresh = await getDeal({ id })
+    return fresh
+}
+</script>
+
+<p>{deal.name}</p>`
+    expect(toComputedCall(page, 'src/deals/index.abide')).toBe(`<script>
+import { computed, health, reactive } from '@abide/abide'
+import getDeal from './getDeal.handler.ts'
+import { format } from './format.ts'
+
+let id = reactive('d2')
+const deal = computed(() => getDeal({ id }))
+const account = computed(() => health())
+const label = format(id)
+const amount = getDeal({ id }).amount
+async function reload() {
+    const fresh = await getDeal({ id })
+    return fresh
+}
+</script>
+
+<p>{deal.name}</p>`)
+    expect(toComputedCall('const deal = getDeal()', 'src/lib/deal.ts')).toBe(
+        'const deal = getDeal()',
+    )
 })

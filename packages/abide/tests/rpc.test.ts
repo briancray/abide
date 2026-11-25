@@ -16,8 +16,9 @@ import {
     watch,
 } from '#shared'
 import { answered } from '#shared/answerOf.ts'
+import type { CALL_ENTRY } from '#shared/reactive/CALL_ENTRY.ts'
 import { keyedValue } from '#shared/reactive/index.ts'
-import type { RpcContext } from '#shared/rpc.ts'
+import { reachOf, type RpcContext } from '#shared/rpc.ts'
 
 // 16.6 — GET OVER A PLAIN FUNCTION IS GET OVER THE `reactive` OF IT, so a parameter makes it keyed
 // and a second call with the same args joins the first (1.8). The work is what is asserted: a
@@ -31,10 +32,10 @@ test('a plain handler is the reactive of itself, and a repeated call joins it �
         return { id, total: 1240 }
     })
 
-    const first = getInvoice({ id: '42' })
+    const first = reachOf(getInvoice, { id: '42' })
     expect(await first).toEqual({ id: '42', total: 1240 })
-    expect(getInvoice({ id: '42' })).toBe(first)
-    expect(getInvoice({ id: '42' })).toBe(first)
+    expect(reachOf(getInvoice, { id: '42' })).toBe(first)
+    expect(await getInvoice({ id: '42' })).toEqual({ id: '42', total: 1240 })
     expect(ran).toBe(1)
 
     await getInvoice({ id: '7' })
@@ -50,11 +51,13 @@ test('a plain handler is the reactive of itself, and a repeated call joins it �
 test('a reactive handler is reached, not wrapped — 16.3, 16.5', async () => {
     const totals = keyedValue(({ region }: { region: string }) => region.length)
     const getTotals = GET(totals)
-    expect(getTotals({ region: 'north' })).toBe(totals({ region: 'north' }))
+    expect(reachOf(getTotals, { region: 'north' })).toBe(
+        totals({ region: 'north' }),
+    )
 
     const viewer = computed(() => ({ readOnly: true }))
     const getViewer = GET(viewer)
-    expect(getViewer()).toBe(viewer)
+    expect(reachOf(getViewer)).toBe(viewer)
     expect(await getViewer()).toEqual({ readOnly: true })
 })
 
@@ -151,10 +154,11 @@ test("a plain handler's options build its value too — 16.6", async () => {
             description: 'An invoice, by id.',
         },
     )
-    const refused = getInvoice({ id: -1 })
-    await refused.catch(() => {})
+    const refused: unknown = await getInvoice({ id: -1 }).catch(
+        (failure: unknown) => failure,
+    )
     expect(`body runs: ${runs}`).toBe('body runs: 0')
-    expect(getInvoice.isError(refused.error(), 'ValidationError')).toBe(true)
+    expect(getInvoice.isError(refused, 'ValidationError')).toBe(true)
     expect(getInvoice.description).toBe('An invoice, by id.')
     expect(await getInvoice({ id: 4 })).toBe(8)
 
@@ -206,9 +210,9 @@ test('a refusal lands on the value and narrows by name — 16.8', async () => {
             ? { number: 'INV-0042' }
             : refuse.notFound({ path: `/invoices/${id}`, method: 'GET' }),
     )
-    const missing = getInvoice({ id: 'nope' })
-    await missing.catch(() => {})
-    const error = missing.error()
+    const error: unknown = await getInvoice({ id: 'nope' }).catch(
+        (failure: unknown) => failure,
+    )
     expect(getInvoice.isError(error, 'NotFound')).toBe(true)
     if (getInvoice.isError(error, 'NotFound')) {
         const path: string = error.data.path
@@ -257,12 +261,10 @@ test("a rung's named refusal is on the Rpc's failures, and narrows by name — 1
             ],
         },
     )
-    type Names = typeof save extends (
-        ...args: never[]
-    ) => Reactive<unknown, unknown, infer Failures, unknown>
-        ? Failures extends { name: infer Name }
-            ? Name
-            : never
+    type Names = NonNullable<
+        ReturnType<typeof save>[typeof CALL_ENTRY]
+    >['failures'] extends { name: infer Name }
+        ? Name
         : never
     const names: [Names] extends [
         'HttpError' | 'Late' | 'NotYours' | 'Stale' | 'ValidationError',
@@ -275,11 +277,11 @@ test("a rung's named refusal is on the Rpc's failures, and narrows by name — 1
         : false = true
 
     // A rung reads the request, so the call is made inside one.
-    const error = await inScope(new Request('http://app/'), async () => {
-        const refused = save({ home: 'theirs', fresh: true })
-        await refused.catch(() => {})
-        return refused.error()
-    })
+    const error: unknown = await inScope(new Request('http://app/'), () =>
+        save({ home: 'theirs', fresh: true }).catch(
+            (failure: unknown) => failure,
+        ),
+    )
     const owners: string[] = []
     if (save.isError(error, 'NotYours')) owners.push(error.data.owner)
     expect([names, owners]).toEqual([true, ['someone']])
@@ -401,7 +403,7 @@ test('a generator handler streams, and the value is its chunks', async () => {
         yield { region: 'north', year }
         yield { region: 'south', year }
     })
-    expect(await salesByRegion({ year: 2026 })).toEqual([
+    expect(await reachOf(salesByRegion, { year: 2026 })).toEqual([
         { region: 'north', year: 2026 },
         { region: 'south', year: 2026 },
     ])
@@ -435,7 +437,7 @@ test('for await over a streamed call ends with the stream, and throws what faile
 // The runtime half pins the shape the type names — name, status, data `undefined`. The type half is
 // the reads: `events.error()?.message` and `error.data` only compile where the `Rpc`'s failures carry
 // it, and the `@ts-expect-error` keeps a name no failure carries refusing. THE REVERT: drop
-// `| Failed<'HttpError', undefined>` from the call's `Reactive` in `rpc.ts` — four reads fail
+// `| Failed<'HttpError', undefined>` from the call's `CallAnswer` in `rpc.ts` — four reads fail
 // typecheck, `.message`, `.status` and `.data` on `never`.
 test('every rpc carries the transport refusal in its failures — 16.8', async () => {
     const ask = POST(
@@ -445,7 +447,11 @@ test('every rpc carries the transport refusal in its failures — 16.8', async (
         },
         { timeout: 20 },
     )
-    const events = ask({ question: 'why' })
+    const events = reachOf(ask, { question: 'why' }) as Reactive<
+        unknown,
+        unknown,
+        NonNullable<ReturnType<typeof ask>[typeof CALL_ENTRY]>['failures']
+    >
     await events.catch(() => {})
     const message: string | undefined = events.error()?.message
     expect(message).toBe('Gateway Timeout')
@@ -524,7 +530,7 @@ test('a pattern narrows an rpc to the entries it matches, in each spelling — 1
     // 13.7: a refresh reloads what something subscribes to, so both shelves are watched.
     for (const warehouse of ['east', 'west'])
         watch(() => {
-            getStock({ warehouse })()
+            getStock({ warehouse })
         })
     loads.length = 0
 
@@ -563,7 +569,7 @@ test('a pattern matches args holding its arrays and nested members — 13.12', a
     )
     for (const stages of [['won', 'lost'], ['open']])
         watch(() => {
-            getDeals({ stages, owner: { team: 'sales', region: 'emea' } })()
+            getDeals({ stages, owner: { team: 'sales', region: 'emea' } })
         })
     loads.length = 0
 
@@ -593,7 +599,7 @@ test('a pattern is checked against Args on every one of the four — 13.12', () 
 
 test('an rpc answers the free probes as its handler does', () => {
     const settled = GET(() => 1)
-    settled()()
+    ;(reachOf(settled) as () => number)()
     expect(busy(settled)).toBe(false)
     expect(settled.ready()).toBe(true)
 })

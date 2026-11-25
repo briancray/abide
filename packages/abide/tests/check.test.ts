@@ -1223,9 +1223,10 @@ const { rows } = props<{ rows: { step: number; label: string }[] }>()
 <p>{busy(rows) ? 'running' : rows.ready() ? rows.map((row) => row.label).join() : 'waiting'}</p>
 <p>{rows.map((row) => row.missing).join()}</p>`,
         'index.abide': `<script>
+import { computed } from '@abide/abide'
 import Status from '#src/lib/Status.abide'
 import sweep from '#src/runs/sweep.handler.ts'
-const running = sweep()
+const running = computed(() => sweep())
 </script>
 <Status rows={running}/>`,
     })

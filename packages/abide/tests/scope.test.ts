@@ -21,6 +21,7 @@ import {
     computed,
     flushSync,
     invalidate,
+    type Reactive,
     reactive,
     refresh,
     watch,
@@ -28,7 +29,7 @@ import {
 import { cellOf } from '#shared/reactive/cellShape.ts'
 import { ambient, ambientComputed, keyedValue } from '#shared/reactive/index.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
-import { GET, POST } from '#shared/rpc.ts'
+import { GET, POST, reachOf } from '#shared/rpc.ts'
 
 installServer()
 
@@ -361,8 +362,8 @@ test('a value handler is one value per request, and one value under global — 1
     const count = GET(0)
     const shared = GET(0, { global: true })
     await inScope(new Request('http://app/a'), async () => {
-        count().set(5)
-        shared().set(5)
+        ;(reachOf(count) as Reactive<number>).set(5)
+        ;(reachOf(shared) as Reactive<number>).set(5)
     })
     await inScope(new Request('http://app/b'), async () => {
         expect(await count()).toBe(0)
@@ -781,8 +782,10 @@ for (const shape of ['plain', 'streamed'] as const)
         await inScope(
             new Request('http://app/', { method: 'POST' }),
             async () => {
-                await sweep()
-                await sweep()
+                // The value a call reaches settles when the stream ends, where the stream itself
+                // would need draining.
+                await reachOf(sweep)
+                await reachOf(sweep)
             },
         )
         expect(order).toEqual(['rung', 'body', 'rung', 'body'])

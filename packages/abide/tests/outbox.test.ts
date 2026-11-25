@@ -7,6 +7,7 @@
 import { afterAll, afterEach, expect, test } from 'bun:test'
 
 import { busy, outbox } from '#shared'
+import { reachOf } from '#shared/rpc.ts'
 import { deliver, resetOutbox } from '#ui/outboxQueue.ts'
 import { resetSocketWire } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
@@ -60,10 +61,18 @@ type Call = PromiseLike<unknown> & {
     synced(): boolean
     error(): unknown
 }
+type Options = { offline?: (args: Record<string, unknown>) => unknown }
 type Caller = (
     args: Record<string, unknown>,
-    options?: { offline?: (args: Record<string, unknown>) => unknown },
-) => Call
+    options?: Options,
+) => Promise<unknown>
+
+/** The value a call with these args reaches — what its `synced()` and `error()` are read off. */
+const reach = (
+    rpc: Caller,
+    args: Record<string, unknown>,
+    options?: Options,
+): Call => reachOf(rpc, args, options) as Call
 
 // 16.81, 16.85 — A `GET` WITH NO ANSWER SETTLES TO ITS STAND-IN, written here rather than produced,
 // and asks the network again once it is back; the answer it then gets is the server's. THE REVERT:
@@ -71,7 +80,11 @@ type Caller = (
 test('a GET with no answer settles to its stand-in until the network answers — 16.81, 16.85', async () => {
     const getNote = wire('GET', '/rpc/getNote') as Caller
     network = false
-    const note = getNote({ id: '1' }, { offline: () => ({ from: 'device' }) })
+    const note = reach(
+        getNote,
+        { id: '1' },
+        { offline: () => ({ from: 'device' }) },
+    )
     expect(await note).toEqual({ from: 'device' })
     expect(note.synced()).toBe(false)
     network = true
@@ -85,7 +98,11 @@ test('a GET with no answer settles to its stand-in until the network answers —
 // server's note for the default.
 test('a refresh with no answer keeps what the copy holds — 16.81', async () => {
     const getNote = wire('GET', '/rpc/getNote') as Caller
-    const note = getNote({ id: '2' }, { offline: () => ({ from: 'device' }) })
+    const note = reach(
+        getNote,
+        { id: '2' },
+        { offline: () => ({ from: 'device' }) },
+    )
     await note
     network = false
     ;(note as unknown as { refresh(): void }).refresh()
@@ -106,7 +123,7 @@ test('an answer the worker kept is not synced until the network answers — 16.8
                 : {},
         ),
     )
-    const note = getNote({ id: '3' })
+    const note = reach(getNote, { id: '3' })
     expect(await note).toEqual({ from: 'kept' })
     expect(note.synced()).toBe(false)
     kept = false
@@ -122,7 +139,8 @@ test('an answer the worker kept is not synced until the network answers — 16.8
 test('a mutation with no answer is queued, sent again under its key, and lands its answer — 16.82, 46.7, 46.10', async () => {
     const addNote = wire('POST', '/rpc/addNote') as Caller
     network = false
-    const added = addNote(
+    const added = reach(
+        addNote,
         { text: 'a' },
         { offline: (args) => ({ from: 'device', ...args }) },
     )
@@ -171,7 +189,7 @@ test('a refused call stays with its error and does not hold back the next — 46
     const tagNote = wire('POST', '/rpc/tagNote') as Caller
     const offline = { offline: () => ({ from: 'device' }) }
     network = false
-    const refusedCall = addNote({ text: 'bad' }, offline)
+    const refusedCall = reach(addNote, { text: 'bad' }, offline)
     await refusedCall
     await Bun.sleep(10)
     await tagNote({ tag: 'x' }, offline)
@@ -244,7 +262,8 @@ test('a call refused 401 holds the line until retry — 46.6, 46.12', async () =
 test('a call refused 429 waits out its retry-after and is sent again — 46.4, 46.21', async () => {
     const addNote = wire('POST', '/rpc/addNote') as Caller
     network = false
-    const added = addNote(
+    const added = reach(
+        addNote,
         { text: 'a' },
         { offline: () => ({ from: 'device' }) },
     )
@@ -376,7 +395,8 @@ test('a reader of outbox is woken as calls are queued and delivered — 46.17', 
 test("a queued call carries its call's value, refused and retried — 46.18, 46.12", async () => {
     const addNote = wire('POST', '/rpc/addNote') as Caller
     network = false
-    const added = addNote(
+    const added = reach(
+        addNote,
         { text: 'a' },
         { offline: () => ({ from: 'device' }) },
     )
@@ -427,7 +447,7 @@ test('a GET copy another call patched offline reads again once the line is deliv
             { headers: { 'cache-control': 'private, max-age=60' } },
         ),
     )
-    const notes = listNotes({}) as Call & {
+    const notes = reach(listNotes, {}) as Call & {
         patch(mutate: (held: { from: string }) => void): void
     }
     await notes

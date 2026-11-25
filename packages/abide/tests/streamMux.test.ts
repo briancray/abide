@@ -8,6 +8,7 @@ import { handedOff } from '#server/handedOff.ts'
 import { park, takeParked } from '#server/parkedAnswers.ts'
 import { streamOverMux } from '#server/streamOverMux.ts'
 import { flushSync } from '#shared'
+import { reachOf } from '#shared/rpc.ts'
 import { resetSocketWire } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
 
@@ -119,11 +120,9 @@ async function landed(copy: Copy): Promise<unknown> {
 // hold. THE REVERT: read every stream with `answerOf` in `wire`'s `streamed` (skip `streamOverMux`);
 // 3 fetches open where 0 are due.
 test('a page reading K streams holds no http connection while they stream — 16.93', async () => {
-    const ticks = wire('GET', `${ORIGIN}/ticks`, { stream: true }) as (args: {
-        n: string
-    }) => Copy
+    const ticks = wire('GET', `${ORIGIN}/ticks`, { stream: true })
     const copies: Copy[] = []
-    for (const n of ['a', 'b', 'c']) copies.push(ticks({ n }))
+    for (const n of ['a', 'b', 'c']) copies.push(reachOf(ticks, { n }) as Copy)
     for (let turns = 0; turns < 200 && answering.size < 3; turns += 1)
         await Bun.sleep(1)
     for (const fed of answering.values()) fed.send('{"at":1}\n')
@@ -145,8 +144,8 @@ test('a page reading K streams holds no http connection while they stream — 16
 test('a stream that refuses after its head ends on that refusal — 16.68, 16.93', async () => {
     const ticks = wire('GET', `${ORIGIN}/refusing`, {
         stream: true,
-    }) as (args: { n: string }) => Copy
-    const copy = ticks({ n: 'refusing' })
+    })
+    const copy = reachOf(ticks, { n: 'refusing' }) as Copy
     for (let turns = 0; turns < 200 && !answering.has('refusing'); turns += 1)
         await Bun.sleep(1)
     const fed = answering.get('refusing') as {
@@ -168,12 +167,13 @@ test('a stream that refuses after its head ends on that refusal — 16.68, 16.93
 // 16.48 OVER THE MUX — a load its signal ends stops the server's stream, which is told so.
 // THE REVERT: drop the `unsub` a stream's abort sends; the server's body is never cancelled.
 test('a stream whose load is aborted stops the server answering it — 16.48, 16.93', async () => {
-    const ticks = wire('GET', `${ORIGIN}/aborted`, { stream: true }) as (
-        args: { n: string },
-        options?: { signal?: AbortSignal },
-    ) => Copy
+    const ticks = wire('GET', `${ORIGIN}/aborted`, { stream: true })
     const ending = new AbortController()
-    const copy = ticks({ n: 'aborted' }, { signal: ending.signal })
+    const copy = reachOf(
+        ticks,
+        { n: 'aborted' },
+        { signal: ending.signal },
+    ) as Copy
     for (let turns = 0; turns < 200 && !answering.has('aborted'); turns += 1)
         await Bun.sleep(1)
     const fed = answering.get('aborted') as {
@@ -193,13 +193,13 @@ test('a stream whose load is aborted stops the server answering it — 16.48, 16
 // REVERT: send `http` with no token in `streamOverMux`, as the mux did before it parked them; the
 // browser calls again over http, and each handler runs 2 times where 1 is due.
 test('an answer the mux cannot carry is taken over http, its handler run once — 16.94', async () => {
-    const bytes = wire('GET', `${ORIGIN}/bytes`, { stream: true }) as () => Copy
-    const chunks = (await bytes()) as Uint8Array[]
+    const bytes = wire('GET', `${ORIGIN}/bytes`, { stream: true })
+    const chunks = (await (reachOf(bytes) as Copy)) as Uint8Array[]
     expect([...(chunks[0] as Uint8Array)]).toEqual([1, 2])
     const signin = wire('GET', `${ORIGIN}/signin`, {
         stream: true,
-    }) as () => Copy
-    expect(await signin()).toEqual([{ at: 1 }, { at: 2 }])
+    })
+    expect(await (reachOf(signin) as Copy)).toEqual([{ at: 1 }, { at: 2 }])
     expect({ bytes: ran.get('/bytes'), signin: ran.get('/signin') }).toEqual({
         bytes: 1,
         signin: 1,

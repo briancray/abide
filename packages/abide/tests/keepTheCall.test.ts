@@ -12,9 +12,11 @@ import {
     refuse,
     watch,
 } from '#shared'
+import type { CallOf } from '#shared/reactive/index.ts'
+import { reachOf } from '#shared/rpc.ts'
 
-// KEEP THE CALL: a form keeps the `Reactive` its write's call handed back rather than awaiting it in
-// a `try` and copying the outcome out by hand. 16.4 issues the request at the call, 11.61 adopts the
+// KEEP THE CALL: a form keeps the call its write made — adopting the value the call reached — rather
+// than awaiting it in a `try` and copying the outcome out by hand. 16.4 issues the request at the call, 11.61 adopts the
 // call's value and 11.50 forwards every probe; 3.15 and 4.19 are the two this form adds.
 
 type Balance = { account: string; amount: number }
@@ -55,6 +57,10 @@ const recordBalance = POST(
         }),
     },
 )
+
+// The value a call reaches, for the tests that probe it rather than what the call answers (16.3).
+const reachRecord = (args: Balance): CallOf<typeof recordBalance> =>
+    reachOf(recordBalance, args) as CallOf<typeof recordBalance>
 
 async function settled(
     value: Reactive<unknown, never, unknown>,
@@ -284,7 +290,7 @@ test('a kept call is let go by keeping one nothing has written — 11.16, 11.50,
     }
     flushSync()
     const release = held()
-    const call = recordBalance({ account: 'closed', amount: 5 })
+    const call = reachRecord({ account: 'closed', amount: 5 })
     saving.set(call)
     release()
     await settled(saving)
@@ -431,7 +437,7 @@ gate(
         const release = held()
         saving.set(
             nextStep(
-                recordBalance({ account: 'checking', amount: 5 }),
+                reachRecord({ account: 'checking', amount: 5 }),
                 async (made) => {
                     await stepped.promise
                     return made.amount * 2
@@ -462,7 +468,7 @@ gate(
     async () => {
         let ran = 0
         const refused = nextStep(
-            recordBalance({ account: 'x', amount: 0 }),
+            reachRecord({ account: 'x', amount: 0 }),
             () => {
                 ran += 1
             },
@@ -471,7 +477,7 @@ gate(
         const issues = Object.keys(refused.issues() ?? {}).join('+')
 
         const thrown = nextStep(
-            recordBalance({ account: 'checking', amount: 5 }),
+            reachRecord({ account: 'checking', amount: 5 }),
             () => {
                 throw new Error('step broke')
             },
@@ -479,7 +485,7 @@ gate(
         await settled(thrown)
 
         const release = held()
-        const closing = recordBalance({ account: 'checking', amount: 5 }).then(
+        const closing = reachRecord({ account: 'checking', amount: 5 }).then(
             () => closeAccount({ account: 'closed' }),
         )
         // Reached at once, as a value keeps one: 2.20 reports what a step nobody reached refused.
@@ -526,6 +532,7 @@ gate(
     async () => {
         const run = await inAFreshProcess(`
 import { POST } from '${import.meta.dir}/../src/server/index.ts'
+import { reachOf } from '${import.meta.dir}/../src/shared/rpc.ts'
 import { reactive } from '${import.meta.dir}/../src/shared/index.ts'
 
 let reported = 0
@@ -539,16 +546,16 @@ const step = ${
                 : '(call, next) => call.then(next)'
         }
 let ran = 0
-step(save({}), () => {
+step(reachOf(save, {}), () => {
     ran += 1
     throw new Error('unreached step broke')
 })
 const kept = reactive()
-kept.set(step(save({}), () => {
+kept.set(step(reachOf(save, {}), () => {
     ran += 1
     throw new Error('kept step broke')
 }))
-const read = step(save({}), () => {
+const read = step(reachOf(save, {}), () => {
     ran += 1
     throw new Error('read step broke')
 })

@@ -4,7 +4,7 @@ import { track, TRACKING } from './tracking.ts'
 
 /**
  * 16.3 — what a call answers for the handler's value `entry`: the promise of its value, rejected with
- * its refusal (15.27), or where the handler streams, the stream of its chunks. Either carries `entry`,
+ * its refusal (16.3), or where the handler streams, the stream of its chunks. Either carries `entry`,
  * so a `computed` handing it back whole adopts the value (11.12).
  *
  * 11.75 — CALLED IN A `computed`, THE CALL IS A READ OF THE VALUE: the reader is subscribed to it, so

@@ -54,10 +54,11 @@ import Tick from './lib/Tick.abide'
 // A CALL MADE WHILE THE MARKUP IS BUILT, not in a setup: nothing defers it, so it is painted in
 // flight and answers a microtask after.
 const INLINE = `<script>
+import { computed } from '@abide/abide'
 import getTick from '#src/totals/getTick.handler.ts'
 </script>
 
-<main><p>{getTick({ id: 'inline' }).busy() ? 'loading' : 'done'}</p></main>`
+<main><p>{computed(() => getTick({ id: 'inline' })).busy() ? 'loading' : 'done'}</p></main>`
 
 // A BARE PROBE IN MARKUP reads every load in its scope, so it is built once the siblings after it
 // have been set up — as the browser's is, where every setup has run before a region chooses.

@@ -1,7 +1,9 @@
 <script>
+import { computed } from '@abide/abide'
+
 import getDealScores from '../getDealScores.handler.ts'
 
-const scores = getDealScores()
+const scores = computed(() => getDealScores())
 </script>
 
 <ul class="fields stacked">

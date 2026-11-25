@@ -157,7 +157,7 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
 /**
  * 16.3 — what one call of an `Rpc` answers, as the handler's body answers: the stream of its chunks
  * where it streams — `Produced` is a chunk where `Value` is the chunks — and otherwise the promise of
- * its value, rejected with its refusal (15.27).
+ * its value, rejected with its refusal (16.3).
  */
 export type CallAnswer<Value, Failures, Produced> = ([Value] extends [Produced]
     ? [Produced] extends [Value]
