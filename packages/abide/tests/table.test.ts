@@ -98,6 +98,28 @@ test('rows written are upserted by key, a turn of writes in one transaction — 
     expect(`commits: ${commits}`).toBe('commits: 1')
 })
 
+// 47.30 — A COLUMN IS AN SQL IDENTIFIER, a row's own shape checked even after another row prepared a
+// statement its columns join to the same text as. THE REVERT: drop the count check from
+// `statementFor`; `{ id, "name,amount" }` hits the statement `{ id, name, amount }` prepared and
+// writes NULLs rather than being refused.
+test('a column that is no SQL identifier is refused, whatever shape came before it — 47.30', async () => {
+    const db = deals()
+    const writer = table<Record<string, unknown>>(
+        db,
+        'deals',
+    ).writable.getWriter()
+    await writer.write({ id: 'd1', name: 'Acme', amount: 100 })
+    await Bun.sleep(5)
+    await writer.write({ id: 'd2', 'name,amount': 1 })
+    await Bun.sleep(5)
+    expect(
+        await writer.close().then(
+            () => 'closed',
+            (thrown: Error) => thrown.message,
+        ),
+    ).toContain('is not an SQL identifier')
+})
+
 // 47.29 — A CHANGE REFRESHES WHAT CARRIES THE TABLE'S NAME AS A TAG: a value reading the table runs
 // again after a write it never heard about. THE REVERT: drop the `invalidate` from `watchTag`, and
 // `total: 100` stands.

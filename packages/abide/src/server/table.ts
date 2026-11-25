@@ -289,27 +289,65 @@ function upserts<Row extends Record<string, unknown>>(
     let flushing: Promise<void> | undefined
     let failed: unknown
     let timer: ReturnType<typeof setTimeout> | undefined
+    // One statement per shape of row, its columns checked and its SQL written once: a batch of rows
+    // with the same columns runs one prepared statement.
+    const statements = new Map<
+        string,
+        { columns: string[]; statement: ReturnType<Database['query']> }
+    >()
+    // A statement is its database's: a `connection` handing back another starts the map over.
+    let preparedOn: Database | undefined
+    const statementFor = (db: Database, row: Row) => {
+        if (db !== preparedOn) {
+            statements.clear()
+            preparedOn = db
+        }
+        const columns = Object.keys(row)
+        const shape = columns.join(',')
+        let prepared = statements.get(shape)
+        // A cached shape's columns are identifiers, so no comma is in one: a row joining to the same
+        // text with another count has a comma in a column, and is checked — and refused — afresh.
+        if (
+            prepared === undefined ||
+            prepared.columns.length !== columns.length
+        ) {
+            for (const column of columns)
+                if (!SQL_IDENTIFIER.test(column))
+                    throw new Error(
+                        `abide: ${name}'s column ${JSON.stringify(column)} is not an SQL identifier.`,
+                    )
+            const quoted: string[] = []
+            const slots: string[] = []
+            const updates: string[] = []
+            for (const column of columns) {
+                quoted.push(`"${column}"`)
+                slots.push('?')
+                if (column !== key)
+                    updates.push(`"${column}" = excluded."${column}"`)
+            }
+            const conflict =
+                updates.length === 0
+                    ? 'DO NOTHING'
+                    : `DO UPDATE SET ${updates.join(', ')}`
+            prepared = {
+                columns,
+                statement: db.query(
+                    `INSERT INTO ${name} (${quoted.join(', ')}) VALUES (${slots.join(', ')}) ON CONFLICT("${key}") ${conflict}`,
+                ),
+            }
+            statements.set(shape, prepared)
+        }
+        return prepared
+    }
     const commit = (rows: Row[]): void => {
         const db = connection()
         db.transaction(() => {
             for (const row of rows) {
-                const columns = Object.keys(row)
-                for (const column of columns)
-                    if (!SQL_IDENTIFIER.test(column))
-                        throw new Error(
-                            `abide: ${name}'s column ${JSON.stringify(column)} is not an SQL identifier.`,
-                        )
-                const updates: string[] = []
-                for (const column of columns)
-                    if (column !== key)
-                        updates.push(`"${column}" = excluded."${column}"`)
-                const conflict =
-                    updates.length === 0
-                        ? 'DO NOTHING'
-                        : `DO UPDATE SET ${updates.join(', ')}`
-                db.query(
-                    `INSERT INTO ${name} (${columns.map((column) => `"${column}"`).join(', ')}) VALUES (${columns.map(() => '?').join(', ')}) ON CONFLICT("${key}") ${conflict}`,
-                ).run(...(columns.map((column) => row[column]) as never[]))
+                const { columns, statement } = statementFor(db, row)
+                const values = new Array<unknown>(columns.length)
+                for (let at = 0; at < columns.length; at += 1)
+                    values[at] = row[columns[at] as string]
+                statement.run(...(values as never[]))
             }
         })()
     }
