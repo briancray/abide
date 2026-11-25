@@ -1,0 +1,30 @@
+<script>
+import { sortableList } from '@abide/abide'
+
+const thisWeek = sortableList({ items: ['Engine renewal'], group: 'focus' })
+const later = sortableList({
+    items: ['Babbage pilot', 'Hopper expansion'],
+    group: 'focus',
+})
+</script>
+
+<ol
+    class="flex min-h-24 flex-col gap-hair"
+    aria-label="This week"
+    {...thisWeek.list}
+>
+    {#for deal of thisWeek.sorted key deal}
+        <li class="row data-active:bg-raised" {...thisWeek.item(deal).item}>
+            <span class="cursor-grab" {...thisWeek.item(deal).handle}>⠿</span>
+            {deal}
+        </li>
+    {/for}
+</ol>
+<ol class="flex min-h-24 flex-col gap-hair" aria-label="Later" {...later.list}>
+    {#for deal of later.sorted key deal}
+        <li class="row data-active:bg-raised" {...later.item(deal).item}>
+            <span class="cursor-grab" {...later.item(deal).handle}>⠿</span>
+            {deal}
+        </li>
+    {/for}
+</ol>

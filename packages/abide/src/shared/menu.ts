@@ -8,7 +8,7 @@ import { type Live, live } from './live.ts'
 import { popover, type PopoverOptions } from './popover.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
-import { join } from './register.ts'
+import { inGroup, join } from './register.ts'
 import { openingEnd, roving, typeahead } from './roving.ts'
 import { withPart } from './withPart.ts'
 
@@ -40,7 +40,8 @@ export type Menu = {
 // every `reactive` without `global` is (11.32), and a menu is a member for as long as its setup stands.
 type Member = {
     group(): string | undefined
-    trigger(): HTMLElement | null
+    /** Its trigger, whose place in the document orders its group. */
+    element(): HTMLElement | null
     isOpen(): boolean
     /** Whether focus is in its menu. */
     holdsFocus(): boolean
@@ -53,21 +54,6 @@ const members = reactive<readonly Member[]>([])
 // Where focus goes as a menu opens: its first item, its last (50.28), or nowhere — a pointer resting
 // on the trigger leaves focus where it was (50.55).
 type Focus = 'first' | 'last' | 'none'
-
-/** The members of `group` standing, in the document order of their triggers. */
-function groupOf(group: string): Member[] {
-    const found: Member[] = []
-    for (const member of members.peek() ?? [])
-        if (member.group() === group && member.trigger() !== null)
-            found.push(member)
-    return found.sort((a, b) =>
-        (a.trigger() as HTMLElement).compareDocumentPosition(
-            b.trigger() as HTMLElement,
-        ) & Node.DOCUMENT_POSITION_FOLLOWING
-            ? -1
-            : 1,
-    )
-}
 
 // 50.29 — the items the keys walk and a click picks.
 const ITEM =
@@ -140,7 +126,7 @@ export function menu(options: MenuOptions = {}): Menu {
 
     const self: Member = {
         group: () => live(options.group),
-        trigger: triggerOf,
+        element: triggerOf,
         isOpen,
         holdsFocus: () => menuOf()?.contains(document.activeElement) === true,
         switchTo: (from, focused, pointer) => {
@@ -156,7 +142,7 @@ export function menu(options: MenuOptions = {}): Menu {
     /** Opens `to` from the open groupmate `from`, each marked with the side the other stands on. */
     const switchIn = (to: Member, from: Member, focused: Focus): void => {
         // A pointer on a trigger is the one switch that comes here; the keys switch in the menu's own.
-        const mates = groupOf(self.group() as string)
+        const mates = inGroup(members, self.group() as string)
         const ahead = mates.indexOf(to) > mates.indexOf(from)
         from.leaving(ahead ? 'end' : 'start')
         to.switchTo(ahead ? 'start' : 'end', focused, true)
@@ -204,7 +190,7 @@ export function menu(options: MenuOptions = {}): Menu {
             if (event.pointerType === 'touch' || isOpen()) return
             const group = self.group()
             if (group !== undefined) {
-                const openMate = groupOf(group).find(
+                const openMate = inGroup(members, group).find(
                     (mate) => mate !== self && mate.isOpen(),
                 )
                 if (openMate !== undefined) {
@@ -257,7 +243,7 @@ export function menu(options: MenuOptions = {}): Menu {
                 group !== undefined &&
                 (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
             ) {
-                const mates = groupOf(group)
+                const mates = inGroup(members, group)
                 const at = mates.indexOf(self)
                 if (mates.length < 2 || at === -1) return
                 event.preventDefault()

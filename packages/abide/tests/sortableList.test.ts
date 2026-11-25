@@ -1,6 +1,6 @@
-// 51.145-51.151 — `sortableList`, a `listbox` reordered: its list keyed and its grips dragged as a
-// browser would, the emulator's missing layout answered with each item's box, and what it reads out
-// heard through `said`.
+// 51.145-51.151, 51.178-51.183 — `sortableList`, a `listbox` reordered: its list keyed and its grips
+// dragged as a browser would, the emulator's missing layout answered with each item's box, and what it
+// reads out heard through `said`.
 
 import { afterEach, expect, test } from 'bun:test'
 
@@ -141,4 +141,170 @@ test('each grip is hidden from the keyboard and from a screen reader — 51.151'
         ranks.item('Dune').handle.tabindex,
     ]).toEqual(['true', undefined])
     expect([ranks.list.role, ranks.list.tabindex]).toEqual(['listbox', '0'])
+})
+
+// Two lists of one group side by side, a hundred pixels wide and four hundred tall, `Ranked` left of
+// `Pool`, each item 40px tall from the top. A test names its own group, so no list another test left
+// standing joins it.
+function grouped(
+    group: string,
+    multiple = false,
+    keyed: (book: string) => string = (book) => book,
+) {
+    const make = (label: string, books: string[], left: number) => {
+        const ranks = sortableList<string, boolean>({
+            items: books,
+            group,
+            multiple,
+            key: keyed,
+        })
+        const list = document.createElement('ol')
+        list.setAttribute('aria-label', label)
+        list.tabIndex = 0
+        list.getBoundingClientRect = () =>
+            ({ left, right: left + 100, top: 0, bottom: 400 }) as DOMRect
+        bound.push(bindPart(ranks.list, list))
+        list.addEventListener('keydown', ranks.list.onkeydown as EventListener)
+        const grips = new Map<string, HTMLElement>()
+        books.forEach((book, at) => {
+            const item = document.createElement('li')
+            item.getBoundingClientRect = () =>
+                ({ top: at * 40, height: 40 }) as DOMRect
+            const parts = ranks.item(book)
+            bound.push(bindPart(parts.item, item))
+            const grip = document.createElement('span')
+            grip.addEventListener(
+                'pointerdown',
+                parts.handle.onpointerdown as EventListener,
+            )
+            item.append(grip)
+            list.append(item)
+            grips.set(book, grip)
+        })
+        document.body.append(list)
+        const key = (name: string, held: KeyboardEventInit = {}) => {
+            const event = new KeyboardEvent('keydown', {
+                key: name,
+                cancelable: true,
+                ...held,
+            })
+            list.dispatchEvent(event)
+            flushSync()
+            return event.defaultPrevented
+        }
+        return { ranks, list, grips, key }
+    }
+    return {
+        ranked: make('Ranked', ['Dune', 'Emma'], 0),
+        pool: make('Pool', ['Ulysses', 'Beloved'], 100),
+    }
+}
+
+const press = (grip: HTMLElement) => {
+    grip.dispatchEvent(
+        new PointerEvent('pointerdown', { button: 0, bubbles: true }),
+    )
+    flushSync()
+}
+const move = (clientX: number, clientY: number) => {
+    globalThis.dispatchEvent(
+        new PointerEvent('pointermove', { clientX, clientY }),
+    )
+    flushSync()
+}
+const letGo = () => {
+    globalThis.dispatchEvent(new PointerEvent('pointerup'))
+    flushSync()
+}
+
+// THE REVERT: leave a key no item of the list's own answers out of `sorted`, and an item moved in
+// from another list is in neither.
+test("a list of a group finds a key it names among its group's items, and leaves an item another list names to it — 51.179", () => {
+    const { ranked, pool } = grouped('found')
+    ranked.ranks.order.set(['Ulysses'])
+    flushSync()
+    expect(ranked.ranks.sorted).toEqual(['Ulysses', 'Dune', 'Emma'])
+    expect(pool.ranks.sorted).toEqual(['Beloved'])
+})
+
+// THE REVERT: write the order of the list the items enter and not of the one they leave, and an item
+// moved stands in both.
+test('Alt with ArrowLeft and ArrowRight carries the active item into the list beside, and past the end moves nothing — 51.178, 51.180, 51.182, 51.183', () => {
+    const { ranked, pool } = grouped('keys')
+    pool.list.focus()
+    expect(pool.key('ArrowLeft', { altKey: true })).toBe(true)
+    expect([ranked.ranks.order(), pool.ranks.order()]).toEqual([
+        ['Ulysses', 'Dune', 'Emma'],
+        ['Beloved'],
+    ])
+    expect(pool.ranks.sorted).toEqual(['Beloved'])
+    expect(document.activeElement).toBe(ranked.list)
+    expect(ranked.ranks.list['aria-activedescendant']).toBe(
+        ranked.ranks.item('Ulysses').item.id,
+    )
+    expect(said.peek()?.text).toBe('Ulysses moved to Ranked, 1 of 3.')
+    // Ranked stands first: a step left of it moves nothing, and is kept from the browser.
+    expect(ranked.key('ArrowLeft', { altKey: true })).toBe(true)
+    expect(ranked.ranks.sorted).toEqual(['Ulysses', 'Dune', 'Emma'])
+    ranked.key('ArrowDown')
+    ranked.key('ArrowRight', { altKey: true })
+    expect(ranked.ranks.sorted).toEqual(['Ulysses', 'Emma'])
+    expect(pool.ranks.sorted).toEqual(['Beloved', 'Dune'])
+    expect([ranked.ranks.selected(), pool.ranks.selected()]).toEqual([
+        undefined,
+        'Dune',
+    ])
+    expect(said.peek()?.text).toBe('Dune moved to Pool, 2 of 2.')
+})
+
+// THE REVERT: hand the list entered no selection, and the items moved together scatter on the next
+// move.
+test('the items selected move into another list as one, selected there — 51.182', () => {
+    const { ranked, pool } = grouped('selected', true)
+    ranked.list.focus()
+    ranked.key('ArrowDown', { shiftKey: true })
+    expect(ranked.ranks.selected()).toEqual(['Dune', 'Emma'])
+    ranked.key('ArrowRight', { altKey: true })
+    expect(pool.ranks.sorted).toEqual(['Dune', 'Emma', 'Ulysses', 'Beloved'])
+    expect([ranked.ranks.selected(), pool.ranks.selected()]).toEqual([
+        [],
+        ['Dune', 'Emma'],
+    ])
+    expect(said.peek()?.text).toBe('2 items moved to Pool, 1 to 2 of 4.')
+})
+
+// THE REVERT: hit-test no list's box, and the item dragged over Pool stays in Ranked.
+test("a grip dragged into another list of its group moves its item there, among that list's items — 51.181, 51.146", () => {
+    const { ranked, pool } = grouped('drag')
+    press(ranked.grips.get('Dune') as HTMLElement)
+    // Over Pool, past the middle of Ulysses (20) and short of Beloved's (60).
+    move(150, 50)
+    expect(pool.ranks.sorted).toEqual(['Ulysses', 'Dune', 'Beloved'])
+    expect(ranked.ranks.sorted).toEqual(['Emma'])
+    expect(pool.ranks.item('Dune').item['data-grabbed']).toBe('')
+    expect(ranked.ranks.item('Dune').item['data-grabbed']).toBeUndefined()
+    // Over neither list, the item stays in the list it was last in.
+    move(500, 90)
+    expect(pool.ranks.sorted).toEqual(['Ulysses', 'Beloved', 'Dune'])
+    letGo()
+    expect(pool.ranks.item('Dune').item['data-grabbed']).toBeUndefined()
+    expect(said.peek()?.text).toBe('Dune moved to Pool, 3 of 3.')
+})
+
+// THE REVERT: count the others ahead of the item on every move, as the place was once found, and a
+// pointer held over one place reads every key on every frame: 20 keys over 10 frames of two items.
+test('a drag held over one place reads no key and writes no order', () => {
+    let read = 0
+    const { ranked } = grouped('still', false, (book) => {
+        read += 1
+        return book
+    })
+    press(ranked.grips.get('Dune') as HTMLElement)
+    move(50, 50)
+    const written = ranked.ranks.order()
+    read = 0
+    for (let frame = 0; frame < 10; frame += 1) move(50, 50 + frame)
+    expect(read).toBe(0)
+    letGo()
+    expect(ranked.ranks.order()).toBe(written)
 })

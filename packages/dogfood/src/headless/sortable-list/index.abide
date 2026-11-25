@@ -3,6 +3,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import FocusDeals from './lib/FocusDeals.abide'
+import focusDeals from './lib/FocusDeals.abide' with { type: 'text' }
 import RankDeals from './lib/RankDeals.abide'
 import rankDeals from './lib/RankDeals.abide' with { type: 'text' }
 </script>
@@ -22,6 +24,18 @@ import rankDeals from './lib/RankDeals.abide' with { type: 'text' }
                 "test('a grip dragged places its item among the others by the pointer",
             ],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/DealFocus.test.ts',
+            from: [
+                "test('Alt with ArrowLeft and ArrowRight moves a deal between this week and later'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/sortableList.test.ts',
+            from: [
+                'test("a grip dragged into another list of its group moves its item there',
+            ],
+        },
     ]}
 >
     <Section level={3} title="Rank deals by dragging or with the keys">
@@ -34,5 +48,15 @@ import rankDeals from './lib/RankDeals.abide' with { type: 'text' }
             read out through <code>announce</code>, so stand an <code>announce.host</code> on
             the page.</p>
         <Example code={rankDeals}><RankDeals /></Example>
+    </Section>
+
+    <Section level={3} title="Move deals between this week and later">
+        <p>Give two lists the same <code>group</code> and each takes the other's items. Drag a
+            grip onto the other list, or press Alt with ArrowLeft or ArrowRight to send the item
+            to the list before or after it; focus goes with it. Each list's <code>order</code> is
+            written on the move, and the announcement names the list by its
+            <code>aria-label</code>. Give an empty list a height, so a drag has somewhere to
+            land.</p>
+        <Example code={focusDeals}><FocusDeals /></Example>
     </Section>
 </Doc>
