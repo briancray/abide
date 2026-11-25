@@ -3898,6 +3898,9 @@ file writes in place or binds to the name it is handed, and MUST import `memo` w
 with the one method a `405` answer's `Allow` names besides `HEAD` and `OPTIONS`, and MUST NOT call
 again where `--method` was given.
 
+38.217 The `tsconfig.json` `abide scaffold` writes, and the default project 38.30 types an app
+against, MUST read every `.ts` file as a module, one with no `import` or `export` among them.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.

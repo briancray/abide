@@ -20,6 +20,8 @@ export const COMPILER_OPTIONS = {
     target: 'esnext',
     module: 'preserve',
     moduleResolution: 'bundler',
+    // 38.217 — Bun runs every `.ts` as a module, a script with no `import` or `export` among them.
+    moduleDetection: 'force',
     allowImportingTsExtensions: true,
     noEmit: true,
     skipLibCheck: true,

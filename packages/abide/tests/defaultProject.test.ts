@@ -13,6 +13,7 @@ import { dirname } from 'node:path' // bun exposes no path helpers of its own
 
 import { spawned } from '@abide/harness/gate'
 
+import { checkApp } from '#compiler/checkApp.ts'
 import { buildFiles } from '#server/appBuild.ts'
 
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
@@ -52,3 +53,21 @@ test('an app with no tsconfig.json is typed against a default project — 38.30'
     expect(server).toContain('slotValue(() => count())')
     expect(client).toContain('count.set(count() + 1)')
 })
+
+// THE REVERT: drop `moduleDetection` from `COMPILER_OPTIONS`, and a script awaiting at its top with
+// no `import` or `export` is refused as no module (TS1375) — a file Bun runs as it is.
+test('the default project reads a script with no import or export as a module — 38.217', async () => {
+    const app = temporaryModule({
+        'index.abide': '<main><p>seeded</p></main>',
+        'lib/seed.ts':
+            'const seeded = await Promise.resolve(3)\nconsole.log(seeded)\n',
+        'package.json': JSON.stringify({
+            name: 'script-fixture',
+            type: 'module',
+        }),
+    })
+    const found = await checkApp(app)
+    expect(
+        found.map((diagnosis) => `${diagnosis.code} ${diagnosis.path}`),
+    ).toEqual([])
+}, 60_000)
