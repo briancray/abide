@@ -53,7 +53,6 @@ export { database } from './database.ts'
 // 47.25-47.31 — a table's changes read out, and rows written in.
 export { type Change, table } from './table.ts'
 // 54 — rungs that let a caller through, another service asked with retries, and work on a schedule.
-export { type FetchOptions, fetchData } from './fetchData.ts'
 export { type Job, type JobOptions, type JobStatus, job } from './job.ts'
 export { readOnly } from './readOnly.ts'
 export { trustedIdentity } from './trustedIdentity.ts'

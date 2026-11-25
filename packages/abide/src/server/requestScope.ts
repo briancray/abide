@@ -155,11 +155,11 @@ const GLOBAL_RUN = new AsyncLocalStorage<true>()
 // Apart from STORAGE: a run is narrower than its request, and ends without the request ending.
 const RUN = new AsyncLocalStorage<RunMark>()
 
-// 54.39 — THE SIGNAL THAT OWNS WORK OUTSIDE EVERY REQUEST AND RUN, where one narrower than the app's
+// 54.35 — THE SIGNAL THAT OWNS WORK OUTSIDE EVERY REQUEST AND RUN, where one narrower than the app's
 // stop does: a `job`'s run.
 const OWNER = new AsyncLocalStorage<AbortSignal>()
 
-/** Runs `body` outside every request and `memo` run, `abortSignal` answering `signal` in it: 54.39. */
+/** Runs `body` outside every request and `memo` run, `abortSignal` answering `signal` in it: 54.35. */
 export function ownedBy<Result>(
     signal: AbortSignal,
     body: () => Result,

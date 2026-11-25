@@ -10,6 +10,7 @@ import { spawned } from '@abide/harness/gate'
 import { paragraphsOf } from '#compiler/agentNotes.ts'
 import { toComputed } from '#compiler/toComputed.ts'
 import { toComputedCall } from '#compiler/toComputedCall.ts'
+import { toFetchAndHandle } from '#compiler/toFetchAndHandle.ts'
 import { toMemo } from '#compiler/toMemo.ts'
 import { upgrade } from '#compiler/upgrade.ts'
 import { ABIDE_DIRECTORY } from '#server/ABIDE_DIRECTORY.ts'
@@ -735,4 +736,22 @@ async function reload() {
     expect(toComputedCall('const deal = getDeal()', 'src/lib/deal.ts')).toBe(
         'const deal = getDeal()',
     )
+})
+
+// 38.225 — `fetchData` IS `fetchAndHandle` where abide's is imported, at the import and each use, and a
+// member of that name is left. THE REVERT: rename a member too; `client.fetchData()` is renamed.
+test('abide upgrade renames fetchData to fetchAndHandle — 38.225', () => {
+    const text = `import { fetchData, GET } from '@abide/abide/server'
+
+export default GET(() => fetchData('https://registry.example/a'))
+const read = client.fetchData()
+`
+    expect(toFetchAndHandle(text, 'src/a.handler.ts'))
+        .toBe(`import { fetchAndHandle, GET } from '@abide/abide/server'
+
+export default GET(() => fetchAndHandle('https://registry.example/a'))
+const read = client.fetchData()
+`)
+    const own = 'const fetchData = () => 1\nfetchData()'
+    expect(toFetchAndHandle(own, 'src/own.ts')).toBe(own)
 })

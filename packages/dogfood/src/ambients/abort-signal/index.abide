@@ -46,7 +46,7 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/job.test.ts',
             from: [
-                "test('abortSignal in a run asked for from a request outlives the request, and ends at stop — 54.39'",
+                "test('abortSignal in a run asked for from a request outlives the request, and ends at stop — 54.35'",
             ],
         },
     ]}

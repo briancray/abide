@@ -6,7 +6,6 @@ import Section from '#src/lib/Section.abide'
 
 <Doc
     seeAlso={[
-        '/data/handle',
         '/helpers/refuse',
         '/helpers/is-failed',
         '/handlers/get',
@@ -14,49 +13,43 @@ import Section from '#src/lib/Section.abide'
     ]}
     tests={[
         {
-            path: 'packages/abide/tests/fetchData.test.ts',
+            path: 'packages/abide/tests/fetchAndHandle.test.ts',
             from: [
                 "test('a 503 is asked again, and the answer after it is the body",
             ],
         },
         {
-            path: 'packages/abide/tests/fetchData.test.ts',
+            path: 'packages/abide/tests/fetchAndHandle.test.ts',
             from: [
                 "test('a body is read as its content-type says, as handle reads it",
             ],
         },
         {
-            path: 'packages/abide/tests/fetchData.test.ts',
+            path: 'packages/abide/tests/fetchAndHandle.test.ts',
             from: [
                 "test('`as` reads the body as JSON, text or a Blob whatever its type says",
             ],
         },
         {
-            path: 'packages/abide/tests/fetchData.test.ts',
-            from: [
-                "test('identical asks under a ttl are one request, and a held answer asks nothing",
-            ],
-        },
-        {
-            path: 'packages/abide/tests/fetchData.test.ts',
+            path: 'packages/abide/tests/fetchAndHandle.test.ts',
             from: [
                 "test('a body that is not JSON, or that the schema refuses, is a FetchFailed",
             ],
         },
         {
-            path: 'packages/abide/tests/fetchData.test.ts',
+            path: 'packages/abide/tests/fetchAndHandle.test.ts',
             from: [
-                "test('fetchData.isError narrows a caught failure to its FetchFailed — 54.44'",
+                "test('fetchAndHandle.isError narrows a caught failure to its FetchFailed — 54.40'",
             ],
         },
         {
-            path: 'packages/abide/tests/fetchData.test.ts',
+            path: 'packages/abide/tests/fetchAndHandle.test.ts',
             from: [
                 "test('a FetchFailed carries what fetch threw as its cause, and the wire carries none of it",
             ],
         },
         {
-            path: 'packages/abide/tests/fetchData.test.ts',
+            path: 'packages/abide/tests/fetchAndHandle.test.ts',
             from: [
                 "test('a refused FetchFailed carries what the service said as its cause",
             ],
@@ -83,17 +76,20 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Fill in a company from a registry that fails now and then">
         <p>A thrown attempt, a timeout or a 408, 425, 429 or 5xx is asked again, twice by default.
-            The body is read as its <code>content-type</code> says, as
-            <code>handle</code> reads one: JSON as its value, text as a string, anything else as
-            a <code>Blob</code>. A service that gives up rejects with a <code>FetchFailed</code>
+            The body is read as its <code>content-type</code> says: JSON as its value, text as a
+            string, JSON Lines or an event stream as its chunks, anything else as a
+            <code>Blob</code>. A service that gives up rejects with a <code>FetchFailed</code>
             at 502, and a handler that lets it reject refuses with it.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData, GET } from '@abide/abide/server'
+            import { fetchAndHandle } from '@abide/abide'
+            import { GET } from '@abide/abide/server'
 
             type Registration = { founded: number; employees: number }
 
             export default GET(({ id }: { id: string }) =>
-                fetchData<Registration>(\`https://registry.example/companies/\${id}\`),
+                fetchAndHandle<Registration>(
+                    \`https://registry.example/companies/\${id}\`,
+                ),
             )
         `} />
     </Section>
@@ -103,24 +99,30 @@ import Section from '#src/lib/Section.abide'
             <code>'text'</code> or <code>'blob'</code>. A registry that labels its filings
             <code>application/octet-stream</code> is still read as a string.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData, GET } from '@abide/abide/server'
+            import { fetchAndHandle, GET } from '@abide/abide/server'
 
             export default GET(({ id }: { id: string }) =>
-                fetchData(\`https://registry.example/filings/\${id}.txt\`, { as: 'text' }),
+                fetchAndHandle(\`https://registry.example/filings/\${id}.txt\`, {
+                    as: 'text',
+                }),
             )
         `} />
     </Section>
 
     <Section level={3} title="Hold a registry answer for a minute">
-        <p><code>ttl</code> holds a <code>GET</code>'s answer for that many milliseconds, keyed by
-            its URL, its headers and its <code>as</code>. Two asks at once are one request, and a
-            failure is never held.</p>
+        <p>A fetch keeps nothing. Hold an answer in a <code>memo</code> with a <code>ttl</code>:
+            keyed by the company, so two asks at once are one request, and a failure is asked
+            again on the next call.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData } from '@abide/abide/server'
+            import { fetchAndHandle, memo } from '@abide/abide'
 
-            fetchData<Registration>(\`https://registry.example/companies/\${id}\`, {
-                ttl: 60_000,
-            })
+            export const registration = memo(
+                ({ id }: { id: string }) =>
+                    fetchAndHandle<Registration>(
+                        \`https://registry.example/companies/\${id}\`,
+                    ),
+                { ttl: 60_000, global: true },
+            )
         `} />
     </Section>
 
@@ -129,10 +131,10 @@ import Section from '#src/lib/Section.abide'
             body it refuses rejects with a <code>FetchFailed</code> whose reason is
             <code>shape</code>.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData } from '@abide/abide/server'
+            import { fetchAndHandle } from '@abide/abide/server'
 
             const registry = 'https://registry.example/companies/ada'
-            const registration = await fetchData(registry, {
+            const registration = await fetchAndHandle(registry, {
                 schema: (value) => {
                     const { employees } = value as { employees: unknown }
                     if (typeof employees !== 'number') throw new Error('no count')
@@ -149,14 +151,14 @@ import Section from '#src/lib/Section.abide'
             <code>cause</code> is what <code>fetch</code> threw, a refused certificate's code
             and all; it never leaves the server.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData, log } from '@abide/abide/server'
+            import { fetchAndHandle, log } from '@abide/abide/server'
 
             try {
-                await fetchData('https://registry.example/filings/ada.txt', {
+                await fetchAndHandle('https://registry.example/filings/ada.txt', {
                     timeout: 2_000,
                 })
             } catch (failed) {
-                if (!fetchData.isError(failed, 'FetchFailed')) throw failed
+                if (!fetchAndHandle.isError(failed, 'FetchFailed')) throw failed
                 log.warning('registry gave up', failed.data, failed.cause)
             }
         `} />
@@ -168,13 +170,13 @@ import Section from '#src/lib/Section.abide'
             <code>cause</code>, it never leaves the server unless you hand it on.</p>
         <Code language="ts" caption="server" code={`
             import { refuse } from '@abide/abide'
-            import { fetchData, GET } from '@abide/abide/server'
+            import { fetchAndHandle, GET } from '@abide/abide/server'
 
             export default GET(async ({ id }: { id: string }) => {
                 try {
-                    return await fetchData(\`https://registry.example/companies/\${id}\`)
+                    return await fetchAndHandle(\`https://registry.example/companies/\${id}\`)
                 } catch (failed) {
-                    if (!fetchData.isError(failed, 'FetchFailed')) throw failed
+                    if (!fetchAndHandle.isError(failed, 'FetchFailed')) throw failed
                     if (failed.data.status !== 422) throw failed
                     return refuse(422, (failed.cause as { error: string }).error)
                 }
@@ -188,15 +190,15 @@ import Section from '#src/lib/Section.abide'
             own terms.</p>
         <Code language="ts" caption="server" code={`
             import { refuse } from '@abide/abide'
-            import { fetchData, GET } from '@abide/abide/server'
+            import { fetchAndHandle, GET } from '@abide/abide/server'
 
             export default GET(async ({ id }: { id: string }) => {
                 try {
-                    return await fetchData<Registration>(
+                    return await fetchAndHandle<Registration>(
                         \`https://registry.example/companies/\${id}\`,
                     )
                 } catch (failed) {
-                    if (!fetchData.isError(failed, 'FetchFailed')) throw failed
+                    if (!fetchAndHandle.isError(failed, 'FetchFailed')) throw failed
                     if (failed.data.status === 404) return refuse(404)
                     throw failed
                 }
@@ -208,10 +210,10 @@ import Section from '#src/lib/Section.abide'
         <p>Where an answer is nice to have, ask once and give up fast: <code>retries: 0</code>
             and a short <code>timeout</code>, with a fallback for the <code>FetchFailed</code>.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData, GET } from '@abide/abide/server'
+            import { fetchAndHandle, GET } from '@abide/abide/server'
 
             export default GET(({ id }: { id: string }) =>
-                fetchData<{ employees: number }>(
+                fetchAndHandle<{ employees: number }>(
                     \`https://registry.example/companies/\${id}\`,
                     { retries: 0, timeout: 500 },
                 ).then(
@@ -228,13 +230,13 @@ import Section from '#src/lib/Section.abide'
             answer served to every caller, with the failure in <code>error</code> beside it.</p>
         <Code language="ts" caption="server" code={`
             import { computed, memo } from '@abide/abide'
-            import { fetchData } from '@abide/abide/server'
+            import { fetchAndHandle } from '@abide/abide/server'
 
             export const registrations = memo(
                 ({ id }: { id: string }) =>
                     computed(
                         () =>
-                            fetchData<Registration>(
+                            fetchAndHandle<Registration>(
                                 \`https://registry.example/companies/\${id}\`,
                             ),
                         { poll: 3_600_000 },
@@ -248,9 +250,9 @@ import Section from '#src/lib/Section.abide'
         <p>A <code>POST</code> is asked once, since asking again may write twice. Set
             <code>retries</code> where the service takes the same write twice safely.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData } from '@abide/abide/server'
+            import { fetchAndHandle } from '@abide/abide/server'
 
-            await fetchData('https://mail.example/send', {
+            await fetchAndHandle('https://mail.example/send', {
                 method: 'POST',
                 body: JSON.stringify(email),
                 retries: 2,
@@ -260,11 +262,11 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Stop asking once the caller leaves">
         <p>Pass the request's <code>signal</code>. Its abort is thrown, the one thing
-            <code>fetchData</code> throws, and nothing is asked again.</p>
+            <code>fetchAndHandle</code> throws, and nothing is asked again.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData, request } from '@abide/abide/server'
+            import { fetchAndHandle, request } from '@abide/abide/server'
 
-            fetchData('https://registry.example/companies/ada', {
+            fetchAndHandle('https://registry.example/companies/ada', {
                 signal: request().signal,
                 timeout: 5_000,
             })

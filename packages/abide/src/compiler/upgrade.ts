@@ -6,6 +6,7 @@
 import { withoutRestatedNotes } from './agentNotes.ts'
 import { toComputed } from './toComputed.ts'
 import { toComputedCall } from './toComputedCall.ts'
+import { toFetchAndHandle } from './toFetchAndHandle.ts'
 import { toJob } from './toJob.ts'
 import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
@@ -75,6 +76,8 @@ const MIGRATIONS: Migration[] = [
     { version: '0.144.0', migrate: eachSource(toComputed) },
     // 38.224 — a handler call a page holds as a value is held through `computed`.
     { version: '0.144.0', migrate: eachSource(toComputedCall) },
+    // 38.225 — `fetchData` is `fetchAndHandle`.
+    { version: '0.144.0', migrate: eachSource(toFetchAndHandle) },
 ]
 
 /**

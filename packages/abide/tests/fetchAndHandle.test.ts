@@ -1,19 +1,21 @@
-// `fetchData` against a service this file serves on a local port: what a fetch asks,
-// how often, and what it settles to (54.7-54.17). No network — every address is this process's.
+// `fetchAndHandle` against a service this file serves on a local port: what a fetch asks,
+// how often, and what it settles to (54.7-54.13). No network — every address is this process's.
 
 import { afterAll, expect, test } from 'bun:test'
 
-import { fetchData } from '#server'
+import { fetchAndHandle } from '#server'
 import { answered } from '#server/answerFailure.ts'
 import { type Failed, problemOf } from '#shared/Failed.ts'
 import type { FetchFailed } from '#shared/fetchFailed.ts'
 import { handle } from '#shared/handle.ts'
 import { refuse } from '#shared/refuse.ts'
 
-/** `fetchData`'s answer, or the refusal it rejected with (54.16), as one value a test reads. */
-const settledFetch = ((...given: Parameters<typeof fetchData>) =>
-    fetchData(...given).catch((refusal: unknown) => refusal)) as unknown as (
-    ...given: Parameters<typeof fetchData>
+/** `fetchAndHandle`'s answer, or the refusal it rejected with (54.12), as one value a test reads. */
+const settledFetch = ((...given: Parameters<typeof fetchAndHandle>) =>
+    fetchAndHandle(...given).catch(
+        (refusal: unknown) => refusal,
+    )) as unknown as (
+    ...given: Parameters<typeof fetchAndHandle>
 ) => Promise<any>
 
 // Every path the service answers, to how many times it was asked.
@@ -90,7 +92,7 @@ test('a 503 is asked again, and the answer after it is the body — 54.8', async
 })
 
 // THE REVERT: count every status transient in `asked`, and `/missing` is asked 3 times.
-test('a 404 is answered at once, as a FetchFailed carrying the status — 54.8, 54.16', async () => {
+test('a 404 is answered at once, as a FetchFailed carrying the status — 54.8, 54.12', async () => {
     const answer = await settledFetch(at('/missing'))
     expect(answer).toMatchObject({
         name: 'FetchFailed',
@@ -101,11 +103,11 @@ test('a 404 is answered at once, as a FetchFailed carrying the status — 54.8, 
     expect(asked.get('/missing')).toBe(1)
 })
 
-// 54.16 — A REFUSAL REJECTS, as a handler's call does (16.3), so `await` hands back the body alone and
-// a `catch` is handed the `FetchFailed`. THE REVERT: return the refusal in `fetchData` rather than
+// 54.12 — A REFUSAL REJECTS, as a handler's call does (16.3), so `await` hands back the body alone and
+// a `catch` is handed the `FetchFailed`. THE REVERT: return the refusal in `fetchAndHandle` rather than
 // throwing it; the promise resolves, and `resolved` is what the test reads.
-test('a refusal rejects the fetch with its FetchFailed — 54.16', async () => {
-    const outcome = await fetchData(at('/missing')).then(
+test('a refusal rejects the fetch with its FetchFailed — 54.12', async () => {
+    const outcome = await fetchAndHandle(at('/missing')).then(
         () => 'resolved',
         (refusal: { name?: string; status?: number }) =>
             `${refusal.name} ${refusal.status}`,
@@ -113,17 +115,17 @@ test('a refusal rejects the fetch with its FetchFailed — 54.16', async () => {
     expect(outcome).toBe('FetchFailed 502')
 })
 
-// 54.44 — A CAUGHT FAILURE IS NARROWED BY NAME, as a handler's is (`rpc.isError`): the fetch's own
+// 54.40 — A CAUGHT FAILURE IS NARROWED BY NAME, as a handler's is (`rpc.isError`): the fetch's own
 // refusal is one, and anything else thrown is not. THE REVERT: answer `isFailed` alone in `isError`;
 // the refusal of another name reads as one and `other: true`.
-test('fetchData.isError narrows a caught failure to its FetchFailed — 54.44', async () => {
-    const caught = await fetchData(at('/missing')).catch(
+test('fetchAndHandle.isError narrows a caught failure to its FetchFailed — 54.40', async () => {
+    const caught = await fetchAndHandle(at('/missing')).catch(
         (error: unknown) => error,
     )
-    const status = fetchData.isError(caught, 'FetchFailed')
+    const status = fetchAndHandle.isError(caught, 'FetchFailed')
         ? caught.data.status
         : undefined
-    const other = fetchData.isError(refuse(404), 'FetchFailed')
+    const other = fetchAndHandle.isError(refuse(404), 'FetchFailed')
     expect(`status: ${status}, other: ${other}`).toBe(
         'status: 404, other: false',
     )
@@ -137,7 +139,7 @@ test('a Retry-After is waited, and one past the deadline is not — 54.10', asyn
 })
 
 // A HANDLER HANDING ON WHAT A FETCH WAS REFUSED hands on the service's wait with it, whether
-// `fetchData` asked or the app's own `fetch` read through `handle`. THE REVERT: drop the `holdUntil` in
+// `fetchAndHandle` asked or the app's own `fetch` read through `handle`. THE REVERT: drop the `holdUntil` in
 // `refusedBy`; both answers carry `null` where `30` is due.
 test("a refusal's Retry-After is held, and crosses the wire again — 15.23, 15.24", async () => {
     const asked = await settledFetch(at('/limited'))
@@ -156,7 +158,7 @@ test('an attempt past its timeout is a FetchFailed for the timeout — 54.7', as
     expect(answer).toMatchObject({ data: { status: null, reason: 'timeout' } })
 })
 
-test('a service nobody answers for is a FetchFailed for the network — 54.16', async () => {
+test('a service nobody answers for is a FetchFailed for the network — 54.12', async () => {
     const closed = Bun.serve({ port: 0, fetch: () => new Response() })
     const origin = closed.url.origin
     await closed.stop(true)
@@ -165,7 +167,7 @@ test('a service nobody answers for is a FetchFailed for the network — 54.16', 
 })
 
 // THE REVERT: drop `cause`, and the refused connection is only 'network', its code lost.
-test('a FetchFailed carries what fetch threw as its cause, and the wire carries none of it — 54.34', async () => {
+test('a FetchFailed carries what fetch threw as its cause, and the wire carries none of it — 54.30', async () => {
     const closed = Bun.serve({ port: 0, fetch: () => new Response() })
     const origin = closed.url.origin
     await closed.stop(true)
@@ -179,7 +181,7 @@ test('a FetchFailed carries what fetch threw as its cause, and the wire carries 
 
 // THE REVERT: cancel a refused body unread, as `refusedBy` did — the service's own `error` is
 // `undefined` where `No path could be found for input` is due.
-test('a refused FetchFailed carries what the service said as its cause, and the wire carries none of it — 54.31, 54.34', async () => {
+test('a refused FetchFailed carries what the service said as its cause, and the wire carries none of it — 54.27, 54.30', async () => {
     const answer = await settledFetch(at('/no-route'), { retries: 0 })
     expect(answer).toMatchObject({ data: { status: 422, reason: 'status' } })
     expect((answer as Error).cause).toEqual({
@@ -195,7 +197,7 @@ test('a refused FetchFailed carries what the service said as its cause, and the 
 
 test("the caller's own abort is thrown, and nothing is asked again — 54.11", async () => {
     const leaving = new AbortController()
-    const answer = fetchData(at('/stalled'), { signal: leaving.signal })
+    const answer = fetchAndHandle(at('/stalled'), { signal: leaving.signal })
     leaving.abort(new Error('the caller left'))
     await expect(answer).rejects.toThrow('the caller left')
 })
@@ -211,7 +213,7 @@ test('a write is not asked again unless `retries` says so — 54.9', async () =>
     expect(asked.get('/written')).toBe(3)
 })
 
-test('a body that is not JSON, or that the schema refuses, is a FetchFailed for its shape — 54.17', async () => {
+test('a body that is not JSON, or that the schema refuses, is a FetchFailed for its shape — 54.13', async () => {
     expect(await settledFetch(at('/not-json'), { as: 'json' })).toMatchObject({
         data: { status: 200, reason: 'shape' },
     })
@@ -232,7 +234,7 @@ test('a body that is not JSON, or that the schema refuses, is a FetchFailed for 
 
 // THE REVERT: read every 2xx as text in `asked`, and the JSON and the PNG are
 // strings — `object` and `Blob` read `string` and `string`.
-test('a body is read as its content-type says, as handle reads it — 54.17, 54.30, 54.33', async () => {
+test('a body is read as its content-type says, as handle reads it — 54.13, 54.26, 54.29', async () => {
     const kinds = [
         await settledFetch(at('/company')),
         await settledFetch(at('/report.csv')),
@@ -243,76 +245,11 @@ test('a body is read as its content-type says, as handle reads it — 54.17, 54.
 
 // THE REVERT: drop `as` from `readBody`, and each is read as its type says — `object`, `string` and
 // `object` where `string`, `Blob` and `object` are due, the last read from text/plain.
-test('`as` reads the body as JSON, text or a Blob whatever its type says — 54.17', async () => {
+test('`as` reads the body as JSON, text or a Blob whatever its type says — 54.13', async () => {
     const kinds = [
         await settledFetch(at('/company'), { as: 'text' }),
         await settledFetch(at('/company'), { as: 'blob' }),
         await settledFetch(at('/plain-json'), { as: 'json' }),
     ].map((body) => (body instanceof Blob ? 'Blob' : typeof body))
     expect(kinds).toEqual(['string', 'Blob', 'object'])
-})
-
-// THE REVERT: key a held answer by its URL and headers alone, and the JSON reading is answered with
-// the text one held — `string` where `object` is due.
-test('one URL read two ways under a ttl is two answers — 54.12', async () => {
-    await settledFetch(at('/held-twice'), { as: 'text', ttl: 60_000 })
-    const parsed = await settledFetch(at('/held-twice'), { ttl: 60_000 })
-    expect(typeof parsed).toBe('object')
-})
-
-// THE REVERT: drop the in-flight entry, so each ask fetches, and `/held` is asked 5 times.
-test('identical asks under a ttl are one request, and a held answer asks nothing — 54.12, 54.13', async () => {
-    const answers = await Promise.all(
-        Array.from({ length: 5 }, () =>
-            settledFetch(at('/held'), { ttl: 60_000 }),
-        ),
-    )
-    expect(answers).toEqual(Array(5).fill({ asked: 1 }))
-    expect(await settledFetch(at('/held'), { ttl: 60_000 })).toEqual({
-        asked: 1,
-    })
-    expect(asked.get('/held')).toBe(1)
-    // Other credentials are another answer.
-    await settledFetch(at('/held'), {
-        ttl: 60_000,
-        headers: { authorization: 'Bearer theo' },
-    })
-    expect(asked.get('/held')).toBe(2)
-})
-
-test('a held answer past its ttl is asked again — 54.12', async () => {
-    await settledFetch(at('/brief'), { ttl: 1 })
-    // The clock passing the ttl: nothing settles as it does.
-    await Bun.sleep(5)
-    expect(await settledFetch(at('/brief'), { ttl: 1 })).toEqual({ asked: 2 })
-})
-
-// THE REVERT: keep a failure in `bodyOf`, and the second ask is answered from the cache — 2 asks.
-test('a failure is not held, and the next ask runs again — 54.14', async () => {
-    const before = asked.get('/missing') ?? 0
-    await settledFetch(at('/missing'), { ttl: 60_000 })
-    await settledFetch(at('/missing'), { ttl: 60_000 })
-    expect((asked.get('/missing') ?? 0) - before).toBe(2)
-})
-
-// THE REVERT: hand a caller that joined the ask in flight `held.answer` whatever it settled to; the
-// second reader shares the first's iterator, which the first drained — `2,0` where `2,2` is due.
-test('a stream is not held, and a caller that joined one in flight reads its own — 54.14', async () => {
-    const drained = async (answer: unknown) => {
-        let chunks = 0
-        for await (const _ of answer as AsyncIterable<unknown>) chunks += 1
-        return chunks
-    }
-    const first = settledFetch(at('/feed'), { ttl: 60_000 })
-    const joined = settledFetch(at('/feed'), { ttl: 60_000 })
-    const read = [await drained(await first), await drained(await joined)]
-    expect(read.join()).toBe('2,2')
-    expect(asked.get('/feed')).toBe(2)
-})
-
-test('a ttl on a POST holds nothing — 54.15', async () => {
-    const before = asked.get('/held') ?? 0
-    await settledFetch(at('/held'), { method: 'POST', body: '', ttl: 60_000 })
-    await settledFetch(at('/held'), { method: 'POST', body: '', ttl: 60_000 })
-    expect((asked.get('/held') ?? 0) - before).toBe(2)
 })

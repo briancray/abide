@@ -105,7 +105,7 @@ export * as format from './format/index.ts'
 export type { FetchFailed } from './fetchFailed.ts'
 // 56.1-56.12 — a form over a handler, checked against its args document before the call.
 export { type FieldName, type Form, type FormField, form } from './form.ts'
-export { handle } from './handle.ts'
+export { type FetchOptions, fetchAndHandle } from './fetchAndHandle.ts'
 export { type Health, health } from './health.ts'
 export type { Issues, Paths } from './Issues.ts'
 export type { JsonValue } from './JsonValue.ts'

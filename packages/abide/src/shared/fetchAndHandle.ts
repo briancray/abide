@@ -1,23 +1,19 @@
-// ANOTHER SERVICE, ASKED WITH A DEADLINE, RETRIES AND A CACHE: 54.7-54.17. A server's helper — the
-// fetch carries the server's credentials, and the cache is this process's.
+// `fetch`, ASKED WITH A DEADLINE AND RETRIES, ITS BODY READ AS ITS TYPE SAYS: 54.7-54.13, 54.26-54.30.
+// Isomorphic, as `fetch` is: on a server a call carries the server's credentials, in a browser the
+// page's. NO CACHE OF ITS OWN: an answer held for a while is a `memo` over the call (11.45), keyed by
+// what the caller asks with.
 
-import {
-    isFailed,
-    isFailedNamed,
-    isTransient,
-    retryAt,
-} from '#shared/Failed.ts'
-import { type FetchFailed, fetchFailed } from '#shared/fetchFailed.ts'
-import { readBody, refusedBy } from '#shared/handle.ts'
-import { isAsyncIterable } from '#shared/isAsyncIterable.ts'
-import { namedLogger } from '#shared/log.ts'
-import { type Backoff, backoffWait } from '#shared/retryWait.ts'
-import { runSchema, type Schema } from '#shared/Schema.ts'
-import { sleep } from '#shared/sleep.ts'
+import { isFailed, isFailedNamed, isTransient, retryAt } from './Failed.ts'
+import { type FetchFailed, fetchFailed } from './fetchFailed.ts'
+import { readBody, refusedBy } from './handle.ts'
+import { namedLogger } from './log.ts'
+import { type Backoff, backoffWait } from './retryWait.ts'
+import { runSchema, type Schema } from './Schema.ts'
+import { sleep } from './sleep.ts'
 
 /** `fetch`'s own options, and the reading, the deadline, the retries, the cache and the gate beside them. */
 export type FetchOptions<T> = RequestInit & {
-    /** 54.17 — the body read as JSON, text or a `Blob` whatever its type says, in place of as `handle` reads it. */
+    /** 54.13 — the body read as JSON, text or a `Blob` whatever its type says, in place of as `handle` reads it. */
     as?: 'json' | 'text' | 'blob' | undefined
     /** 54.7 — the milliseconds one attempt may take before it is aborted; 10000 where none is given. */
     timeout?: number | undefined
@@ -25,9 +21,7 @@ export type FetchOptions<T> = RequestInit & {
     retries?: number | undefined
     /** 54.10 — the first wait before asking again, doubled per retry, or the wait before each retry; 250 where none is given. */
     backoff?: Backoff | undefined
-    /** 54.12, 54.13 — the milliseconds a `GET`'s answer is held for the same URL, headers and reading. */
-    ttl?: number | undefined
-    /** 54.17 — what the body must be, checked before it is the answer. */
+    /** 54.13 — what the body must be, checked before it is the answer. */
     schema?: Schema<T> | undefined
 }
 
@@ -40,27 +34,19 @@ const IDEMPOTENT = new Set(['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS', 'TRACE'])
 
 const FETCH_LOG = namedLogger('abide:fetch')
 
-/** A body held for `ttl`, or one still being asked for, which a second identical ask joins (54.12, 54.13). */
-type Held = {
-    answer: Promise<unknown>
-    expiresAt: number
-}
-
-const HELD = new Map<string, Held>()
-
-/** A body as text, checked against `schema` where one is given: 54.7-54.17. */
+/** A body as text, checked against `schema` where one is given: 54.7-54.13. */
 function fetchBody<T = string>(
     url: string | URL,
     options: FetchOptions<T> & { as: 'text' },
 ): Promise<T>
-/** A body as a `Blob`, checked against `schema` where one is given: 54.7-54.17. */
+/** A body as a `Blob`, checked against `schema` where one is given: 54.7-54.13. */
 function fetchBody<T = Blob>(
     url: string | URL,
     options: FetchOptions<T> & { as: 'blob' },
 ): Promise<T>
 /**
  * A body read as its `content-type` says, as `handle` reads one, or as JSON where `as` says so,
- * checked against `schema` where one is given: 54.7-54.17.
+ * checked against `schema` where one is given: 54.7-54.13.
  */
 function fetchBody<T = unknown>(
     url: string | URL,
@@ -70,17 +56,17 @@ async function fetchBody<T>(
     url: string | URL,
     options: FetchOptions<T> = {},
 ): Promise<T> {
-    // 54.16 — a refusal rejects, as a handler's call does (16.3): `await` hands back the body alone.
+    // 54.12 — a refusal rejects, as a handler's call does (16.3): `await` hands back the body alone.
     const answered = await answeredFor(url, options)
     if (isFailed(answered)) throw answered
     return answered
 }
 
 /**
- * Another service's answer, rejected with the `FetchFailed` it gave up with (54.16), and
- * `fetchData.isError` to narrow a caught failure to one, as `rpc.isError` narrows a handler's (54.44).
+ * Another service's answer, rejected with the `FetchFailed` it gave up with (54.12), and
+ * `fetchAndHandle.isError` to narrow a caught failure to one, as `rpc.isError` narrows a handler's (54.40).
  */
-export const fetchData: typeof fetchBody & {
+export const fetchAndHandle: typeof fetchBody & {
     isError<Name extends 'FetchFailed'>(
         error: unknown,
         name: Name,
@@ -101,55 +87,13 @@ async function answeredFor<T>(
         if (!headers.has('accept')) headers.set('accept', 'application/json')
         asking = { ...options, headers }
     }
-    const body = await answerOf(url, asking)
+    const body = await asked(url, asking, asking.signal)
     if (isFailed(body)) return body as FetchFailed
     if (options.schema === undefined) return body as T
     const result = runSchema(options.schema, body)
     return result.issues === null
         ? (result.value as T)
         : fetchFailed({ status: null, reason: 'shape' })
-}
-
-/** The body `url` answers, held and joined where `ttl` asks (54.12, 54.13), asked again where 54.8 says. */
-function answerOf<T>(
-    url: string | URL,
-    options: FetchOptions<T>,
-): Promise<unknown> {
-    const { ttl = 0, signal } = options
-    const method = (options.method ?? 'GET').toUpperCase()
-    if (ttl <= 0 || method !== 'GET') return asked(url, options, signal)
-    const key = keyOf(url, options)
-    const now = Date.now()
-    const held = HELD.get(key)
-    let answer: Promise<unknown>
-    if (held !== undefined && held.expiresAt > now)
-        // 54.14 — a stream is its first reader's to drain, so a caller that joined one asks for its own.
-        answer = held.answer.then((settled) =>
-            isAsyncIterable(settled) ? asked(url, options, signal) : settled,
-        )
-    else {
-        for (const [stale, each] of HELD)
-            if (each.expiresAt <= now) HELD.delete(stale)
-        // Asked with no caller's signal: one caller leaving does not end it for the rest.
-        answer = asked(url, options, undefined)
-        const fresh: Held = { answer, expiresAt: Number.POSITIVE_INFINITY }
-        HELD.set(key, fresh)
-        answer.then((settled) => {
-            // 54.14 — a failure is not kept, and neither is a stream, which its first reader drains.
-            if (isFailed(settled) || isAsyncIterable(settled)) HELD.delete(key)
-            else fresh.expiresAt = Date.now() + ttl
-        })
-    }
-    return signal == null ? answer : abortable(answer, signal)
-}
-
-// The headers are part of the key: two callers with different credentials are two answers. So is the
-// reading: one body read as text and as JSON is two answers.
-function keyOf<T>(url: string | URL, options: FetchOptions<T>): string {
-    let key = `${options.as ?? ''} ${url}`
-    for (const [name, value] of new Headers(options.headers))
-        key += `\n${name}: ${value}`
-    return key
 }
 
 async function asked<T>(
@@ -162,7 +106,6 @@ async function asked<T>(
         timeout = DEFAULT_TIMEOUT,
         retries: retriesGiven,
         backoff,
-        ttl: _ttl,
         schema: _schema,
         ...init
     } = options
@@ -189,7 +132,7 @@ async function asked<T>(
                 status: null,
                 reason: deadline.aborted ? 'timeout' : 'network',
             })
-            // 54.34 — what `fetch` threw — a refused certificate, a name nothing resolves — for the
+            // 54.30 — what `fetch` threw — a refused certificate, a name nothing resolves — for the
             // app to read. `problemOf` sends no `cause`, so it never leaves this server.
             failure.cause = thrown
         }
@@ -221,22 +164,4 @@ function paused(
     return signal == null
         ? Bun.sleep(milliseconds)
         : sleep(milliseconds, signal)
-}
-
-function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
-    if (signal.aborted) return Promise.reject(signal.reason)
-    return new Promise((resolve, reject) => {
-        const stop = () => reject(signal.reason)
-        signal.addEventListener('abort', stop, { once: true })
-        work.then(
-            (value) => {
-                signal.removeEventListener('abort', stop)
-                resolve(value)
-            },
-            (error) => {
-                signal.removeEventListener('abort', stop)
-                reject(error)
-            },
-        )
-    })
 }

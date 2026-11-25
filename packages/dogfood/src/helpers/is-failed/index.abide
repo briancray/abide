@@ -5,14 +5,8 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={['/helpers/refuse', '/data/fetch-data', '/orchestration/pipe']}
+    seeAlso={['/helpers/refuse', '/data/fetch-and-handle']}
     tests={[
-        {
-            path: 'packages/abide/tests/handle.test.ts',
-            from: [
-                "test('a status outside 2xx, and JSON that does not parse, are a FetchFailed — 54.31'",
-            ],
-        },
         {
             path: 'packages/abide/tests/refuse.test.ts',
             from: ["test('a refusal that crossed a wire is still one'"],
@@ -23,20 +17,6 @@ import Section from '#src/lib/Section.abide'
         },
     ]}
 >
-    <Section level={3} title="Tell a response's refusal from its body">
-        <p><code>handle</code> reads a response's body, or answers the <code>FetchFailed</code>
-            a status outside 2xx is. Check with <code>isFailed</code> before reading the body.</p>
-        <Code language="ts" caption="server" code={`
-            import { handle, isFailed } from '@abide/abide'
-
-            const registry = 'https://registry.example/companies/hopper-co'
-            const read = await handle(await fetch(registry))
-            const founded = isFailed(read)
-                ? 'unknown'
-                : (read as { founded: number }).founded
-        `} />
-    </Section>
-
     <Section level={3} title="Show a refusal and rethrow anything else">
         <p>A refused handler call throws its refusal. Anything else that reaches the
             <code>catch</code> went wrong, so let it go on.</p>

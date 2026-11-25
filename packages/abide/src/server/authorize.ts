@@ -1,4 +1,4 @@
-// 54.2-54.4, 54.28 — THE RUNG A HANDLER NAMES FOR WHO MAY CALL IT. A server's rung: it is filed in a
+// 54.2-54.4, 54.24 — THE RUNG A HANDLER NAMES FOR WHO MAY CALL IT. A server's rung: it is filed in a
 // handler's `middleware` or the per-request lane, and both run on the server.
 
 import type { Failed } from '#shared/Failed.ts'
@@ -18,12 +18,12 @@ type SignedOut = Failed<'SignedOut', undefined>
 /**
  * A rung admitting a signed-in caller whose `principal.resolved` holds `admits`, or whom `admits`
  * passes where it is a function, and answering anyone else as an address nothing serves: 54.2, 54.3,
- * 54.28.
+ * 54.24.
  */
 export function authorize(
     admits: Admits,
     options: {
-        /** 403, the default, refuses `Forbidden`; 404 answers as an address nothing serves (54.28). */
+        /** 403, the default, refuses `Forbidden`; 404 answers as an address nothing serves (54.24). */
         status: 404
     },
 ): Middleware<
@@ -40,7 +40,7 @@ export function authorize(
     options?: {
         /** What the `Forbidden` refusal says. */
         message?: string | undefined
-        /** 403, the default, refuses `Forbidden`; 404 answers as an address nothing serves (54.28). */
+        /** 403, the default, refuses `Forbidden`; 404 answers as an address nothing serves (54.24). */
         status?: 403 | undefined
     },
 ): Middleware<never, object, SignedOut | Failed<'Forbidden', undefined>>
@@ -75,7 +75,7 @@ export function authorize(
     }
 }
 
-// 54.28 — the refusal 15.7 answers an address nothing serves, word for word, so the two cannot be
+// 54.24 — the refusal 15.7 answers an address nothing serves, word for word, so the two cannot be
 // told apart: its path is the one routing reads, below the mount, and not the one bun received. An
 // in-process call has no request, and names no path.
 function hidden(): Failed<'NotFound', { path: string; method: string }> {

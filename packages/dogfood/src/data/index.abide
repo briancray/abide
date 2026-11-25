@@ -12,8 +12,7 @@ import Section from '#src/lib/Section.abide'
         '/data/database',
         '/data/table',
         '/orchestration/job',
-        '/data/fetch-data',
-        '/data/handle',
+        '/data/fetch-and-handle',
         '/reactive/refresh',
         '/helpers/is-failed',
     ]}
@@ -156,23 +155,22 @@ import Section from '#src/lib/Section.abide'
         <Exchange path="/ops/getDigest" />
     </Section>
 
-    <Section title="Another service giving up is a value, not a throw">
-        <p><a href={url('/data/fetch-data')}><code>fetchData</code></a> asks with a deadline
-            and asks again after a 503, twice by default. Where the service still fails it
-            settles to a <code>FetchFailed</code> rather than throwing, and a handler returning
-            the failure refuses at 502.</p>
+    <Section title="Fetch another service, on either side">
+        <p><a href={url('/data/fetch-and-handle')}><code>fetchAndHandle</code></a> is
+            <code>fetch</code> asked with a deadline and asked again after a 503, twice by default,
+            its body read as its type says. Where the service still fails it rejects with a
+            <code>FetchFailed</code>, and a handler that lets it reject refuses at 502.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData, GET } from '@abide/abide/server'
+            import { fetchAndHandle } from '@abide/abide'
+            import { GET } from '@abide/abide/server'
             import { registryOrigin } from './lib/registryOrigin.server.ts'
 
             type Registration = { founded: number; employees: number }
 
             export default GET(
                 ({ id }: { id: string }) =>
-                    fetchData<Registration>(\`\${registryOrigin()}/companies/\${id}\`, {
-                        ttl: 60_000,
-                    }),
-                { description: "A company's entry at the business registry." },
+                    fetchAndHandle<Registration>(\`\${registryOrigin()}/companies/\${id}\`),
+                { global: true, ttl: 60_000 },
             )
         `} />
         <p>The CRM's registry answers Hopper &amp; Co on every third ask, so the retries reach
@@ -183,37 +181,22 @@ import Section from '#src/lib/Section.abide'
         <Exchange path="/companies/getRegistration?id=langley-research" />
     </Section>
 
-    <Section title="Check for a FetchFailed before reading the body">
-        <p>The answer is a body or a <code>FetchFailed</code>, so test it with
-            <a href={url('/helpers/is-failed')}><code>isFailed</code></a> first. The one thing
-            <code>fetchData</code> throws is the abort of a <code>signal</code> you passed.
+    <Section title="Catch a FetchFailed to read why it gave up">
+        <p>A refusal rejects, so catch it and narrow it with <code>fetchAndHandle.isError</code>.
             <code>as</code> reads the body as <code>'text'</code>, <code>'json'</code> or a
             <code>'blob'</code> whatever its type says.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchData, isFailed, log } from '@abide/abide/server'
+            import { fetchAndHandle, log } from '@abide/abide'
 
-            const filing = await fetchData('https://registry.example/filings/ada.txt', {
-                as: 'text',
-                timeout: 2_000,
-            })
-            if (isFailed(filing))
-                log.warning('registry gave up', filing.data, filing.cause)
-        `} />
-    </Section>
-
-    <Section title="Read a response you fetched yourself, on either side">
-        <p><a href={url('/data/handle')}><code>handle</code></a> comes from
-            <code>@abide/abide</code> and runs in the browser as well as on the server. It asks
-            nothing and retries nothing: it reads a <code>Response</code> as its
-            <code>content-type</code> says. A status outside 2xx is a <code>FetchFailed</code>,
-            and what <code>fetch</code> throws reaches you untouched.</p>
-        <Code language="ts" caption="shared" code={`
-            import { handle, isFailed } from '@abide/abide'
-
-            const response = await fetch('https://registry.example/companies/hopper')
-            const session = response.headers.get('x-session')
-            const company = await handle(response)
-            if (isFailed(company)) return company
+            try {
+                await fetchAndHandle('https://registry.example/filings/ada.txt', {
+                    as: 'text',
+                    timeout: 2_000,
+                })
+            } catch (failed) {
+                if (!fetchAndHandle.isError(failed, 'FetchFailed')) throw failed
+                log.warning('registry gave up', failed.data, failed.cause)
+            }
         `} />
     </Section>
 </Doc>

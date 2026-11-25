@@ -1,7 +1,7 @@
 import type { Failed } from './Failed.ts'
 import { refuse } from './refuse.ts'
 
-/** 54.16 — what a fetch that gave up settles to in place of the body. */
+/** 54.12 — what a fetch that gave up settles to in place of the body. */
 export type FetchFailed = Failed<
     'FetchFailed',
     {

@@ -1,11 +1,11 @@
-import { fetchData, GET } from '@abide/abide/server'
+import { fetchAndHandle, GET } from '@abide/abide/server'
 
 import { registryOrigin } from './lib/registryOrigin.server.ts'
 
 /** A company's headcount where the registry answers within half a second, else `null`. */
 export default GET(
     ({ id }: { id: string }) =>
-        fetchData<{ employees: number }>(
+        fetchAndHandle<{ employees: number }>(
             `${registryOrigin()}/companies/${id}`,
             { retries: 0, timeout: 500 },
         ).then(

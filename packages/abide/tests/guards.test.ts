@@ -66,10 +66,10 @@ async function answered(
     return `${answer.status} ${body?.type ?? JSON.stringify(body)}${body?.detail ? `: ${body.detail}` : ''}`
 }
 
-// 54.28 UNDER A SUB-PATH: word for word, the path included — the one routing names, below the mount.
+// 54.24 UNDER A SUB-PATH: word for word, the path included — the one routing names, below the mount.
 // THE REVERT: name the request bun received, and the hidden 404 says `/docs/team/getPayroll` where
 // the unserved address says `/team/getNothing`.
-test('authorize at 404 names the path routing names, under a mount — 54.28, 15.7', async () => {
+test('authorize at 404 names the path routing names, under a mount — 54.24, 15.7', async () => {
     const standing = MOUNT.current
     MOUNT.current = () => '/docs'
     const body = async (address: string) =>
@@ -141,7 +141,7 @@ test('authorize given a function admits whom it passes, refusing with the messag
 })
 
 // THE REVERT: ignore `status`, and Theo is told the address exists — `403 Forbidden`.
-test('authorize at 404 answers a member it does not admit as an address nothing serves — 54.28', async () => {
+test('authorize at 404 answers a member it does not admit as an address nothing serves — 54.24', async () => {
     expect(await answered('getPayroll', { name: 'theo', role: 'sales' })).toBe(
         await answered('getNothing', { name: 'theo', role: 'sales' }),
     )

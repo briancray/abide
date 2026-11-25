@@ -1,4 +1,4 @@
-// WORK ON A SCHEDULE: 54.18-54.27. A job is a `global` value on a `poll` nothing reads — the shape
+// WORK ON A SCHEDULE: 54.14-54.23. A job is a `global` value on a `poll` nothing reads — the shape
 // `poll.ts` already calls a job — so `App.listen` makes its first look and `App.stop` stops it (7.26,
 // 7.30). What this adds is the bookkeeping written once: a status a handler can answer, one run at
 // a time, and when the last run ended.
@@ -11,7 +11,7 @@ import { appStopSignal } from '#shared/reactive/poll.ts'
 
 import { ownedBy } from './requestScope.ts'
 
-/** 54.22 — where a job stands, as a page reads it through a handler. */
+/** 54.18 — where a job stands, as a page reads it through a handler. */
 export type JobStatus = {
     /** Whether a run is going. */
     running: boolean
@@ -26,56 +26,56 @@ export type JobStatus = {
 /** One run's ending: the status it wrote, and what it threw or refused, where it failed. */
 type Ran = { status: JobStatus; failure: unknown }
 
-/** 54.18 — a job's status beside the ways to run it ahead of its schedule and to end it. */
+/** 54.14 — a job's status beside the ways to run it ahead of its schedule and to end it. */
 export type Job<Input = undefined> = {
     status: Reactive<JobStatus>
     run: (input?: Input) => Promise<JobStatus>
     stop: () => Promise<JobStatus>
 }
 
-/** 54.18 — what a job is: its name, its schedule, its work, and what holds or remembers it. */
+/** 54.14 — what a job is: its name, its schedule, its work, and what holds or remembers it. */
 export type JobOptions<Input = undefined> = {
-    /** 54.23 — what a failed run is logged under, beside `job`. */
+    /** 54.19 — what a failed run is logged under, beside `job`. */
     name?: string | undefined
-    /** 54.26, 54.39 — the work, handed what `Job.run` was given and `undefined` where a look started it; `abortSignal()` in it says stop. */
+    /** 54.22, 54.35 — the work, handed what `Job.run` was given and `undefined` where a look started it; `abortSignal()` in it says stop. */
     run: (input: Input | undefined) => unknown
-    /** 54.21 — when the last run ended before this process, in epoch milliseconds, or `undefined` where none has. */
+    /** 54.17 — when the last run ended before this process, in epoch milliseconds, or `undefined` where none has. */
     lastRun?: (() => number | undefined) | undefined
-    /** 54.38 — what holds the schedule: while it reads true, a look starts no run. */
+    /** 54.34 — what holds the schedule: while it reads true, a look starts no run. */
     paused?:
         Reactive<boolean, never, never, boolean> | (() => boolean) | undefined
 } & (
     | {
-          /** 54.18, 54.19, 54.25 — the milliseconds between the end of one run and the next, or between their starts under `from`, read at each look where a function. */
+          /** 54.14, 54.15, 54.21 — the milliseconds between the end of one run and the next, or between their starts under `from`, read at each look where a function. */
           every: number | (() => number)
-          /** 54.29 — whether `every` is measured from when the last run `'end'`ed, the default, or from when it `'start'`ed. */
+          /** 54.25 — whether `every` is measured from when the last run `'end'`ed, the default, or from when it `'start'`ed. */
           from?: 'end' | 'start' | undefined
           cron?: never | undefined
           timeZone?: never | undefined
       }
     | {
-          /** 54.40, 54.41 — the times a run is due, as a five-field cron expression or a nickname such as `@daily`. */
+          /** 54.36, 54.37 — the times a run is due, as a five-field cron expression or a nickname such as `@daily`. */
           cron: string
-          /** 54.41 — the IANA zone `cron` is read in, where it is not the server's own. */
+          /** 54.37 — the IANA zone `cron` is read in, where it is not the server's own. */
           timeZone?: string | undefined
           every?: never | undefined
           from?: never | undefined
       }
 )
 
-/** The longest a job waits between two looks at whether a run is due (54.18). */
+/** The longest a job waits between two looks at whether a run is due (54.14). */
 const LONGEST_LOOK = 60_000
 
-/** 54.40 — how often a `cron` job looks, so a run starts within a second of the time it is due. */
+/** 54.36 — how often a `cron` job looks, so a run starts within a second of the time it is due. */
 const CRON_LOOK = 1_000
 
-/** Work run every `every` milliseconds on the server, one run at a time: 54.18-54.27. */
+/** Work run every `every` milliseconds on the server, one run at a time: 54.14-54.23. */
 export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
     const { every, cron, timeZone, run: work, from = 'end' } = options
-    // 54.42 — one schedule, said one way; a type error in TypeScript, and this for JavaScript.
+    // 54.38 — one schedule, said one way; a type error in TypeScript, and this for JavaScript.
     if ((every === undefined) === (cron === undefined))
         throw new TypeError('A job takes `every` or `cron`, and not both.')
-    // 54.40 — the next time `cron` names after `after`; a bad expression throws here, as it is declared.
+    // 54.36 — the next time `cron` names after `after`; a bad expression throws here, as it is declared.
     const zone = timeZone === undefined ? {} : { tz: timeZone }
     const cronAfter =
         cron === undefined
@@ -100,19 +100,19 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         status.set(current)
         return current
     }
-    // When the last run ended, in ms; `undefined` before one has, and before 54.21 has been asked.
+    // When the last run ended, in ms; `undefined` before one has, and before 54.17 has been asked.
     let lastRunAt: number | undefined
-    // What the next run is measured from: the last run's end, its start under 54.29, or a cron job's first look.
+    // What the next run is measured from: the last run's end, its start under 54.25, or a cron job's first look.
     let measuredFrom: number | undefined
     let remembered = false
     let running: Promise<Ran> | undefined
-    // 54.27 — aborted by `stop`, beside the app's own stop.
+    // 54.23 — aborted by `stop`, beside the app's own stop.
     const stopping = new AbortController()
 
     // When the next run is due in ms, or `undefined` while none is.
     const nextRunAt = (): number | undefined => {
         if (stopping.signal.aborted) return undefined
-        // 54.40 — a cron job never run waits for its first time, measured from its first look.
+        // 54.36 — a cron job never run waits for its first time, measured from its first look.
         if (cronAfter !== undefined)
             return cronAfter(measuredFrom ?? Date.now())
         const interval = intervalOf()
@@ -125,20 +125,20 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
     }
 
     const runOnce = async (input: Input | undefined): Promise<Ran> => {
-        // 54.26 — the app's signal, not the look's: a run outlives the look that started it (7.45).
+        // 54.22 — the app's signal, not the look's: a run outlives the look that started it (7.45).
         const signal = AbortSignal.any([appStopSignal(), stopping.signal])
         const startedAt = Date.now()
         write({ running: true })
         let lastError = current.lastError
         let failure: unknown
         try {
-            // 54.39 — its own owner, whichever request asked for it or look started it.
+            // 54.35 — its own owner, whichever request asked for it or look started it.
             const answered = await ownedBy(signal, () => work(input))
-            // 54.23 — a run answering a refusal failed, as one throwing did.
+            // 54.19 — a run answering a refusal failed, as one throwing did.
             if (isFailed(answered)) throw answered
             lastError = null
         } catch (error) {
-            // 54.24 — a run told to stop has not failed.
+            // 54.20 — a run told to stop has not failed.
             if (!signal.aborted) {
                 lastError = messageOf(error)
                 logger.error('run failed', error)
@@ -161,7 +161,7 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         return { status, failure }
     }
 
-    // 54.20 — a run asked for while one is in flight joins it, its input unread. Cleared once
+    // 54.16 — a run asked for while one is in flight joins it, its input unread. Cleared once
     // settled rather than inside the run, which may settle before it is filed as in flight.
     const ran = (input?: Input): Promise<Ran> => {
         if (running !== undefined) return running
@@ -174,8 +174,8 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         })
         return started
     }
-    // 54.43 — `Job.run` rejects with what the run threw or refused, as a handler's call does (16.3);
-    // the status still records it, and a look's run, which nobody awaits, is logged alone (54.23).
+    // 54.39 — `Job.run` rejects with what the run threw or refused, as a handler's call does (16.3);
+    // the status still records it, and a look's run, which nobody awaits, is logged alone (54.19).
     // A run asked for and not awaited — `void digest.run()` — is not reported twice: its failure is
     // logged and kept, and only whoever awaits it is handed the rejection.
     const run = (input?: Input): Promise<JobStatus> => {
@@ -188,23 +188,23 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
 
     const look = async (): Promise<void> => {
         if (stopping.signal.aborted) return
-        // 54.38 — read in the look's body, so its turning false is a look of its own.
+        // 54.34 — read in the look's body, so its turning false is a look of its own.
         if (options.paused?.() === true) return
         if (!remembered) {
             remembered = true
             lastRunAt = options.lastRun?.()
-            // 54.40 — a cron job's first look is where its first time is counted from.
+            // 54.36 — a cron job's first look is where its first time is counted from.
             measuredFrom =
                 lastRunAt ?? (cronAfter === undefined ? undefined : Date.now())
         }
         const dueAt = nextRunAt()
-        // 54.19 — an `every` job never run is due at once; a cron job counts from its first look.
+        // 54.15 — an `every` job never run is due at once; a cron job counts from its first look.
         if (
             dueAt !== undefined &&
             (measuredFrom === undefined || Date.now() >= dueAt)
         ) {
-            // 54.29 — the clock spaces its looks from when one settles, so a look waiting on the run
-            // would measure from its end. A look made while it runs joins it (54.20): a run due
+            // 54.25 — the clock spaces its looks from when one settles, so a look waiting on the run
+            // would measure from its end. A look made while it runs joins it (54.16): a run due
             // while the last one overran starts at the look after that one ends.
             if (from === 'start') void ran()
             else await ran()

@@ -1,17 +1,19 @@
 // 18.33, 46.8, 54.10 — EVERY RETRY IS TIMED BY ONE RULE: the browser's `RetryTimer` (the outbox and the
-// socket mux) and the server's `fetchData` wait what `retryWait` says — the floor doubled per retry,
+// socket mux) and the server's `fetchAndHandle` wait what `retryWait` says — the floor doubled per retry,
 // and never sooner than a `Retry-After`. Neither test waits: the timer and the sleep are recorded.
 
 import { afterAll, afterEach, expect, spyOn, test } from 'bun:test'
 
-import { fetchData } from '#server'
+import { fetchAndHandle } from '#server'
 import { retryWait } from '#shared/retryWait.ts'
 import { RetryTimer } from '#ui/RetryTimer.ts'
 
-/** `fetchData`'s answer, or the refusal it rejected with (54.16), as one value a test reads. */
-const settledFetch = ((...given: Parameters<typeof fetchData>) =>
-    fetchData(...given).catch((refusal: unknown) => refusal)) as unknown as (
-    ...given: Parameters<typeof fetchData>
+/** `fetchAndHandle`'s answer, or the refusal it rejected with (54.12), as one value a test reads. */
+const settledFetch = ((...given: Parameters<typeof fetchAndHandle>) =>
+    fetchAndHandle(...given).catch(
+        (refusal: unknown) => refusal,
+    )) as unknown as (
+    ...given: Parameters<typeof fetchAndHandle>
 ) => Promise<any>
 
 const service = Bun.serve({
@@ -34,7 +36,7 @@ afterEach(() => {
     for (const spy of spies.splice(0)) spy.mockRestore()
 })
 
-/** The waits `fetchData` sleeps between attempts, slept as nothing. */
+/** The waits `fetchAndHandle` sleeps between attempts, slept as nothing. */
 function sleptBy(): number[] {
     const slept: number[] = []
     const spy = spyOn(Bun, 'sleep').mockImplementation(((wait: number) => {
@@ -67,9 +69,9 @@ test('the floor doubles per retry, stops at the ceiling, and waits out a later R
     expect(retryWait(0, 250, 1_000, Date.now() + 5_000)).toBeGreaterThan(4_900)
 })
 
-// THE REVERT: give `fetchData` back its own `FIRST_BACKOFF * 2 ** attempt`, tripled, or `RetryTimer`
+// THE REVERT: give `fetchAndHandle` back its own `FIRST_BACKOFF * 2 ** attempt`, tripled, or `RetryTimer`
 // its own doubling with the floor tripled — the two sequences part.
-test('fetchData and RetryTimer wait the same sequence from the same floor — 54.10, 46.8', async () => {
+test('fetchAndHandle and RetryTimer wait the same sequence from the same floor — 54.10, 46.8', async () => {
     const slept = sleptBy()
     await settledFetch(`${service.url.origin}/down`, {
         retries: 3,
@@ -82,7 +84,7 @@ test('fetchData and RetryTimer wait the same sequence from the same floor — 54
     expect(armed).toEqual(slept)
 })
 
-// THE REVERT: wait the `Retry-After` in place of the step, as `fetchData` did — `0` is slept where
+// THE REVERT: wait the `Retry-After` in place of the step, as `fetchAndHandle` did — `0` is slept where
 // 250 is due, while `RetryTimer` arms 250 for the same answer.
 test('a Retry-After sooner than the step waits the step, in both — 54.10', async () => {
     const slept = sleptBy()
@@ -99,7 +101,7 @@ test('a Retry-After sooner than the step waits the step, in both — 54.10', asy
 
 // 54.10 — `backoff` IS THE FLOOR THE RULE DOUBLES, OR THE WAIT ITSELF: a number moves where the
 // doubling starts, and a function is asked for each retry by its number from 1. THE REVERT: drop
-// `backoff` from `fetchData`'s `backoffWait` call, and `[250, 500, 1000]` is slept both times.
+// `backoff` from `fetchAndHandle`'s `backoffWait` call, and `[250, 500, 1000]` is slept both times.
 test('backoff moves the floor, or names each wait — 54.10', async () => {
     const slept = sleptBy()
     await settledFetch(`${service.url.origin}/down`, {

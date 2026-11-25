@@ -1,4 +1,4 @@
-// 54.35-54.37 — A CALLER NAMED BY THE PROXY IN FRONT OF THE APP: a single sign-on gateway that has
+// 54.31-54.33 — A CALLER NAMED BY THE PROXY IN FRONT OF THE APP: a single sign-on gateway that has
 // already authenticated whoever it forwards, and says who in a header. The header is believed only
 // on a request whose PEER is one of the proxies — `request.ip`, the socket's address, never a header
 // anyone can write — and the claims are presumed for that request alone, as `App.run`'s are, with no
@@ -31,7 +31,7 @@ export function trustedIdentity(options: {
     }
     return (next, { request: asked }) => {
         const value = asked.headers.get(options.header)
-        // 54.36 — a header any caller can write is read only from a peer that is a proxy.
+        // 54.32 — a header any caller can write is read only from a peer that is a proxy.
         const peer = request.ip()
         if (
             value !== null &&

@@ -1,4 +1,4 @@
-// 54.35-54.37 — A CALLER A TRUSTED PROXY NAMES: served on a real listener, since what decides is the
+// 54.31-54.33 — A CALLER A TRUSTED PROXY NAMES: served on a real listener, since what decides is the
 // peer `request.ip` answers, and a call made in process has none.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
@@ -47,19 +47,19 @@ const asked = (path: string, user?: string) =>
     })
 
 // THE REVERT: drop the peer check, and Theo is signed in by a header he wrote himself.
-test('a header from a trusted proxy signs the caller in, and from anyone else is ignored — 54.35, 54.36', async () => {
+test('a header from a trusted proxy signs the caller in, and from anyone else is ignored — 54.31, 54.32', async () => {
     const trusted = await asked('fromLoopback', 'grace')
     expect([trusted.status, await trusted.json()]).toEqual([200, 'grace'])
     const forged = await asked('fromGateway', 'theo')
     expect(forged.status).toBe(401)
 })
 
-test('a trusted proxy naming nobody leaves the caller as they came — 54.37', async () => {
+test('a trusted proxy naming nobody leaves the caller as they came — 54.33', async () => {
     expect((await asked('fromLoopback')).status).toBe(401)
     expect((await asked('fromLoopback', '')).status).toBe(401)
 })
 
-test('a caller a proxy names is signed in for the request alone, with no cookie sealed — 54.37', async () => {
+test('a caller a proxy names is signed in for the request alone, with no cookie sealed — 54.33', async () => {
     const answer = await asked('fromLoopback', 'grace')
     expect(answer.headers.get('set-cookie') ?? '').not.toContain(
         'abide-principal',

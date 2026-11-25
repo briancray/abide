@@ -1249,17 +1249,10 @@ const WRITTEN: readonly {
                 where: 'server',
             },
             {
-                route: '/data/fetch-data',
-                title: '`fetchData`',
+                route: '/data/fetch-and-handle',
+                title: '`fetchAndHandle`',
                 description:
-                    'Ask another service with a deadline, retries and an optional cache, read the answer as its type says, and get a refusal rather than a throw when it gives up.',
-                where: 'server',
-            },
-            {
-                route: '/data/handle',
-                title: '`handle`',
-                description:
-                    'Read a response you fetched yourself as its type says: JSON, a stream of chunks, text or bytes.',
+                    'Fetch a URL with a deadline and retries, read its body as its type says, and catch a FetchFailed when it gives up.',
                 where: 'anywhere',
             },
         ],

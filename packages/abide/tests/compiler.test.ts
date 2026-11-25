@@ -198,7 +198,6 @@ test('the compiler is not reachable from the server seam', async () => {
             'createApp',
             'database',
             'table',
-            'fetchData',
             'job',
             'middleware',
             'authorize',

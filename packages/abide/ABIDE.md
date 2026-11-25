@@ -237,7 +237,7 @@ table.
   the root layout spreads `tooltip.host()`) beside `elementSize`, `elementVisible` and `elementRect` — every behavior on an element is a
   part, spread as `{...copy()}`, two elements' parts find each other with no element handed between
   them, and several parts spread on one element each bind it.
-- From `@abide/abide/server`: the rungs `signedIn`, `authorize` (a signed-in caller holding the claims it names: `authorize({ groups: ['sales'] })`) and `readOnly`, `fetchData`
+- From `@abide/abide/server`: the rungs `signedIn`, `authorize` (a signed-in caller holding the claims it names: `authorize({ groups: ['sales'] })`) and `readOnly`, `fetchAndHandle`
   (a deadline, retries worth retrying, a cache, the body read as its type says or as `as` names), and `job` (work on a schedule, one run at
   a time).
 

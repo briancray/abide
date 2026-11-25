@@ -58,7 +58,7 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/job.test.ts',
             from: [
-                "test('a paused job starts no run from a look, and Job.run still runs — 54.38'",
+                "test('a paused job starts no run from a look, and Job.run still runs — 54.34'",
             ],
         },
         {

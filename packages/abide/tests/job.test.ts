@@ -1,4 +1,4 @@
-// `job` — WORK ON A SCHEDULE (54.18-54.27). A file of its own: every job a file builds is filed for
+// `job` — WORK ON A SCHEDULE (54.14-54.23). A file of its own: every job a file builds is filed for
 // the process and looked at again by every app the file opens after it (7.30), so each test stops
 // the jobs it built that are still due.
 
@@ -36,7 +36,7 @@ function until(
 
 // THE REVERT: start a run per `Job.run` rather than joining the one in flight, and `handed` is
 // [1, 2, 3].
-test('a run asked for while one is in flight joins it, and its input reaches no run — 54.20', async () => {
+test('a run asked for while one is in flight joins it, and its input reaches no run — 54.16', async () => {
     const handed: (number | undefined)[] = []
     const release = Promise.withResolvers<void>()
     const digest = job({
@@ -61,7 +61,7 @@ test('a run asked for while one is in flight joins it, and its input reaches no 
 })
 
 // THE REVERT: call `run` with `undefined` whoever started it, and `handed` reads `undefined` twice.
-test('Job.run hands the run its input, and a look hands it undefined — 54.26', async () => {
+test('Job.run hands the run its input, and a look hands it undefined — 54.22', async () => {
     const handed: ({ limit: number } | undefined)[] = []
     const imported = job({
         name: 'handed',
@@ -80,7 +80,7 @@ test('Job.run hands the run its input, and a look hands it undefined — 54.26',
 
 // THE REVERT: measure from the end under `from: 'start'` too, and the next run is a full hour after
 // the last one ended rather than after it started.
-test('a job measured from the start names its next run an interval after the last run started — 54.29', async () => {
+test('a job measured from the start names its next run an interval after the last run started — 54.25', async () => {
     const digest = job({
         name: 'fromStart',
         every: 3_600_000,
@@ -94,7 +94,7 @@ test('a job measured from the start names its next run an interval after the las
 })
 
 // THE REVERT: drop `global` from the status, and the request's run is the request's alone.
-test('a run in a request writes the status every caller reads — 54.22', async () => {
+test('a run in a request writes the status every caller reads — 54.18', async () => {
     const digest = job({ name: 'requested', every: 3_600_000, run: () => {} })
     await using app = await inMemoryApp({})
     const ran = await app.run(() => digest.run())
@@ -102,7 +102,7 @@ test('a run in a request writes the status every caller reads — 54.22', async 
     expect(ran.lastRun).not.toBe(null)
 })
 
-test('a failed run rejects, is logged under job:<name> and kept, and the next run clears it — 54.23, 54.43', async () => {
+test('a failed run rejects, is logged under job:<name> and kept, and the next run clears it — 54.19, 54.39', async () => {
     let fail = true
     const digest = job({
         name: 'failing',
@@ -124,7 +124,7 @@ test('a failed run rejects, is logged under job:<name> and kept, and the next ru
     expect((await digest.run()).lastError).toBe(null)
 })
 
-test('a failed run of a job given no name is logged under job — 54.23', async () => {
+test('a failed run of a job given no name is logged under job — 54.19', async () => {
     const unnamed = job({
         every: 3_600_000,
         run: () => {
@@ -141,7 +141,7 @@ test('a failed run of a job given no name is logged under job — 54.23', async 
 })
 
 // THE REVERT: hand each look a run of its own rather than joining the one in flight, and `most` is 2.
-test('a job never run runs once the app opens, and again each interval, one at a time — 54.18, 54.19, 54.20', async () => {
+test('a job never run runs once the app opens, and again each interval, one at a time — 54.14, 54.15, 54.16', async () => {
     let inFlight = 0
     let most = 0
     let runs = 0
@@ -168,7 +168,7 @@ test('a job never run runs once the app opens, and again each interval, one at a
     expect(most).toBe(1)
 })
 
-test('a last run within the interval is waited out, and an older one is run at once — 54.21', async () => {
+test('a last run within the interval is waited out, and an older one is run at once — 54.17', async () => {
     let runs = 0
     const recent = job({
         name: 'recent',
@@ -197,7 +197,7 @@ test('a last run within the interval is waited out, and an older one is run at o
 })
 
 // THE REVERT: drop the guard on a positive interval, and the paused job runs.
-test('an interval of 0 runs nothing, and names no next run — 54.25', async () => {
+test('an interval of 0 runs nothing, and names no next run — 54.21', async () => {
     let runs = 0
     const looked = Promise.withResolvers<void>()
     const paused = job({
@@ -220,7 +220,7 @@ test('an interval of 0 runs nothing, and names no next run — 54.25', async () 
 
 // THE REVERT: drop `stopping.signal` from the run's signal, and the run is never told — the stop
 // waits on a run that never ends; drop the check in `Job.run`, and `runs` is 2.
-test('stop aborts the run in flight, waits on it, and starts no run after — 54.24, 54.26, 54.27', async () => {
+test('stop aborts the run in flight, waits on it, and starts no run after — 54.20, 54.22, 54.23', async () => {
     let runs = 0
     const started = Promise.withResolvers<void>()
     const digest = job({
@@ -250,11 +250,11 @@ test('stop aborts the run in flight, waits on it, and starts no run after — 54
     expect(runs).toBe(1)
 })
 
-// 54.26, 7.45 — A RUN OUTLIVES THE LOOK THAT STARTED IT: under `from: 'start'` a look does not wait
+// 54.22, 7.45 — A RUN OUTLIVES THE LOOK THAT STARTED IT: under `from: 'start'` a look does not wait
 // on the run, so the looks after it are new runs of the job's own value — and a run whose signal
 // was that value's was aborted by the next look. THE REVERT: call `run` outside `ownedBy`, so
 // `abortSignal()` in it is the look's, and `aborted by a look: true`.
-test('a run that overruns its interval is not aborted by the looks after it — 54.26, 54.29', async () => {
+test('a run that overruns its interval is not aborted by the looks after it — 54.22, 54.25', async () => {
     const release = Promise.withResolvers<void>()
     let told: AbortSignal | undefined
     const scrape = job({
@@ -276,9 +276,9 @@ test('a run that overruns its interval is not aborted by the looks after it — 
     })
 })
 
-// 54.38 — WHILE `paused` READS TRUE A LOOK STARTS NO RUN, and `Job.run` still does. THE REVERT: drop
+// 54.34 — WHILE `paused` READS TRUE A LOOK STARTS NO RUN, and `Job.run` still does. THE REVERT: drop
 // the pause from `look`, and `runs while paused: 1` or more.
-test('a paused job starts no run from a look, and Job.run still runs — 54.38', async () => {
+test('a paused job starts no run from a look, and Job.run still runs — 54.34', async () => {
     const paused = reactive(true)
     let runs = 0
     const sweep = job({
@@ -303,9 +303,9 @@ test('a paused job starts no run from a look, and Job.run still runs — 54.38',
     })
 })
 
-// 54.39 — A RUN IS ITS OWN OWNER: `abortSignal()` inside it, after an `await` included, answers the
+// 54.35 — A RUN IS ITS OWN OWNER: `abortSignal()` inside it, after an `await` included, answers the
 // run's signal — not the request `Job.run` was called from, which ends as its caller hangs up.
-test('abortSignal in a run asked for from a request outlives the request, and ends at stop — 54.39', async () => {
+test('abortSignal in a run asked for from a request outlives the request, and ends at stop — 54.35', async () => {
     const release = Promise.withResolvers<void>()
     const started = Promise.withResolvers<void>()
     let inside: AbortSignal | undefined
@@ -337,8 +337,8 @@ test('abortSignal in a run asked for from a request outlives the request, and en
     ).toBe('after hang up: false, after stop: true')
 })
 
-// 54.39 — nor the look that started it, which the next look replaces under `from: 'start'`.
-test('abortSignal in a run that overruns its interval is not aborted by the looks after it — 54.39', async () => {
+// 54.35 — nor the look that started it, which the next look replaces under `from: 'start'`.
+test('abortSignal in a run that overruns its interval is not aborted by the looks after it — 54.35', async () => {
     const release = Promise.withResolvers<void>()
     let inside: AbortSignal | undefined
     const scrape = job({
@@ -361,10 +361,10 @@ test('abortSignal in a run that overruns its interval is not aborted by the look
     })
 })
 
-// 54.39, 57.13 — A PIPE CALLED IN A RUN IS HANDED NO SIGNAL and still ends with the job: it reads
+// 54.35, 57.13 — A PIPE CALLED IN A RUN IS HANDED NO SIGNAL and still ends with the job: it reads
 // `abortSignal` where it is called, and that is the run's. THE REVERT: call `run` outside `ownedBy`,
 // and the step is told nothing at stop — `stop` waits on it past the test's deadline.
-test('a pipe called in a run is told to stop when the job stops — 54.39, 57.13', async () => {
+test('a pipe called in a run is told to stop when the job stops — 54.35, 57.13', async () => {
     const started = Promise.withResolvers<void>()
     let told = false
     const nightly = pipe([
@@ -388,10 +388,10 @@ test('a pipe called in a run is told to stop when the job stops — 54.39, 57.13
     expect(`step told: ${told}`).toBe('step told: true')
 })
 
-// 54.40 — A CRON JOB NEVER RUN WAITS FOR ITS FIRST TIME, where an `every` job runs as the app opens,
+// 54.36 — A CRON JOB NEVER RUN WAITS FOR ITS FIRST TIME, where an `every` job runs as the app opens,
 // and times missed since its last run are caught up with ONE run. THE REVERT: drop the first look's
 // `Date.now()` for a cron job, and `waiting` runs as the app opens — `runs` is 1 where 0 is due.
-test('a cron job never run waits for its first time, and missed times run once — 54.40', async () => {
+test('a cron job never run waits for its first time, and missed times run once — 54.36', async () => {
     let runs = 0
     let caughtUp = 0
     const waiting = job({
@@ -428,9 +428,9 @@ test('a cron job never run waits for its first time, and missed times run once �
     await behind.stop()
 })
 
-// 54.41 — `timeZone` IS WHERE THE CRON'S CLOCK IS READ. THE REVERT: drop `tz` from the parse, and
+// 54.37 — `timeZone` IS WHERE THE CRON'S CLOCK IS READ. THE REVERT: drop `tz` from the parse, and
 // the next run is 2:00 on the server's clock rather than Kiritimati's, fourteen hours past UTC.
-test('a cron job reads its times in its timeZone — 54.41', async () => {
+test('a cron job reads its times in its timeZone — 54.37', async () => {
     const nightly = job({
         name: 'kiritimati nightly',
         cron: '0 2 * * *',
@@ -451,7 +451,7 @@ test('a cron job reads its times in its timeZone — 54.41', async () => {
     await nightly.stop()
 })
 
-test('a job given both every and cron, neither, or a cron that does not parse throws — 54.42', () => {
+test('a job given both every and cron, neither, or a cron that does not parse throws — 54.38', () => {
     const run = () => {}
     expect(() =>
         job({ every: 1_000, cron: '* * * * *', run } as never),
@@ -460,10 +460,10 @@ test('a job given both every and cron, neither, or a cron that does not parse th
     expect(() => job({ cron: 'every night', run })).toThrow()
 })
 
-// 54.43 — A RUN ANSWERING A REFUSAL FAILED, as one throwing did: `Job.run` rejects with it, and the
+// 54.39 — A RUN ANSWERING A REFUSAL FAILED, as one throwing did: `Job.run` rejects with it, and the
 // status keeps its message. THE REVERT: drop the `isFailed` test from `runOnce`; the run resolves and
 // `lastError: null`.
-test('a run answering a refusal rejects and is kept as a failure — 54.43', async () => {
+test('a run answering a refusal rejects and is kept as a failure — 54.39', async () => {
     const digest = job({
         every: 3_600_000,
         run: () => refuse(503, 'the mail server is down'),

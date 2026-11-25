@@ -1,5 +1,5 @@
 import { isFailed, type RouteLiteral, url } from '@abide/abide'
-import { fetchData, type FetchFailed } from '@abide/abide/server'
+import { fetchAndHandle, type FetchFailed } from '@abide/abide/server'
 
 import { markdownOf } from './markdownOf.server.ts'
 import { ownOrigin } from './ownOrigin.server.ts'
@@ -9,7 +9,7 @@ export async function pageMarkdown(
     route: string,
 ): Promise<string | FetchFailed> {
     try {
-        const page = await fetchData(
+        const page = await fetchAndHandle(
             new URL(url(route as RouteLiteral), ownOrigin()),
             { as: 'text' },
         )
