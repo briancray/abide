@@ -13,17 +13,21 @@ const dates = calendar({ month })
         <button {...dates.next} aria-controls="closing">›</button>
     </div>
     <table id="closing">
-        <tr>
-            {#for weekday of dates.weekdays key weekday.day}
-                <th abbr={weekday.name}>{weekday.short}</th>
-            {/for}
-        </tr>
-        {#for week of shown.weeks key week[0]?.date}
+        <thead>
             <tr>
-                {#for day of week key day.date}
-                    <td>{day.day}{CLOSES.has(day.date) ? ' ●' : ''}</td>
+                {#for weekday of dates.weekdays key weekday.day}
+                    <th abbr={weekday.name}>{weekday.short}</th>
                 {/for}
             </tr>
-        {/for}
+        </thead>
+        <tbody>
+            {#for week of shown.weeks key week[0]?.date}
+                <tr>
+                    {#for day of week key day.date}
+                        <td>{day.day}{CLOSES.has(day.date) ? ' ●' : ''}</td>
+                    {/for}
+                </tr>
+            {/for}
+        </tbody>
     </table>
 {/for}
