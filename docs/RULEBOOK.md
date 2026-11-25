@@ -6834,7 +6834,7 @@ what was read.
 under a minute, and every minute otherwise, from a first look made as 7.30 makes a held-back value's
 first run, and MUST stop looking where 7.26 stops a poll.
 
-54.19 A look MUST start a run of a `job` where no run has ended, or where `every` milliseconds have
+54.19 A look MUST start a run of a `job` given `every` where no run has ended, or where `every` milliseconds have
 passed since the last one ended, or since it started under 54.29.
 
 54.20 `Job.run`, and a look, MUST join a run of the `job` in flight, and MUST NOT start a second; the
@@ -6903,6 +6903,17 @@ it all the same.
 54.39 A `job`'s run MUST run outside every request and every `memo` run, whichever started it, and
 `abortSignal` called in it, outside every run 7.45 and 7.47 name and every request entered in it,
 MUST answer the run's signal 54.26 names.
+
+54.40 A look MUST start a run of a `job` given `cron` once a time `cron` names has passed since its
+last run ended, or since its first look where no run has ended, and MUST start one run however many
+such times have passed; such a `job` MUST look every second, and its `nextRun` MUST be the first time
+`cron` names after the last run ended, or after its first look.
+
+54.41 A `job` MUST read `cron` in the zone `timeZone` names, and in the server's own where it names
+none.
+
+54.42 `job` MUST throw a `TypeError` where it is given both `every` and `cron`, or neither, and MUST
+throw where `cron` is not an expression `Bun.cron.parse` reads.
 
 # 55. Worker files
 

@@ -71,6 +71,16 @@ import Section from '#src/lib/Section.abide'
                 "test('a pipe called in a run is told to stop when the job stops",
             ],
         },
+        {
+            path: 'packages/abide/tests/job.test.ts',
+            from: [
+                "test('a cron job never run waits for its first time, and missed times run once",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/job.test.ts',
+            from: ["test('a cron job reads its times in its timeZone"],
+        },
     ]}
 >
     <Section level={3} title="Mail the team a follow-up digest every night">
@@ -190,6 +200,22 @@ import Section from '#src/lib/Section.abide'
             })
         `} />
     </Section>
+    <Section level={3} title="Send the digest at eight on weekday mornings in New York">
+        <p><code>cron</code> names the times a run is due, in place of <code>every</code>, and
+            <code>timeZone</code> is the clock they are read on. A job never run waits for its
+            first time, and a restart that missed some runs once for all of them.</p>
+        <Code language="ts" caption="server" code={`
+            import { job } from '@abide/abide/server'
+
+            job({
+                name: 'digest',
+                cron: '0 8 * * 1-5',
+                timeZone: 'America/New_York',
+                run: mailDigest,
+            })
+        `} />
+    </Section>
+
     <Section level={3} title="Score deals every five minutes from the start of each run">
         <p><code>from: 'start'</code> measures <code>every</code> from when the last run
             started. A run due while the last one overran starts at the look after it ends.</p>

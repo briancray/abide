@@ -33,25 +33,52 @@ export type Job<Input = undefined> = {
 export type JobOptions<Input = undefined> = {
     /** 54.23 — what a failed run is logged under, beside `job`. */
     name?: string
-    /** 54.18, 54.19, 54.25 — the milliseconds between the end of one run and the next, or between their starts under `from`, read at each look where a function. */
-    every: number | (() => number)
-    /** 54.29 — whether `every` is measured from when the last run `'end'`ed, the default, or from when it `'start'`ed. */
-    from?: 'end' | 'start'
     /** 54.26, 54.39 — the work, handed what `Job.run` was given and `undefined` where a look started it; `abortSignal()` in it says stop. */
     run: (input: Input | undefined) => unknown
     /** 54.21 — when the last run ended before this process, in epoch milliseconds, or `undefined` where none has. */
     lastRun?: () => number | undefined
     /** 54.38 — what holds the schedule: while it reads true, a look starts no run. */
     paused?: Reactive<boolean, never, never, boolean> | (() => boolean)
-}
+} & (
+    | {
+          /** 54.18, 54.19, 54.25 — the milliseconds between the end of one run and the next, or between their starts under `from`, read at each look where a function. */
+          every: number | (() => number)
+          /** 54.29 — whether `every` is measured from when the last run `'end'`ed, the default, or from when it `'start'`ed. */
+          from?: 'end' | 'start'
+          cron?: never
+          timeZone?: never
+      }
+    | {
+          /** 54.40, 54.41 — the times a run is due, as a five-field cron expression or a nickname such as `@daily`. */
+          cron: string
+          /** 54.41 — the IANA zone `cron` is read in, where it is not the server's own. */
+          timeZone?: string
+          every?: never
+          from?: never
+      }
+)
 
 /** The longest a job waits between two looks at whether a run is due (54.18). */
 const LONGEST_LOOK = 60_000
 
+/** 54.40 — how often a `cron` job looks, so a run starts within a second of the time it is due. */
+const CRON_LOOK = 1_000
+
 /** Work run every `every` milliseconds on the server, one run at a time: 54.18-54.27. */
 export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
-    const { every, run: work, from = 'end' } = options
-    const intervalOf = typeof every === 'function' ? every : () => every
+    const { every, cron, timeZone, run: work, from = 'end' } = options
+    // 54.42 — one schedule, said one way; a type error in TypeScript, and this for JavaScript.
+    if ((every === undefined) === (cron === undefined))
+        throw new TypeError('A job takes `every` or `cron`, and not both.')
+    // 54.40 — the next time `cron` names after `after`; a bad expression throws here, as it is declared.
+    const zone = timeZone === undefined ? {} : { tz: timeZone }
+    const cronAfter =
+        cron === undefined
+            ? undefined
+            : (after: number): number | undefined =>
+                  Bun.cron.parse(cron, after, zone)?.getTime()
+    cronAfter?.(Date.now())
+    const intervalOf = typeof every === 'function' ? every : () => every ?? 0
     const logger =
         options.name === undefined
             ? log.named('job')
@@ -70,17 +97,26 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
     }
     // When the last run ended, in ms; `undefined` before one has, and before 54.21 has been asked.
     let lastRunAt: number | undefined
-    // What `every` is measured from: the last run's end, or its start under 54.29.
+    // What the next run is measured from: the last run's end, its start under 54.29, or a cron job's first look.
     let measuredFrom: number | undefined
     let remembered = false
     let running: Promise<JobStatus> | undefined
     // 54.27 — aborted by `stop`, beside the app's own stop.
     const stopping = new AbortController()
 
-    const nextRunOf = (): string | null => {
+    // When the next run is due in ms, or `undefined` while none is.
+    const nextRunAt = (): number | undefined => {
+        if (stopping.signal.aborted) return undefined
+        // 54.40 — a cron job never run waits for its first time, measured from its first look.
+        if (cronAfter !== undefined)
+            return cronAfter(measuredFrom ?? Date.now())
         const interval = intervalOf()
-        if (stopping.signal.aborted || !(interval > 0)) return null
-        return new Date((measuredFrom ?? Date.now()) + interval).toISOString()
+        if (!(interval > 0)) return undefined
+        return (measuredFrom ?? Date.now()) + interval
+    }
+    const nextRunOf = (): string | null => {
+        const at = nextRunAt()
+        return at === undefined ? null : new Date(at).toISOString()
     }
 
     const runOnce = async (input: Input | undefined): Promise<JobStatus> => {
@@ -135,13 +171,15 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         if (!remembered) {
             remembered = true
             lastRunAt = options.lastRun?.()
-            measuredFrom = lastRunAt
+            // 54.40 — a cron job's first look is where its first time is counted from.
+            measuredFrom =
+                lastRunAt ?? (cronAfter === undefined ? undefined : Date.now())
         }
-        const interval = intervalOf()
+        const dueAt = nextRunAt()
+        // 54.19 — an `every` job never run is due at once; a cron job counts from its first look.
         if (
-            interval > 0 &&
-            (measuredFrom === undefined ||
-                Date.now() >= measuredFrom + interval)
+            dueAt !== undefined &&
+            (measuredFrom === undefined || Date.now() >= dueAt)
         ) {
             // 54.29 — the clock spaces its looks from when one settles, so a look waiting on the run
             // would measure from its end. A look made while it runs joins it (54.20): a run due
@@ -164,9 +202,11 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         global: true,
         poll: {
             every:
-                typeof every === 'number' && every > 0
-                    ? Math.min(every, LONGEST_LOOK)
-                    : LONGEST_LOOK,
+                cron !== undefined
+                    ? CRON_LOOK
+                    : typeof every === 'number' && every > 0
+                      ? Math.min(every, LONGEST_LOOK)
+                      : LONGEST_LOOK,
             after: 'settle',
         },
     })

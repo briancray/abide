@@ -384,3 +384,75 @@ test('a pipe called in a run is told to stop when the job stops — 54.39, 57.13
     await scheduled.stop()
     expect(`step told: ${told}`).toBe('step told: true')
 })
+
+// 54.40 — A CRON JOB NEVER RUN WAITS FOR ITS FIRST TIME, where an `every` job runs as the app opens,
+// and times missed since its last run are caught up with ONE run. THE REVERT: drop the first look's
+// `Date.now()` for a cron job, and `waiting` runs as the app opens — `runs` is 1 where 0 is due.
+test('a cron job never run waits for its first time, and missed times run once — 54.40', async () => {
+    let runs = 0
+    let caughtUp = 0
+    const waiting = job({
+        name: 'new year',
+        cron: '0 0 1 1 *',
+        run: () => {
+            runs += 1
+        },
+    })
+    // Three new years missed since the last run, and one run for all of them.
+    const behind = job({
+        name: 'missed new years',
+        cron: '0 0 1 1 *',
+        run: () => {
+            caughtUp += 1
+        },
+        lastRun: () => Date.now() - 3 * 366 * 86_400_000,
+    })
+    await serving(async () => {
+        await until(waiting.status, (status) => status.nextRun !== null)
+        await until(behind.status, (status) => status.lastRun !== null)
+        // Two looks more, so a second run of the missed times would have started.
+        await Bun.sleep(2_100)
+    })
+    expect(runs).toBe(0)
+    expect(waiting.status.peek()?.nextRun).toBe(
+        Bun.cron.parse('0 0 1 1 *', Date.now())?.toISOString(),
+    )
+    expect(caughtUp).toBe(1)
+    expect(behind.status.peek()?.nextRun).toBe(
+        Bun.cron.parse('0 0 1 1 *', Date.now())?.toISOString(),
+    )
+    await waiting.stop()
+    await behind.stop()
+})
+
+// 54.41 — `timeZone` IS WHERE THE CRON'S CLOCK IS READ. THE REVERT: drop `tz` from the parse, and
+// the next run is 2:00 on the server's clock rather than Kiritimati's, fourteen hours past UTC.
+test('a cron job reads its times in its timeZone — 54.41', async () => {
+    const nightly = job({
+        name: 'kiritimati nightly',
+        cron: '0 2 * * *',
+        timeZone: 'Pacific/Kiritimati',
+        run: () => {},
+    })
+    await serving(async () => {
+        await until(nightly.status, (status) => status.nextRun !== null)
+    })
+    const nextRun = new Date(nightly.status.peek()?.nextRun ?? '')
+    const hour = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Pacific/Kiritimati',
+        hour: 'numeric',
+        minute: 'numeric',
+        hourCycle: 'h23',
+    }).format(nextRun)
+    expect(hour).toBe('02:00')
+    await nightly.stop()
+})
+
+test('a job given both every and cron, neither, or a cron that does not parse throws — 54.42', () => {
+    const run = () => {}
+    expect(() =>
+        job({ every: 1_000, cron: '* * * * *', run } as never),
+    ).toThrow(TypeError)
+    expect(() => job({ run } as never)).toThrow(TypeError)
+    expect(() => job({ cron: 'every night', run })).toThrow()
+})

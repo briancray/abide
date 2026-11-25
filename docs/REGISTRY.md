@@ -1466,12 +1466,12 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `job` | `<Input = undefined>(options: JobOptions<Input>) => Job<Input>` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38, 54.39 |
+| `job` | `<Input = undefined>(options: JobOptions<Input>) => Job<Input>` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38, 54.39, 54.40, 54.41, 54.42 |
 | `Job` | `<Input = undefined>{ status: Reactive<JobStatus>; run: (input?: Input) => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
 | `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
 | `Job.run` | `(input?: Input) => Promise<JobStatus>` | A run ahead of the schedule, handed the input it is called with. | 54.20, 54.26 |
 | `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.26, 54.27 |
-| `JobOptions` | `<Input = undefined>{ name?: string; every: number \| (() => number); from?: 'end' \| 'start'; run: (input: Input \| undefined) => unknown; lastRun?: () => number \| undefined; paused?: Reactive<boolean> \| (() => boolean) }` | What a job is: its name, how often it runs and from when, the work, when it last ran before this process, and what holds it. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38 |
+| `JobOptions` | `<Input = undefined>{ name?: string; run: (input: Input \| undefined) => unknown; lastRun?: () => number \| undefined; paused?: Reactive<boolean> \| (() => boolean) } & ({ every: number \| (() => number); from?: 'end' \| 'start' } \| { cron: string; timeZone?: string })` | What a job is: its name, the work, when it last ran before this process and what holds it, beside its schedule — an interval measured from a run's end or start, or the times a cron expression names in a zone. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38, 54.40, 54.41, 54.42 |
 | `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.22, 54.23, 54.24, 54.25, 54.27 |
 
 ## Worker files
