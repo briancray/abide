@@ -4,8 +4,8 @@ import { afterEach, expect, test } from 'bun:test'
 
 import { flushSync, inlineEdit, reactive } from '#shared'
 import type { InlineEditOptions } from '#shared/inlineEdit.ts'
-
-import { bindPart } from './bindPart.ts'
+import { bindSpread, bindSpreadElement } from '#ui/bindSpread.ts'
+import { Scope } from '#ui/Scope.ts'
 
 const bound: (() => void)[] = []
 afterEach(() => {
@@ -23,14 +23,16 @@ function standing(options: InlineEditOptions) {
     const view = document.createElement('button')
     const input = document.createElement('input')
     document.body.append(view, input)
+    // Spread as a template spreads a part: its attributes, its listeners, its element binding.
+    const scope = new Scope()
     for (const [element, part] of [
         [view, name.view],
         [input, name.input],
-    ] as const)
-        for (const [key, value] of Object.entries(part))
-            if (key === 'bind:element') bound.push(bindPart(part, element))
-            else if (key.startsWith('on'))
-                element.addEventListener(key.slice(2), value as EventListener)
+    ] as const) {
+        bindSpread(element, () => part, [], scope)
+        bindSpreadElement(element, () => part, scope)
+    }
+    bound.push(() => scope.stop())
     const type = async (text: string, key: string) => {
         input.value = text
         input.dispatchEvent(

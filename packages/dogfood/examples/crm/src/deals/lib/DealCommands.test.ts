@@ -44,3 +44,25 @@ test('the palette opens on its key, lists what is typed and runs it', async () =
     expect(dialog().open).toBe(false)
     expect(document.querySelector('.status')?.textContent).toBe('Exported.')
 })
+
+// 51.71 — OPENED AGAIN, THE INPUT IS EMPTIED and every command is listed, the text typed last time
+// included: the query is spread onto the input as its `value`, kept written into the property a
+// typed-in field shows (32.113). THE REVERT: make `writeControl` return at once, and the field
+// still reads `csv` over the whole list.
+test('the palette opens again empty', async () => {
+    using _commands = await mount(DealCommands({}))
+    press('j', { ctrlKey: true })
+    await Promise.resolve()
+    input().value = 'csv'
+    input().dispatchEvent(new Event('input', { bubbles: true }))
+    flushSync()
+    press('j', { ctrlKey: true })
+    await Promise.resolve()
+    expect(dialog().open).toBe(false)
+    press('j', { ctrlKey: true })
+    await Promise.resolve()
+    flushSync()
+    expect(dialog().open).toBe(true)
+    expect(input().value).toBe('')
+    expect(dialog().querySelectorAll('[role=option]').length).toBe(3)
+})

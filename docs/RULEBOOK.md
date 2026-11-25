@@ -2754,6 +2754,18 @@ moved as in one it made.
 32.112 An element `elementVisible` measures MUST be in view where it intersects its root by at least
 the smallest share its `threshold` names, and where it intersects at all where none is named.
 
+32.113 A `value` an expression or a spread writes to an `<input>` or a `<textarea>`, a `checked` to
+an `<input>`, and a `selected` to an `<option>` MUST also be written by the browser into the
+element's property of that name — `value` as the attribute's text, or `''` where 32.37 makes it
+absent, and `checked` and `selected` as whether it is present — and MUST NOT be written there while
+the property already holds it.
+
+32.114 The server MUST render a `value` an expression or a spread writes to a `<textarea>` as its
+text, as well as its attribute: a spread's where the `<textarea>` has no text of its own, and the
+last spread's that carries one where two do.
+
+32.115 A `<textarea>` with a `value={expr}` and text of its own MUST be a build error.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`

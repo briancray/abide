@@ -28,12 +28,59 @@ export function setAttribute(
     value: unknown,
 ): void {
     WORK.bindingRuns += 1
+    writeAttributeText(element, name, attributeText(name, value))
+}
+
+/**
+ * `setAttribute` on a form control's `value`, `checked` or `selected`, which also keeps the property
+ * of that name written (32.113). Which attributes take it is the compiler's to decide, per element,
+ * so the attribute every other binding writes pays no branch for it.
+ */
+export function setControl(
+    element: Element,
+    name: string,
+    value: unknown,
+): void {
+    WORK.bindingRuns += 1
     const next = attributeText(name, value)
-    if (next === null) {
+    writeAttributeText(element, name, next)
+    writeControl(element, name, next)
+}
+
+/**
+ * 32.113 — THE PROPERTY A CONTROL SHOWS, written from the text `attributeText` answered: the text
+ * itself for `value`, `''` where it is absent, and presence for `checked` and `selected`. Compared
+ * first, as the attribute is: a write of the text the field already holds would put the caret back
+ * at its end.
+ */
+export function writeControl(
+    element: Element,
+    name: string,
+    text: string | null,
+): void {
+    const control = element as HTMLInputElement & HTMLOptionElement
+    if (name === 'value') {
+        const shown = text ?? ''
+        if (control.value !== shown) control.value = shown
+        return
+    }
+    const on = text !== null
+    if (name === 'checked') {
+        if (control.checked !== on) control.checked = on
+    } else if (control.selected !== on) control.selected = on
+}
+
+/** Writes text `attributeText` answered, or removes the attribute where it answered `null`. */
+function writeAttributeText(
+    element: Element,
+    name: string,
+    text: string | null,
+): void {
+    if (text === null) {
         if (element.hasAttribute(name)) element.removeAttribute(name)
         return
     }
-    writeAttribute(element, name, next)
+    writeAttribute(element, name, text)
 }
 
 /** Writes `text` to `element`'s `name` unless it already reads `text` — `setAttribute`'s compare, shared with a spread. */

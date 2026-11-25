@@ -49,7 +49,7 @@ export { safeUrl } from './safeUrl.ts'
 export { setupThrown } from './setupThrown.ts'
 // 32.23 — a markup position that aborts on an unlanded read.
 export { slotValue } from './slotValue.ts'
-// 32.11 — a spread, as props and as markup.
-export { spreadAttributes, spreadProps } from './spread.ts'
+// 32.11, 32.114 — a spread, as props, as markup and as a `<textarea>`'s text.
+export { spreadAttributes, spreadProps, spreadText } from './spread.ts'
 // 31.8, 31.9 — a write through a path, and an array mutator lifted to one.
 export { mutatePath, writePath } from './writePath.ts'

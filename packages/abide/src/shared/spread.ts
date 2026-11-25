@@ -80,6 +80,20 @@ function isListener(member: unknown): boolean {
 }
 
 /**
+ * 32.114 — the text a spread's `value` writes into a `<textarea>`, or `undefined` where it carries
+ * none — or the element names `value` itself, and that is the text.
+ */
+export function spreadText(
+    value: unknown,
+    explicit: readonly string[],
+): string | undefined {
+    if (value === null || typeof value !== 'object') return undefined
+    if (explicit.includes('value')) return undefined
+    const text = attributeText('value', (value as { value?: unknown }).value)
+    return text ?? undefined
+}
+
+/**
  * A spread's attributes as markup, each escaped.
  *
  * 32.11 on the server.

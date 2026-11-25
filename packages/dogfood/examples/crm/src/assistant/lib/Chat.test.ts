@@ -131,6 +131,20 @@ test('Enter sends; Shift+Enter and an input method composing do not', async () =
     await settled()
 })
 
+// 32.113 — THE COMPOSER IS EMPTIED BY SENDING. The draft is `chat`'s, spread onto the textarea as
+// its `value`, and a textarea shows its property, never that attribute. THE REVERT: make
+// `writeControl` return at once, and the question just sent still stands in the box.
+test('sending empties the composer', async () => {
+    const stream = fed()
+    using _chat = await mount(Chat({ ask: stream.ask }))
+    const field = document.querySelector('textarea') as HTMLTextAreaElement
+    type('Which company is Ada at?')
+    press({})
+    expect(field.value).toBe('')
+    stream.end()
+    await settled()
+})
+
 // THE REVERT: fold every event seen again per chunk in `chat`, the answer rebuilt from them each
 // time, and it reads 1,325 event types for 50 chunks where folding each once reads 100.
 test('a streamed answer reads each event once, and a chunk rewrites its answer alone', async () => {

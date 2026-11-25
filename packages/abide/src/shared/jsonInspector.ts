@@ -7,7 +7,7 @@ import type { JsonValue } from './JsonValue.ts'
 import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import { memo, type Reactive, reactive, watch } from './reactive/index.ts'
+import { memo, type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { tree } from './tree.ts'
 import { withPart } from './withPart.ts'
@@ -252,13 +252,6 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
             },
             oninput: (event: Event) =>
                 query.set((event.currentTarget as HTMLInputElement).value),
-            // 32.5 — the field's text is its `value` property, which an attribute stops reaching once
-            // it is typed in.
-            'bind:element': (element: HTMLInputElement) =>
-                watch(() => {
-                    const text = query()
-                    if (element.value !== text) element.value = text
-                }),
         },
         tree: withPart(
             { id: treeId, 'data-json-inspector': 'tree' },
