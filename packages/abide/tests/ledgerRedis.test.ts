@@ -66,12 +66,16 @@ test.skipIf(URL === undefined)(
         const writing = ledger<string>({
             store: store.redis(two, name),
         })
+        const reader = reading(0).getReader()
+        const heard = reader.read()
         await Bun.sleep(50)
         await writing.append('moved')
-        const deadline = Date.now() + 2_000
-        while ((reading.peek()?.length ?? 0) !== 1 && Date.now() < deadline)
-            await Bun.sleep(10)
-        expect(`kept: ${reading.peek()?.length}`).toBe('kept: 1')
+        const next = await Promise.race([
+            heard,
+            Bun.sleep(2_000).then(() => undefined),
+        ])
+        expect(`heard: ${next?.value?.entry}`).toBe('heard: moved')
+        await reader.cancel()
         one.close()
         two.close()
     },

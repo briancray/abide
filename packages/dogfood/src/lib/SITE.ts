@@ -256,13 +256,6 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
-                route: '/reactive/ledger',
-                title: '`ledger`',
-                description:
-                    'Append events that are never coalesced, and read them in order from a position or a named cursor that resumes.',
-                where: 'anywhere',
-            },
-            {
                 route: '/reactive/watch',
                 title: '`watch`',
                 description:
@@ -1275,6 +1268,13 @@ const WRITTEN: readonly {
                 title: '`pipe`',
                 description:
                     'Run each item through steps in order and at once, a few at a time, retried, timed out and paused, as a function or a stream.',
+                where: 'anywhere',
+            },
+            {
+                route: '/orchestration/ledger',
+                title: '`ledger`',
+                description:
+                    'Append events that are never coalesced, and read them in order from a position or a named cursor that resumes.',
                 where: 'anywhere',
             },
             {

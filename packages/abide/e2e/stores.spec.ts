@@ -45,19 +45,21 @@ let count = reactive(0, { store: store.indexedDB('count') })
 
 <main id="indexed"><p id="count">{count.ready() ? count : 'loading'}</p><button id="bump" onclick={() => { count = count + 1 }}>+</button></main>`,
         'visits/index.abide': `<script>
-import { ledger, store } from '@abide/abide'
+import { ledger, memo, store } from '@abide/abide'
 
 const visits = ledger<string>({ store: store.indexedDB('visits') })
+const kept = memo(() => visits())
 </script>
 
-<main id="visits"><p id="head">{visits.length}</p><button id="visit" onclick={() => visits.append('visit')}>visit</button></main>`,
+<main id="visits"><p id="head">{kept.ready() ? kept.length : 0}</p><button id="visit" onclick={() => visits.append('visit')}>visit</button></main>`,
         'drafts/index.abide': `<script>
-import { ledger, store } from '@abide/abide'
+import { ledger, memo, store } from '@abide/abide'
 
 const drafts = ledger<string>({ store: store.indexedDB('drafts'), retain: 1 })
+const kept = memo(() => drafts())
 </script>
 
-<main id="drafts"><p id="last">{drafts.at(-1)?.seq ?? 0}</p><button id="save" onclick={() => drafts.append('save', { key: 'k1' })}>save</button><button id="other" onclick={() => drafts.append('other')}>other</button></main>`,
+<main id="drafts"><p id="last">{kept.ready() ? kept.at(-1)?.seq : 0}</p><button id="save" onclick={() => drafts.append('save', { key: 'k1' })}>save</button><button id="other" onclick={() => drafts.append('other')}>other</button></main>`,
     }))
 })
 

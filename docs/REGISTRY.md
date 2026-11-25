@@ -356,16 +356,6 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- | --- |
 | `memo` | `<Value = never, Args = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>>(body: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate>) => ReactiveOf<Args, Result, Shaped, Gate, ArgsGate>` | A value `body` produces, keyed where it declares a parameter and a stream where it hands back an async iterable. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.50, 11.51, 11.52, 11.53, 11.54, 11.57, 11.58, 41.6, 11.62, 11.63, 11.65, 11.66, 12.14, 12.17, 19.24, 41.34, 41.35, 11.73, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 11.2, 11.4, 11.6, 11.23, 11.55, 7.45, 7.46, 11.74 |
 
-## `ledger`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `ledger` | `<Entry>(options?: LedgerOptions<Entry>) => Ledger<Entry>` | Entries appended and never coalesced, read in order from a position or a named cursor. | 58.1, 58.9, 58.10, 58.11, 58.12 |
-| `Ledger` | `<Entry>Reactive<Logged<Entry>[], never> & { append: (entry: Entry, options?: { key?: string }) => Promise<number>; read: (from?: number \| { cursor: string }) => ReadableStream<Logged<Entry>>; readonly writable: WritableStream<Entry> }` | What `ledger` hands back: the entries it keeps, the append, the read, and the stream an entry is written to. | 58.2, 58.4, 58.5, 58.6, 58.7, 58.8, 58.15, 58.16 |
-| `LedgerOptions` | `<Entry>{ store?: LogStore; retain?: number; ttl?: number; schema?: Schema<Entry> }` | Where the entries are kept, how many are and for how long, and what an entry must be. | 58.3, 58.9, 58.10, 58.14 |
-| `Logged` | `<Entry>{ seq: number; at: number; entry: Entry }` | One entry as a ledger keeps it: its number, when it was appended, and what it holds. | 58.2 |
-| `LogStore` | `{ append: (entry: unknown, key: string \| undefined, at: number) => number \| Promise<number>; since: (seq: number) => Logged<unknown>[] \| Promise<Logged<unknown>[]>; last: () => number \| Promise<number>; position: (cursor: string, seq?: number) => number \| Promise<number>; trim: (through: number) => void \| Promise<void>; watch?: (changed: () => void) => () => void }` | The append face of a `store` a ledger keeps its entries and cursors in. | 58.9, 58.12 |
-
 ## `watch`
 
 | Name | Signature | Meaning | Rules |
@@ -1474,6 +1464,16 @@ type StepIn<S> = S extends readonly (infer Member)[] ? StepIn<Member> : S extend
 type LastOut<Steps> = Steps extends readonly [...unknown[], infer Last] ? StepOut<Last> : never
 type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepIn<First> : never
 ```
+
+## `ledger`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `ledger` | `<Entry>(options?: LedgerOptions<Entry>) => Ledger<Entry>` | Entries appended and never coalesced, read in order from a position or a named cursor. | 58.1, 58.8, 58.9, 58.10, 58.11, 58.12 |
+| `Ledger` | `<Entry>((from?: number \| { cursor: string }) => ReadableStream<Logged<Entry>>) & { append: (entry: Entry, options?: { key?: string }) => Promise<number>; readonly writable: WritableStream<Entry> }` | What `ledger` hands back: called, a read of its entries in order; the append; and the stream an entry is written to. | 58.2, 58.4, 58.5, 58.6, 58.7, 58.15, 58.16 |
+| `LedgerOptions` | `<Entry>{ store?: LogStore; retain?: number; ttl?: number; schema?: Schema<Entry> }` | Where the entries are kept, how many are and for how long, and what an entry must be. | 58.3, 58.9, 58.10, 58.14 |
+| `Logged` | `<Entry>{ seq: number; at: number; entry: Entry }` | One entry as a ledger keeps it: its number, when it was appended, and what it holds. | 58.2 |
+| `LogStore` | `{ append: (entry: unknown, key: string \| undefined, at: number) => number \| Promise<number>; since: (seq: number) => Logged<unknown>[] \| Promise<Logged<unknown>[]>; last: () => number \| Promise<number>; position: (cursor: string, seq?: number) => number \| Promise<number>; trim: (through: number) => void \| Promise<void>; watch?: (changed: () => void) => () => void }` | The append face of a `store` a ledger keeps its entries and cursors in. | 58.9, 58.12 |
 
 ## `job`
 

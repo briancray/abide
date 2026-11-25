@@ -7181,16 +7181,16 @@ settle to that number.
 58.4 `append` given a `key` an entry still kept was appended under MUST keep nothing, and settle to
 that entry's number.
 
-58.5 `read` MUST hand on, in order, every entry numbered past `from`, 0 where none is given, and
-past the last entry MUST wait for the next rather than end.
+58.5 A `Ledger` called MUST answer a stream handing on, in order, every entry numbered past `from`, 0
+where none is given, and past the last entry MUST wait for the next rather than end.
 
-58.6 `read` given a `cursor` MUST start past the entry the cursor was last moved past, and MUST move
+58.6 A `Ledger` called with a `cursor` MUST start past the entry the cursor was last moved past, and MUST move
 the cursor past an entry once its reader asks for the next.
 
 58.7 An entry written to a `Ledger`'s `writable` MUST be appended as `append` appends it.
 
-58.8 A `Ledger` MUST be a `Reactive` whose value is every entry it keeps, oldest first, changed in
-place as an entry is kept or let go, and MUST NOT accept a write.
+58.8 A `ledger` MUST NOT read its `store` before it is appended to or read, and MUST NOT hold a copy
+of the entries its `store` keeps.
 
 58.9 A `ledger` given a `store` MUST keep its entries and its cursors there, and `store.sqlite`,
 `store.indexedDB` and `store.redis` MUST each keep one record per entry.
@@ -7207,7 +7207,7 @@ number again, and MUST hand its waiting reads what the change appended.
 server.
 
 58.14 Where `ttl` is given, an entry MUST be let go once `ttl` milliseconds have passed since it was
-appended, and `read` MUST NOT hand on an entry let go.
+appended, and a read MUST NOT hand on an entry let go.
 
 58.15 A read that would hand on an entry numbered more than one past the last it handed on MUST
 error with a refusal at status 410 naming the entries it missed; a read from 0, or from a cursor

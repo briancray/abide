@@ -9,12 +9,18 @@ import callLog from './lib/CallLog.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/orchestration/pipe', '/data/store', '/reactive/reactive']}
+    seeAlso={['/orchestration/pipe', '/data/store', '/reactive/memo']}
     tests={[
         {
             path: 'packages/abide/tests/ledger.test.ts',
             from: [
-                "test('appends are numbered in order, and the value is every entry kept — 58.2, 58.8'",
+                "test('appends are numbered in order, each kept after the last — 58.2'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/ledger.test.ts',
+            from: [
+                "test('a value whose body reads a ledger holds every entry, and each append — 58.5, 9.6'",
             ],
         },
         {
@@ -50,9 +56,10 @@ import callLog from './lib/CallLog.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="List the calls in a page">
-        <p>A ledger is a <code>Reactive</code> of every entry it keeps, oldest first: read it by
-            name, and each call appended adds its one row without rebuilding the others. Only
-            <code>append</code> writes it.</p>
+        <p>Calling a ledger reads it: every entry kept, oldest first, then each one appended. Hand
+            that read to <code>memo</code>, and the page holds the entries as a value that each
+            call appended adds one row to. The ledger holds no copy of its own, so one only
+            appended to costs nothing for the entries it keeps.</p>
         <Example code={callLog}><CallLog /></Example>
     </Section>
 
@@ -69,7 +76,7 @@ import callLog from './lib/CallLog.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Score each call where the scorer left off">
-        <p>A read with a <code>cursor</code> starts past where that cursor's reader finished, and
+        <p>Called with a <code>cursor</code>, a read starts past where that cursor's reader finished, and
             waits for the next entry rather than ending. An entry is finished once its reader asks
             for the next.</p>
         <Code language="ts" caption="server" code={`
@@ -78,21 +85,22 @@ import callLog from './lib/CallLog.abide' with { type: 'text' }
             const calls = ledger<{ minutes: number }>()
             const score = pipe([(logged) => logged.entry.minutes / 60])
 
-            await calls.read({ cursor: 'scorer' }).pipeThrough(score).pipeTo(scores)
+            await calls({ cursor: 'scorer' }).pipeThrough(score).pipeTo(scores)
         `} />
     </Section>
 
     <Section level={3} title="Follow the call log from a page">
-        <p>Serve the ledger with <code>GET</code>, and a page reading it holds every entry kept;
-            each append reaches it as the patch that pushed the entry, not the whole log. An
-            append is a <code>POST</code> whose <code>key</code> the page makes, so an outbox
-            resend keeps one entry.</p>
+        <p>Serve a read with a streaming <code>GET</code>, and a page reading it is handed every
+            entry kept, then each one appended. An append is a <code>POST</code> whose
+            <code>key</code> the page makes, so an outbox resend keeps one entry.</p>
         <Code language="ts" caption="server" code={`
             import { GET, ledger, POST } from '@abide/abide/server'
 
             const calls = ledger<{ contact: string; minutes: number }>()
 
-            export const listCalls = GET(calls)
+            export const listCalls = GET(async function* () {
+                yield* calls()
+            })
             export const logCall = POST(({ call, key }) => calls.append(call, { key }))
         `} />
     </Section>
@@ -106,7 +114,7 @@ import callLog from './lib/CallLog.abide' with { type: 'text' }
             const calls = ledger<{ contact: string; minutes: number }>()
 
             export const callsAfter = GET(async function* ({ after }: { after: number }) {
-                yield* calls.read(after)
+                yield* calls(after)
             })
         `} />
     </Section>
@@ -165,7 +173,7 @@ import callLog from './lib/CallLog.abide' with { type: 'text' }
             const pings = ledger<string>({ retain: 1_000 })
             const seen: string[] = []
             // Errors with a 410 where the read fell behind what was kept.
-            for await (const ping of pings.read(seen.length)) seen.push(ping.entry)
+            for await (const ping of pings(seen.length)) seen.push(ping.entry)
         `} />
     </Section>
 
