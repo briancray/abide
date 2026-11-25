@@ -6349,6 +6349,11 @@ part is drawn at, a line across the plot carrying only the one of `--x` and `--y
 52.115 `chart` MUST write a series' value in its readout by the series' `format`, given the value and
 its index, where the series gives one, and by `yFormat` where it does not.
 
+52.116 `chart` and `sparkline` given `pad` MUST widen the range of their values by `pad` times its
+span below it and above it — by a pair's first below and its second above — before taking zero into
+the range (52.34, 52.37) and before `chart.ticks` rounds it, and MUST NOT widen a range with no width
+or a range `bounds` gives.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are

@@ -1,4 +1,4 @@
-// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71, 52.113, 52.115 — A CHART AS PARTS: series over
+// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71, 52.113, 52.115, 52.116 — A CHART AS PARTS: series over
 // one pair of axes, handed back as the geometry each mark is drawn at and as parts an app spreads onto
 // elements, SVG or HTML — `{#for point of plot.points}<circle {...point.circle} r="3" />` — with the
 // root's part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
@@ -19,6 +19,7 @@ import type { Disposer } from '../reactive/watch.ts'
 import { scrub } from '../scrub.ts'
 import {
     nearest,
+    padded,
     path,
     percentOf,
     scale,
@@ -47,6 +48,11 @@ export type ChartOptions = {
     yTicks?: Live<number>
     /** Whether the y range takes in zero, with a line drawn there. `false` by default. */
     zero?: Live<boolean>
+    /**
+     * The room kept above and below the values, as a share of their span: `0.15`, or `[below, above]`
+     * (52.116). None by default.
+     */
+    pad?: Live<number | readonly [number, number]>
     /** Whether a series with no `stack` of its own piles into one stack with the others (52.54). `false` by default. */
     stack?: Live<boolean>
     /** Whether each stack is drawn as shares of its total at each x (52.56, 52.59). `false` by default. */
@@ -256,6 +262,8 @@ export function chart(options: ChartOptions): ChartParts {
                 }
             }
         }
+        // 52.116 — padded before zero is taken in, so zero stays the floor of a column.
+        ;[low, high] = padded(low, high, live(options.pad))
         if (zero || columns) {
             low = Math.min(low, 0)
             high = Math.max(high, 0)

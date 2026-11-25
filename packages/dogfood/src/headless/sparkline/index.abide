@@ -13,6 +13,8 @@ import LastValue from './lib/LastValue.abide'
 import lastValue from './lib/LastValue.abide' with { type: 'text' }
 import RepTrendCells from './lib/RepTrendCells.abide'
 import repTrendCells from './lib/RepTrendCells.abide' with { type: 'text' }
+import RoomUnderTrend from './lib/RoomUnderTrend.abide'
+import roomUnderTrend from './lib/RoomUnderTrend.abide' with { type: 'text' }
 import TrendColors from './lib/TrendColors.abide'
 import trendColors from './lib/TrendColors.abide' with { type: 'text' }
 </script>
@@ -36,6 +38,12 @@ import trendColors from './lib/TrendColors.abide' with { type: 'text' }
             path: 'packages/abide/tests/chartParts.test.ts',
             from: [
                 "test('a placed mark carries where it stands as percentages of the box'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/chartParts.test.ts',
+            from: [
+                "test('pad widens the range of the values by a share of its span, before zero is taken in'",
             ],
         },
     ]}
@@ -77,5 +85,12 @@ import trendColors from './lib/TrendColors.abide' with { type: 'text' }
     <Section level={3} title="Fill the area under a trend">
         <p><code>area</code> is the shape under the line, as <code>data-sparkline="area"</code>.</p>
         <Example code={filledTrend}><FilledTrend /></Example>
+    </Section>
+
+    <Section level={3} title="Leave room under a trend for its fill">
+        <p><code>pad: [below, above]</code> widens the range under and over the values by those
+            shares of its span, so the line stands clear of the bottom and the fill shows under
+            its lowest point.</p>
+        <Example code={roomUnderTrend}><RoomUnderTrend /></Example>
     </Section>
 </Doc>

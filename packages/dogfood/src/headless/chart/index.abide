@@ -30,6 +30,8 @@ import MarkADate from './lib/MarkADate.abide'
 import markADate from './lib/MarkADate.abide' with { type: 'text' }
 import OwnUnits from './lib/OwnUnits.abide'
 import ownUnits from './lib/OwnUnits.abide' with { type: 'text' }
+import PadTheLine from './lib/PadTheLine.abide'
+import padTheLine from './lib/PadTheLine.abide' with { type: 'text' }
 import PickMonth from './lib/PickMonth.abide'
 import pickMonth from './lib/PickMonth.abide' with { type: 'text' }
 import PointsOverLines from './lib/PointsOverLines.abide'
@@ -91,6 +93,12 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
             path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
             from: [
                 "test('the arrows step the crosshair month by month, and Escape puts it away'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/chartParts.test.ts',
+            from: [
+                "test('pad widens the range of the values by a share of its span, before zero is taken in'",
             ],
         },
         {
@@ -313,6 +321,13 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
         <p><code>bounds</code> fixes an axis's range rather than fitting it to the values, so two
             teams' charts read on the same scale.</p>
         <Example code={fixedAxis}><FixedAxis /></Example>
+    </Section>
+
+    <Section level={3} title="Keep the line off the top and bottom of the plot">
+        <p><code>pad</code> widens the range by a share of its span before the gridlines round
+            it, so the highest and lowest values stand inside the plot rather than on its edges.
+            Give <code>[below, above]</code> to pad each side apart.</p>
+        <Example code={padTheLine}><PadTheLine /></Example>
     </Section>
 
     <Section level={3} title="Ease columns between stacked and side by side">

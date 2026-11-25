@@ -133,3 +133,23 @@ test('a placed mark carries where it stands as percentages of the box', () => {
     const trend = sparkline({ values: [3, 7, 5], label: 'Won' })
     expect(vars(trend.dot)).toEqual({ x: 100, y: 50 })
 })
+
+// 52.116 — `pad` KEEPS THE VALUES OFF THE EDGES: the range widens by a share of its span before the
+// ticks round it, before zero is taken in, so a column still stands on zero, and a flat range is not
+// widened. THE REVERT: drop `padded` from `chart` and `sparkline` — the ticks end at 10 and 20, on the
+// values, and the trend's low runs along the bottom.
+test('pad widens the range of the values by a share of its span, before zero is taken in', () => {
+    const ticks = (pad: number, kind: 'line' | 'column' = 'line') =>
+        chart({
+            label: 'Won',
+            series: () => [{ label: 'Won', values: [10, 20], kind }],
+            pad,
+        }).yTicks.map((tick) => tick.value)
+    expect(ticks(0)).toEqual([10, 12, 14, 16, 18, 20])
+    expect(ticks(0.15)).toEqual([5, 10, 15, 20, 25])
+    expect(ticks(0.5, 'column')[0]).toBe(0)
+    const trend = sparkline({ values: [0, 10], label: 'Won', pad: [0.5, 0] })
+    expect(String(trend.line.d)).toBe('M0,66.67L100,0')
+    const flat = sparkline({ values: [4, 4], label: 'Won', pad: 0.2 })
+    expect(String(flat.line.d)).toBe('M0,50L100,50')
+})
