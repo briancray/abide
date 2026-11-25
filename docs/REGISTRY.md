@@ -805,7 +805,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `time` | `(options?: TimeOptions) => TimeParts` | Times kept current as parts an app spreads onto a `<time>` of its own, one per value: its `datetime` and `title`, and its label. | 52.1, 52.2, 52.3, 52.5, 52.72, 52.73, 52.74, 52.75, 52.76, 52.77, 49.2, 49.4, 49.5, 49.6 |
+| `time` | `(options?: TimeOptions) => TimeParts` | Times kept current as parts an app spreads onto a `<time>` of its own, one per value: its `datetime` and `title`, and its label. | 52.1, 52.2, 52.3, 52.5, 52.72, 52.73, 52.74, 52.75, 52.76, 52.77, 52.113, 49.2, 49.4, 49.5, 49.6 |
 | `TimeOptions` | `{ style?: 'long' \| 'short' \| 'narrow' \| (() => 'long' \| 'short' \| 'narrow'); locale?: string \| undefined \| (() => string \| undefined); timeZone?: string \| undefined \| (() => string \| undefined) }` | How a time is written, each read live where a function is given. | 52.72 |
 | `TimeParts` | `{ at(value: unknown): TimeAt }` | A value's parts. | 32.11, 32.99, 52.72, 52.73, 49.9 |
 | `TimeAt` | `{ readonly time: Record<string, unknown>; get text(): string }` | A value's `<time>` attributes and its label. | 32.99, 52.72, 52.73, 49.3 |
@@ -966,11 +966,11 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `format.number` | `(value: unknown, options?: Omit<Intl.NumberFormatOptions, 'style'> & { locale?: string }) => string` | A number with its thousands grouped. | 52.1, 52.2, 52.6, 52.112 |
 | `format.plural` | `(value: unknown, one: string, many?: string, options?: { locale?: string }) => string` | A count and the word for what it counts. | 52.1, 52.2, 52.6 |
 | `format.list` | `(value: unknown, options?: Intl.ListFormatOptions & { locale?: string }) => string` | A list of items as a sentence says it. | 52.1, 52.2, 52.6, 52.112 |
-| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101 |
-| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101 |
+| `format.date` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => string` | A date, a time or both, from a `Date`, epoch milliseconds or an ISO string. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101, 52.113 |
+| `format.dateParts` | `(value: unknown, options?: { style?: 'day' \| 'monthDay' \| 'month' \| 'time' \| 'hour' \| 'dateTime' \| 'input'; timeZone?: string; locale?: string }) => Intl.DateTimeFormatPart[]` | What `format.date` writes, as the pieces `Intl` names each part of it. | 52.1, 52.2, 52.3, 52.6, 52.36, 52.101, 52.113 |
 | `format.timeZone` | `Reactive<string \| undefined>` | The zone the app pins every date to where its caller names none, or `undefined` for the visitor's own. | 52.3, 52.44, 52.45 |
 | `format.duration` | `(value: unknown, options?: { locale?: string }) => string` | A length of time in milliseconds, in its two largest units. | 52.1, 52.2, 52.4, 52.6 |
-| `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow'; numeric?: 'auto' \| 'always' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32 |
+| `format.relative` | `(value: unknown, options?: { now?: number; locale?: string; style?: 'long' \| 'short' \| 'narrow'; numeric?: 'auto' \| 'always' }) => string` | How long before or after now a time is. | 52.1, 52.2, 52.5, 52.6, 52.32, 52.113 |
 | `format.bytes` | `(value: unknown, options?: { minimumFractionDigits?: number; maximumFractionDigits?: number; locale?: string }) => string` | A size in bytes, in the largest unit it fills. | 52.1, 52.2, 52.6, 52.7, 52.112 |
 
 ## `highlight`

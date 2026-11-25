@@ -6336,6 +6336,10 @@ each word of `query` — stretches that overlap or touch carrying it as one run.
 own name, over the defaults each formatter keeps, and MUST NOT refuse a caller naming one bound of
 the fraction digits for the default of the other.
 
+52.113 `format.date`, `format.dateParts`, `format.relative` and `time` MUST read a value that is a
+`YYYY-MM-DD` string as the midnight of that day in the zone they write in (52.3) — the one
+`timeZone` names where their caller names one — as `instantAt` reads it (52.102).
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are

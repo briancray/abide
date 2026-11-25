@@ -226,7 +226,7 @@ type DateOptions = {
 
 /**
  * A date, a time or both: `format.date('2026-11-18')` is `Nov 18, 2026`. Takes a `Date`, epoch
- * milliseconds or an ISO string.
+ * milliseconds or an ISO string, a `YYYY-MM-DD` being that day in the zone it writes in.
  */
 export function date(value: unknown, options: DateOptions = {}): string {
     let written = ''
@@ -242,13 +242,13 @@ export function dateParts(
     value: unknown,
     options: DateOptions = {},
 ): Intl.DateTimeFormatPart[] {
-    const time = instant(value)
-    if (time === undefined) return [{ type: 'literal', value: MISSING }]
     const {
         style = 'day',
         timeZone: zone = timeZone() ?? visitorZone(),
         locale = LOCALE,
     } = options
+    const time = instant(value, zone)
+    if (time === undefined) return [{ type: 'literal', value: MISSING }]
     // 52.101 — the zone's wall clock as an `<input>` writes one, in no locale's words.
     if (style === 'input') {
         const written = new Date(wallClockOf(time, zone)).toISOString()
