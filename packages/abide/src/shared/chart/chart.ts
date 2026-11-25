@@ -1,7 +1,7 @@
 // 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71, 52.113 — A CHART AS PARTS: series over
 // one pair of axes, handed back as the geometry each mark is drawn at and as parts an app spreads onto
-// SVG elements of its own — `{#for point of plot.points()}<circle {...point.circle} r="3" />` — with the
-// `<svg>`'s part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
+// elements, SVG or HTML — `{#for point of plot.points}<circle {...point.circle} r="3" />` — with the
+// root's part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
 // against the crosshair in an element of the app's own. Callable, with the
 // arithmetic it draws with as its members, as `reactive` carries `reactive.share`: `chart.ticks` and the
 // rest are what a chart of one's own draws with where even these parts are too much.
@@ -59,9 +59,9 @@ export type ChartOptions = {
           }
         | undefined
     >
-    /** The width drawn at before the `<svg>` is measured. 600 by default. */
+    /** The width drawn at before the root is measured. 600 by default. */
     width?: number
-    /** The height drawn at before the `<svg>` is measured. 240 by default. */
+    /** The height drawn at before the root is measured. 240 by default. */
     height?: number
     /** Called with the x position nearest a click, or the crosshair's on Enter, where `disabled` does not hold for it (52.38, 52.70). */
     onpick?: (index: number) => void
@@ -165,7 +165,7 @@ export type ChartReadout = {
 export type ChartParts = {
     /** The base its parts' ids are derived from. */
     readonly id: string
-    /** The `<svg>`: its size, measured (52.24), its name, focus, and the pointer and keys that move the crosshair (52.26, 52.69). */
+    /** The root, an `<svg>` or any element: its size, measured (52.24), its name, focus, and the pointer and keys that move the crosshair (52.26, 52.69). */
     readonly svg: Record<string, unknown>
     /** The x of position `index`. */
     x(index: number): number
@@ -195,7 +195,7 @@ export type ChartParts = {
     get crosshair():
         { index: number; x: number; line: Record<string, unknown> } | undefined
     /**
-     * 50.46 — the readout's popover, spread onto an element of the app's own outside the `<svg>` and
+     * 50.46 — the readout's popover, spread onto an element of the app's own outside the root and
      * rendered while `readout` stands: opened against the crosshair, describing the chart.
      */
     readonly tip: Record<string, unknown>
@@ -222,7 +222,7 @@ export function chart(options: ChartOptions): ChartParts {
         height: options.height ?? 240,
     })
     const hovered = reactive(-1)
-    // The width the `<svg>` was last measured at, read without following it.
+    // The width the root was last measured at, read without following it.
     const measuredWidth = () => size.peek()?.width ?? 0
 
     const plot = memo(() => {

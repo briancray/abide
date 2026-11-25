@@ -22,6 +22,8 @@ import GroupedStacks from './lib/GroupedStacks.abide'
 import groupedStacks from './lib/GroupedStacks.abide' with { type: 'text' }
 import HideSeries from './lib/HideSeries.abide'
 import hideSeries from './lib/HideSeries.abide' with { type: 'text' }
+import HtmlColumns from './lib/HtmlColumns.abide'
+import htmlColumns from './lib/HtmlColumns.abide' with { type: 'text' }
 import KeyboardReadout from './lib/KeyboardReadout.abide'
 import keyboardReadout from './lib/KeyboardReadout.abide' with { type: 'text' }
 import PickMonth from './lib/PickMonth.abide'
@@ -85,6 +87,18 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
             path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
             from: [
                 "test('the arrows step the crosshair month by month, and Escape puts it away'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/ClosedByWeek.test.ts',
+            from: [
+                "test('the columns are spans placed as shares of the chart, each as tall as its count'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/reports/lib/ClosedByWeek.test.ts',
+            from: [
+                "test('the chart is one tab stop whose arrows step the weeks and read each out'",
             ],
         },
         {
@@ -188,6 +202,14 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
         <p>Size the <code>svg</code> with classes. It measures itself and redraws at the new size
             whenever its box changes, so its labels are never stretched.</p>
         <Example code={fillTheBox}><FillTheBox /></Example>
+    </Section>
+
+    <Section level={3} title="Draw the columns as HTML elements">
+        <p>No part asks for SVG. Spread the root part on a <code>div</code> and each bar on a
+            <code>span</code>: a placed mark carries <code>--x</code> and <code>--y</code>, and a
+            column <code>--width</code> and <code>--height</code>, as percentages of the box. The
+            bar's <code>transform</code> places an SVG rect, so turn it off.</p>
+        <Example code={htmlColumns}><HtmlColumns /></Example>
     </Section>
 
     <Section level={3} title="Mark every point of a line with a dot">
