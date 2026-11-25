@@ -1,0 +1,7 @@
+<script>
+import { toasts } from '@abide/abide'
+</script>
+
+<button onclick={() => toasts.notify('Reminder sent to Ada')}>
+    Remind Ada
+</button>

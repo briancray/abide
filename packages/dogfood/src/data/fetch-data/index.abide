@@ -55,6 +55,24 @@ import Section from '#src/lib/Section.abide'
                 "test('a refused FetchFailed carries what the service said as its cause",
             ],
         },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/Registration.test.ts',
+            from: [
+                "test('a company the registry has never heard of is refused 404'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/Headcount.test.ts',
+            from: [
+                "test('a registry slower than half a second leaves the headcount blank",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/Registrations.test.ts',
+            from: [
+                "test('while the registry is down, every caller is served its last answer'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Fill in a company from a registry that fails now and then">
@@ -147,6 +165,57 @@ import Section from '#src/lib/Section.abide'
                     return refuse(422, (entry.cause as { error: string }).error)
                 return entry
             })
+        `} />
+    </Section>
+
+    <Section level={3} title="Answer 404 when the registry has never heard of the company">
+        <p>A service that gives up is refused 502 whatever it answered. Branch on
+            <code>data.status</code>, or <code>data.reason</code>, to answer your caller in its
+            own terms.</p>
+        <Code language="ts" caption="server" code={`
+            import { refuse } from '@abide/abide'
+            import { fetchData, GET, isFailed } from '@abide/abide/server'
+
+            export default GET(async ({ id }: { id: string }) => {
+                const registration = await fetchData<Registration>(
+                    \`https://registry.example/companies/\${id}\`,
+                )
+                if (isFailed(registration) && registration.data.status === 404)
+                    return refuse(404)
+                return registration
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Show a headcount only if the registry answers in time">
+        <p>Where an answer is nice to have, ask once and give up fast: <code>retries: 0</code>
+            and a short <code>timeout</code>, with a fallback for the <code>FetchFailed</code>.</p>
+        <Code language="ts" caption="server" code={`
+            import { fetchData, GET, isFailed } from '@abide/abide/server'
+
+            export default GET(async ({ id }: { id: string }) => {
+                const registration = await fetchData<{ employees: number }>(
+                    \`https://registry.example/companies/\${id}\`,
+                    { retries: 0, timeout: 500 },
+                )
+                return isFailed(registration) ? null : registration.employees
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep serving the last registry answer while the registry is down">
+        <p>Return the <code>FetchFailed</code> from a <code>global</code> <code>memo</code> that
+            polls. An ask that fails leaves the last answer served to every caller, with the
+            failure in <code>error</code> beside it.</p>
+        <Code language="ts" caption="server" code={`
+            import { memo } from '@abide/abide'
+            import { fetchData } from '@abide/abide/server'
+
+            export const registrations = memo(
+                ({ id }: { id: string }) =>
+                    fetchData<Registration>(\`https://registry.example/companies/\${id}\`),
+                { global: true, poll: 3_600_000 },
+            )
         `} />
     </Section>
 

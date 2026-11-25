@@ -1,0 +1,13 @@
+<script>
+import { elementRect, memo } from '@abide/abide'
+
+const board = elementRect()
+const card = elementRect()
+const offset = memo(() => (card.top ?? 0) - (board.top ?? 0))
+</script>
+
+<section class="flex flex-col gap-snug" {...board.host}>
+    <h4>Proposal</h4>
+    <article {...card.host}>Engine renewal</article>
+</section>
+<p>The card is {offset}px down the board</p>

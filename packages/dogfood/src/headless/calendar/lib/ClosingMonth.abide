@@ -1,0 +1,33 @@
+<script>
+import { calendar, reactive } from '@abide/abide'
+
+const CLOSES = new Set(['2026-12-02', '2026-12-15'])
+let month = reactive<string | undefined>('2026-12')
+const dates = calendar({ month })
+</script>
+
+{#for shown of dates.months key shown.month}
+    <div class="row">
+        <button {...dates.previous} aria-controls="closing">‹</button>
+        <h3>{shown.label}</h3>
+        <button {...dates.next} aria-controls="closing">›</button>
+    </div>
+    <table id="closing">
+        <thead>
+            <tr>
+                {#for weekday of dates.weekdays key weekday.day}
+                    <th abbr={weekday.name}>{weekday.short}</th>
+                {/for}
+            </tr>
+        </thead>
+        <tbody>
+            {#for week of shown.weeks key week[0]?.date}
+                <tr>
+                    {#for day of week key day.date}
+                        <td>{day.day}{CLOSES.has(day.date) ? ' ●' : ''}</td>
+                    {/for}
+                </tr>
+            {/for}
+        </tbody>
+    </table>
+{/for}

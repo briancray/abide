@@ -4,6 +4,10 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import RemindAda from './lib/RemindAda.abide'
+import remindAda from './lib/RemindAda.abide' with { type: 'text' }
+import ReportRefused from './lib/ReportRefused.abide'
+import reportRefused from './lib/ReportRefused.abide' with { type: 'text' }
 import SavePhone from './lib/SavePhone.abide'
 import savePhone from './lib/SavePhone.abide' with { type: 'text' }
 import ToneEdges from './lib/ToneEdges.abide'
@@ -16,6 +20,18 @@ import toneEdges from './lib/ToneEdges.abide' with { type: 'text' }
         {
             path: 'packages/dogfood/examples/crm/src/contacts/lib/SavePhone.test.ts',
             from: ["test('a refused save says why and offers a report'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/ops/lib/ReportProblem.test.ts',
+            from: [
+                "test('a report of the failed call is listed by its browser alone'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/SavePhone.test.ts',
+            from: [
+                "test('saving twice shows one notice, and an id of its own repeats it'",
+            ],
         },
         {
             path: 'packages/abide/tests/overlays.test.ts',
@@ -67,6 +83,20 @@ import toneEdges from './lib/ToneEdges.abide' with { type: 'text' }
         <p>A notice takes itself down after three seconds, and an error's after ten, long enough
             to reach its action.</p>
         <Example code={savePhone}><SavePhone /></Example>
+    </Section>
+
+    <Section level={3} title="Offer a report of a call that failed">
+        <p><code>onRefusal</code> hands you the trace of every refused call. Pass it to
+            <code>report</code> from the notice's action, and the report opens holding the
+            server's lines for that call.</p>
+        <Example code={reportRefused}><ReportRefused /></Example>
+    </Section>
+
+    <Section level={3} title="Show a repeated notice once">
+        <p>A notice already showing is not added again: with no <code>id</code>, the same words,
+            tone and action make the same notice, so pressing twice shows one. Pass an
+            <code>id</code> per press to show each.</p>
+        <Example code={remindAda}><RemindAda /></Example>
     </Section>
 
     <Section level={3} title="Keep a notice up until the digest is sent">

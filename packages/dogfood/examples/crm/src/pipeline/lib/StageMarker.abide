@@ -1,0 +1,19 @@
+<script>
+import { elementRect, memo } from '@abide/abide'
+
+import { STAGES } from './STAGES.ts'
+
+const board = elementRect()
+const current = elementRect()
+// How far down the board the deal's stage sits, wherever the page has scrolled.
+const offset = memo(() => (current.top ?? 0) - (board.top ?? 0))
+</script>
+
+<ol class="relative" {...board.host}>
+    {#for stage of STAGES key stage}
+        {#if stage === 'proposal'}<li {...current.host}>{stage}</li>{:else}<li>{stage}</li>{/if}
+    {/for}
+    <!-- the marker's top, measured from the board to the deal's stage -->
+    <span class="absolute" data-marker style="top: {offset}px">◀ this deal</span>
+</ol>
+<p class="status">{offset}px down the board</p>

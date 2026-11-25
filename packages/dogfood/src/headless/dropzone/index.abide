@@ -6,6 +6,8 @@ import Section from '#src/lib/Section.abide'
 
 import DropContract from './lib/DropContract.abide'
 import dropContract from './lib/DropContract.abide' with { type: 'text' }
+import KeepEveryDrop from './lib/KeepEveryDrop.abide'
+import keepEveryDrop from './lib/KeepEveryDrop.abide' with { type: 'text' }
 import LightUp from './lib/LightUp.abide'
 import lightUp from './lib/LightUp.abide' with { type: 'text' }
 import PasteScreenshot from './lib/PasteScreenshot.abide'
@@ -21,6 +23,12 @@ import pickOrDrop from './lib/PickOrDrop.abide' with { type: 'text' }
         '/behaviors/dismissible',
     ]}
     tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealAttachments.test.ts',
+            from: [
+                "test('each drop is appended to the papers the deal already holds'",
+            ],
+        },
         {
             path: 'packages/abide/tests/elementBehaviors.test.ts',
             from: [
@@ -62,6 +70,12 @@ import pickOrDrop from './lib/PickOrDrop.abide' with { type: 'text' }
             <code>&lt;input type="file"&gt;</code>'s does, and <code>files</code> holds what the
             last drop took.</p>
         <Example code={dropContract}><DropContract /></Example>
+    </Section>
+
+    <Section level={3} title="Keep every batch dropped on a deal">
+        <p><code>files</code> is the last drop alone, as a file input's pick is. To keep them
+            all, append each batch to a list in <code>onfiles</code>.</p>
+        <Example code={keepEveryDrop}><KeepEveryDrop /></Example>
     </Section>
 
     <Section level={3} title="Light up the drop target while files hover">

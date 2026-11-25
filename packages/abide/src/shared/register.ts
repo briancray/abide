@@ -39,3 +39,24 @@ export function join<Entry>(
 ): void {
     watch(() => register(list, entry))
 }
+
+/**
+ * The entries of `list` of `group` whose element stands, in the document order of those elements:
+ * how a `menu` finds the menus it switches between (50.57), and a `sortableList` the lists it moves
+ * items into (51.180).
+ */
+export function inGroup<
+    Entry extends { group(): string | undefined; element(): Element | null },
+>(list: Reactive<readonly Entry[]>, group: string): Entry[] {
+    const found: Entry[] = []
+    for (const entry of list.peek() ?? [])
+        if (entry.group() === group && entry.element() !== null)
+            found.push(entry)
+    return found.sort((a, b) =>
+        (a.element() as Element).compareDocumentPosition(
+            b.element() as Element,
+        ) & Node.DOCUMENT_POSITION_FOLLOWING
+            ? -1
+            : 1,
+    )
+}

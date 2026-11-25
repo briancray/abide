@@ -1,0 +1,22 @@
+<script>
+import { memo, reactive, tabs } from '@abide/abide'
+
+import listDeals from '../listDeals.handler.ts'
+
+const STAGES = ['lead', 'qualified', 'proposal']
+
+const deals = memo(() => listDeals())
+let stage = reactive<string | undefined>('lead')
+const view = tabs({ items: STAGES, selected: stage })
+</script>
+
+<div class="tabs" {...view.list}>
+    {#for each of STAGES}
+        <button {...view.tab(each).button}>{each}</button>
+    {/for}
+</div>
+<ul class="fields stacked" {...view.panel}>
+    {#for deal of deals.filter((each) => each.stage === stage) key deal.id}
+        <li><span>{deal.stage}</span><strong>{deal.name}</strong></li>
+    {/for}
+</ul>

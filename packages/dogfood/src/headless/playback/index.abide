@@ -5,6 +5,8 @@ import Section from '#src/lib/Section.abide'
 
 import ReplayQuarter from './lib/ReplayQuarter.abide'
 import replayQuarter from './lib/ReplayQuarter.abide' with { type: 'text' }
+import WeeksAndBeat from './lib/WeeksAndBeat.abide'
+import weeksAndBeat from './lib/WeeksAndBeat.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -14,6 +16,12 @@ import replayQuarter from './lib/ReplayQuarter.abide' with { type: 'text' }
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/QuarterReplay.test.ts',
             from: [
                 "test('the keys and the scrubber move the replay, and the speeds pick its rate'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/QuarterPulse.test.ts',
+            from: [
+                "test('one press plays the weeks and the marker together, each at its own length'",
             ],
         },
         {
@@ -30,5 +38,13 @@ import replayQuarter from './lib/ReplayQuarter.abide' with { type: 'text' }
             and pauses, the arrows step it. <code>scrubber</code> goes on an
             <code>&lt;input&gt;</code>.</p>
         <Example code={replayQuarter}><ReplayQuarter /></Example>
+    </Section>
+
+    <Section level={3} title="Animate two things at their own lengths from one play button">
+        <p>Make a <code>playback</code> per thing that moves and hand them all one
+            <code>playing</code>. Each keeps its own <code>at</code>, <code>duration</code> and
+            <code>loop</code>, and one press plays them all. The first to reach its end without
+            <code>loop</code> writes <code>playing</code> false, pausing the rest.</p>
+        <Example code={weeksAndBeat}><WeeksAndBeat /></Example>
     </Section>
 </Doc>

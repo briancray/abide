@@ -3,6 +3,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import CardInBoard from './lib/CardInBoard.abide'
+import cardInBoard from './lib/CardInBoard.abide' with { type: 'text' }
 import CardRect from './lib/CardRect.abide'
 import cardRect from './lib/CardRect.abide' with { type: 'text' }
 </script>
@@ -14,6 +16,12 @@ import cardRect from './lib/CardRect.abide' with { type: 'text' }
         '/headless/popover',
     ]}
     tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageMarker.test.ts',
+            from: [
+                'test("the deal\'s stage is measured from the top of the board, not the viewport"',
+            ],
+        },
         {
             path: 'packages/abide/tests/elementRect.test.ts',
             from: ["test('given no target, each of the eight is read by name"],
@@ -31,5 +39,11 @@ import cardRect from './lib/CardRect.abide' with { type: 'text' }
             once a frame as the page scrolls or the card moves. Spread it beside
             <code>elementSize</code> and each measures the element.</p>
         <Example code={cardRect}><CardRect /></Example>
+    </Section>
+
+    <Section level={3} title="Measure a card from the top of its board, not the viewport">
+        <p>Every rectangle is in the viewport. Measure both elements and subtract one from the
+            other in a <code>memo</code>, and the difference holds still as the page scrolls.</p>
+        <Example code={cardInBoard}><CardInBoard /></Example>
     </Section>
 </Doc>

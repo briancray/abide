@@ -7,6 +7,10 @@ import DealTabs from './lib/DealTabs.abide'
 import dealTabs from './lib/DealTabs.abide' with { type: 'text' }
 import KeepDraft from './lib/KeepDraft.abide'
 import keepDraft from './lib/KeepDraft.abide' with { type: 'text' }
+import OneTotal from './lib/OneTotal.abide'
+import oneTotal from './lib/OneTotal.abide' with { type: 'text' }
+import StageListing from './lib/StageListing.abide'
+import stageListing from './lib/StageListing.abide' with { type: 'text' }
 import TabCount from './lib/TabCount.abide'
 import tabCount from './lib/TabCount.abide' with { type: 'text' }
 import UnderlineSelected from './lib/UnderlineSelected.abide'
@@ -33,6 +37,16 @@ import underlineSelected from './lib/UnderlineSelected.abide' with { type: 'text
             ],
         },
         {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageTabs.test.ts',
+            from: [
+                "test('the tabs share one panel, labelled by whichever is selected'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageTabs.test.ts',
+            from: ["test('the listing is the panel, and its rows follow the tab'"],
+        },
+        {
             path: 'packages/abide/tests/tabs.test.ts',
             from: [
                 "test('a panel per tab is hidden while another is selected, and kept",
@@ -48,6 +62,18 @@ import underlineSelected from './lib/UnderlineSelected.abide' with { type: 'text
         <p>Spread <code>list</code> on the row, <code>tab(item).button</code> on each tab, and
             <code>panel</code> on the one panel, and branch on the selected key in it.</p>
         <Example code={dealTabs}><DealTabs /></Example>
+    </Section>
+
+    <Section level={3} title="Show one total under two tabs">
+        <p>Two tabs need not mean two panels. Spread <code>panel</code> once: it takes the
+            selected tab's id and label, so each tab controls it while selected.</p>
+        <Example code={oneTotal}><OneTotal /></Example>
+    </Section>
+
+    <Section level={3} title="Filter a list of deals by stage with tabs">
+        <p>The list is the panel. Spread <code>panel</code> on the <code>&lt;ul&gt;</code> and
+            filter its rows by the selected key.</p>
+        <Example code={stageListing}><StageListing /></Example>
     </Section>
 
     <Section level={3} title="Keep a draft in a tab while another shows">

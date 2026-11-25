@@ -1,0 +1,23 @@
+<script server>
+import { POST, refuse } from '@abide/abide/server'
+
+const sendStatement = POST(() =>
+    refuse(502, 'The mailer refused the statement'),
+)
+</script>
+
+<script>
+import { onRefusal, report, toasts } from '@abide/abide'
+
+onRefusal((refusal, call) => {
+    toasts.notify(refusal.message, {
+        tone: 'error',
+        action: {
+            label: 'Report this',
+            run: () => report({ trace: call.trace ?? '' }).open(),
+        },
+    })
+})
+</script>
+
+<button onclick={() => sendStatement()}>Email Grace her statement</button>

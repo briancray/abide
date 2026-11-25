@@ -35,6 +35,15 @@ test('a registry that never answers is refused 502', async () => {
     expect(registryAsked('langley-research')).toBe(3)
 })
 
+// THE REVERT: return the registry's answer as it came, and Babbage Labs is refused 502.
+test('a company the registry has never heard of is refused 404', async () => {
+    expect(await registrationOf('babbage-labs')).toMatchObject({
+        status: 404,
+        message: 'Not Found',
+    })
+    expect(registryAsked('babbage-labs')).toBe(1)
+})
+
 // THE REVERT: drop `ttl`, and the registry is asked once per caller.
 test('two callers at once ask the registry once', async () => {
     const answers = await Promise.all([

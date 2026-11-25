@@ -5918,7 +5918,8 @@ disabled on the first.
 `steps`, counted from one, and whose `max` is how many steps there are.
 
 51.145 `sortableList`'s `sorted` MUST be `items` in the order `order` names their keys, any item
-`order` does not name following, in the order given.
+`order` does not name following, in the order given, save as 51.179 finds and leaves them for a list
+of a `group`.
 
 51.146 A pointer pressed on an item's `handle` and moved MUST place the items 51.147 names after
 every other item whose middle, as it stood when the pointer was pressed, is above the pointer, and
@@ -5929,8 +5930,8 @@ each of them MUST carry `data-grabbed` on its `item` part until the pointer is l
 together.
 
 51.148 Alt with ArrowUp or ArrowDown on `sortableList`'s `list` MUST move the items 51.147 names one
-place before or after the others, kept to the list's ends, and every other key MUST be the
-`listbox`'s.
+place before or after the others, kept to the list's ends, and every other key but those 51.180 takes
+MUST be the `listbox`'s.
 
 51.149 `sortableList` moving items MUST `announce`, for one item, its `label` and its place among the
 items, and for several, how many and the places they span.
@@ -6019,6 +6020,33 @@ modifier is held or the document holds no element of that id.
 address's fragment with the item's key.
 
 51.177 `scrollSpy` MUST stop following its scroller once its `host` is unbound.
+
+51.178 Items moved out of a `sortableList` into another of its `group` MUST leave the first's `order`
+naming its `sorted` keys without them, and MUST set the other's `order` to its keys with them placed
+together as the move names.
+
+51.179 The `sorted` of a `sortableList` of a `group` MUST hold, for a key its `order` names that no
+item of its `items` answers, the item of that key among the `items` of another list of its `group`, and
+MUST NOT hold an item its `order` does not name that the `order` of another list of its `group` names.
+
+51.180 Alt with ArrowLeft or ArrowRight on the `list` of a `sortableList` of a `group` MUST move the
+items 51.147 names into the list of that `group` before or after it, in the document order of their
+`list` parts, after as many of that list's items as stood ahead of them, and MUST move focus to that
+list's `list` part; where no list stands there it MUST move nothing, and in either case MUST prevent
+the browser's default.
+
+51.181 A pointer pressed on an item's `handle` in a `sortableList` of a `group` and moved MUST move the
+items 51.147 names into the list of that `group` whose `list` part's box, as it stood when the pointer
+was pressed, holds the pointer, placed among that list's items as 51.146 places them, and MUST keep
+them in the list they were last in while no such box holds it.
+
+51.182 Items moved into another `sortableList` MUST make the first of them its active option, and
+those of them `selected` in the list they left MUST leave that list's `selected` and, where the list
+they enter is `multiple`, join its `selected`.
+
+51.183 Items moved into another `sortableList` MUST be announced as 51.149 names, naming that list
+after `moved to` by its `aria-label`, else the text of the elements its `aria-labelledby` names, else
+as `another list`.
 
 # 52. Formatting, markdown and charts
 

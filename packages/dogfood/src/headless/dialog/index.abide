@@ -9,6 +9,8 @@ import ContractPreview from './lib/ContractPreview.abide'
 import contractPreview from './lib/ContractPreview.abide' with { type: 'text' }
 import DealDrawer from './lib/DealDrawer.abide'
 import dealDrawer from './lib/DealDrawer.abide' with { type: 'text' }
+import LookAtDeal from './lib/LookAtDeal.abide'
+import lookAtDeal from './lib/LookAtDeal.abide' with { type: 'text' }
 import StyledDialog from './lib/StyledDialog.abide'
 import styledDialog from './lib/StyledDialog.abide' with { type: 'text' }
 </script>
@@ -36,6 +38,12 @@ import styledDialog from './lib/StyledDialog.abide' with { type: 'text' }
             ],
         },
         {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/DealQuickLook.test.ts',
+            from: [
+                "test('every row opens the one dialog, and the same row opens it again after a close'",
+            ],
+        },
+        {
             path: 'packages/dogfood/examples/crm/src/deals/lib/ContractPreview.test.ts',
             from: [
                 "test('a click beside the contract closes the preview, and a click on it does not'",
@@ -55,6 +63,13 @@ import styledDialog from './lib/StyledDialog.abide' with { type: 'text' }
             and <code>onclose</code> hands you the <code>value</code> of the button that closed it.
             With <code>dismissible: false</code>, Escape and the backdrop leave it open.</p>
         <Example code={archiveDeal}><ArchiveDeal /></Example>
+    </Section>
+
+    <Section level={3} title="Open one dialog from every row of a list">
+        <p>Hand <code>open</code> a <code>memo</code> over the value the rows write. A close
+            writes <code>false</code> to the memo, and it stands until the memo reruns, so clear
+            the value in <code>onclose</code>, or the same row opens nothing the second time.</p>
+        <Example code={lookAtDeal}><LookAtDeal /></Example>
     </Section>
 
     <Section level={3} title="Style the dialog box and the veil behind the dialog">
