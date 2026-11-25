@@ -983,7 +983,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `shrinkImage` | `(file: Blob & { name?: string }, options?: ShrinkImageOptions) => Promise<File>` | A picture made no larger than an edge and a byte budget, the same call where Bun runs and in a browser. | 53.87, 53.88, 53.89 |
+| `shrinkImage` | `(file: Blob & { name?: string }, options?: ShrinkImageOptions) => Promise<File>` | A picture made no larger than an edge and a byte budget, the same call where Bun runs and in a browser. | 53.87, 53.88, 53.89, 53.102 |
 | `ShrinkImageOptions` | `{ maxEdge?: number; maxBytes?: number; type?: 'image/jpeg' \| 'image/webp' \| 'image/png'; quality?: number }` | The most pixels its longer edge keeps, the most bytes it takes, what it is written as, and the quality it is written at first. | 53.87, 53.88 |
 
 ## `download`

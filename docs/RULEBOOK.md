@@ -6622,8 +6622,8 @@ it is not, under the file's name with that type's extension, alike where Bun run
 53.88 `shrinkImage` given `maxBytes` MUST lower the quality it writes at and then its size until it
 takes no more than `maxBytes`, save for PNG, whose size it MUST NOT lower for bytes.
 
-53.89 `shrinkImage` MUST answer a file already within `maxEdge` and `maxBytes` and of `type` as it is,
-written again by nothing.
+53.89 `shrinkImage` MUST answer a file already within `maxEdge` and `maxBytes`, of `type`, and
+carrying none of the metadata 53.102 names as it is, written again by nothing.
 
 53.90 `download` MUST save `data` as a file named `name`, as a click on a link to it in the
 document with that `download` would, text written as `type`, the link's address standing until the
@@ -6662,6 +6662,9 @@ leaves the host where aligning the current one does.
 
 53.101 A scroll that `scrollTo`, `reset` or a change of the item `carousel` rests on starts, and that
 leaves the `host` where it already is, MUST NOT be on its way in 53.65's sense.
+
+53.102 `shrinkImage` MUST answer a `File` carrying none of the EXIF, XMP, IPTC, comment or text
+metadata of the file it is handed.
 
 # 54. Guards, fetches and jobs
 

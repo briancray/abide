@@ -72,6 +72,48 @@ test('a picture already within every bound is handed back as it is — 53.89', a
     )
 })
 
+// A small JPEG carrying an EXIF segment after its start, a stand-in for a phone's location in it.
+async function withExif(): Promise<File> {
+    const jpeg = await shrinkImage(await icon(), { maxEdge: 64 })
+    const bytes = new Uint8Array(await jpeg.arrayBuffer())
+    const payload = [
+        ...new TextEncoder().encode('Exif\0\0'),
+        // A big-endian TIFF header and one empty IFD.
+        ...[0x4d, 0x4d, 0, 0x2a, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0],
+        ...new TextEncoder().encode('GPS 48.8584N 2.2945E'),
+    ]
+    const length = payload.length + 2
+    return new File(
+        [
+            new Uint8Array([
+                0xff,
+                0xd8,
+                0xff,
+                0xe1,
+                length >> 8,
+                length & 0xff,
+                ...payload,
+                ...bytes.slice(2),
+            ]),
+        ],
+        'photo.jpg',
+        { type: 'image/jpeg' },
+    )
+}
+
+// THE REVERT: drop `carriesMetadata` from the as-is test, and the photo within every bound comes
+// back with its location still in it.
+test('a picture carrying metadata is written again without it — 53.102', async () => {
+    const photo = await withExif()
+    const sent = await shrinkImage(photo, { maxEdge: 1600 })
+    const text = new TextDecoder('latin1').decode(await sent.arrayBuffer())
+    expect({
+        exif: text.includes('Exif'),
+        location: text.includes('48.8584N'),
+        type: sent.type,
+    }).toEqual({ exif: false, location: false, type: 'image/jpeg' })
+})
+
 afterEach(() => document.body.replaceChildren())
 
 // THE REVERT: drop the `download` attribute from the link, and the browser opens the file rather than
@@ -124,5 +166,10 @@ test('download clicks its link in the document and keeps the address past the cl
         left: document.querySelector('a[download]') === null,
         revoked,
         releasedLate: delays.length === 1 && (delays[0] ?? 0) >= 10_000,
-    }).toEqual({ connected: [true], left: true, revoked: 0, releasedLate: true })
+    }).toEqual({
+        connected: [true],
+        left: true,
+        revoked: 0,
+        releasedLate: true,
+    })
 })
