@@ -6796,6 +6796,10 @@ empty as it came.
 54.38 A look MUST NOT start a run of a `job` while its `paused` reads true, and `runNow` MUST run
 it all the same.
 
+54.39 A `job`'s run MUST run outside every request and every `memo` run, whichever started it, and
+`abortSignal` called in it, outside every run 7.45 and 7.47 name and every request entered in it,
+MUST answer a signal aborted where 54.26's is.
+
 # 55. Worker files
 
 55.1 An import of a worker file MUST answer each export with a function running that export in the

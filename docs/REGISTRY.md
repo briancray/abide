@@ -1283,7 +1283,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `abortSignal` | `() => AbortSignal` | The signal that says stop to the work it is called in, from the innermost owner that work runs under. | 7.38, 7.39, 7.45, 7.46, 7.47, 7.48, 7.49 |
+| `abortSignal` | `() => AbortSignal` | The signal that says stop to the work it is called in, from the innermost owner that work runs under. | 7.38, 7.39, 7.45, 7.46, 7.47, 7.48, 7.49, 54.39 |
 
 # Browser context
 
@@ -1444,7 +1444,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined; paused?: Reactive<boolean> \| (() => boolean) }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38 |
+| `job` | `(name: string, options: { every: number \| (() => number); from?: 'end' \| 'start'; run: (signal: AbortSignal) => unknown; lastRun?: () => number \| undefined; paused?: Reactive<boolean> \| (() => boolean) }) => Job` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.18, 54.19, 54.21, 54.23, 54.25, 54.26, 54.29, 54.38, 54.39 |
 | `Job` | `{ status: Reactive<JobStatus>; runNow: () => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.18 |
 | `Job.status` | `Reactive<JobStatus>` | Where the job stands, one value for every caller. | 54.22, 54.24 |
 | `Job.runNow` | `() => Promise<JobStatus>` | A run ahead of the schedule. | 54.20 |

@@ -43,7 +43,7 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/workerFiles.test.ts',
             from: [
-                "test('a job whose run is a worker export runs it off the main thread, and stopping it aborts it there",
+                "test('a job whose run is a worker export runs it off the main thread, and stopping it ends the thread",
             ],
         },
     ]}
@@ -119,7 +119,7 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Run the scoring in a thread of its own">
         <p>A worker file's export is a function a job's <code>run</code> can be: each run is a
-            thread of its own, and stopping the job aborts it there.</p>
+            thread of its own, and stopping the job ends the thread.</p>
         <Code language="ts" caption="server" code={`
             import { job } from '@abide/abide/server'
 

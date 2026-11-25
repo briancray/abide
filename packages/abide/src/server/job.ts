@@ -8,6 +8,8 @@ import { messageOf } from '#shared/messageOf.ts'
 import { memo, type Reactive, reactive } from '#shared/reactive/index.ts'
 import { appStopSignal } from '#shared/reactive/poll.ts'
 
+import { ownedBy } from './requestScope.ts'
+
 /** 54.22 — where a job stands, as a page reads it through a handler. */
 export type JobStatus = {
     /** Whether a run is going. */
@@ -38,7 +40,7 @@ export function job(
         every: number | (() => number)
         /** 54.29 — whether `every` is measured from when the last run `'end'`ed, the default, or from when it `'start'`ed. */
         from?: 'end' | 'start'
-        /** 54.26 — the work, handed the signal that says stop. */
+        /** 54.26, 54.39 — the work, handed the signal that says stop, which `abortSignal()` in it answers too. */
         run: (signal: AbortSignal) => unknown
         /** 54.21 — when the last run ended before this process, in epoch milliseconds, or `undefined` where none has. */
         lastRun?: () => number | undefined
@@ -83,7 +85,8 @@ export function job(
         write({ running: true })
         let lastError = current.lastError
         try {
-            await run(signal)
+            // 54.39 — its own owner, whichever request asked for it or look started it.
+            await ownedBy(signal, () => run(signal))
             lastError = null
         } catch (error) {
             // 54.24 — a run told to stop has not failed.

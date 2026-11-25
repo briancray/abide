@@ -6,7 +6,8 @@ import { expect, test } from 'bun:test'
 
 import { job, type JobStatus, log, watch } from '#server'
 import type { App, BootedApp } from '#server/createApp.ts'
-import { type Reactive, reactive } from '#shared'
+import { inOpenScope, scopeFor } from '#server/requestScope.ts'
+import { abortSignal, type Reactive, reactive } from '#shared'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -250,5 +251,61 @@ test('a paused job starts no run from a look, and runNow still runs — 54.38', 
         expect(`runs while paused: ${whilePaused}, asked: ${asked}`).toBe(
             'runs while paused: 0, asked: 1',
         )
+    })
+})
+
+// 54.39 — A RUN IS ITS OWN OWNER: `abortSignal()` inside it, after an `await` included, answers the
+// run's signal — not the request `runNow` was called from, which ends as its caller hangs up.
+test('abortSignal in a run asked for from a request outlives the request, and ends at stop — 54.39', async () => {
+    const release = Promise.withResolvers<void>()
+    const started = Promise.withResolvers<void>()
+    let inside: AbortSignal | undefined
+    const exporting = job('owned', {
+        every: 3_600_000,
+        run: async () => {
+            await Bun.sleep(0)
+            inside = abortSignal()
+            started.resolve()
+            await release.promise
+        },
+    })
+    const hangUp = new AbortController()
+    const scope = scopeFor(
+        new Request('http://crm.test/export', { signal: hangUp.signal }),
+        undefined,
+        undefined,
+    )
+    const ran = inOpenScope(scope, () => exporting.runNow())
+    await started.promise
+    hangUp.abort()
+    const afterHangUp = inside?.aborted
+    const stopping = exporting.stop()
+    release.resolve()
+    await Promise.all([ran, stopping])
+    expect(
+        `after hang up: ${afterHangUp}, after stop: ${inside?.aborted}`,
+    ).toBe('after hang up: false, after stop: true')
+})
+
+// 54.39 — nor the look that started it, which the next look replaces under `from: 'start'`.
+test('abortSignal in a run that overruns its interval is not aborted by the looks after it — 54.39', async () => {
+    const release = Promise.withResolvers<void>()
+    let inside: AbortSignal | undefined
+    const scrape = job('owned overrun', {
+        every: 5,
+        from: 'start',
+        run: async () => {
+            await Bun.sleep(0)
+            inside ??= abortSignal()
+            await release.promise
+        },
+    })
+    await serving(async () => {
+        await until(scrape.status, (status) => status.running)
+        await Bun.sleep(40)
+        const aborted = inside?.aborted
+        release.resolve()
+        await scrape.stop()
+        expect(`aborted by a look: ${aborted}`).toBe('aborted by a look: false')
     })
 })
