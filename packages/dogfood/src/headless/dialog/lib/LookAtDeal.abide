@@ -1,0 +1,19 @@
+<script>
+import { dialog, memo, reactive } from '@abide/abide'
+
+const DEALS = ['Hopper & Co pilot', 'Langley Research audit']
+
+let looking = reactive<string | undefined>(undefined)
+const look = dialog({
+    open: memo(() => looking !== undefined),
+    onclose: () => (looking = undefined),
+})
+</script>
+
+{#for deal of DEALS}
+    <button onclick={() => (looking = deal)}>{deal}</button>
+{/for}
+<dialog {...look.dialog}>
+    <h2>{looking}</h2>
+    <form method="dialog"><button>Close</button></form>
+</dialog>

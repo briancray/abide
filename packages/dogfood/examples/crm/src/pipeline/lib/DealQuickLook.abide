@@ -1,0 +1,27 @@
+<script>
+import { dialog, format, memo, reactive } from '@abide/abide'
+
+import listDeals from '../listDeals.handler.ts'
+
+const deals = memo(() => listDeals())
+// The deal looked at, written by every row's button; the dialog shows while one is.
+let looking = reactive<string | undefined>(undefined)
+const look = dialog({
+    open: memo(() => looking !== undefined),
+    onclose: () => (looking = undefined),
+})
+const deal = () => deals.find((each) => each.id === looking)
+</script>
+
+<ul class="fields stacked">
+    {#for each of deals key each.id}
+        <li><span>{each.stage}</span>
+            <button onclick={() => (looking = each.id)}>{each.name}</button></li>
+    {/for}
+</ul>
+
+<dialog {...look.dialog} class="m-auto w-80 rounded-xl border border-rule bg-raised p-5">
+    <h2>{deal()?.name}</h2>
+    <p>{format.money(deal()?.amount ?? 0, { maximumFractionDigits: 0 })}</p>
+    <form method="dialog"><button>Close</button></form>
+</dialog>
