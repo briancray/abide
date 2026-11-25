@@ -594,7 +594,8 @@ the value of that write standing in its place.
 the function it is handed MUST run `get` again as a restore, per 8.18, and MUST NOT run the body.
 
 8.21 What a `Store`'s `watch` returns MUST be called once the `Reactive` is released: a `Keyed`
-entry evicted, or the setup or request that built it, or its `Keyed`, ended.
+entry evicted, or the setup or request that built it, or its `Keyed`, ended, or the entry opened on
+its store's log (18.45).
 
 8.22 `store.web` MUST keep the value under its key in `localStorage`, or in `sessionStorage` where
 its `area` is `'session'`.
@@ -1648,9 +1649,10 @@ MUST be fed from it, as a call for them would build it.
 version it replaced as the JSON Patch from that value to the new one, an array its `key` tells apart
 matched element by element, and MUST NOT be sent as the value.
 
-18.42 A served `memo` entry kept in a store whose log reads synchronously MUST record each change in
-that log, and its version MUST be the number of the change's record; opened again on that store
-where the value it holds is the value the log leaves, it MUST stand at the log's last record.
+18.42 A served `memo` entry kept in a store with an append face MUST record each change in that
+log, and its version MUST be the number of the change's record; opened again on that store where
+the value it holds is the value the log leaves, it MUST stand at the log's last record. Until a log
+read asynchronously has answered, the entry MUST be versioned per 18.7.
 
 18.43 A subscription naming a version the log of 18.42 holds MUST be sent the records after it as
 JSON Patch, in this process or one opened on the store after it.
@@ -1659,7 +1661,16 @@ JSON Patch, in this process or one opened on the store after it.
 and a subscription naming a version older than the records kept MUST be sent the value.
 
 18.45 A record another process appends to the log of 18.42 MUST be applied to this process's entry at
-that record's number, and sent on to its subscriptions.
+that record's number, and sent on to its subscriptions, and an entry opened on that log MUST NOT
+re-read its store when the store's `watch` says it moved.
+
+18.46 A change of 18.42 to a `memo` entry MUST be numbered the record after the last this process knows of, without
+waiting on the log, and MUST be appended only where that number is still the log's next.
+
+18.47 Where another process's record took a number this process named, its `memo` entry MUST apply
+that process's records, then its own changes not yet appended over them, MUST append the result as the
+value whole and stand at its number, and a subscription naming a number it gave up MUST be sent the
+value.
 
 # 19. Mount paths and schemas
 
@@ -7256,7 +7267,8 @@ the cursor past an entry once its reader asks for the next.
 of the entries its `store` keeps.
 
 58.9 A `ledger` given a `store` MUST keep its entries and its cursors there, and `store.sqlite`,
-`store.indexedDB` and `store.redis` MUST each keep one record per entry.
+`store.indexedDB` and `store.redis` MUST each keep one record per entry, and MUST each make an
+`appendAt` that finds the last number moved from the one it expected append nothing.
 
 58.10 Where `retain` is given, an append MUST let go of every entry but the last `retain`.
 

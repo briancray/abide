@@ -247,3 +247,16 @@ test('a key is forgotten with the entry kept under it — 58.16, 58.10', async (
         'first: 1, again: 3, resent: 3',
     )
 })
+
+// 58.9, 18.46 — AN APPEND AT AN EXPECTED NUMBER appends nothing once another has taken it: two
+// processes naming one version cannot both write it. THE REVERT: drop the `lastOf` check from
+// `store.sqlite`'s `appendAt`; the second append at 0 throws on the number already taken.
+test('store.sqlite appends at an expected number only where it is still the last — 58.9, 18.46', () => {
+    const kept = store.sqlite(new Database(':memory:'), 'expected')
+    const answers = [
+        kept.appendAt('first', 0, 1),
+        kept.appendAt('second', 0, 2),
+        kept.appendAt('second', 1, 3),
+    ]
+    expect(answers.join(',')).toBe('1,,2')
+})

@@ -67,6 +67,7 @@ export function indexedDB<Stored>(
             return () => listening.removeEventListener('message', listener)
         },
         append: log.append,
+        appendAt: log.appendAt,
         since: log.since,
         last: log.last,
         position: log.position,
@@ -115,6 +116,30 @@ function logFace(table: string, log: () => string): LogStore {
             })
             channelOf().postMessage({ table: entries, key: log() })
             return seq
+        },
+        appendAt: async (entry, expected, at) => {
+            if (typeof globalThis.indexedDB === 'undefined') return undefined
+            const db = await databaseWith(tables)
+            const transaction = db.transaction(entries, 'readwrite')
+            const kept = transaction.objectStore(entries)
+            // 18.46 — checked and written in one transaction, which no other tab's append interleaves.
+            if ((await lastIn(kept)) !== expected) return undefined
+            kept.put(
+                {
+                    seq: expected + 1,
+                    at,
+                    key: undefined,
+                    entry: JSON.stringify(entry),
+                },
+                [log(), expected + 1],
+            )
+            await new Promise<void>((done, failed) => {
+                transaction.oncomplete = () => done()
+                transaction.onerror = () => failed(transaction.error)
+                transaction.onabort = () => failed(transaction.error)
+            })
+            channelOf().postMessage({ table: entries, key: log() })
+            return expected + 1
         },
         since: async (seq) => {
             if (typeof globalThis.indexedDB === 'undefined') return []

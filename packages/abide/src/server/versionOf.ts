@@ -21,7 +21,7 @@ import { writtenAt } from '#shared/reactive/patchMarks.ts'
 import { servedCellOf } from '#shared/reactive/producer.ts'
 import type { Reactive } from '#shared/reactive/Reactive.ts'
 
-import { chainOf } from './durableChain.ts'
+import { chainOf, type DurableChain } from './durableChain.ts'
 
 let next = Date.now() * 1000
 
@@ -43,19 +43,29 @@ type Stamp = {
 
 const STAMPS = new WeakMap<object, Stamp>()
 
-/** The version a value's standing production is named by over the wire. 18.7. */
-export function versionOf(value: unknown): number {
-    const cell = servedCellOf(value)
-    // 18.42 — where the value's store keeps a log, its versions are that log's record numbers.
+/**
+ * 18.42 — the log a value's store keeps, once it has been read: until then (a log read asynchronously,
+ * 18.46) the value is versioned as any other, and stamped again from the log once it answers.
+ */
+function durableOf(cell: object, value: unknown): DurableChain | null {
     const chain = chainOf(
         cell,
         value as Reactive<unknown>,
         (cell as { store?: { store?: unknown } | null | undefined }).store
             ?.store,
-        (opened) => {
+        (opened, fresh) => {
+            if (fresh) STAMPS.delete(cell)
             versionOf(opened.value)
         },
     )
+    return chain?.opened === true ? chain : null
+}
+
+/** The version a value's standing production is named by over the wire. 18.7. */
+export function versionOf(value: unknown): number {
+    const cell = servedCellOf(value)
+    // 18.42 — where the value's store keeps a log, its versions are that log's record numbers.
+    const chain = durableOf(cell, value)
     const held = (value as { peek(): unknown }).peek()
     const patched = writtenAt(held)
     const stamp = STAMPS.get(cell)
@@ -117,15 +127,7 @@ export function patchesSince(
     if (since === undefined) return undefined
     const cell = servedCellOf(value)
     // 18.43 — a value kept in a log is sent what the log holds past `since`, across restarts.
-    const chain = chainOf(
-        cell,
-        value as Reactive<unknown>,
-        (cell as { store?: { store?: unknown } | null | undefined }).store
-            ?.store,
-        (opened) => {
-            versionOf(opened.value)
-        },
-    )
+    const chain = durableOf(cell, value)
     if (chain !== null) return chain.since(since)
     const recent = STAMPS.get(cell)?.recent
     if (recent === undefined) return undefined

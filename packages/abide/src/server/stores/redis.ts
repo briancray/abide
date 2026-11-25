@@ -117,6 +117,19 @@ return seq
 `
 
 /**
+ * 18.46 — an append made only where the last number is still `ARGV[1]`, as one step on the server:
+ * the number checked, moved and written together, so two processes appending to one served value's
+ * log never both take the number after it. KEYS: the last number, the log. ARGV: expected, when, entry.
+ */
+const APPEND_AT = `
+local last = tonumber(redis.call('GET', KEYS[1]) or '0')
+if last ~= tonumber(ARGV[1]) then return -1 end
+local seq = redis.call('INCR', KEYS[1])
+redis.call('XADD', KEYS[2], '0-' .. seq, 'at', ARGV[2], 'key', '', 'entry', ARGV[3])
+return seq
+`
+
+/**
  * 58.4, 58.10 — a trim on the server as one step: the keys of every entry through `ARGV[1]` let go
  * with their entries, so a key outlives no entry. KEYS: the log, the keys.
  */
@@ -150,6 +163,21 @@ function logFace(redis: RedisClient, log: () => string): LogStore {
                 JSON.stringify(entry),
             ])
             return Number(seq)
+        },
+        appendAt: async (entry, expected, at) => {
+            const base = log()
+            const seq = Number(
+                await redis.send('EVAL', [
+                    APPEND_AT,
+                    '2',
+                    `${base}:seq`,
+                    `${base}:log`,
+                    String(expected),
+                    String(at),
+                    JSON.stringify(entry),
+                ]),
+            )
+            return seq < 0 ? undefined : seq
         },
         since: async (seq) => {
             const reply = (await redis.send('XRANGE', [

@@ -34,6 +34,13 @@ export type LogStore = {
     position: (cursor: string, seq?: number) => number | Promise<number>
     trim: (through: number) => void | Promise<void>
     watch?: ((changed: () => void) => () => void) | undefined
+    // 18.46 — an append made only where `expected` is still the last number, answering the new one,
+    // or `undefined` where another writer appended first.
+    appendAt: (
+        entry: unknown,
+        expected: number,
+        at: number,
+    ) => number | undefined | Promise<number | undefined>
 }
 
 /** What `ledger` takes. */
@@ -238,18 +245,21 @@ function memoryLog(): LogStore {
     let last = 0
     const keyed = new Map<string, number>()
     const cursors = new Map<string, number>()
+    const append = (entry: unknown, key: string | undefined, at: number) => {
+        if (key !== undefined) {
+            const seen = keyed.get(key)
+            if (seen !== undefined) return seen
+        }
+        last += 1
+        entries.push({ seq: last, at, entry })
+        keys.push(key)
+        if (key !== undefined) keyed.set(key, last)
+        return last
+    }
     return {
-        append: (entry, key, at) => {
-            if (key !== undefined) {
-                const seen = keyed.get(key)
-                if (seen !== undefined) return seen
-            }
-            last += 1
-            entries.push({ seq: last, at, entry })
-            keys.push(key)
-            if (key !== undefined) keyed.set(key, last)
-            return last
-        },
+        append,
+        appendAt: (entry, expected, at) =>
+            expected === last ? append(entry, undefined, at) : undefined,
         since: (seq) => {
             const from = offset + Math.max(0, seq + 1 - first)
             return entries.slice(from, from + 256)

@@ -126,6 +126,17 @@ export function sqlite<Stored>(
                 return seq
             })()
         },
+        appendAt: (entry, expected, at) => {
+            const db = logConnection()
+            const log = storeKey(key)
+            return db.transaction((): number | undefined => {
+                if (lastOf(db, log) !== expected) return undefined
+                db.query(
+                    `INSERT INTO ${table}_log (log, seq, at, key, entry) VALUES (?, ?, ?, NULL, ?)`,
+                ).run(log, expected + 1, at, JSON.stringify(entry))
+                return expected + 1
+            })()
+        },
         since: (seq) => {
             const rows = logConnection()
                 .query(
