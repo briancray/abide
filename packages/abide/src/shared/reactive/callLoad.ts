@@ -1,5 +1,5 @@
 // A CALL REACHING A LOAD, and what the calls waiting on it decide about it: who may end it (16.48),
-// how long it may go without progress (16.59), and whether the call after an ended one starts
+// how long it may go without its answer or first chunk (16.59), and whether the call after an ended one starts
 // another (16.62, 15.19). The policy the core's load primitives — `loadOf`, `abandonLoad`,
 // `streamingOrSettled` — are spent on, kept beside them rather than inside `Reactive.ts`: the core
 // is in every page's static closure, and only a page holding a handler calls a load.
@@ -159,10 +159,13 @@ function attend(attended: Attended, signal: AbortSignal | undefined): void {
 }
 
 /**
- * Ends a load that goes `milliseconds` without progress, refusing it 504.
+ * Ends a load that goes `milliseconds` without its answer or its first chunk, refusing it 504.
  *
- * 16.12, 16.58, 16.59 — `timeout` ON EVERY CALL: a load that goes that long without progress — its
- * answer, or a stream's next chunk — is ended where it stands, as 16.49 ends one, and refuses 504.
+ * 16.12, 16.58, 16.59 — `timeout` ON EVERY CALL: a load that goes that long without settling, or a
+ * stream without its first chunk, is ended where it stands, as 16.49 ends one, and refuses 504. A
+ * STREAM THAT HAS BEGUN KEEPS ITS OWN PACE: a chat, a ticker or a ledger's tail waits on what has
+ * not happened yet, and timing the gap between chunks ended every quiet feed — `ABIDE_RPC_TIMEOUT`
+ * set app-wide ended all of them at once.
  * ONE CLOCK PER LOAD: a call joining a load (1.8) is not a reason to give it longer, and the first
  * clock would end the load at its own time whatever a second one did — so a join starts none.
  */
@@ -178,20 +181,16 @@ function timeLoad(attended: Attended, milliseconds: number | undefined): void {
     const expire = (): void => {
         if (loadOf(reached) === load) abandonLoad(reached, refuse(504))
     }
-    let settled = false
     const end = (): void => {
-        settled = true
         if (clock.timer !== null) clearTimeout(clock.timer)
     }
-    // A CHUNK IS PROGRESS, and the run's close ends the loop (2.6). What the run failed with is the
-    // load's to answer, so the loop only stops on it.
-    const followChunks = async (): Promise<void> => {
+    // The first chunk ends the clock, as does the run's close (2.6). What the run failed with is the
+    // load's to answer, so the wait only stops on it.
+    const firstChunk = async (): Promise<void> => {
         try {
-            for await (const _ of reached as AsyncIterable<unknown>) {
-                if (settled || loadOf(reached) !== load) return
-                armTimer(clock, milliseconds, expire)
-            }
+            for await (const _ of reached as AsyncIterable<unknown>) break
         } catch {}
+        end()
     }
     armTimer(clock, milliseconds, expire)
     // 9.6 — a value behind rungs only turns out to stream once the onion resolves, so the question
@@ -199,6 +198,6 @@ function timeLoad(attended: Attended, milliseconds: number | undefined): void {
     streamingOrSettled(reached).then((settled) => {
         if (settled !== STREAMING) return end()
         void Promise.resolve(reached).then(end, end)
-        if (loadOf(reached) === load) void followChunks()
+        if (loadOf(reached) === load) void firstChunk()
     }, end)
 }

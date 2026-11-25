@@ -1304,8 +1304,9 @@ open.
 
 16.58 Where a handler names no `timeout`, `ABIDE_RPC_TIMEOUT` MUST be its `timeout`.
 
-16.59 A load that goes `timeout` milliseconds without settling, or without a stream's next chunk,
-MUST be ended and MUST refuse with `refuse(504)`.
+16.59 A load that goes `timeout` milliseconds without settling, or a stream without its first
+chunk, MUST be ended and MUST refuse with `refuse(504)`, and a stream past its first chunk MUST NOT
+be ended for the time between chunks.
 
 16.60 A load ended under 16.59 MUST keep serving what its value held, a stream's chunks so far
 included, and MUST report `s.busy` false.

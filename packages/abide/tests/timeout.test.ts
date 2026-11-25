@@ -1,5 +1,5 @@
 // 16.12, 16.58 TO 16.61 — `timeout` ON EVERY CALL, in process as over the wire: a load that goes that
-// long without progress — its answer, or a stream's next chunk — is ended where it stands and refuses
+// long without its answer, or a stream without its first chunk, is ended where it stands and refuses
 // 504, keeping what the value held. One clock per load, which a joining call does not wind back.
 
 import { afterEach, expect, test } from 'bun:test'
@@ -57,59 +57,59 @@ test('a timeout past what a timer holds does not end the load at once — 16.59'
     expect(value.peek()).toBe('answered')
 })
 
-// PER CHUNK, NOT PER RUN: six chunks 40 ms apart run 240 ms under a 150 ms timeout — each gap clears it
-// by 110 ms, which a loaded `--parallel` worker does not eat. THE REVERT: drop the `arm()` in the cursor
-// loop; the clock runs from the first call and the run is ended at 150 ms.
-test('a stream that keeps producing outlives its timeout — 16.59', async () => {
+// A STREAM THAT HAS BEGUN KEEPS ITS OWN PACE: a feed quiet for 150 ms after its first chunk, under a
+// 40 ms timeout, is not ended — a ledger's tail waits on an append that has not been made. THE REVERT:
+// arm the clock again per chunk in `timeLoad` rather than ending it at the first; the run is ended 504
+// with `['first']`.
+test('a stream quiet after its first chunk outlives its timeout — 16.59', async () => {
     const rows = GET(
         async function* () {
-            for (let row = 0; row < 6; row += 1) {
-                await Bun.sleep(40)
-                yield row
-            }
+            yield 'first'
+            await Bun.sleep(150)
+            yield 'second'
         },
-        { timeout: 150 },
+        { timeout: 40 },
     ) as unknown as () => Loading
     const value = rows()
     await settled(value)
     expect(value.error()).toBeUndefined()
-    expect(value.peek()).toEqual([0, 1, 2, 3, 4, 5])
+    expect(value.peek()).toEqual(['first', 'second'])
 })
 
 // AND BEHIND A RUNG, where the value only turns out to stream once the onion resolves (9.6). THE
-// REVERT: ask `isStreaming` once, synchronously, in `timeLoad`; the run is ended 504 at 150 ms.
-test('a stream behind a rung that keeps producing outlives its timeout — 16.59, 9.6', async () => {
+// REVERT: ask `isStreaming` once, synchronously, in `timeLoad`; the clock waits on a settling the
+// stream never makes, and the run is ended 504 at 40 ms.
+test('a stream behind a rung quiet after its first chunk outlives its timeout — 16.59, 9.6', async () => {
     const outside = RPC_SERVER.request
     RPC_SERVER.request = () => new Request('http://timeout.example/')
     try {
         const rows = GET(
             async function* () {
-                for (let row = 0; row < 6; row += 1) {
-                    await Bun.sleep(40)
-                    yield row
-                }
+                yield 'first'
+                await Bun.sleep(150)
+                yield 'second'
             },
-            { timeout: 150, middleware: [(next) => next()] },
+            { timeout: 40, middleware: [(next) => next()] },
         ) as unknown as () => Loading
         const value = rows()
         await settled(value)
         expect(value.error()).toBeUndefined()
-        expect(value.peek()).toEqual([0, 1, 2, 3, 4, 5])
+        expect(value.peek()).toEqual(['first', 'second'])
     } finally {
         RPC_SERVER.request = outside
     }
 })
 
-// 16.60 — WHAT THE RUN HAD SAID STAYS, and the generator is stopped. THE REVERT: drop `timeLoad`; the
-// stream never ends and `busy` still reads true.
-test('a stream that stops producing is ended with the chunks it had — 16.59, 16.60', async () => {
+// 16.59 TIMES THE FIRST CHUNK: a stream that says nothing for its timeout is ended 504, and the
+// generator stopped (16.60). THE REVERT: drop `timeLoad`; the stream never ends and `busy` still reads
+// true.
+test('a stream with no first chunk inside its timeout is ended — 16.59, 16.60', async () => {
     let after = false
     const rows = GET(
         async function* () {
-            yield 'first'
             await Bun.sleep(150)
             after = true
-            yield 'second'
+            yield 'late'
         },
         { timeout: 40 },
     ) as unknown as () => Loading
@@ -117,9 +117,8 @@ test('a stream that stops producing is ended with the chunks it had — 16.59, 1
     await settled(value)
     expect(value.busy()).toBe(false)
     expect(statusOf(value)).toBe(504)
-    expect(value.peek()).toEqual(['first'])
     await Bun.sleep(150)
-    expect(value.peek()).toEqual(['first'])
+    expect(value.peek()).toBeUndefined()
     expect(after).toBe(true)
 })
 
