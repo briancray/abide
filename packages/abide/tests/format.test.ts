@@ -18,6 +18,7 @@ import {
     plural,
     relative,
 } from '../src/shared/format/index.ts'
+import { instant } from '../src/shared/format/instant.ts'
 import { timeZone } from '../src/shared/format/timeZone.ts'
 import { beginHydration, endHydration } from '../src/shared/hydrating.ts'
 
@@ -123,6 +124,45 @@ test('a day alone is its midnight in the zone it is written in — 52.113', () =
         // Noon in Los Angeles is 20:00 UTC.
         const now = Date.UTC(2026, 10, 18, 20)
         expect(relative('2026-11-18', { now })).toBe('12 hours ago')
+    } finally {
+        timeZone.set(undefined)
+    }
+})
+
+// THE REVERT: read a date-time with no offset with `Date.parse`, and it is the process's own zone's
+// 3:04 PM — one hour or another in each zone below, and never both.
+test('a date-time with no offset is that wall clock in the zone it is written in — 52.113', () => {
+    for (const zone of ['America/New_York', 'Asia/Tokyo']) {
+        for (const value of [
+            '2026-11-18T15:04',
+            '2026-11-18T15:04:00',
+            '2026-11-18T15:04:00.250',
+        ])
+            expect(date(value, { style: 'dateTime', timeZone: zone })).toBe(
+                'Nov 18, 2026, 3:04 PM',
+            )
+        // What the `'input'` style writes reads back as the instant it was written from.
+        const at = Date.UTC(2026, 10, 18, 20, 4)
+        const written = date(at, { style: 'input', timeZone: zone })
+        expect(instant(written, zone)).toBe(at)
+        expect(date(written, { style: 'input', timeZone: zone })).toBe(written)
+    }
+    // One with an offset is the instant it names, whatever zone writes it.
+    expect(
+        date('2026-11-18T15:04Z', { style: 'time', timeZone: 'Asia/Tokyo' }),
+    ).toBe('12:04 AM')
+    expect(
+        date('2026-11-18T15:04:00+09:00', {
+            style: 'time',
+            timeZone: 'America/New_York',
+        }),
+    ).toBe('1:04 AM')
+    expect(date('2026-11-18T25:04', { timeZone: 'Asia/Tokyo' })).toBe('—')
+    try {
+        timeZone.set('America/Los_Angeles')
+        // 3:04 PM in Los Angeles is 23:04 UTC.
+        const now = Date.UTC(2026, 10, 18, 23, 4)
+        expect(relative('2026-11-18T13:04', { now })).toBe('2 hours ago')
     } finally {
         timeZone.set(undefined)
     }

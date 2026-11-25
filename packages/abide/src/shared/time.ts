@@ -37,7 +37,7 @@ export type TimeParts = {
 export function time(options: TimeOptions = {}): TimeParts {
     return {
         at(value) {
-            // 52.113 — a day alone is its midnight in the zone the `title` writes in.
+            // 52.113 — a day, or a time with no offset, is that wall clock in the zone the `title` writes in.
             const at = instant(value, live(options.timeZone))
             return {
                 get time() {

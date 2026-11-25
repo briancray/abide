@@ -6359,8 +6359,10 @@ own name, over the defaults each formatter keeps, and MUST NOT refuse a caller n
 the fraction digits for the default of the other.
 
 52.113 `format.date`, `format.dateParts`, `format.relative` and `time` MUST read a value that is a
-`YYYY-MM-DD` string as the midnight of that day in the zone they write in (52.3) — the one
-`timeZone` names where their caller names one — as `instantAt` reads it (52.102).
+`YYYY-MM-DD`, `YYYY-MM-DDTHH:MM` or `YYYY-MM-DDTHH:MM:SS` string, the last with or without a
+fraction of a second, as that wall clock in the zone they write in (52.3) — the one `timeZone`
+names where their caller names one — as `instantAt` reads it (52.102), a day alone being its
+midnight; and a string with a `Z` or an offset as the instant it names.
 
 # 53. Keys, element behaviors and chat
 

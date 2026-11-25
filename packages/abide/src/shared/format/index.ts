@@ -226,7 +226,7 @@ type DateOptions = {
 
 /**
  * A date, a time or both: `format.date('2026-11-18')` is `Nov 18, 2026`. Takes a `Date`, epoch
- * milliseconds or an ISO string, a `YYYY-MM-DD` being that day in the zone it writes in.
+ * milliseconds or an ISO string, one with no offset being that wall clock in the zone it writes in.
  */
 export function date(value: unknown, options: DateOptions = {}): string {
     let written = ''
