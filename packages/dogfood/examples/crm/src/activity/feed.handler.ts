@@ -1,9 +1,11 @@
 import { GET } from '@abide/abide/server'
 
-import { feeds } from './lib/feeds.ts'
+export type Entry = { id: string; kind: string; at: string }
 
-/** Answers at /activity/feed; every tab reading it follows it. */
-export default GET(({ account }: { account: string }) => feeds({ account }), {
+/** Answers at /activity/feed; one feed per account, every tab reading it follows it, idle for an hour, let go. */
+export default GET((_account: { account: string }): Entry[] => [], {
     global: true,
+    ttl: 3_600_000,
+    key: 'id',
     description: "An account's activity feed.",
 })

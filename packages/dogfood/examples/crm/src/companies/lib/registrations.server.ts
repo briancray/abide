@@ -1,17 +1,12 @@
-import { computed, memo } from '@abide/abide'
-import { fetchAndHandle } from '@abide/abide/server'
+import { fetchAndHandle, memo } from '@abide/abide'
 
 import { registryOrigin } from './registryOrigin.server.ts'
 
 /** Each company's registry entry, asked again every hour; an ask that fails keeps the last answer. */
 export const registrations = memo(
     ({ id }: { id: string }) =>
-        computed(
-            () =>
-                fetchAndHandle<{ founded: number; employees: number }>(
-                    `${registryOrigin()}/companies/${id}`,
-                ),
-            { poll: 3_600_000 },
+        fetchAndHandle<{ founded: number; employees: number }>(
+            `${registryOrigin()}/companies/${id}`,
         ),
-    { global: true },
+    { global: true, poll: 3_600_000 },
 )

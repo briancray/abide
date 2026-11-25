@@ -349,9 +349,9 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `memo` | `<Args = undefined, Result = unknown>(fn: (args: Args) => Result, options?: MemoOptions<Args>) => Memo<Args, Result>` | `fn`, remembered: what it answers for each set of args, handed back to every later call with them. | 11.2, 11.3, 11.4, 11.6, 11.74, 11.75, 11.76, 14.4, 15.19 |
-| `Memo` | `<Args, Result>((...args: undefined extends Args ? [args?: Args] : [args: Args]) => Result) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void }` | What `memo` hands back: the function, and the triggers over the keys it holds. | 11.2, 11.24, 11.27, 13.12 |
-| `MemoOptions` | `<Args>{ ttl?: number; tags?: string[] \| ((args: Args) => string[]); global?: boolean; args?: Schema<Args> }` | How long an entry lives, what selects it, where it is kept, and what its args must be. | 11.32, 11.34, 11.40, 11.44, 11.45 |
+| `memo` | `<Args = undefined, Result = unknown>(fn: (args: Args) => Result, options?: MemoOptions<Args>) => Memo<Args, Result>` | `fn`'s value kept per set of args: a call answers its promise, or its stream, and its owner writes and follows it per key. | 11.2, 11.3, 11.4, 11.6, 11.74, 11.75, 11.76, 14.4, 15.19 |
+| `Memo` | `<Args, Result>((...args: undefined extends Args ? [args?: Args] : [args: Args]) => Promise<Awaited<Result>> \| AsyncIterable<unknown>) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void; set(args: Args, value): void; patch(args: Args, mutate: (value) => void): void; readable(args: Args): ReadableStream }` | What `memo` hands back: the call, the triggers over the keys it holds, and the owner's writes and stream per key. | 11.2, 11.24, 11.27, 11.77, 11.78, 13.12 |
+| `MemoOptions` | `<Args>{ ttl?: number; tags?: string[] \| ((args: Args) => string[]); global?: boolean; args?: Schema<Args>; key?: string \| ((element) => unknown) }` | How long an entry lives, what selects it, where it is kept, what its args must be, and what tells one element of its value from another. | 11.32, 11.34, 11.40, 11.44, 11.45, 5.22 |
 
 ## `watch`
 
@@ -1033,6 +1033,9 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `rpc.invalidate` | `(pattern?: Partial<Args>, options?: { caller?: string \| true }) => void` | `invalidate` narrowed to the handler's matching entries. | 7.2, 7.3, 13.4, 13.12, 13.19, 18.37, 18.38, 18.39 |
 | `rpc.refresh` | `(pattern?: Partial<Args>, options?: { caller?: string \| true }) => void` | `refresh` narrowed to the handler's matching entries. | 7.4, 7.5, 13.4, 13.12, 13.19, 18.37, 18.38, 18.39 |
 | `rpc.isError` | `<Name extends string>(error: unknown, name: Name) => error is Extract<Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, { name: Name }>` | Whether a caught failure is the one named. | 16.8 |
+| `rpc.set` | `(args: Args, value: Value) => void` | The owner's write of the handler's value for those args, past every rung. | 11.77 |
+| `rpc.patch` | `(args: Args, mutate: (value: Value) => void) => void` | The owner's mutation of the handler's value for those args in place, past every rung. | 11.77 |
+| `rpc.readable` | `(args: Args) => ReadableStream<Value>` | The handler's value for those args now, then after each change. | 11.78 |
 | `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The handler's call, handed back as its raw `Response`. | 16.11, 16.42 |
 | `rpc.method` | `string` | The HTTP method. | 16.2 |
 | `rpc.url` | `(args?: Args) => string` | The address, resolved against the mount. | 16.9, 16.10, 30.28 |

@@ -722,9 +722,9 @@ inferred from the thunk.
 
 11.1 `computed` MUST produce an unkeyed, tracked `Reactive`.
 
-11.2 A `memo` called MUST answer what its function answered for that call's `Args` key — a value, a
-promise or a refusal, kept rather than awaited — running the function only for a key it holds no
-answer for, and keying a function that declares no parameter on `undefined`.
+11.2 A `memo` called MUST answer a promise of its function's value for that call's `Args` key, or where
+the function answers an async iterable, a stream of its chunks; it MUST run the function only for a
+key it holds no value for, and MUST key a function that declares no parameter on `undefined`.
 
 11.3 `memo` and `computed` MUST NOT read a body's parameters to decide what they produce.
 
@@ -906,6 +906,13 @@ is refreshed or invalidated, and MUST NOT run again for another key's.
 
 11.76 A `memo` whose function answers an async iterable MUST run it once per `Args` key and keep its
 chunks, and each call MUST answer a stream handing on every chunk of that run from its start.
+
+11.77 `m.set(args, value)` MUST replace the value of a `memo`'s entry for `args`, and `m.patch(args,
+mutate)` MUST mutate it in place, each building the entry where none is held, MUST NOT run the
+function, and MUST stand until the next write, `ttl`, `refresh` or `invalidate`.
+
+11.78 `m.readable(args)` MUST answer a stream handing on the entry's value now and its value after
+each change, in order, each a copy no later change mutates.
 
 # 12. Effects
 

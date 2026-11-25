@@ -17,7 +17,12 @@ import type { Annotated, Rpc } from '../rpc.ts'
 import { RPC_SERVER } from '../RPC_SERVER.ts'
 import type { Schema } from '../Schema.ts'
 import type { CALL_ENTRY } from './CALL_ENTRY.ts'
-import { createMemo, type Memo, type MemoOptions } from './createMemo.ts'
+import {
+    KEYED_OF,
+    type Memo,
+    type MemoOptions,
+    memoOver,
+} from './createMemo.ts'
 import { DECLARED_TAGS } from './DECLARED_TAGS.ts'
 import { isReactive } from './isReactive.ts'
 import { createKeyed, isKeyed, type Keyed } from './Keyed.ts'
@@ -27,6 +32,7 @@ import {
     busyOver,
     createReactive,
     invalidateOver,
+    isStreamBody,
     type Reactive,
     type ReactiveOptions,
     readyOver,
@@ -335,7 +341,10 @@ export function memo<Args = undefined, Result = unknown>(
 ): Memo<Args, Result>
 export function memo(fn: unknown, options?: unknown): unknown {
     refuseValue(fn, 'memo')
-    return filed([fn, options], true, buildMemo)
+    return memoOver(
+        keyedValue(fn as (args: unknown) => unknown, options as undefined),
+        isStreamBody(fn as (args: never) => unknown),
+    )
 }
 
 /**
@@ -362,14 +371,6 @@ export function keyedValue<
 >
 export function keyedValue(body: unknown, options?: unknown): unknown {
     return filed([body, options], true, buildBody)
-}
-
-function buildMemo(given: [first?: unknown, options?: unknown]): unknown {
-    return createMemo(
-        'memo',
-        given[0] as (args: unknown) => unknown,
-        given[1] as MemoOptions<unknown> | undefined,
-    )
 }
 
 // 11.74 — at construction, the earliest moment there is: a value handed where a body belongs would
@@ -452,6 +453,9 @@ export const ambientComputed = ((body: unknown, options?: unknown) =>
  */
 export function handlerValue(body: unknown, options: unknown): unknown {
     if (isReactive(body) || isKeyed(body)) return body
+    // 16.6 — a memo handed in is served as the keyed value it is a face over.
+    const memoed = (body as { [KEYED_OF]?: unknown } | null)?.[KEYED_OF]
+    if (memoed !== undefined) return memoed
     if (typeof body !== 'function') return reactive(body, options as undefined)
     return keyedValue(body as (args: unknown) => unknown, options as undefined)
 }

@@ -38,6 +38,7 @@ import {
 } from './reactive/argsContract.ts'
 import type { CALL_ENTRY } from './reactive/CALL_ENTRY.ts'
 import { callLoad } from './reactive/callLoad.ts'
+import { readableOf } from './reactive/createMemo.ts'
 import { DECLARED_TAGS } from './reactive/DECLARED_TAGS.ts'
 import {
     type AdoptedFailures,
@@ -118,6 +119,12 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     busy(pattern?: Partial<Args>): boolean
     ready(pattern?: Partial<Args>): boolean
     synced(pattern?: Partial<Args>): boolean
+    /** 11.77 — the owner's write of the value for `args`, past every rung. */
+    set(args: Args, value: Value): void
+    /** 11.77 — the owner's mutation of the value for `args` in place, past every rung. */
+    patch(args: Args, mutate: (value: Value) => void): void
+    /** 11.78 — the value for `args` now, then after each change. */
+    readable(args: Args): ReadableStream<Value>
     /** 46.1 — the calls the outbox holds for this handler, narrowed by a pattern. */
     outbox(pattern?: Partial<Args>): QueuedCall<Value>[]
     refresh(pattern?: Partial<Args>, options?: TriggerOptions): void
@@ -716,6 +723,19 @@ export function declare<Declared extends Method>(
         members.busy = (pattern?: unknown): boolean =>
             (faceHere().busy(pattern) as boolean) ||
             sendingFor(rpc, pattern as Record<string, unknown> | undefined)
+        // 11.77, 11.78 — A HANDLER IS A MEMO WITH AN ADDRESS (16.6): its owner writes and follows the
+        // value for some args as a memo's does — reached past every rung, since the owner is no caller.
+        members.set = (args: unknown, written: unknown): void => {
+            ;(reach(args) as Reactive<unknown>).set(written)
+        }
+        members.patch = (
+            args: unknown,
+            mutate: (value: unknown) => void,
+        ): void => {
+            ;(reach(args) as Reactive<unknown>).patch(mutate)
+        }
+        members.readable = (args: unknown): ReadableStream<unknown> =>
+            readableOf(reach(args) as Reactive<unknown>)
         members.outbox = (pattern?: unknown): QueuedCall[] =>
             outbox(rpc as never, pattern as Record<string, unknown> | undefined)
         // 21.8, 18.5 — a `GET` over a `global` value, the value it is serving for some args: a cache

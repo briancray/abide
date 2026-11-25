@@ -1,6 +1,6 @@
 import { POST } from '@abide/abide/server'
 
-import { feeds } from './lib/feeds.ts'
+import feed from './feed.handler.ts'
 
 const KINDS = ['Call', 'Email', 'Meeting']
 
@@ -8,7 +8,7 @@ const KINDS = ['Call', 'Email', 'Meeting']
 export default POST(
     ({ account, kind }: { account: string; kind: string }) => {
         if (!KINDS.includes(kind)) return
-        feeds({ account }).patch((entries) => {
+        feed.patch({ account }, (entries) => {
             entries.push({
                 id: crypto.randomUUID(),
                 kind,

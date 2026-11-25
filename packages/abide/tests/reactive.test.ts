@@ -291,9 +291,9 @@ test('a watched derived value reruns on the write, not on a later read', async (
 })
 
 // 11.1, 11.2, 11.3 — THE NAME IS THE FORM, never the body's parameters: a `memo` whose function
-// declares none is kept on `undefined`, and runs once for every call of `m()`. THE REVERT: drop the
-// entry lookup from `createMemo`'s call; `runs: 2` after the second `once()`.
-test('computed is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3', () => {
+// declares none is kept on `undefined`, and runs once for every call of `m()`, each call answering a
+// promise of its value. THE REVERT: build a keyed value per call in `memo`; `runs: 2` after the second.
+test('computed is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3', async () => {
     const unkeyed = computed(() => 7)
     expect(unkeyed()).toBe(7)
 
@@ -302,57 +302,67 @@ test('computed is unkeyed and memo keyed, whatever the body declares — 11.1, 1
         runs += 1
         return 7
     })
-    expect(`value: ${once()}, again: ${once()}, runs: ${runs}`).toBe(
-        'value: 7, again: 7, runs: 1',
-    )
+    expect(
+        `value: ${await once()}, again: ${await once()}, runs: ${runs}`,
+    ).toBe('value: 7, again: 7, runs: 1')
 
     const keyed = memo((args: { id: number; region: string }) => {
         runs += 1
         return args.id * 2
     })
-    expect(keyed({ id: 4, region: 'north' })).toBe(8)
+    expect(await keyed({ id: 4, region: 'north' })).toBe(8)
     // 11.24: members sorted, so two spellings of one key are one entry.
-    expect(keyed({ region: 'north', id: 4 })).toBe(8)
+    expect(await keyed({ region: 'north', id: 4 })).toBe(8)
     expect(`runs: ${runs}`).toBe('runs: 2')
 })
 
-// 11.75 — A `computed` CALLING A MEMO FOLLOWS THE KEY IT CALLED, and no other: refreshing that key
-// runs it again, and refreshing another key wakes nothing. Counted as body runs, which the values
-// cannot show. THE REVERT: read the entry with `peek` rather than calling it in `createMemo`; the
-// refresh reaches no reader and `runs: 1` where 2 is due.
-test('a computed calling a memo runs again when the key it called is refreshed — 11.75', () => {
+// 11.75, 16.107 — A `computed` CALLING A MEMO FOLLOWS THE KEY IT CALLED, and no other: one handing the
+// call back whole adopts the entry, so a refresh reaches its value with no run of its body; one that
+// awaits the call runs again. Counted as body runs, which the values cannot show. THE REVERT: drop the
+// read `answerOfCall` makes; the awaiting body is never run again and `awaited: 3` stays at 4.
+test('a computed calling a memo follows the key it called — 11.75, 16.107', async () => {
     let answer = 1
     const score = memo((args: { id: number }) => answer * args.id)
-    let runs = 0
+    let adoptingRuns = 0
     const shown = computed(() => {
-        runs += 1
+        adoptingRuns += 1
         return score({ id: 2 })
     })
-    expect(`shown: ${shown()}, runs: ${runs}`).toBe('shown: 2, runs: 1')
+    const awaited = computed(async () => (await score({ id: 2 })) + 1)
+    shown.peek()
+    awaited.peek()
+    await Bun.sleep(5)
+    expect(`shown: ${shown()}, awaited: ${awaited()}`).toBe(
+        'shown: 2, awaited: 3',
+    )
     answer = 5
     score.refresh({ id: 3 })
-    expect(`shown: ${shown()}, runs: ${runs}`).toBe('shown: 2, runs: 1')
+    await Bun.sleep(5)
+    expect(`shown: ${shown()}, awaited: ${awaited()}`).toBe(
+        'shown: 2, awaited: 3',
+    )
     score.refresh({ id: 2 })
-    expect(`shown: ${shown()}, runs: ${runs}`).toBe('shown: 10, runs: 2')
-    score.invalidate()
-    answer = 7
-    expect(`shown: ${shown()}, runs: ${runs}`).toBe('shown: 14, runs: 3')
+    awaited.peek()
+    await Bun.sleep(5)
+    expect(
+        `shown: ${shown()}, awaited: ${awaited()}, adopting runs: ${adoptingRuns}`,
+    ).toBe('shown: 10, awaited: 11, adopting runs: 1')
 })
 
-// 11.2, 11.76 — A MEMO HANDS BACK WHAT ITS FUNCTION ANSWERED: one promise for every call with one key,
+// 11.2, 11.76 — A MEMO RUNS ITS FUNCTION ONCE PER KEY: every call with one key is answered its one value,
 // and for a stream, one run that every call reads through a cursor of its own from its start. THE
 // REVERT: box an async iterable in `createMemo` as any answer is; the two calls share one iterator,
 // the second reads nothing the first took, and `two: ` is empty.
-test('a memo keeps a promise per key, and shares a stream with a cursor per call — 11.2, 11.76', async () => {
+test('a memo runs its function once per key, and shares a stream with a cursor per call — 11.2, 11.76', async () => {
     let loads = 0
     const load = memo(async (args: { id: number }) => {
         loads += 1
         return args.id
     })
-    const first = load({ id: 1 })
-    expect(load({ id: 1 })).toBe(first)
-    expect(`answer: ${await first}, loads: ${loads}`).toBe(
-        'answer: 1, loads: 1',
+    const first = await load({ id: 1 })
+    const again = await load({ id: 1 })
+    expect(`answer: ${first}, again: ${again}, loads: ${loads}`).toBe(
+        'answer: 1, again: 1, loads: 1',
     )
 
     let streams = 0
@@ -373,10 +383,10 @@ test('a memo keeps a promise per key, and shares a stream with a cursor per call
     )
 })
 
-// 11.27 — ARGS A MEMO'S GATE REFUSES THROW THE REFUSAL, as a call's promise rejects with it (16.3),
-// and the function never runs. THE REVERT: return what the entry's read threw in `createMemo`; the
-// call answers the refusal and nothing is thrown.
-test('a memo called with args its gate refuses throws the refusal — 11.27', () => {
+// 11.27 — ARGS A MEMO'S GATE REFUSES REJECT WITH THE REFUSAL, as a call's promise does (16.3), and the
+// function never runs. THE REVERT: drop the args gate from `keyedValue`'s reach; the function runs on
+// the bad args and `runs: 1`.
+test('a memo called with args its gate refuses rejects with the refusal — 11.27', async () => {
     let runs = 0
     const byId = memo(
         (args: { id: number }) => {
@@ -391,15 +401,51 @@ test('a memo called with args its gate refuses throws the refusal — 11.27', ()
             }),
         },
     )
-    let thrown: unknown
-    try {
-        byId({ id: 'x' as unknown as number })
-    } catch (refusal) {
-        thrown = refusal
-    }
-    expect(
-        `${(thrown as { status?: number } | undefined)?.status}, runs: ${runs}`,
-    ).toBe('422, runs: 0')
+    const refusal = await byId({ id: 'x' as unknown as number }).catch(
+        (thrown: { status?: number }) => thrown,
+    )
+    expect(`${(refusal as { status?: number }).status}, runs: ${runs}`).toBe(
+        '422, runs: 0',
+    )
+})
+
+// 11.77 — A MEMO'S ENTRY IS WRITTEN BY ITS OWNER: `set` replaces the value for a key and `patch`
+// mutates it in place, each reaching a `computed` that adopted the key, and neither running the
+// function. THE REVERT: drop `patch` from `memoOver`'s face; the call throws, `entries: 1,2` stays `1`.
+test('a memo entry is set and patched by its owner, and a reader follows — 11.77', async () => {
+    let runs = 0
+    const feed = memo((_args: { account: string }) => {
+        runs += 1
+        return [1]
+    })
+    const shown = computed(() => feed({ account: 'a' }))
+    shown.peek()
+    await Bun.sleep(1)
+    feed.patch({ account: 'a' }, (entries) => {
+        entries.push(2)
+    })
+    expect(`entries: ${shown()}`).toBe('entries: 1,2')
+    feed.set({ account: 'a' }, [9])
+    expect(`entries: ${shown()}, runs: ${runs}`).toBe('entries: 9, runs: 1')
+})
+
+// 11.78 — `readable` HANDS ON THE ENTRY'S VALUE NOW, THEN AFTER EACH CHANGE, each a copy of its own, so a
+// reader keeping one is not handed a value a later patch mutates. THE REVERT: enqueue the value rather
+// than its copy in `readableOf`; the first value read is the patched one, `1,2` where `1` is due.
+test('a memo entry is read as a stream of its values — 11.78', async () => {
+    const feed = memo((_args: { account: string }) => [1])
+    await feed({ account: 'a' })
+    const reader = feed.readable({ account: 'a' }).getReader()
+    const first = await reader.read()
+    feed.patch({ account: 'a' }, (entries) => {
+        entries.push(2)
+    })
+    flushSync()
+    const second = await reader.read()
+    await reader.cancel()
+    expect(`first: ${first.value}, second: ${second.value}`).toBe(
+        'first: 1, second: 1,2',
+    )
 })
 
 // 15.19 — A MEMO'S REJECTED PROMISE IS RUN AGAIN by the next call, where a settled answer is kept.

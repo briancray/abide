@@ -1,108 +1,105 @@
-// 11.2, 11.4 — A MEMO: what a function answers, kept per `Args` key and handed back as it answered —
-// a value, a promise, a refusal. Only `reactive` and `computed` produce a `Reactive`; a memo is the
-// function, remembered, and a `computed` calling it is what holds its answer as a value.
+// 11.2, 11.4 — A MEMO: a function's value kept per `Args` key, and the one keyed mechanism a handler is
+// built on too (16.6). Only `reactive` and `computed` hand an app a `Reactive`: a memo's entries are
+// cells it never hands out, and a call answers the promise of the entry's value — or the stream of its
+// chunks — carrying the entry for a `computed` handing it back whole to adopt (16.107).
 //
-// THE KEYED MACHINERY, WITH THE ANSWER BOXED. Each key's entry is a cell of `createKeyed`, so the
-// canonical key (11.24), the args gate (11.27), `ttl` (11.45), tags and the pattern triggers are the
-// ones a keyed value always had — and the cell holds an `Answer` rather than what the function
-// answered, so a promise is handed back as a promise rather than awaited into the entry. The cell
-// is never handed out: the call reads it, which is what subscribes a `computed` calling the memo to
-// the key it called (11.75), so a trigger on the key runs that `computed` again.
-//
-// AN ASYNC ITERABLE IS SHARED (11.76): the entry runs it once and keeps its chunks, and each call is
-// a cursor of its own over that run from its start — so two callers each read every chunk, where
-// handing both one iterator split the chunks between them.
+// A FACE OVER THE KEYED VALUE. The entries, their filing per request (11.32), the canonical key
+// (11.24), the args gate (11.27), `ttl` (11.45), tags and the pattern triggers are the keyed value's,
+// built once by `keyedValue`; this adds the call's answer and the writes an owner of a value has.
 
-import { isFailed, isTransient } from '../Failed.ts'
-import { isAsyncIterable } from '../isAsyncIterable.ts'
 import type { Schema } from '../Schema.ts'
 import { answerOfCall } from './answerOfCall.ts'
 import { ARGS_GATE, type Gated, PARAMETER_DEFAULTS } from './argsContract.ts'
-import { isThenable } from './isThenable.ts'
-import { createKeyed, type Keyed } from './Keyed.ts'
+import type { Keyed } from './Keyed.ts'
 import { MEMO_BRAND } from './MEMO_BRAND.ts'
+import type { Poll } from './poll.ts'
 import { isStreaming } from './producer.ts'
-import { isStreamBody } from './Reactive.ts'
+import type { Reactive } from './Reactive.ts'
 
-/** What `memo` takes: how long an entry lives, what selects it, where it is kept, what its args must be. */
+/** What `memo` takes: how long an entry lives, what selects it, where it is kept, what its args must be, how its elements are told apart, and how often an entry reloads. */
 export type MemoOptions<Args> = {
     ttl?: number | undefined
     tags?: string[] | ((args: Args) => string[]) | undefined
     global?: boolean | undefined
     args?: Schema<Args> | undefined
-}
-
-/** A memo: the function, answering what it answered for args it was called with before (11.2). */
-export type Memo<Args, Result> = ((
-    ...args: undefined extends Args ? [args?: Args] : [args: Args]
-) => Result) & {
-    invalidate(pattern?: Partial<Args>): void
-    refresh(pattern?: Partial<Args>): void
+    key?: string | ((element: never) => unknown) | undefined
+    poll?: Poll | undefined
 }
 
 /**
- * One entry's answer, boxed so the cell keeping it keeps a promise as a promise. `stale` is set
- * where a promise it holds rejected, or settled to a refusal 15.19 counts transient, so the next
- * call runs the function again.
+ * A memo: the function's value per `Args` key — answered as a promise, or as the stream of its chunks
+ * where the function answers an async iterable — written and followed per key.
  */
-class Answer {
-    result: unknown
-    stale: boolean
-    constructor(result: unknown) {
-        this.result = result
-        this.stale = false
-    }
+export type Memo<Args, Result, Value = MemoValue<Result>> = ((
+    ...args: undefined extends Args ? [args?: Args] : [args: Args]
+) => Awaited<Result> extends AsyncIterable<infer Chunk>
+    ? AsyncIterable<Chunk>
+    : Promise<Awaited<Result>>) & {
+    invalidate(pattern?: Partial<Args>): void
+    refresh(pattern?: Partial<Args>): void
+    set(args: Args, value: Value): void
+    patch(args: Args, mutate: (value: Value) => void): void
+    readable(args: Args): ReadableStream<Value>
 }
 
-/** The memo over `fn`. */
-export function createMemo<Args, Result>(
-    label: string,
-    fn: (args: Args) => Result,
-    options: MemoOptions<Args> | undefined,
-): Memo<Args, Result> & Gated<Args> {
-    // 11.76 — AN ASYNC ITERABLE IS THE ENTRY'S STREAM, unboxed: the cell runs it once and keeps its
-    // chunks, and every call reads it through a cursor of its own (2.6, 5.10).
-    const boxed = (args: Args): unknown => {
-        const result = fn(args)
-        if (isAsyncIterable(result)) return result
-        const answer = new Answer(result)
-        if (isThenable(result))
-            (result as PromiseLike<unknown>).then(
-                (settled) => {
-                    if (isFailed(settled) && isTransient(settled.status))
-                        answer.stale = true
-                },
-                () => {
-                    answer.stale = true
-                },
-            )
-        return answer
-    }
-    const keyed = createKeyed<Answer, Args, Answer, never>(
-        label,
-        // A generator function is handed whole, so its entry streams from construction (9.6).
-        (isStreamBody(fn) ? fn : boxed) as (args: Args) => Answer,
-        options as never,
-    ) as Keyed<Answer, Args, Answer, never> & Gated<Args>
+/** What a memo's entry holds: a stream's chunks, else what its function settles to (9.1). */
+type MemoValue<Result> =
+    Awaited<Result> extends AsyncIterable<infer Chunk>
+        ? Chunk[]
+        : Awaited<Result>
+
+/** The member a handler reads the keyed value a memo is a face over through (16.6). */
+export const KEYED_OF = Symbol('abide.keyedOf')
+
+/** The memo over `keyed`, whose function streams where `streams` says (9.6). */
+export function memoOver<Args, Value>(
+    keyed: unknown,
+    streams: boolean,
+): Memo<Args, unknown, Value> & Gated<Args> {
+    const face = keyed as Keyed<Value, Args, Value, never> & Gated<Args>
+    const entryOf = (args: Args): Reactive<Value> =>
+        (keyed as (args: Args) => Reactive<Value>)(args)
+    // 11.2, 11.76 — the promise of the entry's value, or its stream: a cursor of this caller's own
+    // over the one run, from its start.
     const call = (...given: [args?: Args]): unknown => {
-        const entry = keyed(...(given as [Args]))
-        // 11.76 — a stream's entry is answered as a call of a streaming handler is: a cursor of this
-        // caller's own over the one run, carrying the entry for a `computed` to adopt.
-        if (isStreaming(entry)) return answerOfCall(entry, true)
-        // 11.27 — args the gate refused throw the refusal, as a call over the wire rejects with it.
-        let answer = entry()
-        // 15.19 — a rejection, or a refusal for now, is run again by the next call.
-        if (answer.stale) {
-            entry.refresh()
-            answer = entry()
-        }
-        return answer.result
+        const entry = entryOf(given[0] as Args)
+        return answerOfCall(entry, streams || isStreaming(entry))
     }
     return Object.assign(call, {
         [MEMO_BRAND]: true,
-        [ARGS_GATE]: keyed[ARGS_GATE],
-        [PARAMETER_DEFAULTS]: keyed[PARAMETER_DEFAULTS],
-        invalidate: keyed.invalidate,
-        refresh: keyed.refresh,
-    }) as unknown as Memo<Args, Result> & Gated<Args>
+        [KEYED_OF]: keyed,
+        [ARGS_GATE]: face[ARGS_GATE],
+        [PARAMETER_DEFAULTS]: face[PARAMETER_DEFAULTS],
+        invalidate: (pattern?: Partial<Args>): void => face.invalidate(pattern),
+        refresh: (pattern?: Partial<Args>): void => face.refresh(pattern),
+        // 11.77 — the owner's writes, standing until the next write, `ttl`, `refresh` or `invalidate`.
+        set: (args: Args, value: Value): void => {
+            entryOf(args).set(value)
+        },
+        patch: (args: Args, mutate: (value: Value) => void): void => {
+            entryOf(args).patch(mutate)
+        },
+        readable: (args: Args): ReadableStream<Value> =>
+            readableOf(entryOf(args)),
+    }) as unknown as Memo<Args, unknown, Value> & Gated<Args>
+}
+
+/**
+ * 11.78 — the entry's value now, then its value after each change, each a copy of its own: a reader
+ * keeping one is not handed a value a later patch mutates under it.
+ */
+export function readableOf<Value>(
+    entry: Reactive<Value>,
+): ReadableStream<Value> {
+    let stop: (() => void) | undefined
+    return new ReadableStream<Value>({
+        start: (controller) => {
+            stop = entry.watch((value) => {
+                controller.enqueue(structuredClone(value))
+            })
+        },
+        cancel: () => {
+            stop?.()
+        },
+    })
 }
