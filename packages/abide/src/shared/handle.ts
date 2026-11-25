@@ -4,7 +4,7 @@
 
 import { holdUntil, retryAtOf } from './Failed.ts'
 import { type FetchFailed, fetchFailed } from './fetchFailed.ts'
-import { essenceOf, framedStream, framingOf } from './framing.ts'
+import { essenceOf, framedStream, framingOf, isJsonEssence } from './framing.ts'
 
 /**
  * The body a `Response` carries, read as its `content-type` says: JSON as its value, a JSON Lines or
@@ -37,11 +37,7 @@ export async function readBody(
     if (as === 'text') return response.text()
     if (as === 'blob') return response.blob()
     const essence = essenceOf(type)
-    if (
-        as === 'json' ||
-        essence === 'application/json' ||
-        essence.endsWith('+json')
-    ) {
+    if (as === 'json' || isJsonEssence(essence)) {
         const text = await response.text()
         try {
             return JSON.parse(text)
@@ -102,7 +98,7 @@ async function refusalBody(response: Response): Promise<unknown> {
     if (size === 0) return undefined
     const type = response.headers.get('content-type')
     const essence = essenceOf(type)
-    const json = essence === 'application/json' || essence.endsWith('+json')
+    const json = isJsonEssence(essence)
     const read = new Blob(chunks, { type: type ?? '' })
     if (
         !json &&

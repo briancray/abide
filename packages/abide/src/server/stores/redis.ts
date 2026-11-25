@@ -1,8 +1,8 @@
 import { RedisClient } from 'bun'
 
-import type { Store } from '#shared'
 import type { Logged, LogStore } from '#shared/ledger.ts'
 import { namedLogger } from '#shared/log.ts'
+import type { Store } from '#shared/reactive/Reactive.ts'
 import type { Schema } from '#shared/Schema.ts'
 import { KeptText, storeKey } from '#shared/storedValue.ts'
 
@@ -116,7 +116,6 @@ if ARGV[1] ~= '' then redis.call('HSET', KEYS[3], ARGV[1], seq) end
 return seq
 `
 
-/** 58.9 — the append face over the Stream at `<log()>:log` and its three keys beside it. */
 /**
  * 58.4, 58.10 — a trim on the server as one step: the keys of every entry through `ARGV[1]` let go
  * with their entries, so a key outlives no entry. KEYS: the log, the keys.
@@ -135,6 +134,7 @@ redis.call('XTRIM', KEYS[1], 'MINID', '0-' .. (tonumber(ARGV[1]) + 1))
 return #going
 `
 
+/** 58.9 — the append face over the Stream at `<log()>:log` and its three keys beside it. */
 function logFace(redis: RedisClient, log: () => string): LogStore {
     return {
         append: async (entry, key, at) => {

@@ -16,7 +16,7 @@ import { invalidate } from '#shared/reactive/index.ts'
 import { appStopSignal } from '#shared/reactive/poll.ts'
 import { unrefTimer } from '#shared/reactive/unrefTimer.ts'
 
-const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/
+import { SQL_IDENTIFIER } from './SQL_IDENTIFIER.ts'
 
 const WATCH_LOG = namedLogger('abide:table')
 
@@ -48,12 +48,12 @@ export function table<Row extends Record<string, unknown>>(
     name: string,
     options?: { key?: (keyof Row & string) | undefined },
 ): { readable: ReadableStream<Change<Row>>; writable: WritableStream<Row> } {
-    if (!IDENTIFIER.test(name))
+    if (!SQL_IDENTIFIER.test(name))
         throw new Error(
             `abide: table ${JSON.stringify(name)} is not an SQL identifier.`,
         )
     const key = options?.key ?? 'id'
-    if (!IDENTIFIER.test(key))
+    if (!SQL_IDENTIFIER.test(key))
         throw new Error(
             `abide: table ${name}'s key ${JSON.stringify(key)} is not an SQL identifier.`,
         )
@@ -295,7 +295,7 @@ function upserts<Row extends Record<string, unknown>>(
             for (const row of rows) {
                 const columns = Object.keys(row)
                 for (const column of columns)
-                    if (!IDENTIFIER.test(column))
+                    if (!SQL_IDENTIFIER.test(column))
                         throw new Error(
                             `abide: ${name}'s column ${JSON.stringify(column)} is not an SQL identifier.`,
                         )

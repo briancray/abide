@@ -33,12 +33,14 @@ export type Report = {
     markdown: string
 }
 
+/** Where a report was made: the app's version, the platform and the route. */
+export type ReportContext = Pick<Report, 'version' | 'platform' | 'route'>
+
 /** What the server does with a draft in process: its lines for `traces`, and the send. */
 export const REPORTING: {
     lines: ((traces: readonly string[]) => LogRecord[]) | undefined
     send: ((report: Report) => Promise<void>) | undefined
-    context:
-        (() => { version: string; platform: string; route: string }) | undefined
+    context: (() => ReportContext) | undefined
 } = { lines: undefined, send: undefined, context: undefined }
 
 /** A report not yet sent: what the person writes, and what goes with it. */
@@ -51,7 +53,7 @@ export class ReportDraft {
     readonly lines: Reactive<LogRecord[]>
     /** 48.7 — the whole of what `send` sends, as text. */
     readonly markdown: Reactive<string>
-    #context: { version: string; platform: string; route: string }
+    #context: ReportContext
     /** 48.13 — the send in flight or done, so a second one delivers nothing more. */
     #sent: Promise<string> | undefined = undefined
 
@@ -153,11 +155,7 @@ export function report(options?: {
     return new ReportDraft(traces)
 }
 
-function browserContext(): {
-    version: string
-    platform: string
-    route: string
-} {
+function browserContext(): ReportContext {
     return {
         version: '',
         platform: typeof navigator === 'undefined' ? '' : navigator.userAgent,
@@ -202,7 +200,7 @@ function pageLinesOf(lines: LogRecord[]): LogRecord[] {
 export function markdownOf(
     summary: string,
     description: string,
-    context: { version: string; platform: string; route: string },
+    context: ReportContext,
     traces: readonly string[],
     lines: readonly LogRecord[],
 ): string {

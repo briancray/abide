@@ -345,8 +345,8 @@ async function served(
     if (typeof booted === 'number') return booted
     const { port, hostname } = given.values
     await booted.listen({
-        ...(port === undefined ? {} : { port: Number(port) }),
-        ...(hostname === undefined ? {} : { hostname }),
+        port: port === undefined ? undefined : Number(port),
+        hostname,
     })
     stopOnSignalOrFault(booted)
     const server = LISTENING.server as Bun.Server<unknown>

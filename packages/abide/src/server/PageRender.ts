@@ -8,16 +8,16 @@
 // ON THE SCOPE because that is the only thing a call made deep in a page's setup can find it through
 // when requests interleave — `RPC_SERVER.reached` is one slot for every request in flight.
 
-import { CONTINUE_HEADER } from '#shared/CONTINUE_HEADER.ts'
 import { EARLY_CALLS } from '#shared/EARLY_CALLS.ts'
 import type { HandlerRoute } from '#shared/HandlerRoute.ts'
-import { KEEP_HEADER } from '#shared/KEEP_HEADER.ts'
 import { isStreaming } from '#shared/reactive/producer.ts'
 import type { Rpc } from '#shared/rpc.ts'
 import { type RpcRequest, rpcRequest } from '#shared/rpcRequest.ts'
 
 import { callerOf, callerOrMint } from './callerOf.ts'
+import { CONTINUE_HEADER } from './CONTINUE_HEADER.ts'
 import { markPainted } from './deferredBuilds.ts'
+import { KEEP_HEADER } from './KEEP_HEADER.ts'
 import { currentRequestScope, type RequestScope } from './requestScope.ts'
 import {
     callsOnly,

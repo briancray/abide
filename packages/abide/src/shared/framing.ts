@@ -31,8 +31,12 @@ export function framingOf(type: string | null | undefined): Framed | null {
 export function carriesBytes(type: string | null | undefined): boolean {
     if (type === null || type === undefined || type === '') return false
     if (framingOf(type) !== null) return false
-    const essence = essenceOf(type)
-    return essence !== 'application/json' && !essence.endsWith('+json')
+    return !isJsonEssence(essenceOf(type))
+}
+
+/** Whether a content type's essence (`essenceOf`) is JSON: `application/json` or a `+json` suffix. */
+export function isJsonEssence(essence: string): boolean {
+    return essence === 'application/json' || essence.endsWith('+json')
 }
 
 /** A content type less its parameters, folded to lower case, as a type is compared; `''` for none. */

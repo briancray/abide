@@ -1,12 +1,12 @@
 import type { Database } from 'bun:sqlite'
 
 import { database as opener } from '#server/database.ts'
-import type { Store } from '#shared'
 import type { Logged, LogStore } from '#shared/ledger.ts'
+import type { Store } from '#shared/reactive/Reactive.ts'
 import type { Schema } from '#shared/Schema.ts'
 import { expiresAfter, storedValue, storeKey } from '#shared/storedValue.ts'
 
-const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/
+import { SQL_IDENTIFIER } from '../SQL_IDENTIFIER.ts'
 
 /** 8.41 — one opener per string a store names, so a `Keyed` building a store per entry opens one file. */
 const OPENERS = new Map<string, () => Database>()
@@ -33,7 +33,7 @@ export function sqlite<Stored>(
     },
 ): Store<Stored> & LogStore {
     const table = options?.table ?? 'abide_store'
-    if (!IDENTIFIER.test(table))
+    if (!SQL_IDENTIFIER.test(table))
         throw new Error(
             `store.sqlite's table ${JSON.stringify(table)} is not an SQL identifier.`,
         )

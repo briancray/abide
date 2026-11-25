@@ -11,10 +11,10 @@
 import { expect, test } from 'bun:test'
 
 import { cookies, GET, memo } from '#server'
+import { CONTINUE_HEADER } from '#server/CONTINUE_HEADER.ts'
 import type { App } from '#server/createApp.ts'
 import { streamOverMux } from '#server/streamOverMux.ts'
 import { PARKED_ADDRESS } from '#shared/ADDRESSES.ts'
-import { CONTINUE_HEADER } from '#shared/CONTINUE_HEADER.ts'
 import { CONTINUE_KEY } from '#shared/CONTINUE_KEY.ts'
 import { chunksOfStream } from '#shared/reactive/producer.ts'
 

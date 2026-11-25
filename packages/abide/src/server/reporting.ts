@@ -9,6 +9,7 @@ import {
     markdownOf,
     type Report,
     REPORT_LINES,
+    type ReportContext,
     REPORTING,
 } from '#shared/report.ts'
 import { declare } from '#shared/rpc.ts'
@@ -125,7 +126,7 @@ async function deliver(given: Report): Promise<void> {
 }
 
 /** What a draft made on a server holds beside what was written: the app's version, and where. */
-function serverContext(): { version: string; platform: string; route: string } {
+function serverContext(): ReportContext {
     const asked = currentRequestScope()?.request
     return {
         version: appIdentity().version,

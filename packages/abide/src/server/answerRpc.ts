@@ -6,7 +6,6 @@
 // carried the args as.
 
 import { collapsed } from '#shared/coerceArgs.ts'
-import { CONTINUE_HEADER } from '#shared/CONTINUE_HEADER.ts'
 import { type Failed, isFailed } from '#shared/Failed.ts'
 import { framingOf } from '#shared/framing.ts'
 import { isAsyncIterable } from '#shared/isAsyncIterable.ts'
@@ -29,6 +28,7 @@ import {
 import { answerValue, namesEtag, sseHeaders } from './answerValue.ts'
 import { callerCookieOf } from './callerOf.ts'
 import { ownOrigin, positiveSetting } from './config.ts'
+import { CONTINUE_HEADER } from './CONTINUE_HEADER.ts'
 import { allows, crossingOrigin } from './crossingOrigin.ts'
 import { handedOff } from './handedOff.ts'
 import { failureOf } from './hooks.ts'

@@ -6,7 +6,6 @@
 // as bytecode (38.93), where a function has no source to read back.
 
 import { CLIENT_ADDRESS } from '#shared/ADDRESSES.ts'
-import { KEEP_HEADER } from '#shared/KEEP_HEADER.ts'
 import { KEPT_HEADER } from '#shared/KEPT_HEADER.ts'
 import { MOUNT, mounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
@@ -21,6 +20,7 @@ import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { REACHED_MESSAGE } from '#shared/REACHED_MESSAGE.ts'
 import { TRANSIENT_STATUSES } from '#shared/TRANSIENT_STATUSES.ts'
 
+import { KEEP_HEADER } from './KEEP_HEADER.ts'
 import type { Manifest } from './manifestOf.ts'
 
 // What `framingOf` reads as a framed stream (16.32), and a binary's bytes (16.34), which may be one —
