@@ -8,6 +8,7 @@ import { isAsyncIterable } from '#shared/isAsyncIterable.ts'
 import { namedLogger } from '#shared/log.ts'
 import { type Backoff, backoffWait } from '#shared/retryWait.ts'
 import { runSchema, type Schema } from '#shared/Schema.ts'
+import { sleep } from '#shared/sleep.ts'
 
 /** `fetch`'s own options, and the reading, the deadline, the retries, the cache and the gate beside them. */
 export type FetchOptions<T> = RequestInit & {
@@ -187,8 +188,9 @@ function paused(
     milliseconds: number,
     signal: AbortSignal | null | undefined,
 ): Promise<void> {
-    const slept = Bun.sleep(milliseconds)
-    return signal == null ? slept : abortable(slept, signal)
+    return signal == null
+        ? Bun.sleep(milliseconds)
+        : sleep(milliseconds, signal)
 }
 
 function abortable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {

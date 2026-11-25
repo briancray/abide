@@ -23,6 +23,7 @@ import { isThenable } from './reactive/isThenable.ts'
 import { appStopSignal } from './reactive/poll.ts'
 import { refuse } from './refuse.ts'
 import { type Backoff, backoffWait } from './retryWait.ts'
+import { sleep } from './sleep.ts'
 
 /** A step's function: the item, and the signal that says its attempt is over. */
 type StepFunction = (input: never, signal: AbortSignal) => unknown
@@ -629,23 +630,4 @@ class Runner {
         this.pair = { readable, writable }
         return this.pair
     }
-}
-
-/** Waits `ms`, or rejects with `ended`'s reason where it aborts first. */
-function sleep(ms: number, ended: AbortSignal): Promise<void> {
-    return new Promise((woke, refused) => {
-        if (ended.aborted) {
-            refused(ended.reason)
-            return
-        }
-        const leave = (): void => {
-            clearTimeout(timer)
-            refused(ended.reason)
-        }
-        const timer = setTimeout(() => {
-            ended.removeEventListener('abort', leave)
-            woke()
-        }, ms)
-        ended.addEventListener('abort', leave, { once: true })
-    })
 }
