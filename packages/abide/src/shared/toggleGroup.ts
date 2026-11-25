@@ -59,11 +59,12 @@ export function toggleGroup<Item, Multiple extends boolean = false>(
     const itemId = (key: string) => `${base}-${encodeURIComponent(key)}`
 
     // 51.114 — picking one, the key in the tab order: the one picked, the first where none is listed.
-    const current = (): string | undefined => {
+    // A memo, as `tabs`' is: every radio's `tabindex` reads it, so a pick walks the keys once.
+    const current = memo((): string | undefined => {
         const listed = keysOf()
         const now = picks.selected() as string | undefined
         return now !== undefined && listed.includes(now) ? now : listed[0]
-    }
+    })
 
     // 51.110 — picking many, a key's button is a `toggle`, pressed while the key is picked.
     const toggled = (key: string): Record<string, unknown> =>

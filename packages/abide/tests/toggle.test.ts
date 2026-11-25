@@ -113,3 +113,26 @@ test('in a group picking one, only the key picked, or the first, is in the tab o
     flushSync()
     expect(order()).toEqual(['-1', '0'])
 })
+
+// 51.114 — PICKING ONE, THE KEY IN THE TAB ORDER IS WORKED OUT ONCE PER PICK, not once per radio: every
+// radio's `tabindex` reads it. Counted as `includes` walks of the key list while 200 radios read their
+// `tabindex` after a pick. THE REVERT: make `current` a plain function again; 200 walks where 1 is due.
+test("a radio group's tab stop is worked out once for every radio reading it — 51.114", () => {
+    const items = Array.from({ length: 200 }, (_, at) => `k${at}`)
+    const group = toggleGroup({ items })
+    const radios = items.map((item) => group.item(item))
+    ;(radios[3] as { onclick: () => void }).onclick()
+    flushSync()
+    const includes = Array.prototype.includes
+    let walks = 0
+    Array.prototype.includes = function (...args: [unknown, number?]) {
+        walks += 1
+        return includes.apply(this, args)
+    }
+    try {
+        for (const radio of radios) radio.tabindex
+    } finally {
+        Array.prototype.includes = includes
+    }
+    expect(walks).toBe(1)
+})
