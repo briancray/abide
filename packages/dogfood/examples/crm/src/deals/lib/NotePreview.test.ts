@@ -71,7 +71,9 @@ test('a fenced sh block renders as the code with a Copy beside it, and once clos
 // paragraph's — two code blocks with no Copy, `copies: 0`.
 test('a fenced sh block is a block with no blank line around it — 52.43', async () => {
     using _note = await mount(NotePreview({}))
-    write('Run these:\n```sh\nbun install\n```\n```sh\nbun run dev\n```\nThen pair.')
+    write(
+        'Run these:\n```sh\nbun install\n```\n```sh\nbun run dev\n```\nThen pair.',
+    )
     const blocks = preview()?.querySelectorAll('pre code') ?? []
     expect({
         copies: preview()?.querySelectorAll('pre button').length,

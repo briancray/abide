@@ -158,7 +158,9 @@ export function sectionEnd(text: string, from: number): number {
             .slice(at, complete ? newline : text.length)
             .replace(/\r$/, '')
         const opensCode =
-            complete && (line[0] === '`' || line[0] === '~') && fence === undefined
+            complete &&
+            (line[0] === '`' || line[0] === '~') &&
+            fence === undefined
                 ? fenceOf(line)
                 : undefined
         if (at > from && fence === undefined && !blank(line)) {
