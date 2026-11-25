@@ -18,6 +18,7 @@ import {
     carousel,
     chart,
     type ChartParts,
+    clamp,
     combobox,
     type ComboboxChip,
     type ComboboxParts,
@@ -27,11 +28,14 @@ import {
     dialog,
     type DialogParts,
     disclosure,
+    drawer,
     dropzone,
     type DropzoneParts,
     type Form,
     form,
     type FormField,
+    jsonInspector,
+    lightbox,
     type Listbox,
     listbox,
     type Menu,
@@ -39,6 +43,7 @@ import {
     pages,
     pie,
     type PieParts,
+    playback,
     popover,
     range,
     type RangeEnd,
@@ -46,6 +51,7 @@ import {
     reactive,
     scrollSpy,
     type Sections,
+    sortableList,
     sortableTable,
     type SortableTableColumn,
     type SortableTableParts,
@@ -58,6 +64,7 @@ import {
     time,
     type TimeAt,
     type TimeParts,
+    toggleGroup,
     type Tree,
     tree,
     type TreeNode,
@@ -585,4 +592,85 @@ test('a part carrying aria-current or aria-expanded carries data-current or data
         shown.trigger['aria-expanded'],
         box.input['aria-expanded'],
     ]).toEqual(['page', 'page', 'step', true, 'true', 'true', 'true', 'true'])
+})
+
+// 49.18 — A COMPONENT BUILT ON ANOTHER MERGES THAT ONE'S PART WHERE THEY SHARE AN ELEMENT, and hands
+// its parts back whole, under its name, where they go on elements of their own: a merged part carries
+// both `data-` attributes, a handed-back one the other's own. THE REVERT: hand back `menu`'s trigger
+// as the menu's own part alone, not laid over the popover's, and `menu.trigger` is named for
+// `data-popover`.
+test("a component built on another merges that one's part or hands its parts back under its name — 49.18", () => {
+    const inspected = jsonInspector({ value: { a: 1 } })
+    const asked = standing(() => promptsHost())
+    const sorted = sortableList({ items: ['a'] })
+    const merged: [string, Record<string, unknown>, readonly string[]][] = [
+        ['menu.trigger', menu().trigger, ['popover', 'menu']],
+        ['menu.menu', menu().menu, ['popover', 'menu']],
+        ['drawer.drawer', drawer({}).drawer, ['dialog', 'resizable', 'drawer']],
+        ['drawer.handle', drawer({}).handle, ['resizable', 'drawer']],
+        [
+            'lightbox.dialog',
+            lightbox({ items: ['a'] }).dialog,
+            ['dialog', 'lightbox'],
+        ],
+        [
+            'combobox.option',
+            combobox({ options: ['a'] }).option('a'),
+            ['listbox', 'combobox'],
+        ],
+        [
+            'commandPalette.dialog',
+            commandPalette({ commands: [COMMAND] }).dialog,
+            ['dialog', 'command-palette'],
+        ],
+        ['sortableList.list', sorted.list, ['listbox', 'sortable-list']],
+        [
+            'sortableList.item',
+            sorted.item('a').item,
+            ['listbox', 'sortable-list'],
+        ],
+        ['jsonInspector.tree', inspected.tree, ['tree', 'json-inspector']],
+        ['prompts.host.dialog', asked.dialog, ['dialog', 'prompts']],
+        [
+            'accordion.item.button',
+            accordion().item('a').button,
+            ['disclosure', 'accordion'],
+        ],
+        ['clamp.button', clamp().button, ['disclosure', 'clamp']],
+        [
+            'toggleGroup.item',
+            toggleGroup({ items: ['a'], multiple: true }).item('a'),
+            ['toggle', 'toggle-group'],
+        ],
+        [
+            'carousel.play',
+            carousel({ items: ['a'] }).play,
+            ['toggle', 'carousel'],
+        ],
+        [
+            'playback.play',
+            playback({ duration: 1 }).play,
+            ['toggle', 'playback'],
+        ],
+    ]
+    const crumbs = breadcrumbs({
+        trail: ['home'],
+        href: (crumb) => `/${crumb}`,
+    })
+    const steps = wizard({ steps: ['plan'] })
+    const handedBack: [string, Record<string, unknown>, string][] = [
+        ['breadcrumbs.menu.trigger', crumbs.menu.trigger, 'menu'],
+        ['breadcrumbs.menu.menu', crumbs.menu.menu, 'menu'],
+        ['wizard.meter.meter', steps.meter.meter, 'meter'],
+        ['wizard.meter.fill', steps.meter.fill, 'meter'],
+    ]
+    const missing: string[] = []
+    for (const [name, part, components] of merged)
+        for (const component of components)
+            if (part[`data-${component}`] === undefined)
+                missing.push(`${name}: data-${component}`)
+    for (const [name, part, component] of handedBack)
+        if (part[`data-${component}`] === undefined)
+            missing.push(`${name}: data-${component}`)
+    expect(missing).toEqual([])
 })

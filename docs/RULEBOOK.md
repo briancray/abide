@@ -5248,12 +5248,10 @@ a function of the item (49.9), not of its key.
 49.17 A part a headless component hands back MUST carry `data-current` while it carries
 `aria-current`, and `data-open` while it carries `aria-expanded="true"`.
 
-49.18 A headless component built on another MUST hand back that component's parts whole, as a member
-named for that component and laid over none of its own parts, each carrying that component's own
-`data-` attribute (49.3) — `chat`'s `dropzone` and `autoscroll` — save `menu`, `drawer`, `lightbox`,
-`combobox`, `commandPalette`, `sortableList`, `jsonInspector` and `prompts.host`, which lay them over
-parts of their own, and `wizard` and `breadcrumbs`, which hand them back as `progress` and
-`overflow`.
+49.18 A headless component built on another MUST merge that component's part for an element into its
+own part for the same element, the part carrying both components' `data-` attributes (49.3), and
+MUST hand back that component's parts for elements it hands no part for whole, as a member named for
+that component, each carrying that component's own `data-` attribute.
 
 # 50. Dialogs, toasts and popovers
 
