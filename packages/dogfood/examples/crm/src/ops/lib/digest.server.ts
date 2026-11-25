@@ -3,10 +3,11 @@ import { job, log } from '@abide/abide/server'
 import { crmDatabase } from '../../pipeline/lib/crmDatabase.server.ts'
 import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
-/** Every night: the leads still waiting on a follow-up, mailed to the team. */
+/** At eight on weekday mornings in New York: the leads still waiting on a follow-up, mailed to the team. */
 export const digest = job({
     name: 'digest',
-    every: 24 * 60 * 60_000,
+    cron: '0 8 * * 1-5',
+    timeZone: 'America/New_York',
     run: async () => {
         const leads = DEALS.filter((deal) => deal.stage === 'lead')
         await Bun.sleep(300) // the mail going out
@@ -15,7 +16,7 @@ export const digest = job({
         ])
         log.info(`digest sent: ${leads.length} leads to follow up`)
     },
-    // When the last one went out, so a restart waits out the rest of the night.
+    // When the last one went out, so a restart sends a morning it missed once, and never twice.
     lastRun: () =>
         crmDatabase()
             .query<{ sentAt: number | null }, []>(

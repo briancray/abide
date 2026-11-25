@@ -83,16 +83,18 @@ import Section from '#src/lib/Section.abide'
         },
     ]}
 >
-    <Section level={3} title="Mail the team a follow-up digest every night">
-        <p>Declare the job at the top of a server file. Nothing runs as the file loads: the first
-            run waits for the app to serve, and the app's stop ends the schedule.</p>
+    <Section level={3} title="Mail the team a follow-up digest at eight on weekday mornings">
+        <p>Declare the job at the top of a server file. <code>cron</code> names the times a run
+            is due, and <code>timeZone</code> the clock they are read on. Nothing runs as the
+            file loads: the first run waits for its time, and the app's stop ends the schedule.</p>
         <Code language="ts" caption="server" code={`
             import { job, log } from '@abide/abide/server'
             import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
             export const digest = job({
                 name: 'digest',
-                every: 24 * 60 * 60_000,
+                cron: '0 8 * * 1-5',
+                timeZone: 'America/New_York',
                 run: async () => {
                     const leads = DEALS.filter((deal) => deal.stage === 'lead')
                     await Bun.sleep(300) // the mail going out
@@ -181,15 +183,18 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Keep a restart from sending the digest again">
-        <p>A job never run is due at once. <code>lastRun</code> says when the last run ended, in
-            epoch milliseconds, so a restart waits out the rest of the night.</p>
+        <p>A job that has not run waits for its next time, so a morning missed while the server
+            was down is lost. <code>lastRun</code> says when the last run ended, in epoch
+            milliseconds: a restart that missed a morning sends it once, however many it missed,
+            and one that missed none waits for the next.</p>
         <Code language="ts" caption="server" code={`
             import { job } from '@abide/abide/server'
             import { crmDatabase } from '../../pipeline/lib/crmDatabase.server.ts'
 
             job({
                 name: 'digest',
-                every: 24 * 60 * 60_000,
+                cron: '0 8 * * 1-5',
+                timeZone: 'America/New_York',
                 run: mailDigest,
                 lastRun: () =>
                     crmDatabase()
@@ -197,21 +202,6 @@ import Section from '#src/lib/Section.abide'
                             'SELECT max(sentAt) AS sentAt FROM digests',
                         )
                         .get()?.sentAt ?? undefined,
-            })
-        `} />
-    </Section>
-    <Section level={3} title="Send the digest at eight on weekday mornings in New York">
-        <p><code>cron</code> names the times a run is due, in place of <code>every</code>, and
-            <code>timeZone</code> is the clock they are read on. A job never run waits for its
-            first time, and a restart that missed some runs once for all of them.</p>
-        <Code language="ts" caption="server" code={`
-            import { job } from '@abide/abide/server'
-
-            job({
-                name: 'digest',
-                cron: '0 8 * * 1-5',
-                timeZone: 'America/New_York',
-                run: mailDigest,
             })
         `} />
     </Section>

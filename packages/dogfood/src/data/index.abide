@@ -106,11 +106,11 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section title="Work on the records every night with a job">
+    <Section title="Work on the records every weekday morning with a job">
         <p>A <a href={url('/orchestration/job')}><code>job</code></a> runs on the server, one run at a
-            time, and nothing runs as the file loads. The CRM's digest writes a row as it goes
-            out and reads the newest back as <code>lastRun</code>, so a restart waits out the
-            rest of the night rather than mail the team twice.</p>
+            time, and nothing runs as the file loads. The CRM's digest goes out at eight on weekday
+            mornings in New York, writes a row as it does, and reads the newest back as
+            <code>lastRun</code>, so a restart sends a morning it missed once and never twice.</p>
         <Code language="ts" caption="server" code={`
             import { job, log } from '@abide/abide/server'
             import { crmDatabase } from '../../pipeline/lib/crmDatabase.server.ts'
@@ -118,7 +118,8 @@ import Section from '#src/lib/Section.abide'
 
             export const digest = job({
                 name: 'digest',
-                every: 24 * 60 * 60_000,
+                cron: '0 8 * * 1-5',
+                timeZone: 'America/New_York',
                 run: async () => {
                     const leads = DEALS.filter((deal) => deal.stage === 'lead')
                     await Bun.sleep(300) // the mail going out

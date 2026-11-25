@@ -28,7 +28,18 @@ test('the panel reads when the digest went out, and goes next', async () => {
     await app.run(() => sendDigest())
     const status = await app.run(async () => await getDigest())
     expect(status.running).toBe(false)
-    const day =
-        Date.parse(status.nextRun ?? '') - Date.parse(status.lastRun ?? '')
-    expect(day).toBe(24 * 60 * 60_000)
+    // The next weekday morning at eight on New York's clock, after the send that just went out.
+    const next = new Date(status.nextRun ?? '')
+    expect(next.getTime()).toBeGreaterThan(Date.parse(status.lastRun ?? ''))
+    const newYork = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        weekday: 'short',
+        hour: 'numeric',
+        minute: 'numeric',
+        hourCycle: 'h23',
+    }).formatToParts(next)
+    const part = (type: string) =>
+        newYork.find((piece) => piece.type === type)?.value
+    expect(`${part('hour')}:${part('minute')}`).toBe('08:00')
+    expect(['Sat', 'Sun']).not.toContain(part('weekday'))
 })
