@@ -53,7 +53,7 @@ export { database } from './database.ts'
 export { type Change, table } from './table.ts'
 // 54 — rungs that let a caller through, another service asked with retries, and work on a schedule.
 export { type FetchOptions, fetchData } from './fetchData.ts'
-export { type Job, type JobStatus, job } from './job.ts'
+export { type Job, type JobOptions, type JobStatus, job } from './job.ts'
 export { readOnly } from './readOnly.ts'
 export { trustedIdentity } from './trustedIdentity.ts'
 export { signedIn } from './signedIn.ts'

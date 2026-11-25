@@ -29,11 +29,8 @@ export type Job<Input = undefined> = {
     stop: () => Promise<JobStatus>
 }
 
-/** The longest a job waits between two looks at whether a run is due (54.18). */
-const LONGEST_LOOK = 60_000
-
-/** Work run every `every` milliseconds on the server, one run at a time: 54.18-54.27. */
-export function job<Input = undefined>(options: {
+/** 54.18 — what a job is: its name, its schedule, its work, and what holds or remembers it. */
+export type JobOptions<Input = undefined> = {
     /** 54.23 — what a failed run is logged under, beside `job`. */
     name?: string
     /** 54.18, 54.19, 54.25 — the milliseconds between the end of one run and the next, or between their starts under `from`, read at each look where a function. */
@@ -46,7 +43,13 @@ export function job<Input = undefined>(options: {
     lastRun?: () => number | undefined
     /** 54.38 — what holds the schedule: while it reads true, a look starts no run. */
     paused?: Reactive<boolean, never, never, boolean> | (() => boolean)
-}): Job<Input> {
+}
+
+/** The longest a job waits between two looks at whether a run is due (54.18). */
+const LONGEST_LOOK = 60_000
+
+/** Work run every `every` milliseconds on the server, one run at a time: 54.18-54.27. */
+export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
     const { every, run: work, from = 'end' } = options
     const intervalOf = typeof every === 'function' ? every : () => every
     const logger =
