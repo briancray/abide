@@ -10,7 +10,8 @@ async function save() {
         await savePhone({ phone })
         toasts.notify('Phone saved', { tone: 'success' })
     } catch (refused) {
-        toasts.notify((refused as Error).message, {
+        if (!savePhone.isError(refused, 'HttpError')) throw refused
+        toasts.notify(refused.message, {
             tone: 'error',
             action: {
                 label: 'Report',

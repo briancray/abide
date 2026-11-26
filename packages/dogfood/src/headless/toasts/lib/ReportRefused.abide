@@ -14,4 +14,6 @@ onRefusal((refusal, call) => {
 })
 </script>
 
-<button onclick={() => sendStatement()}>Email Grace her statement</button>
+<button onclick={() => sendStatement({ id: 'c2' })}>
+    Email Grace her statement
+</button>

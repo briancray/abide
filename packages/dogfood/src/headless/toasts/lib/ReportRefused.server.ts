@@ -1,5 +1,12 @@
-import { refuse, rpc } from '@abide/abide/server'
+import { log, refuse, rpc } from '@abide/abide/server'
 
-export default rpc(() => refuse(502, 'The mailer refused the statement'), {
-    methods: ['POST'],
-})
+const mailer = log.named('mailer')
+
+export default rpc(
+    ({ id }: { id: string }) => {
+        log(`statement for ${id} built`)
+        mailer.error('550 mailbox full')
+        return refuse(502, 'the mailer refused the statement')
+    },
+    { methods: ['POST'] },
+)
