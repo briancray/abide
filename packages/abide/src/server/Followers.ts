@@ -21,6 +21,7 @@ import { fileIn } from './fileIn.ts'
 import { type FollowedHandler, watchOf } from './mountHandlers.ts'
 import { heldByApp } from './requestScope.ts'
 import { EVENT_STREAM_OPENER, streamEvent } from './streamEvent.ts'
+import { TABLES_READ } from './TABLES_READ.ts'
 import { patchesSince, versionOf } from './versionOf.ts'
 
 const ENCODER = new TextEncoder()
@@ -293,9 +294,13 @@ export class Followers {
      */
     sweep(member: 'invalidate' | 'refresh', tags: string[] | null): void {
         for (const [rpc, handlerFollowers] of this.handlers) {
-            if (tags !== null && !handlerFollowers.tagged) continue
+            // 47.39 — a table a run of the handler read is a tag every copy of it carries.
+            const read =
+                tags === null ? false : readsOne(TABLES_READ.get(rpc), tags)
+            if (tags !== null && !handlerFollowers.tagged && !read) continue
             for (const follower of handlerFollowers.all) {
-                if (tags !== null && !sharesTag(follower.tags, tags)) continue
+                if (tags !== null && !read && !sharesTag(follower.tags, tags))
+                    continue
                 if (this.attach(rpc, follower) !== undefined) continue
                 follower.peer.send(follower.id, TRIGGERS[member])
             }
@@ -376,6 +381,12 @@ export class Followers {
         )
         return shared
     }
+}
+
+function readsOne(read: Set<string> | undefined, swept: string[]): boolean {
+    if (read === undefined) return false
+    for (const tag of swept) if (read.has(tag)) return true
+    return false
 }
 
 function sharesTag(held: string[] | undefined, swept: string[]): boolean {

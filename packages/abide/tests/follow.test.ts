@@ -8,8 +8,9 @@ import { spawned } from '@abide/harness/gate'
 
 import { applyPatch } from '#shared/applyPatch.ts'
 
-import { BIN, handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
-import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
+import { BIN, handlerFiles, serveApp } from './builtApp.ts'
+import { muxClient } from './muxClient.ts'
+import { removeTemporaryModules } from './temporaryModule.ts'
 
 const HANDLERS = `import { GET, invalidate, memo, POST, refresh, refuse } from '@abide/abide/server'
 
@@ -111,63 +112,11 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-// Runs `steps` in a bun process against the mux, handing back every frame it received, in order.
-// `get` and `post` call the app over http. NOTHING IS SEQUENCED BY THE CLOCK: `settled()` sends a
-// subscription to an address nothing answers, which the mux refuses as it reads it, so its refusal
-// coming back says every frame sent before it has been taken; `until` waits on a frame the test is
-// owed. Then a last `settled()`, and the socket closed and drained, so a frame the server sent
-// before it took the close — one too many, which is what most of these are about — lands ahead
-// of what is said.
-async function client(
+const client = (
     steps: string,
     upgrade: Record<string, string> = {},
-): Promise<Record<string, unknown>[]> {
-    const dir = temporaryModule({
-        'client.ts': `const base = process.argv[2]
-type Frame = Record<string, unknown>
-const frames: Frame[] = []
-const ws = new WebSocket(base.replace('http', 'ws') + '/__abide/socket', { headers: ${JSON.stringify(upgrade)} } as never)
-const send = (frame: unknown) => ws.send(JSON.stringify(frame))
-const get = (path: string, headers: Record<string, string> = {}) => fetch(base + '/library/' + path, { headers })
-const post = (path: string, body: unknown) => fetch(base + '/library/' + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
-const BARRIER = 1000
-let barrier = BARRIER
-const refused = new Map<number, () => void>()
-const settled = () =>
-    new Promise<void>((done) => {
-        barrier += 1
-        refused.set(barrier, done)
-        send({ op: 'sub', id: barrier, address: '/library/nothingAnswersHere' })
-    })
-let arrived = () => {}
-const until = async (owed: (frames: Frame[]) => boolean) => {
-    const deadline = Date.now() + 3000
-    while (!owed(frames) && Date.now() < deadline)
-        await new Promise<void>((done) => {
-            arrived = done
-            setTimeout(done, 50).unref()
-        })
-}
-ws.onmessage = (event) => {
-    const frame = JSON.parse(String(event.data)) as Frame
-    if (frame.op === 'error' && (frame.id as number) > BARRIER) {
-        refused.get(frame.id as number)?.()
-        return
-    }
-    frames.push(frame)
-    arrived()
-}
-await new Promise((done) => (ws.onopen = done))
-${steps}
-await settled()
-ws.close()
-await new Promise((done) => (ws.onclose = done))
-console.log(JSON.stringify(frames))
-process.exit(0)
-`,
-    })
-    return lastLinePrinted(['bun', `${dir}/client.ts`, base])
-}
+): Promise<Record<string, unknown>[]> =>
+    muxClient(base, 'library', steps, upgrade)
 
 const ops = (frames: Record<string, unknown>[]): unknown[] =>
     frames.map((frame) => frame.op)

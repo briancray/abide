@@ -20,6 +20,8 @@ import type { FollowedHandler, Mounted } from './mountHandlers.ts'
 import { takeSeeded } from './PageRender.ts'
 import { currentRequestScope, rungsTook, timed } from './requestScope.ts'
 import { type Outcome, outcomeOf } from './seedBuffer.ts'
+import { tablesReadBy } from './table.ts'
+import { TABLES_READ } from './TABLES_READ.ts'
 
 /**
  * What the origin gate makes of a call from `crossing`: the refusal it is answered with, or the
@@ -128,10 +130,21 @@ export async function invokeHandler(
     // 21.15 — timed from before the call: the body starts inside it, and what it does before its
     // first await, or a pause before the clock is read, is the handler's time too.
     const started = performance.now()
+    const reached = seeded === undefined ? reachOf(handler, args) : undefined
     const outcome =
-        seeded === undefined
-            ? await outcomeOf(reachOf(handler, args), started)
-            : await seeded
+        seeded === undefined ? await outcomeOf(reached, started) : await seeded
+    // 47.39 — the tables this run read, which a change to any of them sweeps the handler's followers by.
+    if (reached !== undefined) {
+        const read = tablesReadBy(reached)
+        if (read.length > 0) {
+            let tables = TABLES_READ.get(handler)
+            if (tables === undefined) {
+                tables = new Set()
+                TABLES_READ.set(handler, tables)
+            }
+            for (const name of read) tables.add(name)
+        }
+    }
     const entry = key === undefined ? undefined : global?.at(key)
     const run: Run =
         seeded !== undefined

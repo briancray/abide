@@ -1418,14 +1418,14 @@ type Reached = { readonly [REACHED]: true }
 | `database` | `(file: string \| (() => string), options?: { migrations?: (string \| ((database: Database) => void))[]; openNewer?: boolean; open?: (database: Database) => void; strict?: boolean; readonly?: boolean; safeIntegers?: boolean }) => (() => Database) & { close: (options?: { remove?: boolean }) => void; changed: Reactive<number>; sql: Sql }` | The opener of the app's `bun:sqlite` database `file`, from `@abide/abide/server`. | 36.4, 47.1, 47.2, 47.3, 47.4, 47.5, 47.6, 47.7, 47.8, 47.9, 47.10, 47.11, 47.12, 47.13, 47.14, 47.15, 47.16, 47.18, 47.19, 47.20, 47.21 |
 | `opener.close` | `(options?: { remove?: boolean }) => void` | Closes the `Database` an opener holds, and with `remove` deletes the file it last opened. | 47.11, 47.16, 47.17 |
 | `opener.changed` | `Reactive<number>` | How many times the opener has found another connection's commits to its file. | 47.22, 47.23, 47.24 |
-| `opener.sql` | `Sql` | The opener's database as a tag: a statement, its values bound, answering its rows, read by the run it is made in. | 47.32, 47.33, 47.34, 47.37, 47.38 |
+| `opener.sql` | `Sql` | The opener's database as a tag: a statement, its values bound, answering its rows, read by the run it is made in. | 47.32, 47.33, 47.34, 47.37, 47.38, 47.39 |
 | `Sql` | `<Row = Record<string, unknown>>(strings: TemplateStringsArray, ...values: (SQLQueryBindings \| readonly SQLQueryBindings[])[]) => Row[]` | The tag an opener's `sql` is. | 47.32, 47.37 |
 
 ## `table`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `table` | `<Row extends Record<string, unknown>>(database: Database \| (() => Database), name: string, options?: { key?: keyof Row & string }) => Table<Row>` | A table of the app's `bun:sqlite` database: called, its rows; and a stream pair, its changes read out and rows upserted in, from `@abide/abide/server`. | 47.25, 47.26, 47.27, 47.28, 47.29, 47.30, 47.31, 47.33, 47.35, 47.36, 47.38 |
+| `table` | `<Row extends Record<string, unknown>>(database: Database \| (() => Database), name: string, options?: { key?: keyof Row & string }) => Table<Row>` | A table of the app's `bun:sqlite` database: called, its rows; and a stream pair, its changes read out and rows upserted in, from `@abide/abide/server`. | 47.25, 47.26, 47.27, 47.28, 47.29, 47.30, 47.31, 47.33, 47.35, 47.36, 47.38, 47.39 |
 | `Table` | `<Row>((match?: Match<Row>) => Row[]) & { readonly readable: ReadableStream<Change<Row>>; readonly writable: WritableStream<Row> }` | What `table` hands back: its rows read by calling it, its changes, and the rows written in. | 47.25, 47.33, 47.35, 47.36 |
 | `Match` | `<Row>{ [Column in keyof Row]?: ColumnMatch<Row[Column]> }` | The columns a `table` call matches, each by a `ColumnMatch`. | 47.35, 47.36 |
 | `ColumnMatch` | `<Value>Value \| null \| readonly (Value \| null)[] \| { gt?: Value; gte?: Value; lt?: Value; lte?: Value; ne?: Value \| null }` | What a `table` call matches one column against, all of it JSON. | 47.36 |

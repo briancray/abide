@@ -13,6 +13,7 @@ import type { Database } from 'bun:sqlite'
 
 import { namedLogger } from '#shared/log.ts'
 import { appStopSignal } from '#shared/reactive/abortSignal.ts'
+import { CELL } from '#shared/reactive/CELL.ts'
 import type { Cell } from '#shared/reactive/cellShape.ts'
 import { invalidate } from '#shared/reactive/index.ts'
 import { refreshCells } from '#shared/reactive/producer.ts'
@@ -467,6 +468,24 @@ function runReading(): Reader | undefined {
     }
     READERS.set(cell, reader)
     return reader
+}
+
+/**
+ * 47.39 — the tables the run that produced `value` read, where its last run read any: the value's own
+ * run, or the run of what it adopted, as a handler's call adopts its entry.
+ */
+export function tablesReadBy(value: unknown): string[] {
+    const names: string[] = []
+    let cell: Cell | undefined = (value as { [CELL]?: Cell | undefined })[CELL]
+    while (cell !== undefined) {
+        const reader = READERS.get(cell)
+        if (reader !== undefined && reader.epoch === cell.runEpoch) {
+            for (const watch of reader.tables) names.push(watch.name)
+            return names
+        }
+        cell = cell.adoption?.source
+    }
+    return names
 }
 
 /** 47.32 — the run this is called in read `names`: a change to any of them refreshes it. */

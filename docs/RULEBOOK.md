@@ -5215,6 +5215,10 @@ comparison other than `ne`, and for an array or an object nested where a value g
 `table` call and by `sql`, its stopped watch said once per database, and the writes made through its
 `sql` MUST then be all that refresh what reads it.
 
+47.39 A change 47.33 hears to a table a handler's run read MUST reach every browser following that
+handler as a tag naming the table would per 13.15, where the server holds no value of the handler
+for the change to refresh.
+
 # 48. Problem reports
 
 48.1 `report` MUST answer a `ReportDraft` holding among its `traces` the trace it was given, and the
