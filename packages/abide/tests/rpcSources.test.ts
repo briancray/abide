@@ -79,9 +79,12 @@ test("an rpc answers the verbs a source's members write by — 16.117", () => {
         ['GET', 'POST'],
         ['GET', 'POST'],
     ])
-    expect(() => rpc(memo(() => 1), { methods: ['GET', 'PUT'] })).toThrow(
-        'RULEBOOK 16.112, 16.117',
-    )
+    expect(() =>
+        rpc(
+            memo(() => 1),
+            { methods: ['GET', 'PUT'] },
+        ),
+    ).toThrow('RULEBOOK 16.112, 16.117')
 })
 
 // 16.117 — A TABLE'S RPC READS ITS ROWS BY A JSON MATCH AND WRITES THEM BY KEY, over the wire as in
@@ -93,7 +96,11 @@ test("a table's rpc is read by a match and written by key over the wire — 16.1
         'crm/deals.server.ts': { default: deals },
     })
     const ids = () =>
-        db.sql<{ id: string; stage: string; amount: number }>`SELECT * FROM deals ORDER BY id`
+        db.sql<{
+            id: string
+            stage: string
+            amount: number
+        }>`SELECT * FROM deals ORDER BY id`
             .map((row) => `${row.id}:${row.stage}:${row.amount}`)
             .join(',')
     const read = await sent(
@@ -115,12 +122,10 @@ test("a table's rpc is read by a match and written by key over the wire — 16.1
             `/crm/deals?given=${encodeURIComponent(JSON.stringify([{ id: 'd1' }]))}`,
         ),
     ]
-    expect([read.split(' ')[0], ...writes.map((each) => each.split(' ')[0])]).toEqual([
-        '200',
-        '200',
-        '200',
-        '200',
-    ])
+    expect([
+        read.split(' ')[0],
+        ...writes.map((each) => each.split(' ')[0]),
+    ]).toEqual(['200', '200', '200', '200'])
     expect(ids()).toBe('d2:won:40,d3:lead:7')
     await deals.set({ id: 'd4', stage: 'won', amount: 1 })
     expect((await deals({ stage: 'won' })).map((row) => row.id)).toEqual([
@@ -150,9 +155,12 @@ test("a table's rpc reads and writes the columns it names alone — 16.118", asy
         db.sql<{ amount: number }>`SELECT amount FROM deals WHERE id = 'd1'`[0]
             ?.amount,
     ).toBe(100)
-    expect(() => rpc(memo(() => 1), { columns: ['id'] })).toThrow(
-        'RULEBOOK 16.118',
-    )
+    expect(() =>
+        rpc(
+            memo(() => 1),
+            { columns: ['id'] },
+        ),
+    ).toThrow('RULEBOOK 16.118')
 })
 
 // 16.117 — A MEMO'S RPC IS WRITTEN AS ITS OWNER WRITES IT: `PUT` its `set`, `PATCH` its `patch` by the
@@ -186,8 +194,11 @@ test("a memo's rpc is set, patched and refreshed over the wire — 16.117", asyn
     ).toBe('200 {"team":"a","seats":15}')
     expect(await seats({ team: 'a' })).toEqual({ team: 'a', seats: 15 })
     expect(
-        (await sent(app, 'POST', '/account/seats', { given: [{ team: 'a' }] }))
-            .split(' ')[0],
+        (
+            await sent(app, 'POST', '/account/seats', {
+                given: [{ team: 'a' }],
+            })
+        ).split(' ')[0],
     ).toBe('200')
     expect(await seats({ team: 'a' })).toEqual({ team: 'a', seats: 10 })
     expect(runs).toBe(2)
@@ -239,7 +250,8 @@ test("a browser's copy of a source sends each member by its verb — 16.117", as
     const sent: string[] = []
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
         const method = init?.method ?? 'GET'
-        if (method !== 'GET') sent.push(`${method} ${url} ${String(init?.body)}`)
+        if (method !== 'GET')
+            sent.push(`${method} ${url} ${String(init?.body)}`)
         return new Response(JSON.stringify(method === 'GET' ? [] : 1), {
             headers: { 'content-type': 'application/json' },
         })

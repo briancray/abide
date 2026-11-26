@@ -12,10 +12,10 @@
 import type { Database } from 'bun:sqlite'
 
 import { namedLogger } from '#shared/log.ts'
-import { appStopSignal } from '#shared/reactive/abortSignal.ts'
-import { invalidate } from '#shared/reactive/index.ts'
-import { unrefTimer } from '#shared/reactive/unrefTimer.ts'
 import type { Match } from '#shared/Match.ts'
+import { appStopSignal } from '#shared/reactive/abortSignal.ts'
+import { refresh } from '#shared/reactive/index.ts'
+import { unrefTimer } from '#shared/reactive/unrefTimer.ts'
 import { SOURCE_KIND } from '#shared/SOURCE_KIND.ts'
 
 import { SQL_IDENTIFIER } from './SQL_IDENTIFIER.ts'
@@ -104,7 +104,11 @@ export function table<Row extends Record<string, unknown>>(
         wrote(each.length)
     }
     const remove = (match: Match<Row>): number => {
-        if (match === undefined || match === null || Object.keys(match).length === 0)
+        if (
+            match === undefined ||
+            match === null ||
+            Object.keys(match).length === 0
+        )
             throw new Error(
                 `abide: a delete from table ${name} names no column, which would delete every row. RULEBOOK 47.40.`,
             )
@@ -400,7 +404,6 @@ type Watch = { name: string; seen: number | undefined }
 /** 47.29 — per database or opener, each table's watch. */
 const WATCHED = new WeakMap<object, Map<string, Watch>>()
 
-
 /** 47.38 — the databases whose stopped watch has been said. */
 const WARNED = new WeakSet<object>()
 
@@ -462,9 +465,12 @@ function watchOf(
     return watch
 }
 
-/** 47.29 — what a change to the watched table refreshes: what carries its name as a tag. */
+/**
+ * 47.29 — what a change to the watched table refreshes: what carries its name as a tag, reloaded
+ * where something reads it (13.7) and kept until then, so a reader never meets it empty.
+ */
 function changed(watch: Watch): void {
-    invalidate({ tags: [watch.name] })
+    refresh({ tags: [watch.name] })
 }
 
 /** 47.40 — a write made here, heard now, so the watch's next look does not hear it again. */

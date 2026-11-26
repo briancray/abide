@@ -24,11 +24,12 @@ import { isAsyncIterable } from './isAsyncIterable.ts'
 import { isServer } from './isServer.ts'
 import type { Issues } from './Issues.ts'
 import type { Logged } from './ledger.ts'
-import type { Match } from './Match.ts'
 import { namedLogger } from './log.ts'
+import type { Match } from './Match.ts'
 import { compose, type Rung } from './Middleware.ts'
 import { unmounted } from './mount.ts'
 import { outbox, type QueuedCall } from './outbox.ts'
+import type { PipeStatus } from './pipe.ts'
 import { principalRotated } from './principalRotated.ts'
 import { REACH_CALL } from './REACH_CALL.ts'
 import { answerOfCall } from './reactive/answerOfCall.ts'
@@ -43,8 +44,8 @@ import {
 import type { CALL_ENTRY } from './reactive/CALL_ENTRY.ts'
 import { callLoad } from './reactive/callLoad.ts'
 import {
-    KEYED_OF,
     type KeptIn,
+    KEYED_OF,
     type Memo,
     type MemoValue,
     readableOf,
@@ -52,7 +53,6 @@ import {
     type Written,
 } from './reactive/createMemo.ts'
 import { DECLARED_TAGS } from './reactive/DECLARED_TAGS.ts'
-import { MEMO_BRAND } from './reactive/MEMO_BRAND.ts'
 import {
     type AdoptedFailures,
     type BodyProduced,
@@ -73,6 +73,7 @@ import {
 } from './reactive/index.ts'
 import { isReactive } from './reactive/isReactive.ts'
 import { isThenable } from './reactive/isThenable.ts'
+import { MEMO_BRAND } from './reactive/MEMO_BRAND.ts'
 import { MUTATION } from './reactive/MUTATION.ts'
 import type { PatchOp } from './reactive/patchLog.ts'
 import {
@@ -86,11 +87,10 @@ import { isStreamBody } from './reactive/Reactive.ts'
 import { builtHere, isForwarder } from './reactive/scoped.ts'
 import { checkArgs, refuse } from './refuse.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
+import { rpcRequest } from './rpcRequest.ts'
+import type { Schema } from './Schema.ts'
 import { SOURCE_KIND } from './SOURCE_KIND.ts'
 import { SOURCE_MEMBERS } from './SOURCE_MEMBERS.ts'
-import { rpcRequest } from './rpcRequest.ts'
-import type { PipeStatus } from './pipe.ts'
-import type { Schema } from './Schema.ts'
 import { surfaceName } from './surfaceName.ts'
 
 export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -500,7 +500,10 @@ type JobFace<Status, Input> = {
 type LedgerFace<Entry> = ((
     from?: number | { cursor: string },
 ) => ReadableStream<Logged<Entry>>) & {
-    append: (entry: Entry, options?: { key?: string | undefined }) => Promise<number>
+    append: (
+        entry: Entry,
+        options?: { key?: string | undefined },
+    ) => Promise<number>
 }
 
 /** 16.117 — where a ledger's `rpc` reads from: a position, or a named cursor. */
@@ -875,7 +878,8 @@ export const rpc: Declare<true> = ((
     // 16.117 — what the source writes by: none, for a memo whose entries live a request (11.32), as a
     // write to one would land in a value no later request reads.
     const members: Record<string, Method> =
-        kind === 'memo' && isForwarder((value as Record<symbol, unknown>)[KEYED_OF])
+        kind === 'memo' &&
+        isForwarder((value as Record<symbol, unknown>)[KEYED_OF])
             ? {}
             : SOURCE_MEMBERS[kind]
     const verbs = sourceVerbs(members, methods)
@@ -959,7 +963,10 @@ function jsonOf<Value>(value: Value | string | undefined): Value | undefined {
 
 /** 16.117 — the brand a source carries, or a memo's, or `undefined` for a function or a value. */
 function brandOf(value: unknown): SourceBrand | undefined {
-    if (value === null || (typeof value !== 'object' && typeof value !== 'function'))
+    if (
+        value === null ||
+        (typeof value !== 'object' && typeof value !== 'function')
+    )
         return undefined
     if ((value as Record<symbol, unknown>)[MEMO_BRAND] === true)
         return { kind: 'memo' }
@@ -967,7 +974,9 @@ function brandOf(value: unknown): SourceBrand | undefined {
 }
 
 /** 16.111, 16.112 — a function's one verb: `GET`, or the one `methods` names. */
-function calledVerbs(declared: readonly Method[] | undefined): readonly Method[] {
+function calledVerbs(
+    declared: readonly Method[] | undefined,
+): readonly Method[] {
     if (declared === undefined) return ['GET']
     for (const verb of declared)
         if (!ONE_VERB.includes(verb))
@@ -1030,14 +1039,17 @@ function readOf(
               }
     }
     if (kind === 'ledger')
-        return async function* (
-            from?: { from?: number | undefined; cursor?: string | undefined },
-        ): AsyncGenerator<unknown> {
+        return async function* (from?: {
+            from?: number | undefined
+            cursor?: string | undefined
+        }): AsyncGenerator<unknown> {
             const read = value as (
                 from?: number | { cursor: string },
             ) => ReadableStream<unknown>
             yield* read(
-                from?.cursor !== undefined ? { cursor: from.cursor } : from?.from,
+                from?.cursor !== undefined
+                    ? { cursor: from.cursor }
+                    : from?.from,
             ) as unknown as AsyncIterable<unknown>
         }
     // 16.115 — A VALUE IS THE SERVER'S ONE VALUE, every request reading and writing the same entry:
@@ -1052,8 +1064,14 @@ function readOptions(
     options: RpcOptions,
 ): RpcOptions {
     if (kind === 'memo' || kind === 'job' || kind === 'pipe') return options
-    const given = options as { global?: boolean | undefined; tags?: string[] | undefined }
-    const tags = brand?.tags === undefined ? given.tags : [...(given.tags ?? []), ...brand.tags]
+    const given = options as {
+        global?: boolean | undefined
+        tags?: string[] | undefined
+    }
+    const tags =
+        brand?.tags === undefined
+            ? given.tags
+            : [...(given.tags ?? []), ...brand.tags]
     return { ...options, global: given.global ?? true, tags } as RpcOptions
 }
 
@@ -1071,7 +1089,8 @@ function projected(
     const kept: Record<string, unknown>[] = []
     for (const row of rows) {
         const picked: Record<string, unknown> = {}
-        for (const column of columns) if (column in row) picked[column] = row[column]
+        for (const column of columns)
+            if (column in row) picked[column] = row[column]
         kept.push(picked)
     }
     return kept

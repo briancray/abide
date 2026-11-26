@@ -1,7 +1,6 @@
-// 47.33, 18.3 — A HANDLER READING A TABLE IS FOLLOWED THROUGH IT: a write to the table, made through
-// the app's own `sql` or committed by another connection, reaches a browser following a `GET` whose
-// body read it — the value where the server holds one, a trigger where it does not — with no tag
-// written to say which table.
+// 47.29, 16.117, 18.3 — A TABLE IS FOLLOWED THROUGH ITS TAG: a write through its `rpc`, or a commit
+// another connection makes, reaches a browser following the table's own `rpc` and every `GET` that
+// carries the table's name as a tag.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
@@ -21,21 +20,15 @@ const db = database(${JSON.stringify(FILE)}, {
         "INSERT INTO deals VALUES ('d1', 'won'), ('d2', 'lead'), ('d3', 'lead')",
     ],
 })
-const deals = table<{ id: string; stage: string }>(db, 'deals')
+export const deals = rpc(table<{ id: string; stage: string }>(db, 'deals'))
 
 export const won = rpc(
     () => db.sql<{ id: string }>\`SELECT id FROM deals WHERE stage = 'won' ORDER BY id\`.map((row) => row.id),
-    { global: true },
+    { global: true, tags: ['deals'] },
 )
-
-export const staged = rpc(({ stage }: { stage: string }) => deals({ stage }).map((row) => row.id))
 
 // 47.4 — the file the server opened, a scratch one under test, which another connection opens too.
 export const where = rpc(() => db().filename)
-
-export const close = rpc(({ id }: { id: string }) => {
-    db.sql\`UPDATE deals SET stage = 'won' WHERE id = \${id}\`
-}, { methods: ['POST'] })
 `
 
 let base = ''
@@ -62,35 +55,40 @@ function patched(held: unknown, frame: Record<string, unknown> | undefined) {
     return copy
 }
 
-// THE REVERT: drop `readTables` from the tag in `sqlOver`; the served entry never reloads, and the
-// follower is sent no frame where a patch is due.
-test("a write through the app's sql reaches a follower of a GET whose body read the table — 47.33", async () => {
+/** The value a follower holds once `frames`' first change after its answer has landed on `held`. */
+function landed(held: unknown, frames: Record<string, unknown>[]) {
+    const sent = frames.find(
+        (frame) => frame.op === 'patch' || frame.op === 'value',
+    )
+    return sent?.op === 'value' ? sent.value : patched(held, sent)
+}
+
+// 47.29, 16.117 — A WRITE THROUGH THE TABLE'S `rpc` REACHES A FOLLOWER OF A `GET` TAGGED WITH IT, at
+// once. THE REVERT: drop the `refresh` from `changed` in table.ts; the follower is sent no frame where
+// `["d1"] -> ["d1","d2"]` is due.
+test("a write through a table's rpc reaches a follower of a GET tagged with the table — 47.29, 16.117", async () => {
     const frames = await client(`const answered = await get('won')
 const version = Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, ''))
 frames.push({ op: 'answered', value: await answered.json() })
 send({ op: 'sub', id: 1, address: '/crm/won', version })
 await settled()
-await post('close', { id: 'd2' })
+await fetch(base + '/crm/deals', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ given: [{ id: 'd2', stage: 'won' }] }) })
 await until((frames) => frames.some((frame) => frame.op === 'patch' || frame.op === 'value'))
 `)
     const held = frames[0]?.value
-    const sent = frames.find(
-        (frame) => frame.op === 'patch' || frame.op === 'value',
-    )
-    const now = sent?.op === 'value' ? sent.value : patched(held, sent)
-    expect(`${JSON.stringify(held)} -> ${JSON.stringify(now)}`).toBe(
-        '["d1"] -> ["d1","d2"]',
-    )
+    expect(
+        `${JSON.stringify(held)} -> ${JSON.stringify(landed(held, frames))}`,
+    ).toBe('["d1"] -> ["d1","d2"]')
 })
 
-// 47.26 — another connection's commit is heard through the table's triggers and its watch. THE
-// REVERT: drop `readTables` from the tag in `sqlOver`; the follower is sent no frame where a patch is
-// due.
-test('a commit by another connection reaches a follower of a GET whose body read the table — 47.33', async () => {
-    const frames = await client(`const answered = await get('won')
+// 47.26, 16.117 — ANOTHER CONNECTION'S COMMIT IS HEARD THROUGH THE TABLE'S TRIGGERS AND ITS WATCH, and
+// a follower of the table's own `rpc` for a match is sent its rows as they now stand. THE REVERT: give
+// a table's read no tag in `readOptions`; the follower is sent no frame where `d3` is due.
+test("a commit by another connection reaches a follower of a table's rpc — 47.26, 16.117", async () => {
+    const frames = await client(`const answered = await get('deals?stage=won')
 const version = Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, ''))
 frames.push({ op: 'answered', value: await answered.json() })
-send({ op: 'sub', id: 1, address: '/crm/won', version })
+send({ op: 'sub', id: 1, address: '/crm/deals', args: { stage: 'won' }, version })
 await settled()
 const { Database } = await import('bun:sqlite')
 const other = new Database(await (await get('where')).json())
@@ -98,28 +96,8 @@ other.run("UPDATE deals SET stage = 'won' WHERE id = 'd3'")
 other.close()
 await until((frames) => frames.some((frame) => frame.op === 'patch' || frame.op === 'value'))
 `)
-    const held = frames[0]?.value as string[]
-    const sent = frames.find(
-        (frame) => frame.op === 'patch' || frame.op === 'value',
-    )
-    const now = (
-        sent?.op === 'value' ? sent.value : patched(held, sent)
-    ) as string[]
-    expect(now.filter((id) => !held.includes(id))).toEqual(['d3'])
-})
-
-// 47.39 — A `GET` THE SERVER HOLDS NO VALUE OF between requests: its follower is sent a trigger, to
-// fetch again. THE REVERT: hand `readsOne` nothing in `Followers.sweep`; the browser is sent `[]`
-// where `['invalidate']` is due.
-test('a follower of a GET the server holds no value of is sent a trigger when its table changes — 47.39', async () => {
-    const frames = await client(`await (await get('staged?stage=lead')).json()
-send({ op: 'sub', id: 2, address: '/crm/staged', args: { stage: 'lead' } })
-await settled()
-const { Database } = await import('bun:sqlite')
-const other = new Database(await (await get('where')).json())
-other.run("INSERT INTO deals VALUES ('d9', 'lead')")
-other.close()
-await until((frames) => frames.length > 0)
-`)
-    expect(frames.map((frame) => frame.op)).toEqual(['invalidate'])
+    const held = frames[0]?.value as { id: string }[]
+    const now = landed(held, frames) as { id: string }[]
+    const ids = (rows: { id: string }[]) => rows.map((row) => row.id)
+    expect(ids(now).filter((id) => !ids(held).includes(id))).toEqual(['d3'])
 })

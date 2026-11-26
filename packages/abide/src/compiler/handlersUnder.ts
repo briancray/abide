@@ -104,6 +104,16 @@ export async function handlersUnder(
                                     method === each.method
                                         ? each.result
                                         : undefined,
+                                // 16.117 — a write's face takes what its member is given, which
+                                // the read's args say nothing of.
+                                args:
+                                    method === each.method
+                                        ? each.args
+                                        : undefined,
+                                defaults:
+                                    method === each.method
+                                        ? each.defaults
+                                        : undefined,
                             },
                             each.name,
                         ),
@@ -161,8 +171,9 @@ export async function handlersUnder(
                     description: each.description,
                     middleware: each.middleware,
                     copy: method === each.method ? each.copy : undefined,
-                    defaults: each.defaults,
-                    args: each.args,
+                    defaults:
+                        method === each.method ? each.defaults : undefined,
+                    args: method === each.method ? each.args : undefined,
                     result: method === each.method ? each.result : undefined,
                 })
             diagnostics.warn(each.unread)

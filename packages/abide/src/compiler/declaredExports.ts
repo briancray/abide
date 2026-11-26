@@ -655,7 +655,11 @@ type SourceKind = keyof typeof SOURCE_MEMBERS
  * memo's owner writes and triggers with no address (an `Rpc` has `url`), a table's rows written by key,
  * a job's run and status, a pipe's streams and status, a ledger's appends.
  */
-const KIND_MEMBERS: readonly [SourceKind, readonly string[], readonly string[]][] = [
+const KIND_MEMBERS: readonly [
+    SourceKind,
+    readonly string[],
+    readonly string[],
+][] = [
     ['ledger', ['append', 'writable'], []],
     ['pipe', ['status', 'readable', 'writable', 'stop'], []],
     ['job', ['status', 'run', 'stop'], ['writable']],
