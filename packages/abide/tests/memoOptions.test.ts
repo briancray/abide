@@ -210,3 +210,32 @@ test('an entry a window starts onto a refused call settles its awaits — 5.20',
         'refused TooBig, busy false',
     )
 })
+
+// 3.3 UNDER A WINDOW — A PROBE READER WAKES WHERE THE PROBE MOVED: the first write a throttle holds
+// turns `busy` on, and each held after it replaces what is held under a `busy` already true, so a
+// guard reading `busy` beside the value runs once for the window rather than once per write.
+//
+// THE REVERT: have `hold` move the probes on every write it holds; the guard runs 51 times where 3
+// are due, 48 of them onto a state it had already read.
+test('a write a window holds behind another wakes no probe reader — 3.3, 5.15', () => {
+    const status = memo(() => ({ n: -1 }), { throttle: 60_000 })
+    const followed = reactive.derived(() => status())
+    const seen: string[] = []
+    const stop = watch(() => {
+        let n: number | string = 'unlanded'
+        try {
+            n = followed().n
+        } catch {}
+        seen.push(`${followed.busy()} ${n}`)
+    })
+    flushSync()
+    for (let at = 0; at < 50; at += 1) {
+        status.set({ n: at })
+        flushSync()
+    }
+    stop()
+    expect(`${seen.length} runs: ${[...new Set(seen)].join(', ')}`).toBe(
+        `${seen.length} runs: ${seen.join(', ')}`,
+    )
+    expect(seen.join(' | ')).toBe('false -1 | false 0 | true 0')
+})

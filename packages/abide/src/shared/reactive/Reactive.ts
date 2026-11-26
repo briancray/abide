@@ -1170,12 +1170,17 @@ function capped(
  * it did not need was refused there once already.
  */
 function hold(cell: Cell, cap: Cap, value: unknown): void {
+    // 3.3: A PROBE READER WAKES WHERE THE PROBE MOVED. Only the first write a window holds moves
+    // `busy`; each after it replaces what is held under a `busy` already true — `settleProbes`
+    // cleared the hold's `loading` on the way here and this puts it back — and waking the probe's
+    // readers for it woke every guard once per write the window exists to collapse.
+    const moved = !cap.holding
     cap.held = value
     cap.holding = true
     cell.loading = true
     if (LOADS !== null) keepLoad(cell)
     // Nothing a reader can see moved, and `busy` did.
-    probesMoved(cell)
+    if (moved) probesMoved(cell)
 }
 
 /**
