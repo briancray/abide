@@ -298,7 +298,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `s.then` | `<Settled = Stored, Refused = never, Next = never>(onSettled?: (value: Stored) => Settled \| Reactive<Settled, any, Next, any> \| PromiseLike<Settled>, onFailed?: (error: unknown) => Refused \| PromiseLike<Refused>) => Reactive<Settled \| Refused, Settled \| Refused, Failures \| Next>` | The next step after the settling, as a value. | 1.4, 2.7, 2.8, 2.15, 2.16, 2.17, 2.18, 2.19, 2.20, 2.21, 2.22 |
 | `s.catch` | `<Result>(onFailed: (error: unknown) => Result \| PromiseLike<Result>) => Reactive<Stored \| Result, Stored \| Result, Failures>` | The settling's refusal path. | 1.4, 1.5 |
 | `s.finally` | `(onSettled: () => void) => Reactive<Stored, Stored, Failures>` | The settling's end, whichever way it went. | 1.4, 1.5 |
-| `for await (… of s)` | `AsyncIterable<Produced>` | What one run produced: the settled value once, or a stream's chunks. | 2.5, 2.6, 5.10, 9.12, 9.15, 9.16, 9.17 |
+| `for await (… of s)` | `AsyncIterable<Produced>` | What one run produced: the settled value once, or a stream's chunks. | 2.5, 2.6, 5.10, 9.12, 9.15, 9.16, 9.17, 9.18 |
 | `s[Symbol.asyncIterator]` | `() => AsyncIterator<Produced>` | The run being served, from its start to its end. | 2.5, 2.6 |
 
 ### Writes

@@ -2455,6 +2455,13 @@ function heldValue(cell: Cell): unknown {
  */
 async function* runChunks(cell: Cell, gated: boolean): AsyncGenerator<unknown> {
     let ring = cell.ring
+    // 9.18: a refresh's run is in flight and has landed nothing yet, so the ring is the closed run's —
+    // what a read still serves (9.7), and not the run being made. The walk waits for the new ring.
+    const stream = ownStream(cell)
+    let closedRun =
+        stream !== null && stream.closed && stream.iterator !== null
+            ? ring
+            : null
     const standing = failureOf(cell)
     // Gated reads by index and holds no place, so it sits past every chunk where no patch keeps it.
     const cursor = new Cursor(
@@ -2465,6 +2472,17 @@ async function* runChunks(cell: Cell, gated: boolean): AsyncGenerator<unknown> {
     let sent = 0
     try {
         for (;;) {
+            if (closedRun !== null) {
+                if (cell.ring === closedRun) {
+                    if (cursor.closed) break
+                    await cursor.turn()
+                    continue
+                }
+                closedRun = null
+                ring = cell.ring
+                // From the new run's first chunk: the ordinals between are the closed run's.
+                if (!gated) cursor.at = cell.ringBase
+            }
             if (cell.ring !== ring) {
                 if (ring !== EMPTY_RING) return
                 ring = cell.ring

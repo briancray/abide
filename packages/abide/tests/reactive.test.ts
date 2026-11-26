@@ -5016,6 +5016,29 @@ test('for await over a stream ends where a refresh replaces its run — 9.16', a
     expect(await walking).toEqual([1])
 })
 
+// 9.18: A LOOP OPENED ON A REFRESH IN FLIGHT walks the run the refresh started, not the one a read
+// still serves (9.7) — that one closed, and walking it handed over its first chunk and then ended at
+// the new run's ring (9.16), short of its own close. THE REVERT, run: drop the `closedRun` wait in
+// `runChunks`; `[1,2]` where `[10,20]` is due.
+test('for await opened on a refresh in flight walks the new run — 9.18', async () => {
+    const feed = streamOf<number>()
+    const rows = reactive.derived(feed.body)
+    const first = feed.runs[0] as Run<number>
+    first.push(1)
+    first.push(2)
+    first.close()
+    await rows
+    rows.refresh()
+    const walking = walked(rows, 500)
+    await turns()
+    const second = feed.runs[1] as Run<number>
+    second.push(10)
+    await turns()
+    second.push(20)
+    second.close()
+    expect(JSON.stringify(await walking)).toBe('[10,20]')
+})
+
 // 9.16 OVER THE WIRE: what a streamed answer sends is one run as well, so a refresh mid-stream
 // ends it rather than splicing the new run's chunks on at the old run's index.
 test('a streamed answer ends where a refresh replaces its run — 9.16, 16.76', async () => {

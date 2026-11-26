@@ -617,6 +617,9 @@ run ended on.
 9.17 A streaming producer's run MUST NOT end, to a reader of it or of a value forwarding it, before
 every chunk that run produced has reached that reader.
 
+9.18 A cursor opened over a streaming producer while a run is in flight that has produced no chunk
+MUST walk that run, and MUST NOT walk the accumulation 9.7 serves meanwhile.
+
 # 10. Sharing
 
 10.1 A handle `reactive.shared` hands back MUST get or create its value in one call.
