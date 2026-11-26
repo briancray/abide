@@ -3,10 +3,10 @@
 // reader sees is what the model was answered — never a description of it.
 import { props, raw, reactive, type RouteLiteral, url } from '@abide/abide'
 
-import clause from '#src/ask/tools/clause.handler.ts'
-import name from '#src/ask/tools/name.handler.ts'
-import results from '#src/ask/tools/results.handler.ts'
-import source from '#src/ask/tools/source.handler.ts'
+import clause from '#src/ask/tools/clause.server.ts'
+import name from '#src/ask/tools/name.server.ts'
+import results from '#src/ask/tools/results.server.ts'
+import source from '#src/ask/tools/source.server.ts'
 
 import Code from './Code.abide'
 import { languageOf } from './highlight.ts'

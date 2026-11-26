@@ -32,7 +32,7 @@ import Section from '#src/lib/Section.abide'
             Ask <code>isReactive</code> first, or a live value gets settled to one snapshot.</p>
         <Code language="ts" caption="shared" code={`
             import { isReactive, reactive } from '@abide/abide'
-            import getForecast from './getForecast.handler.ts'
+            import getForecast from './getForecast.server.ts'
 
             const forecast = reactive.derived(() => getForecast())
             typeof forecast.then // 'function'

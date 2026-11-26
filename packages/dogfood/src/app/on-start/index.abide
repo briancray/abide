@@ -25,7 +25,7 @@ import Section from '#src/lib/Section.abide'
             once the app has booted. The app answers nothing until every hook returns. Call it
             in a handler file or a <code>&lt;script server&gt;</code>.</p>
         <Code language="ts" caption="server" code={`
-            import { GET, onStart } from '@abide/abide/server'
+            import { onStart, rpc } from '@abide/abide/server'
             import { pool } from './lib/pool.server.ts'
 
             onStart(async (start) => {
@@ -34,7 +34,7 @@ import Section from '#src/lib/Section.abide'
                 pool.upAt = new Date().toISOString()
             })
 
-            export default GET(() => ({ upAt: pool.upAt }))
+            export default rpc(() => ({ upAt: pool.upAt }))
         `} />
         <p>The CRM's pool, asked when this page loaded. It connected before the app came
             up:</p>

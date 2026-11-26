@@ -11,7 +11,7 @@ The ledger keeps one book per household: `src/books/` is its pages, and `CONTEXT
 
 ## Layout
 
-- `src/books/getBook.handler.ts` answers `/books/getBook`, and every page of a book reads it.
+- `src/books/getBook.server.ts` answers `/books/getBook`, and every page of a book reads it.
 
 ## This app
 

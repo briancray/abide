@@ -35,27 +35,30 @@ const HANDLERS = new Map([
         GRID,
         {
             scope: '/media/getGrid',
-            address: '/media/getGrid',
             client: 'export default __wire()',
-            args: undefined,
+            exports: {
+                default: { address: '/media/getGrid', args: undefined },
+            },
         },
     ],
     [
         STAFF,
         {
             scope: '/staff/internal',
-            address: '/staff/internal',
             client: '',
-            args: undefined,
+            exports: {
+                default: { address: '/staff/internal', args: undefined },
+            },
         },
     ],
     [
         MOUNTED,
         {
             scope: '/tools/users/list',
-            address: '/tools/users/list',
             client: 'export default __wire()',
-            args: undefined,
+            exports: {
+                default: { address: '/tools/users/list', args: undefined },
+            },
         },
     ],
 ])

@@ -19,7 +19,7 @@ import type { Rpc } from '#shared/rpc.ts'
 
 /**
  * An `App` over `modules`, by the path below the app's root of each handler file —
- * `invoices/getInvoice.handler.ts` — to what it exports, its handler as its default (16.73), with `rows`
+ * `invoices/getInvoice.server.ts` — to what it exports, its handler as its default (16.73), with `rows`
  * laid over the table derived from them by address.
  */
 export function inMemoryApp(
@@ -30,26 +30,29 @@ export function inMemoryApp(
     for (const [source, exported] of Object.entries(modules)) {
         const address = routeOf(source)
         const handler = exported.default as Rpc<unknown, unknown>
-        handlers.push({
-            ...handlerFileMount(
-                { address, source, scope: address, matchers: {} },
-                {
-                    method: handler.method,
-                    description: handler.description,
-                    middleware: [],
-                    // Every surface, as a declaration that names none is listed on (20.3, 20.4).
-                    ui: true,
-                    cli: true,
-                    mcp: true,
-                    copy: undefined,
-                    defaults: undefined,
-                    args: undefined,
-                    result: undefined,
-                },
-            ),
-            load: async () => exported,
-            ...rows.find((row) => row.address === address),
-        })
+        // 16.111 — a row per verb the `rpc` answers.
+        for (const method of handler.methods ?? [handler.method])
+            handlers.push({
+                ...handlerFileMount(
+                    { address, source, scope: address, matchers: {} },
+                    {
+                        method,
+                        methods: handler.methods ?? [handler.method],
+                        description: handler.description,
+                        middleware: [],
+                        // Every surface, as a declaration that names none is listed on (20.3, 20.4).
+                        ui: true,
+                        cli: true,
+                        mcp: true,
+                        copy: undefined,
+                        defaults: undefined,
+                        args: undefined,
+                        result: undefined,
+                    },
+                ),
+                load: async () => exported,
+                ...rows.find((row) => row.address === address),
+            })
     }
     return bootApp({ hooks: undefined, package: {} }, () =>
         appSources({

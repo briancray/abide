@@ -38,10 +38,10 @@ count('page')
 <h1>{GREETING}</h1>
 <Counter/>
 `,
-        'tally.handler.ts': `import { GET } from '@abide/abide/server'
+        'tally.server.ts': `import { rpc } from '@abide/abide/server'
 import { count, GREETING } from '#src/lib/Counter.abide'
 
-export default GET(() => \`\${GREETING} \${count('handler')}\`)
+export default rpc(() => \`\${GREETING} \${count('handler')}\`)
 `,
     })
     const built = await buildApp(app)

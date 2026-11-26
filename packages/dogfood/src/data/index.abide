@@ -44,10 +44,10 @@ import Section from '#src/lib/Section.abide'
             <a href={url('/handlers/get')}><code>GET</code></a>, which runs the query on the
             server and answers the rows as JSON.</p>
         <Code language="ts" caption="server" code={`
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { crmDatabase } from './lib/crmDatabase.server.ts'
 
-            export default GET(
+            export default rpc(
                 () =>
                     crmDatabase()
                         .query(
@@ -71,8 +71,8 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import listTargets from '../listTargets.handler.ts'
-            import setTarget from '../setTarget.handler.ts'
+            import listTargets from '../listTargets.server.ts'
+            import setTarget from '../setTarget.server.ts'
 
             const targets = reactive.derived(() => listTargets())
 
@@ -140,10 +140,10 @@ import Section from '#src/lib/Section.abide'
             digest stands. <code>Job.run</code> in a <code>POST</code> sends the digest ahead of
             the schedule.</p>
         <Code language="ts" caption="server" code={`
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { digest } from './lib/digest.server.ts'
 
-            export default GET(digest.status, {
+            export default rpc(digest.status, {
                 description: 'When the follow-up digest last went out, and goes next.',
             })
         `} />
@@ -158,12 +158,12 @@ import Section from '#src/lib/Section.abide'
             <code>FetchFailed</code>, and a handler that lets it reject refuses at 502.</p>
         <Code language="ts" caption="server" code={`
             import { fetchAndHandle } from '@abide/abide'
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { registryOrigin } from './lib/registryOrigin.server.ts'
 
             type Registration = { founded: number; employees: number }
 
-            export default GET(
+            export default rpc(
                 ({ id }: { id: string }) =>
                     fetchAndHandle<Registration>(\`\${registryOrigin()}/companies/\${id}\`),
                 { global: true, ttl: 60_000 },

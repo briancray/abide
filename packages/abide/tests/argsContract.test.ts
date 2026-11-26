@@ -4,7 +4,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET } from '#server'
+import { rpc } from '#server'
 import { argsFor, derivedArgs } from '#server/argsContract.ts'
 import { handlerFileMount } from '#server/handlerFileMount.ts'
 import { type Mounted, mountHandlers } from '#server/mountHandlers.ts'
@@ -24,7 +24,7 @@ const SCHEMA = {
 // The handler as the module it is loaded through leaves it: held to the schema its annotation
 // derives, which its text args are then coerced by too.
 function heldTo(schema: typeof SCHEMA): Mounted['handler'] {
-    const handler = GET(
+    const handler = rpc(
         (_args: { id: number; tags?: string[] }) => 1,
     ) as Mounted['handler']
     derivedArgs(handler, schema)
@@ -57,7 +57,7 @@ test('text args are coerced and JSON args are not — 19.7', () => {
 // and a text member that looks like JSON stays text. THE REVERT: drop the JSON arm from
 // `coerceMember`; `filter` reaches the schema as text and is refused.
 test('a declared record or list of records is read from its JSON text — 19.27', () => {
-    const search = GET(
+    const search = rpc(
         (_args: {
             filter: { stage: string }
             picks: { id: number }[]
@@ -149,7 +149,7 @@ test('a member no parameter takes is kept as an own member, `__proto__` included
 // executable's handler faces file no `derivedArgs`, so the row the build wrote is what the mount
 // holds it to. THE REVERT: drop the `derivedArgs` call from `mountHandlers`; `id` arrives as '42'.
 test('a mounted row holds its handler to the schema the build derived — 19.9', async () => {
-    const loose = GET((_args: { id: number }) => 1)
+    const loose = rpc((_args: { id: number }) => 1)
     const handlers = await mountHandlers([
         {
             ...handlerFileMount(

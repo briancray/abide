@@ -89,18 +89,18 @@ Promise.reject(new Error('nobody awaited this'))
 <main id="orphan">orphaned</main>`,
         // A HANDLER TREE FROM THE START, so a handler saved later lands in a directory the checker
         // already knows.
-        'present/present.handler.ts':
-            "import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'here')\n",
+        'present/present.server.ts':
+            "import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 'here')\n",
         // 38.4 — an extensionless RELATIVE import out of a server block, which the runtime takes
         // itself rather than through dev's plugin. A private handler (16.70), so the module that
         // imports is the compiled `.abide`'s.
         'relative/index.abide':
-            "<script server>\nimport { GET } from '@abide/abide/server'\nimport { greeting } from '../lib/greeting'\n\nconst hello = GET(() => greeting())\n</script>\n",
+            "<script server>\nimport { rpc } from '@abide/abide/server'\nimport { greeting } from '../lib/greeting'\n\nexport const hello = rpc(() => greeting())\n</script>\n",
         // 38.97 — a stack read on the server, and a line the browser's map places.
         'mapped/index.abide': `<script server>
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-const where = GET(() => new Error('placed').stack ?? '')
+export const where = rpc(() => new Error('placed').stack ?? '')
 </script>
 
 <script>
@@ -114,8 +114,8 @@ process.exit(3)
 
 <main id="exit"/>`,
         // 22.12 — where a call came from, which only the listener's process can see.
-        'whereFrom.handler.ts':
-            "import { GET, request } from '@abide/abide/server'\n\nexport default GET(() => request.ip())\n",
+        'whereFrom.server.ts':
+            "import { request, rpc } from '@abide/abide/server'\n\nexport default rpc(() => request.ip())\n",
         'package.json': PACKAGE,
         'tsconfig.json': TSCONFIG,
     })
@@ -268,7 +268,7 @@ test('a stack read on the server names the .abide line — 38.97', async () => {
     const stack = await (
         await Bun.fetch(`${base}/__abide/handlers/mapped/index/where`)
     ).text()
-    expect(stack).toMatch(/mapped\/index\.abide:4:29\b/)
+    expect(stack).toMatch(/mapped\/index\.abide:4:36\b/)
 })
 
 // 38.97 — THE BROWSER'S MAP READS THE `.abide`: the chunk's position of the script's own line is
@@ -488,8 +488,8 @@ test('an import saved before its module exists recovers when the module is writt
     // A HANDLER, which the app imports at boot and bun resolves itself — the shape that met it: a
     // compiled page's imports go through abide's plugin, which asks the disk every time.
     await save(
-        'present/readLate.handler.ts',
-        "import { GET } from '@abide/abide/server'\nimport { late } from '#src/lib/late'\n\nexport default GET(() => late)\n",
+        'present/readLate.server.ts',
+        "import { rpc } from '@abide/abide/server'\nimport { late } from '#src/lib/late'\n\nexport default rpc(() => late)\n",
     )
     expect(
         await waitFor(`${base}/present/readLate`, (body) =>

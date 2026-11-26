@@ -1,7 +1,9 @@
 <script server>
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-const saveDeal = POST((deal: { name: string }) => deal)
+export const saveDeal = rpc((deal: { name: string }) => deal, {
+    methods: ['POST'],
+})
 </script>
 
 <script>

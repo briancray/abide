@@ -1,7 +1,7 @@
 <script server>
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-const summarizeDeal = GET(async function* () {
+export const summarizeDeal = rpc(async function* () {
     for (const word of '**Acme** wants the annual plan.'.split(' ')) {
         await Bun.sleep(150)
         yield `${word} `

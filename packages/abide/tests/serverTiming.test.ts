@@ -18,9 +18,9 @@ middleware(async (next) => {
 `
 
 const HANDLERS = `import { memo } from '@abide/abide'
-import { GET, trace } from '@abide/abide/server'
+import { rpc, trace } from '@abide/abide/server'
 
-export const held = GET(async (args: { n: number }) => {
+export const held = rpc(async (args: { n: number }) => {
             await Bun.sleep(50)
             return { n: args.n }
         }, { global: true, ttl: 60_000 })
@@ -30,13 +30,13 @@ function spin(milliseconds: number): void {
     while (performance.now() < until) {}
 }
 
-export const primed = GET(async (args: { n: number }) => {
+export const primed = rpc(async (args: { n: number }) => {
             spin(50)
             await Promise.resolve()
             return { n: args.n }
         }, { global: true, ttl: 60_000 })
 
-export const guarded = GET(
+export const guarded = rpc(
     async () => {
         await Bun.sleep(100)
         return { n: 1 }
@@ -51,7 +51,7 @@ export const guarded = GET(
     },
 )
 
-export const thenable = GET(() =>
+export const thenable = rpc(() =>
     trace.span(
         'remote',
         (): PromiseLike<{ n: number }> => {
@@ -62,7 +62,7 @@ export const thenable = GET(() =>
     ),
 )
 
-export const spanned = GET(() =>
+export const spanned = rpc(() =>
     trace.span(
         'db',
         async () => {

@@ -82,7 +82,8 @@ async function topLevelComponents(): Promise<string[]> {
 
 // The handlers a `<script server>` declares, by the call that declares them — what the build's
 // handler table keeps of the bindings the server module hands out (16.70).
-const HANDLER = /^const (\w+) = (?:GET|POST|PUT|PATCH|DELETE)\(/gm
+// 16.70 — each name a server block exports is answered, by that name.
+const HANDLER = /^export (?:const|let|var|function|async function) (\w+)/gm
 
 // THE EXAMPLE APP, COMPILED WHOLE: its `package.json`, every `.ts` and `.abide` under its `src`,
 // and every component compiled to the pair it becomes, served at its own path as a build serves it

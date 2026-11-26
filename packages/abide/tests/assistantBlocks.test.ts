@@ -13,7 +13,7 @@ import { assistantMessage } from '#shared/assistantMessage.ts'
 import type { ChatCall } from '#shared/callsOf.ts'
 import { chat } from '#shared/chat.ts'
 import { resultsOf } from '#shared/resultsOf.ts'
-import { POST, type Rpc } from '#shared/rpc.ts'
+import { type Rpc, rpc } from '#shared/rpc.ts'
 
 import { CITATION } from './fixtures/assistant/CITATION.ts'
 import { CITED_EVENTS } from './fixtures/assistant/CITED_EVENTS.ts'
@@ -277,7 +277,7 @@ test('chat folds an answer in place, a block keeping its identity from its first
 // failed call's left out. THE REVERT: drop `block.is_error !== true` from `resultsOf`, and the refused
 // call's words are a value too — `["ada", "refused"]` where `["ada"]` is due.
 test('resultsOf reads what a handler’s calls answered off the messages — 44.51', () => {
-    const whoami = POST(() => 'ada') as Rpc<string, never>
+    const whoami = rpc(() => 'ada', { methods: ['POST'] }) as Rpc<string, never>
     whoami.address = '/invoices/whoami'
     const call = (id: string, name: string): AssistantMessage => ({
         role: 'assistant',
@@ -322,7 +322,9 @@ test('resultsOf reads what a handler’s calls answered off the messages — 44.
 // `undefined` where `4217` is due; drop `streaming` from `callsOf`'s record, and the running call
 // reads as settled.
 test('chat hands back the calls to one handler, live, each value as its event delivered it — 53.109, 44.106', async () => {
-    const balance = POST((args: { account: string }) => args.account.length)
+    const balance = rpc((args: { account: string }) => args.account.length, {
+        methods: ['POST'],
+    })
     balance.address = '/accounts/balance'
     const run = (id: string, input: string): AssistantEvent[] => [
         {

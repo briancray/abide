@@ -8,12 +8,12 @@ import { rpcRequest } from '#shared/rpcRequest.ts'
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, jsonSchema, memo, POST, refuse } from '@abide/abide/server'
+const HANDLERS = `import { jsonSchema, memo, refuse, rpc } from '@abide/abide/server'
 
 const order: string[] = []
 let innerRuns = 0
 
-export const guarded = GET(async ({ id, flags }: { id: number; flags?: boolean[] }) => ({ id, type: typeof id, flags }), {
+export const guarded = rpc(async ({ id, flags }: { id: number; flags?: boolean[] }) => ({ id, type: typeof id, flags }), {
     args: jsonSchema({
         type: 'object',
         properties: { id: { type: 'integer' }, flags: { type: 'array', items: { type: 'boolean' } } },
@@ -33,17 +33,17 @@ export const guarded = GET(async ({ id, flags }: { id: number; flags?: boolean[]
     ],
 })
 
-export const seenOrder = GET(() => order)
+export const seenOrder = rpc(() => order)
 
-export const tagged = GET(async ({ tags }: { tags: string[] }) => tags, { args: jsonSchema({
+export const tagged = rpc(async ({ tags }: { tags: string[] }) => tags, { args: jsonSchema({
             type: 'object',
             properties: { tags: { type: 'array', items: { type: 'string' } } },
             required: ['tags'],
         }) })
 
-export const searched = GET(async ({ q }: { q: string }) => q, { args: jsonSchema({ type: 'object', properties: { q: { type: 'string' } }, required: ['q'] }) })
+export const searched = rpc(async ({ q }: { q: string }) => q, { args: jsonSchema({ type: 'object', properties: { q: { type: 'string' } }, required: ['q'] }) })
 
-const inner = GET(() => 'inner value', {
+const inner = rpc(() => 'inner value', {
     middleware: [
         async (next) => {
             innerRuns += 1
@@ -52,21 +52,21 @@ const inner = GET(() => 'inner value', {
     ],
 })
 
-export const callsInner = GET(async () => [await inner(), innerRuns])
+export const callsInner = rpc(async () => [await inner(), innerRuns])
 
-export const pay = POST(({ amount }: { amount: number }) => ({ paid: amount }), { maxBodySize: 32 })
+export const pay = rpc(({ amount }: { amount: number }) => ({ paid: amount }), { methods: ['POST'], maxBodySize: 32 })
 
-export const shared = POST(() => 'shared', { crossOrigin: ['https://partner.example'] })
+export const shared = rpc(() => 'shared', { methods: ['POST'], crossOrigin: ['https://partner.example'] })
 
-export const untimed = GET(() => 1)
+export const untimed = rpc(() => 1)
 
-export const slow = GET(() => 1, { timeout: 40_000 })
+export const slow = rpc(() => 1, { timeout: 40_000 })
 
-export const endless = GET(() => 1, { timeout: Infinity })
+export const endless = rpc(() => 1, { timeout: Infinity })
 
-export const stalls = GET(() => new Promise<string>(() => {}), { timeout: 100 })
+export const stalls = rpc(() => new Promise<string>(() => {}), { timeout: 100 })
 
-export const addressOfLookup = GET(() => guarded.url({ id: 5 }))
+export const addressOfLookup = rpc(() => guarded.url({ id: 5 }))
 
 let release: () => void = () => {}
 
@@ -86,18 +86,18 @@ const unlucky = {
     ],
 }
 
-export const streamed = GET(async function* ({ n }: { n: number }) {
+export const streamed = rpc(async function* ({ n }: { n: number }) {
     yield* lines(n)
 }, unlucky)
 
 const arrowRuns: Record<number, number> = {}
 
-export const arrowStreamed = GET(({ n }: { n: number }) => {
+export const arrowStreamed = rpc(({ n }: { n: number }) => {
     arrowRuns[n] = (arrowRuns[n] ?? 0) + 1
     return lines(n)
 }, unlucky)
 
-export const joinedStream = GET(async () => {
+export const joinedStream = rpc(async () => {
     const first = arrowStreamed({ n: 2 })
     const second = arrowStreamed({ n: 2 })
     setTimeout(() => release(), 10)
@@ -105,7 +105,7 @@ export const joinedStream = GET(async () => {
     return [arrowRuns[2] === 1, ...chunks]
 })
 
-export const annotated = GET(({ id, kind, tags, page = 1 }: { id: number; kind: 'movie' | 'series'; tags?: string[]; page: number }) => ({
+export const annotated = rpc(({ id, kind, tags, page = 1 }: { id: number; kind: 'movie' | 'series'; tags?: string[]; page: number }) => ({
             id,
             type: typeof id,
             kind,
@@ -113,18 +113,18 @@ export const annotated = GET(({ id, kind, tags, page = 1 }: { id: number; kind: 
             page,
         }))
 
-export const optionallyAnnotated = GET(
+export const optionallyAnnotated = rpc(
     async (args?: { kind?: 'movie' | 'series'; page?: number }) => args ?? 'none',
 )
 
 let tallied = 0
 
-export const tally = POST(({ id, n }: { id: number; n: number }) => {
+export const tally = rpc(({ id, n }: { id: number; n: number }) => {
     tallied += 1
     return id + n
-})
+}, { methods: ['POST'] })
 
-export const tallyInProcess = GET(async () => {
+export const tallyInProcess = rpc(async () => {
     let refused = { name: '', status: 0, data: undefined as unknown }
     try {
         await tally({ id: 1, n: 'x' as never })
@@ -136,20 +136,20 @@ export const tallyInProcess = GET(async () => {
     return { refused: [refused.name, refused.status, refused.data], runsAfterRefused, accepted, runs: tallied }
 })
 
-export const researched = GET(
+export const researched = rpc(
     ({ home, topic }: { home: string; topic?: string }) => \`\${home}:\${topic ?? '-'}\`,
 )
 
-export const featured = GET(
+export const featured = rpc(
     ({ category, q }: { category: string | undefined; q: string }) => \`\${category ?? '-'}:\${q}\`,
 )
 
-export const filed = POST(
+export const filed = rpc(
     ({ deal, tags }: { deal: { name: string; note?: string }; tags: { label: string; hint?: string }[] }) =>
         \`\${deal.name}:\${deal.note ?? '-'}:\${tags[0]?.label}:\${tags[0]?.hint ?? '-'}\`,
-)
+ { methods: ['POST'] },)
 
-export const undefinedInProcess = GET(async () => {
+export const undefinedInProcess = rpc(async () => {
     const answered = async (call: () => Promise<unknown>) => {
         try {
             return await call()
@@ -168,12 +168,12 @@ export const undefinedInProcess = GET(async () => {
     ]
 })
 
-export const releaseStream = GET(() => {
+export const releaseStream = rpc(() => {
     release()
     return 'released'
 })
 
-export const rawLookup = GET(async () => {
+export const rawLookup = rpc(async () => {
     const answer = await guarded.raw({ id: 7 })
     return [answer.status, await answer.json()]
 })

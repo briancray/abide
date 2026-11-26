@@ -1,7 +1,9 @@
 <script server>
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-const deleteDeal = POST(({ id }: { id: string }) => id)
+export const deleteDeal = rpc(({ id }: { id: string }) => id, {
+    methods: ['POST'],
+})
 </script>
 
 <script>

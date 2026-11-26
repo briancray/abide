@@ -34,7 +34,7 @@ import {
     processWide,
 } from '#shared/reactive/index.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
-import { GET, POST, reachOf } from '#shared/rpc.ts'
+import { reachOf, rpc } from '#shared/rpc.ts'
 
 installServer()
 
@@ -184,7 +184,7 @@ test("a value derived in a request lets go of a global at the request's teardown
 // 1 time before anything called it, where 0 are due.
 test('a handler declaring no parameter does not run at its declaration — 16.64', async () => {
     let runs = 0
-    const visit = GET(() => {
+    const visit = rpc(() => {
         runs += 1
         return runs
     })
@@ -203,7 +203,7 @@ test('a handler declaring no parameter does not run at its declaration — 16.64
 // `handlerValue`; each request builds its own and the body runs 2 times where 1 is due.
 test('a plain handler declaring global is built once, on its first call — 11.34, 16.64', async () => {
     let runs = 0
-    const visit = GET(
+    const visit = rpc(
         () => {
             runs += 1
             return runs
@@ -229,11 +229,11 @@ test('a plain handler declaring global is built once, on its first call — 11.3
 test('a home first reached inside an owner outlives it — 12.17', async () => {
     let runs = 0
     let starts = 0
-    const visit = GET(() => {
+    const visit = rpc(() => {
         runs += 1
         return runs
     })
-    const archive = GET(async function* () {
+    const archive = rpc(async function* () {
         starts += 1
         yield starts
     })
@@ -241,7 +241,7 @@ test('a home first reached inside an owner outlives it — 12.17', async () => {
         await visit()
         await archive()
     })
-    const again = GET(() => {
+    const again = rpc(() => {
         runs += 1
         return runs
     })
@@ -266,11 +266,14 @@ test('a home first reached inside an owner outlives it — 12.17', async () => {
 // where 0 are due — each handler's, once outside every request and once inside one.
 test('a handler no call has reached runs nothing when triggered — 13.19, 16.64', async () => {
     let runs = 0
-    const save = POST(async () => {
-        runs += 1
-        return runs
-    })
-    const feed = GET(() => {
+    const save = rpc(
+        async () => {
+            runs += 1
+            return runs
+        },
+        { methods: ['POST'] },
+    )
+    const feed = rpc(() => {
         runs += 1
         return runs
     })
@@ -293,8 +296,8 @@ test('a handler no call has reached runs nothing when triggered — 13.19, 16.64
 // for every request where it declares `global`. THE REVERT: have `handlerValue` hand a value to
 // `reactive` unfiled — request b reads request a's write, 5 where 0 is due.
 test('a value handler is one value per request, and one value under global — 16.1, 16.6', async () => {
-    const count = GET(0)
-    const shared = GET(memo(() => 0, { global: true }))
+    const count = rpc(0)
+    const shared = rpc(memo(() => 0, { global: true }))
     await inScope(new Request('http://app/a'), async () => {
         ;(reachOf(count) as Reactive<number>).set(5)
         ;(reachOf(shared) as Reactive<number>).set(5)
@@ -614,7 +617,7 @@ test('a handler with rungs keys its value by the args as sent — 11.26, 11.67',
             }),
         },
     )
-    const getInvoice = GET(
+    const getInvoice = rpc(
         invoice as unknown as (args: { id: string }) => { id: string },
         { middleware: [async (next) => next()] },
     )
@@ -641,7 +644,7 @@ test('a rung that caught the args refusal and asks again is refused again — 16
             return given as { id: string }
         },
     })
-    const getInvoice = GET(
+    const getInvoice = rpc(
         invoice as unknown as (args: { id: string }) => { id: string },
         {
             middleware: [
@@ -681,7 +684,8 @@ for (const shape of ['plain', 'streamed'] as const)
                       order.push('body')
                       yield 'swept'
                   }
-        const sweep = POST(body as () => Promise<string>, {
+        const sweep = rpc(body as () => Promise<string>, {
+            methods: ['POST'],
             middleware: [
                 async () => {
                     order.push('rung')
@@ -711,7 +715,8 @@ for (const shape of ['plain', 'streamed'] as const)
                       order.push('body')
                       yield 'swept'
                   }
-        const sweep = POST(body as () => Promise<string>, {
+        const sweep = rpc(body as () => Promise<string>, {
+            methods: ['POST'],
             middleware: [
                 async (next) => {
                     order.push('rung')

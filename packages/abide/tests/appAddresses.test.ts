@@ -1,6 +1,6 @@
 // 23.14 — AN APP'S ADDRESSES ARE ITS FILES' PATHS: a page is a `.abide` directly in an address
 // directory (23.21), an `index.abide` answering at its directory's path; a handler file is a
-// `.handler.ts` there, answering at its own path (16.2); a `<script server>` declares private handlers below
+// `.server.ts` there, answering at its own path (16.2); a `<script server>` declares private handlers below
 // `/__abide/handlers/` (16.70); and pages and handlers answer in one table of routes (19.1, 19.20).
 // A fence is never an address (23.15, 23.16), and a server file is the server's alone (16.29). A
 // route's hooks run over it and what lies below it, a fenced file's at the route holding its fence
@@ -10,7 +10,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { checkApp } from '#compiler/checkApp.ts'
 import { compileApp } from '#compiler/compileApp.ts'
-import { GET, POST } from '#server'
+import { rpc } from '#server'
 import { buildFiles } from '#server/appBuild.ts'
 import { MOUNT } from '#shared/mount.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
@@ -24,7 +24,7 @@ afterAll(removeTemporaryModules)
 
 // A file holding nothing but a server block declaring `body`.
 const SERVED = (body: string): string =>
-    `<script server>\nimport { GET, POST } from '@abide/abide/server'\n\n${body}\n</script>\n`
+    `<script server>\nimport { rpc } from '@abide/abide/server'\n\n${body}\n</script>\n`
 
 // 35.1 — A LAYOUT WRAPS EVERY PAGE BELOW ITS ROUTE, and 35.13 — one with no template wraps nothing. THE REVERT: give `layoutsAround` back a prefix over
 // the FILE's directory; `/media` is wrapped in no layout, against 1.
@@ -69,7 +69,7 @@ test('an error.abide with neither template nor head answers for no page — 35.1
     expect(errors).not.toContain('media/error.abide')
 })
 
-// 23.15 — `ui` IS A DIRECTORY LIKE ANY OTHER: a page in one has an address, a `.handler.ts` in one is a
+// 23.15 — `ui` IS A DIRECTORY LIKE ANY OTHER: a page in one has an address, a `.server.ts` in one is a
 // handler file, and a server block may import a module from a `lib` under one. THE REVERT: add `ui`
 // back to `RESERVED_DIRECTORIES`; `/ui` has no page, and the build refuses the page under it (23.18).
 test('a ui directory is an ordinary one — 23.15', async () => {
@@ -79,10 +79,10 @@ test('a ui directory is an ordinary one — 23.15', async () => {
             'ui/index.abide': '<p>ui</p>',
             'media/ui/lib/format.ts':
                 'export const format = (n: number) => `${n}`\n',
-            'media/ui/status.handler.ts':
-                "import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'up')\n",
+            'media/ui/status.server.ts':
+                "import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 'up')\n",
             'media/index.abide': SERVED(
-                "import { format } from './ui/lib/format.ts'\n\nconst count = GET(() => format(1))",
+                "import { format } from './ui/lib/format.ts'\n\nexport const count = rpc(() => format(1))",
             ),
         }),
     )
@@ -130,15 +130,15 @@ test('two layouts at one route are refused, naming both — 35.12', async () => 
 test('a handler file answers at its path, and a private handler below /__abide/handlers — 16.2, 16.70, 23.3, 23.14', async () => {
     const { mounts, routes } = await compileApp(
         appFixture({
-            'media/[id]/index.abide': `${SERVED('const rate = POST(() => 1)')}<p>one</p>`,
-            'media/[id]/save.handler.ts':
-                "import { POST } from '@abide/abide/server'\n\nexport default POST(({ id }: { id: string }) => id)\n",
-            'media/[id]/comments/addComment.handler.ts':
-                "import { POST } from '@abide/abide/server'\n\nexport default POST(({ id }: { id: string }) => id)\n",
-            'admin/lib/Panel.abide': `${SERVED('const recent = GET(() => 1)')}<p>panel</p>`,
+            'media/[id]/index.abide': `${SERVED('export const rate = rpc(() => 1, { methods: [\'POST\'] })')}<p>one</p>`,
+            'media/[id]/save.server.ts':
+                "import { rpc } from '@abide/abide/server'\n\nexport default rpc(({ id }: { id: string }) => id, { methods: ['POST'] })\n",
+            'media/[id]/comments/addComment.server.ts':
+                "import { rpc } from '@abide/abide/server'\n\nexport default rpc(({ id }: { id: string }) => id, { methods: ['POST'] })\n",
+            'admin/lib/Panel.abide': `${SERVED('export const recent = rpc(() => 1)')}<p>panel</p>`,
             'admin/index.abide': SERVED(''),
-            'health.handler.ts':
-                "import { GET } from '@abide/abide/server'\n\nexport default GET(() => 1)\n",
+            'health.server.ts':
+                "import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 1)\n",
         }),
     )
     const addresses: string[] = []
@@ -163,14 +163,14 @@ test('a page and a GET handler at one address are refused, parameter names aside
         compileApp(
             appFixture({
                 'media/[id]/save/index.abide': '<p>saving</p>',
-                'media/[slug]/save.handler.ts':
-                    "import { GET } from '@abide/abide/server'\n\nexport default GET(({ slug }: { slug: string }) => slug)\n",
+                'media/[slug]/save.server.ts':
+                    "import { rpc } from '@abide/abide/server'\n\nexport default rpc(({ slug }: { slug: string }) => slug)\n",
             }),
         ),
     )
     expect(page).toContain('19.1')
     expect(page).toContain('media/[id]/save/index.abide')
-    expect(page).toContain('media/[slug]/save.handler.ts')
+    expect(page).toContain('media/[slug]/save.server.ts')
 })
 
 // 16.67 — a parameter the handler's `Args` does not declare. THE REVERT: drop
@@ -181,8 +181,8 @@ test('a handler whose args do not declare its route parameter is refused — 16.
         compileApp(
             appFixture({
                 'index.abide': '<p>home</p>',
-                'media/[id]/read.handler.ts':
-                    "import { GET } from '@abide/abide/server'\n\nexport default GET(() => 1)\n",
+                'media/[id]/read.server.ts':
+                    "import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 1)\n",
             }),
         ),
     )
@@ -190,13 +190,11 @@ test('a handler whose args do not declare its route parameter is refused — 16.
     expect(refused).toContain('`id`')
 })
 
-// 34.17, 16.73 — `export *` IS AN EXPORT LIKE ANY OTHER: refused from a `.abide`'s server block, and
-// from a handler file beside its default, where each name it carries is an export of the file's
-// own. THE REVERTS: skip `export` in `projectShadow`'s `refuseExport`; the `.abide` builds. Refuse
-// only a default that is not a handler in `handlersUnder`'s 16.73 loop; the handler file builds,
-// `charge` and `helper` exported beside it.
-test('export * is refused from a server block and from a handler file — 34.17, 16.73', async () => {
-    const charges = `import { POST } from '@abide/abide/server'\n\nexport const charge = POST(() => 1)\nexport const helper = 2\n`
+// 34.17 — `export *` IS REFUSED FROM A `.abide`'s SERVER BLOCK: a server block exports one declared
+// name at a time, each its component's to call (16.70), and a re-export declares none. THE REVERT:
+// skip `export` in `projectShadow`'s `refuseExport`; the `.abide` builds.
+test('export * is refused from a server block — 34.17', async () => {
+    const charges = `import { rpc } from '@abide/abide/server'\n\nexport const charge = rpc(() => 1, { methods: ['POST'] })\nexport const helper = 2\n`
     const block = await refusal(
         compileApp(
             appFixture({
@@ -206,18 +204,6 @@ test('export * is refused from a server block and from a handler file — 34.17,
         ),
     )
     expect(block).toContain('34.17')
-    const file = await refusal(
-        compileApp(
-            appFixture({
-                'index.abide': '<p>home</p>',
-                'billing/lib/charges.server.ts': charges,
-                'billing/charge.handler.ts':
-                    "import { POST } from '@abide/abide/server'\n\nexport default POST(() => 1)\nexport * from './lib/charges.server.ts'\n",
-            }),
-        ),
-    )
-    expect(file).toContain('16.73')
-    expect(file).toContain('billing/charge.handler.ts')
 })
 
 // 34.20, 34.17 — a server block under a `public` directory has no route to be filed at, and a
@@ -229,7 +215,7 @@ test('a server block under a public directory, and one exporting default, are re
             appFixture({
                 'index.abide': '<p>home</p>',
                 'media/public/Rating.abide': SERVED(
-                    'const rate = POST(() => 1)',
+                    'export const rate = rpc(() => 1, { methods: [\'POST\'] })',
                 ),
             }),
         ),
@@ -239,7 +225,7 @@ test('a server block under a public directory, and one exporting default, are re
     const named = await refusal(
         compileApp(
             appFixture({
-                'index.abide': SERVED('export default GET(() => 1)'),
+                'index.abide': SERVED('export default rpc(() => 1)'),
             }),
         ),
     )
@@ -248,7 +234,7 @@ test('a server block under a public directory, and one exporting default, are re
 
 // 23.16, 23.17, 23.18, 23.22, 23.23 — what the tree may not hold: a fence under another, a route in
 // abide's own namespace, a page where nothing has an address, a file directly in an address
-// directory that is neither a `.abide`, a handler file (`<name>.handler.ts`) nor a test file, and a
+// directory that is neither a `.abide`, a handler file (`<name>.server.ts`) nor a test file, and a
 // server file outside a `lib` directory. THE REVERTS: drop each `refusals.at` in `appFiles`'s `walk` (or
 // `appLayout`'s `refuseFrameworkRoute`); its build succeeds.
 test('a fence under another, a page under one, an __abide route, a stray file and a stray server file are refused — 23.16, 23.17, 23.18, 23.22, 23.23', async () => {
@@ -287,7 +273,7 @@ test('a fence under another, a page under one, an __abide route, a stray file an
     expect(stray).toContain('23.22')
     expect(stray).toContain('media/notes.json')
     expect(stray).toContain('lib')
-    // a `.ts` not named `.handler.ts` is no handler file, and the refusal says how to name one.
+    // a `.ts` not named `.server.ts` is no handler file, and the refusal says how to name one.
     const module = await refusal(
         compileApp(
             appFixture({
@@ -298,9 +284,21 @@ test('a fence under another, a page under one, an __abide route, a stray file an
     )
     expect(module).toContain('23.22')
     expect(module).toContain('media/format.ts')
-    expect(module).toContain('<name>.handler.ts')
-    // 23.23 — beside a page, or under `public` where it would be answered as authored.
-    for (const file of ['media/db.server.ts', 'public/key.server.pem']) {
+    expect(module).toContain('<name>.server.ts')
+    // 23.23 — under `public`, where it would be answered as authored; and 16.73 — beside a page,
+    // where it is there to answer at its route, with no `rpc` to answer with.
+    const answering = await refusal(
+        compileApp(
+            appFixture({
+                'index.abide': '<p>home</p>',
+                'media/db.server.ts': 'export const db = 1\n',
+            }),
+        ),
+    )
+    expect(answering).toContain('16.73')
+    expect(answering).toContain('media/db.server.ts')
+    expect(answering).toContain('lib directory')
+    for (const file of ['public/key.server.pem']) {
         const server = await refusal(
             compileApp(
                 appFixture({
@@ -422,10 +420,10 @@ test("a component's browser module carries its private handlers' wrappers and no
     const { files } = await compileApp(
         appFixture({
             'media/[id]/lib/Rating.abide': `<script server>
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 const KEY = 'sk-not-for-browsers'
-const rate = POST(({ stars }: { stars: number }) => KEY.length + stars)
+export const rate = rpc(({ stars }: { stars: number }) => KEY.length + stars, { methods: ['POST'] })
 </script>
 
 <script>
@@ -457,10 +455,10 @@ let stars = reactive(0)
 test('a server block importing what its <script> imports compiles as one binding — 34.22', async () => {
     const root = appFixture({
         'index.abide': `<script server>
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 import { reactive, refuse } from '@abide/abide'
 
-const count = GET(({ n }: { n: number }) => (n > 0 ? reactive(n)() : refuse(400)))
+export const count = rpc(({ n }: { n: number }) => (n > 0 ? reactive(n)() : refuse(400)))
 </script>
 
 <script>
@@ -499,7 +497,7 @@ import type { Contact } from './lib/schema.ts'
 const empty: Contact = { name: '' }
 </script>
 
-${SERVED("import { Contact } from './lib/schema.ts'\n\nconst save = POST((a: unknown) => Contact.parse(a))")}
+${SERVED("import { Contact } from './lib/schema.ts'\n\nexport const save = rpc((a: unknown) => Contact.parse(a), { methods: ['POST'] })")}
 <p>{empty.name}</p>`,
     })
     const found = await checkApp(root)
@@ -518,7 +516,7 @@ test('a .abide default both a server block and its <script> import is refused �
         compileApp(
             appFixture({
                 'lib/Card.abide': '<p>card</p>',
-                'index.abide': `${SERVED("import Card from './lib/Card.abide'\n\nconst preview = GET(() => Card({}))")}
+                'index.abide': `${SERVED("import Card from './lib/Card.abide'\n\nexport const preview = rpc(() => Card({}))")}
 <script>
 import Card from './lib/Card.abide'
 </script>
@@ -543,7 +541,7 @@ test('a comment inside a shared multi-line import leaves a server module that pa
     b,
 } from './lib/x.ts'
 
-const sum = GET(() => a + b)`)}
+const sum = rpc(() => a + b)`)}
 <script>
 import { a } from './lib/x.ts'
 </script>
@@ -564,7 +562,7 @@ import { a } from './lib/x.ts'
 test('a default import both blocks make merges beside the names only one makes — 34.22', async () => {
     const root = appFixture({
         'lib/x.ts': 'export default 1\nexport const y = 2',
-        'index.abide': `${SERVED("import X, { y } from './lib/x.ts'\n\nconst total = GET(() => X + y)")}
+        'index.abide': `${SERVED("import X, { y } from './lib/x.ts'\n\nexport const total = rpc(() => X + y)")}
 <script>
 import X from './lib/x.ts'
 </script>
@@ -585,11 +583,11 @@ import X from './lib/x.ts'
 test("a page reads a handler file's answer by name, typed — 16.74", async () => {
     const found = await checkApp(
         appFixture({
-            'getPolicy.handler.ts':
-                "import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ retries: 3 }))\n",
+            'getPolicy.server.ts':
+                "import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => ({ retries: 3 }))\n",
             'index.abide': `<script>
 import { reactive } from '@abide/abide'
-import getPolicy from './getPolicy.handler.ts'
+import getPolicy from './getPolicy.server.ts'
 
 const policy = reactive.derived(() => getPolicy())
 const retries: number = policy.retries
@@ -615,7 +613,9 @@ test('a handler is named on MCP and OpenAPI by its method and its route — 20.1
 // THE REVERT: name the tool by `rpc.address` as it stands — under `/docs` it reads
 // `post_docs_figures_draw` where `post_figures_draw` is due.
 test('rpc.tool is the name MCP lists the handler by, under a mount too — 20.24', () => {
-    const draw = POST(({ shape }: { shape: string }) => shape)
+    const draw = rpc(({ shape }: { shape: string }) => shape, {
+        methods: ['POST'],
+    })
     expect(draw.tool).toBeUndefined()
     draw.address = '/figures/draw'
     expect(draw.tool).toBe('post_figures_draw')
@@ -624,7 +624,7 @@ test('rpc.tool is the name MCP lists the handler by, under a mount too — 20.24
     try {
         draw.address = '/docs/figures/draw'
         expect(draw.tool).toBe('post_figures_draw')
-        const read = GET(({ id }: { id: number }) => id)
+        const read = rpc(({ id }: { id: number }) => id)
         read.address = '/docs/media/[id]'
         expect(read.tool).toBe('get_media_id')
     } finally {
@@ -653,9 +653,9 @@ beforeAll(async () => {
     const fixture = appFixture({
         'index.abide': '<p>home</p>',
         'media/[id]/index.abide': '<p id="page">a film</p>',
-        'media/new.handler.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ title }: { title: string }) => ({ made: title }))\n`,
-        'media/[id]/note.handler.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ id, note }: { id: number; note: string }) => ({ id, note }))\n`,
-        'media/[id]/read.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(({ id }: { id: number }) => ({ id, type: typeof id }))\n`,
+        'media/new.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport default rpc(({ title }: { title: string }) => ({ made: title }), { methods: ['POST'] })\n`,
+        'media/[id]/note.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport default rpc(({ id, note }: { id: number; note: string }) => ({ id, note }), { methods: ['POST'] })\n`,
+        'media/[id]/read.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport default rpc(({ id }: { id: number }) => ({ id, type: typeof id }))\n`,
         'media/public/poster.txt': 'a poster',
         // 35.2 — an error page answers for its own route and what lies below it.
         'shelf/error.abide': '<p id="error">the shelf</p>',
@@ -675,31 +675,31 @@ onError((error) => void seen.push(\`vault: \${(error as Error).message}\`))
 </script>
 `,
         'vault/index.abide': '<p>vault</p>',
-        'vault/gold.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 'gold')\n`,
-        'vault/blowUp.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => {
+        'vault/gold.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 'gold')\n`,
+        'vault/blowUp.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => {
     throw new Error('the vault blew up')
 })
 `,
         'vault/lib/seen.server.ts': 'export const seen: string[] = []\n',
         // 30.3, 15.8 — a render calling a handler with a path parameter no address carries, and
         // painting its refusal, beside a count of the handler's runs.
-        'comments/[id]/getComments.handler.ts': `import { GET } from '@abide/abide/server'
+        'comments/[id]/getComments.server.ts': `import { rpc } from '@abide/abide/server'
 import { runs } from '../../lib/runs.server.ts'
 
-export default GET(({ id }: { id: string }) => {
+export default rpc(({ id }: { id: string }) => {
     runs.count += 1
     return [id]
 })
 `,
         'lib/runs.server.ts': 'export const runs = { count: 0 }\n',
-        'commentRuns.handler.ts': `import { POST } from '@abide/abide/server'
+        'commentRuns.server.ts': `import { rpc } from '@abide/abide/server'
 import { runs } from './lib/runs.server.ts'
 
-export default POST(() => runs.count)
+export default rpc(() => runs.count, { methods: ['POST'] })
 `,
         'uncommented/index.abide': `<script>
 import { reactive } from '@abide/abide'
-import getComments from '../comments/[id]/getComments.handler.ts'
+import getComments from '../comments/[id]/getComments.server.ts'
 
 const blank = reactive.derived(() => getComments({ id: '' }))
 </script>
@@ -718,22 +718,22 @@ middleware((next, { request }) => {
 </script>
 `,
         'lobby/index.abide': '<p>lobby</p>',
-        'lobby/badge.handler.ts': `import { cookies, GET, request } from '@abide/abide/server'
+        'lobby/badge.server.ts': `import { cookies, request, rpc } from '@abide/abide/server'
 
-export default GET(() => ({
+export default rpc(() => ({
     header: request().headers.get('x-badge'),
     cookie: cookies().get('pass') ?? null,
 }))
 `,
         // 16.69 — two handlers under a rest, each answering at its own name.
-        'docs/[...path]/save.handler.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ path }: { path: string[] }) => ({ saved: path }))\n`,
-        'docs/[...path]/remove.handler.ts': `import { POST } from '@abide/abide/server'\n\nexport default POST(({ path }: { path: string[] }) => ({ removed: path }))\n`,
-        'errors.handler.ts': `import { GET } from '@abide/abide/server'
+        'docs/[...path]/save.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport default rpc(({ path }: { path: string[] }) => ({ saved: path }), { methods: ['POST'] })\n`,
+        'docs/[...path]/remove.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport default rpc(({ path }: { path: string[] }) => ({ removed: path }), { methods: ['POST'] })\n`,
+        'errors.server.ts': `import { rpc } from '@abide/abide/server'
 import { seen } from './vault/lib/seen.server.ts'
 
-export default GET(() => [...seen])
+export default rpc(() => [...seen])
 `,
-        'boom.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => {
+        'boom.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => {
     throw new Error('the root blew up')
 })
 `,
@@ -749,9 +749,9 @@ middleware((next, { request }) =>
 `,
         'admin/index.abide': `<script>\nimport Panel from './lib/Panel.abide'\n</script>\n\n<Panel/>`,
         'admin/lib/Panel.abide': `<script server>
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-const save = POST(() => 'saved')
+export const save = rpc(() => 'saved', { methods: ['POST'] })
 </script>
 
 <button onclick={() => save()}>save</button>`,
@@ -762,9 +762,9 @@ middleware(() => new Response('reports only', { status: 418 }))
 </script>
 `,
         'reports/lib/Chart.abide': `<script server>
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-const draw = POST(() => 'drawn')
+export const draw = rpc(() => 'drawn', { methods: ['POST'] })
 </script>
 
 <button onclick={() => draw()}>draw</button>`,
@@ -797,7 +797,7 @@ test('a parameter in the path and the query as well is refused 400 — 16.66', a
 })
 
 // 19.20 — A STATIC ROUTE THAT DOES NOT ANSWER THE METHOD LEAVES IT TO ONE THAT DOES: `GET /media/new`
-// is the page at `/media/[id]`, and `POST /media/new` the handler file `media/new.handler.ts`. THE REVERT: stop the walk at
+// is the page at `/media/[id]`, and `POST /media/new` the handler file `media/new.server.ts`. THE REVERT: stop the walk at
 // the first route that matches; the GET is a 405.
 test('a request reaches the most specific route answering its method — 19.20', async () => {
     const page = await Bun.fetch(`${base}/media/new`)
@@ -951,8 +951,8 @@ test('a private handler is on neither the OpenAPI document nor the MCP listing �
 test("a mutation's browser copy holds its declared literal document, and a GET's holds none — 19.28, 19.29", async () => {
     const { handlers } = await compileApp(
         appFixture({
-            'deals/createDeal.handler.ts': `import { jsonSchema } from '@abide/abide'
-import { POST } from '@abide/abide/server'
+            'deals/createDeal.server.ts': `import { jsonSchema } from '@abide/abide'
+import { rpc } from '@abide/abide/server'
 
 const NEW_DEAL = jsonSchema<{ company: string; amount: number }>({
     type: 'object',
@@ -963,19 +963,19 @@ const NEW_DEAL = jsonSchema<{ company: string; amount: number }>({
     },
 })
 
-export default POST(({ company }: { company: string; amount: number }) => company, {
+export default rpc(({ company }: { company: string; amount: number }) => company, { methods: ['POST'],
     args: NEW_DEAL,
 })
 `,
-            'deals/getDeal.handler.ts': `import { GET } from '@abide/abide/server'
+            'deals/getDeal.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(({ id }: { id: string }) => id)
+export default rpc(({ id }: { id: string }) => id)
 `,
         }),
     )
     const face = (name: string) =>
         Object.entries(handlers).find(([path]) =>
-            path.endsWith(`${name}.handler.ts`),
+            path.endsWith(`${name}.server.ts`),
         )?.[1]
     const declared = {
         type: 'object',
@@ -985,8 +985,8 @@ export default GET(({ id }: { id: string }) => id)
             amount: { type: 'number', minimum: 1000 },
         },
     }
-    expect(face('createDeal')?.args).toEqual(declared)
+    expect(face('createDeal')?.exports.default?.args).toEqual(declared)
     expect(face('createDeal')?.client).toContain(JSON.stringify(declared))
-    expect(face('getDeal')?.args).toBeDefined()
+    expect(face('getDeal')?.exports.default?.args).toBeDefined()
     expect(face('getDeal')?.client).not.toContain('"properties"')
 })

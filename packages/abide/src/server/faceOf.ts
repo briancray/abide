@@ -42,15 +42,14 @@ export type Asked =
     'text' | 'style' | 'component' | 'client' | 'server' | 'abide' | 'handler'
 
 /**
- * One handler file, as `Compilation.handlers` holds it — and 19.9's schema its default's annotation
- * derives, which the module at the file's path holds it to (`derivedArgs`), and the address it is
- * stamped with on load (16.2).
+ * One server file answering at its route, as `Compilation.handlers` holds it: per `rpc` it exports,
+ * the address it is stamped with on load (16.2) and 19.9's schema its annotation derives, which the
+ * module at the file's path holds it to (`derivedArgs`).
  */
 export type HandlerFace = {
     scope: string
-    address: string
     client: string
-    args: JsonValue | undefined
+    exports: Record<string, { address: string; args: JsonValue | undefined }>
 }
 
 /**

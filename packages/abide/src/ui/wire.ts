@@ -34,11 +34,13 @@ import { HandlerRoute } from '#shared/HandlerRoute.ts'
 import type { JsonValue } from '#shared/JsonValue.ts'
 import { standForLoadCall, startingLoadCall } from '#shared/loadCall.ts'
 import { randomToken } from '#shared/randomToken.ts'
+import { diffOps } from '#shared/reactive/diffOps.ts'
 import { deepEqual, keyedValue } from '#shared/reactive/index.ts'
 import {
     declareDefaults,
     type Defaults,
 } from '#shared/reactive/parameterDefaults.ts'
+import type { PatchOp } from '#shared/reactive/patchLog.ts'
 import { closedRun, standIn } from '#shared/reactive/producer.ts'
 import { declare, type Method, STREAMING_COPY, WIRE_COPY } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
@@ -49,7 +51,8 @@ import { continueOverMux, followRpc, streamOverMux } from './socketWire.ts'
 
 /** The browser's `Rpc` for a handler: the server's declaration over a body that fetches. */
 export function wire(
-    method: Method,
+    // 16.111 — the verb its call sends, or every verb it answers, that one first.
+    verbs: Method | readonly Method[],
     address: string,
     // 18.4 — what the build read off the handler's declaration.
     options?: CopyOptions,
@@ -58,6 +61,9 @@ export function wire(
     // 19.28 — and, for a mutation, the JSON Schema the build read for its args, which a `form` checks.
     document?: JsonValue,
 ): unknown {
+    const methods: readonly Method[] =
+        typeof verbs === 'string' ? [verbs] : verbs
+    const method = methods[0] as Method
     // 16.9 — the handler's route, compiled once for every call through the copy.
     const route = new HandlerRoute(address)
     // 16.80 — the requests this page has had an answer to, whose next load asks past every cache.
@@ -264,11 +270,66 @@ export function wire(
     ;(rpc as unknown as { [WIRE_COPY]: () => void })[WIRE_COPY]()
     // 16.9 — the address `rpc.url` and `rpc.raw` build on.
     rpc.address = address
+    rpc.methods = methods
+    // 16.115, 16.116 — A WRITE OF A VALUE ANSWERING `PUT` OR `PATCH` IS THE SERVER'S: shown on this
+    // page's copy at once, sent, and the copy then holds what the server answered — or, refused, is
+    // loaded again from it.
+    if (methods.includes('PUT') || methods.includes('PATCH'))
+        sendsWrites(rpc as unknown as WrittenCopy, methods, route)
     if (document !== undefined)
         (rpc as unknown as Record<typeof ARGS_DOCUMENT, JsonValue>)[
             ARGS_DOCUMENT
         ] = document
     return rpc
+}
+
+/** What `sendsWrites` reaches of a copy: its writes, its reload and its value now. */
+type WrittenCopy = {
+    set(...given: unknown[]): void
+    patch(...given: unknown[]): void
+    refresh(): void
+    (): PromiseLike<unknown>
+}
+
+/**
+ * 16.115, 16.116 — sends a copy's `set` as a `PUT` of the value and its `patch` as a `PATCH` of the
+ * JSON Patch it made, where the value answers by each. A value answering by these takes no args, so
+ * a write is the value alone (11.80).
+ */
+function sendsWrites(
+    copy: WrittenCopy,
+    methods: readonly Method[],
+    route: HandlerRoute,
+): void {
+    const setHere = copy.set.bind(copy)
+    const patchHere = copy.patch.bind(copy)
+    const send = (verb: Method, args: Record<string, unknown>): void => {
+        const request = rpcRequest(verb, route, args, 'no-store')
+        void fetch(request.url, request.init)
+            .then((response) => answerFrom(response, undefined, false))
+            .then((answer) => {
+                const value = answered(answer as Answer, request)
+                if (isFailed(value)) copy.refresh()
+                else setHere(value)
+            })
+            .catch(() => copy.refresh())
+    }
+    if (methods.includes('PUT'))
+        copy.set = (...given: unknown[]): void => {
+            setHere(...given)
+            send('PUT', { value: given.at(-1) })
+        }
+    if (methods.includes('PATCH'))
+        copy.patch = (...given: unknown[]): void => {
+            const mutate = given.at(-1) as (value: unknown) => void
+            let ops: PatchOp[] = []
+            patchHere((value: unknown) => {
+                const before = structuredClone(value)
+                mutate(value)
+                ops = diffOps(before, value, null)
+            })
+            if (ops.length !== 0) send('PATCH', { ops })
+        }
 }
 
 /** The token a chunk carries where it is an early call's continuation rather than a chunk (16.97). */

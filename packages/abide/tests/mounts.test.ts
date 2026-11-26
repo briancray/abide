@@ -27,9 +27,9 @@ const KIT = {
         '<div class="users"><slot/></div>',
     'node_modules/admin-kit/admin/users/[id]/index.abide':
         '<p>one admin user</p>',
-    'node_modules/admin-kit/admin/users/list.handler.ts': `import { GET } from '@abide/abide/server'
+    'node_modules/admin-kit/admin/users/list.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => ['ada', 'grace'])
+export default rpc(() => ['ada', 'grace'])
 `,
 }
 
@@ -216,12 +216,12 @@ test("a mounted page's import of its own handler file is the browser's wrapper â
     const app = appFixture({
         ...APP,
         ...KIT,
-        'node_modules/admin-kit/admin/users/list.handler.ts': `import { GET } from '@abide/abide/server'
+        'node_modules/admin-kit/admin/users/list.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => ['handler-body-marker'])
+export default rpc(() => ['handler-body-marker'])
 `,
         'node_modules/admin-kit/admin/index.abide': `<script>
-import list from './users/list.handler.ts'
+import list from './users/list.server.ts'
 
 const names = list()
 </script>
@@ -251,12 +251,12 @@ test("the app's import of a mounted handler file by its package's name is the br
     const app = appFixture({
         ...APP,
         ...KIT,
-        'node_modules/admin-kit/admin/users/list.handler.ts': `import { GET } from '@abide/abide/server'
+        'node_modules/admin-kit/admin/users/list.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => ['handler-body-marker'])
+export default rpc(() => ['handler-body-marker'])
 `,
         'index.abide': `<script>
-import list from 'admin-kit/admin/users/list.handler.ts'
+import list from 'admin-kit/admin/users/list.server.ts'
 
 const names = list()
 </script>

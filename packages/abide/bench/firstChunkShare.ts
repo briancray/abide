@@ -19,9 +19,9 @@ const DELAY = Number(process.argv[4] ?? 100)
 // socket's handshake are what the mux waits on that the early call does not.
 const LATENCY = Number(process.argv[5] ?? 0)
 
-const TICKS = `import { GET } from '@abide/abide/server'
+const TICKS = `import { rpc } from '@abide/abide/server'
 
-export default GET(async function* ({ n }: { n: string }) {
+export default rpc(async function* ({ n }: { n: string }) {
     await Bun.sleep(${DELAY})
     for (let at = 0; at < 40; at++) {
         yield { n, at }
@@ -32,7 +32,7 @@ export default GET(async function* ({ n }: { n: string }) {
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import ticks from '#src/data/ticks.handler.ts'
+import ticks from '#src/data/ticks.server.ts'
 
 const a = reactive.derived(() => ticks({ n: 'a' }))
 </script>
@@ -42,7 +42,7 @@ const a = reactive.derived(() => ticks({ n: 'a' }))
 const { base, server } = await servedFixture(
     'first-chunk',
     {
-        'data/ticks.handler.ts': TICKS,
+        'data/ticks.server.ts': TICKS,
         'streams/index.abide': PAGE,
     },
     {},

@@ -5,7 +5,7 @@
 import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
 
-import { GET, store } from '#server'
+import { rpc, store } from '#server'
 import { flushSync, isFailed, memo, reactive, refuse, watch } from '#shared'
 import { KEYED_OF } from '#shared/reactive/createMemo.ts'
 import type { Reactive } from '#shared/reactive/Reactive.ts'
@@ -137,8 +137,8 @@ test("a derived keeps the answer it served while a memo's window holds the next 
 // 16.110 — A HANDLER TAKES A MEMO'S PACE. Typed, never run; the assertion is that it compiles.
 test('a handler takes throttle or debounce, as a memo does — 16.110', () => {
     const typed = (): void => {
-        GET(() => 1, { throttle: 100 })
-        GET(() => 1, { debounce: 100 })
+        rpc(() => 1, { throttle: 100 })
+        rpc(() => 1, { debounce: 100 })
     }
     expect(typeof typed).toBe('function')
 })
@@ -150,11 +150,11 @@ test('a handler takes throttle or debounce, as a memo does — 16.110', () => {
 test("a handler's store is any store, as a memo's is — 16.110", () => {
     const db = new Database(':memory:')
     const typed = (): void => {
-        GET((): { id: string }[] => [], {
+        rpc((): { id: string }[] => [], {
             global: true,
             store: store.sqlite(db, 'calls'),
         })
-        GET((_args: { account: string }): { id: string }[] => [], {
+        rpc((_args: { account: string }): { id: string }[] => [], {
             global: true,
             store: ({ account }) => store.sqlite(db, account),
         })
@@ -196,7 +196,7 @@ test('an entry a window starts onto a refused call settles its awaits — 5.20',
         status: 413,
         schema: (value: unknown) => value as { n: number },
     })
-    const bounded = GET(({ n }: { n: number }) => (n > 10 ? tooBig({ n }) : n))
+    const bounded = rpc(({ n }: { n: number }) => (n > 10 ? tooBig({ n }) : n))
     const paced = memo(bounded, { debounce: 10 })
     const shown = reactive.derived(() => paced({ n: 99 }))
     const answered = await Promise.race([

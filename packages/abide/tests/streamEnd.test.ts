@@ -10,7 +10,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { cookies, GET, reactive } from '#server'
+import { cookies, reactive, rpc } from '#server'
 import { CONTINUE_HEADER } from '#server/CONTINUE_HEADER.ts'
 import type { App } from '#server/createApp.ts'
 import { streamOverMux } from '#server/streamOverMux.ts'
@@ -32,7 +32,7 @@ let handoffs = 0
 let current: unknown
 const chunksOfCurrent = (): AsyncIterable<unknown> =>
     chunksOfStream(reactive.derived(() => current as never))
-const ticks = GET(chunksOfCurrent)
+const ticks = rpc(chunksOfCurrent)
 
 /** A `global` stream of `count` chunks, each released by the test, returning as it yields its last. */
 function gatedStream(count: number): {
@@ -195,7 +195,7 @@ function seeded(seed: number): () => number {
 // one turn, so a chunk lands with the handoff's own race (16.97) as well as with the close.
 test('a reader joining a run mid-way reads every chunk it produced, on every lane — 9.17', async () => {
     await using app = await inMemoryApp({
-        'feed/ticks.handler.ts': { default: ticks },
+        'feed/ticks.server.ts': { default: ticks },
     })
     const short: string[] = []
     let cases = 0
@@ -276,8 +276,8 @@ test('a run failing as it yields its last chunk throws after every chunk it prod
 // early call is handed to the mux with its cookie never laid on.
 test('an early call whose handler wrote a cookie is answered whole over http — 16.97', async () => {
     await using app = await inMemoryApp({
-        'feed/flavor.handler.ts': {
-            default: GET(() => {
+        'feed/flavor.server.ts': {
+            default: rpc(() => {
                 cookies().set('flavor', 'mint')
                 return chunksOfCurrent()
             }),

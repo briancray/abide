@@ -12,27 +12,27 @@ import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const HANDLERS = `import { memo, refuse } from '@abide/abide'
-import { GET, POST, request, response } from '@abide/abide/server'
+import { request, response, rpc } from '@abide/abide/server'
 import { reported } from '../../lib/reported.server.ts'
 
-export const shared = GET(() => ({ n: 1 }), { global: true, ttl: 90_500 })
+export const shared = rpc(() => ({ n: 1 }), { global: true, ttl: 90_500 })
 
-export const sharedForever = GET(() => ({ n: 1 }), { global: true })
+export const sharedForever = rpc(() => ({ n: 1 }), { global: true })
 
-export const aging = GET(() => ({ n: 1 }), { global: true, ttl: 60_500 })
+export const aging = rpc(() => ({ n: 1 }), { global: true, ttl: 60_500 })
 
-export const agingKeyed = GET((args: { n: number }) => ({ n: args.n }), { global: true, ttl: 60_500 })
+export const agingKeyed = rpc((args: { n: number }) => ({ n: args.n }), { global: true, ttl: 60_500 })
 
-export const agingGuarded = GET((args: { n: number }) => ({ n: args.n }), { global: true, ttl: 60_500, middleware: [async (next) => next()] })
+export const agingGuarded = rpc((args: { n: number }) => ({ n: args.n }), { global: true, ttl: 60_500, middleware: [async (next) => next()] })
 
-export const sharedWrite = POST(() => ({ n: 1 }), { global: true, ttl: 90_000 })
+export const sharedWrite = rpc(() => ({ n: 1 }), { methods: ['POST'], global: true, ttl: 90_000 })
 
-export const local = GET(() => ({ n: 1 }), { ttl: 90_000 })
+export const local = rpc(() => ({ n: 1 }), { ttl: 90_000 })
 
-export const sharedRefused = GET((args: { n: number }) => (args.n > 0 ? { n: args.n } : refuse(404, 'none')), { global: true,
+export const sharedRefused = rpc((args: { n: number }) => (args.n > 0 ? { n: args.n } : refuse(404, 'none')), { global: true,
         ttl: 90_000 })
 
-export const feed = GET(async function* () {
+export const feed = rpc(async function* () {
     yield { n: 1 }
     await Bun.sleep(300)
     yield { n: 2 }
@@ -41,7 +41,7 @@ export const feed = GET(async function* () {
 // Held after its first line until \`release\` is called, so a reader that has the first line before
 // it releases the second proves the line went out before the body was done.
 let open = (): void => {}
-export const held = GET(async function* () {
+export const held = rpc(async function* () {
     yield { n: 1 }
     await new Promise<void>((done) => {
         open = done
@@ -49,25 +49,25 @@ export const held = GET(async function* () {
     yield { n: 2 }
 })
 
-export const release = POST(() => {
+export const release = rpc(() => {
     open()
-})
+}, { methods: ['POST'] })
 
-export const late = GET(async function* () {
+export const late = rpc(async function* () {
     await Bun.sleep(150)
     yield { n: 1 }
 })
 
-export const binary = GET(async function* () {
+export const binary = rpc(async function* () {
     yield new Uint8Array([1, 2])
     yield new Uint8Array([3])
 })
 
-export const fixed = GET(() => response.sse([1, 2]))
+export const fixed = rpc(() => response.sse([1, 2]))
 
-export const doc = GET(() => response.page('<h1>hello</h1>'))
+export const doc = rpc(() => response.page('<h1>hello</h1>'))
 
-export const streamedDoc = GET(() =>
+export const streamedDoc = rpc(() =>
     response.page(
         (async function* () {
             yield '<h1>'
@@ -76,29 +76,29 @@ export const streamedDoc = GET(() =>
     ),
 )
 
-export const moved = POST(() => response.redirect('/there', 303))
+export const moved = rpc(() => response.redirect('/there', 303), { methods: ['POST'] })
 
-export const nothing = POST(() => undefined)
+export const nothing = rpc(() => undefined, { methods: ['POST'] })
 
-export const nothingAsJson = POST(() => response.json(undefined))
+export const nothingAsJson = rpc(() => response.json(undefined), { methods: ['POST'] })
 
-export const partial = GET(() => {
+export const partial = rpc(() => {
     response().status = 206
     return response.json([1, 2])
 })
 
-export const raw = GET(() => new Response('teapot', { status: 418 }))
+export const raw = rpc(() => new Response('teapot', { status: 418 }))
 
-export const file = GET(() => new Blob(['hello world'], { type: 'text/plain' }))
+export const file = rpc(() => new Blob(['hello world'], { type: 'text/plain' }))
 
-export const gone = GET(
+export const gone = rpc(
     () =>
         new Promise((_, reject) =>
             request().signal.addEventListener('abort', () => reject(new Error('the client left'))),
         ),
 )
 
-export const reports = POST(() => reported.count)
+export const reports = rpc(() => reported.count, { methods: ['POST'] })
 
 `
 

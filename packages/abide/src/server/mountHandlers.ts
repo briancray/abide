@@ -5,7 +5,7 @@ import type { CopyOptions } from '#shared/CopyOptions.ts'
 import type { JsonValue } from '#shared/JsonValue.ts'
 import type { Gated, HeldToAnnotation } from '#shared/reactive/argsContract.ts'
 import type { Defaults } from '#shared/reactive/parameterDefaults.ts'
-import type { Method, Rpc } from '#shared/rpc.ts'
+import { FACES, type Method, type Rpc } from '#shared/rpc.ts'
 
 import { addressed } from './addressed.ts'
 import { answered } from './answerFailure.ts'
@@ -21,6 +21,8 @@ import { type LaneRung, rungsOver } from './hooks.ts'
 export type Mount = {
     address: string
     method: Method
+    /** 16.111 — every verb its export answers at its address, the one its call sends first. */
+    methods: readonly Method[]
     source: string
     /** The handler file's name, or the private handler's binding. */
     name: string
@@ -151,6 +153,7 @@ export function mountedOwn(
         {
             address,
             method,
+            methods: [method],
             // The root's rungs run before routing (37.3), and nothing is filed below a route
             // of abide's own.
             rungs: [],
@@ -189,8 +192,21 @@ export async function mountHandlers(
     const handlers = new Map<string, Mounted>()
     for (let at = 0; at < table.length; at += 1) {
         const mount = table[at] as Mount
-        const exported = (modules[at] as Record<string, unknown>)[mount.export]
-        const handler = exported as Mounted['handler']
+        const exported = (modules[at] as Record<string, unknown>)[
+            mount.export
+        ] as Mounted["handler"] & {
+            [FACES]?: Partial<Record<string, unknown>> | undefined
+        }
+        // 16.115 — a verb the `rpc` answers beside the one its call sends is a face of its own.
+        const handler = (
+            exported.method === mount.method
+                ? exported
+                : exported[FACES]?.[mount.method]
+        ) as Mounted['handler']
+        if (handler === undefined)
+            throw new Error(
+                `abide: ${mount.source}'s \`${mount.export}\` answers no ${mount.method}, which the build mounted it at. RULEBOOK 16.111.`,
+            )
         // 16.9, 16.10 — the address `rpc.url` and `rpc.raw` build on, under the mount — and what a
         // page's render turns a call it made into the browser's request by (41.20).
         addressed(handler, mount.address)

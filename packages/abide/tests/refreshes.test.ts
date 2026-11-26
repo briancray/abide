@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET, log, POST, principal, refuse, watch } from '#server'
+import { log, principal, refuse, rpc, watch } from '#server'
 import type { BootedApp } from '#server/createApp.ts'
 import type { Selection } from '#shared'
 import { keyedValue } from '#shared/reactive/index.ts'
@@ -43,17 +43,19 @@ const settled = async (): Promise<void> => {
 const counted = (): string =>
     `cars ${runs.cars}, boats ${runs.boats}, car 1 ${runs.car1}, car 2 ${runs.car2}`
 
-const save = POST(
+const save = rpc(
     ({ ok }: { ok: boolean }) => (ok ? 'saved' : refuse(409, 'taken')),
-    { refreshes: ['refreshes:cars'] },
+    { methods: ['POST'], refreshes: ['refreshes:cars'] },
 )
 
-const guarded = POST(() => 'saved', {
+const guarded = rpc(() => 'saved', {
+    methods: ['POST'],
     refreshes: ['refreshes:cars'],
     middleware: [async () => refuse(403, 'not yours')],
 })
 
-const repaint = POST(({ id }: { id: number }) => id, {
+const repaint = rpc(({ id }: { id: number }) => id, {
+    methods: ['POST'],
     refreshes: ({ id }) => [`refreshes:car:${id}`],
 })
 
@@ -71,7 +73,7 @@ test('a call that answers refreshes its tags, and one refused refreshes nothing 
         () => undefined,
     )
     await using app = await inMemoryApp({
-        'garage/guarded.handler.ts': { default: guarded },
+        'garage/guarded.server.ts': { default: guarded },
     })
     const answer = await app.fetch(
         new Request('http://app.invalid/garage/guarded', {
@@ -128,14 +130,14 @@ test('a streamed answer refreshes once it closes, and not where it fails — 16.
     const held = new Promise<void>((resolve) => {
         release = resolve
     })
-    const stream = POST(
+    const stream = rpc(
         async function* ({ fail }: { fail: boolean }) {
             yield 1
             await held
             if (fail) throw refuse(500, 'broke')
             yield 2
         },
-        { refreshes: ['refreshes:boats'] },
+        { methods: ['POST'], refreshes: ['refreshes:boats'] },
     )
     await settled()
     const before = runs.boats
@@ -165,17 +167,15 @@ test('a streamed answer refreshes once it closes, and not where it fails — 16.
     )
 })
 
-// 16.92 — A `GET` TAKES NO `refreshes`: its options lack the key, so the declaration is a type
-// error, and a caller the types did not reach is refused where it declares. THE REVERT for the type:
-// hand `GET` the mutations' options, and the `@ts-expect-error` below is unused, failing
-// `bun run typecheck`. For the refusal: drop the check in `declare`; nothing is thrown.
-test('a GET declared with refreshes is refused — 16.92', () => {
-    expect(() =>
-        // @ts-expect-error — `refreshes` is a mutation's option alone.
-        GET(() => 1, { refreshes: ['refreshes:cars'] }),
-    ).toThrow('RULEBOOK 16.92')
+// 16.92 — AN `rpc` ANSWERING `GET` ALONE TAKES NO `refreshes`: a read changes nothing to refresh after,
+// so the declaration is refused where it is made — the verbs it answers are read at run time (16.111).
+// THE REVERT: drop the check in `rpc`; nothing is thrown.
+test('an rpc answering GET alone declared with refreshes is refused — 16.92', () => {
+    expect(() => rpc(() => 1, { refreshes: ['refreshes:cars'] })).toThrow(
+        'RULEBOOK 16.92',
+    )
     const untyped = { refreshes: ['refreshes:cars'] } as object
-    expect(() => GET(() => 1, untyped)).toThrow('RULEBOOK 16.92')
+    expect(() => rpc(() => 1, untyped)).toThrow('RULEBOOK 16.92')
 })
 
 // 16.89, 16.101 — A WRITE NAMES WHOSE ENTRY IT CHANGED BY WHO CALLED IT. Each person's board is one entry of a
@@ -196,22 +196,24 @@ const boards = keyedValue(
     }),
     { global: true, tags: ({ personId }) => [`refreshes:board:${personId}`] },
 )
-const board = GET(boards as never)
+const board = rpc(boards as never)
 const personId = async (): Promise<string> =>
     String((await principal.resolved).name)
 // Neither handler reads `principal` itself, so nothing has resolved it by the time `refreshes` runs.
-const addByPair = POST(() => 'added', {
+const addByPair = rpc(() => 'added', {
+    methods: ['POST'],
     refreshes: async () => [[boards, { personId: await personId() }]],
 })
-const addByTag = POST(() => 'added', {
+const addByTag = rpc(() => 'added', {
+    methods: ['POST'],
     refreshes: async () => [`refreshes:board:${await personId()}`],
 })
 
 test('a write refreshes the caller’s own board, on the server and in its tabs, and no one else’s — 16.89, 16.101', async () => {
     await using app = (await inMemoryApp({
-        'boards/board.handler.ts': { default: board },
-        'boards/addByPair.handler.ts': { default: addByPair },
-        'boards/addByTag.handler.ts': { default: addByTag },
+        'boards/board.server.ts': { default: board },
+        'boards/addByPair.server.ts': { default: addByPair },
+        'boards/addByTag.server.ts': { default: addByTag },
     })) as BootedApp
     // What a tab's first read of its board has the server hold before it follows (18.3).
     await boards({ personId: 'ada' })
@@ -266,12 +268,14 @@ test('a write refreshes the caller’s own board, on the server and in its tabs,
 // is a write a retrying client makes twice. Thrown and rejected alike, each warned once on
 // `abide:reactive` naming the handler. THE REVERT: drop the `try` and the `.catch` in
 // `refreshOrWarn` in `rpc.ts`; both answer 500 where 200 is due, and warn 0 times where 1 is due.
-const throwing = POST(() => 'written', {
+const throwing = rpc(() => 'written', {
+    methods: ['POST'],
     refreshes: () => {
         throw new Error('the refresh broke')
     },
 })
-const rejecting = POST(() => 'written', {
+const rejecting = rpc(() => 'written', {
+    methods: ['POST'],
     refreshes: async () => {
         throw new Error('the refresh broke')
     },
@@ -279,8 +283,8 @@ const rejecting = POST(() => 'written', {
 
 test('a refreshes that fails answers the write as it returned, and warns once — 16.102', async () => {
     await using app = await inMemoryApp({
-        'failing/throwing.handler.ts': { default: throwing },
-        'failing/rejecting.handler.ts': { default: rejecting },
+        'failing/throwing.server.ts': { default: throwing },
+        'failing/rejecting.server.ts': { default: rejecting },
     })
     const answered = async (address: string): Promise<string> => {
         const before = (log.records.peek() ?? []).length
@@ -319,11 +323,14 @@ const broken = {
         throw new Error('this entry broke')
     },
 } as unknown as Selection
-const partly = POST(() => 'written', { refreshes: () => [broken, after] })
+const partly = rpc(() => 'written', {
+    methods: ['POST'],
+    refreshes: () => [broken, after],
+})
 
 test('an entry of refreshes that fails leaves the entries after it refreshed — 16.103', async () => {
     await using app = await inMemoryApp({
-        'partly/partly.handler.ts': { default: partly },
+        'partly/partly.server.ts': { default: partly },
     })
     await after
     const before = afterRuns
@@ -352,19 +359,20 @@ test('an entry of refreshes that fails leaves the entries after it refreshed —
 // no caller, and the machine's call reaches every browser — `frames 1 1 1; ada +2, grace +1` where
 // `frames 0 0 0; ada +0, grace +0` is due.
 const whoRuns: Record<string, number> = { ada: 0, grace: 0 }
-const whoAmI = GET(async () => {
+const whoAmI = rpc(async () => {
     const name = String((await principal.resolved).name)
     whoRuns[name]! += 1
     return name
 })
-const signUp = POST(() => 'kept', {
+const signUp = rpc(() => 'kept', {
+    methods: ['POST'],
     refreshes: [[whoAmI, undefined, { caller: true }]],
 })
 
 test('a write refreshes what the calling browser follows, in every tab of it, and no other browser’s — 16.104, 18.39', async () => {
     await using app = (await inMemoryApp({
-        'me/whoAmI.handler.ts': { default: whoAmI },
-        'me/signUp.handler.ts': { default: signUp },
+        'me/whoAmI.server.ts': { default: whoAmI },
+        'me/signUp.server.ts': { default: signUp },
     })) as BootedApp
     const mux = app.openMux()
     const tabs = { ada1: 'ada', ada2: 'ada', grace: 'grace' } as const

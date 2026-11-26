@@ -1,7 +1,7 @@
 <script>
 import { assistantMessage, reactive } from '@abide/abide'
 
-import askAssistant from '../askAssistant.handler.ts'
+import askAssistant from '../askAssistant.server.ts'
 
 const QUESTION = 'Which company is Ada at?'
 

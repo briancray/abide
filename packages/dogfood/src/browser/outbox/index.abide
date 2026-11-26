@@ -36,8 +36,8 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { outbox, reactive } from '@abide/abide'
-            import logCall from './logCall.handler.ts'
-            import listCalls from './listCalls.handler.ts'
+            import logCall from './logCall.server.ts'
+            import listCalls from './listCalls.server.ts'
 
             const calls = reactive.derived(() => listCalls())
             function log(note) {
@@ -58,7 +58,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { outbox } from '@abide/abide'
-            import logCall from './logCall.handler.ts'
+            import logCall from './logCall.server.ts'
             </script>
 
             {#for call of outbox(logCall) key call.id}
@@ -75,14 +75,14 @@ import Section from '#src/lib/Section.abide'
         <p>Every send of a queued call carries the same <code>idempotency-key</code>. Let the browser
             pick the id, so a resend whose answer was lost writes nothing twice.</p>
         <Code language="ts" caption="server" code={`
-            import { POST } from '@abide/abide/server'
-            import listCalls, { type Call } from './listCalls.handler.ts'
+            import { rpc } from '@abide/abide/server'
+            import listCalls, { type Call } from './listCalls.server.ts'
 
-            export default POST(({ id, note }: Call) => {
+            export default rpc(({ id, note }: Call) => {
                 listCalls.patch((held) => {
                     if (!held.some((call) => call.id === id)) held.push({ id, note })
                 })
-            })
+            }, { methods: ['POST'] })
         `} />
     </Section>
 </Doc>

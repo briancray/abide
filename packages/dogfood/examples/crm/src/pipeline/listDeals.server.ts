@@ -1,0 +1,13 @@
+import { rpc } from '@abide/abide/server'
+
+import { DEALS } from './lib/DEALS.server.ts'
+
+/** Every open deal, as a list. */
+export default rpc(
+    async () => {
+        // A slow database, so the wait is on screen.
+        await Bun.sleep(400)
+        return DEALS.map((deal) => ({ ...deal }))
+    },
+    { description: 'Every deal in the pipeline.' },
+)

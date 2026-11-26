@@ -13,7 +13,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 
 const FILE = `${process.env.TMPDIR ?? '/tmp'}/abide-sql-follow-${process.pid}-${Date.now()}.sqlite`
 
-const HANDLERS = `import { database, GET, POST, table } from '@abide/abide/server'
+const HANDLERS = `import { database, rpc, table } from '@abide/abide/server'
 
 const db = database(${JSON.stringify(FILE)}, {
     migrations: [
@@ -23,19 +23,19 @@ const db = database(${JSON.stringify(FILE)}, {
 })
 const deals = table<{ id: string; stage: string }>(db, 'deals')
 
-export const won = GET(
+export const won = rpc(
     () => db.sql<{ id: string }>\`SELECT id FROM deals WHERE stage = 'won' ORDER BY id\`.map((row) => row.id),
     { global: true },
 )
 
-export const staged = GET(({ stage }: { stage: string }) => deals({ stage }).map((row) => row.id))
+export const staged = rpc(({ stage }: { stage: string }) => deals({ stage }).map((row) => row.id))
 
 // 47.4 — the file the server opened, a scratch one under test, which another connection opens too.
-export const where = GET(() => db().filename)
+export const where = rpc(() => db().filename)
 
-export const close = POST(({ id }: { id: string }) => {
+export const close = rpc(({ id }: { id: string }) => {
     db.sql\`UPDATE deals SET stage = 'won' WHERE id = \${id}\`
-})
+}, { methods: ['POST'] })
 `
 
 let base = ''

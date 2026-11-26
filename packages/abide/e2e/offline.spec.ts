@@ -43,29 +43,29 @@ test.beforeAll(async ({}, testInfo) => {
             // reading it, and how many times the server was asked for it.
             'data/lib/meetings.ts':
                 "export const meetings: string[] = ['dune']\nexport const asked = { count: 0 }\n",
-            'data/getMeetings.handler.ts': `import { GET } from '@abide/abide/server'
+            'data/getMeetings.server.ts': `import { rpc } from '@abide/abide/server'
 import { asked, meetings } from './lib/meetings.ts'
 
-export default GET(() => {
+export default rpc(() => {
     asked.count += 1
     return [...meetings]
 }, { tags: ['meetings'] })
 `,
-            'data/getMeetingsAsked.handler.ts': `import { GET } from '@abide/abide/server'
+            'data/getMeetingsAsked.server.ts': `import { rpc } from '@abide/abide/server'
 import { asked } from './lib/meetings.ts'
 
-export default GET(() => asked.count)
+export default rpc(() => asked.count)
 `,
-            'data/addMeeting.handler.ts': `import { POST } from '@abide/abide/server'
+            'data/addMeeting.server.ts': `import { rpc } from '@abide/abide/server'
 import { meetings } from './lib/meetings.ts'
 
-export default POST((args: { title: string }) => {
+export default rpc((args: { title: string }) => {
     meetings.push(args.title)
-})
+}, { methods: ['POST'] })
 `,
             'meetings/index.abide': `<script>
 import { reactive } from '@abide/abide'
-import getMeetings from '#src/data/getMeetings.handler.ts'
+import getMeetings from '#src/data/getMeetings.server.ts'
 
 const meetings = reactive.derived(() => getMeetings())
 </script>
@@ -73,7 +73,7 @@ const meetings = reactive.derived(() => getMeetings())
 <main id="meetings"><p id="listed">{meetings.ready() ? meetings().join(',') : ''}</p><a id="to-new" href="/meetings/new">new</a></main>`,
             'meetings/new/index.abide': `<script>
 import { navigate, refresh } from '@abide/abide'
-import addMeeting from '#src/data/addMeeting.handler.ts'
+import addMeeting from '#src/data/addMeeting.server.ts'
 
 async function add() {
     await addMeeting({ title: 'emma' })
@@ -87,23 +87,23 @@ async function add() {
             // delivered twice says so.
             'data/lib/added.ts':
                 'export const added = new Map<string, number>()\n',
-            'data/addNote.handler.ts': `import { POST, request } from '@abide/abide/server'
+            'data/addNote.server.ts': `import { request, rpc } from '@abide/abide/server'
 import { added } from './lib/added.ts'
 
-export default POST((args: { text: string }) => {
+export default rpc((args: { text: string }) => {
     const key = request().headers.get('idempotency-key') ?? ''
     added.set(key, (added.get(key) ?? 0) + 1)
     return { text: args.text, from: 'server' }
-})
+}, { methods: ['POST'] })
 `,
-            'data/getAdded.handler.ts': `import { GET } from '@abide/abide/server'
+            'data/getAdded.server.ts': `import { rpc } from '@abide/abide/server'
 import { added } from './lib/added.ts'
 
-export default GET(() => [...added.values()])
+export default rpc(() => [...added.values()])
 `,
             'outbox/index.abide': `<script>
 import { outbox, reactive } from '@abide/abide'
-import addNote from '#src/data/addNote.handler.ts'
+import addNote from '#src/data/addNote.server.ts'
 
 let said = reactive('')
 
@@ -114,18 +114,18 @@ async function add() {
 </script>
 
 <main id="outboxed"><button id="add" onclick={add}>add</button><p id="said">{said}</p><p id="waiting">{outbox().length}</p><p id="kept">{outbox().map((call) => call.value().from + (call.value.synced() ? ' saved' : ' not saved')).join(',')}</p></main>`,
-            'data/getNote.handler.ts': `import { GET } from '@abide/abide/server'
+            'data/getNote.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => ({ text: 'a saved note' }))
+export default rpc(() => ({ text: 'a saved note' }))
 `,
-            'data/getTags.handler.ts': `import { GET } from '@abide/abide/server'
+            'data/getTags.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => ['kept', 'offline'])
+export default rpc(() => ['kept', 'offline'])
 `,
             'note/index.abide': `<script>
 import { reactive } from '@abide/abide'
-import getNote from '#src/data/getNote.handler.ts'
-import getTags from '#src/data/getTags.handler.ts'
+import getNote from '#src/data/getNote.server.ts'
+import getTags from '#src/data/getTags.server.ts'
 
 const note = reactive.derived(() => getNote())
 const tags = reactive.derived(() => getTags())

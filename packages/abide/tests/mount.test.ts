@@ -8,7 +8,7 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const PAGE = `<script>
 import { reactive, url } from '@abide/abide'
-import getInvoice from '#src/invoices/getInvoice.handler.ts'
+import getInvoice from '#src/invoices/getInvoice.server.ts'
 import '#src/lib/face.css'
 
 const invoice = reactive.derived(() => getInvoice({ id: '4' }))
@@ -61,10 +61,10 @@ import { url } from '@abide/abide'
             'public/fonts/face.woff2': 'a face',
             'public/robots.txt': 'User-agent: *\n',
             'login.abide': '<main>sign in</main>',
-            'invoices/getInvoice.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, total: 99 }))\n`,
+            'invoices/getInvoice.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport default rpc(async ({ id }: { id: string }) => ({ id, total: 99 }))\n`,
             // a segment named as the mount, which an address missing the mount is mistaken for
-            'docs/getDoc.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(async ({ id }: { id: string }) => ({ id, title: 'a doc' }), { description: 'A doc.' })\n`,
-            'invoices/count.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ open: 3 }), { global: true })\n`,
+            'docs/getDoc.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport default rpc(async ({ id }: { id: string }) => ({ id, title: 'a doc' }), { description: 'A doc.' })\n`,
+            'invoices/count.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => ({ open: 3 }), { global: true })\n`,
         },
         { ...process.env, APP_URL: 'http://example.test/docs/' },
     ))

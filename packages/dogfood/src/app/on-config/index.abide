@@ -24,11 +24,11 @@ import Section from '#src/lib/Section.abide'
         <p>The function returns defaults. A deployment's <code>RETRIES</code> in the environment
             wins over the <code>3</code>, and <code>config()</code> reads the result.</p>
         <Code language="ts" caption="server" code={`
-            import { config, GET, onConfig } from '@abide/abide/server'
+            import { config, onConfig, rpc } from '@abide/abide/server'
 
             onConfig(() => ({ RETRIES: 3 }))
 
-            export default GET(() => ({ retries: config().RETRIES }))
+            export default rpc(() => ({ retries: config().RETRIES }))
         `} />
         <p>The CRM's <code>.env</code> sets <code>RETRIES=5</code>. Its retry count, asked
             when this page loaded:</p>

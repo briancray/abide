@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET, ledger, POST } from '#server'
+import { ledger, rpc } from '#server'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -15,17 +15,18 @@ type Call = { contact: string; minutes: number }
 
 const calls = ledger<Call>()
 
-const getCalls = GET(async function* ({ after }: { after: number }) {
+const getCalls = rpc(async function* ({ after }: { after: number }) {
     yield* calls(after)
 })
-const logCall = POST(({ call, key }: { call: Call; key: string }) =>
-    calls.append(call, { key }),
+const logCall = rpc(
+    ({ call, key }: { call: Call; key: string }) => calls.append(call, { key }),
+    { methods: ['POST'] },
 )
 
 test('a ledger read across the wire is handed every entry, then each one appended after — 58.4, 58.5', async () => {
     const app = await inMemoryApp({
-        'calls/getCalls.handler.ts': { default: getCalls },
-        'calls/logCall.handler.ts': { default: logCall },
+        'calls/getCalls.server.ts': { default: getCalls },
+        'calls/logCall.server.ts': { default: logCall },
     })
     const append = (call: Call, key: string): Promise<Response> =>
         app.fetch(

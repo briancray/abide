@@ -10,16 +10,16 @@ import { ShadowHost } from '#compiler/ShadowHost.ts'
 import { addressOf, appFixture, BIN, buildApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const HANDLER = `import { GET } from '@abide/abide/server'
+const HANDLER = `import { rpc } from '@abide/abide/server'
 
-export default GET(() => 'pong')
+export default rpc(() => 'pong')
 `
 const ADDRESS = '/health/ping'
 
 afterAll(removeTemporaryModules)
 
 test('abide start answers an app of handlers alone — 16.2', async () => {
-    const app = appFixture({ 'health/ping.handler.ts': HANDLER })
+    const app = appFixture({ 'health/ping.server.ts': HANDLER })
     const built = await buildApp(app)
     expect(built.stderr).toBe('')
     expect(built.exitCode).toBe(0)
@@ -34,7 +34,7 @@ test('abide start answers an app of handlers alone — 16.2', async () => {
 }, 30_000)
 
 test('abide dev answers an app of handlers alone — 16.2', async () => {
-    const app = appFixture({ 'health/ping.handler.ts': HANDLER })
+    const app = appFixture({ 'health/ping.server.ts': HANDLER })
     const dev = Bun.spawn(['bun', BIN, 'dev', '--root', app, '--port', '0'], {
         stdout: 'pipe',
         stderr: 'pipe',
@@ -58,7 +58,7 @@ test('abide dev answers an app of handlers alone — 16.2', async () => {
 test('an own handler file is asked of the snapshot already taken — 16.73', async () => {
     const app = appFixture({
         'index.abide': '<p>home</p>',
-        'health/ping.handler.ts': HANDLER,
+        'health/ping.server.ts': HANDLER,
     })
     const snapshot = spyOn(
         ShadowHost.prototype as unknown as { snapshot: () => unknown },

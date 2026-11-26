@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { POST } from '#server'
+import { rpc } from '#server'
 import { addressed } from '#server/addressed.ts'
 import { flushSync, form, refuse, watch } from '#shared'
 import { ARGS_DOCUMENT } from '#shared/ARGS_DOCUMENT.ts'
@@ -68,10 +68,13 @@ function holding<Handler extends object>(handler: Handler): Handler {
 test('a submit the check refuses makes no call, and one it passes calls with the fields coerced — 56.1, 56.2', async () => {
     const reached: unknown[] = []
     const add = holding(
-        POST((args: { company: string; amount: number }) => {
-            reached.push(args)
-            return args
-        }),
+        rpc(
+            (args: { company: string; amount: number }) => {
+                reached.push(args)
+                return args
+            },
+            { methods: ['POST'] },
+        ),
     )
     addressed(add, '/deals/add')
     const deal = form(add)
@@ -107,7 +110,8 @@ const needsCompany: StandardSchemaV1<{ company: string }> = {
 // check's findings would, focus landing on the field once the call is refused. THE REVERT: drop the
 // `watch` over the call's issues; the message shows and focus stays on the body.
 test('a handler with no document is called unchecked, and its refusal shows and takes focus — 56.3, 56.4, 56.6', async () => {
-    const save = POST((args: { company: string }) => args, {
+    const save = rpc((args: { company: string }) => args, {
+        methods: ['POST'],
         args: needsCompany,
     })
     addressed(save, '/companies/save')
@@ -126,12 +130,15 @@ test('a handler with no document is called unchecked, and its refusal shows and 
 test('a submit while the call is in flight calls nothing, and the button says so — 56.5, 56.11', async () => {
     let answer: (value: unknown) => void = () => undefined
     let calls = 0
-    const slow = POST((_args: { company: string }) => {
-        calls += 1
-        return new Promise((resolve) => {
-            answer = resolve
-        })
-    })
+    const slow = rpc(
+        (_args: { company: string }) => {
+            calls += 1
+            return new Promise((resolve) => {
+                answer = resolve
+            })
+        },
+        { methods: ['POST'] },
+    )
     addressed(slow, '/companies/slow')
     const company = form(slow)
     const element = rendered(company, { company: 'Hopper & Co' })
@@ -149,7 +156,9 @@ test('a submit while the call is in flight calls nothing, and the button says so
 // 56.12 — A FILE IN A FIELD IS REFUSED BY NAME rather than sent as the `{}` JSON makes of it. THE
 // REVERT: drop the file check from `argsOf`; the call goes out with `contract: {}`.
 test('a field holding a file throws at the submit, naming it — 56.12', () => {
-    const attach = POST((args: { contract: string }) => args)
+    const attach = rpc((args: { contract: string }) => args, {
+        methods: ['POST'],
+    })
     addressed(attach, '/deals/attach')
     const deal = form(attach)
     const element = rendered(deal, {})
@@ -171,7 +180,9 @@ test('a field holding a file throws at the submit, naming it — 56.12', () => {
 // `message` as a value read once rather than an accessor — the field reads no message after the submit.
 test("a field's group carries its message and whether it is invalid — 49.9, 56.9", async () => {
     const add = holding(
-        POST((args: { company: string; amount: number }) => args),
+        rpc((args: { company: string; amount: number }) => args, {
+            methods: ['POST'],
+        }),
     )
     addressed(add, '/deals/grouped')
     const deal = form(add)
@@ -190,12 +201,14 @@ test("a field's group carries its message and whether it is invalid — 49.9, 56
 // `message`, its element shown, while every field reads none. THE REVERT: have the form's `message`
 // answer nothing — `deal.message` reads `undefined` where the server's message is due.
 test("a refusal no field owns shows as the form's own message — 56.4", async () => {
-    const book = POST((args: { company: string }) =>
-        args.company === 'open'
-            ? args
-            : refuse.validation<{ company: string }>({
-                  '': ['the books are closed'],
-              }),
+    const book = rpc(
+        (args: { company: string }) =>
+            args.company === 'open'
+                ? args
+                : refuse.validation<{ company: string }>({
+                      '': ['the books are closed'],
+                  }),
+        { methods: ['POST'] },
     )
     addressed(book, '/deals/closed')
     const deal = form(book)
@@ -242,7 +255,9 @@ const EDITED = { company: 'Hopper & Co', amount: '4000' }
 // THE REVERT: compare `value` against `''` rather than `defaultValue` — the untouched amount reads
 // changed.
 test('a field typed into reads changed, and typed back reads clean — 56.14, 56.16, 56.20, 56.21', () => {
-    const edit = POST((args: { company: string; amount: number }) => args)
+    const edit = rpc((args: { company: string; amount: number }) => args, {
+        methods: ['POST'],
+    })
     addressed(edit, '/deals/edit')
     const deal = form(edit)
     const element = opened(deal, EDITED)
@@ -263,7 +278,9 @@ test('a field typed into reads changed, and typed back reads clean — 56.14, 56
 // `<select>` marking no option opens on its first, which is its baseline. THE REVERT: compare a single
 // `<select>` option by option — the select reads changed before anyone touched it.
 test('a field opened with no value and one cleared compare equal — 56.15', () => {
-    const edit = POST((args: { company: string; stage: string }) => args)
+    const edit = rpc((args: { company: string; stage: string }) => args, {
+        methods: ['POST'],
+    })
     addressed(edit, '/deals/blank')
     const deal = form(edit)
     const element = opened(deal, { company: undefined })
@@ -292,7 +309,9 @@ test('a field opened with no value and one cleared compare equal — 56.15', () 
 // in it.
 test("a form's changes are the args a submit sends, narrowed to the fields that differ — 56.17", () => {
     const edit = holding(
-        POST((args: { company: string; amount: number }) => args),
+        rpc((args: { company: string; amount: number }) => args, {
+            methods: ['POST'],
+        }),
     )
     addressed(edit, '/deals/changes')
     const deal = form(edit)
@@ -306,7 +325,9 @@ test("a form's changes are the args a submit sends, narrowed to the fields that 
 // differs, and the `<form>`'s reset takes every field to its baseline and reads clean. THE REVERT:
 // drop `onreset` from the form's part — the form reads dirty after the reset.
 test('a reset puts every field back and reads clean — 56.18, 56.22', () => {
-    const edit = POST((args: { company: string; amount: number }) => args)
+    const edit = rpc((args: { company: string; amount: number }) => args, {
+        methods: ['POST'],
+    })
     addressed(edit, '/deals/reset')
     const deal = form(edit)
     const element = opened(deal, EDITED)
@@ -328,11 +349,12 @@ test('a reset puts every field back and reads clean — 56.18, 56.22', () => {
 // over the call — the company reads changed after the save.
 test('a call answered moves the baseline to what it sent — 56.19', async () => {
     let answer: () => void = () => undefined
-    const edit = POST(
+    const edit = rpc(
         (args: { company: string; amount: number }) =>
             new Promise((resolve) => {
                 answer = () => resolve(args)
             }),
+        { methods: ['POST'] },
     )
     addressed(edit, '/deals/save')
     const deal = form(edit)
@@ -354,10 +376,14 @@ test('a call answered moves the baseline to what it sent — 56.19', async () =>
 // 56.19 — A REFUSED CALL SAVED NOTHING, and the edit it carried stays changed. THE REVERT: move the
 // baseline whatever the call answers — the company reads clean.
 test('a refused call leaves the baseline where it was — 56.19', async () => {
-    const edit = POST((args: { company: string }) =>
-        args.company === 'Hopper & Co'
-            ? args
-            : refuse.validation<{ company: string }>({ company: ['is taken'] }),
+    const edit = rpc(
+        (args: { company: string }) =>
+            args.company === 'Hopper & Co'
+                ? args
+                : refuse.validation<{ company: string }>({
+                      company: ['is taken'],
+                  }),
+        { methods: ['POST'] },
     )
     addressed(edit, '/deals/taken')
     const deal = form(edit)
@@ -372,7 +398,9 @@ test('a refused call leaves the baseline where it was — 56.19', async () => {
 // amount's `changed` not once. THE REVERT: hold the changed names in one `reactive` set every field
 // reads — the amount's reader wakes at each of the company's keystrokes (2 wakes, not 0).
 test("an edit of one field wakes no reader of another's changed — 56.23", () => {
-    const edit = POST((args: { company: string; amount: number }) => args)
+    const edit = rpc((args: { company: string; amount: number }) => args, {
+        methods: ['POST'],
+    })
     addressed(edit, '/deals/wakes')
     const deal = form(edit)
     const element = opened(deal, EDITED)

@@ -30,9 +30,9 @@ beforeAll(async () => {
         'holdings/TICKER.param.ts':
             '// A ticker, a share class after a period included.\nexport const TICKER = /[A-Z]+(?:\\.[A-Z]+)?/\n',
         'holdings/[symbol=TICKER].abide': PAGE('holding', 'symbol'),
-        'holdings/[symbol=TICKER]/quote.handler.ts': `import { GET } from '@abide/abide/server'
+        'holdings/[symbol=TICKER]/quote.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(({ symbol }: { symbol: string }) => symbol)
+export default rpc(({ symbol }: { symbol: string }) => symbol)
 `,
         'WORD.param.ts': 'export const WORD = /[a-z]+/',
         'docs/[name=WORD].abide': PAGE('word', 'name'),

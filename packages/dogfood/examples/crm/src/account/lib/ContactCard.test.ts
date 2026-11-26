@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { createApp } from '@abide/abide/server'
 
-import getContact from '../getContact.handler.ts'
+import getContact from '../getContact.server.ts'
 
 test('an admin reads the deal value', async () => {
     await using app = await createApp()

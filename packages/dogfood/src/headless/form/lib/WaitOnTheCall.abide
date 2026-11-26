@@ -1,10 +1,13 @@
 <script server>
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-const addDeal = POST(async ({ name }: { name: string }) => {
-    await Bun.sleep(1_500)
-    return { name }
-})
+export const addDeal = rpc(
+    async ({ name }: { name: string }) => {
+        await Bun.sleep(1_500)
+        return { name }
+    },
+    { methods: ['POST'] },
+)
 </script>
 
 <script>

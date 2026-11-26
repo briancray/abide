@@ -1,5 +1,5 @@
 <script server>
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 const DEALS = [
     { stage: 'lead', amount: 12_000 },
@@ -7,7 +7,7 @@ const DEALS = [
     { stage: 'lead', amount: 8_000 },
 ]
 
-const getStage = GET(async ({ stage }: { stage: string }) => {
+export const getStage = rpc(async ({ stage }: { stage: string }) => {
     await Bun.sleep(400)
     let value = 0
     for (const deal of DEALS) if (deal.stage === stage) value += deal.amount

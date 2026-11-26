@@ -11,7 +11,7 @@ import { Followers } from '#server/Followers.ts'
 import { fileRoute, middleware, onConfig, rungsOver } from '#server/hooks.ts'
 import { installServer } from '#server/installServer.ts'
 import type { FollowedHandler } from '#server/mountHandlers.ts'
-import { GET } from '#shared/rpc.ts'
+import { rpc } from '#shared/rpc.ts'
 
 installServer()
 
@@ -59,7 +59,7 @@ test("a GET followed over the mux passes its route's middleware — 18.26", asyn
             : new Response('locked', { status: 401 }),
     )
     fileRoute(undefined)
-    const handler = GET(() => 'gold', { global: true })
+    const handler = rpc(() => 'gold', { global: true })
     ;(handler as unknown as { address: string }).address = '/vault/gold'
     const row: FollowedHandler = {
         address: '/vault/gold',
@@ -109,7 +109,7 @@ test('a route rung that re-heads the answer still admits the follow — 18.26', 
         return new Response(answer.body, answer)
     })
     fileRoute(undefined)
-    const handler = GET(() => 'trail', { global: true })
+    const handler = rpc(() => 'trail', { global: true })
     ;(handler as unknown as { address: string }).address = '/traced/trail'
     const row: FollowedHandler = {
         address: '/traced/trail',

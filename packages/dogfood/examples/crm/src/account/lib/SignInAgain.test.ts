@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { createApp } from '@abide/abide/server'
 
-import getCommission from '../getCommission.handler.ts'
+import getCommission from '../getCommission.server.ts'
 
 test('a member signed in reads their commission', async () => {
     await using app = await createApp()

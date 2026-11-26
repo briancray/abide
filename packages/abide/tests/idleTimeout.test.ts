@@ -14,26 +14,26 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 // Past the moment bun reaps an idle connection, which its four-second tick puts up to four late.
 const PAST_REAPING = (IDLE_TIMEOUT_SECONDS + 5) * 1000
 
-const HANDLERS = `import { GET, POST, response } from '@abide/abide/server'
+const HANDLERS = `import { response, rpc } from '@abide/abide/server'
 
-export const price = GET((): number => 1, { global: true })
+export const price = rpc((): number => 1, { global: true })
 
-export const reprice = POST(async () => {
+export const reprice = rpc(async () => {
     price.set((await price()) + 1)
-})
+}, { methods: ['POST'] })
 
-export const report = GET(async () => {
+export const report = rpc(async () => {
     await Bun.sleep(${PAST_REAPING})
     return 'done'
 })
 
-export const ticks = GET(async function* () {
+export const ticks = rpc(async function* () {
     yield 1
     await Bun.sleep(${PAST_REAPING})
     yield 2
 })
 
-export const beats = GET(() =>
+export const beats = rpc(() =>
     response.sse(
         (async function* () {
             yield 1
@@ -43,7 +43,7 @@ export const beats = GET(() =>
     ),
 )
 
-export const own = GET(
+export const own = rpc(
     () =>
         new Response(
             new ReadableStream({
@@ -58,7 +58,7 @@ export const own = GET(
         ),
 )
 
-export const lines = GET(
+export const lines = rpc(
     () =>
         new Response(
             new ReadableStream({
@@ -73,7 +73,7 @@ export const lines = GET(
         ),
 )
 
-export const echo = POST((args: { text: string }) => args.text)
+export const echo = rpc((args: { text: string }) => args.text, { methods: ['POST'] })
 `
 
 let base = ''

@@ -41,9 +41,9 @@ const callTool = (name: string) =>
             <a href={url('/middleware/signed-in')}><code>signedIn</code></a> in its own
             <code>middleware</code> option.</p>
         <Code language="ts" caption="server" code={`
-            import { GET, signedIn } from '@abide/abide/server'
+            import { rpc, signedIn } from '@abide/abide/server'
 
-            export default GET(() => ({ amount: '$6,200' }), {
+            export default rpc(() => ({ amount: '$6,200' }), {
                 middleware: [signedIn],
             })
         `} />
@@ -66,11 +66,11 @@ const callTool = (name: string) =>
         `} />
         <p>The contacts export lists it in its own <code>middleware</code>:</p>
         <Code language="ts" caption="server" code={`
-            import { POST } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { CONTACTS } from '../contacts/lib/CONTACTS.server.ts'
             import { adminsOnly } from './lib/adminsOnly.ts'
 
-            export default POST(async () => CONTACTS, {
+            export default rpc(async () => CONTACTS, { methods: ['POST'],
                 middleware: [adminsOnly],
             })
         `} />

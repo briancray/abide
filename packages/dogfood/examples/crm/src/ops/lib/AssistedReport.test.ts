@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test'
 import { chat } from '@abide/abide'
 import { createApp } from '@abide/abide/server'
 
-import draftReport from '../draftReport.handler.ts'
+import draftReport from '../draftReport.server.ts'
 
 // The events the assistant answers a draft with, through the app.
 async function answered(draft: string) {

@@ -5,5 +5,5 @@ app is laid out, checked and tested, and what this file is for.
 
 ## This app
 
-- `src/getGreeting.handler.ts` and its test are the pattern for a handler and the test that calls
+- `src/getGreeting.server.ts` and its test are the pattern for a handler and the test that calls
   it; `src/index.test.ts` is the pattern for a page test that counts the work a click did.

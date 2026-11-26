@@ -9,16 +9,16 @@ import { Followers, Frame, type Peer } from '#server/Followers.ts'
 import type { FollowedHandler } from '#server/mountHandlers.ts'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
 import { refresh } from '#shared/reactive/index.ts'
-import { GET } from '#shared/rpc.ts'
+import { rpc } from '#shared/rpc.ts'
 
 // The function form on the `GET`'s own options, on a value handed to it, and the list form beside.
-const stage = GET(({ home }: { home: string }) => ({ home }), {
+const stage = rpc(({ home }: { home: string }) => ({ home }), {
     tags: ({ home }) => ['access', `home:${home}`],
 })
-const visits = GET(({ id }: { id: number }) => ({ id }), {
+const visits = rpc(({ id }: { id: number }) => ({ id }), {
     tags: ({ id }) => ['access', `visit:${id}`],
 })
-const fixed = GET(() => ({ fixed: true }), { tags: ['access'] })
+const fixed = rpc(() => ({ fixed: true }), { tags: ['access'] })
 
 function rowOf(handler: unknown, address: string): FollowedHandler {
     ;(handler as { address: string }).address = address

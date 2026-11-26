@@ -1210,11 +1210,11 @@ function other(film: { id: string; label: string; year: string }) { void film }
 // refused (TS2345), and for a member and `rows.ready()` is (TS2339) — each beside the one finding due.
 test('a probe takes a prop typed by its value alone — 33.27', async () => {
     const probed = appFixture({
-        'runs/sweep.handler.ts': `import { POST } from '@abide/abide/server'
+        'runs/sweep.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default POST(async function* () {
+export default rpc(async function* () {
     yield { step: 1, label: 'start' }
-})
+}, { methods: ['POST'] })
 `,
         'lib/Status.abide': `<script>
 import { busy, props } from '@abide/abide'
@@ -1225,7 +1225,7 @@ const { rows } = props<{ rows: { step: number; label: string }[] }>()
         'index.abide': `<script>
 import { reactive } from '@abide/abide'
 import Status from '#src/lib/Status.abide'
-import sweep from '#src/runs/sweep.handler.ts'
+import sweep from '#src/runs/sweep.server.ts'
 const running = reactive.derived(() => sweep())
 </script>
 <Status rows={running}/>`,
@@ -1269,7 +1269,7 @@ import { shared as renamed } from '#src/lib/rows.ts'
 test('a check reports what only building the whole app refuses — 16.73', async () => {
     const stray = appFixture({
         'index.abide': '<p>hello</p>',
-        'things/answer.handler.ts': 'export default 42\n',
+        'things/answer.server.ts': 'export default 42\n',
     })
     const refused = (await checkApp(stray)).filter((diagnosis) =>
         diagnosis.message.includes('16.73'),
@@ -1333,7 +1333,7 @@ test('a check reports an emit refusal beside a parse refusal — 38.33, 16.73', 
             'index.abide': '<p>home</p>',
             'broken/index.abide':
                 '{#component row({ label })}<li>{label}</li>{/component}',
-            'things/answer.handler.ts': 'export default 42\n',
+            'things/answer.server.ts': 'export default 42\n',
         }),
     )
     expect(
@@ -1415,24 +1415,24 @@ test('a check reports an export in an imported .abide at its file — 38.33, 34.
 }, 60_000)
 
 // 38.33 — WHAT THE WHOLE APP REFUSES IS FOUND AT EACH FILE, every one of them, as a file's own
-// refusals are: two handler files that each export a second name are two findings, one at each.
+// refusals are: two server files beside a page that each export no `rpc` are two findings, one at each.
 // THE REVERT: hand `emitApp` no `refuse` in `checkApp`; the first refusal throws, and the check
 // reports 1 finding at the app's root where 2 are due at the files.
 test('a check reports every handler file refusal at its own file — 38.33, 16.73', async () => {
     const twice = appFixture({
         'index.abide': '<p>home</p>',
-        'media/getOne.handler.ts':
-            "import { GET } from '@abide/abide/server'\n\nexport const extra = 1\nexport default GET(() => 1)\n",
-        'media/getTwo.handler.ts':
-            "import { GET } from '@abide/abide/server'\n\nexport const more = 2\nexport default GET(() => 2)\n",
+        'media/getOne.server.ts':
+            'export const extra = 1\n',
+        'media/getTwo.server.ts':
+            'export const more = 2\n',
     })
     const at: string[] = []
     for (const diagnosis of await checkApp(twice))
         if (diagnosis.message.includes('16.73'))
             at.push(relative(realpathSync(twice), diagnosis.path))
     expect(at.sort()).toEqual([
-        'media/getOne.handler.ts',
-        'media/getTwo.handler.ts',
+        'media/getOne.server.ts',
+        'media/getTwo.server.ts',
     ])
 }, 60_000)
 
@@ -1447,18 +1447,18 @@ test("a check reports each 16.39 refusal at its file beside another file's — 3
 
 export const user = reactive({ name: 'Ada' })
 `,
-        'people/getProfile.handler.ts': `import { GET } from '@abide/abide/server'
+        'people/getProfile.server.ts': `import { rpc } from '@abide/abide/server'
 import { user } from '../lib/user.ts'
 
-export default GET(() => ({ user }))
+export default rpc(() => ({ user }))
 `,
-        'people/getRows.handler.ts': `import { GET } from '@abide/abide/server'
+        'people/getRows.server.ts': `import { rpc } from '@abide/abide/server'
 import { user } from '../lib/user.ts'
 
-export default GET(() => [{ user }])
+export default rpc(() => [{ user }])
 `,
-        'media/getTwo.handler.ts':
-            "import { GET } from '@abide/abide/server'\n\nexport const more = 2\nexport default GET(() => 2)\n",
+        'media/getTwo.server.ts':
+            'export const more = 2\n',
     })
     const at: string[] = []
     for (const diagnosis of await checkApp(nesting))
@@ -1470,9 +1470,9 @@ export default GET(() => [{ user }])
                 `${relative(realpathSync(nesting), diagnosis.path)} ${diagnosis.message.includes('16.39') ? '16.39' : '16.73'}`,
             )
     expect(at.sort()).toEqual([
-        'media/getTwo.handler.ts 16.73',
-        'people/getProfile.handler.ts 16.39',
-        'people/getRows.handler.ts 16.39',
+        'media/getTwo.server.ts 16.73',
+        'people/getProfile.server.ts 16.39',
+        'people/getRows.server.ts 16.39',
     ])
 }, 60_000)
 
@@ -1508,15 +1508,15 @@ test('a handler returning a Reactive nested in its value is refused by path — 
 
 export const user = reactive({ name: 'Ada' })
 `,
-            'people/getUser.handler.ts': `import { GET } from '@abide/abide/server'
+            'people/getUser.server.ts': `import { rpc } from '@abide/abide/server'
 import { user } from '../lib/user.ts'
 
-export default GET(() => user)
+export default rpc(() => user)
 `,
             ...(name === ''
                 ? {}
                 : {
-                      [`people/${name}.handler.ts`]: `import { GET } from '@abide/abide/server'
+                      [`people/${name}.server.ts`]: `import { rpc } from '@abide/abide/server'
 import { user } from '../lib/user.ts'
 
 export default ${handler}
@@ -1530,17 +1530,17 @@ export default ${handler}
     }
     const member = await refusals(
         'getProfile',
-        'GET(() => ({ user, since: 1815 }))',
+        'rpc(() => ({ user, since: 1815 }))',
     )
     expect(member.length).toBe(1)
-    expect(member[0]).toContain('people/getProfile.handler.ts')
+    expect(member[0]).toContain('people/getProfile.server.ts')
     expect(member[0]).toContain('`default` returns a `Reactive` at `.user`')
     const item = await refusals(
         'getRows',
-        'GET(async () => [{ owner: { held: user } }])',
+        'rpc(async () => [{ owner: { held: user } }])',
     )
     expect(item.length).toBe(1)
-    expect(item[0]).toContain('people/getRows.handler.ts')
+    expect(item[0]).toContain('people/getRows.server.ts')
     expect(item[0]).toContain(
         '`default` returns a `Reactive` at `[].owner.held`',
     )
@@ -1550,13 +1550,13 @@ export default ${handler}
     // where 0 is due.
     const deepest = await refusals(
         'getDeep',
-        'GET(() => ({ a: { b: { c: { d: { e: { f: { g: user } } } } } } }))',
+        'rpc(() => ({ a: { b: { c: { d: { e: { f: { g: user } } } } } } }))',
     )
     expect(deepest.length).toBe(1)
     expect(deepest[0]).toContain('at `.a.b.c.d.e.f.g`')
     const past = await refusals(
         'getPast',
-        'GET(() => ({ a: { b: { c: { d: { e: { f: { g: { h: user } } } } } } } }))',
+        'rpc(() => ({ a: { b: { c: { d: { e: { f: { g: { h: user } } } } } } } }))',
     )
     expect(past).toEqual([])
 }, 60_000)
@@ -1569,17 +1569,17 @@ export default ${handler}
 test('a handler answering an array item that may be undefined is refused by path — 16.105', async () => {
     const app = appFixture({
         'index.abide': '<p>hello</p>',
-        'charts/getPoints.handler.ts': `import { GET } from '@abide/abide/server'
+        'charts/getPoints.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => ({ points: [1, undefined, 3] }))
+export default rpc(() => ({ points: [1, undefined, 3] }))
 `,
-        'charts/getPair.handler.ts': `import { POST } from '@abide/abide/server'
+        'charts/getPair.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default POST(({ at }: { at: number }): { pair: [number, string | undefined] } => ({ pair: [at, undefined] }))
+export default rpc(({ at }: { at: number }): { pair: [number, string | undefined] } => ({ pair: [at, undefined] }), { methods: ['POST'] })
 `,
-        'charts/getKept.handler.ts': `import { GET } from '@abide/abide/server'
+        'charts/getKept.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => ({ points: [1, null, 3], note: undefined as string | undefined }))
+export default rpc(() => ({ points: [1, null, 3], note: undefined as string | undefined }))
 `,
     })
     const said: string[] = []
@@ -1589,8 +1589,8 @@ export default GET(() => ({ points: [1, null, 3], note: undefined as string | un
                 `${relative(realpathSync(app), diagnosis.path)} ${/at `([^`]*)`/.exec(diagnosis.message)?.[1]}`,
             )
     expect(said.sort()).toEqual([
-        'charts/getPair.handler.ts .pair[1]',
-        'charts/getPoints.handler.ts .points[]',
+        'charts/getPair.server.ts .pair[1]',
+        'charts/getPoints.server.ts .points[]',
     ])
 }, 60_000)
 

@@ -25,11 +25,11 @@ const { params } = props<{ params: { id: string } }>()
         // 37.1 — a hook a handler file calls is filed at that handler's own route, a member call
         // of abide's as much as a bare one. THE REVERT: skip a name after a `.` in `hookCalls`;
         // the middleware leaves the map.
-        'media/getGrid.handler.ts': `import * as server from '@abide/abide/server'
+        'media/getGrid.server.ts': `import * as server from '@abide/abide/server'
 
 server.middleware((next) => next())
 
-export default server.GET(() => [1, 2])
+export default server.rpc(() => [1, 2])
 `,
         // 38.135 — a handler's own rungs, named as written: a call, a spread, a name, inline.
         'media/lib/homeAccess.ts': `import type { Middleware } from '@abide/abide'
@@ -37,30 +37,30 @@ export default server.GET(() => [1, 2])
 export const homeAccess = (): Middleware[] => [(next) => next()]
 export const audited: Middleware = (next) => next()
 `,
-        'media/saveGrid.handler.ts': `import { POST } from '@abide/abide/server'
+        'media/saveGrid.server.ts': `import { rpc } from '@abide/abide/server'
 import { audited, homeAccess } from './lib/homeAccess.ts'
 
-export default POST(() => 'saved', {
+export default rpc(() => 'saved', { methods: ['POST'],
     middleware: [...homeAccess(), audited, (next) => next()],
 })
 `,
-        'media/dropGrid.handler.ts': `import { DELETE } from '@abide/abide/server'
+        'media/dropGrid.server.ts': `import { rpc } from '@abide/abide/server'
 import { homeAccess } from './lib/homeAccess.ts'
 
 const OPTIONS = { middleware: homeAccess() }
 
-export default DELETE(() => 'dropped', OPTIONS)
+export default rpc(() => 'dropped', { methods: ['DELETE'], ...OPTIONS })
 `,
-        'media/openGrid.handler.ts': `import { PUT } from '@abide/abide/server'
+        'media/openGrid.server.ts': `import { rpc } from '@abide/abide/server'
 import { homeAccess } from './lib/homeAccess.ts'
 
-export default PUT(() => 'opened', { middleware: homeAccess() })
+export default rpc(() => 'opened', { methods: ['PUT'], middleware: homeAccess() })
 `,
         // 16.70 — declared, not exported: the component's own, answered below `/__abide/handlers/`.
         'media/lib/Card.abide': `<script server>
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-const save = POST(() => 'saved')
+export const save = rpc(() => 'saved', { methods: ['POST'] })
 </script>
 
 <button onclick={() => save()}>save</button>`,
@@ -105,7 +105,7 @@ test("abide routes --json lists every route, the private handler marked, each ha
             {
                 method: 'DELETE',
                 address: '/media/dropGrid',
-                file: 'media/dropGrid.handler.ts',
+                file: 'media/dropGrid.server.ts',
                 kind: 'handler',
                 matchers: {},
                 middleware: null,
@@ -113,7 +113,7 @@ test("abide routes --json lists every route, the private handler marked, each ha
             {
                 method: 'GET',
                 address: '/media/getGrid',
-                file: 'media/getGrid.handler.ts',
+                file: 'media/getGrid.server.ts',
                 kind: 'handler',
                 matchers: {},
                 middleware: [],
@@ -121,7 +121,7 @@ test("abide routes --json lists every route, the private handler marked, each ha
             {
                 method: 'PUT',
                 address: '/media/openGrid',
-                file: 'media/openGrid.handler.ts',
+                file: 'media/openGrid.server.ts',
                 kind: 'handler',
                 matchers: {},
                 middleware: ['homeAccess'],
@@ -129,7 +129,7 @@ test("abide routes --json lists every route, the private handler marked, each ha
             {
                 method: 'POST',
                 address: '/media/saveGrid',
-                file: 'media/saveGrid.handler.ts',
+                file: 'media/saveGrid.server.ts',
                 kind: 'handler',
                 matchers: {},
                 middleware: ['homeAccess', 'audited', '<inline>'],
@@ -139,7 +139,7 @@ test("abide routes --json lists every route, the private handler marked, each ha
             {
                 hook: 'middleware',
                 route: '/media/getGrid',
-                file: 'media/getGrid.handler.ts',
+                file: 'media/getGrid.server.ts',
             },
         ],
     })
@@ -162,22 +162,22 @@ test('abide routes prints the same map as text — 38.108', async () => {
         [
             'DELETE',
             '/media/dropGrid',
-            'media/dropGrid.handler.ts',
+            'media/dropGrid.server.ts',
             'middleware:',
             'unread',
         ],
-        ['GET', '/media/getGrid', 'media/getGrid.handler.ts'],
+        ['GET', '/media/getGrid', 'media/getGrid.server.ts'],
         [
             'PUT',
             '/media/openGrid',
-            'media/openGrid.handler.ts',
+            'media/openGrid.server.ts',
             'middleware:',
             'homeAccess',
         ],
         [
             'POST',
             '/media/saveGrid',
-            'media/saveGrid.handler.ts',
+            'media/saveGrid.server.ts',
             'middleware:',
             'homeAccess,',
             'audited,',
@@ -191,7 +191,7 @@ test('abide routes prints the same map as text — 38.108', async () => {
         '',
         'hooks',
         expect.stringMatching(
-            /^ {2}middleware\s+\/media\/getGrid\s+media\/getGrid\.handler\.ts$/,
+            /^ {2}middleware\s+\/media\/getGrid\s+media\/getGrid\.server\.ts$/,
         ),
     ])
 }, 30_000)

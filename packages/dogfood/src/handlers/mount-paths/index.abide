@@ -50,14 +50,14 @@ import Section from '#src/lib/Section.abide'
             <code>/deals/d2/close</code>.</p>
         <Code language="ts" caption="server" code={`
             // src/deals/[id]/close.handler.ts
-            import { POST } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { DEALS } from '../../lib/DEALS.server.ts'
 
-            export default POST(({ id }: { id: string }) => {
+            export default rpc(({ id }: { id: string }) => {
                 const deal = DEALS.find((each) => each.id === id)
                 if (deal) deal.stage = 'won'
                 return deal ?? null
-            })
+            }, { methods: ['POST'] })
         `} />
     </Section>
 
@@ -67,10 +67,10 @@ import Section from '#src/lib/Section.abide'
             no surface lists it.</p>
         <Code language="abide" caption="abide" code={`
             <script server>
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
 
             const NOTES: Record<string, string[]> = { d1: ['Wants a three-year term.'] }
-            const getNotes = GET(({ id }: { id: string }) => NOTES[id] ?? [])
+            export const getNotes = rpc(({ id }: { id: string }) => NOTES[id] ?? [])
             </script>
 
             <script>

@@ -1,7 +1,11 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
+import { PRIVATE_EXPORT } from '#server/PRIVATE_EXPORT.ts'
 import type { JsonValue } from '#shared/JsonValue.ts'
-import { SERVER_RUNTIME_SPECIFIER } from '#shared/SPECIFIERS.ts'
+import {
+    SERVER_RUNTIME_SPECIFIER,
+    SERVER_SPECIFIER,
+} from '#shared/SPECIFIERS.ts'
 
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { placed } from './Cursor.ts'
@@ -10,7 +14,7 @@ import { abideBindings } from './hookCalls.ts'
 import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
 import { moduleImports } from './moduleImports.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
-import { privateExports } from './projectShadow.ts'
+import { privateExports, serverExports } from './projectShadow.ts'
 import {
     concat,
     definitions,
@@ -98,9 +102,15 @@ export function emitComponent(
         : `${lowering.use('fileRoute')}(${JSON.stringify(route)})
 ${serverSetup.body}
 ${lowering.use('fileRoute')}(undefined)
-${heldToAnnotations(lowering, derived)}${privateExports(file.servers.join('\n'))}`
+${privateExports(file.servers.join('\n'), SERVER_SPECIFIER)}${heldToAnnotations(lowering, derived)}`
     const setup = splitImports(lowering.scripts())
-    const componentBody = setup.body
+    // 16.70 — WHAT THE FILE'S OWN COMPONENT CALLS IS THE VALUE ANSWERED, rendering here as in the
+    // browser: the `rpc` each name it exports is, so a call made in the render is the one the
+    // browser's call takes its answer from (41.13) rather than a second run of the function.
+    let answered = ''
+    for (const name of serverExports(file.servers.join('\n')))
+        answered += `const ${name} = ${PRIVATE_EXPORT}${name}\n`
+    const componentBody = answered + setup.body
 
     // A child invoked inside `<head>` pushes to the same array from the head expression — and a
     // child invoked anywhere is a `renderComponent` call, the one writer of `HEADS`.
@@ -152,7 +162,7 @@ ${heldToAnnotations(lowering, derived)}${privateExports(file.servers.join('\n'))
     const probes =
         !settles &&
         readsBareProbe(file, `${head}\n${declared}\n${body.join('\n')}`)
-    const waits = !settles && !probes && holdsStatement(componentBody)
+    const waits = !settles && !probes && holdsStatement(setup.body)
     const level =
         settles || probes
             ? deferred()
@@ -213,6 +223,6 @@ function heldToAnnotations(
 ): string {
     let out = ''
     for (const name in derived)
-        out += `${lowering.use('derivedArgs')}(${name}, ${JSON.stringify(derived[name])})\n`
+        out += `${lowering.use('derivedArgs')}(${PRIVATE_EXPORT}${name}, ${JSON.stringify(derived[name])})\n`
     return out
 }

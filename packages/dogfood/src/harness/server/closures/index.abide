@@ -25,7 +25,7 @@ import Section from '#src/lib/Section.abide'
             move each by five.</p>
         <Code language="ts" caption="server" code={`
             import { closures } from '@abide/harness/server'
-            import getDeal from './getDeal.handler.ts'
+            import getDeal from './getDeal.server.ts'
             import { DEALS } from './lib/DEALS.server.ts'
 
             const handlers: (() => void)[] = []

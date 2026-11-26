@@ -3,7 +3,7 @@
 
 import { afterEach, beforeAll, expect, test } from 'bun:test'
 
-import { GET, log, onReport, type Report, report, trace } from '#server'
+import { log, onReport, type Report, report, rpc, trace } from '#server'
 import { serveLocally } from '#server/bridgeRelay.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -35,8 +35,8 @@ function received(): Report[] {
 }
 
 const sync = {
-    'probe/sync.handler.ts': {
-        default: GET(() => {
+    'probe/sync.server.ts': {
+        default: rpc(() => {
             log(`contact loaded with key ${SECRET}`)
             log.error('billing refused the key')
             return trace()

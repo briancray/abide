@@ -12,9 +12,9 @@ test.describe.configure({ mode: 'default' })
 
 const STREAMS = 3
 
-const TICKS = `import { GET } from '@abide/abide/server'
+const TICKS = `import { rpc } from '@abide/abide/server'
 
-export default GET(async function* ({ n }: { n: string }) {
+export default rpc(async function* ({ n }: { n: string }) {
     for (let at = 0; at < 600; at++) {
         yield { n, at }
         await Bun.sleep(50)
@@ -24,7 +24,7 @@ export default GET(async function* ({ n }: { n: string }) {
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import ticks from '#src/data/ticks.handler.ts'
+import ticks from '#src/data/ticks.server.ts'
 
 const a = reactive.derived(() => ticks({ n: 'a' }))
 const b = reactive.derived(() => ticks({ n: 'b' }))
@@ -43,7 +43,7 @@ let base = ''
 test.beforeAll(async ({}, testInfo) => {
     ;({ base, server } = await servedFixture(
         `e2e-stream-mux-${testInfo.project.name}`,
-        { 'data/ticks.handler.ts': TICKS, 'streams/index.abide': PAGE },
+        { 'data/ticks.server.ts': TICKS, 'streams/index.abide': PAGE },
     ))
 })
 

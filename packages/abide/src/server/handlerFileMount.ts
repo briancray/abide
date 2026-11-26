@@ -1,8 +1,9 @@
 import type { Mount } from './mountHandlers.ts'
 
 /**
- * The row of a handler file (16.73): its default, answered at the route the file is placed at and
- * named for the file — what its declaration says of it laid over that.
+ * The row of one verb of a server file's `rpc` (16.73, 16.111): answered at `file.address` and named
+ * for its last segment — what its declaration says of it laid over that. `methods` is every verb the
+ * export answers, `method` this row's; the default where `exported` names none.
  */
 export function handlerFileMount(
     file: Pick<Mount, 'address' | 'source' | 'scope' | 'matchers'>,
@@ -18,14 +19,17 @@ export function handlerFileMount(
         | 'defaults'
         | 'args'
         | 'result'
-    >,
+    > &
+        Partial<Pick<Mount, 'methods'>>,
+    exported = 'default',
 ): Mount {
     return {
         address: file.address,
         method: declared.method,
+        methods: declared.methods ?? [declared.method],
         source: file.source,
         name: file.address.slice(file.address.lastIndexOf('/') + 1),
-        export: 'default',
+        export: exported,
         scope: file.scope,
         matchers: file.matchers,
         private: false,

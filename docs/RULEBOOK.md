@@ -136,10 +136,10 @@ REGISTRY.md because none of them is a name an app author writes.
 | thread | The worker a worker file's exports run in: a `Worker` on a server, a Web Worker in a browser. |
 | test file | A `.test.ts` file. |
 | declaration file | A `.d.ts` file. |
-| handler file | A file of the app's own named `<name>.handler.ts`, directly in a directory under no fence. |
+| handler file | A server file of the app's own (`<name>.server.ts`), directly in a directory under no fence. |
 | param file | A file of the app's own named `<NAME>.param.ts`, directly in a directory under no fence. |
 | matcher | What a param file declares, and what a segment naming it matches by. |
-| private handler | A handler a `<script server>` declares. |
+| private handler | A value a `<script server>` exports. |
 | menu bar extra | The item `menuBarExtra` puts in the platform's menu bar. |
 | example app | The app every `<Example>` is drawn from, kept whole so a reader can download it and run it. |
 | headless component | A function `@abide/abide` exports handing back parts an app spreads onto elements it writes. |
@@ -1087,23 +1087,23 @@ a wire again under 15.21.
 
 16.1 A handler MUST be a `Reactive`, a `Keyed`, a plain function, or a value.
 
-16.2 `GET`, `POST`, `PUT`, `PATCH` and `DELETE` MUST give the handler a handler file exports as its
-default an address over http: that file's route, per 23.14.
+16.2 `rpc` MUST give the handler an address over http: a handler file's default `rpc` that file's
+route, per 23.14, and each other `rpc` it exports that route and then the export's name.
 
 16.3 An `Rpc` called MUST answer a promise of the handler's value for those `Args`, rejected with its
 refusal, or where the handler streams, an async iterable of its chunks.
 
 16.4 An `Rpc` MUST be callable in both arms, the call being what issues the request.
 
-16.5 Which arm `GET` takes MUST be read off a brand the factory stamped, and MUST NOT be inferred
+16.5 Which arm `rpc` takes MUST be read off a brand the factory stamped, and MUST NOT be inferred
 from the shape.
 
-16.6 `GET` over a plain function MUST keep the function's value per `Args` key, keying a function
+16.6 `rpc` over a plain function MUST keep the function's value per `Args` key, keying a function
 that declares no parameter on `undefined` and reading none of its parameters, and over a value MUST
-behave as `GET` over a `reactive` of it, each built with the options `GET` was handed; a `Reactive`
+behave as `rpc` over a `reactive` of it, each built with the options `rpc` was handed; a `Reactive`
 handed in MUST take the address's options alone.
 
-16.7 A mutation over a plain function MUST have its value's `ttl` default to 0 unless its options
+16.7 An `rpc` over a plain function answering a verb other than `GET` MUST have its value's `ttl` default to 0 unless its options
 declare one.
 
 16.8 `Failures` on an `Rpc` MUST be the union of what the handler declared, what its rungs
@@ -1290,9 +1290,9 @@ Details — and a reader MUST refuse with it after the chunks before it.
 16.69 A `[...rest]` segment MUST take the most parts of an address the segments after it leave, so
 a handler declared under one MUST answer at its own name.
 
-16.70 A private handler MUST have an address below `/__abide/handlers/`, named by its file's path
-below the root, a segment's brackets and dots dropped, and then its binding's name, and MUST NOT
-take a parameter from the path.
+16.70 A private handler MUST be answered as `rpc` over it, MUST have an address below
+`/__abide/handlers/`, named by its file's path below the root, a segment's brackets and dots
+dropped, and then its export's name, and MUST NOT take a parameter from the path.
 
 16.71 A private handler MUST NOT be listed on `/__abide/mcp`, on `/__abide/openapi.json` or by the
 command line.
@@ -1300,12 +1300,12 @@ command line.
 16.72 A private handler MUST run under the `middleware` and `onError` filed at the route 37.1 files
 its file's hooks at.
 
-16.73 A handler file's default export MUST be declared by a call of abide's `GET`, `POST`, `PUT`,
-`PATCH` or `DELETE`, and any other export, however the language spells it, MUST be a build error
+16.73 A handler file exporting no value declared by a call of abide's `rpc` MUST be a build error
 naming it.
 
-16.74 A module of the client graph importing a handler file MUST receive the wrapper 16.28 states as
-that file's default.
+16.74 A module of the client graph importing a handler file MUST receive the wrapper 16.28 states in
+place of each `rpc` it exports, under that export's name, and an import of any other export MUST be
+a build error naming it.
 
 ## Streamed answers and ceilings, continued
 
@@ -1367,8 +1367,7 @@ answer over the wire is sent.
 16.91 Where the answer streams, the `refresh` 16.89 states MUST run once the run closes, before its
 last frame is sent, and MUST NOT run where the run ends on a failure.
 
-16.92 The options `GET` takes MUST NOT carry `refreshes`, and a `GET` declared with `refreshes`
-MUST be refused as it is declared.
+16.92 An `rpc` answering `GET` alone declared with `refreshes` MUST be refused as it is declared.
 
 16.93 A `GET` call in a browser whose copy the build marked as streaming MUST be read over the
 socket mux, answered as the request the call names made with the headers of the connection's
@@ -1430,6 +1429,28 @@ with `rpc.set` and `rpc.patch`, as the way to serve a value the server writes.
 
 16.110 A handler MUST take a `memo`'s value options, `throttle` and `debounce` among them, and a
 `GET`'s browser copy MUST keep the pace they declare as a `memo` does (5.18-5.25).
+
+16.111 `rpc` MUST answer the verbs its value answers by — a function `GET`, any other value `GET`,
+`PUT` and `PATCH` — or, where its options declare `methods`, the verbs `methods` names, and a call
+of it MUST be sent as the first of them.
+
+16.112 `methods` naming a verb its value cannot answer by — a function more than one verb, a value
+any verb but `GET`, `PUT` and `PATCH`, or none of them `GET` — MUST be refused as it is declared.
+
+16.113 `address` MUST put an `rpc` at that address in place of the one 16.2 gives it, and a private
+handler declaring one MUST be a build error naming it.
+
+16.114 A `GET` call whose URL, its args in the query, would be longer than 2048 characters MUST be
+sent to its address as `QUERY`, its args as its JSON body, and a server MUST answer a `QUERY` as the
+`GET` at its address.
+
+16.115 A value's `PUT` MUST write the `value` its body carries as its owner's write (11.76), and a
+value's `PATCH` MUST apply the JSON Patch its body's `ops` carry (18.11) to the value in place, and
+each MUST answer the value then held.
+
+16.116 A browser's copy of a value answering `PUT` or `PATCH` MUST send its `set` as a `PUT` and
+its `patch` as a `PATCH` of the ops the mutation made, and MUST then hold what the server answers,
+or load the value again where the answer is a refusal.
 
 # 17. Response helpers
 
@@ -1908,7 +1929,7 @@ entry nothing subscribes to (6.2).
 23.13 `reachable` MUST ask a host that names no scheme over https, and an origin as written.
 
 23.14 A route MUST be the path of its file below the app's `--root` without its extension, a handler
-file's being `.handler.ts`, and an `index.abide`'s, a `layout.abide`'s and an `error.abide`'s MUST be
+file's being `.server.ts`, and an `index.abide`'s, a `layout.abide`'s and an `error.abide`'s MUST be
 its directory's.
 
 23.15 A file under a fence MUST NOT have a route, save `src/native/menubar.abide` (38.167).
@@ -1930,13 +1951,13 @@ error naming the mount.
 `layout.abide` and an `error.abide`.
 
 23.22 A file of the app's own directly in a directory under no fence MUST be a `.abide`, a handler
-file (`<name>.handler.ts`), a param file (`<NAME>.param.ts`), a test file (`<name>.test.ts`), a bench
+file (`<name>.server.ts`), a param file (`<NAME>.param.ts`), a test file (`<name>.test.ts`), a bench
 file (`<name>.bench.ts`) or a declaration file (`<name>.d.ts`), and any other MUST be a build error
 naming the file and a `lib` directory — save a file directly in a root that holds its package's
 `package.json`, which MAY be any file but a `.ts`.
 
-23.23 A server file of the app's own under no `lib` directory MUST be a build error naming the file
-and a `lib` directory.
+23.23 A server file of the app's own under no `lib` directory, and no handler file, MUST be a build
+error naming the file and a `lib` directory.
 
 23.24 A param file MUST hold one `export const`, of the name it is filed under, whose value is a
 regular expression literal carrying no flag, and anything else, an import included, MUST be a build
@@ -2894,8 +2915,8 @@ compiles to, as a static import of it does.
 34.16 A `.abide` file a server module imports MUST resolve to a function that binds its props and
 answers a `Component`, under `abide dev`, `abide start` and `abide compile` alike.
 
-34.17 An `export` in a `<script>` or a `<script server>`, however the language spells it, MUST be a
-compile error.
+34.17 An `export` in a `<script>`, however the language spells it, and one in a `<script server>`
+other than of one name a `const`, `let`, `var` or `function` declares, MUST be a compile error.
 
 34.18 A write a `<script>` makes outside any function to a `let` or `var` its file's
 `<script module>` declares, holding no `Reactive`, MUST be warned on.
@@ -3973,6 +3994,11 @@ literal, and each call whose `create` differs from its handle's.
 38.230 The migration keyed to 0.144.0 MUST note, by 38.226, each handler declared over a name the app
 declares as a `reactive` or a `reactive.derived`, in the file of the handler or in the app file it
 imports the name from.
+
+38.231 The migration keyed to 0.145.0 MUST rewrite each call of abide's `GET` as `rpc`, and each of
+`POST`, `PUT`, `PATCH` and `DELETE` as `rpc` whose options' `methods` names that verb; MUST move each
+`<name>.handler.ts` to `<name>.server.ts`, and every import specifier naming it with it, noting by
+38.226 one whose server file is already there; and MUST export each `rpc` a `<script server>` binds.
 
 # 39. Head and view transitions
 

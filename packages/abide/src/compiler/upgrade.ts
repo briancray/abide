@@ -13,12 +13,13 @@ import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
 import { toNamedParts } from './toNamedParts.ts'
 import { toRefuseNamed } from './toRefuseNamed.ts'
+import { toRpc } from './toRpc.ts'
 import { toServedValues } from './toServedValues.ts'
 import { toShared } from './toShared.ts'
 import { toSourceOptions } from './toSourceOptions.ts'
 
-/** A file's text before and after `abide upgrade`. */
-export type Edit = { path: string; before: string; after: string }
+/** A file's text before and after `abide upgrade`: `null` after, for a file it moves away from. */
+export type Edit = { path: string; before: string; after: string | null }
 
 /** 38.226 — a line a migration changed the meaning of and left for the app to decide. */
 export type UpgradeNote = { path: string; line: number; message: string }
@@ -34,7 +35,9 @@ type Migration = {
         read: (path: string) => Promise<string | undefined>,
         sources: () => Promise<string[]>,
         note: (path: string, line: string, message: string) => void,
-    ) => Promise<Record<string, string>>
+        // 38.231 — a file it moves, so a note an earlier migration made of it names where it went.
+        move: (from: string, to: string) => void,
+    ) => Promise<Record<string, string | null>>
 }
 
 // What an app's code is written in, outside what it installs or builds.
@@ -101,6 +104,8 @@ const MIGRATIONS: Migration[] = [
     // 38.230 — a handler over a value the app declares as a `reactive` throws (16.109): noted, after
     // 38.228 has spelled every such value `reactive` or `reactive.derived`.
     { version: '0.144.0', migrate: toServedValues },
+    // 38.231 — the five verbs are one `rpc`, and a handler file is a server file.
+    { version: '0.145.0', migrate: toRpc },
 ]
 
 /**
@@ -114,9 +119,10 @@ export async function upgrade(
     noteEach: (note: UpgradeNote) => void = () => {},
 ): Promise<Edit[]> {
     const before = new Map<string, string | undefined>()
-    const after = new Map<string, string>()
+    const after = new Map<string, string | null>()
     const read = async (path: string): Promise<string | undefined> => {
         const changed = after.get(path)
+        if (changed === null) return undefined
         if (changed !== undefined) return changed
         if (!before.has(path)) {
             const file = Bun.file(`${directory}/${path}`)
@@ -136,9 +142,15 @@ export async function upgrade(
         listed.sort()
         return listed
     }
-    const noted: { path: string; line: string; message: string }[] = []
+    let noted: { path: string; line: string; message: string }[] = []
     const note = (path: string, line: string, message: string): void => {
         noted.push({ path, line, message })
+    }
+    // Each migration's notes numbered in the text it left, so a later one rewriting the line keeps
+    // the number; and a file a later one moves carries its notes with it (38.231).
+    const numberedNotes: UpgradeNote[] = []
+    const move = (from: string, to: string): void => {
+        for (const each of numberedNotes) if (each.path === from) each.path = to
     }
     for (const migration of MIGRATIONS) {
         if (
@@ -147,19 +159,24 @@ export async function upgrade(
         )
             continue
         for (const [path, text] of Object.entries(
-            await migration.migrate(read, sources, note),
+            await migration.migrate(read, sources, note, move),
         )) {
             await read(path)
             after.set(path, text)
         }
+        numberedNotes.push(...(await numbered(noted, read)))
+        noted = []
     }
     const edits: Edit[] = []
     for (const [path, text] of after) {
-        const original = before.get(path) ?? ''
-        if (text !== original)
-            edits.push({ path, before: original, after: text })
+        const original = before.get(path)
+        if (text === null) {
+            if (original !== undefined)
+                edits.push({ path, before: original, after: null })
+        } else if (text !== (original ?? ''))
+            edits.push({ path, before: original ?? '', after: text })
     }
-    for (const each of await numbered(noted, read)) noteEach(each)
+    for (const each of numberedNotes) noteEach(each)
     return edits
 }
 

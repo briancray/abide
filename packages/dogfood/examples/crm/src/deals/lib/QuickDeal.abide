@@ -1,7 +1,7 @@
 <script>
 import { reactive } from '@abide/abide'
 
-import createDeal from '../createDeal.handler.ts'
+import createDeal from '../createDeal.server.ts'
 
 let name = reactive('Support renewal')
 let saving = reactive<typeof createDeal>()

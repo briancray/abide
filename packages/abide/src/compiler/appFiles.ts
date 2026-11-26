@@ -120,11 +120,17 @@ function walk(
             continue
         }
         const place = placeOf(path)
-        if (isServerFile(path) && place !== 'lib') {
+        // 23.23 — a server file stands in a lib directory, or directly in an address directory, where
+        // its `rpc`s answer at its route (16.73).
+        if (
+            isServerFile(path) &&
+            place !== 'lib' &&
+            !(place === 'address' && isHandlerFile(path))
+        ) {
             refusals.at(
                 path,
                 new Error(
-                    `abide: ${path} is a server file under no lib directory. Move it into a lib directory, beside it or in any directory above it. RULEBOOK 23.23.`,
+                    `abide: ${path} is a server file under no lib directory and in no address directory. Move it into a lib directory, beside it or in any directory above it, or into the address directory it answers in. RULEBOOK 23.23.`,
                 ),
             )
             continue
@@ -148,7 +154,7 @@ function walk(
                 refusals.at(
                     path,
                     new Error(
-                        `abide: ${path} is directly in an address directory, which holds pages, layouts, error pages, handler files, param files, test files, bench files and declaration files alone. ${path.endsWith('.ts') ? 'Name a handler file <name>.handler.ts, or move anything else' : 'Move it'} into a lib directory, beside it or in any directory above it. RULEBOOK 23.22.`,
+                        `abide: ${path} is directly in an address directory, which holds pages, layouts, error pages, server files, param files, test files, bench files and declaration files alone. ${path.endsWith('.ts') ? 'Name a module whose `rpc`s answer here <name>.server.ts, or move anything else' : 'Move it'} into a lib directory, beside it or in any directory above it. RULEBOOK 23.22.`,
                     ),
                 )
                 continue

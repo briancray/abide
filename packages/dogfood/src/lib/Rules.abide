@@ -1,10 +1,10 @@
 <script server>
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 import { CLAUSE_TEXTS } from '#src/rulebook/lib/CLAUSE_TEXTS.server.ts'
 
 // Read on the server: the rulebook is a quarter of a megabyte, and a page shows a dozen clauses of it.
-const clauseTexts = GET(({ ids }: { ids: string[] }) => {
+export const clauseTexts = rpc(({ ids }: { ids: string[] }) => {
     const texts: { id: string; text: string }[] = []
     for (const id of ids) texts.push({ id, text: CLAUSE_TEXTS.get(id) ?? '' })
     return texts

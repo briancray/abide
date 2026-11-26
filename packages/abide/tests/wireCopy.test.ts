@@ -48,7 +48,7 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-const LIBRARY = `import { deepEqual, GET, memo, POST, reactive } from '@abide/abide/server'
+const LIBRARY = `import { deepEqual, memo, reactive, rpc } from '@abide/abide/server'
 
 const shelf = reactive([{ id: 'a' }], {
     global: true,
@@ -57,17 +57,17 @@ const shelf = reactive([{ id: 'a' }], {
     identity: deepEqual,
 })
 
-const bound = GET(shelf)
-const inline = GET(reactive.derived(() => [{ isbn: '1' }], { key: 'isbn' }))
-const keyedCopy = GET(({ id }: { id: string }) => [{ id }], { key: (row) => row.id,
+export const bound = rpc(shelf)
+export const inline = rpc(reactive.derived(() => [{ isbn: '1' }], { key: 'isbn' }))
+export const keyedCopy = rpc(({ id }: { id: string }) => [{ id }], { key: (row) => row.id,
         tags: ({ id }) => [id],
         identity: (next, previous) => next === previous })
-const plain = GET(() => [1])
-const optioned = GET(() => [{ isbn: '1' }], {
+export const plain = rpc(() => [1])
+export const optioned = rpc(() => [{ isbn: '1' }], {
     key: 'isbn',
     description: 'Books.',
 })
-const change = POST(() => undefined)
+export const change = rpc(() => undefined, { methods: ['POST'] })
 `
 
 // THE REVERTS: hand back `undefined` from `declaredCopy`; every wrapper is written without a record,
@@ -106,7 +106,7 @@ test('an option bound to a const carries its literal, and one the build cannot r
     const app = appFixture({
         'index.abide': '<main>home</main>',
         'named/lib/Handlers.abide': `<script server>
-import { GET, reactive } from '@abide/abide/server'
+import { reactive, rpc } from '@abide/abide/server'
 
 const KEY = 'isbn'
 const TAGS = ['shelf', 'named'] as const
@@ -114,11 +114,11 @@ const OPTIONS = { key: KEY, tags: TAGS }
 let grown = 'is'
 grown += 'bn'
 
-const named = GET(
+export const named = rpc(
     reactive.derived(() => [{ isbn: '1' }], { key: KEY, tags: TAGS }),
 )
-const handed = GET(reactive.derived(() => [{ isbn: '1' }], OPTIONS))
-const unread = GET(reactive.derived(() => [{ isbn: '1' }], { key: grown }))
+export const handed = rpc(reactive.derived(() => [{ isbn: '1' }], OPTIONS))
+export const unread = rpc(reactive.derived(() => [{ isbn: '1' }], { key: grown }))
 </script>
 `,
     })
@@ -228,12 +228,12 @@ test("the build writes a handler's parameter defaults into its wrapper, and refu
     const app = appFixture({
         'index.abide': '<main>home</main>',
         'paged/lib/Handlers.abide': `<script server>
-import { GET, memo, POST } from '@abide/abide/server'
+import { memo, rpc } from '@abide/abide/server'
 
-const list = GET(async ({ page = 1, q = 'all' }: { page?: number; q?: string }) => [page, q])
-const kept = GET(({ size = 20 }: { size?: number }) => size, { key: 'id' })
-const save = POST(async ({ draft = true }: { draft?: boolean }) => draft)
-const plain = GET(async ({ id }: { id: string }) => id)
+export const list = rpc(async ({ page = 1, q = 'all' }: { page?: number; q?: string }) => [page, q])
+export const kept = rpc(({ size = 20 }: { size?: number }) => size, { key: 'id' })
+export const save = rpc(async ({ draft = true }: { draft?: boolean }) => draft, { methods: ['POST'] })
+export const plain = rpc(async ({ id }: { id: string }) => id)
 </script>
 `,
     })
@@ -257,10 +257,10 @@ const plain = GET(async ({ id }: { id: string }) => id)
     const refused = appFixture({
         'index.abide': '<main>home</main>',
         'paged/lib/Handlers.abide': `<script server>
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 const PAGE_SIZE = 20
-const list = GET(async ({ size = PAGE_SIZE }: { size?: number }) => size)
+export const list = rpc(async ({ size = PAGE_SIZE }: { size?: number }) => size)
 </script>
 `,
     })
@@ -354,15 +354,15 @@ test("the build writes a GET's throttle or debounce into its wrapper — 16.110,
     const app = appFixture({
         'index.abide': '<main>home</main>',
         'paced/lib/Handlers.abide': `<script server>
-import { GET, memo } from '@abide/abide/server'
+import { memo, rpc } from '@abide/abide/server'
 
 const WINDOW = 250
 let grown = 100
 grown += 1
 
-const searched = GET(({ q }: { q: string }) => [q], { debounce: 300 })
-const served = GET(memo(({ q }: { q: string }) => [q], { throttle: WINDOW }))
-const unread = GET(({ q }: { q: string }) => [q], { debounce: grown })
+export const searched = rpc(({ q }: { q: string }) => [q], { debounce: 300 })
+export const served = rpc(memo(({ q }: { q: string }) => [q], { throttle: WINDOW }))
+export const unread = rpc(({ q }: { q: string }) => [q], { debounce: grown })
 </script>
 `,
     })

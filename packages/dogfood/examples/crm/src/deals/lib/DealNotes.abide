@@ -1,12 +1,12 @@
 <script server>
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 const NOTES: Record<string, string[]> = {
     d1: ['Wants a three-year term.'],
 }
 
 // No export: this file is the one caller.
-const getNotes = GET(({ id }: { id: string }) => NOTES[id] ?? [])
+export const getNotes = rpc(({ id }: { id: string }) => NOTES[id] ?? [])
 </script>
 
 <script>

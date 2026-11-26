@@ -4,7 +4,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET, POST } from '#server'
+import { rpc } from '#server'
 import type { Issues, JsonValue, StandardSchemaV1 } from '#shared'
 import { jsonSchema, reactive, validateJson } from '#shared'
 import { keyedValue } from '#shared/reactive/index.ts'
@@ -629,7 +629,7 @@ test('an args gate types its ValidationError into a keyed error(), and only a ga
 // matches this call` — `Computed` inferred as `{ id: number }` from the schema, which the body's
 // promise is not).
 test('a body is typed from the body, whatever schema gates it — 19.23, 19.24', async () => {
-    const invoice = GET(
+    const invoice = rpc(
         async ({ id }: { id: number }) => ({ id, total: id * 10 }),
         {
             args: jsonSchema({
@@ -734,11 +734,12 @@ test('a member left undefined is absent — 19.25', async () => {
 // THE REVERT: drop the `Rpc` arm of `Issues`. Over a function it is then the record arm keyed by
 // the function's own members, and both `@ts-expect-error` lines go unused.
 test('Issues over an Rpc is the Issues of its args', () => {
-    const save = POST(
+    const save = rpc(
         (args: { name: string; amount: number }) =>
             `${args.name}${args.amount}`,
+        { methods: ['POST'] },
     )
-    const rename = POST((name: string) => name)
+    const rename = rpc((name: string) => name, { methods: ['POST'] })
     const keyed: Issues<typeof save> = { name: ['required'], '': ['whole'] }
     // @ts-expect-error — not a field of `save`'s args.
     const stray: Issues<typeof save> = { nope: ['x'] }

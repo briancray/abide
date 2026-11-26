@@ -3,7 +3,7 @@ import { reactive } from '@abide/abide'
 
 import Markdown from '#src/lib/Markdown.abide'
 
-import summarizeDeal from '../summarizeDeal.handler.ts'
+import summarizeDeal from '../summarizeDeal.server.ts'
 
 let asked = reactive(false)
 const summary = reactive.derived(() => (asked ? summarizeDeal() : []))

@@ -31,10 +31,10 @@ import Section from '#src/lib/Section.abide'
         <p>Call <code>request()</code> anywhere the handler reaches. Nothing passes the request
             down.</p>
         <Code language="ts" caption="server" code={`
-            import { GET, request } from '@abide/abide/server'
+            import { request, rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default GET(({ id }: { id: string }) => {
+            export default rpc(({ id }: { id: string }) => {
                 const deal = DEALS.find((each) => each.id === id)
                 const locale = request().headers.get('accept-language')?.split(',')[0]
                 return new Intl.NumberFormat(locale).format(deal?.amount ?? 0)
@@ -52,13 +52,13 @@ import Section from '#src/lib/Section.abide'
             itself, a test's included, reads <code>'in-process'</code>.</p>
         <Code language="ts" caption="server" code={`
             import { log } from '@abide/abide'
-            import { POST, request } from '@abide/abide/server'
+            import { request, rpc } from '@abide/abide/server'
 
-            export default POST(({ email }: { email: string }) => {
+            export default rpc(({ email }: { email: string }) => {
                 const from = request.ip()
                 const address = from === 'in-process' ? from : from?.address
                 log.info('sign-in', { email, address })
-            })
+            }, { methods: ['POST'] })
         `} />
     </Section>
 
@@ -66,9 +66,9 @@ import Section from '#src/lib/Section.abide'
         <p>Hand the request's <code>signal</code> to the work it started. A closed tab aborts the
             fetch rather than leaving it to finish for nobody.</p>
         <Code language="ts" caption="server" code={`
-            import { GET, request } from '@abide/abide/server'
+            import { request, rpc } from '@abide/abide/server'
 
-            export default GET(async ({ domain }: { domain: string }) => {
+            export default rpc(async ({ domain }: { domain: string }) => {
                 const lookup = await fetch(\`https://api.example/companies/\${domain}\`, {
                     signal: request().signal,
                 })

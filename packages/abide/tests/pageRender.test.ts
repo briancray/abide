@@ -12,7 +12,7 @@ import {
     takeSeeded,
 } from '#server/PageRender.ts'
 import { inScope } from '#server/requestScope.ts'
-import { GET, type Rpc } from '#shared/rpc.ts'
+import { type Rpc, rpc } from '#shared/rpc.ts'
 
 installServer()
 
@@ -22,12 +22,12 @@ function counted(address: string): {
     runs: () => number
 } {
     let runs = 0
-    const rpc = GET(({ id }: { id: number }) => {
+    const handler = rpc(({ id }: { id: number }) => {
         runs += 1
         return { id }
     })
-    rpc.address = address
-    return { rpc, runs: () => runs }
+    handler.address = address
+    return { rpc: handler, runs: () => runs }
 }
 
 /** A page's request from the browser `caller` names, with `headers` beside its cookie. */

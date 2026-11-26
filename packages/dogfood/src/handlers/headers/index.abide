@@ -38,11 +38,11 @@ import Section from '#src/lib/Section.abide'
         <p>Declare the read <code>global</code> with a <code>ttl</code>. Its answer says how long
             the entry has left, in place of <code>no-store</code>.</p>
         <Code language="ts" caption="server" code={`
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { closedTotals } from './lib/closedTotals.ts'
 
             // cache-control: private, max-age=60
-            export default GET(() => closedTotals(30), { global: true, ttl: 60_000 })
+            export default rpc(() => closedTotals(30), { global: true, ttl: 60_000 })
         `} />
     </Section>
 
@@ -50,10 +50,10 @@ import Section from '#src/lib/Section.abide'
         <p>Write the header through <code>response()</code>. What the handler writes wins over
             the default.</p>
         <Code language="ts" caption="server" code={`
-            import { GET, response } from '@abide/abide/server'
+            import { response, rpc } from '@abide/abide/server'
             import { COMPANIES } from './lib/COMPANIES.server.ts'
 
-            export default GET(() => {
+            export default rpc(() => {
                 response().headers.set('cache-control', 'public, max-age=300')
                 return COMPANIES
             })

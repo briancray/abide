@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { clientTags } from '#server/servedApp.ts'
 import { type HasParams, type HasSegments, url } from '#shared'
-import { GET } from '#shared/rpc.ts'
+import { rpc } from '#shared/rpc.ts'
 
 // 30.1, 30.3 — A REQUIRED SEGMENT IS FILLED, and encoded as a segment: a slash in a value is data,
 // not another directory.
@@ -49,7 +49,7 @@ test("url's query spells an empty list as an rpc's args do — 30.28", () => {
         '/search?q=ink&tags',
     )
     expect(url('/search', {}, { tags: [''] })).toBe('/search?tags=')
-    const search = GET(({ tags }: { tags: string[]; q?: string }) => tags)
+    const search = rpc(({ tags }: { tags: string[]; q?: string }) => tags)
     ;(search as { address?: string }).address = '/search'
     expect(search.url({ tags: [], q: 'ink' })).toBe('/search?q=ink&tags')
 })
@@ -59,7 +59,7 @@ test("url's query spells an empty list as an rpc's args do — 30.28", () => {
 // order is one. THE REVERT: drop the JSON arm from `queryText`; both filters write
 // `filter=[object Object]` and the second search answers with the first's deals.
 test('a record or a list of records rides the query as its canonical JSON — 30.28', () => {
-    const search = GET(
+    const search = rpc(
         (_args: {
             filter: { stage: string; owner?: string }
             ids?: number[]

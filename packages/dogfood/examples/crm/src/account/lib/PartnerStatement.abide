@@ -1,10 +1,10 @@
 <script server>
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-import getStatement from '../getStatement.handler.ts'
+import getStatement from '../getStatement.server.ts'
 
 // Another site's browser, asking for the statement under its own origin.
-const askAs = GET(
+export const askAs = rpc(
     async ({ origin }: { origin: string }) => {
         const answer = await getStatement.raw(undefined, {
             headers: { origin },

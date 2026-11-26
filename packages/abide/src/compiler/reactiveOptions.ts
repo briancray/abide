@@ -13,8 +13,6 @@ import {
     isPropertyAssignment,
 } from 'typescript/unstable/ast/is'
 
-import type { Method } from '#shared/rpc.ts'
-
 /**
  * The options object literal a value is built with — `reactive(x, { … })`, or `GET(f, { … })` over
  * a function written in place (16.6) — or `undefined`.
@@ -57,14 +55,8 @@ export function isReactiveCall(call: Node & { expression: Node }): boolean {
     )
 }
 
-/** The five handler declarers, by the spelling `isReactiveCall` reads `reactive` by. */
-export const METHODS: ReadonlySet<string> = new Set<Method>([
-    'GET',
-    'POST',
-    'PUT',
-    'PATCH',
-    'DELETE',
-])
+/** 16.111 — the one handler declarer, by the spelling `isReactiveCall` reads `reactive` by. */
+export const METHODS: ReadonlySet<string> = new Set(['rpc'])
 
 /** Whether a call is a declarer handed a function written in place, which it builds a value of. */
 function isDeclaredOverBody(call: CallExpression): boolean {

@@ -8,11 +8,11 @@ import { Mux, type MuxConnection } from '#server/answerSocket.ts'
 import { Followers } from '#server/Followers.ts'
 import type { FollowedHandler } from '#server/mountHandlers.ts'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
-import { GET } from '#shared/rpc.ts'
+import { rpc } from '#shared/rpc.ts'
 
 type Frame = { op: string; id: number }
 
-const cart = GET(() => ['the cart of whoever asks']) as unknown as {
+const cart = rpc(() => ['the cart of whoever asks']) as unknown as {
     address: string
     refresh(pattern?: unknown, options?: { caller?: string }): void
     invalidate(pattern?: unknown, options?: { caller?: string }): void

@@ -1,4 +1,5 @@
-// `GET` and the four mutations: a handler given an address (16.2). The IN-PROCESS arm is what a
+// `rpc`: a value, a function or a source given an address (16.2), answering the verbs it can (16.111).
+// The IN-PROCESS arm is what a
 // server-side caller, a page rendering on the server and a test all reach; the WIRE arm is what a
 // browser gets in its place (16.28, `#ui/wire.ts`) — and it is `declare` over a body that fetches,
 // which is why this module is in the seam both reach rather than in the server's.
@@ -13,6 +14,7 @@
 // the call hands back a value whose body runs the onion once per args, per request, over the
 // handler's own.
 
+import { applyPatch } from './applyPatch.ts'
 import { DERIVED_ARGS } from './DERIVED_ARGS.ts'
 import { type Failed, isFailed, isFailedNamed } from './Failed.ts'
 import { GLOBAL_GETS } from './GLOBAL_GETS.ts'
@@ -68,6 +70,7 @@ import {
 import { isReactive } from './reactive/isReactive.ts'
 import { isThenable } from './reactive/isThenable.ts'
 import { MUTATION } from './reactive/MUTATION.ts'
+import type { PatchOp } from './reactive/patchLog.ts'
 import {
     chunksOfStream,
     nameLoad,
@@ -116,7 +119,10 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     Failures | Failed<'HttpError', undefined> | Annotated<Args>,
     Produced
 >) & {
+    /** 16.111 — the verb a call is sent with. */
     method: Method
+    /** 16.111 — every verb the `rpc` answers at its address, `method` first. */
+    methods: readonly Method[]
     description: string | undefined
     /** 11.76 — the owner's write of the value for `args`, past every rung; `set(value)` where it takes no args at all (11.80). */
     set(...given: Written<Args, Value>): void
@@ -260,6 +266,10 @@ export type RpcOptions<
     Args = unknown,
     Answers extends readonly unknown[] = unknown[],
 > = {
+    /** 16.112 — the verbs answered, in place of the ones the value is answered by (16.111). */
+    methods?: readonly Method[] | undefined
+    /** 16.113 — the address answered at, in place of the handler file's route. */
+    address?: string | undefined
     description?: string | undefined
     /**
      * 16.86 — one rung per answer in `Answers`, each read in context: a rung's own refusals are
@@ -355,6 +365,15 @@ type HandlerShaping<Shaping> = Omit<Shaping, 'store'>
 type HandlerStore<Args, Value> = { store?: KeptIn<Args, Value> | undefined }
 
 type Declare<Writes extends boolean> = {
+    // 16.70 — an `rpc` already, handed back as it is: a server block's export declared by one.
+    <
+        Declared extends ((...given: never[]) => unknown) & {
+            methods: readonly Method[]
+            address: string | undefined
+        },
+    >(
+        handler: Declared,
+    ): Declared
     // 11.2 — keyed where the body declares a parameter, an optional one included; 16.87 — `Args`
     // read off the `args` the options declare where the parameter carries no annotation. A body
     // declaring none infers nothing, and `undefined` is the key an unkeyed `Rpc` is called with.
@@ -612,6 +631,7 @@ export function declare<Declared extends Method>(
                 wireCopy = true
             },
             method,
+            methods: [method] as readonly Method[],
             description: options?.description,
             address: undefined as string | undefined,
             timeout: options?.timeout,
@@ -733,11 +753,111 @@ export function declare<Declared extends Method>(
     }) as Declare<Declared extends 'GET' ? false : true>
 }
 
-export const GET: Declare<false> = declare('GET')
-export const POST: Declare<true> = declare('POST')
-export const PUT: Declare<true> = declare('PUT')
-export const PATCH: Declare<true> = declare('PATCH')
-export const DELETE: Declare<true> = declare('DELETE')
+/** 16.115, 16.116 — the faces a value answers its writes over the wire by, keyed by their verb. */
+export const FACES = Symbol('abide.faces')
+
+/** What a function's or a built value's `methods` may name: one verb, its call's. */
+const ONE_VERB: readonly Method[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
+/** What a plain value answers by: its read, and its writes (16.111). */
+const VALUE_VERBS: readonly Method[] = ['GET', 'PUT', 'PATCH']
+
+/**
+ * A value, a function or a source given an address: what `GET` and the four mutations were, one
+ * name over the verbs the value answers by (16.111), or the ones `methods` names (16.112).
+ */
+export const rpc: Declare<true> = ((
+    value: unknown,
+    options?: RpcOptions,
+): unknown => {
+    // 16.70 — an `rpc` already: a server block's export declared by one, given its private address.
+    if (options === undefined && isRpc(value)) return value
+    const { methods, address: _address, ...rest } = options ?? {}
+    const verbs = verbsOf(value, methods)
+    const primary = verbs[0] as Method
+    // 16.92 — `refreshes` refreshes after a write, which a read-only `rpc` never makes.
+    if (rest.refreshes !== undefined && verbs.every((verb) => verb === 'GET'))
+        throw new Error(
+            'abide: an `rpc` answering `GET` alone was declared with `refreshes`, which only a write takes. Refresh from the write that changed the value. RULEBOOK 16.92.',
+        )
+    const main = declare(primary)(value as never, rest as never) as unknown as {
+        methods: readonly Method[]
+        [FACES]: Partial<Record<Method, unknown>>
+        set(value: unknown): void
+        patch(mutate: (value: unknown) => void): void
+        (): unknown
+    }
+    main.methods = verbs
+    // 16.115, 16.116 — A VALUE'S WRITES ARE FACES OF THEIR OWN at its address, each a call whose args
+    // carry what the browser wrote, so every rung, gate and answer a call has, these have.
+    const faces: Partial<Record<Method, unknown>> = {}
+    const shared = facesOptions(rest)
+    if (verbs.includes('PUT'))
+        faces.PUT = declare('PUT')(
+            (({ value: written }: { value: unknown }) => {
+                main.set(written)
+                return main()
+            }) as never,
+            shared as never,
+        )
+    if (verbs.includes('PATCH'))
+        faces.PATCH = declare('PATCH')(
+            (({ ops }: { ops: PatchOp[] }) => {
+                main.patch((held) => applyPatch(held, ops))
+                return main()
+            }) as never,
+            shared as never,
+        )
+    main[FACES] = faces
+    return main
+}) as Declare<true>
+
+/** Whether `value` is an `Rpc` already. */
+function isRpc(value: unknown): boolean {
+    return typeof value === 'function' && REACH_CALL in value
+}
+
+/** The options a value's write faces share with it: who may call them, and how. */
+function facesOptions(options: RpcOptions): RpcOptions {
+    return {
+        description: options.description,
+        middleware: options.middleware,
+        timeout: options.timeout,
+        clients: options.clients,
+        crossOrigin: options.crossOrigin,
+        maxBodySize: options.maxBodySize,
+    }
+}
+
+/**
+ * 16.111, 16.112 — the verbs `value` answers by, the one it reads by first: a function's or a built
+ * value's one verb, `GET` unless `methods` names another; a plain value's read and writes, or the
+ * ones `methods` keeps.
+ */
+function verbsOf(
+    value: unknown,
+    declared: readonly Method[] | undefined,
+): readonly Method[] {
+    const called = typeof value === 'function'
+    if (declared === undefined) return called ? ['GET'] : VALUE_VERBS
+    const able = called ? ONE_VERB : VALUE_VERBS
+    for (const verb of declared)
+        if (!able.includes(verb))
+            throw new Error(
+                `abide: an \`rpc\` was declared with \`methods\` naming ${JSON.stringify(verb)}, which ${called ? 'a function does not answer by' : 'a value answers by only as GET, PUT or PATCH'}. RULEBOOK 16.112.`,
+            )
+    if (called && declared.length !== 1)
+        throw new Error(
+            `abide: an \`rpc\` over a function was declared with \`methods\` naming ${declared.length} verbs, and a function is called by one. RULEBOOK 16.112.`,
+        )
+    if (!called && !declared.includes('GET'))
+        throw new Error(
+            'abide: an `rpc` over a value was declared with `methods` leaving out `GET`, which every value is read by. RULEBOOK 16.112.',
+        )
+    // The read first: it is what a call of the `rpc` sends.
+    return called
+        ? declared
+        : ['GET', ...declared.filter((verb) => verb !== 'GET')]
+}
 
 /** The handler's mount address, or a throw naming where one comes from. */
 function addressOf(rpc: { address: string | undefined }): string {

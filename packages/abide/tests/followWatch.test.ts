@@ -8,7 +8,7 @@ import { Mux, type MuxConnection } from '#server/answerSocket.ts'
 import { callerOf } from '#server/callerOf.ts'
 import { Followers } from '#server/Followers.ts'
 import { followedOwn, mountedOwn } from '#server/mountHandlers.ts'
-import { GET } from '#shared/rpc.ts'
+import { rpc } from '#shared/rpc.ts'
 
 type Frame = { op: string; id: number }
 
@@ -19,7 +19,7 @@ const OWN = followedOwn(
     mountedOwn(
         '/__abide/watched-test',
         'watchedTest',
-        GET(() => 'state'),
+        rpc(() => 'state'),
     ),
     (poke) => {
         const caller = callerOf() ?? ''

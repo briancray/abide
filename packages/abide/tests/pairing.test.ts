@@ -5,7 +5,7 @@
 
 import { afterEach, beforeEach, expect, jest, spyOn, test } from 'bun:test'
 
-import { GET, onPairing } from '#server'
+import { onPairing, rpc } from '#server'
 import { config } from '#server/config.ts'
 import { flushSync } from '#shared'
 import { BRIDGE_ADDRESS, PAIRING_ADDRESS } from '#shared/ADDRESSES.ts'
@@ -241,8 +241,8 @@ test('a pairing built outside a setup stops reading and following once stopped �
 // settles, `status.set(new Promise(() => {}))`; this reports `busy: true`.
 test('a pairing a server builds holds undefined and nothing in flight — 44.69', async () => {
     await using app = await inMemoryApp({
-        'probe/pairing.handler.ts': {
-            default: GET(() => {
+        'probe/pairing.server.ts': {
+            default: rpc(() => {
                 const { status } = pairing()
                 return `ready: ${status.ready()}, busy: ${status.busy()}, held: ${status.peek()}`
             }),
@@ -522,7 +522,7 @@ test('/__abide/pairing mints its code with ABIDE_BRIDGE_NOTE — 44.67, 44.91', 
 test('/__abide/pairing is on no generated surface — 44.68', async () => {
     // One handler of the app's own, so the surfaces have something to list.
     await using app = await inMemoryApp({
-        'contacts.handler.ts': { default: GET(() => ['Ada']) },
+        'contacts.server.ts': { default: rpc(() => ['Ada']) },
     })
     const listed = (await (
         await app.fetch(

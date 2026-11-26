@@ -116,10 +116,10 @@ import Section from '#src/lib/Section.abide'
         <p><code>status</code> is one value for every caller, written as each run starts and
             ends, so a handler serves it as it is.</p>
         <Code language="ts" caption="server" code={`
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { digest } from './lib/digest.server.ts'
 
-            export default GET(digest.status)
+            export default rpc(digest.status)
         `} />
     </Section>
 
@@ -128,10 +128,10 @@ import Section from '#src/lib/Section.abide'
             twice mails the team once. It rejects with what a failed run threw or refused, so the
             press is refused with it; <code>status</code> keeps it as <code>lastError</code>.</p>
         <Code language="ts" caption="server" code={`
-            import { POST } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { digest } from './lib/digest.server.ts'
 
-            export default POST(() => digest.run())
+            export default rpc(() => digest.run(), { methods: ['POST'] })
         `} />
     </Section>
 
@@ -141,7 +141,7 @@ import Section from '#src/lib/Section.abide'
             <code>status</code>; a press while <code>running</code> reads true is refused 409.</p>
         <Code language="ts" caption="server" code={`
             import { refuse } from '@abide/abide'
-            import { job, POST } from '@abide/abide/server'
+            import { job, rpc } from '@abide/abide/server'
 
             export const dealImport = job({
                 name: 'dealImport',
@@ -154,11 +154,11 @@ import Section from '#src/lib/Section.abide'
                 message: 'An import is already running.',
             })
 
-            export default POST(() => {
+            export default rpc(() => {
                 if (dealImport.status.peek()?.running) return importRunning()
                 void dealImport.run()
                 return dealImport.status.peek()
-            })
+            }, { methods: ['POST'] })
         `} />
     </Section>
 
@@ -167,7 +167,7 @@ import Section from '#src/lib/Section.abide'
             what to import. A run the schedule starts is handed <code>undefined</code>, and the input
             of a <code>Job.run</code> that joins a run in flight is never read.</p>
         <Code language="ts" caption="server" code={`
-            import { job, log, POST } from '@abide/abide/server'
+            import { job, log, rpc } from '@abide/abide/server'
             import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
             export const dealImport = job({
@@ -184,9 +184,9 @@ import Section from '#src/lib/Section.abide'
                 },
             })
 
-            export default POST((options: { stage?: string } = {}) =>
+            export default rpc((options: { stage?: string } = {}) =>
                 dealImport.run(options),
-            )
+             { methods: ['POST'] },)
         `} />
     </Section>
 
@@ -261,7 +261,7 @@ import Section from '#src/lib/Section.abide'
             job's stop ends the steps in flight with no signal handed to it.</p>
         <Code language="ts" caption="server" code={`
             import { job, pipe } from '@abide/abide/server'
-            import getDeal from '../deals/getDeal.handler.ts'
+            import getDeal from '../deals/getDeal.server.ts'
 
             const nightly = pipe([() => getDeal({ id: 'd2' }), (deal) => deal.name])
             job({

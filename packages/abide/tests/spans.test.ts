@@ -3,7 +3,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { GET, log, refuse, trace } from '#server'
+import { log, refuse, rpc, trace } from '#server'
 import type { LogRecord } from '#shared/log.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -32,8 +32,8 @@ const respondedSpan = (answer: Response): string =>
 // names none either, so the request's span heads nothing.
 test('a span names its own id and the span it opened under, and a throw closes it as an error — 24.9', async () => {
     await using app = await inMemoryApp({
-        'probe/nested.handler.ts': {
-            default: GET(() =>
+        'probe/nested.server.ts': {
+            default: rpc(() =>
                 trace.span('outer', () =>
                     trace.span('inner', () => {
                         try {
@@ -74,8 +74,8 @@ test('a span names its own id and the span it opened under, and a throw closes i
 
 test('a span whose promise rejects closes as an error, and the rejection reaches the caller — 24.9', async () => {
     await using app = await inMemoryApp({
-        'probe/rejected.handler.ts': {
-            default: GET(async () => {
+        'probe/rejected.server.ts': {
+            default: rpc(async () => {
                 await trace
                     .span('rejecting', () => Promise.reject(new Error('no')))
                     .catch(() => {})
@@ -97,9 +97,9 @@ test('a span whose promise rejects closes as an error, and the rejection reaches
 test('a request is a server span under the caller’s, named by its method and route — 24.10', async () => {
     process.env.DEBUG = 'abide:request'
     await using app = await inMemoryApp({
-        'probe/fine.handler.ts': { default: GET(() => 'fine') },
-        'probe/failing.handler.ts': {
-            default: GET(() => {
+        'probe/fine.server.ts': { default: rpc(() => 'fine') },
+        'probe/failing.server.ts': {
+            default: rpc(() => {
                 throw refuse(503, 'down')
             }),
         },
@@ -138,7 +138,7 @@ test('a request is a server span under the caller’s, named by its method and r
 test('a request writes no span where abide:request is closed — 24.10, 28.7', async () => {
     delete process.env.DEBUG
     await using app = await inMemoryApp({
-        'probe/quiet.handler.ts': { default: GET(() => 'q') },
+        'probe/quiet.server.ts': { default: rpc(() => 'q') },
     })
     const answer = await app.fetch(new Request('http://app.test/probe/quiet'))
     expect(

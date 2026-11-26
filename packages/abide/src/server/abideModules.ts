@@ -181,19 +181,27 @@ function handlerFilesPlugin(
                 },
                 (args) => {
                     const face = JSON.stringify(`${args.path}${HANDLER_SUFFIX}`)
-                    const { address, args: schema } = faces.get(
-                        args.path,
-                    ) as HandlerFace
+                    const { exports } = faces.get(args.path) as HandlerFace
                     const lines = [
-                        `export { default } from ${face}`,
-                        `import __handler from ${face}`,
+                        `export * from ${face}`,
+                        `import * as __module from ${face}`,
                         `import { addressed as __addressed, derivedArgs as __derivedArgs } from '${SERVER_RUNTIME_SPECIFIER}'`,
-                        `__addressed(__handler, ${JSON.stringify(address)})`,
                     ]
-                    if (schema !== undefined)
+                    for (const [
+                        name,
+                        { address, args: schema },
+                    ] of Object.entries(exports)) {
+                        const handler = `__module[${JSON.stringify(name)}]`
+                        if (name === 'default')
+                            lines.push(`export { default } from ${face}`)
                         lines.push(
-                            `__derivedArgs(__handler, ${JSON.stringify(schema)})`,
+                            `__addressed(${handler}, ${JSON.stringify(address)})`,
                         )
+                        if (schema !== undefined)
+                            lines.push(
+                                `__derivedArgs(${handler}, ${JSON.stringify(schema)})`,
+                            )
+                    }
                     return { contents: `${lines.join('\n')}\n`, loader: 'js' }
                 },
             )

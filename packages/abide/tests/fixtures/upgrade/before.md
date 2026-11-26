@@ -34,7 +34,7 @@ The ledger keeps one book per household: `src/books/` is its pages, and `CONTEXT
 - A `.ts` beside the pages is a handler: `src/invoices/getInvoice.ts` holds
   `export default GET(…)` and answers `/invoices/getInvoice`. It is the app's public API, for pages,
   scripts, the CLI and MCP alike.
-- `src/books/getBook.handler.ts` answers `/books/getBook`, and every page of a book reads it.
+- `src/books/getBook.server.ts` answers `/books/getBook`, and every page of a book reads it.
 - Import the app's own modules as `#src/…` (see `imports` in `package.json`).
 
 ## Habits

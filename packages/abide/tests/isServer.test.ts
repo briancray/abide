@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET, isServer, online, watch } from '#server'
+import { isServer, online, rpc, watch } from '#server'
 import { type Component, render } from '#server/render.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -13,11 +13,11 @@ import { inMemoryApp } from './inMemoryApp.ts'
 // What one request saw, and what the handler whose effect threw answered with.
 async function answered(): Promise<{ side: string; threw: string }> {
     await using app = await inMemoryApp({
-        'probe/side.handler.ts': {
-            default: GET(() => ({ server: isServer(), online: online() })),
+        'probe/side.server.ts': {
+            default: rpc(() => ({ server: isServer(), online: online() })),
         },
-        'probe/effect.handler.ts': {
-            default: GET(() => {
+        'probe/effect.server.ts': {
+            default: rpc(() => {
                 watch(() => {
                     throw new Error('boom')
                 })

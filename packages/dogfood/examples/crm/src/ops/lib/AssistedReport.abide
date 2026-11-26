@@ -8,9 +8,9 @@ import {
     watch,
 } from '@abide/abide'
 
-import askReport from '../askReport.handler.ts'
-import draftReport from '../draftReport.handler.ts'
-import sendStatement from '../sendStatement.handler.ts'
+import askReport from '../askReport.server.ts'
+import draftReport from '../draftReport.server.ts'
+import sendStatement from '../sendStatement.server.ts'
 
 let draft = reactive<ReportDraft | undefined>(undefined)
 

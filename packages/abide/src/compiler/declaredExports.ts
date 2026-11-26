@@ -10,6 +10,7 @@ import {
     isObjectLiteralExpression,
     isPropertyAccessExpression,
     isPropertyAssignment,
+    isSpreadAssignment,
     isSpreadElement,
     isStringLiteral,
     isVariableDeclaration,
@@ -185,6 +186,8 @@ async function exportsIn(
                         return {
                             name: exported.name,
                             method: declared?.method,
+                            methods: declared?.methods ?? [],
+                            address: declared?.address,
                             ui: declared?.ui ?? true,
                             cli: declared?.cli ?? true,
                             mcp: declared?.mcp ?? true,
@@ -243,6 +246,10 @@ type DeclaredExport = Pick<
     | 'middleware'
 > & {
     method: Declared | undefined
+    /** 16.111 — every verb it answers, `method` first. */
+    methods: Method[]
+    /** 16.113 — the address its options name, where they name one as a literal. */
+    address: string | undefined
     /** 18.15 — what its copy's options declare and the build could not read. */
     unread: Diagnosis[]
 }
@@ -258,6 +265,8 @@ async function declaringMethod(
 ): Promise<
     | {
           method: Declared
+          methods: Method[]
+          address: string | undefined
           ui: boolean
           cli: boolean
           mcp: boolean
@@ -293,22 +302,52 @@ async function declaringMethod(
         call = await boundInitializer(checker, bound)
     }
     if (call === undefined || !isCallExpression(call)) return undefined
+    return declaredBy(checker, call, abide)
+}
+
+/** `declaringMethod` past the declaration: what the declaring `call` says, where it is an `rpc`. */
+async function declaredBy(
+    checker: Checker,
+    call: CallExpression,
+    abide: Abide,
+): ReturnType<typeof declaringMethod> {
     const callee = isPropertyAccessExpression(call.expression)
         ? call.expression.name
         : call.expression
     const named = await checker.getSymbolAtLocation(callee)
     if (named === undefined) return undefined
-    const method = await aliasedSymbol(checker, named)
+    const declarer = await aliasedSymbol(checker, named)
+    // 16.70 — `rpc(x)` over an `x` an `rpc` declared already is that one, as the runtime has it.
+    const inner = await declarationOf(checker, call.arguments[0])
+    if (
+        call.arguments.length === 1 &&
+        inner !== undefined &&
+        isCallExpression(inner) &&
+        inner !== call
+    ) {
+        const innerCallee = isPropertyAccessExpression(inner.expression)
+            ? inner.expression.name
+            : inner.expression
+        const innerNamed = await checker.getSymbolAtLocation(innerCallee)
+        if (
+            innerNamed !== undefined &&
+            METHODS.has((await aliasedSymbol(checker, innerNamed)).name)
+        )
+            return declaredBy(checker, inner, abide)
+    }
     const ui = declaredFor(call, 'ui') ?? true
     const description = describedAs(call)
     if (
-        !METHODS.has(method.name) ||
+        !METHODS.has(declarer.name) ||
         abide.methods === undefined ||
-        method.valueDeclaration?.path !== abide.methods
+        declarer.valueDeclaration?.path !== abide.methods
     )
         return undefined
+    // 16.111, 16.112 — the verbs it answers: the ones `methods` names, or the ones its value does.
+    const methods = await declaredMethods(checker, call)
+    const method = methods[0] as Method
     const declared =
-        method.name === 'GET'
+        method === 'GET'
             ? await declaredCopy(checker, call, abide)
             : { copy: undefined, unread: [] }
     const body = await handlerBodyOf(checker, call.arguments[0])
@@ -325,7 +364,9 @@ async function declaringMethod(
     // they were given, and are not a `Response`.
     const answersResponse = await isResponse(returned)
     return {
-        method: method.name as Method,
+        method,
+        methods,
+        address: declaredAddress(call),
         ui,
         cli: declaredFor(call, 'cli') ?? !answersResponse,
         mcp: declaredFor(call, 'mcp') ?? !answersResponse,
@@ -594,6 +635,52 @@ async function stringLiteralsOf(
     return names
 }
 
+/** What a plain value answers by: its read, then its writes (16.111). */
+const VALUE_METHODS: Method[] = ['GET', 'PUT', 'PATCH']
+
+/**
+ * 16.111, 16.112 — the verbs an `rpc` answers, its call's first: the `methods` its options write as
+ * a literal, or the ones its value answers by — a function `GET`, any other value `GET`, `PUT` and
+ * `PATCH`. A `methods` the build cannot read is the value's, which the runtime checks it against.
+ */
+async function declaredMethods(
+    checker: Checker,
+    call: CallExpression,
+): Promise<Method[]> {
+    const options = inlineOptions(call)
+    const written =
+        options === undefined ? undefined : optionNamed(options, 'methods')
+    if (written !== undefined && isArrayLiteralExpression(written)) {
+        const named: Method[] = []
+        for (const element of written.elements)
+            if (isStringLiteral(element)) named.push(element.text as Method)
+        if (named.length === written.elements.length && named.length > 0)
+            return named.includes('GET') && named[0] !== 'GET'
+                ? ['GET', ...named.filter((verb) => verb !== 'GET')]
+                : named
+    }
+    const value = call.arguments[0]
+    const type =
+        value === undefined ? undefined : await checker.getTypeAtLocation(value)
+    const called =
+        type !== undefined &&
+        (await checker.getSignaturesOfType(type, SignatureKind.Call)).length > 0
+    return called ? ['GET'] : [...VALUE_METHODS]
+}
+
+/** 16.113 — the `address` an `rpc`'s options write as a literal, or `undefined`. */
+function declaredAddress(
+    call: Node & { arguments?: readonly Node[] | undefined },
+): string | undefined {
+    const options = inlineOptions(call)
+    if (options === undefined) return undefined
+    const address = optionNamed(options, 'address')
+    return address !== undefined &&
+        (isStringLiteral(address) || isNoSubstitutionTemplateLiteral(address))
+        ? address.text
+        : undefined
+}
+
 /**
  * The `description` a handler call declares inline, where it is written as a literal.
  *
@@ -630,7 +717,9 @@ function rungsNamed(
     if (options === undefined) return []
     if (!isObjectLiteralExpression(options)) return null
     const written = optionNamed(options, 'middleware')
-    if (written === undefined) return []
+    // A spread may carry rungs the build cannot read.
+    if (written === undefined)
+        return options.properties.some(isSpreadAssignment) ? null : []
     const entries = isArrayLiteralExpression(written)
         ? written.elements
         : [written]

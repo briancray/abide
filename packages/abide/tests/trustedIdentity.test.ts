@@ -11,7 +11,7 @@ let stop = (): void => {}
 
 const HANDLER = (
     proxies: string,
-) => `import { GET, principal, signedIn, trustedIdentity } from '@abide/abide/server'
+) => `import { principal, rpc, signedIn, trustedIdentity } from '@abide/abide/server'
 
 const trust = trustedIdentity({
     header: 'x-forwarded-user',
@@ -19,7 +19,7 @@ const trust = trustedIdentity({
     claims: (name) => ({ name }),
 })
 
-export default GET(async () => (await principal.resolved).name, {
+export default rpc(async () => (await principal.resolved).name, {
     middleware: [trust, signedIn],
     description: 'Who the caller is.',
 })
@@ -28,8 +28,8 @@ export default GET(async () => (await principal.resolved).name, {
 beforeAll(async () => {
     ;({ base, stop } = await serveApp(
         {
-            'fromLoopback.handler.ts': HANDLER(`['127.0.0.0/8', '::1']`),
-            'fromGateway.handler.ts': HANDLER(`['10.0.0.0/8']`),
+            'fromLoopback.server.ts': HANDLER(`['127.0.0.0/8', '::1']`),
+            'fromGateway.server.ts': HANDLER(`['10.0.0.0/8']`),
         },
         process.env,
         ['--hostname', '127.0.0.1'],

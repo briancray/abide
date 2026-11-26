@@ -67,6 +67,7 @@ const focused = () => plot.root['aria-describedby']
 `)
     expect(after('NOTES.md')).toBe(notes.replace('won.svg', 'won.root'))
     expect(after('src/lib/kept.ts')).toBeUndefined()
-    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    for (const edit of edits)
+        await Bun.write(`${app}/${edit.path}`, edit.after ?? '')
     expect(await upgrade(app, '0.143.0')).toEqual([])
 })

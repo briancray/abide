@@ -8,7 +8,7 @@ import { rm } from 'node:fs/promises' // bun has no recursive remove of its own
 
 import { spawned } from '@abide/harness/gate'
 
-import { POST } from '#server'
+import { rpc } from '#server'
 
 import bridgePackage from '../../bridge/package.json' with { type: 'json' }
 import { SILENCE_MILLISECONDS } from '../../bridge/src/bridge.ts'
@@ -53,41 +53,41 @@ const SETTINGS_KEPT_NONE = {
     env: {},
 }
 
-const INVOICES = `import { cookies, POST } from '@abide/abide/server'
+const INVOICES = `import { cookies, rpc } from '@abide/abide/server'
 
-export default POST(() => cookies().get('who') ?? 'nobody', { description: 'Who is asking.' })
+export default rpc(() => cookies().get('who') ?? 'nobody', { methods: ['POST'], description: 'Who is asking.' })
 `
 
-const PICTURE = `import { GET } from '@abide/abide/server'
+const PICTURE = `import { rpc } from '@abide/abide/server'
 
-export default GET(() => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), { description: 'A picture.' })
+export default rpc(() => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), { description: 'A picture.' })
 `
 
 // Off the MCP surface, as the pairing handlers are, so no conversation here lists it as a tool.
 const SIGN_IN = `import { principal } from '@abide/abide'
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-export default POST(({ id }: { id: string }) => principal.set({ id }), { clients: { mcp: false } })
+export default rpc(({ id }: { id: string }) => principal.set({ id }), { methods: ['POST'], clients: { mcp: false } })
 `
 
 const SIGN_OUT = `import { principal } from '@abide/abide'
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-export default POST(() => principal.clear(), { clients: { mcp: false } })
+export default rpc(() => principal.clear(), { methods: ['POST'], clients: { mcp: false } })
 `
 
 // The claims carry an `iat` of their own, which the seal's overwrites, so the code this mints is
 // filed under the claims as a later request opens them rather than as they were handed.
 const SIGN_IN_AND_PAIR = `import { principal } from '@abide/abide'
-import { POST, provider } from '@abide/abide/server'
+import { provider, rpc } from '@abide/abide/server'
 
-export default POST(async ({ id }: { id: string }) => {
+export default rpc(async ({ id }: { id: string }) => {
     await principal.set({ id, iat: 1 })
     return (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })()
-}, { clients: { mcp: false } })
+}, { methods: ['POST'], clients: { mcp: false } })
 `
 
-const ASK = `import { assistant, type AssistantMessage, type ClaudeCodeConfig, GET, POST, type Provider, provider } from '@abide/abide/server'
+const ASK = `import { assistant, type AssistantMessage, type ClaudeCodeConfig, type Provider, provider, rpc } from '@abide/abide/server'
 
 const HIDDEN = { clients: { mcp: false } }
 
@@ -114,30 +114,30 @@ const own: Provider = {
     },
 }
 
-export const bridge = GET(() => provider.claudeCode.bridge(), { ...HIDDEN, timeout: Infinity })
+export const bridge = rpc(() => provider.claudeCode.bridge(), { ...HIDDEN, timeout: Infinity })
 
-export const command = GET(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })(), HIDDEN)
+export const command = rpc(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })(), HIDDEN)
 
-export const granting = GET(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })({ tools: ['WebSearch', 'WebFetch'] }), HIDDEN)
-export const noting = GET(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })({ note: 'one\\ntwo ' + 'a'.repeat(300) }), HIDDEN)
-export const askingFull = GET(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })({ full: true, note: 'So it can build what you ask for.' }), HIDDEN)
+export const granting = rpc(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })({ tools: ['WebSearch', 'WebFetch'] }), HIDDEN)
+export const noting = rpc(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })({ note: 'one\\ntwo ' + 'a'.repeat(300) }), HIDDEN)
+export const askingFull = rpc(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })({ full: true, note: 'So it can build what you ask for.' }), HIDDEN)
 
-export const asking = GET(() => provider.claudeCode.bridge({ tools: ['WebSearch', 'mcp__calendar__meetings'] }), { ...HIDDEN, timeout: Infinity })
+export const asking = rpc(() => provider.claudeCode.bridge({ tools: ['WebSearch', 'mcp__calendar__meetings'] }), { ...HIDDEN, timeout: Infinity })
 
-export const permit = POST(({ id, allow }: { id: string; allow: boolean }) => provider.claudeCode.permit(id, allow), HIDDEN)
+export const permit = rpc(({ id, allow }: { id: string; allow: boolean }) => provider.claudeCode.permit(id, allow), { methods: ['POST'], ...HIDDEN })
 
 // Its transcript unchecked by any schema of its own, so what reaches \`assistant\` is what was sent.
-export const askLoose = POST(
+export const askLoose = rpc(
     async function* ({ messages }: { messages: unknown[] }) {
         yield* assistant(
             messages as AssistantMessage[],
             provider.claudeApi({ apiKey: 'key', baseURL: process.env.FAKE_API, model: 'claude-opus-5', max_tokens: 1000 }),
         )
     },
-    HIDDEN,
+    { methods: ['POST'], ...HIDDEN },
 )
 
-export const ask = POST(
+export const ask = rpc(
     async function* ({ messages, via, maxTurns, config }: { messages: AssistantMessage[]; via: 'api' | 'code' | 'own'; maxTurns?: number; config?: Record<string, unknown> }) {
         yield* assistant(
             messages,
@@ -150,12 +150,12 @@ export const ask = POST(
             { tools: true, maxTurns },
         )
     },
-    HIDDEN,
+    { methods: ['POST'], ...HIDDEN },
 )
 `
 
 // The handler `post_invoices_whoami` calls, as its `Rpc` reads it (44.48).
-const WHOAMI = POST((): string => '')
+const WHOAMI = rpc((): string => '', { methods: ['POST'] })
 WHOAMI.address = '/invoices/whoami'
 
 let app = ''
@@ -185,11 +185,11 @@ beforeAll(async () => {
     ;({ app, base, stop } = await serveApp(
         {
             'index.abide': '<main>home</main>',
-            'invoices/whoami.handler.ts': INVOICES,
-            'pictures/drawn.handler.ts': PICTURE,
-            'account/signIn.handler.ts': SIGN_IN,
-            'account/signInAndPair.handler.ts': SIGN_IN_AND_PAIR,
-            'account/signOut.handler.ts': SIGN_OUT,
+            'invoices/whoami.server.ts': INVOICES,
+            'pictures/drawn.server.ts': PICTURE,
+            'account/signIn.server.ts': SIGN_IN,
+            'account/signInAndPair.server.ts': SIGN_IN_AND_PAIR,
+            'account/signOut.server.ts': SIGN_OUT,
             // 16.2 — three handler files at the root, each re-exporting the module's binding.
             ...handlerFiles('', ASK),
         },
@@ -467,7 +467,9 @@ test('an answer carries its value, and resultsOf finds a handler’s calls by it
 // value read back is a `string`. THE REVERT: type the parameter `Rpc<Value, never, unknown, unknown>`
 // — an `Rpc` is contravariant in its `Args`, and `setHome` is refused.
 test('a handler that takes args is one resultsOf reads — 44.51', () => {
-    const setHome = POST(({ home }: { home: string }) => home)
+    const setHome = rpc(({ home }: { home: string }) => home, {
+        methods: ['POST'],
+    })
     setHome.address = '/homes/setHome'
     const homes: string[] = resultsOf(
         [

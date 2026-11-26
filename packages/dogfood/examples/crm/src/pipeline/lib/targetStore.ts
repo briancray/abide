@@ -1,7 +1,7 @@
 import type { Store } from '@abide/abide'
 
-import getTarget from '../getTarget.handler.ts'
-import setTarget from '../setTarget.handler.ts'
+import getTarget from '../getTarget.server.ts'
+import setTarget from '../setTarget.server.ts'
 
 /** The team's target, kept on the server, so every visitor reads one. */
 export const targetStore: Store<number | undefined> = {

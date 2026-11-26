@@ -1,6 +1,6 @@
 <script>
 import { chat } from '@abide/abide'
-import askAssistant from 'crm/src/assistant/askAssistant.handler.ts'
+import askAssistant from 'crm/src/assistant/askAssistant.server.ts'
 
 const talk = chat({ ask: askAssistant })
 const parts = talk.message

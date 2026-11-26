@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import { GET, POST } from '#server'
+import { rpc } from '#server'
 import { inScope } from '#server/requestScope.ts'
 import {
     busy,
@@ -25,7 +25,7 @@ import { reachOf, type RpcContext } from '#shared/rpc.ts'
 // different value, and the body runs again for an invoice that was already held.
 test('a plain handler is the reactive of itself, and a repeated call joins it — 16.6', async () => {
     let ran = 0
-    const getInvoice = GET(async ({ id }: { id: string }) => {
+    const getInvoice = rpc(async ({ id }: { id: string }) => {
         ran += 1
         return { id, total: 1240 }
     })
@@ -48,7 +48,7 @@ test('a plain handler is the reactive of itself, and a repeated call joins it �
 // screen, which is why it is identity that is asserted.
 test('a reactive handler is reached, not wrapped — 16.3, 16.5', () => {
     const totals = keyedValue(({ region }: { region: string }) => region.length)
-    const getTotals = GET(totals as never)
+    const getTotals = rpc(totals as never)
     expect(reachOf(getTotals, { region: 'north' })).toBe(
         totals({ region: 'north' }),
     )
@@ -61,14 +61,17 @@ test('a reactive handler is reached, not wrapped — 16.3, 16.5', () => {
 test('a mutation runs again on a later call, where a read serves what it holds — 16.7', async () => {
     let reads = 0
     let payments = 0
-    const readInvoice = GET(({ id }: { id: string }) => {
+    const readInvoice = rpc(({ id }: { id: string }) => {
         reads += 1
         return id
     })
-    const payInvoice = POST(({ id }: { id: string }) => {
-        payments += 1
-        return id
-    })
+    const payInvoice = rpc(
+        ({ id }: { id: string }) => {
+            payments += 1
+            return id
+        },
+        { methods: ['POST'] },
+    )
 
     await readInvoice({ id: '42' })
     await payInvoice({ id: '42' })
@@ -85,12 +88,12 @@ test('a mutation runs again on a later call, where a read serves what it holds �
 // the first one's answer and the body runs 1 time where 2 are due.
 test('a mutation given a ttl of undefined still runs again on a later call — 59.1, 16.7', async () => {
     let payments = 0
-    const payInvoice = POST(
+    const payInvoice = rpc(
         ({ id }: { id: string }) => {
             payments += 1
             return id
         },
-        { ttl: undefined },
+        { methods: ['POST'], ttl: undefined },
     )
 
     await payInvoice({ id: '42' })
@@ -105,15 +108,21 @@ test('a mutation given a ttl of undefined still runs again on a later call — 5
 // keyed reach and the `dropExpired` in `rpc.ts`; each body runs 1 time where 2 are due.
 test('a mutation called again in the same turn runs again — 16.7', async () => {
     let payments = 0
-    const payInvoice = POST(({ id }: { id: string }) => {
-        payments += 1
-        return id
-    })
+    const payInvoice = rpc(
+        ({ id }: { id: string }) => {
+            payments += 1
+            return id
+        },
+        { methods: ['POST'] },
+    )
     let pings = 0
-    const ping = POST(() => {
-        pings += 1
-        return pings
-    })
+    const ping = rpc(
+        () => {
+            pings += 1
+            return pings
+        },
+        { methods: ['POST'] },
+    )
 
     await payInvoice({ id: '42' })
     await payInvoice({ id: '42' })
@@ -133,7 +142,7 @@ test('a mutation called again in the same turn runs again — 16.7', async () =>
 // `body runs: 1` — and the payment runs 2 times where 1 is due.
 test("a plain handler's options build its value too — 16.6", async () => {
     let runs = 0
-    const getInvoice = GET(
+    const getInvoice = rpc(
         ({ id }: { id: number }) => {
             runs += 1
             return id * 2
@@ -156,12 +165,12 @@ test("a plain handler's options build its value too — 16.6", async () => {
     expect(await getInvoice({ id: 4 })).toBe(8)
 
     let payments = 0
-    const payInvoice = POST(
+    const payInvoice = rpc(
         ({ id }: { id: string }) => {
             payments += 1
             return id
         },
-        { ttl: 60_000 },
+        { methods: ['POST'], ttl: 60_000 },
     )
     await payInvoice({ id: '42' })
     await Bun.sleep(0)
@@ -170,7 +179,7 @@ test("a plain handler's options build its value too — 16.6", async () => {
 
     const byId = keyedValue(({ id }: { id: string }) => id)
     // A keyed value handed in has decided its own options.
-    GET(byId as never, { ttl: 0 })
+    rpc(byId as never, { ttl: 0 })
 })
 
 // 16.1, 16.6 — A VALUE IS A HANDLER, `reactive`'s value overload given an address: it answers what
@@ -180,22 +189,25 @@ test("a plain handler's options build its value too — 16.6", async () => {
 // THE REVERT: drop the value arm from `Declare` — the three declarations fail typecheck, and the
 // `@ts-expect-error` still holds.
 test('a value is a handler, answering what it holds — 16.1, 16.6', async () => {
-    const greeting = GET('hello')
-    const answer = GET(Promise.resolve(42), { description: 'The answer.' })
-    const limit = POST(10, { schema: (value: unknown) => value as number })
+    const greeting = rpc('hello')
+    const answer = rpc(Promise.resolve(42), { description: 'The answer.' })
+    const limit = rpc(10, {
+        methods: ['GET', 'PUT'],
+        schema: (value: unknown) => value as number,
+    })
     const text: string = await greeting()
     const number: number = await answer()
     expect([text, number, await limit()]).toEqual(['hello', 42, 10])
     expect(answer.description).toBe('The answer.')
     // @ts-expect-error a body's options are checked against the body, not read as a value's
-    GET(() => 1, { ttl: 'soon' })
+    rpc(() => 1, { ttl: 'soon' })
 })
 
 // 16.8 — A REFUSAL IS THE HANDLER'S OWN, carried on the value and narrowed by name on the `Rpc`.
 // The type half is the assignment inside the guard: `e.data.path` only compiles where the guard
 // narrowed `e` to `NotFound`.
 test('a refusal lands on the value and narrows by name — 16.8', async () => {
-    const getInvoice = GET(async ({ id }: { id: string }) =>
+    const getInvoice = rpc(async ({ id }: { id: string }) =>
         id === '42'
             ? { number: 'INV-0042' }
             : refuse.notFound({ path: `/invoices/${id}`, method: 'GET' }),
@@ -237,10 +249,11 @@ test("a rung's named refusal is on the Rpc's failures, and narrows by name — 1
             ? next()
             : notYours({ owner: 'someone' })
     const open: Middleware = async (next) => next()
-    const save = POST(
+    const save = rpc(
         async ({ home }: { home: string; fresh: boolean }) =>
             home === 'stale' ? stale() : home,
         {
+            methods: ['POST'],
             middleware: [
                 open,
                 owned,
@@ -303,16 +316,24 @@ test("a helper's rungs carry their refusals, and take the handler's args — 16.
     const names: string[] = []
     const failure: unknown = refuse.named('NotYours', { status: 403 })()
     for (const handler of [
-        POST(({ home }: { home: string }) => home, { middleware: listed() }),
-        POST(({ home }: { home: string }) => home, { middleware: tupled() }),
-        POST(({ home }: { home: string }) => home, {
+        rpc(({ home }: { home: string }) => home, {
+            methods: ['POST'],
+            middleware: listed(),
+        }),
+        rpc(({ home }: { home: string }) => home, {
+            methods: ['POST'],
+            middleware: tupled(),
+        }),
+        rpc(({ home }: { home: string }) => home, {
+            methods: ['POST'],
             middleware: [...listed()],
         }),
-        GET(realms as never, { middleware: [owned] }),
-        GET(realms as never, { middleware: listed() }),
+        rpc(realms as never, { middleware: [owned] }),
+        rpc(realms as never, { middleware: listed() }),
     ])
         if (handler.isError(failure, 'NotYours')) names.push(failure.name)
-    const guarded = POST(({ home }: { home: string }) => home, {
+    const guarded = rpc(({ home }: { home: string }) => home, {
+        methods: ['POST'],
         middleware: forArgs(),
     })
     expect([names, guarded.method]).toEqual([
@@ -328,14 +349,14 @@ test("a helper's rungs carry their refusals, and take the handler's args — 16.
 // both reads fail typecheck, `any` assigned to `never`.
 test("a declared args types the handler's parameter — 16.87", async () => {
     type Typed<Value> = 0 extends 1 & Value ? never : Value
-    const double = POST(
+    const double = rpc(
         ({ n }) => {
             const read: Typed<typeof n> = n
             return read * 2
         },
-        { args: (value: unknown) => value as { n: number } },
+        { methods: ['POST'], args: (value: unknown) => value as { n: number } },
     )
-    const greet = GET(
+    const greet = rpc(
         ({ name }) => {
             const read: Typed<typeof name> = name
             return `hi ${read}`
@@ -357,9 +378,11 @@ test("a declared args types the handler's parameter — 16.87", async () => {
 // `| Annotated<Args>` from both of `Rpc`'s failure unions in `rpc.ts` — the three reads fail
 // typecheck, `.data` on `never`.
 test("a handler the annotation checks carries the wire's ValidationError — 16.8, 19.9", () => {
-    const double = POST(async ({ n }: { n: number }) => n * 2)
-    const page = GET(({ size = 10 }: { size?: number } = {}) => size)
-    const keyed = POST(({ id }: { id: string }) => id)
+    const double = rpc(async ({ n }: { n: number }) => n * 2, {
+        methods: ['POST'],
+    })
+    const page = rpc(({ size = 10 }: { size?: number } = {}) => size)
+    const keyed = rpc(({ id }: { id: string }) => id, { methods: ['POST'] })
     const refused: unknown = refuse.validation<{ n: number }>({
         n: ['must be number'],
     })
@@ -369,10 +392,12 @@ test("a handler the annotation checks carries the wire's ValidationError — 16.
     if (keyed.isError(refused, 'ValidationError')) read.push(refused.data.id)
     expect(read).toEqual([['must be number'], undefined, undefined])
 
-    const bare = POST(async () => 1)
-    const scalar = POST(async (count: number) => count)
-    const either = POST(async (_pick: { a: number } | { b: string }) => 1)
-    const loose = POST(async (_anything: unknown) => 1)
+    const bare = rpc(async () => 1, { methods: ['POST'] })
+    const scalar = rpc(async (count: number) => count, { methods: ['POST'] })
+    const either = rpc(async (_pick: { a: number } | { b: string }) => 1, {
+        methods: ['POST'],
+    })
+    const loose = rpc(async (_anything: unknown) => 1, { methods: ['POST'] })
     if (bare.isError(refused, 'ValidationError'))
         // @ts-expect-error no args, no schema derived, no refusal carried
         read.push(refused.data)
@@ -389,7 +414,7 @@ test("a handler the annotation checks carries the wire's ValidationError — 16.
 
 // 9.6 THROUGH 16.6: a generator handler is a streaming `reactive`, so the value is every chunk.
 test('a generator handler streams, and the value is its chunks', async () => {
-    const salesByRegion = GET(async function* ({ year }: { year: number }) {
+    const salesByRegion = rpc(async function* ({ year }: { year: number }) {
         yield { region: 'north', year }
         yield { region: 'south', year }
     })
@@ -403,12 +428,15 @@ test('a generator handler streams, and the value is its chunks', async () => {
 // throws what cut it off. THE REVERT is the live cursor this replaced, which waited on the next run:
 // the first loop never ends, and the test times out.
 test('for await over a streamed call ends with the stream, and throws what failed it — 2.6, 9.15', async () => {
-    const ask = POST(async function* ({ fail }: { fail: boolean }) {
-        yield { type: 'text', text: 'a' }
-        await Bun.sleep(1)
-        if (fail) throw new Error('cut off')
-        yield { type: 'done' }
-    })
+    const ask = rpc(
+        async function* ({ fail }: { fail: boolean }) {
+            yield { type: 'text', text: 'a' }
+            await Bun.sleep(1)
+            if (fail) throw new Error('cut off')
+            yield { type: 'done' }
+        },
+        { methods: ['POST'] },
+    )
     const seen: string[] = []
     for await (const event of ask({ fail: false })) seen.push(event.type)
     expect(seen).toEqual(['text', 'done'])
@@ -430,12 +458,12 @@ test('for await over a streamed call ends with the stream, and throws what faile
 // `| Failed<'HttpError', undefined>` from the call's `CallAnswer` in `rpc.ts` — four reads fail
 // typecheck, `.message`, `.status` and `.data` on `never`.
 test('every rpc carries the transport refusal in its failures — 16.8', async () => {
-    const ask = POST(
+    const ask = rpc(
         async function* (_args: { question: string }) {
             await new Promise(() => {})
             yield { type: 'text', text: '' }
         },
-        { timeout: 20 },
+        { methods: ['POST'], timeout: 20 },
     )
     const events = reachOf(ask, { question: 'why' }) as Reactive<
         unknown,
@@ -486,10 +514,13 @@ test('every rpc carries the transport refusal in its failures — 16.8', async (
 // written through a `POST` both hold the transport's refusal. THE REVERT: type `set`'s `Reactive` arm
 // back to `Reactive<Accepted>` in `Reactive.ts` — the `set` below fails typecheck, failures `never`.
 test('a value adopts an rpc call whose failures it carries — 11.60, 16.8', async () => {
-    const getContact = GET(async (_args: { id: string }) => ({ phone: '1' }))
-    const updatePhone = POST(async ({ phone }: { phone: string }) => ({
-        phone,
-    }))
+    const getContact = rpc(async (_args: { id: string }) => ({ phone: '1' }))
+    const updatePhone = rpc(
+        async ({ phone }: { phone: string }) => ({
+            phone,
+        }),
+        { methods: ['POST'] },
+    )
     const contact = reactive.derived(() => getContact({ id: '4021' }))
     await contact
     contact.set(updatePhone({ phone: '2' }))
@@ -498,8 +529,8 @@ test('a value adopts an rpc call whose failures it carries — 11.60, 16.8', asy
 })
 
 test('an rpc carries its method and description', () => {
-    const read = GET(() => 1, { description: 'One.' })
-    const write = POST(() => 1)
+    const read = rpc(() => 1, { description: 'One.' })
+    const write = rpc(() => 1, { methods: ['POST'] })
     expect(read.method).toBe('GET')
     expect(read.description).toBe('One.')
     expect(write.method).toBe('POST')
@@ -512,7 +543,7 @@ test('an rpc carries its method and description', () => {
 // the pattern; the first reloads `west` as well — `east,west` where `east` is due.
 test('a pattern narrows an rpc to the entries it matches — 13.12', async () => {
     const loads: string[] = []
-    const getStock = GET(({ warehouse }: { warehouse: string }) => {
+    const getStock = rpc(({ warehouse }: { warehouse: string }) => {
         loads.push(warehouse)
         return 3
     })
@@ -546,7 +577,7 @@ test('a pattern narrows an rpc to the entries it matches — 13.12', async () =>
 // `won-lost` is due.
 test('a pattern matches args holding its arrays and nested members — 13.12', async () => {
     const loads: string[] = []
-    const getDeals = GET(
+    const getDeals = rpc(
         ({
             stages,
         }: {
@@ -573,7 +604,7 @@ test('a pattern matches args holding its arrays and nested members — 13.12', a
 // assertion: typecheck fails if a probe starts taking an `Rpc`, or a trigger a pattern outside
 // `Args`. THE REVERT: put `busy` back on `Rpc`; the first directive is unused, a typecheck error.
 test('a probe takes no rpc, and a trigger checks its pattern against Args — 13.1, 13.12', () => {
-    const getStock = GET(({ warehouse }: { warehouse: string }) => warehouse)
+    const getStock = rpc(({ warehouse }: { warehouse: string }) => warehouse)
     // Typed, never run: a probe handed an `Rpc` has no member to ask.
     const typed = (): void => {
         getStock.refresh({ warehouse: 'east' })
@@ -598,7 +629,7 @@ test('a probe takes no rpc, and a trigger checks its pattern against Args — 13
 // the first call, where 1 is due.
 test('a handler refusing for now runs once per call, and again on the next — 15.19', async () => {
     let runs = 0
-    const limited = GET(() => {
+    const limited = rpc(() => {
         runs += 1
         return refuse(429)
     })

@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET } from '#server'
+import { rpc } from '#server'
 import { flushSync } from '#shared'
 import { reachOf } from '#shared/rpc.ts'
 import { wire } from '#ui/wire.ts'
@@ -21,28 +21,28 @@ type Loading = (() => unknown) & {
 // A handler whose loads finish only when the test says so, one release per load started.
 function held() {
     const releases: (() => void)[] = []
-    const getInvoice = GET(
+    const getInvoice = rpc(
         ({ id }: { id: string }) =>
             new Promise<string>((done) => {
                 releases.push(() => done(`invoice ${id}`))
             }),
     )
-    const rpc = (
+    const call = (
         args: { id: string },
         options?: { signal?: AbortSignal },
     ): Loading => reachOf(getInvoice, args, options) as Loading
-    return { rpc, releases }
+    return { call, releases }
 }
 
 // THE REVERT: end the load on the FIRST abort in `Attended.handleEvent` (drop the loop over
 // `signals`, `#shared/reactive/callLoad.ts`); the shared load ends while the second caller is still
 // waiting, and `busy` reports false here.
 test('a load two signaled calls share ends when both abort, not the first — 16.48', async () => {
-    const { rpc, releases } = held()
+    const { call, releases } = held()
     const first = new AbortController()
     const second = new AbortController()
-    const value = rpc({ id: '1' }, { signal: first.signal })
-    expect(rpc({ id: '1' }, { signal: second.signal })).toBe(value)
+    const value = call({ id: '1' }, { signal: first.signal })
+    expect(call({ id: '1' }, { signal: second.signal })).toBe(value)
 
     first.abort()
     flushSync()
@@ -66,10 +66,10 @@ test('a load two signaled calls share ends when both abort, not the first — 16
 // THE REVERT: drop the `pinned` check in `Attended.handleEvent`; the load ends under a caller that never
 // handed a signal and is still waiting on it.
 test('a call with no signal keeps the load going whatever the others abort — 16.48', async () => {
-    const { rpc, releases } = held()
+    const { call, releases } = held()
     const signaled = new AbortController()
-    const value = rpc({ id: '2' }, { signal: signaled.signal })
-    rpc({ id: '2' })
+    const value = call({ id: '2' }, { signal: signaled.signal })
+    call({ id: '2' })
     signaled.abort()
     flushSync()
     expect(value.busy()).toBe(true)
@@ -81,14 +81,14 @@ test('a call with no signal keeps the load going whatever the others abort — 1
 // a load no call handed a signal to; the call after it joins that load and is its only waiter.
 // THE REVERT: clear the value in `abandonLoad` rather than refusing over it; the read then throws.
 test('an aborted reload keeps serving what the value held — 16.49', async () => {
-    const { rpc, releases } = held()
-    const value = rpc({ id: '3' })
+    const { call, releases } = held()
+    const value = call({ id: '3' })
     releases[0]?.()
     expect(await value).toBe('invoice 3')
 
     value.refresh()
     const leaving = new AbortController()
-    expect(rpc({ id: '3' }, { signal: leaving.signal })).toBe(value)
+    expect(call({ id: '3' }, { signal: leaving.signal })).toBe(value)
     expect(value.busy()).toBe(true)
     leaving.abort()
     flushSync()
@@ -102,14 +102,14 @@ test('an aborted reload keeps serving what the value held — 16.49', async () =
 // the `abandoned` read from `callLoad`; the second call joins the ended load and reads `Aborted` for
 // good, with 1 load started rather than 2.
 test('a call after an aborted first load starts another — 16.62', async () => {
-    const { rpc, releases } = held()
+    const { call, releases } = held()
     const leaving = new AbortController()
-    const value = rpc({ id: '5' }, { signal: leaving.signal })
+    const value = call({ id: '5' }, { signal: leaving.signal })
     leaving.abort()
     flushSync()
     expect((value.error() as { name: string }).name).toBe('Aborted')
 
-    expect(rpc({ id: '5' })).toBe(value)
+    expect(call({ id: '5' })).toBe(value)
     expect(`loads: ${releases.length}`).toBe('loads: 2')
     expect(value.busy()).toBe(true)
     releases[1]?.()
@@ -122,7 +122,7 @@ test('a call after an aborted first load starts another — 16.62', async () => 
 test('an aborted stream keeps the chunks it had and runs no further — 16.49', async () => {
     let finished = false
     let release = (): void => {}
-    const rows = GET(async function* () {
+    const rows = rpc(async function* () {
         yield 'first'
         await new Promise<void>((done) => {
             release = done

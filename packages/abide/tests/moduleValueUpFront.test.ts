@@ -10,21 +10,21 @@ import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 // `whoami` lands a microtask after it starts, inside the turn a render lets run after setup.
-const HANDLERS = `import { GET } from '@abide/abide/server'
+const HANDLERS = `import { rpc } from '@abide/abide/server'
 
-export const whoami = GET(async () => {
+export const whoami = rpc(async () => {
     await Promise.resolve()
     return { owner: true }
 })
 
-export const getTick = GET(async () => {
+export const getTick = rpc(async () => {
     await Promise.resolve()
     return 1
 })
 `
 
 const ME = `import { reactive } from '@abide/abide'
-import whoami from '#src/who/whoami.handler.ts'
+import whoami from '#src/who/whoami.server.ts'
 
 export const me = reactive.derived(() => whoami())
 `
@@ -38,7 +38,7 @@ export const canEdit = reactive.derived(() => me.ready() && me().owner)
 // The child's setup makes a call, so 41.28 builds it after the turn.
 const DEFERRED = `<script>
 import { reactive } from '@abide/abide'
-import getTick from '#src/who/getTick.handler.ts'
+import getTick from '#src/who/getTick.server.ts'
 import { canEdit } from './canEdit.ts'
 
 const tick = reactive.derived(() => getTick())

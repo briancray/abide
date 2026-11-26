@@ -1,7 +1,7 @@
 <script server>
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-const getDeal = GET(({ id }: { id: string }) => ({
+export const getDeal = rpc(({ id }: { id: string }) => ({
     id,
     name: 'Acme renewal',
     stage: 'lead',

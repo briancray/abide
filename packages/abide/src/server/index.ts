@@ -7,7 +7,7 @@
 
 import { installServer } from './installServer.ts'
 
-// THE WHOLE ISOMORPHIC SURFACE, re-exported rather than owned. A server module imports `GET` and
+// THE WHOLE ISOMORPHIC SURFACE, re-exported rather than owned. A server module imports `rpc` and
 // `reactive` through this one specifier — the same callable, by the same name, that `@abide/abide`
 // hands a page. What only EMITTED code calls is on `@abide/abide/server/runtime` (`runtime.ts`).
 export * from '#shared'
@@ -16,13 +16,10 @@ export type { PatchOp } from '#shared/reactive/patchLog.ts'
 export {
     type CallAnswer,
     type Clients,
-    DELETE,
-    GET,
-    PATCH,
-    POST,
-    PUT,
+    type Method,
     type Rpc,
     type RpcOptions,
+    rpc,
 } from '#shared/rpc.ts'
 // 44 — a conversation with a model, piped through a handler, and the two providers abide ships.
 // 44 — what a page sends and is handed back, which the isomorphic entry carries too.

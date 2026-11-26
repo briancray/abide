@@ -34,17 +34,17 @@ import Section from '#src/lib/Section.abide'
             the method.</p>
         <Code language="ts" caption="server" code={`
             import { refuse } from '@abide/abide'
-            import { PATCH } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default PATCH(
+            export default rpc(
                 ({ id, stage }: { id: string; stage: string }) => {
                     const deal = DEALS.find((each) => each.id === id)
                     if (deal === undefined) return refuse(404)
                     deal.stage = stage
                     return { ...deal }
                 },
-                { description: 'Moves a deal to another stage.' },
+                { methods: ['PATCH'], description: 'Moves a deal to another stage.' },
             )
         `} />
         <p>Ask the CRM's address with another method and it answers 405, with the one it takes
@@ -58,7 +58,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import moveDeal from './moveDeal.handler.ts'
+            import moveDeal from './moveDeal.server.ts'
 
             let stage = reactive('proposal')
             async function win() {
@@ -74,16 +74,16 @@ import Section from '#src/lib/Section.abide'
         <p>List the tags the write changes in <code>refreshes</code>. Before the write answers,
             the server reloads the entries carrying them, in every tab following them.</p>
         <Code language="ts" caption="server" code={`
-            import { POST } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default POST(
+            export default rpc(
                 () => {
                     const deal = DEALS.find((each) => each.stage === 'lead')
                     if (deal) deal.stage = 'qualified'
                     return deal?.id ?? null
                 },
-                { refreshes: ['stage:lead', 'stage:qualified'] },
+                { methods: ['POST'], refreshes: ['stage:lead', 'stage:qualified'] },
             )
         `} />
     </Section>
@@ -92,8 +92,8 @@ import Section from '#src/lib/Section.abide'
         <p>Give the call <code>offline</code>. Where the network fails, the call settles to what
             it returns and the write waits in <code>outbox</code> to be sent.</p>
         <Code language="ts" caption="browser" code={`
-            import listCalls from './listCalls.handler.ts'
-            import logCall from './logCall.handler.ts'
+            import listCalls from './listCalls.server.ts'
+            import logCall from './logCall.server.ts'
 
             const call = { id: crypto.randomUUID(), note: 'Wants a demo' }
             logCall(call, {

@@ -4,7 +4,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 
-import { GET, jsonSchema, POST, refuse, request } from '#server'
+import { jsonSchema, refuse, request, rpc } from '#server'
 import { config } from '#server/config.ts'
 import type { McpSurface } from '#server/generatedSurfaces.ts'
 import { currentRequestScope, LISTENING } from '#server/requestScope.ts'
@@ -15,8 +15,8 @@ const RPC = '/invoices'
 
 // Each a handler file's module, by its path (`inMemoryApp.ts`).
 const INVOICES = {
-    'invoices/getInvoice.handler.ts': {
-        default: GET(
+    'invoices/getInvoice.server.ts': {
+        default: rpc(
             async ({ id }: { id: number }) => ({ id, total: id * 10 }),
             {
                 args: jsonSchema<{ id: number }>({
@@ -27,12 +27,12 @@ const INVOICES = {
             },
         ),
     },
-    'invoices/untimed.handler.ts': { default: GET(() => 1) },
-    'invoices/endless.handler.ts': {
-        default: GET(() => 1, { timeout: Infinity }),
+    'invoices/untimed.server.ts': { default: rpc(() => 1) },
+    'invoices/endless.server.ts': {
+        default: rpc(() => 1, { timeout: Infinity }),
     },
-    'invoices/settle.handler.ts': {
-        default: POST(({ id }: { id: number }) => id),
+    'invoices/settle.server.ts': {
+        default: rpc(({ id }: { id: number }) => id, { methods: ['POST'] }),
     },
 }
 
@@ -142,16 +142,15 @@ test('a call under a mount sets the idle timeout on the request the listener rec
 })
 
 const ASKED = {
-    'asked/whoami.handler.ts': {
-        default: POST(
-            () => request().headers.get('authorization') ?? 'nobody',
-            {
-                description: 'Who is asking.',
-            },
-        ),
+    'asked/whoami.server.ts': {
+        default: rpc(() => request().headers.get('authorization') ?? 'nobody', {
+            methods: ['POST'],
+            description: 'Who is asking.',
+        }),
     },
-    'asked/guarded.handler.ts': {
-        default: POST(() => 'never', {
+    'asked/guarded.server.ts': {
+        default: rpc(() => 'never', {
+            methods: ['POST'],
             description: 'Refused by its rung.',
             middleware: [async () => refuse(401, 'no')],
         }),
@@ -192,8 +191,8 @@ test('the MCP surface lists and calls in process, as the asker — 20.9, 20.10, 
 // REVERT: drop the catch around `callOf` in `McpSurface.#called`; the call answers 500.
 test('an MCP tool call missing a path parameter is a ValidationError tool result — 30.3, 15.8', async () => {
     await using app = await inMemoryApp({
-        'comments/[id]/thread.handler.ts': {
-            default: GET(({ id }: { id: string }) => [id]),
+        'comments/[id]/thread.server.ts': {
+            default: rpc(({ id }: { id: string }) => [id]),
         },
     })
     const ask = async (method: string, params: unknown): Promise<Response> =>

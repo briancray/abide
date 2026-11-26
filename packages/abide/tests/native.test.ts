@@ -4,7 +4,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET, native } from '#server'
+import { native, rpc } from '#server'
 import { nativeUserAgent } from '#server/nativeUserAgent.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -13,8 +13,8 @@ import { inMemoryApp } from './inMemoryApp.ts'
 // window's answers `"none"` where `"1.4.0"` is due.
 test('native() answers per request, and nothing outside one — 38.141', async () => {
     await using app = await inMemoryApp({
-        'probe/shell.handler.ts': {
-            default: GET(() => native()?.version ?? 'none'),
+        'probe/shell.server.ts': {
+            default: rpc(() => native()?.version ?? 'none'),
         },
     })
     const asked = (agent: string): Promise<string> =>

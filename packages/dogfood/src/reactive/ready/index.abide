@@ -27,9 +27,9 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive, ready } from '@abide/abide'
-            // each declared GET(…, { tags: ['export'] })
-            import listContacts from './listContacts.handler.ts'
-            import listDeals from './listDeals.handler.ts'
+            // each declared rpc(…, { tags: ['export'] })
+            import listContacts from './listContacts.server.ts'
+            import listDeals from './listDeals.server.ts'
 
             const contacts = reactive.derived(() => listContacts())
             const deals = reactive.derived(() => listDeals())
@@ -47,7 +47,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { ready } from '@abide/abide'
-            import getStage from './getStage.handler.ts'
+            import getStage from './getStage.server.ts'
 
             const won = reactive.derived(() => getStage({ stage: 'won' }))
             </script>

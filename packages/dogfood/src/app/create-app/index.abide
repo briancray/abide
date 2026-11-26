@@ -49,7 +49,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { expect } from 'bun:test'
             import { createApp } from '@abide/abide/server'
-            import getCommission from '../getCommission.handler.ts'
+            import getCommission from '../getCommission.server.ts'
 
             await using app = await createApp()
             const commission = await app.run(async () => await getCommission(), {

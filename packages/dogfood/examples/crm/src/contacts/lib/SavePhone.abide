@@ -3,7 +3,7 @@ import { reactive, report, toasts } from '@abide/abide'
 
 import Toasts from '#src/lib/Toasts.abide'
 
-import savePhone from '../savePhone.handler.ts'
+import savePhone from '../savePhone.server.ts'
 
 let phone = reactive('555 0100')
 

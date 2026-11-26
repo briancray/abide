@@ -58,7 +58,7 @@ import Section from '#src/lib/Section.abide'
             answered: the server's lines for that call go with the report.</p>
         <Code language="ts" caption="browser" code={`
             import { report, toasts } from '@abide/abide'
-            import savePhone from './savePhone.handler.ts'
+            import savePhone from './savePhone.server.ts'
 
             try {
                 await savePhone({ phone: '12' })

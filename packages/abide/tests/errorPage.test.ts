@@ -37,28 +37,28 @@ const missing = undefined as unknown as { boom: string }
 <p>{missing.boom} {failure.data.path}</p>`
 
 // 16.38 — handlers a form posts to with no script on the page.
-const SAVE = `import { POST, refuse } from '@abide/abide/server'
+const SAVE = `import { refuse, rpc } from '@abide/abide/server'
 
-export default POST(({ amount }: { amount: string | string[] }) =>
+export default rpc(({ amount }: { amount: string | string[] }) =>
     Number(amount) > 0 ? { saved: amount } : refuse(422, 'The amount has to be above zero.'),
-)
+ { methods: ['POST'] },)
 `
 
-const MOVE = `import { POST, response } from '@abide/abide/server'
+const MOVE = `import { response, rpc } from '@abide/abide/server'
 
-export default POST(() => response.redirect('/elsewhere', 303))
+export default rpc(() => response.redirect('/elsewhere', 303), { methods: ['POST'] })
 `
 
 // 41.1, 35.2 — A DETAIL PAGE WHOSE RECORD IS NOT THERE. The handler refuses, the page reads the
 // refusal while it is built, and nothing of the document has gone out yet.
-const RECORD = `import { GET, refuse } from '@abide/abide/server'
+const RECORD = `import { refuse, rpc } from '@abide/abide/server'
 
-export default GET(({ id }: { id: number }) => (id === 1 ? { title: 'The first record' } : refuse.notFound()))
+export default rpc(({ id }: { id: number }) => (id === 1 ? { title: 'The first record' } : refuse.notFound()))
 `
 
 const RECORD_PAGE = `<script>
 import { reactive, route } from '@abide/abide'
-import record from '#src/records/record.handler.ts'
+import record from '#src/records/record.server.ts'
 
 const found = reactive.derived(() => record({ id: Number(route.params().id) }))
 </script>
@@ -78,9 +78,9 @@ beforeAll(async () => {
         'broken/error.abide': BROKEN_ERROR,
         'tax returns/index.abide': '<main>tax returns</main>',
         'tax returns/error.abide': '<h1 id="encoded">No such return</h1>',
-        'forms/save.handler.ts': SAVE,
-        'forms/move.handler.ts': MOVE,
-        'records/record.handler.ts': RECORD,
+        'forms/save.server.ts': SAVE,
+        'forms/move.server.ts': MOVE,
+        'records/record.server.ts': RECORD,
         'records/[id]/index.abide': RECORD_PAGE,
         'records/error.abide': `<script>
 import { props, type Failed } from '@abide/abide'

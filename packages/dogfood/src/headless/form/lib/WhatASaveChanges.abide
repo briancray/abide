@@ -1,10 +1,11 @@
 <script server>
 import { jsonSchema } from '@abide/abide'
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 type Deal = { name: string; company: string; amount: number }
 
-const saveDeal = POST((deal: Deal) => deal, {
+export const saveDeal = rpc((deal: Deal) => deal, {
+    methods: ['POST'],
     args: jsonSchema<Deal>({
         type: 'object',
         properties: {

@@ -4,7 +4,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET } from '#server'
+import { rpc } from '#server'
 import { memo, reactive, refuse } from '#shared'
 
 const tooBig = refuse.named('TooBig', {
@@ -13,7 +13,7 @@ const tooBig = refuse.named('TooBig', {
 })
 
 test("a derived over a memo of a handler is typed with the handler's refusals — 11.12", async () => {
-    const bounded = GET(({ n }: { n: number }) => (n > 10 ? tooBig({ n }) : n))
+    const bounded = rpc(({ n }: { n: number }) => (n > 10 ? tooBig({ n }) : n))
     const paced = memo(bounded, { debounce: 0 })
     const shown = reactive.derived(() => paced({ n: 99 }))
     await Promise.resolve(shown).then(

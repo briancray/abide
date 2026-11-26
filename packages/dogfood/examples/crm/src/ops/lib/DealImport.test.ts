@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { createApp } from '@abide/abide/server'
 
-import importDeals from '../importDeals.handler.ts'
+import importDeals from '../importDeals.server.ts'
 import { dealImport, importedDeals } from './dealImport.server.ts'
 
 /** What the CRM answers a press of Import, a refusal included. */

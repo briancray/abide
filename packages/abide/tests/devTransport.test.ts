@@ -26,41 +26,41 @@ export function release(): void {
 
 export const pulled = { count: 0 }
 `,
-    'library/books.handler.ts': `import { GET } from '@abide/abide/server'
+    'library/books.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET((): string[] => ['dune'], { global: true })
+export default rpc((): string[] => ['dune'], { global: true })
 `,
-    'library/shelve.handler.ts': `import { POST } from '@abide/abide/server'
-import books from './books.handler.ts'
+    'library/shelve.server.ts': `import { rpc } from '@abide/abide/server'
+import books from './books.server.ts'
 
-export default POST(async ({ title }: { title: string }) => {
+export default rpc(async ({ title }: { title: string }) => {
     books.set([...(await books()), title])
-})
+}, { methods: ['POST'] })
 `,
-    'library/held.handler.ts': `import { GET } from '@abide/abide/server'
+    'library/held.server.ts': `import { rpc } from '@abide/abide/server'
 import { held } from './lib/state.ts'
 
-export default GET(async function* () {
+export default rpc(async function* () {
     yield 'first'
     await held()
     yield 'second'
 })
 `,
-    'library/release.handler.ts': `import { POST } from '@abide/abide/server'
+    'library/release.server.ts': `import { rpc } from '@abide/abide/server'
 import { release } from './lib/state.ts'
 
-export default POST(() => {
+export default rpc(() => {
     release()
-})
+}, { methods: ['POST'] })
 `,
     // Counts a 64 KB chunk per pull, forever — large, so the socket's own buffer fills in a few — and
     // \`howFar\` says how far it got. A \`Response\` of its own (16.36) rather than a generator: a
     // streaming \`reactive\` pumps its body to accumulate it (9.1) whoever reads it, and what 38.36 is
     // about is the body the connection pulls.
-    'library/count.handler.ts': `import { GET } from '@abide/abide/server'
+    'library/count.server.ts': `import { rpc } from '@abide/abide/server'
 import { pulled } from './lib/state.ts'
 
-export default GET(
+export default rpc(
     () =>
         new Response(
             new ReadableStream(
@@ -75,28 +75,28 @@ export default GET(
         ),
 )
 `,
-    'library/howFar.handler.ts': `import { GET } from '@abide/abide/server'
+    'library/howFar.server.ts': `import { rpc } from '@abide/abide/server'
 import { pulled } from './lib/state.ts'
 
-export default GET(() => pulled.count)
+export default rpc(() => pulled.count)
 `,
-    'library/patient.handler.ts': `import { GET } from '@abide/abide/server'
+    'library/patient.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => 1)
+export default rpc(() => 1)
 `,
     // A child under the request's signal, named by its pid, and an answer that never ends on its own.
-    'library/spawns.handler.ts': `import { GET, request } from '@abide/abide/server'
+    'library/spawns.server.ts': `import { request, rpc } from '@abide/abide/server'
 
-export default GET(async function* () {
+export default rpc(async function* () {
     const child = Bun.spawn(['sleep', '60'], { signal: request().signal })
     yield String(child.pid)
     await new Promise(() => {})
 })
 `,
     // Answers anything, an upgrade included, with the status the lane admits the mux with.
-    'library/nothing.handler.ts': `import { GET } from '@abide/abide/server'
+    'library/nothing.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => new Response(null, { status: 204 }))
+export default rpc(() => new Response(null, { status: 204 }))
 `,
 }
 
@@ -213,9 +213,9 @@ import { onConfig } from '@abide/abide/server'
 onConfig(() => ({ ABIDE_MAX_SOCKET_MESSAGE_SIZE: 64 }))
 </script>
 `,
-        'books.handler.ts': `import { GET } from '@abide/abide/server'
+        'books.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => ['dune'])
+export default rpc(() => ['dune'])
 `,
         'package.json': JSON.stringify({
             name: 'dev-limited-fixture',
@@ -396,7 +396,7 @@ say(\`child gone: \${await gone()}\`)
 // the worker replaced on a reload, and the child it spawned left running.
 test('a reload aborts the requests the replaced worker was answering — 38.96', async () => {
     const said = await run(`${SPAWNED}
-const library = ${JSON.stringify(`${app}/library/spawns.handler.ts`)}
+const library = ${JSON.stringify(`${app}/library/spawns.server.ts`)}
 await Bun.write(library, await Bun.file(library).text())
 say(\`child gone: \${await gone()}\`)
 reader.cancel().catch(() => {})

@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test'
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
 
-import createDeal from '../createDeal.handler.ts'
+import createDeal from '../createDeal.server.ts'
 import { DEALS } from './DEALS.server.ts'
 import NewDeal from './NewDeal.abide'
 

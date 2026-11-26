@@ -406,14 +406,20 @@ async function emitApp(
     // 16.74 — what the browser holds of each handler file, and the route its hooks are filed at:
     // read by the module's load, which runs before the server table is imported.
     const handlers: Compilation['handlers'] = {}
-    for (const mount of mounts)
-        if (!mount.private)
-            handlers[mount.source] = {
-                scope: mount.scope,
+    for (const mount of mounts) {
+        if (mount.private) continue
+        const face = (handlers[mount.source] ??= {
+            scope: mount.scope,
+            client: standIns.get(mount.source) ?? '',
+            exports: {},
+        })
+        // One per export, whichever verb's row: its call's is the one the build read its args off.
+        if (mount.method === mount.methods[0])
+            face.exports[mount.export] = {
                 address: mount.address,
-                client: standIns.get(mount.source) ?? '',
                 args: mount.args,
             }
+    }
     if (routes.length > 0) {
         tables[ROUTES_TABLE] = clientTable(routes, transitions)
         // The entry's SOURCE carries the name the bundle is written under — `entry-<hash>.js`
@@ -652,13 +658,18 @@ function clientModules(route: AppRoute): string {
 function standInsOf(mounts: Mount[]): Map<string, string> {
     const lines = new Map<string, string[]>()
     for (const mount of mounts) {
-        // 20.4 — withheld from the browser: no wrapper, so a call of it there names nothing.
-        if (!mount.ui) continue
+        // 20.4 — withheld from the browser: no wrapper, so a call of it there names nothing. 16.111 —
+        // one wrapper per export, written off the row of the verb its call sends.
+        if (!mount.ui || mount.method !== mount.methods[0]) continue
         const held = lines.get(mount.source) ?? []
         held.push(
             wireLine(
                 mount,
-                mount.private ? `const ${mount.name} =` : 'export default',
+                mount.private
+                    ? `const ${mount.name} =`
+                    : mount.export === 'default'
+                      ? 'export default'
+                      : `export const ${mount.export} =`,
             ),
         )
         lines.set(mount.source, held)
@@ -675,7 +686,12 @@ function standInsOf(mounts: Mount[]): Map<string, string> {
 function derivedOf(mounts: Mount[]): Map<string, Record<string, JsonValue>> {
     const derived = new Map<string, Record<string, JsonValue>>()
     for (const mount of mounts) {
-        if (!mount.private || mount.args === undefined) continue
+        if (
+            !mount.private ||
+            mount.args === undefined ||
+            mount.method !== mount.methods[0]
+        )
+            continue
         const held = derived.get(mount.source) ?? {}
         held[mount.name] = mount.args
         derived.set(mount.source, held)
@@ -704,7 +720,9 @@ function wireLine(mount: Mount, binding: string): string {
     let copy = ''
     for (const each of trailing)
         copy += `, ${each === undefined ? 'undefined' : JSON.stringify(each)}`
-    return `${binding} __wire(${JSON.stringify(mount.method)}, new URL(${at}, import.meta.url).pathname${copy})\n`
+    // 16.111 — the one verb its call sends, or every verb it answers where it answers more.
+    const verbs = mount.methods.length === 1 ? mount.method : mount.methods
+    return `${binding} __wire(${JSON.stringify(verbs)}, new URL(${at}, import.meta.url).pathname${copy})\n`
 }
 
 /** A module of wrappers: the import they share, then each line. */

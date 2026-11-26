@@ -45,9 +45,9 @@ import Section from '#src/lib/Section.abide'
             is refused <code>SignedOut</code> at 401, as <code>signedIn</code> refuses them, and
             anyone else signed in <code>Forbidden</code> at 403, before the body runs.</p>
         <Code language="ts" caption="server" code={`
-            import { authorize, GET } from '@abide/abide/server'
+            import { authorize, rpc } from '@abide/abide/server'
 
-            export default GET(() => ({ total: '$18,400' }), {
+            export default rpc(() => ({ total: '$18,400' }), {
                 middleware: [authorize({ role: 'admin' })],
             })
         `} />
@@ -61,10 +61,10 @@ import Section from '#src/lib/Section.abide'
             member in <code>{`['support', 'sales']`}</code>. A nested object is matched the
             same way.</p>
         <Code language="ts" caption="server" code={`
-            import { authorize, GET } from '@abide/abide/server'
+            import { authorize, rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default GET(() => DEALS, {
+            export default rpc(() => DEALS, {
                 middleware: [authorize({ groups: ['sales'] })],
             })
         `} />
@@ -74,7 +74,7 @@ import Section from '#src/lib/Section.abide'
         <p>Pass a function of the principal in place of the claims. <code>message</code> is what
             the <code>Forbidden</code> refusal says.</p>
         <Code language="ts" caption="server" code={`
-            import { authorize, GET } from '@abide/abide/server'
+            import { authorize, rpc } from '@abide/abide/server'
             import { TEAM } from './lib/TEAM.server.ts'
 
             const onTheTeam = authorize(
@@ -82,7 +82,7 @@ import Section from '#src/lib/Section.abide'
                 { message: 'Only the team sees the team.' },
             )
 
-            export default GET(() => TEAM, { middleware: [onTheTeam] })
+            export default rpc(() => TEAM, { middleware: [onTheTeam] })
         `} />
     </Section>
 
@@ -91,7 +91,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import getTeamCommission from './getTeamCommission.handler.ts'
+            import getTeamCommission from './getTeamCommission.server.ts'
 
             const commission = reactive.derived(() => getTeamCommission())
             const error = () => commission.error()
@@ -111,9 +111,9 @@ import Section from '#src/lib/Section.abide'
         <p><code>status: 404</code> answers a member it does not admit as an address nothing
             serves, word for word, so they cannot tell the page exists.</p>
         <Code language="ts" caption="server" code={`
-            import { authorize, GET } from '@abide/abide/server'
+            import { authorize, rpc } from '@abide/abide/server'
 
-            export default GET(listPayroll, {
+            export default rpc(listPayroll, {
                 middleware: [authorize({ role: 'admin' }, { status: 404 })],
             })
         `} />

@@ -57,7 +57,7 @@ import seatTotal from './lib/SeatTotal.abide' with { type: 'text' }
             first, busy until the stream ends.</p>
         <Code language="ts" caption="shared" code={`
             import { reactive } from '@abide/abide'
-            import listDeals from './listDeals.handler.ts'
+            import listDeals from './listDeals.server.ts'
 
             const waiting = reactive.derived(async function* () {
                 for (const deal of await listDeals())

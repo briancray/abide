@@ -1,7 +1,7 @@
 <script>
 import { dialog, format, reactive } from '@abide/abide'
 
-import listDeals from '../listDeals.handler.ts'
+import listDeals from '../listDeals.server.ts'
 
 const deals = reactive.derived(() => listDeals())
 // The deal looked at, written by every row's button; the dialog shows while one is.

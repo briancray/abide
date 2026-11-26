@@ -1,6 +1,6 @@
 import { type AssistantMessage, type ChatOptions } from '@abide/abide'
 
-import askAssistant from '../askAssistant.handler.ts'
+import askAssistant from '../askAssistant.server.ts'
 
 /**
  * The CRM's assistant, asked with the page the rep is on and every earlier tool result cut to a

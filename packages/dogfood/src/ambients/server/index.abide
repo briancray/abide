@@ -24,9 +24,9 @@ import Section from '#src/lib/Section.abide'
         <p><code>server()</code> is the <code>Bun.Server</code> that is listening. Reach for it
             when no abide name covers what you need, such as how many requests are in flight.</p>
         <Code language="ts" caption="server" code={`
-            import { GET, server } from '@abide/abide/server'
+            import { rpc, server } from '@abide/abide/server'
 
-            export default GET(() => ({
+            export default rpc(() => ({
                 inFlight: server().pendingRequests,
                 sockets: server().pendingWebSockets,
             }))

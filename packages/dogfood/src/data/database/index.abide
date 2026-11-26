@@ -69,10 +69,10 @@ import Section from '#src/lib/Section.abide'
             SQLite compiles it to read, so a browser showing this list is sent the new rows when
             anyone sets a target — no tag names the table.</p>
         <Code language="ts" caption="server" code={`
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { crmDatabase } from './lib/crmDatabase.server.ts'
 
-            export default GET(
+            export default rpc(
                 () => crmDatabase.sql\`SELECT id, target, setAt FROM targets
                     ORDER BY id DESC LIMIT 5\`,
             )
@@ -83,10 +83,10 @@ import Section from '#src/lib/Section.abide'
         <p>Every value written into the template is a bound parameter, never text, so a value
             from a request cannot change the statement. Each call site prepares its statement once.</p>
         <Code language="ts" caption="server" code={`
-            import { POST } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { crmDatabase } from './lib/crmDatabase.server.ts'
 
-            export default POST(({ target }: { target: number }) => {
+            export default rpc(({ target }: { target: number }) => {
                 crmDatabase.sql\`INSERT INTO targets (target) VALUES (\${target})\`
             })
         `} />

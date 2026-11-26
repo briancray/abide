@@ -2,6 +2,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { PRIVATE_EXPORT } from '#server/PRIVATE_EXPORT.ts'
 import { isEventName } from '#shared/isEventName.ts'
+import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import { isComponentTag, propKeyOf } from './classifyTemplate.ts'
 import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
@@ -611,9 +612,10 @@ function project(file: AbideFile): Projection {
     refuseExport(modulesText, '<script module>')
     refuseExport(serversText, '<script server>')
     refuseExport(scriptsText, '<script>')
-    // 16.70 — what the server block binds, re-exported under a name no author writes, so the
-    // checker reads each one's declaring call as it reads a handler file's default.
-    text += privateExports(serversText)
+    // 16.70 — what the server block exports, given an address under a name no author writes, so the
+    // checker reads each one as it reads a server file's `rpc`.
+    // The app's own spelling of abide, which is what the checker reads the app's `rpc` by.
+    text += privateExports(serversText, SERVER_SPECIFIER)
     return {
         text,
         modules,
@@ -833,13 +835,44 @@ function refuseExport(
             tokens[index - 1]?.text === '.'
         )
             continue
+        // 16.70 — a server block exports a value its component calls over the wire, by name.
+        if (block === '<script server>') {
+            const refused = refusedServerExport(tokens, index + 1)
+            if (refused !== undefined) throw new Error(refused)
+            continue
+        }
         if (block !== '<script module>')
             throw new Error(
-                `abide: a ${block} cannot export — ${block === '<script>' ? 'it runs once per instance, so there is no one instance an importer could read' : 'it is the server’s alone, and the browser’s module never carries it'}. Export from the file’s <script module>; a handler another file calls is a handler file (a <name>.handler.ts beside the page, \`export default GET(…)\`). RULEBOOK 34.17.`,
+                `abide: a ${block} cannot export — ${block === '<script>' ? 'it runs once per instance, so there is no one instance an importer could read' : 'it is the server’s alone, and the browser’s module never carries it'}. Export from the file’s <script module>; what another file calls over the wire is a server file’s \`rpc\` (a <name>.server.ts beside the page). RULEBOOK 34.17.`,
             )
         const refused = refusedModuleExport(tokens, index + 1)
         if (refused !== undefined) throw new Error(refused)
     }
+}
+
+/**
+ * 16.70, 34.17 — why the `<script server>` export whose tokens begin at `from` is refused, or
+ * `undefined`: a server block exports one declared name at a time — `const`, `let`, `var`,
+ * `function` or `async function` — which its component reaches over the wire.
+ */
+function refusedServerExport(
+    tokens: readonly Token[],
+    from: number,
+): string | undefined {
+    let at = from
+    if (tokens[at]?.text === 'async') at += 1
+    const keyword = tokens[at]?.text
+    const declared =
+        keyword === 'const' ||
+        keyword === 'let' ||
+        keyword === 'var' ||
+        keyword === 'function'
+    const named =
+        tokens[at + 1]?.kind === SyntaxKind.Identifier ||
+        (keyword === 'function' && tokens[at + 1]?.text === '*')
+    return declared && named
+        ? undefined
+        : 'abide: a <script server> exports one declared name at a time — `export const name = …` or `export function name(…)` — which its component calls over the wire. RULEBOOK 34.17, 16.70.'
 }
 
 /** Why the `<script module>` export whose tokens begin at `from` is refused, or `undefined`. */
@@ -869,39 +902,58 @@ const REEXPORT_REFUSAL =
     'abide: a <script module> cannot re-export — import the name, then export it. RULEBOOK 34.35.'
 
 /**
- * 16.70 — the `export { … }` re-exporting each name the server blocks bind under `PRIVATE_EXPORT`,
- * or `''` where they bind none. One spelling for the checker's view and the emitted module, which
- * the build's handler table reads a private handler out of by the same name.
+ * 16.70 — each name a server block EXPORTS, given an address under a name no author writes: the
+ * value in it, as `rpc` makes it answer (16.111). One spelling for the checker's view and the emitted
+ * module, which the build's handler table reads a private value out of by the same name.
  */
-export function privateExports(servers: string): string {
-    const listed: string[] = []
-    for (const name of serverBindings(servers))
-        listed.push(`${name} as ${PRIVATE_EXPORT}${name}`)
-    return listed.length === 0 ? '' : `export { ${listed.join(', ')} }\n`
+export function privateExports(servers: string, specifier: string): string {
+    const names = serverExports(servers)
+    if (names.length === 0) return ''
+    let out = `import { rpc as ${PRIVATE_RPC} } from ${JSON.stringify(specifier)}\n`
+    for (const name of names)
+        out += `export const ${PRIVATE_EXPORT}${name} = ${PRIVATE_RPC}(${name})\n`
+    return out
 }
 
+/** What a private value's `rpc` is imported as in a file's server module: a name no author writes. */
+const PRIVATE_RPC = '__abide_rpc'
+
 /**
- * The names a `<script server>` binds with `const`, `let` or `var` at its top level, a
- * destructuring's aside: a handler is a call bound to one name.
+ * 16.70 — the names a `<script server>` exports at its top level: `export const`, `let`, `var`,
+ * `function` or `async function`, one name each — what its component reaches over the wire.
  */
-function serverBindings(source: string): string[] {
+export function serverExports(source: string): string[] {
     const names: string[] = []
-    if (source === '') return names
+    if (source === '' || !source.includes(EXPORT)) return names
     let depth = 0
+    let exporting = false
     let declaring = false
     for (const token of tokenize(source)) {
         const text = token.text
         const moved = nesting(token.kind)
         if (moved !== 0) {
             depth += moved
+            exporting = false
             declaring = false
         } else if (depth !== 0) continue
-        else if (text === 'const' || text === 'let' || text === 'var')
-            declaring = true
+        else if (text === EXPORT) exporting = true
+        else if (
+            exporting &&
+            (text === 'const' ||
+                text === 'let' ||
+                text === 'var' ||
+                text === 'function' ||
+                text === 'async')
+        )
+            declaring = text !== 'async'
         else if (declaring && token.kind === SyntaxKind.Identifier) {
             names.push(text)
+            exporting = false
             declaring = false
-        } else declaring = false
+        } else {
+            exporting = false
+            declaring = false
+        }
     }
     return names
 }

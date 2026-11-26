@@ -23,9 +23,9 @@ import Section from '#src/lib/Section.abide'
             timeout per call.</p>
         <Code language="ts" caption="server" code={`
             import { refuse } from '@abide/abide'
-            import { POST, reachable } from '@abide/abide/server'
+            import { reachable, rpc } from '@abide/abide/server'
 
-            export default POST(async ({ id }: { id: string }) => {
+            export default rpc(async ({ id }: { id: string }) => {
                 if (!(await reachable('billing.example')))
                     return refuse(503, 'Billing is unreachable.')
                 await fetch(\`https://billing.example/contacts/\${id}\`, {
@@ -47,16 +47,16 @@ import Section from '#src/lib/Section.abide'
             call after a <code>true</code> can still fail, so keep its own error handling.</p>
         <Code language="ts" caption="server" code={`
             import { refuse } from '@abide/abide'
-            import { POST, reachable } from '@abide/abide/server'
+            import { reachable, rpc } from '@abide/abide/server'
 
-            export default POST(async (contact: { id: string }) => {
+            export default rpc(async (contact: { id: string }) => {
                 if (!(await reachable('https://billing.example'))) return refuse(503)
                 const sent = await fetch('https://billing.example/contacts', {
                     method: 'POST',
                     body: JSON.stringify(contact),
                 })
                 if (!sent.ok) return refuse(502, 'Billing refused the contact.')
-            })
+            }, { methods: ['POST'] })
         `} />
     </Section>
 </Doc>

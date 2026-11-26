@@ -6,7 +6,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { spawned } from '@abide/harness/gate'
 
-import { GET } from '#server'
+import { rpc } from '#server'
 import { Followers } from '#server/Followers.ts'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
 import { seedFor, takeSeed } from '#server/seedBuffer.ts'
@@ -30,12 +30,12 @@ onStop(async (stop) => {
 
 // KEYED BY ITS ARGS, so the rejection happens when it is called: a handler of none is one value, and
 // its body runs where it is declared — at boot.
-const FAULT = `import { POST } from '@abide/abide/server'
+const FAULT = `import { rpc } from '@abide/abide/server'
 
-export default POST((args: { reason: string; abort?: boolean }) => {
+export default rpc((args: { reason: string; abort?: boolean }) => {
     void Promise.reject(args.abort ? new DOMException(args.reason, 'AbortError') : new Error(args.reason))
     return 'answered'
-})
+}, { methods: ['POST'] })
 `
 
 let app = ''
@@ -46,11 +46,11 @@ beforeAll(async () => {
         'layout.abide': `<script server>
 ${HOOKS}</script>
 `,
-        'probe/fault.handler.ts': FAULT,
+        'probe/fault.server.ts': FAULT,
         // A request that never finishes, for the drain to wait on.
-        'probe/hang.handler.ts': `import { POST } from '@abide/abide/server'
+        'probe/hang.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default POST(() => new Promise(() => {}))
+export default rpc(() => new Promise(() => {}), { methods: ['POST'] })
 `,
     })
     const built = await buildApp(app)
@@ -229,8 +229,8 @@ process.exit(0)
 // runs out.
 test('App.stop ends a stream it is still writing — 42.11', async () => {
     const app = await inMemoryApp({
-        'feed/ticks.handler.ts': {
-            default: GET(async function* () {
+        'feed/ticks.server.ts': {
+            default: rpc(async function* () {
                 let tick = 0
                 while (true) {
                     yield tick
@@ -285,12 +285,12 @@ test('App.stop drops the seed entries its renders left — 42.11', async () => {
 // call with its 503 and the wire is reached 0 times, where 1 is due.
 test('a raw call outside every request after App.stop does not reach the stopped app — 16.42', async () => {
     let answered = 0
-    const greeting = GET(() => {
+    const greeting = rpc(() => {
         answered += 1
         return 'hello'
     })
     const app = await inMemoryApp({
-        'stopped/greeting.handler.ts': { default: greeting },
+        'stopped/greeting.server.ts': { default: greeting },
     })
     expect(await (await greeting.raw()).json()).toBe('hello')
     expect(answered).toBe(1)

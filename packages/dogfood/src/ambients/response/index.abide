@@ -35,11 +35,11 @@ import Section from '#src/lib/Section.abide'
         <p>Write the status and headers through <code>response()</code>, then go on returning the
             value. The body stays the handler's return.</p>
         <Code language="ts" caption="server" code={`
-            import { POST, response } from '@abide/abide/server'
+            import { response, rpc } from '@abide/abide/server'
 
             let nextId = 4031
 
-            export default POST(async ({ name }: { name: string }) => {
+            export default rpc(async ({ name }: { name: string }) => {
                 const contact = { id: String(nextId), name }
                 nextId += 1
                 response().status = 201
@@ -53,12 +53,12 @@ import Section from '#src/lib/Section.abide'
         <p><code>response.redirect</code> sets the status and <code>location</code> and returns
             <code>undefined</code>. The status is 302 unless you name another.</p>
         <Code language="ts" caption="server" code={`
-            import { POST, response } from '@abide/abide/server'
+            import { response, rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
             type NewDeal = { name: string; company: string; amount: number }
 
-            export default POST(({ name, company, amount }: NewDeal) => {
+            export default rpc(({ name, company, amount }: NewDeal) => {
                 const id = \`d\${DEALS.length + 1}\`
                 DEALS.push({ id, name, company, amount, stage: 'lead' })
                 return response.redirect(\`/deals/\${id}\`, 303)
@@ -71,10 +71,10 @@ import Section from '#src/lib/Section.abide'
             <code>response.jsonl</code>, <code>response.sse</code> or <code>response.bytes</code>
             to fix the framing.</p>
         <Code language="ts" caption="server" code={`
-            import { GET, response } from '@abide/abide/server'
+            import { response, rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default GET(() => response.jsonl(DEALS))
+            export default rpc(() => response.jsonl(DEALS))
         `} />
     </Section>
 
@@ -82,11 +82,11 @@ import Section from '#src/lib/Section.abide'
         <p><code>response.page</code> marks what <code>render</code> produced as
             <code>text/html</code>. It renders nothing itself.</p>
         <Code language="ts" caption="server" code={`
-            import { GET, render, response } from '@abide/abide/server'
+            import { render, response, rpc } from '@abide/abide/server'
             import { COMPANIES } from './lib/COMPANIES.server.ts'
             import CompanySheet from './lib/CompanySheet.abide'
 
-            export default GET(async ({ id }: { id: string }) => {
+            export default rpc(async ({ id }: { id: string }) => {
                 const company = COMPANIES.find((one) => one.id === id)
                 return response.page(await render(CompanySheet({ company })))
             })

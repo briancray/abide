@@ -13,7 +13,7 @@ import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const QUERIES = `import { jsonSchema, memo, type StandardSchemaV1 } from '@abide/abide'
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 export const unwritten = memo(({ page }: { page?: number }) => page, {
     args: jsonSchema({ type: 'object', properties: { page: { type: 'integer', default: 1 } } }),
@@ -35,7 +35,7 @@ export const checked = memo(({ page }: { page?: number }) => page, {
     args: (value: unknown) => value as { page?: number },
 })
 
-export const handled = GET(({ per }: { per?: number }) => per, {
+export const handled = rpc(({ per }: { per?: number }) => per, {
     args: jsonSchema({ type: 'object', properties: { per: { type: 'integer', default: 10 } } }),
     description: 'A page size.',
 })

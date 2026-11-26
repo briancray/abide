@@ -5,26 +5,26 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { handlerFiles, serveApp, startApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, POST, principal } from '@abide/abide/server'
+const HANDLERS = `import { principal, rpc } from '@abide/abide/server'
 import { RESOLVED } from '#src/lib/RESOLVED.server.ts'
 
-export const signIn = POST(async ({ name }: { name: string }) => {
+export const signIn = rpc(async ({ name }: { name: string }) => {
     await principal.set({ name, ticket: 'sealed' })
     return principal.authenticated()
-})
+}, { methods: ['POST'] })
 
-export const whoami = GET(async () => ({
+export const whoami = rpc(async () => ({
     authenticated: await principal.authenticated,
     resolved: await principal.resolved,
     caller: principal.caller(),
 }))
 
-export const signOut = POST(() => {
+export const signOut = rpc(() => {
     principal.clear()
     return principal.authenticated()
-})
+}, { methods: ['POST'] })
 
-export const resolutions = GET(() => RESOLVED.count)
+export const resolutions = rpc(() => RESOLVED.count)
 `
 
 // How many times `onPrincipal` ran, in the server's process.

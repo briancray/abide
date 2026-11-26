@@ -1,13 +1,15 @@
 <script server>
 import { refuse } from '@abide/abide'
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 const TAKEN = ['Ledger audit']
 
-const addDeal = POST(({ name }: { name: string }) =>
-    TAKEN.includes(name)
-        ? refuse.validation<{ name: string }>({ name: ['is taken'] })
-        : { name },
+export const addDeal = rpc(
+    ({ name }: { name: string }) =>
+        TAKEN.includes(name)
+            ? refuse.validation<{ name: string }>({ name: ['is taken'] })
+            : { name },
+    { methods: ['POST'] },
 )
 </script>
 

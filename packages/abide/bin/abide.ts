@@ -883,9 +883,11 @@ async function upgradeCommand(
         notes.push(note),
     )
     for (const { path, before, after } of edits) {
-        console.log(unifiedDiff(path, before, after))
-        if (values.check !== true)
-            await Bun.write(`${directory}/${path}`, after)
+        console.log(unifiedDiff(path, before, after ?? ''))
+        if (values.check === true) continue
+        // 38.231 — a file a migration moved away from is gone.
+        if (after === null) await Bun.file(`${directory}/${path}`).delete()
+        else await Bun.write(`${directory}/${path}`, after)
     }
     // 38.226 — after the diffs, so the last thing read is what is left to do.
     for (const { path, line, message } of notes)

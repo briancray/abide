@@ -17,23 +17,23 @@ import { spawned } from '@abide/harness/gate'
 import { addressOf, appFixture, BIN } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const NAME = `import { config, GET } from '@abide/abide/server'
+const NAME = `import { config, rpc } from '@abide/abide/server'
 
-export default GET(() => config().APP_NAME)
+export default rpc(() => config().APP_NAME)
 `
 
-const FAIL = `import { GET } from '@abide/abide/server'
+const FAIL = `import { rpc } from '@abide/abide/server'
 
-export default GET(() => {
+export default rpc(() => {
     throw new Error('failed in the handler')
 })
 `
 
 // A handler module no script below imports: its top level speaks on stderr if it ever runs.
-const UNTOUCHED = `import { GET } from '@abide/abide/server'
+const UNTOUCHED = `import { rpc } from '@abide/abide/server'
 
 console.error('untouched handler module ran')
-export default GET(() => 'untouched')
+export default rpc(() => 'untouched')
 `
 
 const HOOKS = `import { middleware, onStart } from '@abide/abide/server'
@@ -71,11 +71,11 @@ const THREAD = `export async function* onThread(): AsyncGenerator<boolean> {
 }
 `
 
-const ON_THREAD = `import { GET } from '@abide/abide/server'
+const ON_THREAD = `import { rpc } from '@abide/abide/server'
 
 import { onThread } from '#src/lib/thread.worker.ts'
 
-export default GET(async () => {
+export default rpc(async () => {
     for await (const main of onThread()) return main ? 'main' : 'thread'
 })
 `
@@ -95,14 +95,14 @@ beforeAll(async () => {
         }),
         'src/index.abide': '<main><h1>compiled</h1></main>',
         'src/public/robots.txt': 'User-agent: *\n',
-        'src/identity/name.handler.ts': NAME,
-        'src/identity/fail.handler.ts': FAIL,
-        'src/untouched/untouched.handler.ts': UNTOUCHED,
+        'src/identity/name.server.ts': NAME,
+        'src/identity/fail.server.ts': FAIL,
+        'src/untouched/untouched.server.ts': UNTOUCHED,
         'src/layout.abide': `<script server>\n${HOOKS}</script>\n`,
         'src/lib/visits.ts': VISITS,
         'src/visits/index.abide': COUNTED,
         'src/lib/thread.worker.ts': THREAD,
-        'src/identity/thread.handler.ts': ON_THREAD,
+        'src/identity/thread.server.ts': ON_THREAD,
     })
     where = temporaryModule({})
     const compiled = await spawned(
@@ -274,7 +274,7 @@ test('run takes abide and the handlers from the executable, under its identity �
     await Bun.write(
         `${where}/script.ts`,
         `import { config } from '@abide/abide/server'
-import name from '#src/identity/name.handler.ts'
+import name from '#src/identity/name.server.ts'
 console.log(JSON.stringify({ configured: config().APP_NAME, handler: await name(), args: process.argv.slice(2) }))
 `,
     )
@@ -319,7 +319,7 @@ console.log(JSON.stringify({ execArgv: process.execArgv, system: getCACertificat
 test('an error thrown in the executable reports its source line — 38.93', async () => {
     await Bun.write(
         `${where}/failing.ts`,
-        `import fail from '#src/identity/fail.handler.ts'
+        `import fail from '#src/identity/fail.server.ts'
 try {
     await fail()
 } catch (error) {
@@ -333,5 +333,5 @@ try {
     expect(ran.stdout).toContain('failed in the handler')
     // The line the `throw` is written on, in the file it is written in — the frame may carry the
     // suffix of the namespace the file was loaded through.
-    expect(ran.stdout).toMatch(/identity\/fail\.handler\.ts:4:/)
+    expect(ran.stdout).toMatch(/identity\/fail\.server\.ts:4:/)
 })

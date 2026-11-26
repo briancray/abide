@@ -28,11 +28,11 @@ const id: string = route.params().id
 </script>
 
 <p>{id}</p>`,
-    'node_modules/admin-kit/admin/users/list.handler.ts': `import { GET, middleware } from '@abide/abide/server'
+    'node_modules/admin-kit/admin/users/list.server.ts': `import { middleware, rpc } from '@abide/abide/server'
 
 middleware((next) => next())
 
-export default GET(() => ['ada'])
+export default rpc(() => ['ada'])
 `,
 }
 
@@ -99,7 +99,7 @@ test("abide routes lists a mounted handler file's hooks at its mount — 38.108,
         {
             hook: 'middleware',
             route: '/tools/users/list',
-            file: 'node_modules/admin-kit/admin/users/list.handler.ts',
+            file: 'node_modules/admin-kit/admin/users/list.server.ts',
         },
     ])
 }, 60_000)
@@ -110,12 +110,12 @@ test("abide routes lists a mounted handler file's hooks at its mount — 38.108,
 test('a member call of an abide hook name on something else is no hook — 37.1, 38.108', async () => {
     const { hooks } = await appMap(
         appFixture({
-            'media/getGrid.handler.ts': `import { GET } from '@abide/abide/server'
+            'media/getGrid.server.ts': `import { rpc } from '@abide/abide/server'
 
 const emitter = { onError: (_: () => void) => {} }
 emitter.onError(() => {})
 
-export default GET(() => [1, 2])
+export default rpc(() => [1, 2])
 `,
         }),
     )
@@ -129,11 +129,11 @@ export default GET(() => [1, 2])
 test('an indented top-level onConfig in a handler file types Config — 27.13', async () => {
     const found = await checkApp(
         appFixture({
-            'media/getGrid.handler.ts': `import { config, GET, onConfig } from '@abide/abide/server'
+            'media/getGrid.server.ts': `import { config, onConfig, rpc } from '@abide/abide/server'
 
     onConfig(() => ({ RETRIES: 3 }))
 
-export default GET(() => {
+export default rpc(() => {
     const retries: number = config().RETRIES
     return retries
 })

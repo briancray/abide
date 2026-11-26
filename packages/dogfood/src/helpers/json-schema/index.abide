@@ -30,7 +30,7 @@ import Section from '#src/lib/Section.abide'
             document as written.</p>
         <Code language="ts" caption="server" code={`
             import { jsonSchema } from '@abide/abide'
-            import { POST } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
             type NewDeal = { name: string; amount: number }
@@ -43,7 +43,7 @@ import Section from '#src/lib/Section.abide'
                 },
             })
 
-            export default POST(
+            export default rpc(
                 ({ name, amount }) => {
                     const deal = { id: \`d\${DEALS.length + 1}\`, name, amount, stage: 'lead' }
                     DEALS.push(deal)

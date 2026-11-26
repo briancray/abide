@@ -164,7 +164,8 @@ export async function answerRequest(
     adoptRequest(request)
     const url = new URL(request.url)
     const asked = url.pathname
-    const method = request.method === 'HEAD' ? 'GET' : request.method
+    // 16.114 — a `QUERY` is the `GET` whose args outgrew its URL.
+    const method = readsAsGet(request.method) ? 'GET' : request.method
 
     const arm = armOf(app, request, asked)
     switch (arm.kind) {
@@ -337,7 +338,7 @@ function routed(
     // request carries one) and so no handler's: the route answers 15.17's 405 with what it allows.
     const asking = preflight
         ? request.headers.get('access-control-request-method')
-        : request.method === 'HEAD'
+        : readsAsGet(request.method)
           ? 'GET'
           : request.method
     let allowed: Set<string> | undefined
@@ -553,4 +554,9 @@ function publicResponse(
         }),
         200,
     )
+}
+
+/** 16.50, 16.114 — whether a request is answered by the `GET` at its address: a `HEAD` or a `QUERY`. */
+function readsAsGet(method: string): boolean {
+    return method === 'HEAD' || method === 'QUERY'
 }

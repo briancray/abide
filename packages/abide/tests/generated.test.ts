@@ -6,50 +6,50 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, jsonSchema, log, memo, POST, refuse } from '@abide/abide/server'
+const HANDLERS = `import { jsonSchema, log, memo, refuse, rpc } from '@abide/abide/server'
 
-export const listInvoices = GET(() => [{ id: 1 }], { description: 'Every invoice.' })
+export const listInvoices = rpc(() => [{ id: 1 }], { description: 'Every invoice.' })
 
-export const getInvoice = GET(async ({ id }: { id: number }) => ({ id, total: id * 10 }), { args: jsonSchema({ type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] }), description: 'One invoice.' })
+export const getInvoice = rpc(async ({ id }: { id: number }) => ({ id, total: id * 10 }), { args: jsonSchema({ type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] }), description: 'One invoice.' })
 
-export const pay = POST(({ amount }: { amount: number }) => ({ paid: amount }), { description: 'Pay.' })
+export const pay = rpc(({ amount }: { amount: number }) => ({ paid: amount }), { methods: ['POST'], description: 'Pay.' })
 
-export const hidden = GET(() => 'secret', { clients: { mcp: false, openapi: false } })
+export const hidden = rpc(() => 'secret', { clients: { mcp: false, openapi: false } })
 
-export const guarded = POST(() => 'never', {
+export const guarded = rpc(() => 'never', { methods: ['POST'],
     description: 'Refused by its rung.',
     middleware: [async () => refuse(401, 'no')],
 })
 
-export const shout = POST(({ text }: { text: string }) => {
+export const shout = rpc(({ text }: { text: string }) => {
     log(text)
-})
+}, { methods: ['POST'] })
 
-export const playlist = POST(async ({ id }: { id: string }) => new Response(\`#EXTM3U \${id}\`), {
+export const playlist = rpc(async ({ id }: { id: string }) => new Response(\`#EXTM3U \${id}\`), {
     description: 'A playlist.',
 })
 
-export const stamped = GET(() => ({ at: new Date(), count: 1 }), { description: 'When.' })
+export const stamped = rpc(() => ({ at: new Date(), count: 1 }), { description: 'When.' })
 
-export const traced = GET(
+export const traced = rpc(
     () => (log.records.peek() ?? []).filter((record) => record.namespace === 'abide:mcp').map((record) => record.message),
     { clients: { mcp: false, openapi: false } },
 )
 
-export const tagged = POST(({ id }: { id: string }) => Response.json({ id }), {
+export const tagged = rpc(({ id }: { id: string }) => Response.json({ id }), { methods: ['POST'],
     description: 'Back on.',
     clients: { mcp: true },
 })
 
-export const drawn = GET(() => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), {
+export const drawn = rpc(() => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }), {
     description: 'A picture.',
 })
 
-export const sketched = GET(() => new Blob(['<svg/>'], { type: 'image/svg+xml' }), {
+export const sketched = rpc(() => new Blob(['<svg/>'], { type: 'image/svg+xml' }), {
     description: 'A drawing a model is not shown.',
 })
 
-export const charted = GET(
+export const charted = rpc(
     () => new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' }) as unknown as { total: number },
     { description: 'A chart typed as a total.' },
 )
@@ -63,9 +63,9 @@ beforeAll(async () => {
         {
             'index.abide': '<main>home</main>',
             ...handlerFiles('invoices', HANDLERS),
-            'files/[[folder]]/listFiles.handler.ts': `import { GET } from '@abide/abide/server'
+            'files/[[folder]]/listFiles.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(({ folder }: { folder?: string }) => [folder ?? '/'], {
+export default rpc(({ folder }: { folder?: string }) => [folder ?? '/'], {
     clients: { mcp: false },
 })
 `,

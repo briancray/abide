@@ -327,10 +327,10 @@ const named = memo(() => rows, { key: by, tags: ['rows'] })
 {#for row of rows key by}<s>{row.id}</s>{/for}
 `)
     expect(after('src/lib/books.ts'))
-        .toBe(`import { GET, reactive } from '@abide/abide'
+        .toBe(`import { reactive, rpc } from '@abide/abide'
 
 const OPTIONS = { by: 'id' }
-export const books = GET(reactive.derived(() => [{ isbn: '1' }], { key: 'isbn' }))
+export const books = rpc(reactive.derived(() => [{ isbn: '1' }], { key: 'isbn' }))
 export const kept = reactive<{ id: string }[]>([], {
     key(row) {
         return row.id
@@ -348,7 +348,8 @@ const deals = reactive([], { key: 'id' })
 {#for deal of deals key deal.id}<li>{deal.name}</li>{/for}
 \`\`\`
 `)
-    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    for (const edit of edits)
+        await Bun.write(`${app}/${edit.path}`, edit.after ?? '')
     expect(await upgrade(app, '0.142.0')).toEqual([])
 })
 
@@ -393,7 +394,7 @@ job('score', { every: 300_000, run: scoreAll })
     const after = (path: string) =>
         edits.find((edit) => edit.path === path)?.after
     expect(after('src/lib/digest.server.ts'))
-        .toBe(`import { job, POST } from '@abide/abide/server'
+        .toBe(`import { job, rpc } from '@abide/abide/server'
 
 export const digest = job({ name: 'digest', every: 60_000, run: mail })
 export const nightly = job({
@@ -405,7 +406,7 @@ export const named = job({ name: NAME, every: 0, run: mail })
 export const queued = queue.job('kept', { run: mail })
 export const moved = job({ name: 'moved', every: 0, run: mail })
 const { runNow } = legacy
-export default POST(() => digest.run(), { tags: ['digest'] })
+export default rpc(() => digest.run(), { methods: ['POST'], tags: ['digest'] })
 export const maybe = () => nightly?.run()
 `)
     expect(after('src/index.abide')).toBe(`<script>
@@ -420,7 +421,8 @@ import { digest } from './lib/digest.server.ts'
 job({ name: 'score', every: 300_000, run: scoreAll })
 \`\`\`
 `)
-    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    for (const edit of edits)
+        await Bun.write(`${app}/${edit.path}`, edit.after ?? '')
     expect(await upgrade(app, '0.143.0')).toEqual([])
 })
 
@@ -501,7 +503,8 @@ const talk = chat({ ask })
 <button {...talk.autoscroll.jump}>Latest</button>
 \`\`\`
 `)
-    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    for (const edit of edits)
+        await Bun.write(`${app}/${edit.path}`, edit.after ?? '')
     expect(await upgrade(app, '0.143.0')).toEqual([])
 })
 
@@ -561,7 +564,8 @@ export const moved = refuse.named('Moved', { status: 409 })
 const busy = refuse.named('Busy', { status: 409, message: 'Try again.' })
 \`\`\`
 `)
-    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    for (const edit of edits)
+        await Bun.write(`${app}/${edit.path}`, edit.after ?? '')
     expect(await upgrade(app, '0.143.0')).toEqual([])
 })
 
@@ -647,7 +651,8 @@ export const reset = () => {
     viewer.open.set(false)
 }
 `)
-    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    for (const edit of edits)
+        await Bun.write(`${app}/${edit.path}`, edit.after ?? '')
     expect(await upgrade(app, '0.143.0')).toEqual([])
 })
 
@@ -806,7 +811,8 @@ export async function quote(): Promise<string> {
         'src/quote.server.ts:3 fetchAndHandle rejects with its FetchFailed where fetchData answered it',
         'src/quote.server.ts:6 fetchAndHandle rejects with its FetchFailed where fetchData answered it',
     ])
-    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    for (const edit of edits)
+        await Bun.write(`${app}/${edit.path}`, edit.after ?? '')
     const again: unknown[] = []
     expect(await upgrade(app, '0.143.0', (note) => again.push(note))).toEqual(
         [],
@@ -858,7 +864,7 @@ export const query = reactive('', { debounce: 300 })
     expect(after).toContain('memo(() => [], { global: true, ttl: 300_000 })')
     expect(after).toContain('memo(() => [], { ttl: 3_600_000 })')
     expect(after).toContain('{ poll: { every: 60_000, delay: 5_000 } }')
-    expect(after).toContain('GET(() => 1, { ttl: 60_000 })')
+    expect(after).toContain('rpc(() => 1, { ttl: 60_000 })')
     expect(notes).toEqual([
         '4 poll is now ttl',
         '5 poll is now ttl',
@@ -867,7 +873,8 @@ export const query = reactive('', { debounce: 300 })
         '8 reactive and reactive.derived take no ttl, throttle, debounce, tags, global or poll',
         '9 reactive and reactive.derived take no ttl, throttle, debounce, tags, global or poll',
     ])
-    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    for (const edit of edits)
+        await Bun.write(`${app}/${edit.path}`, edit.after ?? '')
     expect(await upgrade(app, '0.144.0')).toEqual([])
 })
 // 38.228 — `computed` IS `reactive.derived`: every use of abide's, `reactive` imported beside where it
@@ -952,7 +959,8 @@ const shown = theme()
         'src/lib/Picker.abide:4 reactive.share is reactive.shared(create), a handle declared once',
         'src/lib/Row.abide:4 reactive.share is reactive.shared(create), a handle declared once',
     ])
-    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    for (const edit of edits)
+        await Bun.write(`${app}/${edit.path}`, edit.after ?? '')
     expect(
         (await upgrade(app, '0.144.0')).filter(
             (edit) => edit.path === 'src/index.abide',
@@ -998,7 +1006,7 @@ export const listed = GET(rows)
     expect(notes).toEqual([
         'src/ops.server.ts:4 these options are not written out here',
         'src/ops.server.ts:5 these options are not written out here',
-        'src/getCounts.handler.ts:5 a handler serves no Reactive',
-        'src/getTotals.handler.ts:5 a handler serves no Reactive',
+        'src/getCounts.server.ts:5 a handler serves no Reactive',
+        'src/getTotals.server.ts:5 a handler serves no Reactive',
     ])
 })

@@ -59,9 +59,9 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
             import {
                 assistant,
                 type AssistantMessage,
-                POST,
                 provider,
-            } from '@abide/abide/server'
+                rpc,
+} from '@abide/abide/server'
 
             const claude = provider.claudeApi({
                 apiKey: Bun.env.ANTHROPIC_API_KEY ?? '',
@@ -69,11 +69,11 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
                 max_tokens: 1024,
             })
 
-            export default POST(
+            export default rpc(
                 async function* ({ messages }: { messages: AssistantMessage[] }) {
                     yield* assistant(messages, claude, { tools: true })
                 },
-                { clients: { mcp: false } },
+                { methods: ['POST'], clients: { mcp: false } },
             )
         `} />
         <p>The CRM's assistant runs the same loop on a recorded model. Asked when this page
@@ -132,11 +132,11 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
             import {
                 assistant,
                 type AssistantMessage,
-                POST,
                 provider,
-            } from '@abide/abide/server'
+                rpc,
+} from '@abide/abide/server'
 
-            export default POST(
+            export default rpc(
                 async function* ({ messages }: { messages: AssistantMessage[] }) {
                     yield* assistant(
                         messages,
@@ -146,7 +146,7 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
                         { tools: true },
                     )
                 },
-                {
+                { methods: ['POST'],
                     description: "Asks the visitor's Claude Code.",
                     clients: { mcp: false },
                 },
@@ -163,7 +163,7 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
         <Code language="abide" caption="abide" code={`
             <script>
             import { pairing } from '@abide/abide'
-            import askClaudeCode from '../askClaudeCode.handler.ts'
+            import askClaudeCode from '../askClaudeCode.server.ts'
             import Chat from './Chat.abide'
 
             const { status, step, start } = pairing()
@@ -212,7 +212,7 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
             they stream.</p>
         <Code language="ts" caption="browser" code={`
             import { assistantMessage, type AssistantMessage } from '@abide/abide'
-            import askAssistant from './askAssistant.handler.ts'
+            import askAssistant from './askAssistant.server.ts'
 
             const messages: AssistantMessage[] = []
             async function ask(question: string) {
@@ -243,8 +243,8 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
         <Code language="abide" caption="abide" code={`
             <script>
             import { chat } from '@abide/abide'
-            import askAssistant from './askAssistant.handler.ts'
-            import searchContacts from './searchContacts.handler.ts'
+            import askAssistant from './askAssistant.server.ts'
+            import searchContacts from './searchContacts.server.ts'
 
             const talk = chat({ ask: askAssistant })
             </script>

@@ -23,6 +23,12 @@ export type RpcRequest = {
 }
 
 /**
+ * 16.114 — the longest URL a `GET` is sent at: past it, the call is a `QUERY` carrying its args in its
+ * body, which no proxy or server between the two ends refuses for its length.
+ */
+export const LONGEST_URL = 2_048
+
+/**
  * Whether a method carries its args in the URL.
  *
  * The half of 16.18 both ends read.
@@ -50,9 +56,17 @@ export function rpcRequest(
     ).split(given)
     let url = path
     let body: string | undefined
+    // 16.114 — what the request is sent as: `QUERY` where a `GET`'s args outgrew its URL.
+    let sent: Method | 'QUERY' = method
     if (argsInURL(method)) {
         const text = rest === undefined ? '' : queryText(rest)
         if (text !== '') url = `${url}?${text}`
+        // 16.114 — a `GET` whose args outgrow its URL is the same read, its args in the body.
+        if (method === 'GET' && url.length > LONGEST_URL) {
+            url = path
+            body = JSON.stringify(rest)
+            sent = 'QUERY'
+        }
     } else if (rest !== undefined) body = JSON.stringify(rest)
     // 18.14 — A COPY IS ITS OWN CACHE and keeps its own `max-age`. What it asks the server once it
     // holds an answer is asked because it went stale, was invalidated or refreshed, and a cache
@@ -62,7 +76,7 @@ export function rpcRequest(
     // the outbox's send asks `no-store`. `rpc.raw` is handed `no-cache`, under whatever `init` its
     // caller passes. `no-cache` rather than `no-store`: a `fetch` the app writes itself to the same
     // address still reads 21.8's `max-age`.
-    const init: RequestInit = { method, cache }
+    const init: RequestInit = { method: sent, cache }
     if (body !== undefined) {
         init.headers = { 'content-type': 'application/json' }
         init.body = body

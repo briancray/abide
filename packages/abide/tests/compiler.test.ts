@@ -177,7 +177,7 @@ test('a static page emits no client runtime import', async () => {
 test('the compiler is not reachable from the server seam', async () => {
     const server = await import('#server')
     // THE WHOLE ISOMORPHIC SURFACE CROSSES, so the list is the shared seam's plus what the server
-    // owns: `render` is 35.4's, the five methods are 16.2's, `request`, `response` and `server` are
+    // owns: `render` is 35.4's, `rpc` is 16.2's, `request`, `response` and `server` are
     // 22.1's, `createApp` is 42's, `onLauncher` is 38.80's, the hooks are 37's — `onError` among the
     // shared seam's, the server's own exported over the browser's (37.16), and `store` the same way,
     // the server's carrying `sqlite` (8.25) and `redis` (8.31) beside the shared three — `trace` is
@@ -188,12 +188,7 @@ test('the compiler is not reachable from the server seam', async () => {
     expect(Object.keys(server).sort()).toEqual(
         [
             ...shared,
-            'DELETE',
-            'GET',
             'assistant',
-            'PATCH',
-            'POST',
-            'PUT',
             'config',
             'createApp',
             'database',
@@ -215,6 +210,7 @@ test('the compiler is not reachable from the server seam', async () => {
             'render',
             'request',
             'response',
+            'rpc',
             'server',
             'signedIn',
             'trace',

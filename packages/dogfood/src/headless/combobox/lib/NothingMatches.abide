@@ -1,9 +1,9 @@
 <script server>
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 type Contact = { id: string; name: string }
 
-const listContacts = GET((): Contact[] => [
+export const listContacts = rpc((): Contact[] => [
     { id: 'ada', name: 'Ada Lovelace' },
     { id: 'grace', name: 'Grace Hopper' },
     { id: 'katherine', name: 'Katherine Johnson' },

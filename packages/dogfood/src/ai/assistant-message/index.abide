@@ -70,7 +70,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { assistantMessage, dropzone, reactive } from '@abide/abide'
-            import askAssistant from './askAssistant.handler.ts'
+            import askAssistant from './askAssistant.server.ts'
 
             let question = reactive('')
             let files = reactive<File[]>([])
@@ -99,7 +99,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { assistantMessage } from '@abide/abide'
-            import askAssistant from './askAssistant.handler.ts'
+            import askAssistant from './askAssistant.server.ts'
 
             async function ask(event: Event) {
                 const [card] = (event.target as HTMLInputElement).files ?? []
@@ -118,7 +118,7 @@ import Section from '#src/lib/Section.abide'
             where it mentions it.</p>
         <Code language="ts" caption="browser" code={`
             import { assistantMessage } from '@abide/abide'
-            import askAssistant from './askAssistant.handler.ts'
+            import askAssistant from './askAssistant.server.ts'
 
             const message = await assistantMessage('user', [
                 'Was this receipt',
@@ -136,7 +136,7 @@ import Section from '#src/lib/Section.abide'
             first.</p>
         <Code language="ts" caption="browser" code={`
             import { assistantMessage } from '@abide/abide'
-            import askAssistant from './askAssistant.handler.ts'
+            import askAssistant from './askAssistant.server.ts'
 
             const statement = new URL('https://bank.example/statements/q3.pdf')
             const message = await assistantMessage('user', [statement, 'What did I hold?'])
@@ -150,7 +150,7 @@ import Section from '#src/lib/Section.abide'
             no part of its own in <a href={url('/headless/chat')}><code>chat</code></a>.</p>
         <Code language="ts" caption="browser" code={`
             import { assistantMessage } from '@abide/abide'
-            import askAssistant from './askAssistant.handler.ts'
+            import askAssistant from './askAssistant.server.ts'
 
             const message = await assistantMessage('user', [
                 {
@@ -170,7 +170,7 @@ import Section from '#src/lib/Section.abide'
             the file.</p>
         <Code language="ts" caption="browser" code={`
             import { assistantMessage } from '@abide/abide'
-            import askAssistant from './askAssistant.handler.ts'
+            import askAssistant from './askAssistant.server.ts'
 
             try {
                 const message = await assistantMessage('user', [...files, question])
@@ -201,7 +201,7 @@ import Section from '#src/lib/Section.abide'
             out, so the conversation goes back to the API as it is.</p>
         <Code language="ts" caption="browser" code={`
             import { assistantMessage, type AssistantMessage } from '@abide/abide'
-            import askAssistant from './askAssistant.handler.ts'
+            import askAssistant from './askAssistant.server.ts'
 
             const history: AssistantMessage[] = [
                 await assistantMessage('user', ['Which company is Ada at?']),

@@ -39,9 +39,9 @@ let count = reactive(0)
 <button class="badge" onclick={() => { count = count + 1 }}>{shout(label)} {count}</button>
 `,
     'node_modules/kit/index.abide': '<p>the package’s own page</p>',
-    'node_modules/kit/charge.handler.ts': `import { POST } from '@abide/abide/server'
+    'node_modules/kit/charge.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default POST(({ cents }: { cents: number }) => ({ charged: cents }))
+export default rpc(({ cents }: { cents: number }) => ({ charged: cents }), { methods: ['POST'] })
 `,
     // TYPED AS THE APP'S, as a second install of the same abide is: what differs is the instance.
     'node_modules/kit/node_modules/@abide/abide/package.json': JSON.stringify({
@@ -70,7 +70,7 @@ import Own from 'kit/index.abide'
 </script>
 
 <main><Badge label="hello" /><Own /></main>`,
-    'billing/charge.handler.ts': `export { default } from 'kit/charge.handler.ts'\n`,
+    'billing/charge.server.ts': `export { default } from 'kit/charge.server.ts'\n`,
 }
 
 // THE REVERTS: drop `withDependencies` from `compileApp` and the page's import of `kit/Badge.abide`
@@ -94,7 +94,7 @@ test("a package's component compiles with the app, on the app's abide, and is no
 })
 
 // THE REVERT: drop `node_modules` from `skipped` in `routePattern`; the walk reads the package's
-// `charge.handler.ts` as one of the app's handler files and mounts it a second time, at
+// `charge.server.ts` as one of the app's handler files and mounts it a second time, at
 // `/node_modules/kit/charge`.
 test("a package's handler is mounted where the app re-exports it, and nowhere else — 34.27, 16.2", async () => {
     const compiled = await compileApp(temporaryModule({ ...APP, ...KIT }))
@@ -105,7 +105,7 @@ test("a package's handler is mounted where the app re-exports it, and nowhere el
 
 // A LINKED PACKAGE LIES OUTSIDE THE ROOT, which is where bun resolves it to. THE REVERTS: drop the
 // real-path lookup from `ShadowHost.shadowAt`, or the session config's `files`; the checker reads the
-// re-export through the link as an empty module, and refuses `billing/charge.handler.ts` as
+// re-export through the link as an empty module, and refuses `billing/charge.server.ts` as
 // exporting no handler (16.73).
 test('a linked package outside the root compiles with the app — 34.23, 34.25', async () => {
     const outside = temporaryModule(

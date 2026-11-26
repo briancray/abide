@@ -10,20 +10,20 @@ import { buildFiles } from '#server/appBuild.ts'
 import { BIN, builtStylesheet, handlerFiles, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, jsonSchema, memo, POST, refuse } from '@abide/abide/server'
+const HANDLERS = `import { jsonSchema, memo, refuse, rpc } from '@abide/abide/server'
 
-export const echo = GET((args: { id: string }) => ({ id: args.id }))
+export const echo = rpc((args: { id: string }) => ({ id: args.id }))
 
-export const add = POST(({ a, b }: { a: number; b: number }) => a + b)
+export const add = rpc(({ a, b }: { a: number; b: number }) => a + b, { methods: ['POST'] })
 
-export const refused = POST(() => refuse(409, 'taken'))
+export const refused = rpc(() => refuse(409, 'taken'), { methods: ['POST'] })
 
-export const faulted = GET((): string => {
+export const faulted = rpc((): string => {
     throw new Error('the database is on fire')
 })
 
 // A gate whose schema declares what the annotation leaves open.
-export const kindOf = POST((args: { n: unknown }) => typeof args.n, { args: jsonSchema({ type: 'object', properties: { n: { type: 'number' } } }) })
+export const kindOf = rpc((args: { n: unknown }) => typeof args.n, { methods: ['POST'], args: jsonSchema({ type: 'object', properties: { n: { type: 'number' } } }) })
 `
 
 let base = ''
@@ -66,7 +66,7 @@ test('scaffold writes a starter project, skips what is there, builds and passes 
     for (const path of [
         'src/index.abide',
         'src/layout.abide',
-        'src/getGreeting.handler.ts',
+        'src/getGreeting.server.ts',
         'src/getGreeting.test.ts',
         'src/index.test.ts',
         'src/lib/app.css',

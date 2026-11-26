@@ -1,5 +1,5 @@
 <script server>
-import { GET, POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 const ACME = { stage: 'lead', amount: 12_000 }
 const DEALS = [
@@ -8,16 +8,19 @@ const DEALS = [
     { stage: 'proposal', amount: 9_000 },
 ]
 
-const getStage = GET(async ({ stage }: { stage: string }) => {
+export const getStage = rpc(async ({ stage }: { stage: string }) => {
     await Bun.sleep(400)
     let value = 0
     for (const deal of DEALS) if (deal.stage === stage) value += deal.amount
     return value
 })
 
-const winDeal = POST(() => {
-    ACME.stage = ACME.stage === 'lead' ? 'won' : 'lead'
-})
+export const winDeal = rpc(
+    () => {
+        ACME.stage = ACME.stage === 'lead' ? 'won' : 'lead'
+    },
+    { methods: ['POST'] },
+)
 </script>
 
 <script>

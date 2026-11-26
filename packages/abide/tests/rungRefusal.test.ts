@@ -53,10 +53,10 @@ const { failure } = props<{ failure: Failed<string, unknown> }>()
 
 <h1 id="members">Members only ({failure.status})</h1>`
 
-const ROSTER = `import { GET } from '@abide/abide/server'
+const ROSTER = `import { rpc } from '@abide/abide/server'
 import { signedIn } from '#src/lib/signedIn.server.ts'
 
-export default GET(() => ['maya'], { middleware: [signedIn] })
+export default rpc(() => ['maya'], { middleware: [signedIn] })
 `
 
 let base = ''
@@ -70,8 +70,8 @@ beforeAll(async () => {
         'members/layout.abide': MEMBERS_LAYOUT,
         'members/index.abide': '<main id="list">the members</main>',
         'members/error.abide': MEMBERS_ERROR,
-        'members/roster.handler.ts': ROSTER,
-        'open/roster.handler.ts': ROSTER,
+        'members/roster.server.ts': ROSTER,
+        'open/roster.server.ts': ROSTER,
     }))
 }, 30_000)
 

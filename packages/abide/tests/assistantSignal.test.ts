@@ -4,7 +4,7 @@
 import { expect, test } from 'bun:test'
 
 import { assistant, type Provider } from '../src/server/assistant.ts'
-import { GET } from '../src/server/index.ts'
+import { rpc } from '../src/server/index.ts'
 import { inScope } from '../src/server/requestScope.ts'
 import { isFailed } from '../src/shared/Failed.ts'
 import {
@@ -101,7 +101,7 @@ test('a request aborting ends a conversation whose provider is stuck — 44.57',
 // and the reader leaving aborts it — `true` where `false` is due.
 test('a global handler streams a conversation its first reader leaving does not end — 44.57, 44.101', async () => {
     const { provider, handed } = stuckProvider()
-    const implications = GET(
+    const implications = rpc(
         async function* ({ path }: { path: string }) {
             yield* assistant(
                 [{ role: 'user', content: `implications of ${path}` }],

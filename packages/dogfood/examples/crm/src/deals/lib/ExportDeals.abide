@@ -1,5 +1,5 @@
 <script>
-import exportDeals from '../exportDeals.handler.ts'
+import exportDeals from '../exportDeals.server.ts'
 </script>
 
 <div class="row">

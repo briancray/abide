@@ -3,49 +3,50 @@
 
 import { expect, test } from 'bun:test'
 
-import { authorize, GET, POST, readOnly, signedIn } from '#server'
+import { authorize, readOnly, rpc, signedIn } from '#server'
 import { MOUNT } from '#shared/mount.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
 let bodyRuns = 0
 
-const getFigure = GET(
+const getFigure = rpc(
     () => {
         bodyRuns += 1
         return { total: 18_400 }
     },
     { middleware: [authorize({ role: 'admin' })] },
 )
-const getOwn = GET(() => 'own', { middleware: [signedIn] })
-const getAudit = GET(() => 'audit', {
+const getOwn = rpc(() => 'own', { middleware: [signedIn] })
+const getAudit = rpc(() => 'audit', {
     middleware: [
         authorize((member) => member.name === 'maya', {
             message: 'Maya audits.',
         }),
     ],
 })
-const getPayroll = GET(() => 'payroll', {
+const getPayroll = rpc(() => 'payroll', {
     middleware: [authorize({ role: 'admin' }, { status: 404 })],
 })
-const getPipeline = GET(() => 'pipeline', {
+const getPipeline = rpc(() => 'pipeline', {
     middleware: [
         authorize({ groups: ['sales'], region: { codes: ['emea', 'apac'] } }),
     ],
 })
-const signIn = POST(() => 'signed in')
-const archive = POST(() => 'archived', {
+const signIn = rpc(() => 'signed in', { methods: ['POST'] })
+const archive = rpc(() => 'archived', {
+    methods: ['POST'],
     middleware: [readOnly({ allow: [signIn] })],
 })
 
 const app = await inMemoryApp({
-    'team/getFigure.handler.ts': { default: getFigure },
-    'team/getOwn.handler.ts': { default: getOwn },
-    'team/getAudit.handler.ts': { default: getAudit },
-    'team/getPayroll.handler.ts': { default: getPayroll },
-    'team/getPipeline.handler.ts': { default: getPipeline },
-    'team/signIn.handler.ts': { default: signIn },
-    'team/archive.handler.ts': { default: archive },
+    'team/getFigure.server.ts': { default: getFigure },
+    'team/getOwn.server.ts': { default: getOwn },
+    'team/getAudit.server.ts': { default: getAudit },
+    'team/getPayroll.server.ts': { default: getPayroll },
+    'team/getPipeline.server.ts': { default: getPipeline },
+    'team/signIn.server.ts': { default: signIn },
+    'team/archive.server.ts': { default: archive },
 })
 
 /** `status name` of what `address` answers a caller signed in with `claims`, or nobody. */

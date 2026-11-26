@@ -1,7 +1,7 @@
 <script>
 import { onRefusal, principal, reactive, watch } from '@abide/abide'
 
-import getCommission from '../getCommission.handler.ts'
+import getCommission from '../getCommission.server.ts'
 import SignInAs from './SignInAs.abide'
 
 let signedOut = reactive(false)

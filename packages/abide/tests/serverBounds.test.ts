@@ -4,7 +4,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { GET } from '#server'
+import { rpc } from '#server'
 import { answerBridge, mintCode, runTurn } from '#server/bridgeRelay.ts'
 import { config } from '#server/config.ts'
 import type { BootedApp } from '#server/createApp.ts'
@@ -15,8 +15,8 @@ import { inMemoryApp } from './inMemoryApp.ts'
 const SIGNED_OUT = JSON.stringify(null)
 
 const MODULES = {
-    'shelf/book.handler.ts': {
-        default: GET(({ id }: { id: number }) => ({ id, title: `book ${id}` })),
+    'shelf/book.server.ts': {
+        default: rpc(({ id }: { id: number }) => ({ id, title: `book ${id}` })),
     },
 }
 

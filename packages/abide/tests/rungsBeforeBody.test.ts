@@ -7,7 +7,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { POST, refuse } from '#server'
+import { refuse, rpc } from '#server'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
@@ -21,8 +21,8 @@ const guard = async <Ctx>(next: (ctx?: Ctx) => Promise<unknown>, ctx: Ctx) => {
 }
 
 const HANDLERS = {
-    'jobs/stream.handler.ts': {
-        default: POST(
+    'jobs/stream.server.ts': {
+        default: rpc(
             async function* () {
                 order.push('body')
                 running = true
@@ -33,16 +33,16 @@ const HANDLERS = {
                     running = false
                 }
             },
-            { middleware: [guard] },
+            { methods: ['POST'], middleware: [guard] },
         ),
     },
-    'jobs/plain.handler.ts': {
-        default: POST(
+    'jobs/plain.server.ts': {
+        default: rpc(
             () => {
                 order.push('body')
                 return 'done'
             },
-            { middleware: [guard] },
+            { methods: ['POST'], middleware: [guard] },
         ),
     },
 }

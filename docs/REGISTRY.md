@@ -171,7 +171,7 @@ A property written `name?: T` in a signature takes `undefined` as it takes the p
 | `**/index.abide` | The page at its directory's route. | 19.1, 23.3, 23.4, 23.14, 23.18, 35.19 |
 | `**/<name>.abide` | The page at its directory's route and then `<name>`. | 19.1, 23.3, 23.4, 23.14, 23.21, 35.19 |
 | `**/<NAME>.param.ts` | A param file: the matcher a segment naming `NAME` matches by. | 23.22, 23.24, 23.25, 23.26 |
-| `**/<name>.handler.ts` | A handler file: the handler its default export declares, at its directory's route and then `<name>`. | 16.2, 16.28, 16.73, 16.74, 19.1, 23.14, 23.22 |
+| `**/<name>.server.ts` | A handler file, directly in an address directory: each `rpc` it exports, its default at its directory's route and then `<name>`, every other below that by its name. | 16.2, 16.28, 16.73, 16.74, 16.113, 19.1, 23.14, 23.22, 23.23 |
 | `**/layout.abide` | A layout, rendering every page below its route through a slot, and the hooks over that route. | 35.1, 35.12, 35.13, 37.2, 41.11, 41.19, 41.23 |
 | `src/native/` | The native app's own pages, which are no routes of the app's. | 23.15, 23.33 |
 | `src/native/launcher.abide` | The native launcher: the `onLauncher` it calls, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85, 38.107 |
@@ -1015,7 +1015,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 # Handlers
 
-## `GET`
+## `rpc`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
@@ -1026,9 +1026,9 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `Produced` | `unknown` | What the handler yields per production, per the unit rule. | 1.2, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.18, 19.15, 19.27, 30.28 |
 | `Middleware` | `Middleware<Answer = never, Extra extends object = object, Refused extends Failed<string, unknown> = Failed<string, unknown>> = <Given extends { request: Request } & Extra, Result extends {} \| null \| undefined>(next: (ctx?: Given) => Promise<Result>, ctx: Given) => Result \| Answer \| Refused \| Promise<Result \| Answer \| Refused>` | One rung, written once for every lane whose context carries `Extra`. | 16.8, 16.14, 16.15, 16.16, 16.21, 16.86, 37.14, 37.15 |
-| `GET` | `<Args = undefined, Result = unknown, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>, Answers extends readonly unknown[] = unknown[]>(handler: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate> & Sourced<Args> & Omit<RpcOptions<Args, Answers>, 'refreshes'>) => Rpc<Kept<Shaped>, Args, AdoptedFailures<Result> \| Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args> \| RungRefusals<Answers>, BodyProduced<Result, Kept<Shaped>>>` | Declares a read any surface may call, from a body or a `memo`: a value kept per args, a stream where it hands back an async iterable, its options (`ttl`, `global`, `store` and the rest, a `memo`'s) building the value it becomes beside its address. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.68, 16.76, 16.34, 16.35, 16.36, 16.37, 16.39, 16.105, 16.44, 16.45, 16.46, 16.47, 16.75, 16.50, 16.51, 16.52, 16.64, 12.17, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24, 18.27, 16.92, 16.93, 16.94, 16.95, 16.96, 16.97, 16.98, 16.99, 16.100, 16.7, 11.2, 16.87, 16.109, 18.40, 18.41, 18.42, 18.43, 18.44, 18.45, 18.46, 18.47, 16.110 |
-| `GET` | `<Built extends ((args: never) => unknown) & { invalidate: unknown }, Answers extends readonly unknown[] = unknown[]>(handler: Built, options?: Omit<RpcOptions<BuiltArgs<Built>, Answers>, 'refreshes'>) => BuiltRpc<Built, Answers>` | The built form, for a `memo` given an address and served as it is; a `Reactive` is refused (16.109). | 11.2, 16.1, 16.3, 16.6 |
-| `GET` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>, Answers extends readonly unknown[] = unknown[]>(handler: Held<Accepted>, options?: Shaping<Accepted, Shaped, never, Gate> & Omit<RpcOptions<undefined, Answers>, 'refreshes'>) => Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Accepted> \| RungRefusals<Answers>>` | The value form, for what the handler owns outright, whose options build the value it becomes. | 16.1, 16.6, 16.7 |
+| `rpc` | `<Args = undefined, Result = unknown, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>, Answers extends readonly unknown[] = unknown[]>(handler: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate> & Sourced<Args> & RpcOptions<Args, Answers>) => Rpc<Kept<Shaped>, Args, AdoptedFailures<Result> \| Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args> \| RungRefusals<Answers>, BodyProduced<Result, Kept<Shaped>>>` | Declares a handler any surface may call, from a body or a `memo`, answering the verbs its value answers by or the ones `methods` names: a value kept per args, a stream where it hands back an async iterable, its options (`ttl`, `global`, `store` and the rest, a `memo`'s) building the value it becomes beside its address. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.68, 16.76, 16.34, 16.35, 16.36, 16.37, 16.39, 16.105, 16.44, 16.45, 16.46, 16.47, 16.75, 16.50, 16.51, 16.52, 16.64, 12.17, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24, 18.27, 16.92, 16.93, 16.94, 16.95, 16.96, 16.97, 16.98, 16.99, 16.100, 16.7, 11.2, 16.87, 16.109, 18.40, 18.41, 18.42, 18.43, 18.44, 18.45, 18.46, 18.47, 16.110, 16.38, 16.53, 19.29, 16.111, 16.112, 16.113, 16.114 |
+| `rpc` | `<Built extends ((args: never) => unknown) & { invalidate: unknown }, Answers extends readonly unknown[] = unknown[]>(handler: Built, options?: RpcOptions<BuiltArgs<Built>, Answers>) => BuiltRpc<Built, Answers>` | The built form, for a `memo` given an address and served as it is; a `Reactive` is refused (16.109). | 11.2, 16.1, 16.3, 16.6 |
+| `rpc` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>, Answers extends readonly unknown[] = unknown[]>(handler: Held<Accepted>, options?: Shaping<Accepted, Shaped, never, Gate> & RpcOptions<undefined, Answers>) => Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Accepted> \| RungRefusals<Answers>>` | The value form, for what the handler owns outright, whose options build the value it becomes. | 16.1, 16.6, 16.7, 16.115, 16.116 |
 | `rpc.invalidate` | `(pattern?: Partial<Args>, options?: { caller?: string \| true }) => void` | `invalidate` narrowed to the handler's matching entries. | 7.2, 7.3, 13.4, 13.12, 13.19, 18.37, 18.38, 18.39 |
 | `rpc.refresh` | `(pattern?: Partial<Args>, options?: { caller?: string \| true }) => void` | `refresh` narrowed to the handler's matching entries. | 7.4, 7.5, 13.4, 13.12, 13.19, 18.37, 18.38, 18.39 |
 | `rpc.isError` | `<Name extends string>(error: unknown, name: Name) => error is Extract<Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, { name: Name }>` | Whether a caught failure is the one named. | 16.8 |
@@ -1036,7 +1036,8 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `rpc.patch` | `(args: Args, mutate: (value: Value) => void) => void` | The owner's mutation of the handler's value for those args in place, past every rung. | 11.76, 11.80, 47.40 |
 | `rpc.readable` | `(args: Args) => ReadableStream<Value>` | The handler's value for those args now, then after each change. | 11.77 |
 | `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The handler's call, handed back as its raw `Response`. | 16.11, 16.42 |
-| `rpc.method` | `string` | The HTTP method. | 16.2 |
+| `rpc.method` | `string` | The verb a call is sent with. | 16.2, 16.111 |
+| `rpc.methods` | `readonly string[]` | Every verb it answers at its address, `rpc.method` first. | 16.111, 16.115, 16.116 |
 | `rpc.url` | `(args?: Args) => string` | The address, resolved against the mount. | 16.9, 16.10, 30.28 |
 | `rpc.address` | `string \| undefined` | Where the handler answers. | 16.88 |
 | `rpc.tool` | `string \| undefined` | The name MCP and OpenAPI list the handler by. | 20.13, 20.24 |
@@ -1063,6 +1064,8 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
+| `methods` | `readonly ('GET' \| 'POST' \| 'PUT' \| 'PATCH' \| 'DELETE')[]` | The verbs it answers, in place of the ones its value answers by. | 16.111, 16.112 |
+| `address` | `string` | Where it answers, in place of its file's route. | 16.113 |
 | `description` | `string` | The human description carried onto every generated surface. | 16.28 |
 | `middleware` | `{ [At in keyof Answers]: (next: (ctx?: { request: Request; args: () => Args }) => Promise<Reached>, ctx: { request: Request; args: () => Args }) => Answers[At] \| Promise<Answers[At]> } \| readonly ((next: (ctx?: { request: Request; args: () => NoInfer<Args> }) => Promise<Reached>, ctx: { request: Request; args: () => NoInfer<Args> }) => unknown)[]` | The rungs run per call. | 16.8, 16.11, 16.12, 16.16, 16.17, 16.18, 16.19, 16.20, 16.86 |
 | `timeout` | `number` | How long the call may go without its answer, or a stream without its first chunk. | 16.22, 16.58, 16.59, 16.60, 16.61, 16.77 |
@@ -1071,20 +1074,17 @@ type Reached = { readonly [REACHED]: true }
 | `maxBodySize` | `number` | The largest request body a mutation will accept, in bytes. | 16.13, 16.54, 16.55 |
 | `refreshes` | `readonly (string \| Selection \| readonly [Selection, Record<string, unknown>] \| readonly [Rpc, Record<string, unknown> \| undefined, { caller?: string \| true }])[] \| ((args: Args) => readonly (string \| Selection \| readonly [Selection, Record<string, unknown>] \| readonly [Rpc, Record<string, unknown> \| undefined, { caller?: string \| true }])[] \| PromiseLike<readonly (string \| Selection \| readonly [Selection, Record<string, unknown>] \| readonly [Rpc, Record<string, unknown> \| undefined, { caller?: string \| true }])[]>)` | The tags and selections a run of a mutation refreshes once it answers. | 16.89, 16.90, 16.91, 16.92, 16.101, 16.102, 16.103, 16.104 |
 
-## `POST`, `PUT`, `PATCH` and `DELETE`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `POST` / `PUT` / `PATCH` / `DELETE` | same as `GET`, with `RpcOptions` in place of `Omit<RpcOptions, 'refreshes'>` | Declares a mutation. | 16.2, 16.7, 16.32, 16.68, 16.76, 16.38, 16.53, 19.29 |
-
 ## Mount paths
 
 | File | Declares | Served at | Rules |
 | --- | --- | --- | --- |
-| `users/getUser.handler.ts` | `export default GET(…)` | `/users/getUser` | 16.2, 16.73, 19.1, 19.20, 23.14 |
-| `health.handler.ts` | `export default GET(…)` | `/health` | 16.2, 23.14 |
-| `media/[id]/save.handler.ts` | `export default POST(…)` | `/media/[id]/save`, `id` reaching its `Args` | 16.2, 16.65, 16.66, 16.67, 16.69 |
-| `media/[id]/lib/Comments.abide` | `const addComment = POST(…)` in its `<script server>` | `/__abide/handlers/media/id/lib/Comments/addComment` | 16.70, 16.71, 16.72 |
+| `users/getUser.server.ts` | `export default rpc(…)` | `/users/getUser` | 16.2, 16.73, 19.1, 19.20, 23.14 |
+| `users/getUser.server.ts` | `export const avatar = rpc(…)` | `/users/getUser/avatar` | 16.2, 16.73 |
+| `health.server.ts` | `export default rpc(…)` | `/health` | 16.2, 23.14 |
+| `media/[id]/save.server.ts` | `export default rpc(…, { methods: ['POST'] })` | `/media/[id]/save`, `id` reaching its `Args` | 16.2, 16.65, 16.66, 16.67, 16.69, 16.111 |
+| `media/[id]/lib/Comments.abide` | `export const addComment = …` in its `<script server>` | `/__abide/handlers/media/id/lib/Comments/addComment` | 16.70, 16.71, 16.72, 34.17 |
+| any `rpc` | `{ address: '/api/v1/deals/[id]' }` | that address | 16.113 |
+| a `GET` | its args past 2048 characters of URL | the same address, sent as `QUERY` | 16.114 |
 
 ## Headers abide generates
 
@@ -1893,7 +1893,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97, 38.123, 38.136, 38.181 |
 | `abide native [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 38.175, 38.176, 38.178, 38.179, 38.180, 38.181, 38.182, 38.186, 38.187, 38.188, 38.189, 38.190, 38.191, 38.192, 38.193, 38.194, 44.77, 44.80 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118, 38.130 |
-| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215, 38.217, 38.219, 38.220, 38.221, 38.222, 38.223, 38.224, 38.225, 38.226, 38.227, 38.228, 38.229, 38.230 |
+| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215, 38.217, 38.219, 38.220, 38.221, 38.222, 38.223, 38.224, 38.225, 38.226, 38.227, 38.228, 38.229, 38.230, 38.231 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |
 

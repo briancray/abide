@@ -42,10 +42,10 @@ const callExport = JSON.stringify(
         <p>Set a surface to <code>false</code> in <code>clients</code>. The export is no MCP tool,
             and its address still answers the page's button.</p>
         <Code language="ts" caption="server" code={`
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { CONTACTS } from './lib/CONTACTS.server.ts'
 
-            export default GET(() => CONTACTS, {
+            export default rpc(() => CONTACTS, {
                 description: 'Every contact, for the export button.',
                 clients: { mcp: false },
             })
@@ -58,15 +58,15 @@ const callExport = JSON.stringify(
         <p>With <code>ui: false</code> no page can import the handler: the import fails the
             build, naming it. OpenAPI, MCP and the command line still list it.</p>
         <Code language="ts" caption="server" code={`
-            import { POST } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default POST(
+            export default rpc(
                 ({ id }: { id: string }) => {
                     const deal = DEALS.find((each) => each.id === id)
                     if (deal) deal.stage = 'won'
                 },
-                {
+                { methods: ['POST'],
                     description: 'Wins a deal, from the e-signature service.',
                     clients: { ui: false },
                 },

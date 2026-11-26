@@ -50,7 +50,7 @@ import starContact from './lib/StarContact.abide' with { type: 'text' }
         <Code language="abide" caption="abide" code={`
             <script>
             import { type Reactive, reactive, refresh } from '@abide/abide'
-            import listDeals from './listDeals.handler.ts'
+            import listDeals from './listDeals.server.ts'
 
             const deals = reactive.derived(() => listDeals())
             const held: Reactive<Deal[]> = deals

@@ -40,7 +40,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import type { AssistantMessage } from '@abide/abide/server'
             import { resultsOf } from '@abide/abide'
-            import searchContacts from '../searchContacts.handler.ts'
+            import searchContacts from '../searchContacts.server.ts'
 
             export function contactsFound(stored: AssistantMessage[]) {
                 return resultsOf(stored, searchContacts).flat().length
@@ -53,7 +53,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import type { AssistantMessage } from '@abide/abide/server'
             import { resultsOf } from '@abide/abide'
-            import draftReport from '../draftReport.handler.ts'
+            import draftReport from '../draftReport.server.ts'
 
             export function summaries(stored: AssistantMessage[]) {
                 return resultsOf(stored, draftReport).map((written) => written.summary)

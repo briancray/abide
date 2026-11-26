@@ -9,7 +9,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import getTotal from '#src/totals/getTotal.handler.ts'
+import getTotal from '#src/totals/getTotal.server.ts'
 
 const total = reactive.derived(() => getTotal())
 </script>
@@ -36,7 +36,7 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'index.abide': PAGE,
         'inline/index.abide': INLINE,
-        'totals/getTotal.handler.ts': `import { GET } from '@abide/abide/server'\n\nexport default GET(() => 1240)\n`,
+        'totals/getTotal.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 1240)\n`,
         'layout.abide': `<script server>
 import { csp, middleware } from '@abide/abide/server'
 

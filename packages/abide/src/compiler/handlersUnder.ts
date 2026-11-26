@@ -1,13 +1,13 @@
-// 16.2 AND 16.70 — EVERY HANDLER AN APP DECLARES, AND WHERE IT IS ANSWERED. A handler file's default
-// export answers at that file's route (23.14), and is the app's public surface; a handler a
-// `<script server>` declares is its file's alone, answered below `/__abide/handlers/` at the file's
-// path and its binding's name, and listed nowhere (16.71).
+// 16.2 AND 16.70 — EVERY `rpc` AN APP DECLARES, AND WHERE IT IS ANSWERED. A server file directly in
+// an address directory answers at that file's route (23.14): its default there, each named `rpc`
+// below it by its name, or wherever its `address` says — the app's public surface. A value a
+// `<script server>` exports is its file's alone, answered below `/__abide/handlers/` at the file's
+// path and its name, and listed nowhere (16.71). One row per verb each answers (16.111).
 //
 // READ, NOT RUN. The build finds handlers by what their files SAY rather than by importing them,
-// so a build never runs server code: a handler file may open a database at import, and nothing
+// so a build never runs server code: a server file may open a database at import, and nothing
 // about building a browser bundle is a reason to. The checker the build already holds lists what
-// each module exports and which call declares each (16.73) — which is also what makes an export
-// that is not a handler a refusal here rather than an address that silently never answers.
+// each module exports and which call declares each (16.73).
 
 import { handlerFileMount } from '#server/handlerFileMount.ts'
 import type { Mount } from '#server/mountHandlers.ts'
@@ -67,39 +67,55 @@ export async function handlersUnder(
     const declared = await declaredExports(host, modules, diagnostics)
     const mounts: Mount[] = []
     const names = new Map<string, string>()
-    for (const { path, relative, route: address, scope, matchers } of files) {
+    for (const { path, relative, route, scope, matchers } of files) {
         const exported = declared.get(path)
         if (exported === undefined) continue
         try {
-            const handler = exported.find((each) => each.name === 'default')
-            // 16.73 — the default and nothing else, declared by one of the five methods.
-            for (const each of exported)
-                if (each.name !== 'default' || each.method === undefined)
-                    throw new Error(
-                        each.name === 'default'
-                            ? `abide: ${relative}'s default export is not declared as a handler. A handler file's default is declared by abide's \`GET(…)\` (or POST, PUT, PATCH, DELETE); anything else belongs under a lib directory. RULEBOOK 16.73.`
-                            : `abide: ${relative} exports \`${each.name}\`, and a handler file exports its handler as its default and nothing else. Move \`${each.name}\` into a module under a lib directory. RULEBOOK 16.73.`,
+            let answering = 0
+            for (const each of exported) {
+                if (each.method === undefined) continue
+                answering += 1
+                // 16.73, 16.113 — the default at the file's route, a named one below it by its name,
+                // or wherever its `address` says.
+                const address =
+                    each.address ??
+                    (each.name === 'default' ? route : `${route}/${each.name}`)
+                refuseUndeclaredParameters(address, each.args, relative)
+                for (const method of each.methods) {
+                    // 20.13 — one name per handler on every generated surface.
+                    const surface = surfaceName(method, address)
+                    const named = names.get(surface)
+                    if (named !== undefined)
+                        throw new Error(
+                            `abide: ${named} and ${relative} are both named ${surface} on the generated surfaces. RULEBOOK 20.13.`,
+                        )
+                    names.set(surface, relative)
+                    mounts.push(
+                        handlerFileMount(
+                            { address, source: relative, scope, matchers },
+                            {
+                                ...each,
+                                method,
+                                copy:
+                                    method === each.method
+                                        ? each.copy
+                                        : undefined,
+                                result:
+                                    method === each.method
+                                        ? each.result
+                                        : undefined,
+                            },
+                            each.name,
+                        ),
                     )
-            if (handler?.method === undefined)
+                }
+                diagnostics.warn(each.unread)
+            }
+            // 16.73 — a server file in an address directory is there to answer at its route.
+            if (answering === 0)
                 throw new Error(
-                    `abide: ${relative} is a handler file — a <name>.handler.ts directly in an address directory — and exports no handler as its default. Export one (\`export default GET(…)\`), or move the file into a lib directory. RULEBOOK 16.73, 23.22.`,
+                    `abide: ${relative} is a server file directly in an address directory, and exports no \`rpc\`. Export one (\`export default rpc(…)\`), or move the file into a lib directory. RULEBOOK 16.73, 23.23.`,
                 )
-            refuseUndeclaredParameters(address, handler.args, relative)
-            // 20.13 — one name per handler on every generated surface.
-            const surface = surfaceName(handler.method, address)
-            const named = names.get(surface)
-            if (named !== undefined)
-                throw new Error(
-                    `abide: ${named} and ${relative} are both named ${surface} on the generated surfaces. RULEBOOK 20.13.`,
-                )
-            names.set(surface, relative)
-            mounts.push(
-                handlerFileMount(
-                    { address, source: relative, scope, matchers },
-                    { ...handler, method: handler.method },
-                ),
-            )
-            diagnostics.warn(handler.unread)
         } catch (thrown) {
             diagnostics.at(relative, thrown)
         }
@@ -108,29 +124,47 @@ export async function handlersUnder(
         // 34.24 — a dependency's file answers where a mount places it, and its handlers below the
         // path it has there.
         const below = place === 'dependency' ? relative : position
-        for (const each of declared.get(host.projectionOf(path)) ?? []) {
+        const exported = declared.get(host.projectionOf(path)) ?? []
+        // 16.113 — an address is a server file's to publish; a server block's is its file's own.
+        try {
+            for (const each of exported)
+                if (
+                    each.name.startsWith(PRIVATE_EXPORT) &&
+                    each.address !== undefined
+                )
+                    throw new Error(
+                        `abide: ${relative}'s <script server> exports \`${each.name.slice(PRIVATE_EXPORT.length)}\` with an \`address\`, and what a server block exports answers for its own file alone. An \`rpc\` at an address of its own is a server file's (a <name>.server.ts). RULEBOOK 16.113.`,
+                    )
+        } catch (thrown) {
+            diagnostics.at(relative, thrown)
+            continue
+        }
+        for (const each of exported) {
             if (each.method === undefined) continue
             if (!each.name.startsWith(PRIVATE_EXPORT)) continue
             const name = each.name.slice(PRIVATE_EXPORT.length)
-            mounts.push({
-                address: privateAddress(below, name),
-                method: each.method,
-                source: relative,
-                name,
-                export: each.name,
-                scope,
-                matchers: {},
-                private: true,
-                ui: each.ui,
-                cli: false,
-                mcp: false,
-                description: each.description,
-                middleware: each.middleware,
-                copy: each.copy,
-                defaults: each.defaults,
-                args: each.args,
-                result: each.result,
-            })
+            const address = privateAddress(below, name)
+            for (const method of each.methods)
+                mounts.push({
+                    address,
+                    method,
+                    methods: each.methods,
+                    source: relative,
+                    name,
+                    export: each.name,
+                    scope,
+                    matchers: {},
+                    private: true,
+                    ui: each.ui,
+                    cli: false,
+                    mcp: false,
+                    description: each.description,
+                    middleware: each.middleware,
+                    copy: method === each.method ? each.copy : undefined,
+                    defaults: each.defaults,
+                    args: each.args,
+                    result: method === each.method ? each.result : undefined,
+                })
             diagnostics.warn(each.unread)
         }
     }

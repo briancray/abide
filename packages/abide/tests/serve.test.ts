@@ -80,16 +80,16 @@ import '#src/lib/broken.ts'
 
 <main id="broken"><h1>Broken</h1></main>`
 
-const LIST_ROWS = `import { GET } from '@abide/abide/server'
+const LIST_ROWS = `import { rpc } from '@abide/abide/server'
 
-export default GET(() =>
+export default rpc(() =>
     Array.from({ length: 120 }, (_, at) => ({ id: \`row_\${at}\`, status: at % 2 === 0 ? 'open' : 'paid' })),
 )
 `
 
-const ONE_ROW = `import { GET } from '@abide/abide/server'
+const ONE_ROW = `import { rpc } from '@abide/abide/server'
 
-export default GET(() => ({ id: 'row_0', status: 'open' }))
+export default rpc(() => ({ id: 'row_0', status: 'open' }))
 `
 
 let stop: (() => void) | undefined
@@ -116,8 +116,8 @@ beforeAll(async () => {
         'lib/slow.ts': `await new Promise((settle) => setTimeout(settle, ${SLOW_MS}))\nexport {}\n`,
         'broken/index.abide': BROKEN,
         // 38.29, 38.68 — one answer over the floor and one under it.
-        'ledger/listRows.handler.ts': LIST_ROWS,
-        'ledger/oneRow.handler.ts': ONE_ROW,
+        'ledger/listRows.server.ts': LIST_ROWS,
+        'ledger/oneRow.server.ts': ONE_ROW,
         // ON THE SERVER ONLY, so the build still bundles it: the browser never evaluates it here.
         'lib/broken.ts': `if (typeof window === 'undefined') throw new Error('broken on purpose')\nexport {}\n`,
         // 36.11 — TWO DEPTHS, because "its path below that directory" is the clause and a flat

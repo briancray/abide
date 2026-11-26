@@ -12,7 +12,7 @@ import type { FollowedHandler } from '#server/mountHandlers.ts'
 import { flushSync, invalidate, refresh } from '#shared'
 import { applyPatch } from '#shared/applyPatch.ts'
 import { keyedValue } from '#shared/reactive/index.ts'
-import { GET } from '#shared/rpc.ts'
+import { rpc } from '#shared/rpc.ts'
 
 const FOLLOWERS = 20
 
@@ -51,10 +51,10 @@ test('a change is serialized once for every follower of a value, and each is sen
             return { titles }
         },
     })
-    const value = GET(() => shelf(['dune']), { global: true })
-    const rpc = value as unknown as { address: string }
-    rpc.address = '/shelf'
-    const mux = muxOver(rpc)
+    const value = rpc(() => shelf(['dune']), { global: true })
+    const served = value as unknown as { address: string }
+    served.address = '/shelf'
+    const mux = muxOver(served)
     const sent: {
         op: string
         id: number
@@ -85,7 +85,7 @@ test('a change is serialized once for every follower of a value, and each is sen
         )
         connections.push(connection)
         await connection.message(
-            JSON.stringify({ op: 'sub', id: at + 1, address: rpc.address }),
+            JSON.stringify({ op: 'sub', id: at + 1, address: served.address }),
         )
     }
     // A follower joining after the first is sent what stands, as the first was.
@@ -125,13 +125,13 @@ test('a change is serialized once for every follower of a value, and each is sen
 // sends no frame.
 test('a free invalidate and refresh over a tag reach the followers of the GET serving it — 7.10, 7.18', async () => {
     let built = 0
-    const value = GET(() => ({ built: built++ }), {
+    const value = rpc(() => ({ built: built++ }), {
         global: true,
         tags: ['stock'],
     })
-    const rpc = value as unknown as { address: string }
-    rpc.address = '/stock'
-    const mux = muxOver(rpc)
+    const served = value as unknown as { address: string }
+    served.address = '/stock'
+    const mux = muxOver(served)
     const frames: { op: string; value?: unknown; ops?: unknown }[] = []
     const connection = mux.connect(
         new Request('http://app.test/__abide/socket'),
@@ -143,7 +143,7 @@ test('a free invalidate and refresh over a tag reach the followers of the GET se
         },
     )
     await connection.message(
-        JSON.stringify({ op: 'sub', id: 1, address: rpc.address }),
+        JSON.stringify({ op: 'sub', id: 1, address: served.address }),
     )
     flushSync()
     invalidate({ tags: ['stock'] })
@@ -169,9 +169,9 @@ test('a subscription builds the entry for its own args and is fed from it — 18
     const value = keyedValue(({ id }: { id: number }) => ({ id }), {
         global: true,
     })
-    const rpc = GET(value as never) as unknown as { address: string }
-    rpc.address = '/keyed'
-    const mux = muxOver(rpc)
+    const served = rpc(value as never) as unknown as { address: string }
+    served.address = '/keyed'
+    const mux = muxOver(served)
     const frames: {
         op: string
         id: number
@@ -192,7 +192,7 @@ test('a subscription builds the entry for its own args and is fed from it — 18
             JSON.stringify({
                 op: 'sub',
                 id: id + 1,
-                address: rpc.address,
+                address: served.address,
                 args: { id },
             }),
         )
@@ -213,10 +213,10 @@ test('a subscription builds the entry for its own args and is fed from it — 18
 // parses and 21 stringifies a write, against 0 and 1.
 test('a write reaches every event stream following a value with one serialization and no parse — 18.6, 18.20', async () => {
     const STREAMS = 20
-    const value = GET(() => ({ titles: ['dune'] }), { global: true })
-    const rpc = value as unknown as { address: string }
-    rpc.address = '/events'
-    const row = followedRow(rpc)
+    const value = rpc(() => ({ titles: ['dune'] }), { global: true })
+    const served = value as unknown as { address: string }
+    served.address = '/events'
+    const row = followedRow(served)
     const followers = new Followers()
     const readers: ReadableStreamDefaultReader<Uint8Array>[] = []
     for (let at = 0; at < STREAMS; at++)

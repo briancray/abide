@@ -1,7 +1,7 @@
 <script>
 import { combobox, reactive } from '@abide/abide'
 
-import searchCompanies from '../searchCompanies.handler.ts'
+import searchCompanies from '../searchCompanies.server.ts'
 
 type Company = { id: string; name: string; city: string }
 

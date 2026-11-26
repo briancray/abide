@@ -28,7 +28,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { navigate, url } from '@abide/abide'
-            import searchCompanies from './searchCompanies.handler.ts'
+            import searchCompanies from './searchCompanies.server.ts'
 
             async function open(q: string) {
                 const [company] = await searchCompanies({ q })

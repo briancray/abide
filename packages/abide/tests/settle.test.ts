@@ -12,20 +12,20 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 import { closeTyped, serverOf } from './typed.ts'
 
 // Held, and answered from what it holds: nothing to wait on but its own `async`.
-const GET_INVOICE = `import { GET } from '@abide/abide/server'
+const GET_INVOICE = `import { rpc } from '@abide/abide/server'
 
 let setups = 0
 
-export default GET(async ({ id }: { id: string }) => {
+export default rpc(async ({ id }: { id: string }) => {
     setups += 1
     return { id, setups }
 })
 `
 
 // Waits on the clock, which no turn is long enough for: still a hole, filled by the browser (41.4).
-const GET_SLOW = `import { GET } from '@abide/abide/server'
+const GET_SLOW = `import { rpc } from '@abide/abide/server'
 
-export default GET(async () => {
+export default rpc(async () => {
     await Bun.sleep(200)
     return 'late'
 })
@@ -37,8 +37,8 @@ const LAYOUT = `<main><slot/></main>`
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import getInvoice from '#src/invoices/getInvoice.handler.ts'
-import getSlow from '#src/invoices/getSlow.handler.ts'
+import getInvoice from '#src/invoices/getInvoice.server.ts'
+import getSlow from '#src/invoices/getSlow.server.ts'
 
 const invoice = reactive.derived(() => getInvoice({ id: '4021' }))
 const slow = reactive.derived(() => getSlow())
@@ -53,8 +53,8 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'layout.abide': LAYOUT,
         'index.abide': PAGE,
-        'invoices/getInvoice.handler.ts': GET_INVOICE,
-        'invoices/getSlow.handler.ts': GET_SLOW,
+        'invoices/getInvoice.server.ts': GET_INVOICE,
+        'invoices/getSlow.server.ts': GET_SLOW,
     }))
 }, 30_000)
 

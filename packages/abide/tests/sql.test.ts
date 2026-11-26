@@ -5,7 +5,7 @@
 import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
 
-import { database, GET, table } from '#server'
+import { database, rpc, table } from '#server'
 import { flushSync, memo, reactive, watch } from '#shared'
 import { keyedValue } from '#shared/reactive/index.ts'
 
@@ -409,7 +409,7 @@ test('a write of rows the body reshaped stays in the entry, and a row with no ke
 test("a GET's owner writes the rows a table call answered back to the table — 47.40", async () => {
     const db = crm()
     const deals = table<Deal>(db, 'deals')
-    const staged = GET(({ stage }: { stage: string }) => deals({ stage }), {
+    const staged = rpc(({ stage }: { stage: string }) => deals({ stage }), {
         global: true,
     })
     await staged({ stage: 'lead' })

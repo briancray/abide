@@ -1,5 +1,5 @@
 <script server>
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 import { folded } from './folded.ts'
 import { ownOrigin } from './ownOrigin.server.ts'
@@ -19,7 +19,7 @@ const LONGEST_BODY = 1200
 // A REAL REQUEST TO THE CRM AND ITS ANSWER (40.43), asked as the page loads — the browser's own call,
 // so the answer reaches it as every answer does (41.5) — and sent to this server's own origin, where the
 // CRM's handlers answer at their own addresses (40.24) — never a request off it.
-const exchange = GET(
+export const exchange = rpc(
     async ({
         method,
         path,

@@ -13,17 +13,17 @@ let app = ''
 beforeAll(async () => {
     app = appFixture({
         'index.abide': '<main>home</main>',
-        'greetings/hello.handler.ts': `import { GET } from '@abide/abide/server'
+        'greetings/hello.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => 'hello')
+export default rpc(() => 'hello')
 `,
-        'greetings/remember.handler.ts': `import { POST } from '@abide/abide/server'
+        'greetings/remember.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default POST((args: { name: string }) => args.name)
+export default rpc((args: { name: string }) => args.name, { methods: ['POST'] })
 `,
-        'greetings/add.handler.ts': `import { POST } from '@abide/abide/server'
+        'greetings/add.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default POST((args: { a: number; b: number }) => args.a + args.b, {
+export default rpc((args: { a: number; b: number }) => args.a + args.b, { methods: ['POST'],
     description: 'Adds two numbers.',
 })
 `,

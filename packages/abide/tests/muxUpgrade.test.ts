@@ -11,12 +11,12 @@ import { BIN, handlerFiles, lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 // A `GET` over a `global` value, so the app has a handler for the mux to carry (37.3).
-const HANDLERS = `import { GET } from '@abide/abide/server'
+const HANDLERS = `import { rpc } from '@abide/abide/server'
 
-export const books = GET((): string[] => ['dune'], { global: true })
+export const books = rpc((): string[] => ['dune'], { global: true })
 
 // Answers anything, an upgrade included, with the status the lane admits the mux with.
-export const nothing = GET(() => new Response(null, { status: 204 }))
+export const nothing = rpc(() => new Response(null, { status: 204 }))
 `
 
 // 37.3 — an app rung that refuses a request it can tell by a header, the mux's upgrade included.

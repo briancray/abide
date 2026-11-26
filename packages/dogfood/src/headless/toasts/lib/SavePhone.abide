@@ -1,10 +1,13 @@
 <script server>
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-const savePhone = POST(({ phone }: { phone: string }) => {
-    if (!/^[\d ]+$/.test(phone)) throw new Error('A phone is digits')
-    return phone
-})
+export const savePhone = rpc(
+    ({ phone }: { phone: string }) => {
+        if (!/^[\d ]+$/.test(phone)) throw new Error('A phone is digits')
+        return phone
+    },
+    { methods: ['POST'] },
+)
 </script>
 
 <script>

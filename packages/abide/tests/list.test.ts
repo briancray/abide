@@ -1781,14 +1781,14 @@ const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
 test('a {#for} over a followed GET adopts the rows the server painted, over the mux — 41.8, 41.10', async () => {
     const { Mux } = await import('#server/answerSocket.ts')
     const { Followers } = await import('#server/Followers.ts')
-    const { GET } = await import('#shared/rpc.ts')
+    const { rpc } = await import('#shared/rpc.ts')
     const { resetSocketWire } = await import('#ui/socketWire.ts')
     const { wire } = await import('#ui/wire.ts')
     // AN ORIGIN OF THIS CASE'S OWN, for `followWire.test.ts`'s reason: the browser's follows are
     // process-wide, keyed by address.
     const address = 'http://list-follow.test/transcript'
     const turns = ['ask', 'answer', 'follow-up']
-    const handler = GET((): string[] => [...turns], {
+    const handler = rpc((): string[] => [...turns], {
         global: true,
     }) as unknown as {
         (): Promise<string[]>

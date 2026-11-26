@@ -2,7 +2,8 @@
 // wherever it lies, so a secret or a database client cannot ride into the browser by being imported
 // from the wrong file. A handler crosses as the wrapper the compiler wrote in its place — a handler
 // file as that file, a private handler in its server block's place (16.28); this is the fence around
-// everything else.
+// everything else. A server file directly in an address directory crosses as its `rpc`s' wrappers
+// (16.74), and the import of any other export of it is the bundle's refusal to resolve that name.
 //
 // A PLUGIN ON THE BUNDLE, NOT A REWRITE OF THE PAGES. A rewrite reaches the specifiers the compiler
 // emitted; the bundle reaches every edge — a helper the page imports, importing a server file,
@@ -20,6 +21,7 @@ import {
     STYLE_NAMESPACE,
     TEXT_NAMESPACE,
 } from './faceOf.ts'
+import { HANDLER_SUFFIX } from './MODULE_QUERIES.ts'
 import { isServerFile } from './placement.ts'
 
 // Every namespace a browser bundle loads a file of the app's in: its modules, its components, a
@@ -42,6 +44,8 @@ export function fenceServer(root: string): Bun.BunPlugin {
         setup(build) {
             for (const namespace of FENCED)
                 build.onLoad({ filter, namespace }, (args) => {
+                    // 16.74 — a server file answering at its route crosses as its wrappers, its face.
+                    if (args.path.endsWith(HANDLER_SUFFIX)) return undefined
                     const path = realFileOf(args.path)
                     if (!isServerFile(path)) return undefined
                     const dependency = path.lastIndexOf('/node_modules/')

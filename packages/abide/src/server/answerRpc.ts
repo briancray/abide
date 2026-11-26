@@ -70,7 +70,8 @@ export async function answerRpc(
             : answered(
                   refuse.notFound({ path: pathname, method: request.method }),
               )
-    const inUrl = argsInURL(found.method)
+    // 16.114 — a `QUERY` carries the `GET`'s args in its body.
+    const inUrl = argsInURL(found.method) && request.method !== 'QUERY'
     const form = isForm(request)
     // 21.19 — the origin the answer admits, where the handler declared it may read.
     const admitted = originGate(
@@ -100,7 +101,10 @@ export async function answerRpc(
     if (isFailed(invoked)) return answered(invoked)
     const outcome = invoked.outcome
     // 16.38 — A MUTATION A DOCUMENT MADE — a form posted with no script — is answered as a navigation.
-    if (!inUrl && prefers(request, 'text/html', 'application/json'))
+    if (
+        !argsInURL(found.method) &&
+        prefers(request, 'text/html', 'application/json')
+    )
         return navigated(outcome, request, pathname, pages)
     const answer = await answerOutcome(invoked, request, found, offline)
     // A `Response` the handler built is its own — but the origin answer below is laid over it, so it

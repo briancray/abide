@@ -6,7 +6,7 @@ import { atMost } from '@abide/harness/gate'
 
 import Markdown from '#src/lib/Markdown.abide'
 
-import summarizeDeal from '../summarizeDeal.handler.ts'
+import summarizeDeal from '../summarizeDeal.server.ts'
 import DealSummary from './DealSummary.abide'
 
 const summary = () => document.querySelector('[aria-label=Summary]')

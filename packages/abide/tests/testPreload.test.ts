@@ -30,21 +30,21 @@ const { label } = props<{ label: string }>()
 </script>
 
 <span id="badge">{label}</span>`,
-        'src/media/getThing.handler.ts': `import { GET } from '@abide/abide/server'
+        'src/media/getThing.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => 'thing')
+export default rpc(() => 'thing')
 `,
-        'src/media/signIn.handler.ts': `import { principal } from '@abide/abide'
-import { POST } from '@abide/abide/server'
+        'src/media/signIn.server.ts': `import { principal } from '@abide/abide'
+import { rpc } from '@abide/abide/server'
 
-export default POST(async () => {
+export default rpc(async () => {
     await principal.set({ id: 'ada' })
-})
+}, { methods: ['POST'] })
 `,
         'src/media/tests/badge.test.ts': `import { expect, test } from 'bun:test'
 import { createApp, render } from '@abide/abide/server'
 import Badge from '../lib/Badge.abide'
-import getThing from '../getThing.handler.ts'
+import getThing from '../getThing.server.ts'
 
 test('the component and the handler are the modules the app compiles', async () => {
     const html = new TextDecoder().decode(await render(Badge({ label: 'live' })))
@@ -342,9 +342,9 @@ test('a test file finds no answer an earlier file settled — 38.133', async () 
         }),
         'bunfig.toml': BUNFIG,
         'src/index.abide': '<main>home</main>',
-        'src/things/listThings.handler.ts': `import { GET } from '@abide/abide/server'
+        'src/things/listThings.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(async () => {
+export default rpc(async () => {
     await Bun.sleep(100)
     return ['thing']
 })
@@ -352,7 +352,7 @@ export default GET(async () => {
         'src/things/lib/Things.abide': `<script>
 import { reactive } from '@abide/abide'
 
-import listThings from '../listThings.handler.ts'
+import listThings from '../listThings.server.ts'
 
 const things = reactive.derived(() => listThings())
 </script>
@@ -464,11 +464,11 @@ test('a mounted component calls its private handler from a click — 38.121', as
         'bunfig.toml': BUNFIG,
         'src/index.abide': '<main>home</main>',
         'src/lib/Private.abide': `<script server>
-import { GET, POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 let count = 0
-const bump = POST(() => ++count)
-const greet = GET(() => 'hi')
+export const bump = rpc(() => ++count, { methods: ['POST'] })
+export const greet = rpc(() => 'hi')
 </script>
 
 <script>
@@ -530,20 +530,20 @@ test('a call in a test is held to the handler annotation — 15.8, 19.9, 38.121'
         }),
         'bunfig.toml': BUNFIG,
         'src/index.abide': '<main>home</main>',
-        'src/tally.handler.ts': `import { POST } from '@abide/abide/server'
+        'src/tally.server.ts': `import { rpc } from '@abide/abide/server'
 
 const runs = globalThis as { tallied?: number }
 
-export default POST(({ id, n }: { id: number; n: number }) => {
+export default rpc(({ id, n }: { id: number; n: number }) => {
     runs.tallied = (runs.tallied ?? 0) + 1
     return id + n
-})
+}, { methods: ['POST'] })
 `,
         'src/lib/Form.abide': `<script server>
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 let saved = 0
-const save = POST(({ n }: { n: number }) => ++saved + n)
+export const save = rpc(({ n }: { n: number }) => ++saved + n, { methods: ['POST'] })
 </script>
 
 <script>
@@ -566,7 +566,7 @@ const send = async (n: unknown) => {
         'src/tests/annotated.test.ts': `import { expect, test } from 'bun:test'
 import { mount } from '@abide/harness/abide'
 import Form from '../lib/Form.abide'
-import tally from '../tally.handler.ts'
+import tally from '../tally.server.ts'
 
 const runs = globalThis as { tallied?: number }
 const REFUSED = 'ValidationError 422 {"n":["must be number, was string"]}'
@@ -626,13 +626,13 @@ test('settled waits out a call a click made, and names one that never answers �
         'bunfig.toml': BUNFIG,
         'src/index.abide': '<main>home</main>',
         'src/lib/Slow.abide': `<script server>
-import { POST } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
-const save = POST(async () => {
+export const save = rpc(async () => {
     await Bun.sleep(150)
     return 'saved'
-})
-const hang = POST(() => new Promise<string>(() => {}))
+}, { methods: ['POST'] })
+export const hang = rpc(() => new Promise<string>(() => {}), { methods: ['POST'] })
 </script>
 
 <script>

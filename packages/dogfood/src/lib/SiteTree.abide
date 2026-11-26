@@ -2,7 +2,7 @@
 // `node:fs` for a handler file's text, read synchronously inside the walk.
 import { readFileSync } from 'node:fs'
 
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 import { crmDirectory } from './exampleDirectory.server.ts'
 import { ownOrigin } from './ownOrigin.server.ts'
@@ -32,7 +32,7 @@ function addressOf(path: string): string {
 // EACH FILE OF ONE DIRECTORY OF THE CRM, and what its place and its name make it: a page, a layout or
 // an error page at its address, a handler answering a method there, a matcher, a test — and a `lib`
 // directory, which is no address, as one line.
-const filesUnder = GET(async ({ directory }: { directory: string }) => {
+export const filesUnder = rpc(async ({ directory }: { directory: string }) => {
     if (!DIRECTORY.test(directory))
         throw new Error(`docs: ${directory} is not a directory of the CRM`)
     const root = `${crmDirectory()}/src`
@@ -85,7 +85,7 @@ const filesUnder = GET(async ({ directory }: { directory: string }) => {
                 address: addressOf(path),
                 link: !path.includes('['),
             })
-        else if (name.endsWith('.handler.ts')) {
+        else if (name.endsWith('.server.ts')) {
             const method =
                 METHOD.exec(readFileSync(`${root}/${path}`, 'utf8'))?.[1] ??
                 'GET'

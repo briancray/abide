@@ -44,10 +44,10 @@ const searchHopper = JSON.stringify(
             one by its <code>description</code>, so write one on every handler.</p>
         <Code language="ts" caption="server" code={`
             // src/assistant/searchContacts.handler.ts
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { CONTACTS } from '../contacts/lib/CONTACTS.server.ts'
 
-            export default GET(
+            export default rpc(
                 ({ name }: { name: string }) =>
                     CONTACTS.filter((contact) => contact.name.includes(name)),
                 { description: 'The contacts whose name contains \`name\`.' },

@@ -56,7 +56,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import addContact from './addContact.handler.ts'
+            import addContact from './addContact.server.ts'
 
             let name = reactive('')
             let saving = reactive<typeof addContact>()
@@ -72,16 +72,16 @@ import Section from '#src/lib/Section.abide'
         <p>A <code>Schema</code> is a function returning what it accepts, or a Standard Schema
             such as zod's. The function throws what it refuses.</p>
         <Code language="ts" caption="server" code={`
-            import { POST } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { crmDatabase } from './lib/crmDatabase.server.ts'
 
             const INSERT = 'INSERT INTO targets (target) VALUES (?)'
 
-            export default POST(
+            export default rpc(
                 ({ target }) => {
                     crmDatabase().query(INSERT).run(target)
                 },
-                {
+                { methods: ['POST'],
                     args: (value: unknown) => {
                         const { target } = value as { target: number }
                         if (!(target > 0)) throw new Error('target must be positive')

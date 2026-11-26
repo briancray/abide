@@ -14,11 +14,11 @@ import { warningsWhile } from './warningsWhile.ts'
 
 // SLOW ON PURPOSE. The render does not wait for it (41.4), so the call below arrives while the
 // render's load is still in flight — the case 41.13 has join rather than run again.
-const INVOICES = `import { GET } from '@abide/abide/server'
+const INVOICES = `import { rpc } from '@abide/abide/server'
 
 let runs = 0
 
-export const getInvoice = GET(async ({ id }: { id: string }) => {
+export const getInvoice = rpc(async ({ id }: { id: string }) => {
     runs += 1
     const run = runs
     await Bun.sleep(150)
@@ -28,7 +28,7 @@ export const getInvoice = GET(async ({ id }: { id: string }) => {
 
 const PAGE = `<script>
 import { reactive } from '@abide/abide'
-import getInvoice from '#src/invoices/getInvoice.handler.ts'
+import getInvoice from '#src/invoices/getInvoice.server.ts'
 
 const invoice = reactive.derived(() => getInvoice({ id: '4021' }))
 </script>
@@ -46,22 +46,22 @@ middleware((next, { request }) => {
 
 // 41.25, 41.26 — ONE CALL OF EACH KIND A PAGE IS PAINTED FROM: answered within the render's turn,
 // refused within it, and a stream that has closed within it.
-const TOTALS = `import { GET, refuse } from '@abide/abide/server'
+const TOTALS = `import { refuse, rpc } from '@abide/abide/server'
 
-export const getTotal = GET(({ id }: { id: string }) => ({ id, total: 12 }))
+export const getTotal = rpc(({ id }: { id: string }) => ({ id, total: 12 }))
 
-export const getMissing = GET(({ id }: { id: string }) => refuse(404, id))
+export const getMissing = rpc(({ id }: { id: string }) => refuse(404, id))
 
-export const getLines = GET(async function* ({ id }: { id: string }) {
+export const getLines = rpc(async function* ({ id }: { id: string }) {
     yield id
 })
 `
 
 const PAINTED = `<script>
 import { reactive } from '@abide/abide'
-import getLines from '#src/totals/getLines.handler.ts'
-import getMissing from '#src/totals/getMissing.handler.ts'
-import getTotal from '#src/totals/getTotal.handler.ts'
+import getLines from '#src/totals/getLines.server.ts'
+import getMissing from '#src/totals/getMissing.server.ts'
+import getTotal from '#src/totals/getTotal.server.ts'
 
 const total = reactive.derived(() => getTotal({ id: 't' }))
 const missing = reactive.derived(() => getMissing({ id: 'm' }))
@@ -71,19 +71,19 @@ const lines = reactive.derived(() => getLines({ id: 'l' }))
 <main><p>{total.busy()}</p><p>{missing.error()}</p><p>{lines.busy()}</p></main>`
 
 // 18.5, 41.13 — A `global` VALUE A RENDER READ, and a write that moves it before the browser's call.
-const SHELF = `import { GET, POST } from '@abide/abide/server'
+const SHELF = `import { rpc } from '@abide/abide/server'
 
-export const books = GET((): string[] => ['dune'], { global: true })
+export const books = rpc((): string[] => ['dune'], { global: true })
 
-export const shelve = POST(async ({ title }: { title: string }) => {
+export const shelve = rpc(async ({ title }: { title: string }) => {
     books.set([...(await books()), title])
-})
+}, { methods: ['POST'] })
 `
 
 // 41.13 — A STREAM STILL RUNNING WHEN THE PAGE IS ANSWERED, which the browser's call then joins.
-const FEED = `import { GET } from '@abide/abide/server'
+const FEED = `import { rpc } from '@abide/abide/server'
 
-export const getFeed = GET(async function* () {
+export const getFeed = rpc(async function* () {
     for (const line of ['one', 'two', 'three']) {
         await Bun.sleep(100)
         yield line
@@ -93,7 +93,7 @@ export const getFeed = GET(async function* () {
 
 const FEED_PAGE = `<script>
 import { reactive } from '@abide/abide'
-import getFeed from '#src/feed/getFeed.handler.ts'
+import getFeed from '#src/feed/getFeed.server.ts'
 
 const lines = reactive.derived(() => getFeed())
 </script>
@@ -101,14 +101,14 @@ const lines = reactive.derived(() => getFeed())
 <main><p>{lines.busy()}</p></main>`
 
 // 18.23 — A `global` VALUE HOLDING A BINARY.
-const COVERS = `import { GET } from '@abide/abide/server'
+const COVERS = `import { rpc } from '@abide/abide/server'
 
-export const art = GET(() => new Blob(['png'], { type: 'image/png' }), { global: true })
+export const art = rpc(() => new Blob(['png'], { type: 'image/png' }), { global: true })
 `
 
 const SHELF_PAGE = `<script>
 import { reactive } from '@abide/abide'
-import books from '#src/shelf/books.handler.ts'
+import books from '#src/shelf/books.server.ts'
 
 const shelved = reactive.derived(() => books())
 </script>
@@ -116,11 +116,11 @@ const shelved = reactive.derived(() => books())
 <main><p>{shelved()}</p></main>`
 
 // 41.18 — A HANDLER WHOSE ANSWER IS DECIDED BY A COOKIE the app signs in with, not abide's principal.
-const ACCOUNT = `import { GET, cookies, refuse } from '@abide/abide/server'
+const ACCOUNT = `import { cookies, refuse, rpc } from '@abide/abide/server'
 
 let runs = 0
 
-export const getAccount = GET(() => {
+export const getAccount = rpc(() => {
     runs += 1
     const session = cookies().get('session')
     if (session === null) throw refuse(401, 'Sign in first.')
@@ -130,7 +130,7 @@ export const getAccount = GET(() => {
 
 const ACCOUNT_PAGE = `<script>
 import { reactive } from '@abide/abide'
-import getAccount from '#src/account/getAccount.handler.ts'
+import getAccount from '#src/account/getAccount.server.ts'
 
 const account = reactive.derived(() => getAccount())
 </script>

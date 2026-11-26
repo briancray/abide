@@ -4,7 +4,7 @@
 // would stream in after it, and miss the page's markdown twin, which reads that first answer.
 import { readFileSync } from 'node:fs'
 
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 import { directoryAbove } from './directoryAbove.ts'
 import { slice } from './slice.ts'
@@ -24,7 +24,7 @@ function repositoryRoot(): string {
 
 // Read on the server (40.15): a test file is hundreds of lines, and a page shows a case or two of it.
 // Each entry is one JSON string: a GET's args ride the query, which holds a list of strings.
-const testCases = GET(({ tests }: { tests: string[] }) => {
+export const testCases = rpc(({ tests }: { tests: string[] }) => {
     root ??= repositoryRoot()
     const sliced: { path: string; code: string }[] = []
     for (const entry of tests) {

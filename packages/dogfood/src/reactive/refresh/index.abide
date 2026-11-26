@@ -36,10 +36,10 @@ import winLead from './lib/WinLead.abide' with { type: 'text' }
         <p>Tag the handler's entries, then refresh the tag. It reaches every value carrying it,
             whichever handler it came from.</p>
         <Code language="ts" caption="server" code={`
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default GET(
+            export default rpc(
                 async ({ stage }: { stage: string }) =>
                     DEALS.filter((deal) => deal.stage === stage).length,
                 { tags: ({ stage }) => [\`stage:\${stage}\`] },

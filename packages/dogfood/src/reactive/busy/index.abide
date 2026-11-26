@@ -42,8 +42,8 @@ import dimBoard from './lib/DimBoard.abide' with { type: 'text' }
             nothing, every load in this scope and any call the outbox is sending.</p>
         <Code language="ts" caption="shared" code={`
             import { busy, reactive } from '@abide/abide'
-            // declared GET(…, { tags: ['stages'] })
-            import getStage from './getStage.handler.ts'
+            // declared rpc(…, { tags: ['stages'] })
+            import getStage from './getStage.server.ts'
 
             const won = reactive.derived(() => getStage({ stage: 'won' }))
 

@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET } from '#server'
+import { rpc } from '#server'
 import { inScope } from '#server/requestScope.ts'
 import { keyedValue } from '#shared/reactive/index.ts'
 import { defaultsInSource } from '#shared/reactive/parameterDefaults.ts'
@@ -54,7 +54,7 @@ test('a trigger naming the default reaches the entry a call left to it — 11.29
 test("an Rpc's rungs run once for a call that left a member to the handler's default — 11.27", async () => {
     let rungRuns = 0
     let bodyRuns = 0
-    const list = GET(
+    const list = rpc(
         async ({ page = 1 }: { page?: number }) => {
             bodyRuns += 1
             return page

@@ -39,9 +39,9 @@ import Section from '#src/lib/Section.abide'
             import {
                 assistant,
                 type AssistantMessage,
-                POST,
                 provider,
-            } from '@abide/abide/server'
+                rpc,
+} from '@abide/abide/server'
 
             const claude = provider.claudeApi({
                 apiKey: Bun.env.ANTHROPIC_API_KEY ?? '',
@@ -49,11 +49,11 @@ import Section from '#src/lib/Section.abide'
                 max_tokens: 1024,
             })
 
-            export default POST(
+            export default rpc(
                 async function* ({ messages }: { messages: AssistantMessage[] }) {
                     yield* assistant(messages, claude, { tools: true })
                 },
-                { clients: { mcp: false } },
+                { methods: ['POST'], clients: { mcp: false } },
             )
         `} />
     </Section>
@@ -64,7 +64,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import askAssistant from './askAssistant.handler.ts'
+            import askAssistant from './askAssistant.server.ts'
 
             const events = reactive.derived(() => askAssistant({
                 messages: [{ role: 'user', content: 'Where does Ada work?' }],

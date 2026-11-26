@@ -1,7 +1,7 @@
 <script>
 import { reactive, url } from '@abide/abide'
 
-import getTeam from '../admin/getTeam.handler.ts'
+import getTeam from '../admin/getTeam.server.ts'
 import SignInAs from './SignInAs.abide'
 
 let page = reactive('—')

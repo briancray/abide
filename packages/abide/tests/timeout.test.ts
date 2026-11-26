@@ -4,7 +4,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { GET } from '#server'
+import { rpc } from '#server'
 import { reactive } from '#shared'
 import { reachOf } from '#shared/rpc.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
@@ -35,7 +35,7 @@ afterEach(() => {
 // THE REVERT: drop the `timeLoad` call from `callLoad` in `#shared/reactive/callLoad.ts`; the load never settles and
 // `busy` still reads true.
 test('a load that goes its timeout without settling refuses 504 — 16.59', async () => {
-    const never = GET(() => new Promise<string>(() => {}), {
+    const never = rpc(() => new Promise<string>(() => {}), {
         timeout: 40,
     })
     const value = reach(never)
@@ -48,7 +48,7 @@ test('a load that goes its timeout without settling refuses 504 — 16.59', asyn
 // PAST WHAT `setTimeout` HOLDS — 2^31 - 1 ms — a delay runs after 1 ms. THE REVERT: arm `timeLoad`'s
 // timer with `milliseconds` uncapped; the load is refused 504 before it answers at 30 ms.
 test('a timeout past what a timer holds does not end the load at once — 16.59', async () => {
-    const slow = GET(
+    const slow = rpc(
         async () => {
             await Bun.sleep(30)
             return 'answered'
@@ -66,7 +66,7 @@ test('a timeout past what a timer holds does not end the load at once — 16.59'
 // arm the clock again per chunk in `timeLoad` rather than ending it at the first; the run is ended 504
 // with `['first']`.
 test('a stream quiet after its first chunk outlives its timeout — 16.59', async () => {
-    const rows = GET(
+    const rows = rpc(
         async function* () {
             yield 'first'
             await Bun.sleep(150)
@@ -87,7 +87,7 @@ test('a stream behind a rung quiet after its first chunk outlives its timeout �
     const outside = RPC_SERVER.request
     RPC_SERVER.request = () => new Request('http://timeout.example/')
     try {
-        const rows = GET(
+        const rows = rpc(
             async function* () {
                 yield 'first'
                 await Bun.sleep(150)
@@ -109,7 +109,7 @@ test('a stream behind a rung quiet after its first chunk outlives its timeout �
 // true.
 test('a stream with no first chunk inside its timeout is ended — 16.59, 16.60', async () => {
     let after = false
-    const rows = GET(
+    const rows = rpc(
         async function* () {
             await Bun.sleep(150)
             after = true
@@ -130,7 +130,7 @@ test('a stream with no first chunk inside its timeout is ended — 16.59, 16.60'
 // REVERT: clear the value in `abandonLoad` rather than refusing over it; the read then throws.
 test('a reload that times out keeps serving what the value held — 16.60', async () => {
     let calls = 0
-    const invoice = GET(
+    const invoice = rpc(
         () => {
             calls += 1
             return calls === 1
@@ -159,7 +159,7 @@ test('a reload that times out keeps serving what the value held — 16.60', asyn
 // `callLoad` alone is not that revert: each call then arms a clock of its own, and the first still
 // ends the load at 200.
 test('a call joining a load does not extend its timeout — 16.61', async () => {
-    const never = GET(() => new Promise<string>(() => {}), {
+    const never = rpc(() => new Promise<string>(() => {}), {
         timeout: 200,
     })
     const value = reach(never)
@@ -179,7 +179,7 @@ test('a call joining a load does not extend its timeout — 16.61', async () => 
 // names none. THE REVERT: time the load by `rpc.timeout` alone in `reachCall`; nothing ends it.
 test('a handler naming no timeout takes the environment one — 16.58', async () => {
     RPC_SERVER.timeout = () => 40
-    const never = GET(() => new Promise<string>(() => {}))
+    const never = rpc(() => new Promise<string>(() => {}))
     const value = reach(never)
     await settled(value)
     expect(statusOf(value)).toBe(504)
@@ -191,7 +191,7 @@ test('a handler naming no timeout takes the environment one — 16.58', async ()
 // `run`'s adoption of a call's answer; the body calls again on each 504 and `runs` climbs past 1.
 test('a computed adopting a call that times out refuses once — 16.107, 16.59', async () => {
     let runs = 0
-    const ask = GET(
+    const ask = rpc(
         async function* ({ q }: { q: string }) {
             runs += 1
             await Bun.sleep(300)

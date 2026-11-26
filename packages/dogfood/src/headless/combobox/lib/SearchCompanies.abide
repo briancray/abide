@@ -1,5 +1,5 @@
 <script server>
-import { GET } from '@abide/abide/server'
+import { rpc } from '@abide/abide/server'
 
 type Company = { id: string; name: string }
 const COMPANIES: Company[] = [
@@ -8,7 +8,7 @@ const COMPANIES: Company[] = [
     { id: 'hopper', name: 'Hopper & Co' },
 ]
 
-const searchCompanies = GET(({ q }: { q: string }) =>
+export const searchCompanies = rpc(({ q }: { q: string }) =>
     COMPANIES.filter((each) =>
         each.name.toLowerCase().includes(q.toLowerCase()),
     ),

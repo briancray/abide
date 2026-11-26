@@ -14,22 +14,22 @@ test.describe.configure({ mode: 'default' })
 
 // One handler file apiece (16.73), so each page imports its own as the file's default (16.74).
 const HANDLERS = {
-    getValue: `import { GET } from '@abide/abide/server'
+    getValue: `import { rpc } from '@abide/abide/server'
 
-export default GET(({ id }: { id: string }) => ({ id, word: 'settled' }))
+export default rpc(({ id }: { id: string }) => ({ id, word: 'settled' }))
 `,
     // Slower than the render's turn, so the server paints it in flight (41.4).
-    getSlow: `import { GET } from '@abide/abide/server'
+    getSlow: `import { rpc } from '@abide/abide/server'
 
-export default GET(async ({ id }: { id: string }) => {
+export default rpc(async ({ id }: { id: string }) => {
     await new Promise((done) => setTimeout(done, 100))
     return { id, word: 'settled' }
 })
 `,
     // Lands a microtask after it starts, inside the turn a render lets run after setup (41.19).
-    whoami: `import { GET } from '@abide/abide/server'
+    whoami: `import { rpc } from '@abide/abide/server'
 
-export default GET(async () => {
+export default rpc(async () => {
     await Promise.resolve()
     return { owner: true }
 })
@@ -40,7 +40,7 @@ export default GET(async () => {
 // whose setup makes a call, which 41.28 builds after the turn.
 const MODULE_VALUE = {
     'lib/me.ts': `import { reactive } from '@abide/abide'
-import whoami from '#src/data/whoami.handler.ts'
+import whoami from '#src/data/whoami.server.ts'
 
 export const me = reactive.derived(() => whoami())
 `,
@@ -51,7 +51,7 @@ export const canEdit = reactive.derived(() => me.ready() && me().owner)
 `,
     'lib/Deferred.abide': `<script>
 import { reactive } from '@abide/abide'
-import getValue from '#src/data/getValue.handler.ts'
+import getValue from '#src/data/getValue.server.ts'
 import { canEdit } from './canEdit.ts'
 
 const value = reactive.derived(() => getValue({ id: 'deferred' }))
@@ -71,7 +71,7 @@ import { canEdit } from '../lib/canEdit.ts'
 // and the static `class` — the one thing an arm bound to the other's button never writes.
 const pageOver = (handler: string) => `<script>
 import { memo, reactive } from '@abide/abide'
-import ${handler} from '#src/data/${handler}.handler.ts'
+import ${handler} from '#src/data/${handler}.server.ts'
 
 const value = reactive.derived(() => ${handler}({ id: 'one' }))
 const pressed = reactive('')
@@ -84,12 +84,12 @@ const pressed = reactive('')
 // it painted in flight (`getSlow` does not).
 const MODULE_CALL = {
     'lib/early.ts': `import { reactive } from '@abide/abide'
-import getValue from '#src/data/getValue.handler.ts'
+import getValue from '#src/data/getValue.server.ts'
 
 export const early = reactive.derived(() => getValue({ id: 'module' }))
 `,
     'lib/late.ts': `import { reactive } from '@abide/abide'
-import getSlow from '#src/data/getSlow.handler.ts'
+import getSlow from '#src/data/getSlow.server.ts'
 
 export const late = reactive.derived(() => getSlow({ id: 'module' }))
 `,
@@ -117,7 +117,7 @@ test.beforeAll(async ({}, testInfo) => {
         ...MODULE_CALL,
     }
     for (const [name, text] of Object.entries(HANDLERS))
-        files[`data/${name}.handler.ts`] = text
+        files[`data/${name}.server.ts`] = text
     ;({ base, server } = await servedFixture(
         `e2e-hydrate-${testInfo.project.name}`,
         files,

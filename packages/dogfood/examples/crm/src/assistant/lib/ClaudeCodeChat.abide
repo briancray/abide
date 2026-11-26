@@ -3,8 +3,8 @@
 // the CRM's conversation with it.
 import { copy, pairing, props } from '@abide/abide'
 
-import askClaudeCode from '../askClaudeCode.handler.ts'
-import permitClaudeCode from '../permitClaudeCode.handler.ts'
+import askClaudeCode from '../askClaudeCode.server.ts'
+import permitClaudeCode from '../permitClaudeCode.server.ts'
 import Chat from './Chat.abide'
 
 // Milliseconds of connecting before it offers to try again.

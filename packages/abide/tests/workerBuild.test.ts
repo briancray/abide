@@ -33,11 +33,11 @@ export async function* scores(): AsyncGenerator<string> {
     yield SECRET
 }
 `,
-        'getScores.handler.ts': `import { GET } from '@abide/abide/server'
+        'getScores.server.ts': `import { rpc } from '@abide/abide/server'
 
 import { scores } from '#src/lib/scores.worker.ts'
 
-export default GET(async () => {
+export default rpc(async () => {
     const read: string[] = []
     for await (const score of scores()) read.push(score)
     return read

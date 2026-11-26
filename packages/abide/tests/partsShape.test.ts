@@ -6,7 +6,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { POST } from '#server'
+import { rpc } from '#server'
 import { addressed } from '#server/addressed.ts'
 import {
     accordion,
@@ -105,7 +105,7 @@ const COLUMN = { key: 'name', label: 'Name' } as const
 const ROW: Row = { id: 'ada', name: 'Ada' }
 const COMMAND = { label: 'Open', run: () => {} }
 // A handler, as `form` is handed one: what it posts to and how it is called.
-const ADD = POST((args: { name: string }) => args)
+const ADD = rpc((args: { name: string }) => args, { methods: ['POST'] })
 addressed(ADD, '/deals/shape')
 
 // 49.9 — the members a parts type may not have: a function taking nothing that answers a value, or

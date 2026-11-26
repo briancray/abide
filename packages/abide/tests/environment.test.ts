@@ -20,9 +20,9 @@ const stops: (() => void)[] = []
 beforeAll(async () => {
     app = appFixture({
         'index.abide': '<main>home</main>',
-        'environment/name.handler.ts': `import { GET } from '@abide/abide/server'
+        'environment/name.server.ts': `import { rpc } from '@abide/abide/server'
 
-export default GET(() => process.env.NODE_ENV ?? null)
+export default rpc(() => process.env.NODE_ENV ?? null)
 `,
     })
     const built = await buildApp(app)

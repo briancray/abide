@@ -1,8 +1,8 @@
 <script>
 import { isFailed, reactive, refresh } from '@abide/abide'
 
-import exportCompanies from '../exportCompanies.handler.ts'
-import reportedErrors from '../reportedErrors.handler.ts'
+import exportCompanies from '../exportCompanies.server.ts'
+import reportedErrors from '../reportedErrors.server.ts'
 
 let told = reactive('—')
 const reported = reactive.derived(() => reportedErrors())

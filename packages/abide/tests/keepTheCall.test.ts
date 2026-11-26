@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { gate, inAFreshProcess } from '@abide/harness/gate'
 
-import { POST } from '#server'
+import { rpc } from '#server'
 import {
     flushSync,
     type Issues,
@@ -39,7 +39,7 @@ function held(): () => void {
 // How many times the handler ran, so a wait that ran the write again shows.
 let recorded = 0
 
-const recordBalance = POST(
+const recordBalance = rpc(
     async ({ account, amount }: Balance) => {
         recorded += 1
         await answer
@@ -47,6 +47,7 @@ const recordBalance = POST(
         return { account, amount }
     },
     {
+        methods: ['POST'],
         args: jsonSchema<Balance>({
             type: 'object',
             required: ['account', 'amount'],
@@ -306,11 +307,14 @@ test('a kept call is let go by keeping one nothing has written — 11.16, 11.49,
     expect(call.error()?.name).toBe('AccountClosed')
 })
 
-const closeAccount = POST(async ({ account }: { account: string }) => {
-    await answer
-    if (account === 'closed') return AccountClosed({ account })
-    return undefined
-})
+const closeAccount = rpc(
+    async ({ account }: { account: string }) => {
+        await answer
+        if (account === 'closed') return AccountClosed({ account })
+        return undefined
+    },
+    { methods: ['POST'] },
+)
 
 // 4.19 FOR A UNION — ONE BUSY AND ONE ERROR FOR A FLOW CALLING ONE OF SEVERAL HANDLERS: the value is
 // typed over every call it may keep, its failures the union of theirs, and each call is adopted as
@@ -356,7 +360,7 @@ gate(
     },
     async () => {
         const run = await inAFreshProcess(`
-import { POST } from '${import.meta.dir}/../src/server/index.ts'
+import { rpc } from '${import.meta.dir}/../src/server/index.ts'
 import { reactive, refuse } from '${import.meta.dir}/../src/shared/index.ts'
 
 let reported = 0
@@ -364,7 +368,7 @@ process.on('unhandledRejection', () => {
     reported += 1
 })
 const Closed = refuse.named('Closed', { status: 409 })
-const save = POST(async ({ ok }) => (ok ? { ok } : Closed()))
+const save = rpc(async ({ ok }) => (ok ? { ok } : Closed()), { methods: ['POST'] })
 const saving = reactive()
 const keep = (call) => {
     saving.set(call)
@@ -531,7 +535,7 @@ gate(
     },
     async () => {
         const run = await inAFreshProcess(`
-import { POST } from '${import.meta.dir}/../src/server/index.ts'
+import { rpc } from '${import.meta.dir}/../src/server/index.ts'
 import { reachOf } from '${import.meta.dir}/../src/shared/rpc.ts'
 import { reactive } from '${import.meta.dir}/../src/shared/index.ts'
 
@@ -539,7 +543,7 @@ let reported = 0
 process.on('unhandledRejection', () => {
     reported += 1
 })
-const save = POST(async () => ({ saved: true }))
+const save = rpc(async () => ({ saved: true }), { methods: ['POST'] })
 const step = ${
             reachedStepReported
                 ? '(call, next) => call.then((value) => { try { return next(value) } catch (error) { Promise.reject(error); throw error } })'

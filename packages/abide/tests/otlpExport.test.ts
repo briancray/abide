@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 
-import { GET, log, trace } from '#server'
+import { log, rpc, trace } from '#server'
 import { exporting, flushExports, stopExporting } from '#server/otlpExport.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
@@ -71,8 +71,8 @@ type OtlpSpan = {
 }
 
 const probe = {
-    'probe/traced.handler.ts': {
-        default: GET(() =>
+    'probe/traced.server.ts': {
+        default: rpc(() =>
             trace.span('lookup', () => {
                 log('looked up the contact')
                 return trace()

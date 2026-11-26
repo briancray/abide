@@ -69,10 +69,10 @@ import Section from '#src/lib/Section.abide'
             shows.</p>
         <Code language="ts" caption="server" code={`
             import { refuse } from '@abide/abide'
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default GET(
+            export default rpc(
                 ({ id }: { id: string }) =>
                     DEALS.find((deal) => deal.id === id) ?? refuse(404),
                 { description: 'One deal, by id.' },
@@ -90,7 +90,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import getDeal from './getDeal.handler.ts'
+            import getDeal from './getDeal.server.ts'
 
             let id = reactive('d1')
             const deal = reactive.derived(() => getDeal({ id }))
@@ -106,7 +106,7 @@ import Section from '#src/lib/Section.abide'
             reading it holds every entry that has arrived, and its <code>busy()</code> stays true
             until the stream closes.</p>
         <Code language="ts" caption="server" code={`
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
 
             const OLDER = [
                 { on: '2026-09-02', note: 'Intro call, asked for pricing' },
@@ -114,7 +114,7 @@ import Section from '#src/lib/Section.abide'
                 { on: '2026-10-01', note: 'Signed for 40 seats' },
             ]
 
-            export default GET(async function* () {
+            export default rpc(async function* () {
                 for (const entry of OLDER) {
                     await Bun.sleep(600) // a slow archive
                     yield entry
@@ -129,7 +129,7 @@ import Section from '#src/lib/Section.abide'
             blob's own type.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import exportDeals from './exportDeals.handler.ts'
+            import exportDeals from './exportDeals.server.ts'
             </script>
 
             <a href={exportDeals.url()} download="deals.csv">Download deals</a>
@@ -143,7 +143,7 @@ import Section from '#src/lib/Section.abide'
             sorted, so one filter is one address. A list of plain values repeats its name. The
             handler reads both back as its <code>Args</code> declares them.</p>
         <Code language="ts" caption="browser" code={`
-            import searchDeals from './searchDeals.handler.ts'
+            import searchDeals from './searchDeals.server.ts'
 
             const address = searchDeals.url({
                 filter: { stage: 'won', owner: 'ada' },
@@ -159,7 +159,7 @@ import Section from '#src/lib/Section.abide'
             <code>tool_use</code> carries. It is read off the route, so it stays the same under a
             sub-path.</p>
         <Code language="ts" caption="browser" code={`
-            import draftReport from './draftReport.handler.ts'
+            import draftReport from './draftReport.server.ts'
 
             // 'post_ops_draftReport'
             const drafting = (block: { type: string; name?: string }) =>
@@ -171,8 +171,8 @@ import Section from '#src/lib/Section.abide'
         <p>Pass the handler's <code>refresh</code> a pattern of its args, and the entries matching
             it load again while every other stage stays as it is.</p>
         <Code language="ts" caption="browser" code={`
-            import getStage from './getStage.handler.ts'
-            import winDeal from './winDeal.handler.ts'
+            import getStage from './getStage.server.ts'
+            import winDeal from './winDeal.server.ts'
 
             await winDeal()
             getStage.refresh({ stage: 'lead' })
@@ -186,14 +186,14 @@ import Section from '#src/lib/Section.abide'
             the JSON Patch from the value it replaced, so a logged call is one row on the wire
             rather than the list again. <code>key</code> says which row is which.</p>
         <Code language="ts" caption="server" code={`
-            import { POST } from '@abide/abide/server'
-            import listCalls, { type Call } from './listCalls.handler.ts'
+            import { rpc } from '@abide/abide/server'
+            import listCalls, { type Call } from './listCalls.server.ts'
 
-            export default POST(({ id, note }: Call) => {
+            export default rpc(({ id, note }: Call) => {
                 listCalls.patch((held) => {
                     if (!held.some((call) => call.id === id)) held.push({ id, note })
                 })
-            })
+            }, { methods: ['POST'] })
         `} />
     </Section>
 
@@ -202,10 +202,10 @@ import Section from '#src/lib/Section.abide'
             query is searched at once, and one typed after it once the typing pauses rather than
             once per keystroke. The page reads the handler as it would any other.</p>
         <Code language="ts" caption="server" code={`
-            import { GET } from '@abide/abide/server'
+            import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default GET(
+            export default rpc(
                 ({ q }: { q: string }) => {
                     const names: string[] = []
                     for (const deal of DEALS)
@@ -219,7 +219,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import searchDeals from '../searchDeals.handler.ts'
+            import searchDeals from '../searchDeals.server.ts'
 
             let q = reactive('')
             const found = reactive.derived(() => searchDeals({ q }))
@@ -237,12 +237,12 @@ import Section from '#src/lib/Section.abide'
             it missed. A second server on the same store applies the first one's records and sends
             them to its own followers.</p>
         <Code language="ts" caption="server" code={`
-            import { GET, store } from '@abide/abide/server'
+            import { rpc, store } from '@abide/abide/server'
             import { crmDatabase } from '../pipeline/lib/crmDatabase.server.ts'
 
             export type Call = { id: string; note: string }
 
-            export default GET((): Call[] => [], {
+            export default rpc((): Call[] => [], {
                 global: true,
                 key: 'id',
                 store: store.sqlite<Call[]>(crmDatabase, 'calls'),

@@ -4,7 +4,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { GET } from '#server'
+import { rpc } from '#server'
 import { derivedArgs } from '#server/argsContract.ts'
 import type { Mount, Mounted } from '#server/mountHandlers.ts'
 import {
@@ -21,6 +21,7 @@ function row(path: string, rest: Partial<Mount> = {}): Mount {
     return {
         address: `/${path}`,
         method: 'GET',
+        methods: ['GET'],
         source: `${path.split('/')[0]}.ts`,
         name: path.split('/').at(-1) as string,
         export: 'default',
@@ -81,7 +82,7 @@ test('the shell lists and completes no handler whose clients.cli is false — 20
 // and the schema probed at mount, where a row is read off what the build wrote. THE REVERT: read
 // `clients` off the row for a mounted handler too; `hidden` is published to MCP.
 test('a mounted handler is projected off the handler, a row off the build — 20.1, 20.11', () => {
-    const hidden = GET(() => 'secret', {
+    const hidden = rpc(() => 'secret', {
         description: 'At run time.',
         clients: { mcp: false },
     })
@@ -117,7 +118,7 @@ test("a Response handler's row keeps it off MCP unless its clients puts it back 
     const mountedAs = (clients: { mcp?: boolean }): Mounted => ({
         ...row('media/playlist', { mcp: false }),
         method: 'GET',
-        handler: GET(() => new Response(''), { clients }) as Mounted['handler'],
+        handler: rpc(() => new Response(''), { clients }) as Mounted['handler'],
         rungs: [],
     })
     expect(surfaceOf(mountedAs({}), 'mcp')).toBeUndefined()

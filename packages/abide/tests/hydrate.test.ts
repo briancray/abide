@@ -960,9 +960,9 @@ const rows = await Promise.resolve(1)
 })
 
 // 34.17, 34.33, 34.34, 34.35 — WHAT EACH BLOCK MAY EXPORT, every spelling in every block. A
-// `<script>` and a `<script server>` export nothing (34.17); a `<script module>` exports by name
-// (34.33), never the default (34.34) and never a re-export (34.35). Each row is the clause its
-// refusal cites, or `''` where it compiles.
+// `<script>` exports nothing and a `<script server>` one declared name at a time (34.17); a
+// `<script module>` exports by name (34.33), never the default (34.34) and never a re-export (34.35).
+// Each row is the clause its refusal cites, or `''` where it compiles.
 //
 // THE REVERT: hand `refuseExport` `'<script>'` for the module block in `projectShadow`; the six
 // module rows cite 34.17 as well, where two are due to compile and four to cite 34.34 or 34.35.
@@ -996,6 +996,8 @@ ${spelled}
         expected[`<script> ${spelled}`] = '34.17'
         expected[`<script server> ${spelled}`] = '34.17'
     }
+    // 16.70 — what its component calls over the wire.
+    expected['<script server> export const rows = 1'] = ''
     expected['<script module> export const rows = 1'] = ''
     expected['<script module> const rows = 1\nexport { rows }'] = ''
     expected['<script module> export default 1'] = '34.34'

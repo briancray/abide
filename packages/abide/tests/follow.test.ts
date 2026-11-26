@@ -12,46 +12,46 @@ import { BIN, handlerFiles, serveApp } from './builtApp.ts'
 import { muxClient } from './muxClient.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const HANDLERS = `import { GET, invalidate, memo, POST, refresh, refuse } from '@abide/abide/server'
+const HANDLERS = `import { invalidate, memo, refresh, refuse, rpc } from '@abide/abide/server'
 
-export const books = GET((): string[] => ['dune'], { global: true })
+export const books = rpc((): string[] => ['dune'], { global: true })
 
-export const shelve = POST(async ({ title }: { title: string }) => {
+export const shelve = rpc(async ({ title }: { title: string }) => {
     const titles = [...(await books()), title]
     books.set(titles)
     locked.set([...titles])
-})
+}, { methods: ['POST'] })
 
-export const rename = POST(({ at, title }: { at: number; title: string }) => {
+export const rename = rpc(({ at, title }: { at: number; title: string }) => {
     books.patch((titles) => {
         titles[at] = title
     })
-})
+}, { methods: ['POST'] })
 
-export const shuffle = POST(() => {
+export const shuffle = rpc(() => {
     books.patch((titles) => {
         titles.sort((a, b) => b.localeCompare(a))
     })
-})
+}, { methods: ['POST'] })
 
-export const contact = GET(({ id }: { id: number }) => ({ id, at: Date.now() }))
+export const contact = rpc(({ id }: { id: number }) => ({ id, at: Date.now() }))
 
-export const touch = POST(({ id, refresh }: { id: number; refresh?: boolean }) => {
+export const touch = rpc(({ id, refresh }: { id: number; refresh?: boolean }) => {
     if (refresh) contact.refresh({ id })
     else contact.invalidate({ id })
-})
+}, { methods: ['POST'] })
 
 let priced = 0
-export const price = GET(({ id }: { id: number }) => ({ id, priced: priced++ }), { global: true })
+export const price = rpc(({ id }: { id: number }) => ({ id, priced: priced++ }), { global: true })
 
-export const reprice = POST(({ id, refresh }: { id?: number; refresh?: boolean }) => {
+export const reprice = rpc(({ id, refresh }: { id?: number; refresh?: boolean }) => {
     const pattern = id === undefined ? undefined : { id }
     if (refresh) price.refresh(pattern)
     else price.invalidate(pattern)
-})
+}, { methods: ['POST'] })
 
 // The shelf behind a token: a value of its own, which \`shelve\` writes beside \`books\`'s.
-export const locked = GET(async (): Promise<string[]> => [...(await books())], {
+export const locked = rpc(async (): Promise<string[]> => [...(await books())], {
     global: true,
     middleware: [
         async (next, { request }) => {
@@ -61,40 +61,40 @@ export const locked = GET(async (): Promise<string[]> => [...(await books())], {
     ],
 })
 
-export const touchLocked = POST(() => {
+export const touchLocked = rpc(() => {
     locked.invalidate()
-})
+}, { methods: ['POST'] })
 
 let restocked = 0
-export const level = GET(() => ({ restocked: restocked++ }), { global: true })
+export const level = rpc(() => ({ restocked: restocked++ }), { global: true })
 
-export const restock = POST(() => {
+export const restock = rpc(() => {
     level.invalidate()
-})
+}, { methods: ['POST'] })
 
-export const shows = GET(() => ({ at: Date.now() }), { tags: ['library'] })
+export const shows = rpc(() => ({ at: Date.now() }), { tags: ['library'] })
 
-export const films = GET(() => ({ at: performance.now() }), { global: true, tags: ['catalog'] })
+export const films = rpc(() => ({ at: performance.now() }), { global: true, tags: ['catalog'] })
 
-export const recatalog = POST(() => {
+export const recatalog = rpc(() => {
     refresh({ tags: ['catalog'] })
-})
+}, { methods: ['POST'] })
 
-export const reshelve = POST(() => 'shelved', { refreshes: ['library'] })
+export const reshelve = rpc(() => 'shelved', { methods: ['POST'], refreshes: ['library'] })
 
-export const stage = GET(({ home }: { home: string }) => ({ home }), {
+export const stage = rpc(({ home }: { home: string }) => ({ home }), {
     tags: ({ home }) => ['access', \`home:\${home}\`],
 })
 
-export const revoke = POST(({ tag }: { tag: string }) => {
+export const revoke = rpc(({ tag }: { tag: string }) => {
     refresh({ tags: [tag] })
-})
+}, { methods: ['POST'] })
 
-export const rescan = POST(({ refresh: reload, bare }: { refresh?: boolean; bare?: boolean }) => {
+export const rescan = rpc(({ refresh: reload, bare }: { refresh?: boolean; bare?: boolean }) => {
     const selection = bare ? undefined : { tags: ['library'] }
     if (reload) refresh(selection)
     else invalidate(selection)
-})
+}, { methods: ['POST'] })
 `
 
 let base = ''

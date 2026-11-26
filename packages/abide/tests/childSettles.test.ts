@@ -10,14 +10,14 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 
 // `getTick` needs one microtask, which a component built where it is called never gives it;
 // `getSlow` needs a timer, which no render waits for (41.4).
-const TOTALS = `import { GET } from '@abide/abide/server'
+const TOTALS = `import { rpc } from '@abide/abide/server'
 
-export const getTick = GET(async ({ id }: { id: string }) => {
+export const getTick = rpc(async ({ id }: { id: string }) => {
     await Promise.resolve()
     return { id, total: 2 }
 })
 
-export const getSlow = GET(async ({ id }: { id: string }) => {
+export const getSlow = rpc(async ({ id }: { id: string }) => {
     await Bun.sleep(20)
     return { id, total: 3 }
 })
@@ -25,7 +25,7 @@ export const getSlow = GET(async ({ id }: { id: string }) => {
 
 const child = (call: string, title: string): string => `<script>
 import { memo, reactive } from '@abide/abide'
-import call from '#src/totals/${call}.handler.ts'
+import call from '#src/totals/${call}.server.ts'
 import Grand from './Grand.abide'
 
 const total = reactive.derived(() => call({ id: '${call}' }))
@@ -36,7 +36,7 @@ const total = reactive.derived(() => call({ id: '${call}' }))
 
 const GRAND = `<script>
 import { reactive } from '@abide/abide'
-import getTick from '#src/totals/getTick.handler.ts'
+import getTick from '#src/totals/getTick.server.ts'
 
 const total = reactive.derived(() => getTick({ id: 'grand' }))
 </script>
@@ -55,7 +55,7 @@ import Tick from './lib/Tick.abide'
 // flight and answers a microtask after.
 const INLINE = `<script>
 import { reactive } from '@abide/abide'
-import getTick from '#src/totals/getTick.handler.ts'
+import getTick from '#src/totals/getTick.server.ts'
 </script>
 
 <main><p>{reactive.derived(() => getTick({ id: 'inline' })).busy() ? 'loading' : 'done'}</p></main>`

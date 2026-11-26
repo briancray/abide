@@ -11,16 +11,16 @@ import { servedFixture } from './servedFixture.ts'
 // ONE TREE AND ONE WORKER PER PROJECT, for `routing.spec.ts`'s reason.
 test.describe.configure({ mode: 'default' })
 
-const HANDLER = `import { POST, refuse } from '@abide/abide/server'
+const HANDLER = `import { refuse, rpc } from '@abide/abide/server'
 
-export default POST(() => {
+export default rpc(() => {
     throw refuse(409, 'already taken')
-})
+}, { methods: ['POST'] })
 `
 
-const ANSWERED = `import { POST } from '@abide/abide/server'
+const ANSWERED = `import { rpc } from '@abide/abide/server'
 
-export default POST(() => ({ answered: true }))
+export default rpc(() => ({ answered: true }), { methods: ['POST'] })
 `
 
 // What the layout's hook hears, painted in a list the test reads.
@@ -38,8 +38,8 @@ onError((error) => {
 
 const PAGE = `<script>
 import { reactive, watch } from '@abide/abide'
-import answer from '#src/data/answer.handler.ts'
-import claim from '#src/data/claim.handler.ts'
+import answer from '#src/data/answer.server.ts'
+import claim from '#src/data/claim.server.ts'
 
 let broken = reactive(false)
 let saving = reactive<typeof claim | typeof answer>()
@@ -90,8 +90,8 @@ test.beforeAll(async ({}, testInfo) => {
     ;({ base, server } = await servedFixture(
         `e2e-on-error-${testInfo.project.name}`,
         {
-            'data/claim.handler.ts': HANDLER,
-            'data/answer.handler.ts': ANSWERED,
+            'data/claim.server.ts': HANDLER,
+            'data/answer.server.ts': ANSWERED,
             'claims/layout.abide': LAYOUT,
             'claims/index.abide': PAGE,
         },

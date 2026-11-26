@@ -26,8 +26,8 @@ import {
     watch,
 } from '@abide/abide'
 
-import answer from '#src/ask/answer.handler.ts'
-import permit from '#src/ask/permit.handler.ts'
+import answer from '#src/ask/answer.server.ts'
+import permit from '#src/ask/permit.server.ts'
 
 import Conversation from './Conversation.abide'
 import { ASK_ITEM } from './nativeMenus.ts'

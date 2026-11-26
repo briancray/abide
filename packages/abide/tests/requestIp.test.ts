@@ -4,7 +4,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
-import { GET, request } from '#server'
+import { request, rpc } from '#server'
 import { banner } from '#server/banner.ts'
 
 import { serveApp } from './builtApp.ts'
@@ -17,7 +17,7 @@ let stop = (): void => {}
 beforeAll(async () => {
     ;({ base, stop } = await serveApp(
         {
-            'whereFrom.handler.ts': `import { GET, request } from '@abide/abide/server'\n\nexport default GET(() => request.ip(), { description: 'Where the call came from.' })\n`,
+            'whereFrom.server.ts': `import { request, rpc } from '@abide/abide/server'\n\nexport default rpc(() => request.ip(), { description: 'Where the call came from.' })\n`,
         },
         process.env,
         ['--hostname', '127.0.0.1'],
@@ -88,7 +88,7 @@ test('request.ip answers the peer under start, and in-process for a call the app
 // the request in `request.ip`; the call reads `null`, which a unix socket answers too.
 test('request.ip answers in-process for App.fetch with no listener — 22.13', async () => {
     const app = await inMemoryApp({
-        'whereFrom.handler.ts': { default: GET(() => request.ip()) },
+        'whereFrom.server.ts': { default: rpc(() => request.ip()) },
     })
     const answer = await app.fetch(new Request('http://app.test/whereFrom'))
     expect(await answer.json()).toBe('in-process')

@@ -1,8 +1,9 @@
 <script server>
-import { POST, refuse } from '@abide/abide/server'
+import { refuse, rpc } from '@abide/abide/server'
 
-const sendStatement = POST(() =>
-    refuse(502, 'The mailer refused the statement'),
+export const sendStatement = rpc(
+    () => refuse(502, 'The mailer refused the statement'),
+    { methods: ['POST'] },
 )
 </script>
 

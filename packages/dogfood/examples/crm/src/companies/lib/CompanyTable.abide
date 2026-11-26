@@ -1,7 +1,7 @@
 <script>
 import { type Column, reactive, sortableTable, url } from '@abide/abide'
 
-import listCompanies from '../listCompanies.handler.ts'
+import listCompanies from '../listCompanies.server.ts'
 
 type Company = { id: string; name: string; city: string; contact: string }
 

@@ -8,11 +8,11 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { serveApp } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
-const PAGES = `import { GET } from '@abide/abide/server'
+const PAGES = `import { rpc } from '@abide/abide/server'
 
 let runs = 0
 
-export default GET(async ({ page = 1 }: { page?: number }) => {
+export default rpc(async ({ page = 1 }: { page?: number }) => {
     runs += 1
     const run = runs
     await Bun.sleep(150)
@@ -23,7 +23,7 @@ export default GET(async ({ page = 1 }: { page?: number }) => {
 // One page leaves the member to the default and the other writes it.
 const pageCalling = (args: string): string => `<script>
 import { memo, reactive } from '@abide/abide'
-import list from '#src/pages/list.handler.ts'
+import list from '#src/pages/list.server.ts'
 
 const shown = reactive.derived(() => list(${args}))
 </script>
@@ -37,7 +37,7 @@ beforeAll(async () => {
     ;({ base, stop } = await serveApp({
         'index.abide': pageCalling('{}'),
         'written/index.abide': pageCalling('{ page: 1 }'),
-        'pages/list.handler.ts': PAGES,
+        'pages/list.server.ts': PAGES,
     }))
 }, 30_000)
 

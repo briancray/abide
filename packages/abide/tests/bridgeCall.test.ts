@@ -17,13 +17,13 @@ const FAKE_CLAUDE = `${FIXTURES}fakeClaudeCode.ts`
 const RECORD = `${Bun.env.TMPDIR ?? '/tmp'}/abide-bridge-call-${process.pid}.json`
 const SCRATCH: string[] = []
 
-const HANDLERS = `import { GET, POST, provider } from '@abide/abide/server'
+const HANDLERS = `import { provider, rpc } from '@abide/abide/server'
 
 const HIDDEN = { clients: { mcp: false } }
 
-export const command = GET(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })(), HIDDEN)
+export const command = rpc(() => (async (o) => { for await (const status of provider.claudeCode.bridge(o)) return status })(), HIDDEN)
 
-export const call = POST(({ tool, input }: { tool: string; input: unknown }) => provider.claudeCode.callTool(tool, input), HIDDEN)
+export const call = rpc(({ tool, input }: { tool: string; input: unknown }) => provider.claudeCode.callTool(tool, input), { methods: ['POST'], ...HIDDEN })
 `
 
 let base = ''

@@ -21,10 +21,10 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 const PAGE = `<main><h1>home</h1></main>`
 
 // One handler file a handler (16.73), each answered at its own path below `probe`.
-const IMPORTS = `import { config, cookies, GET, POST, request, response, trace } from '@abide/abide/server'\n\n`
+const IMPORTS = `import { config, cookies, request, response, rpc, trace } from '@abide/abide/server'\n\n`
 
 const HANDLERS: Record<string, string> = {
-    'probe/settings.handler.ts': `${IMPORTS}export default GET(() => {
+    'probe/settings.server.ts': `${IMPORTS}export default rpc(() => {
     const resolved = config()
     return {
         limit: resolved.LIMIT,
@@ -35,25 +35,25 @@ const HANDLERS: Record<string, string> = {
     }
 })
 `,
-    'probe/remember.handler.ts': `${IMPORTS}export default POST(() => {
+    'probe/remember.server.ts': `${IMPORTS}export default rpc(() => {
     const theme = cookies().get('theme')
     cookies().set('seen', '1')
     cookies().set('session', 'abc', { httpOnly: true })
     return theme
-})
+}, { methods: ['POST'] })
 `,
-    'probe/seen.handler.ts': `${IMPORTS}export default GET(() => response().headers.get('x-rung') ?? 'none')
+    'probe/seen.server.ts': `${IMPORTS}export default rpc(() => response().headers.get('x-rung') ?? 'none')
 `,
-    'probe/rewritten.handler.ts': `${IMPORTS}export default GET(() => request().headers.get('x-rewritten') ?? 'the original')
+    'probe/rewritten.server.ts': `${IMPORTS}export default rpc(() => request().headers.get('x-rewritten') ?? 'the original')
 `,
-    'probe/who.handler.ts': `${IMPORTS}import { principal } from '@abide/abide'
+    'probe/who.server.ts': `${IMPORTS}import { principal } from '@abide/abide'
 
-export default GET(async () => {
+export default rpc(async () => {
     const resolved = (await principal.resolved) as { authenticated: boolean; id?: string }
     return \`\${resolved.authenticated} \${resolved.id} \${principal.caller()}\`
 })
 `,
-    'probe/traced.handler.ts': `${IMPORTS}export default GET(() =>
+    'probe/traced.server.ts': `${IMPORTS}export default rpc(() =>
     trace.span('lookup', () => ({
         id: trace(),
         sampled: trace.sampled(),

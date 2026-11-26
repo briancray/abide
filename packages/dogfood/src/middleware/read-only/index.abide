@@ -48,8 +48,8 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script server>
             import { middleware, readOnly } from '@abide/abide/server'
-            import signIn from './account/signIn.handler.ts'
-            import signOut from './account/signOut.handler.ts'
+            import signIn from './account/signIn.server.ts'
+            import signOut from './account/signOut.server.ts'
 
             middleware(readOnly({ allow: [signIn, signOut] }))
             </script>
@@ -63,7 +63,7 @@ import Section from '#src/lib/Section.abide'
             with <code>isFailed</code>.</p>
         <Code language="ts" caption="browser" code={`
             import { isFailed, reactive } from '@abide/abide'
-            import reopenDeal from './reopenDeal.handler.ts'
+            import reopenDeal from './reopenDeal.server.ts'
 
             const notice = reactive('')
             try {

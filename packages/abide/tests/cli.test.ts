@@ -151,9 +151,9 @@ test('a build that stops on a refusal prints it as abide check does, not as a st
         [
             {
                 'src/local.abide': '<p>hi</p>\n',
-                'src/local.handler.ts': `import { GET } from '@abide/abide/server'\nexport default GET(() => 1)\n`,
+                'src/local.server.ts': `import { rpc } from '@abide/abide/server'\nexport default rpc(() => 1)\n`,
             },
-            'src/local.handler.ts - error: abide: local.abide and local.handler.ts both answer GET at /local. RULEBOOK 19.1.',
+            'src/local.server.ts - error: abide: local.abide and local.server.ts both answer GET at /local. RULEBOOK 19.1.',
         ],
         [
             { 'src/index.abide': '<p>{#if x}</p>\n' },
