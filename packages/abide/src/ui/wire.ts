@@ -12,7 +12,7 @@
 //
 // 18.3, 18.9 — EVERY `GET` LOADED IS FOLLOWED over the mux, naming the version its answer carried:
 // a trigger on the server reaches the copy for these args, and a `global` value's changes arrive as
-// values the copy takes (18.10).
+// values the copy takes (18.10) — until nothing has read the copy for a while (18.48).
 //
 // An entry of its own (`@abide/abide/wire`) rather than a name on the runtime barrel: only a generated
 // wrapper imports it, and a page with no handler pays nothing for it.

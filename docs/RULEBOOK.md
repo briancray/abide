@@ -1643,6 +1643,9 @@ that process's records, then its own changes not yet appended over them, MUST ap
 value whole and stand at its number, and a subscription naming a number it gave up MUST be sent the
 value.
 
+18.48 A client's subscription of 18.3 to a `GET` MUST end once its copy has had no reader for 60
+seconds, MUST NOT end before 30 seconds of none, and MUST leave the copy stale as it ends.
+
 # 19. Mount paths and schemas
 
 19.1 A route MUST be answered for each method by one file at most, a page answering `GET` and `HEAD`

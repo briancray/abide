@@ -21,11 +21,13 @@ import { type Reactive } from '#shared/reactive/index.ts'
 import { patchEpoch, writtenSince } from '#shared/reactive/patchMarks.ts'
 import {
     heldGenerationOf,
+    isSubscribed,
     loadOf,
     patchInto,
     produceInto,
     writtenLocally,
 } from '#shared/reactive/producer.ts'
+import { unrefTimer } from '#shared/reactive/unrefTimer.ts'
 import type { RpcRequest } from '#shared/rpcRequest.ts'
 
 import { undelivered, whenDelivered } from './outboxQueue.ts'
@@ -33,6 +35,9 @@ import { RetryTimer } from './RetryTimer.ts'
 
 const RETRY_FLOOR_MS = 250
 const RETRY_CEILING_MS = 10_000
+
+/** 18.48 — how often the follows are swept for a copy nothing has read since the sweep before. */
+const UNREAD_SWEEP_MS = 30_000
 
 /**
  * A handler followed over the socket mux, its copy the `Rpc`'s entry for these args.
@@ -52,6 +57,10 @@ class Following {
     // load moves, and the patch epoch then, which a local `s.patch` writes past on what it holds.
     generation: number | undefined
     epoch: number
+    // 18.48 — the copy as it was last in step, asked without a reach whether anything reads it, and
+    // whether the last sweep found nothing did.
+    copy: unknown
+    unread: boolean
 
     constructor(
         id: number,
@@ -68,11 +77,14 @@ class Following {
         this.expiry = undefined
         this.generation = undefined
         this.epoch = 0
+        this.copy = undefined
+        this.unread = false
     }
 
     /** Marks the copy in step as it stands, its load in flight included. */
     inStep(): void {
         const copy = this.entry()
+        this.copy = copy
         this.generation = loadOf(copy) ?? heldGenerationOf(copy)
         this.epoch = patchEpoch()
     }
@@ -492,6 +504,8 @@ const FOLLOWING = new Map<string, Following>()
 export function resetSocketWire(): void {
     for (const following of FOLLOWING.values()) clearTimeout(following.expiry)
     FOLLOWING.clear()
+    clearTimeout(sweep)
+    sweep = undefined
     for (const mux of MUXES.values()) mux.dispose()
     MUXES.clear()
 }
@@ -560,6 +574,7 @@ export function followRpc(
         following = new Following(mux.nextId++, address, args, version, entry)
         FOLLOWING.set(key, following)
         mux.subscribe(following)
+        sweepLater()
     } else if (version !== undefined && (following.version ?? 0) < version)
         // 18.7 — versions only rise, so the larger is the later.
         following.version = version
@@ -576,9 +591,49 @@ function unfollowRpc(address: string, args: unknown): void {
     const key = `${address} ${canonicalKey(args)}`
     const following = FOLLOWING.get(key)
     if (following === undefined) return
+    unfollowAt(key, following)
+}
+
+function unfollowAt(key: string, following: Following): void {
     FOLLOWING.delete(key)
     clearTimeout(following.expiry)
-    muxFor(address).unfollow(following.id)
+    muxFor(following.address).unfollow(following.id)
+}
+
+let sweep: ReturnType<typeof setTimeout> | undefined
+
+/** Arms the next sweep, where none is armed and anything is followed. */
+function sweepLater(): void {
+    if (sweep !== undefined || FOLLOWING.size === 0) return
+    sweep = setTimeout(() => {
+        sweep = undefined
+        sweepFollows()
+        sweepLater()
+    }, UNREAD_SWEEP_MS)
+    unrefTimer(sweep)
+}
+
+/**
+ * 18.48 — A COPY NOTHING READS IS NOT FOLLOWED: one nothing subscribed to at this sweep or the one
+ * before is let go, and left stale, so the read that comes back fetches it — and follows it again.
+ * Two sweeps rather than one, so a copy read again a moment after it was let go of is not fetched
+ * twice: an answer awaited before what reads it has mounted.
+ */
+export function sweepFollows(): void {
+    for (const [key, following] of FOLLOWING) {
+        const copy = following.copy
+        // Not in step yet: its answer is still landing.
+        if (copy === undefined || isSubscribed(copy)) {
+            following.unread = false
+            continue
+        }
+        if (!following.unread) {
+            following.unread = true
+            continue
+        }
+        unfollowAt(key, following)
+        ;(copy as Reactive<unknown>).invalidate()
+    }
 }
 
 // 18.36 — a handler abide mounts itself is followed through these, where this module is loaded.

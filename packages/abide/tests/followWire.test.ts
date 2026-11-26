@@ -10,7 +10,7 @@ import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import type { Reactive } from '#shared/reactive/index.ts'
 import { reachOf } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
-import { resetSocketWire } from '#ui/socketWire.ts'
+import { resetSocketWire, sweepFollows } from '#ui/socketWire.ts'
 import { wire } from '#ui/wire.ts'
 
 type Sent = {
@@ -671,4 +671,59 @@ test('a copy written here takes nothing sent while its calls wait, and reads aga
     } finally {
         globalThis.fetch = answering
     }
+})
+
+/** The frames this file's mux sent for `address`, by op. */
+function opsFor(address: string): string[] {
+    const ops: string[] = []
+    const ids = new Set<number>()
+    for (const frame of muxSocket().sent) {
+        if (frame.address === address) ids.add(frame.id)
+        if (ids.has(frame.id)) ops.push(frame.op)
+    }
+    return ops
+}
+
+// 18.48 — A COPY NOTHING READS IS LET GO OF: awaited once and read by nothing, it is still followed
+// after one sweep, unsubscribed at the second, and the read that comes back fetches it and follows it
+// again. THE REVERT: return at the top of `sweepFollows`; the ops stay `sub` where `sub, unsub, sub`
+// is due, and no fetch is made.
+test('a copy nothing reads stops being followed at the second sweep, and its next read fetches it — 18.48', async () => {
+    const address = `${LIBRARY}/unread`
+    const unread = wire('GET', address) as (
+        args?: unknown,
+    ) => (() => unknown) & PromiseLike<unknown>
+    await unread()
+    await Bun.sleep(10)
+    sweepFollows()
+    const afterOne = opsFor(address).join(', ')
+    sweepFollows()
+    const before = answers
+    await unread()
+    await Bun.sleep(10)
+    expect(
+        `${afterOne} | ${opsFor(address).join(', ')} | fetched ${answers - before}`,
+    ).toBe('sub | sub, unsub, sub | fetched 1')
+})
+
+// 18.48 — A COPY SOMETHING READS STAYS FOLLOWED, however many sweeps pass. THE REVERT: drop the
+// `isSubscribed` test from `sweepFollows`; the copy a watch reads is sent `unsub` at the second sweep.
+test('a copy something reads stays followed through every sweep — 18.48', async () => {
+    const address = `${LIBRARY}/read`
+    const read = wire('GET', address) as (
+        args?: unknown,
+    ) => (() => unknown) & PromiseLike<unknown>
+    await read()
+    const stop = watch(() => {
+        try {
+            read()()
+        } catch {}
+    })
+    flushSync()
+    await Bun.sleep(10)
+    sweepFollows()
+    sweepFollows()
+    sweepFollows()
+    stop()
+    expect(opsFor(address)).toEqual(['sub'])
 })
