@@ -19,7 +19,6 @@ import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
 import { gateOf } from '#shared/reactive/argsContract.ts'
-import { processWide, type Reactive } from '#shared/reactive/index.ts'
 import { parseRoutePattern } from '#shared/routePattern.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 
@@ -208,20 +207,20 @@ function openApiOf(handlers: Map<string, Mounted>): {
 }
 
 /**
- * A surface built by `build` over the route table, as a `reactive` cached in `built`.
+ * A surface built by `build` over the route table, cached in `built`.
  *
- * 20.5 — FROM A `reactive` OVER THE ROUTE TABLE, with no `ttl`: the table is fixed for the life of
+ * 20.5 — DERIVED FROM THE ROUTE TABLE, AND KEPT WHILE IT STANDS: the table is fixed for the life of
  * the app, so each surface is built once and served thereafter. A surface's own cache, so an app
  * that opens one does not build the other.
  */
 function overTable<Built>(
-    built: WeakMap<Map<string, Mounted>, Reactive<Built>>,
+    built: WeakMap<Map<string, Mounted>, Built>,
     handlers: Map<string, Mounted>,
     build: (handlers: Map<string, Mounted>) => Built,
-): Reactive<Built> {
+): Built {
     let found = built.get(handlers)
     if (found === undefined) {
-        found = processWide(() => build(handlers))
+        found = build(handlers)
         built.set(handlers, found)
     }
     return found
@@ -229,18 +228,18 @@ function overTable<Built>(
 
 const documents = new WeakMap<
     Map<string, Mounted>,
-    Reactive<ReturnType<typeof openApiOf>>
+    ReturnType<typeof openApiOf>
 >()
 
 /** The OpenAPI document over the route table, or `undefined` where it lists no handler. 20.7. */
 export function openApi(
     handlers: Map<string, Mounted>,
-): Reactive<unknown> | undefined {
+): ReturnType<typeof openApiOf> | undefined {
     const document = overTable(documents, handlers, openApiOf)
-    return Object.keys(document().paths).length > 0 ? document : undefined
+    return Object.keys(document.paths).length > 0 ? document : undefined
 }
 
-const published = new WeakMap<Map<string, Mounted>, Reactive<Published[]>>()
+const published = new WeakMap<Map<string, Mounted>, Published[]>()
 
 type JsonRpc = {
     jsonrpc: '2.0'
@@ -296,7 +295,7 @@ export class McpSurface {
         // Every handler the MCP surface lists, each a tool — a read as much as a mutation. 20.9.
         return overTable(published, this.#handlers, (handlers) =>
             listed(handlers, 'mcp'),
-        )()
+        )
     }
 
     /** Every tool it lists. 20.9. */
