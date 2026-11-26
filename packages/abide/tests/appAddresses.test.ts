@@ -474,6 +474,7 @@ export const count = rpc(() => 1, { methods: ['POST'] })
         ),
     )
     expect(refused).toContain('RULEBOOK 16.119')
+    // @ts-expect-error — 16.119: an `rpc` is not a value `rpc` takes, in the types as at run time.
     expect(() => rpc(rpc(() => 1))).toThrow('RULEBOOK 16.119')
 })
 

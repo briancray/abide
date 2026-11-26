@@ -384,15 +384,6 @@ type HandlerStore<Args, Value> = { store?: KeptIn<Args, Value> | undefined }
  * 16.92 — `Writes` is false for `GET` alone, whose options have no `refreshes`.
  */
 type Declare<Writes extends boolean> = {
-    // 16.70 — an `rpc` already, handed back as it is: a server block's export declared by one.
-    <
-        Declared extends ((...given: never[]) => unknown) & {
-            methods: readonly Method[]
-            address: string | undefined
-        },
-    >(
-        handler: Declared,
-    ): Declared
     // 11.2 — keyed where the body declares a parameter, an optional one included; 16.87 — `Args`
     // read off the `args` the options declare where the parameter carries no annotation. A body
     // declaring none infers nothing, and `undefined` is the key an unkeyed `Rpc` is called with.
