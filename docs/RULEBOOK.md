@@ -1100,8 +1100,8 @@ from the shape.
 
 16.6 `rpc` over a plain function MUST keep the function's value per `Args` key, keying a function
 that declares no parameter on `undefined` and reading none of its parameters, and over a value MUST
-behave as `rpc` over a `reactive` of it, each built with the options `rpc` was handed; a `Reactive`
-handed in MUST take the address's options alone.
+hold it as one value every request reads and writes, each built with the options `rpc` was handed; a
+`Reactive` handed in MUST take the address's options alone.
 
 16.7 An `rpc` over a plain function answering a verb other than `GET` MUST have its value's `ttl` default to 0 unless its options
 declare one.

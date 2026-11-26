@@ -1121,14 +1121,14 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `/__abide/openapi.json` | `GET` | The generated OpenAPI document. | 19.21, 19.22, 20.5, 20.6, 20.7, 20.8, 20.11, 20.13, 20.15, 20.23, 36.7 |
+| `/__abide/openapi.json` | `'GET'` | The generated OpenAPI document. | 19.21, 19.22, 20.5, 20.6, 20.7, 20.8, 20.11, 20.13, 20.15, 20.23, 36.7 |
 | `OpenApiDocument` | `JsonValue` | OpenAPI 3.1, whose schema dialect is `JsonSchema`. | 20.6 |
 
 ## MCP
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `/__abide/mcp` | `POST` | The streamable-http MCP endpoint. | 19.21, 19.22, 20.5, 20.7, 20.8, 20.9, 20.10, 20.12, 20.13, 20.14, 20.16, 20.17, 20.19, 20.20, 20.21, 20.22, 20.23, 36.7, 16.78 |
+| `/__abide/mcp` | `'POST'` | The streamable-http MCP endpoint. | 19.21, 19.22, 20.5, 20.7, 20.8, 20.9, 20.10, 20.12, 20.13, 20.14, 20.16, 20.17, 20.19, 20.20, 20.21, 20.22, 20.23, 36.7, 16.78 |
 
 # Middleware and guards
 
@@ -1537,8 +1537,8 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `provider.claudeCode.callTool` | `(tool: string, input: unknown) => Promise<ToolAnswer>` | What one MCP tool of the visitor's machine answered, called through the bridge paired with their browser with no model, or by a turn where the bridge cannot make the call. | 44.93, 44.94, 44.95, 44.96, 44.97, 44.98, 44.99 |
 | `provider.claudeCode.permit` | `(id: string, allow: boolean) => void` | The asking browser's answer to a `permission` event its bridge's turn is waiting on. | 44.83 |
 | `BridgeStatus` | `{ paired: boolean; missing: string[]; command: string; link: string; install: string }` | Whether a bridge is paired, the tools it cannot make available, and the command and the link that pair one, with the command that installs what opens the link. | 44.20, 44.40, 44.56, 44.59, 44.60, 44.78 |
-| `/__abide/bridge` | `GET`, `POST` | Where a bridge pairs, and is relayed its turns and calls. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 44.61, 44.63, 44.96, 44.97, 16.57, 16.78 |
-| `/__abide/pairing` | `GET` | This browser's pairing, as it changes, for `pairing` to read. | 44.67, 44.68, 44.74, 44.75, 44.76, 18.36 |
+| `/__abide/bridge` | `'GET'`, `'POST'` | Where a bridge pairs, and is relayed its turns and calls. | 36.7, 44.14, 44.15, 44.19, 44.23, 44.26, 44.61, 44.63, 44.96, 44.97, 16.57, 16.78 |
+| `/__abide/pairing` | `'GET'` | This browser's pairing, as it changes, for `pairing` to read. | 44.67, 44.68, 44.74, 44.75, 44.76, 18.36 |
 
 ## `pairing`
 

@@ -786,7 +786,11 @@ export const rpc: Declare<true> = ((
     const shaped =
         held === value
             ? rest
-            : { ...rest, global: (rest as { global?: boolean }).global ?? true }
+            : {
+                  ...rest,
+                  global:
+                      (rest as { global?: boolean | undefined }).global ?? true,
+              }
     const main = declare(primary)(
         held as never,
         shaped as never,

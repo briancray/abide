@@ -292,10 +292,10 @@ test('a handler no call has reached runs nothing when triggered — 13.19, 16.64
     expect(`body runs: ${runs}`).toBe('body runs: 1')
 })
 
-// 16.1 THROUGH 16.6 — A HANDLER THAT IS A VALUE IS FILED AS A BODY IS: one value per request, and one
-// for every request where it declares `global`. THE REVERT: have `handlerValue` hand a value to
-// `reactive` unfiled — request b reads request a's write, 5 where 0 is due.
-test('a value handler is one value per request, and one value under global — 16.1, 16.6', async () => {
+// 16.1, 16.6, 16.115 — AN `rpc` OVER A VALUE IS THE SERVER'S ONE VALUE, every request reading what
+// another wrote, as a `global` memo served by one is. THE REVERT: drop the `global` default for a value
+// in `rpc`; request b reads a value of its own, 0 where 5 is due.
+test("an rpc over a value is the server's one value — 16.1, 16.6, 16.115", async () => {
     const count = rpc(0)
     const shared = rpc(memo(() => 0, { global: true }))
     await inScope(new Request('http://app/a'), async () => {
@@ -303,7 +303,7 @@ test('a value handler is one value per request, and one value under global — 1
         ;(reachOf(shared) as Reactive<number>).set(5)
     })
     await inScope(new Request('http://app/b'), async () => {
-        expect(await count()).toBe(0)
+        expect(await count()).toBe(5)
         expect(await shared()).toBe(5)
     })
 })

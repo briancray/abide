@@ -69,8 +69,10 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
                 max_tokens: 1024,
             })
 
+            type Asked = { messages: AssistantMessage[] }
+
             export default rpc(
-                async function* ({ messages }: { messages: AssistantMessage[] }) {
+                async function* ({ messages }: Asked) {
                     yield* assistant(messages, claude, { tools: true })
                 },
                 { methods: ['POST'], clients: { mcp: false } },
@@ -136,8 +138,10 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
                 rpc,
 } from '@abide/abide/server'
 
+            type Asked = { messages: AssistantMessage[] }
+
             export default rpc(
-                async function* ({ messages }: { messages: AssistantMessage[] }) {
+                async function* ({ messages }: Asked) {
                     yield* assistant(
                         messages,
                         provider.claudeCode({

@@ -101,7 +101,10 @@ import callLog from './lib/CallLog.abide' with { type: 'text' }
             export const listCalls = rpc(async function* () {
                 yield* calls()
             })
-            export const logCall = rpc(({ call, key }) => calls.append(call, { key }), { methods: ['POST'] })
+            export const logCall = rpc(
+                ({ call, key }) => calls.append(call, { key }),
+                { methods: ['POST'] },
+            )
         `} />
     </Section>
 
