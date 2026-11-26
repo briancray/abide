@@ -25,6 +25,7 @@ import { isThenable } from './reactive/isThenable.ts'
 import { refuse } from './refuse.ts'
 import { type Backoff, backoffWait } from './retryWait.ts'
 import { sleep } from './sleep.ts'
+import { SOURCE_KIND } from './SOURCE_KIND.ts'
 
 /** A step's function: the item, and the signal that says its attempt is over. */
 type StepFunction = (input: never, signal: AbortSignal) => unknown
@@ -123,6 +124,8 @@ export function pipe<const Steps extends readonly [Step, ...Step[]]>(
     const call = (input: unknown, signal?: AbortSignal): Promise<unknown> =>
         runner.call(input, signal)
     return Object.defineProperties(call, {
+        // 16.117 — read by `rpc` for its face.
+        [SOURCE_KIND]: { value: { kind: 'pipe' } },
         status: { get: () => runner.status },
         readable: { get: () => runner.streams().readable },
         writable: { get: () => runner.streams().writable },

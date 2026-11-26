@@ -13,14 +13,9 @@ import type { Database } from 'bun:sqlite'
 
 import { namedLogger } from '#shared/log.ts'
 import { appStopSignal } from '#shared/reactive/abortSignal.ts'
-import { CELL } from '#shared/reactive/CELL.ts'
-import type { Cell } from '#shared/reactive/cellShape.ts'
-import { deepEqual } from '#shared/reactive/deepEqual.ts'
 import { invalidate } from '#shared/reactive/index.ts'
-import { refreshCells } from '#shared/reactive/producer.ts'
-import { SCOPING } from '#shared/reactive/scoping.ts'
 import { unrefTimer } from '#shared/reactive/unrefTimer.ts'
-import { WRITES_THROUGH } from '#shared/reactive/WRITES_THROUGH.ts'
+import { SOURCE_KIND } from '#shared/SOURCE_KIND.ts'
 
 import { SQL_IDENTIFIER } from './SQL_IDENTIFIER.ts'
 
@@ -64,8 +59,17 @@ export type ColumnMatch<Value> =
 /** 47.35 — the columns a `table` call matches, each by a `ColumnMatch`. */
 export type Match<Row> = { [Column in keyof Row]?: ColumnMatch<Row[Column]> }
 
-/** A table of the app's database: its rows read by calling it, its changes read out, rows written in. */
+/**
+ * A table of the app's database: its rows read by calling it, rows written by key, its changes read
+ * out and rows streamed in.
+ */
 export type Table<Row> = ((match?: Match<Row>) => Row[]) & {
+    /** 47.40 — rows upserted by key: inserted, or replacing the row with their key. */
+    set(rows: Row | readonly Row[]): void
+    /** 47.40 — the columns each row names written onto the row with its key; the rest are left. */
+    patch(rows: Partial<Row> | readonly Partial<Row>[]): void
+    /** 47.40 — the rows `match` names deleted, and how many there were. */
+    delete(match: Match<Row>): number
     readonly readable: ReadableStream<Change<Row>>
     readonly writable: WritableStream<Row>
 }
@@ -94,43 +98,40 @@ export function table<Row extends Record<string, unknown>>(
     watchOf(database, connection, name)
     let readable: ReadableStream<Change<Row>> | undefined
     let writable: WritableStream<Row> | undefined
-    const names = [name]
     // 47.38 — READ ON THE CONNECTION AS IT IS: a database refusing the change log is still read.
-    const rows = selects<Row>(acquire, name)
-    const writeRows = rowWrites<Row>(name, key)
-    // 47.40 — an owner's write of the rows answered, as the rows to upsert and the rows to delete.
-    const writeSlice = (before: readonly Row[], next: unknown): void => {
-        if (!Array.isArray(next))
+    const read = selects<Row>(acquire, name)
+    const writes = rowWrites<Row>(name, key)
+    // 47.29, 47.40 — a write made here is heard at once: what carries the table's name as a tag is
+    // refreshed now, and the watch's next look does not hear it again.
+    const wrote = (count: number): number => {
+        if (count > 0) heard(watchOf(database, connection, name), connection)
+        return count
+    }
+    const set = (rows: Row | readonly Row[]): void => {
+        const each = listOf(rows)
+        for (const row of each) keyOf(name, key, row)
+        writes.upsert(connection(), each)
+        wrote(each.length)
+    }
+    const patch = (rows: Partial<Row> | readonly Partial<Row>[]): void => {
+        const each = listOf(rows)
+        for (const row of each) keyOf(name, key, row)
+        writes.update(connection(), each)
+        wrote(each.length)
+    }
+    const remove = (match: Match<Row>): number => {
+        if (match === undefined || match === null || Object.keys(match).length === 0)
             throw new Error(
-                `abide: rows of table ${name} are written as an array of rows. RULEBOOK 47.40.`,
+                `abide: a delete from table ${name} names no column, which would delete every row. RULEBOOK 47.40.`,
             )
-        const standing = new Map<unknown, Row>()
-        for (const row of before) standing.set(row[key], row)
-        const upserted: Row[] = []
-        const kept = new Set<unknown>()
-        for (const row of next as Row[]) {
-            const id = row?.[key]
-            if (id === undefined || id === null)
-                throw new Error(
-                    `abide: a row written to table ${name} carries no ${key}. RULEBOOK 47.40.`,
-                )
-            kept.add(id)
-            const was = standing.get(id)
-            if (was === undefined || !deepEqual(was, row)) upserted.push(row)
-        }
-        const deleted: unknown[] = []
-        for (const id of standing.keys()) if (!kept.has(id)) deleted.push(id)
-        if (upserted.length === 0 && deleted.length === 0) return
-        writeRows(connection(), upserted, deleted)
-        heard(watchOf(database, connection, name), connection)
+        return wrote(read.remove(connection(), match))
     }
-    const read = (match?: Match<Row>): Row[] => {
-        const answered = rows(match)
-        readTables(database, connection, names)
-        WRITES_THROUGH.set(answered, (next) => writeSlice(answered, next))
-        return answered
-    }
-    return Object.defineProperties(read, {
+    return Object.defineProperties((match?: Match<Row>) => read.rows(match), {
+        // 16.117 — read by `rpc` for its face: a change to the table refreshes its name as a tag.
+        [SOURCE_KIND]: { value: { kind: 'table', tags: [name] } },
+        set: { value: set },
+        patch: { value: patch },
+        delete: { value: remove },
         // 47.25 — reached, the table is prepared, and a table the database does not hold throws here.
         readable: {
             get() {
@@ -173,17 +174,23 @@ const COMPARISONS: Record<string, string> = {
 /**
  * 47.35, 47.36 — the rows of `name`, or those every column `match` names matches: one statement per
  * shape of match — its columns, the length of each list and the comparisons named — each column
- * checked against the table's own.
+ * checked against the table's own; and 47.40 — the rows a match names deleted, by the same shapes.
  */
 function selects<Row>(
-    connection: () => Database,
+    acquire: () => Database,
     name: string,
-): (match?: Match<Row>) => Row[] {
+): {
+    rows: (match?: Match<Row>) => Row[]
+    remove: (db: Database, match: Match<Row>) => number
+} {
     const statements = new Map<string, ReturnType<Database['query']>>()
     let preparedOn: Database | undefined
     let columns: Set<string> | undefined
-    return (match) => {
-        const db = connection()
+    const shaped = (
+        db: Database,
+        match: Match<Row> | undefined,
+        verb: 'SELECT *' | 'DELETE',
+    ): [ReturnType<Database['query']>, unknown[]] => {
         if (db !== preparedOn) {
             statements.clear()
             preparedOn = db
@@ -212,18 +219,43 @@ function selects<Row>(
                     )
                 conditions.push(conditionOf(name, column, value, values))
             }
-        const shape = conditions.join(' AND ')
+        const shape = `${verb}|${conditions.join(' AND ')}`
         let statement = statements.get(shape)
         if (statement === undefined) {
             statement = db.query(
-                shape === ''
-                    ? `SELECT * FROM ${name}`
-                    : `SELECT * FROM ${name} WHERE ${shape}`,
+                conditions.length === 0
+                    ? `${verb} FROM ${name}`
+                    : `${verb} FROM ${name} WHERE ${conditions.join(' AND ')}`,
             )
             statements.set(shape, statement)
         }
-        return statement.all(...(values as never[])) as Row[]
+        return [statement, values]
     }
+    return {
+        rows: (match) => {
+            const [statement, values] = shaped(acquire(), match, 'SELECT *')
+            return statement.all(...(values as never[])) as Row[]
+        },
+        remove: (db, match) => {
+            const [statement, values] = shaped(db, match, 'DELETE')
+            return statement.run(...(values as never[])).changes
+        },
+    }
+}
+
+/** One row or a list of them, as a list. */
+function listOf<Row>(rows: Row | readonly Row[]): readonly Row[] {
+    return Array.isArray(rows) ? (rows as readonly Row[]) : [rows as Row]
+}
+
+/** 47.40 — the key `row` carries, which a write by key cannot go without. */
+function keyOf(name: string, key: string, row: unknown): unknown {
+    const id = (row as Record<string, unknown> | null)?.[key]
+    if (id === undefined || id === null)
+        throw new Error(
+            `abide: a row written to table ${name} carries no ${key}. RULEBOOK 47.40.`,
+        )
+    return id
 }
 
 /**
@@ -378,27 +410,13 @@ function looking(
     unrefTimer(timer)
 }
 
-/**
- * 47.29, 47.32 — one table's watch: the last change it has passed, and the runs that read the table.
- * A reader is held by its record, which holds its value weakly — a read is never a reason to keep one.
- */
-type Watch = { name: string; seen: number | undefined; readers: Set<Reader> }
-
-/** One run's reads: the value whose run it is, which run, and the watches of the tables it read. */
-type Reader = {
-    value: WeakRef<Cell>
-    epoch: number
-    tables: Set<Watch>
-    wrote: Set<Watch>
-}
+/** 47.29 — one table's watch: its name, and the last change it has passed. */
+type Watch = { name: string; seen: number | undefined }
 
 /** 47.29 — per database or opener, each table's watch. */
 const WATCHED = new WeakMap<object, Map<string, Watch>>()
 
-/** 47.32 — each value's reads, as of its last run that read a table. */
-const READERS = new WeakMap<Cell, Reader>()
 
-/** 47.29, 47.31 — each change to `name` refreshes every value tagged `name`, and old changes go. */
 /** 47.38 — the databases whose stopped watch has been said. */
 const WARNED = new WeakSet<object>()
 
@@ -415,7 +433,7 @@ function watchOf(
     const standing = watches.get(name)
     if (standing !== undefined) return standing
     // 47.29 — the baseline taken where the table is named, so a write before the first look is heard.
-    const watch: Watch = { name, seen: undefined, readers: new Set() }
+    const watch: Watch = { name, seen: undefined }
     watches.set(name, watch)
     const watched = watches
     try {
@@ -429,12 +447,12 @@ function watchOf(
                 db = connection()
             } catch (thrown) {
                 // 47.38 — a database refusing the change log, read-only among them: said once per
-                // database, and the writes made through `sql` are then all that refresh its readers.
+                // database, and the writes made through its `table` are then all that refresh.
                 broken = true
                 if (!WARNED.has(owner)) {
                     WARNED.add(owner)
                     WATCH_LOG.warning(
-                        `the watch of ${name} stopped: only writes made through sql refresh what reads this database. RULEBOOK 47.38.`,
+                        `the watch of ${name} stopped: only writes made through its table refresh what is tagged with it. RULEBOOK 47.38.`,
                         thrown,
                     )
                 }
@@ -460,127 +478,18 @@ function watchOf(
     return watch
 }
 
-/** 47.29, 47.32 — what a change to the watched table refreshes: its tag, and the runs that read it. */
+/** 47.29 — what a change to the watched table refreshes: what carries its name as a tag. */
 function changed(watch: Watch): void {
     invalidate({ tags: [watch.name] })
-    const reloading: Cell[] = []
-    for (const reader of watch.readers) {
-        const cell = reader.value.deref()
-        // Collected, or run again since without reading the table: its last run did not read it.
-        if (cell === undefined || cell.runEpoch !== reader.epoch) {
-            watch.readers.delete(reader)
-            continue
-        }
-        reloading.push(cell)
-    }
-    if (reloading.length > 0) refreshCells(reloading)
 }
 
-/** 47.34, 47.40 — a write made here, heard now, so the watch's next look does not hear it again. */
+/** 47.40 — a write made here, heard now, so the watch's next look does not hear it again. */
 function heard(watch: Watch, connection: () => Database): void {
     try {
         watch.seen = lastChange(connection(), watch.name)
     } catch {}
     changed(watch)
 }
-
-/**
- * 47.32, 47.33 — the run this is called in, where one is running that a table's change may refresh:
- * not a mutation's (13.16), nor the continuation of a run already ended (7.24).
- */
-function runReading(): Reader | undefined {
-    const mark = SCOPING.provider?.currentRun()
-    if (mark === undefined) return undefined
-    const cell = mark.cell
-    if (cell.mutation || mark.epoch !== cell.runEpoch) return undefined
-    let reader = READERS.get(cell)
-    if (reader !== undefined && reader.epoch === mark.epoch) return reader
-    // A new run: what the last one read is not what this one reads.
-    if (reader !== undefined)
-        for (const watch of reader.tables) watch.readers.delete(reader)
-    reader = {
-        value: new WeakRef(cell),
-        epoch: mark.epoch,
-        tables: new Set(),
-        wrote: new Set(),
-    }
-    READERS.set(cell, reader)
-    return reader
-}
-
-/**
- * 47.39 — the tables the run that produced `value` read, where its last run read any: the value's own
- * run, or the run of what it adopted, as a handler's call adopts its entry.
- */
-export function tablesReadBy(value: unknown): string[] {
-    const names: string[] = []
-    let cell: Cell | undefined = (value as { [CELL]?: Cell | undefined })[CELL]
-    while (cell !== undefined) {
-        const reader = READERS.get(cell)
-        if (reader !== undefined && reader.epoch === cell.runEpoch) {
-            for (const watch of reader.tables) names.push(watch.name)
-            return names
-        }
-        cell = cell.adoption?.source
-    }
-    return names
-}
-
-/** 47.32 — the run this is called in read `names`: a change to any of them refreshes it. */
-export function readTables(
-    owner: object,
-    connection: () => Database,
-    names: readonly string[],
-): void {
-    if (names.length === 0) return
-    const reader = runReading()
-    if (reader === undefined) return
-    for (const name of names) {
-        const watch = watchOf(owner, connection, name)
-        if (reader.tables.has(watch) || reader.wrote.has(watch)) continue
-        reader.tables.add(watch)
-        watch.readers.add(reader)
-    }
-}
-
-/** 47.33, 47.34 — the tables written in this turn through `sql`, refreshed once each as it ends. */
-const WRITTEN = new Set<Watch>()
-let flushing: (() => void) | undefined
-
-/**
- * 47.33 — the run this is called in wrote `names`: it is no reader of them, and 47.34 refreshes what
- * read them as the turn ends.
- */
-export function wroteTables(
-    owner: object,
-    connection: () => Database,
-    names: readonly string[],
-): void {
-    if (names.length === 0) return
-    const reader = runReading()
-    for (const name of names) {
-        const watch = watchOf(owner, connection, name)
-        if (reader !== undefined) {
-            reader.wrote.add(watch)
-            reader.tables.delete(watch)
-            watch.readers.delete(reader)
-        }
-        WRITTEN.add(watch)
-        WROTE_ON.set(watch, connection)
-    }
-    if (flushing !== undefined) return
-    flushing = () => {
-        flushing = undefined
-        const watches = [...WRITTEN]
-        WRITTEN.clear()
-        for (const watch of watches)
-            heard(watch, WROTE_ON.get(watch) as () => Database)
-    }
-    setTimeout(flushing, 0)
-}
-
-/** The connection each written watch's write was made on, to read its log's last change from. */
-const WROTE_ON = new WeakMap<Watch, () => Database>()
 
 /** 47.27, 47.28 — the table's changes from the moment the stream is first read, in order. */
 function changesOf<Row>(
@@ -657,28 +566,34 @@ function changesOf<Row>(
 }
 
 /**
- * 47.30, 47.40 — rows upserted by `key` and rows deleted by it, all in one transaction. One statement
- * per shape of row, its columns checked and its SQL written once: a batch of rows with the same
- * columns runs one prepared statement.
+ * 47.30, 47.40 — rows upserted by `key`, or the columns they name updated on the row with their key,
+ * each batch one transaction. One statement per shape of row, its columns checked and its SQL written
+ * once: a batch of rows with the same columns runs one prepared statement.
  */
 function rowWrites<Row extends Record<string, unknown>>(
     name: string,
     key: string,
-): (
-    db: Database,
-    upserted: readonly Row[],
-    deleted: readonly unknown[],
-) => void {
+): {
+    upsert: (db: Database, rows: readonly Row[]) => void
+    update: (db: Database, rows: readonly Partial<Row>[]) => void
+} {
     const statements = new Map<
         string,
         { columns: string[]; statement: ReturnType<Database['query']> }
     >()
-    let removal: ReturnType<Database['query']> | undefined
     // A statement is its database's: a `connection` handing back another starts the map over.
     let preparedOn: Database | undefined
-    const statementFor = (db: Database, row: Row) => {
+    const statementFor = (
+        db: Database,
+        row: Partial<Row>,
+        updating: boolean,
+    ) => {
+        if (db !== preparedOn) {
+            statements.clear()
+            preparedOn = db
+        }
         const columns = Object.keys(row)
-        const shape = columns.join(',')
+        const shape = `${updating ? 'u' : 'i'}:${columns.join(',')}`
         let prepared = statements.get(shape)
         // A cached shape's columns are identifiers, so no comma is in one: a row joining to the same
         // text with another count has a comma in a column, and is checked — and refused — afresh.
@@ -694,45 +609,54 @@ function rowWrites<Row extends Record<string, unknown>>(
             const quoted: string[] = []
             const slots: string[] = []
             const updates: string[] = []
+            const sets: string[] = []
             for (const column of columns) {
                 quoted.push(`"${column}"`)
                 slots.push('?')
-                if (column !== key)
-                    updates.push(`"${column}" = excluded."${column}"`)
+                if (column === key) continue
+                updates.push(`"${column}" = excluded."${column}"`)
+                sets.push(`"${column}" = ?`)
             }
             const conflict =
                 updates.length === 0
                     ? 'DO NOTHING'
                     : `DO UPDATE SET ${updates.join(', ')}`
+            // An update binds the columns it sets, then the key it names the row by.
+            const ordered = updating
+                ? [...columns.filter((column) => column !== key), key]
+                : columns
             prepared = {
-                columns,
+                columns: ordered,
                 statement: db.query(
-                    `INSERT INTO ${name} (${quoted.join(', ')}) VALUES (${slots.join(', ')}) ON CONFLICT("${key}") ${conflict}`,
+                    updating
+                        ? `UPDATE ${name} SET ${sets.join(', ')} WHERE "${key}" = ?`
+                        : `INSERT INTO ${name} (${quoted.join(', ')}) VALUES (${slots.join(', ')}) ON CONFLICT("${key}") ${conflict}`,
                 ),
             }
             statements.set(shape, prepared)
         }
         return prepared
     }
-    return (db, upserted, deleted) => {
-        if (db !== preparedOn) {
-            statements.clear()
-            removal = undefined
-            preparedOn = db
+    const written =
+        (updating: boolean) =>
+        (db: Database, rows: readonly Partial<Row>[]): void => {
+            db.transaction(() => {
+                for (const row of rows) {
+                    // An update naming no column but its key changes nothing.
+                    if (updating && Object.keys(row).length < 2) continue
+                    const { columns, statement } = statementFor(
+                        db,
+                        row,
+                        updating,
+                    )
+                    const values = new Array<unknown>(columns.length)
+                    for (let at = 0; at < columns.length; at += 1)
+                        values[at] = row[columns[at] as string]
+                    statement.run(...(values as never[]))
+                }
+            })()
         }
-        db.transaction(() => {
-            for (const row of upserted) {
-                const { columns, statement } = statementFor(db, row)
-                const values = new Array<unknown>(columns.length)
-                for (let at = 0; at < columns.length; at += 1)
-                    values[at] = row[columns[at] as string]
-                statement.run(...(values as never[]))
-            }
-            if (deleted.length === 0) return
-            removal ??= db.query(`DELETE FROM ${name} WHERE "${key}" = ?`)
-            for (const gone of deleted) removal.run(gone as never)
-        })()
-    }
+    return { upsert: written(false), update: written(true) }
 }
 
 /** 47.30 — rows upserted by `key`, a turn's writes one transaction. */
@@ -745,8 +669,8 @@ function upserts<Row extends Record<string, unknown>>(
     let flushing: Promise<void> | undefined
     let failed: unknown
     let timer: ReturnType<typeof setTimeout> | undefined
-    const write = rowWrites<Row>(name, key)
-    const commit = (rows: Row[]): void => write(connection(), rows, [])
+    const writes = rowWrites<Row>(name, key)
+    const commit = (rows: Row[]): void => writes.upsert(connection(), rows)
     const flush = (): Promise<void> => {
         if (timer !== undefined) clearTimeout(timer)
         timer = undefined

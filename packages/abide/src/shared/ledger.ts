@@ -18,6 +18,7 @@
 
 import { refuse } from './refuse.ts'
 import { runSchema, type Schema } from './Schema.ts'
+import { SOURCE_KIND } from './SOURCE_KIND.ts'
 
 /** One entry of a ledger: its number in order from 1, when it was appended, and what it holds. */
 export type Logged<Entry> = { seq: number; at: number; entry: Entry }
@@ -214,6 +215,8 @@ export function ledger<Entry>(options?: LedgerOptions<Entry>): Ledger<Entry> {
 
     let writable: WritableStream<Entry> | undefined
     return Object.defineProperties(read, {
+        // 16.117 — read by `rpc` for its face.
+        [SOURCE_KIND]: { value: { kind: 'ledger' } },
         append: { value: append },
         writable: {
             get: () => {

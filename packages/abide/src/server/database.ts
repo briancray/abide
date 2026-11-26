@@ -171,7 +171,7 @@ export function database(
     return Object.assign(opener, {
         close,
         changed,
-        sql: sqlOver(opener, opener),
+        sql: sqlOver(opener),
     })
 }
 

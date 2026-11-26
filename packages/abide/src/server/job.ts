@@ -15,6 +15,7 @@ import {
     type Reactive,
     type Store,
 } from '#shared/reactive/index.ts'
+import { SOURCE_KIND } from '#shared/SOURCE_KIND.ts'
 
 import { ownedBy } from './requestScope.ts'
 
@@ -341,5 +342,6 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         },
         inFlight: () => running,
     })
-    return { status, run, stop }
+    // 16.117 — read by `rpc` for its face.
+    return { status, run, stop, [SOURCE_KIND]: { kind: 'job' } } as Job<Input>
 }
