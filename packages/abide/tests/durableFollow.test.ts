@@ -20,7 +20,7 @@ test('a restart over the same store keeps the version, and the patches since —
     const db = new Database(':memory:')
     const kept = store.sqlite(db, 'shelf')
     const shelf = () =>
-        memo((_none: undefined) => ['dune'], {
+        memo(() => ['dune'], {
             global: true,
             store: () => kept,
         })
@@ -53,7 +53,7 @@ test('a restart over the same store keeps the version, and the patches since —
 test('a follower behind the kept records is sent the value — 18.44', async () => {
     const db = new Database(':memory:')
     const kept = store.sqlite(db, 'counter')
-    const counter = memo((_none: undefined) => ({ n: 0 }), {
+    const counter = memo(() => ({ n: 0 }), {
         global: true,
         store: () => kept,
     })
@@ -79,7 +79,7 @@ test("a change made through another connection reaches this one's value at its v
     const one = database(file)
     const two = database(file)
     const shelfOver = (opener: typeof one) =>
-        memo((_none: undefined) => ['dune'], {
+        memo(() => ['dune'], {
             global: true,
             store: () => store.sqlite(opener, 'shelf'),
         })

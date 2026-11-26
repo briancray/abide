@@ -55,7 +55,7 @@ function sharedLog() {
 }
 
 const shelfOver = (kept: unknown) =>
-    memo((_none: undefined) => ['dune'], {
+    memo(() => ['dune'], {
         global: true,
         store: () => kept as never,
     })

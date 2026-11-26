@@ -41,7 +41,7 @@ test('a memo gates and shapes what its function settles to — 11.79', async () 
 // THE REVERT: drop `identity` from what `memo` hands `keyedValue`; the equal write is a change, and the
 // reader of the entry wakes 2 times where 1 is due.
 test('a write a memo identity calls a repeat wakes no reader — 11.79', async () => {
-    const shelf = memo((_none: undefined) => ({ id: 1, title: 'dune' }), {
+    const shelf = memo(() => ({ id: 1, title: 'dune' }), {
         identity: (shelved: { id: number }) => shelved.id,
     })
     await shelf()

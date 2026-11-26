@@ -393,11 +393,11 @@ test("a memo's owner writes the rows a table call answered back to the table —
 test('a write of rows the body reshaped stays in the entry, and a row with no key throws — 47.40', async () => {
     const db = crm()
     const deals = table<Deal>(db, 'deals')
-    const ids = memo((_none: undefined) => deals().map((row) => row.id))
+    const ids = memo(() => deals().map((row) => row.id))
     await ids()
     ids.set(['x'])
     expect(`${await ids()} rows: ${deals().length}`).toBe('x rows: 2')
-    const all = memo((_none: undefined) => deals())
+    const all = memo(() => deals())
     await all()
     expect(() => all.set([{ stage: 'won', amount: 1 } as never])).toThrow(
         'RULEBOOK 47.40',

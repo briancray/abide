@@ -45,7 +45,7 @@ export function browserHealthReport():
 
 /** The account of the app this call is in. */
 export const health: Rpc<Health, undefined> = /* @__PURE__ */ declare('GET')(
-    (_none: undefined) => HEALTH.report(),
+    () => HEALTH.report(),
     // 20.1 — no generated surface: abide mounts it, not the app's tree.
     { clients: { ui: false, mcp: false, cli: false, openapi: false } },
 ) as Rpc<Health, undefined>

@@ -396,7 +396,7 @@ export const claudeCode: typeof claudeCodeProvider & {
 // 44.75, 18.36 — NOT A STREAM: a page follows it over the mux it already holds, and is sent a refresh
 // whenever the pairing changes or its code expires, so no http connection is held while it watches.
 const pairingHandler = declare('GET')(
-    (_none: undefined): BridgeStatus | Promise<BridgeStatus> => {
+    (): BridgeStatus | Promise<BridgeStatus> => {
         const configured = config.peek()?.ABIDE_BRIDGE_TOOLS
         const tools =
             typeof configured === 'string' && configured !== ''
