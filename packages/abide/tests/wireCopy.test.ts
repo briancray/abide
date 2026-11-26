@@ -5,7 +5,7 @@
 
 import { afterAll, expect, test } from 'bun:test'
 
-import { flushSync, invalidate, watch } from '#shared'
+import { flushSync, invalidate, reactive, watch } from '#shared'
 import { reachOf } from '#shared/rpc.ts'
 import { rowKeyOf } from '#ui/rowKeyOf.ts'
 import { resetSocketWire } from '#ui/socketWire.ts'
@@ -344,4 +344,66 @@ test('a stale copy whose reload reaches no server goes on serving what it held �
     } finally {
         unreachable = false
     }
+})
+
+// 16.110, 18.4 — A HANDLER'S PACE REACHES ITS COPY: the build writes a `throttle` or `debounce` a `GET`
+// declares — on itself or on the `memo` it serves — and warns on one it cannot read (18.15). THE
+// REVERT: drop the `throttle`/`debounce` arm from `declaredCopy`; no wrapper line carries `"debounce"`
+// or `"throttle"`, and nothing warns on `grown`.
+test("the build writes a GET's throttle or debounce into its wrapper — 16.110, 18.4, 18.15", async () => {
+    const app = appFixture({
+        'index.abide': '<main>home</main>',
+        'paced/lib/Handlers.abide': `<script server>
+import { GET, memo } from '@abide/abide/server'
+
+const WINDOW = 250
+let grown = 100
+grown += 1
+
+const searched = GET(({ q }: { q: string }) => [q], { debounce: 300 })
+const served = GET(memo(({ q }: { q: string }) => [q], { throttle: WINDOW }))
+const unread = GET(({ q }: { q: string }) => [q], { debounce: grown })
+</script>
+`,
+    })
+    const built = await buildApp(app)
+    expect(built.exitCode).toBe(0)
+    const wrapper =
+        (await builtCompilation(app)).files['paced/lib/Handlers.abide']
+            ?.client ?? ''
+    const line = (name: string): string =>
+        wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
+        ''
+    expect(line('searched')).toContain('{"debounce":300}')
+    expect(line('served')).toContain('{"throttle":250}')
+    expect(line('unread')).not.toContain('{"')
+    expect(built.stderr).toContain('`debounce: grown`')
+})
+
+// 16.110, 5.18 — THE COPY KEEPS THE PACE: the page's first key starts at once, and three typed inside
+// the window after it send one request, for the last, once the typing stops. THE REVERT: drop
+// `throttle`/`debounce` from what `copyOptions` hands `keyedValue`; this reads `requests: 3`.
+test('a copy given a debounce sends one request for the keys a page reaches inside the window — 16.110, 5.18', async () => {
+    answer = { body: ['found'], life: 'private, no-store' }
+    const searched = wire('GET', '/library/searched', {
+        debounce: 40,
+    }) as (args: { q: string }) => (() => unknown) & PromiseLike<unknown>
+    const q = reactive('')
+    const found = reactive.derived(() => searched({ q: q() }))
+    const stop = watch(() => {
+        try {
+            found()
+        } catch {}
+    })
+    flushSync()
+    const before = loads
+    for (const typed of ['h', 'ho', 'hop']) {
+        q.set(typed)
+        flushSync()
+        await Bun.sleep(5)
+    }
+    await Bun.sleep(120)
+    flushSync()
+    expect(`requests: ${loads - before}`).toBe('requests: 1')
+    stop()
 })

@@ -49,10 +49,11 @@ import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
         <Example code={stageEntries}><StageEntries /></Example>
     </Section>
 
-    <Section level={3} title="Search once the typing stops">
-        <p>Set <code>debounce</code> on a <code>memo</code> the search reads through, and a new
-            query is searched once the typing pauses rather than once per keystroke. The pace is
-            the memo's, so every page reading it is held to it.</p>
+    <Section level={3} title="Search once the typing stops, on this page alone">
+        <p>Where the handler declares no pace, or one this page does not want, read it through a
+            <code>memo</code> with a <code>debounce</code>, and a new query is searched once the
+            typing pauses rather than once per keystroke. A pace every page should keep goes on the
+            <a href={url('/handlers/get')}><code>GET</code></a> itself.</p>
         <Example code={dealSearch}><DealSearch /></Example>
     </Section>
 

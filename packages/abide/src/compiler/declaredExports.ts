@@ -449,6 +449,11 @@ async function declaredCopy(
                 (await namesAbide(checker, value, 'deepEqual', abide.deepEqual))
             )
                 copy.identity = 'deepEqual'
+        } else if (name === 'throttle' || name === 'debounce') {
+            // 16.110 — the pace, which the copy keeps for the keys a page reaches.
+            const type = await checker.getTypeAtLocation(value)
+            if (type?.isNumberLiteralType()) copy[name] = type.value
+            else unread.push(value)
         } else if (name === 'key' || name === 'tags') {
             const type = await checker.getTypeAtLocation(value)
             if (type === undefined) continue

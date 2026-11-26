@@ -1,13 +1,10 @@
 <script>
-import { memo, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 import searchDeals from '../searchDeals.handler.ts'
 
 let q = reactive('')
-const searching = memo(({ q }: { q: string }) => searchDeals({ q }), {
-    debounce: 300,
-})
-const found = reactive.derived(() => searching({ q }))
+const found = reactive.derived(() => searchDeals({ q }))
 </script>
 
 <label>search deals

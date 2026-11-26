@@ -10,6 +10,9 @@ export type CopyOptions = {
     key?: string | undefined
     tags?: string[] | undefined
     identity?: 'deepEqual' | undefined
+    /** 16.110 — the pace the copy starts a newly reached key at, as a `memo`'s window does (5.18). */
+    throttle?: number | undefined
+    debounce?: number | undefined
     /**
      * The handler is an async generator, so its answer is a stream the copy reads as it lands.
      *

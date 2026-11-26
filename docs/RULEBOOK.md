@@ -1427,7 +1427,8 @@ one, MUST adopt the handler's value for those `Args` (11.12), as it would the va
 answers a `Reactive` MUST throw on the run that answers it, each naming a `memo`'s value, written
 with `rpc.set` and `rpc.patch`, as the way to serve a value the server writes.
 
-16.110 A handler MUST take a `memo`'s value options, `throttle` and `debounce` among them.
+16.110 A handler MUST take a `memo`'s value options, `throttle` and `debounce` among them, and a
+`GET`'s browser copy MUST keep the pace they declare as a `memo` does (5.18-5.25).
 
 # 17. Response helpers
 
@@ -1470,8 +1471,8 @@ and MUST NOT answer 204.
 for those `Args`.
 
 18.4 A subscriber's copy of a wired `Reactive` MUST carry what that `Reactive` declares of `key` as a
-property name, `tags` as a list of names, and `identity` as `deepEqual`, and MUST NOT carry a
-function form of `key` or `tags`, which stays the server's (13.15).
+property name, `tags` as a list of names, `identity` as `deepEqual`, and `throttle` or `debounce` as
+a number, and MUST NOT carry a function form of `key` or `tags`, which stays the server's (13.15).
 
 18.5 A `GET` answered from a `global` value MUST carry the version of the production it answered
 with as its `etag`.
@@ -1499,8 +1500,8 @@ the value again.
 
 18.14 A subscriber's copy of a `GET` MUST go stale when the `max-age` its answer carried runs out.
 
-18.15 The build MUST warn where a `GET`'s `Reactive` declares `key` or `tags` by a value that is not a
-function and whose type is not the one 18.4 carries.
+18.15 The build MUST warn where a `GET`'s `Reactive` declares `key`, `tags`, `throttle` or `debounce`
+by a value that is not a function and whose type is not the one 18.4 carries.
 
 18.16 Every frame on one connection to the socket mux MUST be answered in one request scope, whose
 `request` is the upgrade's.
