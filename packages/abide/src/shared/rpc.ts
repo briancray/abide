@@ -889,7 +889,7 @@ export const rpc: Declare<true> = ((
         )
     const main = declare('GET')(
         readOf(kind, value, brand, columns) as never,
-        readOptions(kind, brand, rest) as never,
+        readOptions(kind, brand, rest, isPromise(value)) as never,
     ) as unknown as Record<string, unknown> & {
         methods: readonly Method[]
         [FACES]: Partial<Record<Method, unknown>>
@@ -925,8 +925,8 @@ export const rpc: Declare<true> = ((
         // sends the JSON Patch it made, applied here to the value as it stands.
         faces[verb] = declare(verb)(
             (async (args: {
-                given?: unknown[] | string
-                ops?: PatchOp[] | string
+                given?: unknown[] | string | undefined
+                ops?: PatchOp[] | string | undefined
             }) => {
                 // A `DELETE` carries its args in the query, each member JSON text where no schema
                 // read it back (16.9).
@@ -1062,8 +1062,11 @@ function readOptions(
     kind: SourceKind,
     brand: SourceBrand | undefined,
     options: RpcOptions,
+    // A promise is the value form's own (16.1), which takes no source's options (11.81).
+    promised: boolean,
 ): RpcOptions {
-    if (kind === 'memo' || kind === 'job' || kind === 'pipe') return options
+    if (kind === 'memo' || kind === 'job' || kind === 'pipe' || promised)
+        return options
     const given = options as {
         global?: boolean | undefined
         tags?: string[] | undefined

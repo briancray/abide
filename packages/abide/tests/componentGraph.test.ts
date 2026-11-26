@@ -166,16 +166,14 @@ test('a .abide directly in an address directory is a page, and one under lib is 
 // THE REVERTS: drop the `refuse` for a file neither `.abide` nor a handler file in `appFiles`'s
 // walk; the three strays build, 0 of 3 refused where 3 are due. Or drop `isDeclarationFile` from the
 // walk's skip; `media/types.d.ts` is refused under 23.22. Or drop `isBenchFile` from it;
-// `media/index.bench.ts` is refused under 23.22 too. Or skip the check for a handler file exporting no `rpc` in
-// `handlersUnder`; `helpers.server.ts` builds, a module in an address directory answering nothing.
-test('a file in an address directory that is no page or handler file is a build error — 23.22, 16.73', async () => {
+// `media/index.bench.ts` is refused under 23.22 too. 16.73 — a server file exporting no `rpc` is a
+// module, built and answering nothing.
+test('a file in an address directory that is no page or server file is a build error — 23.22, 16.73', async () => {
     const helpers = await compiledTree({
         'media/helpers.server.ts':
             'export const twice = (n: number): number => n * 2\n',
     })
-    expect(helpers.refused).toContain('media/helpers.server.ts')
-    expect(helpers.refused).toContain('exports no `rpc`')
-    expect(helpers.refused).toContain('RULEBOOK 16.73')
+    expect(helpers.refused).toBe('')
     const bare = await compiledTree({
         'media/helpers.ts':
             'export const twice = (n: number): number => n * 2\n',

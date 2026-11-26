@@ -1263,16 +1263,17 @@ import { shared as renamed } from '#src/lib/rows.ts'
     expect(loops.map(({ line }) => line)).toEqual([7])
 }, 60_000)
 
-// A REFUSAL ONLY THE WHOLE APP CAN SEE is a finding too: a handler file whose default no handler
-// declares type-checks, and only the emit refuses it. THE REVERT: skip `emitApp` in `compiled` when
-// checking; the check reads 0 refusals where 1 is due.
-test('a check reports what only building the whole app refuses — 16.73', async () => {
+// A REFUSAL ONLY THE WHOLE APP CAN SEE is a finding too: a handler whose args leave out a parameter
+// of the route its file answers at type-checks, and only the emit refuses it. THE REVERT: skip
+// `emitApp` in `compiled` when checking; the check reads 0 refusals where 1 is due.
+test('a check reports what only building the whole app refuses — 16.67', async () => {
     const stray = appFixture({
         'index.abide': '<p>hello</p>',
-        'things/answer.server.ts': 'export default 42\n',
+        'media/[id]/getOne.server.ts':
+            "import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 1)\n",
     })
     const refused = (await checkApp(stray)).filter((diagnosis) =>
-        diagnosis.message.includes('16.73'),
+        diagnosis.message.includes('16.67'),
     )
     expect(refused.length).toBe(1)
 }, 60_000)
@@ -1325,19 +1326,20 @@ const answer = 42
 
 // 38.33 — WHAT ONLY THE WHOLE APP CAN REFUSE IS FOUND BESIDE A FILE THAT DID NOT PARSE: the emit runs
 // over every file that got that far, so one broken page does not hide a handler file the emit refuses.
-// THE REVERT: skip `emitApp` in `compiled` when a refusal was already kept; 16.73 goes unreported, 0
+// THE REVERT: skip `emitApp` in `compiled` when a refusal was already kept; 16.67 goes unreported, 0
 // findings where 1 is due.
-test('a check reports an emit refusal beside a parse refusal — 38.33, 16.73', async () => {
+test('a check reports an emit refusal beside a parse refusal — 38.33, 16.67', async () => {
     const found = await checkApp(
         appFixture({
             'index.abide': '<p>home</p>',
             'broken/index.abide':
                 '{#component row({ label })}<li>{label}</li>{/component}',
-            'things/answer.server.ts': 'export default 42\n',
+            'media/[id]/getOne.server.ts':
+                "import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 1)\n",
         }),
     )
     expect(
-        found.filter((diagnosis) => diagnosis.message.includes('16.73')).length,
+        found.filter((diagnosis) => diagnosis.message.includes('16.67')).length,
     ).toBe(1)
     expect(found.some((diagnosis) => diagnosis.message.includes('32.39'))).toBe(
         true,
@@ -1415,28 +1417,30 @@ test('a check reports an export in an imported .abide at its file — 38.33, 34.
 }, 60_000)
 
 // 38.33 — WHAT THE WHOLE APP REFUSES IS FOUND AT EACH FILE, every one of them, as a file's own
-// refusals are: two server files beside a page that each export no `rpc` are two findings, one at each.
+// refusals are: two handlers under a route parameter neither declares are two findings, one at each.
 // THE REVERT: hand `emitApp` no `refuse` in `checkApp`; the first refusal throws, and the check
 // reports 1 finding at the app's root where 2 are due at the files.
-test('a check reports every handler file refusal at its own file — 38.33, 16.73', async () => {
+test('a check reports every handler file refusal at its own file — 38.33, 16.67', async () => {
     const twice = appFixture({
         'index.abide': '<p>home</p>',
-        'media/getOne.server.ts': 'export const extra = 1\n',
-        'media/getTwo.server.ts': 'export const more = 2\n',
+        'media/[id]/getOne.server.ts':
+            "import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 1)\n",
+        'media/[id]/getTwo.server.ts':
+            "import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 2)\n",
     })
     const at: string[] = []
     for (const diagnosis of await checkApp(twice))
-        if (diagnosis.message.includes('16.73'))
+        if (diagnosis.message.includes('16.67'))
             at.push(relative(realpathSync(twice), diagnosis.path))
     expect(at.sort()).toEqual([
-        'media/getOne.server.ts',
-        'media/getTwo.server.ts',
+        'media/[id]/getOne.server.ts',
+        'media/[id]/getTwo.server.ts',
     ])
 }, 60_000)
 
 // 38.33, 16.39 — WHAT THE CHECKER'S READ OF A HANDLER REFUSES is a finding at the handler's file,
 // each one, beside a refusal of another file: two handlers nesting a `Reactive` and a handler file
-// exporting a second name are three findings at three files. THE REVERT: let `declaredExports`
+// under a route parameter it does not declare are three findings at three files. THE REVERT: let `declaredExports`
 // throw what it refuses; the check reads 1 finding at the app's root where 3 are due at the files.
 test("a check reports each 16.39 refusal at its file beside another file's — 38.33, 16.39", async () => {
     const nesting = appFixture({
@@ -1455,19 +1459,20 @@ import { user } from '../lib/user.ts'
 
 export default rpc(() => [{ user }])
 `,
-        'media/getTwo.server.ts': 'export const more = 2\n',
+        'media/[id]/getTwo.server.ts':
+            "import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 2)\n",
     })
     const at: string[] = []
     for (const diagnosis of await checkApp(nesting))
         if (
             diagnosis.category === 'error' &&
-            /16\.(39|73)/.test(diagnosis.message)
+            /16\.(39|67)/.test(diagnosis.message)
         )
             at.push(
-                `${relative(realpathSync(nesting), diagnosis.path)} ${diagnosis.message.includes('16.39') ? '16.39' : '16.73'}`,
+                `${relative(realpathSync(nesting), diagnosis.path)} ${diagnosis.message.includes('16.39') ? '16.39' : '16.67'}`,
             )
     expect(at.sort()).toEqual([
-        'media/getTwo.server.ts 16.73',
+        'media/[id]/getTwo.server.ts 16.67',
         'people/getProfile.server.ts 16.39',
         'people/getRows.server.ts 16.39',
     ])

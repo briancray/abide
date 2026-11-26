@@ -471,20 +471,17 @@ test('a handler with clients.cli false, or returning a Response, is written to t
     })
 })
 
-// 16.73 — AND A DEFAULT CALLING AN `rpc` THAT IS NOT abide's ANSWERS NOTHING, and the refusal names
-// the file. THE REVERT: accept the export by the callee's spelling in `declaredExports`; this builds,
-// and mounts a plain number as a handler.
-test("a server file whose rpc is not abide's does not build, naming the file — 16.73", async () => {
+// 16.73 — AND A DEFAULT CALLING AN `rpc` THAT IS NOT abide's ANSWERS NOTHING: the file is a module.
+// THE REVERT: accept the export by the callee's spelling in `declaredExports`; the build mounts a
+// plain number as a handler at `/fake/count`.
+test("a server file whose rpc is not abide's answers nothing — 16.73", async () => {
     const app = appFixture({
         'index.abide': '<p>home</p>',
         'fake/count.server.ts': `const rpc = (value: () => number) => value()\n\nexport default rpc(() => 1)\n`,
     })
     const built = await buildApp(app)
-    expect(built.exitCode).not.toBe(0)
-    expect(built.stderr).toContain(
-        'fake/count.server.ts is a server file directly in an address directory, and exports no `rpc`',
-    )
-    expect(built.stderr).toContain('RULEBOOK 16.73')
+    expect(built.exitCode).toBe(0)
+    expect(built.stderr).not.toContain('fake/count')
 })
 
 // THE BROWSER'S `Rpc`, against the served handler. `wire` is what a generated wrapper calls, so this
