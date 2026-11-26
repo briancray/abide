@@ -9,18 +9,18 @@ export const askAs = async ({ origin }: { origin: string }) => {
 </script>
 
 <script>
-import { reactive } from '@abide/abide'
+import { reactive, toggleGroup } from '@abide/abide'
 
 const ORIGINS = ['https://books.example', 'https://elsewhere.example']
 
 let origin = reactive(ORIGINS[0] ?? '')
+const origins = toggleGroup({ items: ORIGINS, value: origin, label: 'Origin' })
 const allowed = reactive(() => askAs({ origin }))
 </script>
 
-<div class="tabs">
+<div class="tabs" {...origins.group}>
     {#for each of ORIGINS}
-        <button aria-pressed={origin === each}
-            onclick={() => (origin = each)}>{each.slice(8)}</button>
+        <button {...origins.item(each)}>{each.slice(8)}</button>
     {/for}
 </div>
 

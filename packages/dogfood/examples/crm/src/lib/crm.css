@@ -780,7 +780,8 @@
         }
 
         &[aria-pressed=true],
-        &[aria-selected=true] {
+        &[aria-selected=true],
+        &[aria-checked=true] {
             @apply border-signal bg-signal text-paper;
         }
     }

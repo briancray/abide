@@ -1,22 +1,23 @@
 <script>
-import { reactive } from '@abide/abide'
+import { reactive, toggleGroup } from '@abide/abide'
 
 import { topFive } from './topFive.ts'
 
 let by = reactive<'amount' | 'idle'>('amount')
+const order = toggleGroup({
+    items: ['amount', 'idle'],
+    value: by,
+    label: 'Order',
+})
 const top = reactive(() => topFive(by))
 
 const shown = (deal: { amount: number; idle: number }) =>
     by === 'amount' ? `$${deal.amount}` : `${deal.idle} days idle`
 </script>
 
-<div class="tabs">
-    <button aria-pressed={by === 'amount'} onclick={() => (by = 'amount')}>
-        Largest
-    </button>
-    <button aria-pressed={by === 'idle'} onclick={() => (by = 'idle')}>
-        Most idle
-    </button>
+<div class="tabs" {...order.group}>
+    <button {...order.item('amount')}>Largest</button>
+    <button {...order.item('idle')}>Most idle</button>
 </div>
 <ul class="fields">
     {#for deal of top key deal.company}

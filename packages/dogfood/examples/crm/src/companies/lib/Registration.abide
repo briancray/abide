@@ -1,5 +1,5 @@
 <script>
-import { reactive } from '@abide/abide'
+import { reactive, toggleGroup } from '@abide/abide'
 
 import getRegistration from '../getRegistration.server.ts'
 
@@ -9,6 +9,12 @@ const COMPANIES = [
 ]
 
 let id = reactive('hopper-and-co')
+const companies = toggleGroup({
+    items: COMPANIES,
+    key: (company) => company.id,
+    value: id,
+    label: 'Company',
+})
 
 const registration = reactive(() => getRegistration({ id }))
 
@@ -22,12 +28,9 @@ function said() {
 }
 </script>
 
-<div class="tabs">
+<div class="tabs" {...companies.group}>
     {#for one of COMPANIES}
-        <button aria-pressed={id === one.id}
-            onclick={() => {
-                id = one.id
-            }}>{one.name}</button>
+        <button {...companies.item(one)}>{one.name}</button>
     {/for}
 </div>
 

@@ -1,11 +1,12 @@
 <script>
-import { reactive } from '@abide/abide'
+import { reactive, toggleGroup } from '@abide/abide'
 
 import salesReport from '../salesReport.server.ts'
 
 const REGIONS = ['north', 'south']
 
 let region = reactive('north')
+const regions = toggleGroup({ items: REGIONS, value: region, label: 'Region' })
 
 const rows = reactive(() => salesReport({ region }))
 
@@ -15,12 +16,9 @@ function refusal() {
 }
 </script>
 
-<div class="tabs">
+<div class="tabs" {...regions.group}>
     {#for one of REGIONS}
-        <button aria-pressed={region === one}
-            onclick={() => {
-                region = one
-            }}>{one}</button>
+        <button {...regions.item(one)}>{one}</button>
     {/for}
 </div>
 

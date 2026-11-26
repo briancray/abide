@@ -1,5 +1,5 @@
 <script>
-import { format, reactive, sparkline } from '@abide/abide'
+import { format, reactive, sparkline, toggleGroup } from '@abide/abide'
 
 // Won revenue per month, June to November; Grace's August is not closed yet, and Joan, new this
 // summer, has closed nothing.
@@ -26,33 +26,29 @@ const REPS = [
     },
 ]
 
-let months = reactive(6)
+let months = reactive('6')
+const spans = toggleGroup({ items: ['6', '3'], value: months, label: 'Months' })
 
 // Each rep's two trends, over the months shown.
 const ROWS = REPS.map((rep) => ({
     name: rep.name,
     november: rep.won.at(-1),
     won: sparkline({
-        values: () => rep.won.slice(-months),
+        values: () => rep.won.slice(-Number(months)),
         label: () => `${rep.name}'s won revenue, ${months} months`,
         zero: true,
     }),
     closed: sparkline({
         kind: 'bar',
-        values: () => rep.closed.slice(-months),
+        values: () => rep.closed.slice(-Number(months)),
         label: () => `${rep.name}'s deals closed, ${months} months`,
     }),
 }))
 </script>
 
-<div class="tabs">
-    {#for choice of [6, 3]}
-        <button
-            aria-pressed={months === choice}
-            onclick={() => (months = choice)}
-        >
-            {choice} months
-        </button>
+<div class="tabs" {...spans.group}>
+    {#for choice of ['6', '3']}
+        <button {...spans.item(choice)}>{choice} months</button>
     {/for}
 </div>
 <table>

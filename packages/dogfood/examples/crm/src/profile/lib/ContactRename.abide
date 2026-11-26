@@ -1,13 +1,18 @@
 <script>
-import { reactive } from '@abide/abide'
+import { reactive, toggleGroup } from '@abide/abide'
 
 import NameDraft from './NameDraft.abide'
 
 let open = reactive('Grace Hopper')
+const contacts = toggleGroup({
+    items: ['Grace Hopper', 'Ada Lovelace'],
+    value: open,
+    label: 'Contact',
+})
 </script>
 
-<div class="tabs">
-    <button onclick={() => (open = 'Grace Hopper')}>Grace Hopper</button>
-    <button onclick={() => (open = 'Ada Lovelace')}>Ada Lovelace</button>
+<div class="tabs" {...contacts.group}>
+    <button {...contacts.item('Grace Hopper')}>Grace Hopper</button>
+    <button {...contacts.item('Ada Lovelace')}>Ada Lovelace</button>
 </div>
 <NameDraft name={open} />
