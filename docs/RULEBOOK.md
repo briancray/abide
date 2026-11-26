@@ -4009,8 +4009,10 @@ literal, and each call whose `create` differs from its handle's.
 declares as a `reactive` or a `reactive.derived`, in the file of the handler or in the app file it
 imports the name from.
 
-38.231 The migration keyed to 0.145.0 MUST rewrite each call of abide's `GET` as `rpc`, and each of
-`POST`, `PUT`, `PATCH` and `DELETE` as `rpc` whose options' `methods` names that verb; MUST move each
+38.231 The migration keyed to 0.145.0 MUST rewrite each call of abide's `GET` as `rpc`, naming `GET`
+in its options' `methods` where its first argument is not a function the module shows it to be, and
+each of `POST`, `PUT`, `PATCH` and `DELETE` as `rpc` whose options' `methods` names that verb, so no
+address answers a verb it did not; MUST write that `methods` as a formatter would; MUST move each
 `<name>.handler.ts` to `<name>.server.ts`, and every import specifier naming it with it, noting by
 38.226 one whose server file is already there; and MUST export each `rpc` a `<script server>` binds,
 as its value where the `rpc` takes no options, noting by 38.226 each one that takes them.

@@ -1,6 +1,8 @@
 // 38.231 — THE MIGRATION TO `rpc`: `GET`, `POST`, `PUT`, `PATCH` and `DELETE` are one `rpc`, its verb
-// read off the value — a function's `GET` — or named by `methods`. So `GET(x, o)` is `rpc(x, o)`, and a
-// mutation keeps its verb in its options: `POST(f, o)` is `rpc(f, { methods: ['POST'], ...o })`. A
+// read off the value — a function's `GET` — or named by `methods`. So `GET(f, o)` over a function is
+// `rpc(f, o)`, `GET(x, o)` over anything else keeps `GET` as its one verb — bare, a memo or a value
+// would answer its writes too (16.117) — and a mutation keeps its verb in its options:
+// `POST(f, o)` is `rpc(f, { methods: ['POST'], ...o })`. A
 // handler file is a server file (16.73): `<name>.handler.ts` is `<name>.server.ts`, answering at the
 // same route, and every import naming it is moved with it. A handler a `<script server>` declares is
 // a value it exports bare (16.70): `rpc(v)` there is `v`, and one given options is noted, as only a
@@ -27,6 +29,10 @@ const TAKEN =
     'abide upgrade moves a handler file to <name>.server.ts, and that file is already there: merge the two — the handler as `export default rpc(…)` — so it answers where it did. RULEBOOK 16.73, 38.231.'
 
 const SCRIPT = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g
+
+/** 38.231 — a server block's `GET` over a value that would answer writes bare, by its export's name. */
+const READ_ONLY = (name: string): string =>
+    `this ${name} answered GET alone, and exported bare from a <script server> it would also answer the writes its value derives: move it to a <Component>.server.ts beside the component as \`export const ${name} = rpc(…, { methods: ['GET'], clients: { mcp: false, cli: false, openapi: false } })\`, and import it where it is called. RULEBOOK 16.117, 16.119, 38.231.`
 
 const OPTIONED =
     "a <script server> exports bare values, and `rpc` with options is a server file's: move this one to a <name>.server.ts beside the component, and import it where it is called. RULEBOOK 16.119, 38.231."
@@ -133,6 +139,7 @@ function declaredByRpc(
     }
     if (verbs.size === 0) return code
     const tokens = tokenize(code)
+    const functions = declaredFunctions(tokens)
     for (let at = 0; at < tokens.length; at += 1) {
         const token = tokens[at] as Token
         const verb =
@@ -149,11 +156,15 @@ function declaredByRpc(
         )
             continue
         edits.push({ start: token.start, end: token.end, text: 'rpc' })
-        if (verb === 'GET') continue
         const open = at + 1
         if (tokens[open]?.kind !== SyntaxKind.OpenParenToken) continue
         const close = closerOf(tokens, open)
         if (close === -1) continue
+        // A `GET` over a function is a function's `rpc`, which answers `GET` alone (16.111). Over
+        // anything else — a memo, a value, a name it cannot see is a function — `rpc` would also
+        // answer the writes that value derives (16.117), so the `GET` is kept as its one verb.
+        if (verb === 'GET' && isFunctionArgument(tokens, open, functions))
+            continue
         edits.push(methodsOption(code, tokens, open, close, verb))
     }
     edits.sort((left, right) => left.start - right.start)
@@ -187,8 +198,23 @@ function methodsOption(
         }
     }
     const first = tokens[second] as Token
-    if (first.kind === SyntaxKind.OpenBraceToken)
+    if (first.kind === SyntaxKind.OpenBraceToken) {
+        const next = tokens[second + 1] as Token
+        if (next.kind === SyntaxKind.CloseBraceToken)
+            return { start: first.end, end: next.start, text: ` ${methods} ` }
+        // Options written a member to a line take the verb as a line of their own, as a formatter
+        // would write it.
+        const between = code.slice(first.end, next.start)
+        if (between.includes('\n')) {
+            const indent = between.slice(between.lastIndexOf('\n') + 1)
+            return {
+                start: first.end,
+                end: first.end,
+                text: `\n${indent}${methods},`,
+            }
+        }
         return { start: first.end, end: first.end, text: ` ${methods},` }
+    }
     // Options built elsewhere are spread under the verb.
     const last = commas[1] === undefined ? close - 1 : commas[1] - 1
     return {
@@ -196,6 +222,55 @@ function methodsOption(
         end: (tokens[last] as Token).end,
         text: `{ ${methods}, ...${code.slice(first.start, (tokens[last] as Token).end)} }`,
     }
+}
+
+/**
+ * Whether the first argument of the call opened at `open` is a function: written as one — `function`,
+ * or an arrow, its `=>` outside every bracket of the argument — or a name `functions` holds.
+ */
+function isFunctionArgument(
+    tokens: readonly Token[],
+    open: number,
+    functions: ReadonlySet<string>,
+): boolean {
+    const first = tokens[open + 1]
+    if (first === undefined) return false
+    if (first.kind === SyntaxKind.FunctionKeyword) return true
+    if (
+        first.kind === SyntaxKind.AsyncKeyword &&
+        tokens[open + 2]?.kind === SyntaxKind.FunctionKeyword
+    )
+        return true
+    // A lone name: a function only where this module declares it one.
+    const after = tokens[open + 2]?.kind
+    if (
+        first.kind === SyntaxKind.Identifier &&
+        (after === SyntaxKind.CommaToken ||
+            after === SyntaxKind.CloseParenToken)
+    )
+        return functions.has(first.text)
+    let depth = 0
+    for (let at = open + 1; at < tokens.length; at += 1) {
+        const kind = (tokens[at] as Token).kind
+        if (depth === 0 && kind === SyntaxKind.EqualsGreaterThanToken)
+            return true
+        if (depth === 0 && kind === SyntaxKind.CommaToken) return false
+        depth += nesting(kind)
+        if (depth < 0) return false
+    }
+    return false
+}
+
+/** The names a module declares as functions: `function name`, at any depth. */
+function declaredFunctions(tokens: readonly Token[]): Set<string> {
+    const names = new Set<string>()
+    for (let at = 0; at < tokens.length - 1; at += 1)
+        if (
+            (tokens[at] as Token).kind === SyntaxKind.FunctionKeyword &&
+            (tokens[at + 1] as Token).kind === SyntaxKind.Identifier
+        )
+            names.add((tokens[at + 1] as Token).text)
+    return names
 }
 
 /** A server block with each top-level `const x = rpc(` exported. */
@@ -281,9 +356,18 @@ function bareExports(
         if (optioned) {
             const lineStart = body.lastIndexOf('\n', token.start) + 1
             const lineEnd = body.indexOf('\n', token.start)
+            // The `GET` this migration narrowed (see `isFunctionArgument`): its options are the verb.
+            const options = body
+                .slice(
+                    (tokens[(commas[0] as number) + 1] as Token).start,
+                    (tokens[close - 1] as Token).end,
+                )
+                .trim()
             note(
                 body.slice(lineStart, lineEnd === -1 ? undefined : lineEnd),
-                OPTIONED,
+                options === "{ methods: ['GET'] }"
+                    ? READ_ONLY((tokens[index + 2] as Token).text)
+                    : OPTIONED,
             )
             continue
         }

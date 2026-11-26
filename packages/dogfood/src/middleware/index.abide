@@ -93,7 +93,7 @@ const callTool = (name: string) =>
 
             <slot />
         `} />
-        <p><code>getTeam.handler.ts</code> lists no rung of its own, and is refused all the
+        <p><code>getTeam.server.ts</code> lists no rung of its own, and is refused all the
             same:</p>
         <Exchange path="/account/admin/getTeam" />
     </Section>
@@ -118,7 +118,7 @@ const callTool = (name: string) =>
         <Code code={`
             src/layout.abide                csp         before routing
             src/account/admin/layout.abide  adminsOnly  after routing, outer first
-            getTeam.handler.ts              none        last, in the order listed
+            getTeam.server.ts              none        last, in the order listed
         `} />
         <p>For the admin section's <code>getTeam</code>, that is two rungs and none of its
             own. An outer rung is handed what an inner one answered. The CRM's root layout files

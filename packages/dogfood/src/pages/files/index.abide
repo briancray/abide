@@ -42,7 +42,7 @@ import SiteTree from '#src/lib/SiteTree.abide'
               index.abide                  /
               contacts/
                 index.abide                /contacts
-                listContacts.handler.ts    GET /contacts/listContacts
+                listContacts.server.ts     GET /contacts/listContacts
                 lib/ContactList.abide      no address
                 lib/ContactList.test.ts    run by bun test
               companies/

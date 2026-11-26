@@ -43,7 +43,7 @@ const searchHopper = JSON.stringify(
         <p>Every handler the app publishes is a tool on <code>/__abide/mcp</code>. A model picks
             one by its <code>description</code>, so write one on every handler.</p>
         <Code language="ts" caption="server" code={`
-            // src/assistant/searchContacts.handler.ts
+            // src/assistant/searchContacts.server.ts
             import { rpc } from '@abide/abide/server'
             import { CONTACTS } from '../contacts/lib/CONTACTS.server.ts'
 

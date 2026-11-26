@@ -13,6 +13,7 @@ import { toComputedCall } from '#compiler/toComputedCall.ts'
 import { toDerived } from '#compiler/toDerived.ts'
 import { toFetchAndHandle } from '#compiler/toFetchAndHandle.ts'
 import { toMemo } from '#compiler/toMemo.ts'
+import { toRpcText } from '#compiler/toRpc.ts'
 import { upgrade } from '#compiler/upgrade.ts'
 import { ABIDE_DIRECTORY } from '#server/ABIDE_DIRECTORY.ts'
 
@@ -330,7 +331,7 @@ const named = memo(() => rows, { key: by, tags: ['rows'] })
         .toBe(`import { reactive, rpc } from '@abide/abide'
 
 const OPTIONS = { by: 'id' }
-export const books = rpc(reactive.derived(() => [{ isbn: '1' }], { key: 'isbn' }))
+export const books = rpc(reactive.derived(() => [{ isbn: '1' }], { key: 'isbn' }), { methods: ['GET'] })
 export const kept = reactive<{ id: string }[]>([], {
     key(row) {
         return row.id
@@ -1085,4 +1086,113 @@ export const listNotes = ({ id }: { id: string }) => [id]
         if (edit.after === null) await Bun.file(`${app}/${edit.path}`).delete()
         else await Bun.write(`${app}/${edit.path}`, edit.after)
     expect(await upgrade(app, '0.144.0')).toEqual([])
+})
+
+// 38.231 — A `GET` KEEPS ITS ONE VERB: over a function an `rpc` answers `GET` alone (16.111), but over a
+// memo, a value or a name the module does not declare a function, a bare `rpc` would also answer the
+// writes that value derives (16.117) — a read-only address turned writable by anyone. So only a
+// function the migration can see keeps the bare form, and every other `GET` names `methods: ['GET']`,
+// which narrows and never widens. THE REVERT: skip `methodsOption` for every `GET` again; the memo,
+// the value and the imported name lose their `methods: ['GET']`, three of the expectations below.
+test('abide upgrade keeps a GET over anything but a function at GET alone — 38.231', () => {
+    const migrated = toRpcText(
+        `import { GET } from '@abide/abide/server'
+import { memo } from '@abide/abide'
+import { listed } from './listed.ts'
+
+function named() {
+    return 1
+}
+const SEATS = { seats: 40 }
+
+export const board = GET(memo(() => 1, { global: true }))
+export const seats = GET(SEATS)
+export const imported = GET(listed)
+export const declared = GET(named)
+export const arrow = GET(({ id }: { id: string }) => id)
+export const asynchronous = GET(async () => 1)
+export const written = GET(function () {
+    return 1
+})
+export const described = GET(memo(() => 1, { global: true }), { description: 'A board.' })
+`,
+        'src/x.server.ts',
+    )
+    expect(migrated).toContain(
+        "export const board = rpc(memo(() => 1, { global: true }), { methods: ['GET'] })",
+    )
+    expect(migrated).toContain(
+        "export const seats = rpc(SEATS, { methods: ['GET'] })",
+    )
+    expect(migrated).toContain(
+        "export const imported = rpc(listed, { methods: ['GET'] })",
+    )
+    expect(migrated).toContain('export const declared = rpc(named)\n')
+    expect(migrated).toContain(
+        'export const arrow = rpc(({ id }: { id: string }) => id)\n',
+    )
+    expect(migrated).toContain(
+        'export const asynchronous = rpc(async () => 1)\n',
+    )
+    expect(migrated).toContain('export const written = rpc(function () {')
+    expect(migrated).toContain(
+        "export const described = rpc(memo(() => 1, { global: true }), { methods: ['GET'], description: 'A board.' })",
+    )
+})
+
+// 38.231 — `methods` IS WRITTEN AS A FORMATTER WOULD: options written a member to a line take it as a
+// line of its own at their indent, and empty options take it alone, so a migrated file passes
+// `bun fmt --check` where it did before. THE REVERT: insert ` methods: […],` after the `{` alone; the
+// first expectation reads `{ methods: ['POST'],` on the call's line.
+test('abide upgrade writes methods into options as a formatter would — 38.231', () => {
+    const migrated = toRpcText(
+        `import { POST, PUT } from '@abide/abide/server'
+
+export const save = POST(({ id }: { id: string }) => id, {
+    description: 'Saves a deal.',
+})
+export const replace = PUT(({ id }: { id: string }) => id, {})
+`,
+        'src/x.server.ts',
+    )
+    expect(migrated)
+        .toContain(`export const save = rpc(({ id }: { id: string }) => id, {
+    methods: ['POST'],
+    description: 'Saves a deal.',
+})`)
+    expect(migrated).toContain(
+        "export const replace = rpc(({ id }: { id: string }) => id, { methods: ['PUT'] })",
+    )
+})
+
+// 38.231 — A SERVER BLOCK'S `GET` OVER A VALUE IS NOT EXPORTED BARE: bare, a memo would also answer the
+// writes it derives (16.117), and a `<script server>` takes no `methods` (16.119). So it is left with
+// its narrowed verb and noted — moved by hand to a server file beside the component, read-only and
+// unlisted — while a `GET` over a function is still exported bare, a function answering `GET` alone.
+// THE REVERT: drop the narrowing for `GET` (`verb === 'GET' ||` in `declaredByRpc`); the board is
+// exported bare as `export const board = memo(` and no note is given.
+test("abide upgrade notes a server block's GET over a value rather than export it bare — 38.231", () => {
+    const notes: string[] = []
+    const migrated = toRpcText(
+        `<script server>
+import { GET } from '@abide/abide/server'
+import { memo } from '@abide/abide'
+
+const board = GET(memo(() => 1, { global: true }))
+const listNotes = GET(({ id }: { id: string }) => [id])
+</script>
+`,
+        'src/deals/lib/Board.abide',
+        undefined,
+        (_line, message) => notes.push(message.split(':')[0] as string),
+    )
+    expect(migrated).toContain(
+        "export const board = rpc(memo(() => 1, { global: true }), { methods: ['GET'] })",
+    )
+    expect(migrated).toContain(
+        'export const listNotes = ({ id }: { id: string }) => [id]',
+    )
+    expect(notes).toEqual([
+        'this board answered GET alone, and exported bare from a <script server> it would also answer the writes its value derives',
+    ])
 })

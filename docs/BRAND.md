@@ -72,7 +72,7 @@ with where the audience knows what an MCP server costs to maintain.
 | | Why |
 | --- | --- |
 | A static marketing site | It renders one, but nothing here earns its keep if nothing on the page changes |
-| Gradual adoption into an existing app | The page files (`index.abide`, `<name>.abide`), `layout`, `error`, the `<name>.handler.ts` files and the `.server.ts` files are the mechanism, not a convention. There is no partial mode |
+| Gradual adoption into an existing app | The page files (`index.abide`, `<name>.abide`), `layout`, `error`, and the `.server.ts` files, an `rpc` among their exports, are the mechanism, not a convention. There is no partial mode |
 | A team that wants to swap the runtime | abide is Bun and web standards deliberately, and uses Bun's APIs rather than abstracting over them |
 
 Saying these out loud is part of the positioning, not a disclaimer to bury. A framework that

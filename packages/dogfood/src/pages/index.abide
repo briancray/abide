@@ -38,7 +38,8 @@ import SiteTree from '#src/lib/SiteTree.abide'
 
     <Section title="Start a feature with its page, its handlers and a lib">
         <p><code>index.abide</code> answers at the directory's address. Each
-            <code>.handler.ts</code> answers at its own name below it, and <code>lib/</code> holds
+            <code>.server.ts</code> exporting an <code>rpc</code> answers at its own name below it,
+            and <code>lib/</code> holds
             what the page mounts but nobody visits. The CRM's <code>contacts</code>, read as this
             page rendered:</p>
         <SiteTree directory="contacts" />
