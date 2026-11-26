@@ -263,8 +263,10 @@ class Lifetime {
 /**
  * One throttle or debounce window for a whole keyed face, holding back starting what it reaches.
  *
- * 5.18, 5.19, 5.20. A throttle starts the first key at once and the latest reached inside its
- * window when it ends; a debounce starts the latest once the reaches stop. Either way only the
+ * 5.18, 5.19, 5.20. The face's FIRST key starts at once under either: nothing was standing for it
+ * to delay a change from, and a render waiting on the value (41.4) would otherwise go out without
+ * it. Past that, a throttle starts a key at once where no window is open and the latest reached
+ * inside one when it ends; a debounce starts the latest once the reaches stop. Either way only the
  * LATEST held key starts — one reached and then superseded inside a window is work the window
  * would discard (5.11), so it is abandoned and dropped instead.
  */
@@ -273,16 +275,19 @@ class StartWindow {
     ms: number
     timer: ReturnType<typeof setTimeout> | null
     pending: { entry: unknown; drop: () => void } | null
+    started: boolean
 
     constructor(leading: boolean, ms: number) {
         this.leading = leading
         this.ms = ms
         this.timer = null
         this.pending = null
+        this.started = false
     }
 
     reached(entry: unknown, drop: () => void): void {
-        if (this.leading && this.timer === null) {
+        if (!this.started || (this.leading && this.timer === null)) {
+            this.started = true
             startDeferred(entry)
             this.open()
             return

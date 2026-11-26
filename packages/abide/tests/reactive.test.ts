@@ -6845,13 +6845,15 @@ test('reactive() is empty and reactive(undefined) is loaded', () => {
 
 // ── A window on a keyed value holds back starting a key (RULEBOOK 5.18, 5.19, 5.20) ─────────
 
-// 5.18 AND 5.19: A DEBOUNCE STARTS THE KEY THE REACHES STOPPED AT. A search box typing `n`, `no`,
-// `nor` reaches three keys, and the two superseded before the window closed never make their call
-// — 5.11's "don't start work a window would discard", across keys. They are not held either, so a
-// later reach of one of them goes through the window again.
+// 5.18 AND 5.19: A DEBOUNCE STARTS THE FIRST KEY AT ONCE, AND AFTER IT THE KEY THE REACHES STOPPED
+// AT. A search box opening on `n` runs it — nothing stood for a window to delay a change from — and
+// typing on to `no`, `nor` reaches two more keys, of which the one superseded before the window
+// closed never makes its call: 5.11's "don't start work a window would discard", across keys. It
+// is not held either, so a later reach of it goes through the window again.
 //
-// THE REVERT is the factory starting each entry as it is reached: `calls: n,no,nor`.
-test('a debounce on a keyed value starts only the key the reaches stopped at', async () => {
+// THE REVERTS: the factory starting each entry as it is reached reads `calls: n,no,nor`; the window
+// holding the first key back as well reads `calls: ` where `n` is due.
+test('a debounce on a keyed value starts the first key, then only the key the reaches stopped at', async () => {
     const calls: string[] = []
     const search = keyedValue(
         (args: { query: string }) => {
@@ -6863,14 +6865,15 @@ test('a debounce on a keyed value starts only the key the reaches stopped at', a
     const first = search({ query: 'n' })
     search({ query: 'no' })
     const last = search({ query: 'nor' })
-    expect(`calls: ${calls.join(',')}`).toBe('calls: ')
+    expect(`calls: ${calls.join(',')}`).toBe('calls: n')
     // 5.20: held back is busy, with nothing to serve yet.
     expect(`busy: ${last.busy()}, ready: ${last.ready()}`).toBe(
         'busy: true, ready: false',
     )
-    expect(`held: ${search.entries.size}`).toBe('held: 1')
+    // The first key, and the one held: the superseded key is not kept (5.19).
+    expect(`held: ${search.entries.size}`).toBe('held: 2')
     await Bun.sleep(AFTER_WINDOW)
-    expect(`calls: ${calls.join(',')}`).toBe('calls: nor')
+    expect(`calls: ${calls.join(',')}`).toBe('calls: n,nor')
     expect(last()).toBe(3)
     expect(`superseded busy: ${first.busy()}`).toBe('superseded busy: false')
 })
@@ -6908,7 +6911,7 @@ test('a debounce on a keyed stream opens one stream for a burst of reaches', asy
     rows({ region: 'no' })
     const settled = rows({ region: 'nor' })
     await Bun.sleep(AFTER_WINDOW)
-    expect(`opened: ${opened.join(',')}`).toBe('opened: nor')
+    expect(`opened: ${opened.join(',')}`).toBe('opened: n,nor')
     expect(await settled).toEqual(['nor'])
 })
 

@@ -88,9 +88,9 @@ test("a memo's throttle paces what its owner's writes send each follower — 5.2
 })
 
 // 5.18 — A KEY REACHED ANEW IS PACED TOO: search-as-you-type reaches a new key each keystroke, so a
-// debounce starts only the one the reaches stopped at. THE REVERT: drop `starts` in `createKeyed`;
-// every key runs, `a,ab,abc` where `abc` is due.
-test("a memo's debounce starts only the key its reaches stopped at — 5.18", async () => {
+// debounce starts the first at once and after it only the one the reaches stopped at. THE REVERT:
+// drop `starts` in `createKeyed`; every key runs, `a,ab,abc` where `a,abc` is due.
+test("a memo's debounce starts the first key, then only the key its reaches stopped at — 5.18", async () => {
     const ran: string[] = []
     const search = memo(
         (query: string) => {
@@ -102,7 +102,7 @@ test("a memo's debounce starts only the key its reaches stopped at — 5.18", as
     void search('a').catch(() => {})
     void search('ab').catch(() => {})
     expect(await search('abc')).toBe('ABC')
-    expect(ran.join()).toBe('abc')
+    expect(ran.join()).toBe('a,abc')
 })
 
 // 5.25 — A HELD ENTRY DELAYS THE CHANGE, as 5.13 has a debounce do: a derived re-pointed onto a key the

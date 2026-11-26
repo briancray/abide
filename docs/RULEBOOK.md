@@ -352,8 +352,8 @@ two is a comparator answering directly.
 
 5.17 A read of a capped streaming producer MUST serve the accumulation as the last release left it.
 
-5.18 `throttle` and `debounce` on a `memo` MUST hold back starting a newly reached entry until the
-window allows it.
+5.18 `throttle` and `debounce` on a `memo` MUST start the first entry it reaches at once, and MUST
+hold back starting each newly reached entry after it until the window allows it.
 
 5.19 An entry a `memo`'s window replaced with a later key before it started MUST NOT be started, and
 MUST NOT be held.
