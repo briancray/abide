@@ -98,10 +98,9 @@ import Section from '#src/lib/Section.abide'
         <p><code>readable</code> hands on each insert, update and delete committed after it is
             first read, in order, with the row after and before. A write rolled back is none.</p>
         <Code language="ts" caption="server" code={`
-            import { table } from '@abide/abide/server'
-            import { crmDatabase } from '../pipeline/lib/crmDatabase.server.ts'
+            import { targets } from '../pipeline/lib/targets.server.ts'
 
-            for await (const change of table(crmDatabase, 'targets').readable)
+            for await (const change of targets.readable)
                 console.log(change.op, change.row?.target, change.previous?.target)
         `} />
     </Section>
@@ -110,10 +109,13 @@ import Section from '#src/lib/Section.abide'
         <p><code>writable</code> upserts by <code>key</code>, <code>id</code> where none is given,
             and the rows written in one turn are one transaction.</p>
         <Code language="ts" caption="server" code={`
-            import { table } from '@abide/abide/server'
-            import { crmDatabase } from '../pipeline/lib/crmDatabase.server.ts'
+            import { targets } from '../pipeline/lib/targets.server.ts'
 
-            await imported.pipeTo(table(crmDatabase, 'targets').writable)
+            const imported = ReadableStream.from([
+                { id: 7, target: 400_000, setAt: '2026-01-05 09:00:00' },
+                { id: 8, target: 450_000, setAt: '2026-02-02 09:00:00' },
+            ])
+            await imported.pipeTo(targets.writable)
         `} />
     </Section>
 </Doc>

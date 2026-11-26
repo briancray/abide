@@ -11,7 +11,5 @@ export const targetStore: Store<number | undefined> = {
         // A blank field is no target, and the team's stands.
         if (target === undefined) return
         await setTarget({ target })
-        // The next read asks the server, not this tab's copy.
-        getTarget.invalidate()
     },
 }

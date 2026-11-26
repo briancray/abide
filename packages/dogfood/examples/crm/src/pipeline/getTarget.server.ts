@@ -1,20 +1,19 @@
+import { memo } from '@abide/abide'
 import { rpc } from '@abide/abide/server'
 
-import { crmDatabase } from './lib/crmDatabase.server.ts'
+import { targets } from './lib/targets.server.ts'
 
 /** The team's target, or `null` where nobody has set one. */
 export default rpc(
-    async () => {
-        // Slowed, so the wait is on screen.
-        await Bun.sleep(300)
-        const [newest] = crmDatabase.sql<{
-            target: number
-        }>`SELECT target FROM targets ORDER BY id DESC LIMIT 1`
-        return newest?.target ?? null
-    },
-    {
-        // 16.89 — read again when `setTarget` refreshes the tag.
-        tags: ['targets'],
-        description: "Reads the team's target for the quarter.",
-    },
+    memo(
+        async () => {
+            // 47.29 — called, the table reads this again after any committed change, whoever wrote it.
+            const newest = targets().at(-1)
+            // Slowed, so the wait is on screen.
+            await Bun.sleep(300)
+            return newest?.target ?? null
+        },
+        { global: true },
+    ),
+    { description: "Reads the team's target for the quarter." },
 )

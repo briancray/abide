@@ -11,9 +11,7 @@ export const digest = job({
     run: async () => {
         const leads = DEALS.filter((deal) => deal.stage === 'lead')
         await Bun.sleep(300) // the mail going out
-        crmDatabase().run('INSERT INTO digests (sentAt) VALUES (?)', [
-            Date.now(),
-        ])
+        crmDatabase.sql`INSERT INTO digests (sentAt) VALUES (${Date.now()})`
         log.info(`digest sent: ${leads.length} leads to follow up`)
     },
     // Its status kept beside the CRM's tables, so a restart sends a morning it missed once, never twice.

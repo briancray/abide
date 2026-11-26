@@ -41,21 +41,22 @@ import Section from '#src/lib/Section.abide'
 
     <Section title="Read the rows in a handler, and a page calls the handler">
         <p>A page reaches the rows through a handler declared with
-            <a href={url('/handlers/rpc')}><code>GET</code></a>, which runs the query on the
-            server and answers the rows as JSON.</p>
+            <a href={url('/handlers/rpc')}><code>rpc</code></a>, which runs the query on the
+            server and answers the rows as JSON. <code>sql</code> binds every value and follows
+            nothing, so the list carries a tag for whatever writes a target to refresh.</p>
         <Code language="ts" caption="server" code={`
             import { rpc } from '@abide/abide/server'
             import { crmDatabase } from './lib/crmDatabase.server.ts'
+            import type { Target } from './lib/targets.server.ts'
 
             export default rpc(
                 () =>
-                    crmDatabase()
-                        .query(
-                            \`SELECT id, target, setAt FROM targets
-                            ORDER BY id DESC LIMIT 5\`,
-                        )
-                        .all() as { id: number; target: number; setAt: string }[],
-                { description: 'Lists the targets the team has set, newest first.' },
+                    crmDatabase.sql<Target>\`SELECT id, target, setAt FROM targets
+                        ORDER BY id DESC LIMIT 5\`,
+                {
+                    tags: ['targets'],
+                    description: 'Lists the targets the team has set, newest first.',
+                },
             )
         `} />
         <p>The CRM's targets, asked when this page loaded. A server nobody has set a target on
@@ -63,46 +64,38 @@ import Section from '#src/lib/Section.abide'
         <Exchange path="/pipeline/listTargets" />
     </Section>
 
-    <Section title="A write on the server changes nothing a page holds">
-        <p>Write the row in a <a href={url('/handlers/rpc')}><code>POST</code></a>, then
-            reload what read the table. The list a page holds is its last answer, and nothing
-            tells the page a row was added until
-            <a href={url('/reactive/refresh')}><code>refresh</code></a> asks again.</p>
-        <Code language="abide" caption="abide" code={`
-            <script>
-            import { reactive } from '@abide/abide'
-            import listTargets from '../listTargets.server.ts'
-            import setTarget from '../setTarget.server.ts'
+    <Section title="Name what a write changed, and every page reading it loads again">
+        <p>Write the row in an <code>rpc</code> whose <code>methods</code> name
+            <code>POST</code>, and name the tag it changed in <code>refreshes</code>. The list is
+            read again on the server before the write answers, and every browser showing it is
+            sent the new rows.</p>
+        <Code language="ts" caption="server" code={`
+            import { rpc } from '@abide/abide/server'
+            import { crmDatabase } from './lib/crmDatabase.server.ts'
 
-            const targets = reactive(() => listTargets())
-
-            async function record() {
-                await setTarget({ target: 600_000 })
-                targets.refresh()
-            }
-            </script>
-
-            <button onclick={record}>Set target</button>
+            export default rpc(
+                ({ target }: { target: number }) => {
+                    crmDatabase.sql\`INSERT INTO targets (target) VALUES (\${target})\`
+                },
+                { methods: ['POST'], refreshes: ['targets'] },
+            )
         `} />
     </Section>
 
-    <Section title="Reload every value tagged with a table, whoever wrote the row">
-        <p>A refresh after the CRM's own write misses a row the <code>sqlite3</code> shell or a
-            second server commits. Name the table with
-            <a href={url('/data/table')}><code>table</code></a>, and every <code>memo</code> whose
-            <code>tags</code> name it loads again after any committed change.</p>
+    <Section title="Call the table, and a value follows it whoever wrote the row">
+        <p>A tag is refreshed by the CRM's own write, and misses a row the <code>sqlite3</code>
+            shell or a second server commits. Call the table with
+            <a href={url('/data/table')}><code>table</code></a> instead, and a value whose run called
+            it loads again after any committed change. The rows are the same for everyone, so the
+            value is <code>global</code>.</p>
         <Code language="ts" caption="server" code={`
             import { memo } from '@abide/abide'
-            import { table } from '@abide/abide/server'
-            import { crmDatabase } from '../pipeline/lib/crmDatabase.server.ts'
+            import { rpc } from '@abide/abide/server'
+            import { targets } from './lib/targets.server.ts'
 
-            const latest = 'SELECT target FROM targets ORDER BY id DESC'
-
-            table(crmDatabase, 'targets')
-            export const target = memo(() => crmDatabase().query(latest).get(), {
-                global: true,
-                tags: ['targets'],
-            })
+            export default rpc(
+                memo(async () => targets().at(-1)?.target ?? null, { global: true }),
+            )
         `} />
     </Section>
 
@@ -123,9 +116,7 @@ import Section from '#src/lib/Section.abide'
                 run: async () => {
                     const leads = DEALS.filter((deal) => deal.stage === 'lead')
                     await Bun.sleep(300) // the mail going out
-                    crmDatabase().run('INSERT INTO digests (sentAt) VALUES (?)', [
-                        Date.now(),
-                    ])
+                    crmDatabase.sql\`INSERT INTO digests (sentAt) VALUES (\${Date.now()})\`
                     log.info(\`digest sent: \${leads.length} leads to follow up\`)
                 },
                 store: store.sqlite(crmDatabase, 'digest'),
