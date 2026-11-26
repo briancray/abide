@@ -3,14 +3,21 @@
 // mutation keeps its verb in its options: `POST(f, o)` is `rpc(f, { methods: ['POST'], ...o })`. A
 // handler file is a server file (16.73): `<name>.handler.ts` is `<name>.server.ts`, answering at the
 // same route, and every import naming it is moved with it. A handler a `<script server>` declares is
-// a value it exports (16.70), so its binding is exported.
+// a value it exports bare (16.70): `rpc(v)` there is `v`, and one given options is noted, as only a
+// server file's `rpc` takes them.
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { isAbideSpecifier } from './hookCalls.ts'
 import { rewriteCode } from './rewriteCode.ts'
 import { importStatements, namedImports } from './splitImports.ts'
-import { argumentCommas, closerOf, type Token, tokenize } from './tokenize.ts'
+import {
+    argumentCommas,
+    closerOf,
+    nesting,
+    type Token,
+    tokenize,
+} from './tokenize.ts'
 
 type Note = (path: string, line: string, message: string) => void
 
@@ -20,6 +27,9 @@ const TAKEN =
     'abide upgrade moves a handler file to <name>.server.ts, and that file is already there: merge the two — the handler as `export default rpc(…)` — so it answers where it did. RULEBOOK 16.73, 38.231.'
 
 const SCRIPT = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g
+
+const OPTIONED =
+    "a <script server> exports bare values, and `rpc` with options is a server file's: move this one to a <name>.server.ts beside the component, and import it where it is called. RULEBOOK 16.70, 38.231."
 
 /**
  * 38.231 — every source the app holds with its handlers declared by `rpc`, and each handler file
@@ -47,7 +57,9 @@ export async function toRpc(
     for (const path of paths) {
         const text = await read(path)
         if (text === undefined) continue
-        const migrated = toRpcText(text, path, isSpecifier)
+        const migrated = toRpcText(text, path, isSpecifier, (line, message) =>
+            note(moved.get(path) ?? path, line, message),
+        )
         if (taken.has(path)) note(path, migrated.split('\n')[0] ?? '', TAKEN)
         const target = moved.get(path)
         if (target !== undefined) {
@@ -64,6 +76,7 @@ export function toRpcText(
     text: string,
     path: string,
     isSpecifier: (specifier: string) => boolean = isAbideSpecifier,
+    note: (line: string, message: string) => void = () => {},
 ): string {
     let out = movedSpecifiers(text)
     // The rewrite reads a file holding a verb's name: a file importing one of them holds it.
@@ -77,7 +90,7 @@ export function toRpcText(
     // 16.70 — a server block's handler is a value it exports.
     return out.replace(SCRIPT, (whole, open: string, body: string, close) =>
         /\bserver\b/.test(open)
-            ? `${open}${exportedHandlers(body)}${close}`
+            ? `${open}${bareExports(exportedHandlers(body), isSpecifier, note)}${close}`
             : whole,
     )
 }
@@ -222,4 +235,107 @@ function exportedHandlers(body: string): string {
         out = `${out.slice(0, start)}export ${out.slice(start)}`
     }
     return out
+}
+
+/**
+ * 16.70 — a server block with each top-level `export const x = rpc(v)` exported as `v`, and abide's
+ * `rpc` no longer imported where nothing else names it. One given options is left, and noted.
+ */
+function bareExports(
+    body: string,
+    isSpecifier: (specifier: string) => boolean,
+    note: (line: string, message: string) => void,
+): string {
+    if (!body.includes('rpc(')) return body
+    const tokens = tokenize(body)
+    const edits: Edit[] = []
+    let depth = 0
+    for (let index = 0; index < tokens.length; index += 1) {
+        const token = tokens[index] as Token
+        const moved = nesting(token.kind)
+        if (moved !== 0) {
+            depth += moved
+            continue
+        }
+        if (
+            depth !== 0 ||
+            token.text !== 'export' ||
+            !(
+                tokens[index + 1]?.text === 'const' ||
+                tokens[index + 1]?.text === 'let'
+            ) ||
+            tokens[index + 2]?.kind !== SyntaxKind.Identifier ||
+            tokens[index + 3]?.kind !== SyntaxKind.EqualsToken ||
+            tokens[index + 4]?.text !== 'rpc' ||
+            tokens[index + 5]?.kind !== SyntaxKind.OpenParenToken
+        )
+            continue
+        const open = index + 5
+        const close = closerOf(tokens, open)
+        if (close === -1) continue
+        const commas = argumentCommas(tokens, open)
+        // A comma before the closer alone is a trailing one: the value is the only argument.
+        const optioned =
+            commas.length > 1 ||
+            (commas.length === 1 && commas[0] !== close - 1)
+        if (optioned) {
+            const lineStart = body.lastIndexOf('\n', token.start) + 1
+            const lineEnd = body.indexOf('\n', token.start)
+            note(
+                body.slice(lineStart, lineEnd === -1 ? undefined : lineEnd),
+                OPTIONED,
+            )
+            continue
+        }
+        const first = tokens[open + 1] as Token
+        const last = tokens[
+            commas.length === 1 ? close - 2 : close - 1
+        ] as Token
+        edits.push({
+            start: (tokens[index + 4] as Token).start,
+            end: (tokens[close] as Token).end,
+            text: body.slice(first.start, last.end),
+        })
+    }
+    if (edits.length === 0) return body
+    let out = body
+    for (let index = edits.length - 1; index >= 0; index -= 1) {
+        const edit = edits[index] as Edit
+        out = `${out.slice(0, edit.start)}${edit.text}${out.slice(edit.end)}`
+    }
+    return withoutUnusedRpc(out, isSpecifier)
+}
+
+/** `body` without abide's `rpc` in its imports, where no other token of it names `rpc`. */
+function withoutUnusedRpc(
+    body: string,
+    isSpecifier: (specifier: string) => boolean,
+): string {
+    const statements = importStatements(body)
+    let named = 0
+    for (const token of tokenize(body))
+        if (token.kind === SyntaxKind.Identifier && token.text === 'rpc')
+            named += 1
+    for (let index = statements.length - 1; index >= 0; index -= 1) {
+        const statement = statements[index] as (typeof statements)[number]
+        if (!isSpecifier(statement.specifier)) continue
+        const binding = statement.bindings.find(
+            (each) => each.imported === 'rpc' && each.local === 'rpc',
+        )
+        // Named by the import alone: nothing in the block calls it any more.
+        if (binding === undefined || named > 1) continue
+        const kept: string[] = []
+        for (const each of statement.bindings)
+            if (each !== binding) kept.push(each.written)
+        if (kept.length === 0) {
+            // The statement, its line break, and the blank line that set it apart from the code.
+            let end = statement.end
+            if (body[end] === '\n') end += 1
+            if (body[end] === '\n') end += 1
+            return `${body.slice(0, statement.start)}${body.slice(end)}`
+        }
+        const edit = namedImports(body, statement, kept)
+        return `${body.slice(0, edit.start)}${edit.text}${body.slice(edit.end)}`
+    }
+    return body
 }

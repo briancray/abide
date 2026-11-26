@@ -1013,9 +1013,11 @@ export const listed = GET(rows)
 
 // 38.231 — THE FIVE VERBS ARE ONE `rpc`, and a handler file is a server file: a `GET` is an `rpc`, a
 // mutation keeps its verb in `methods`, a `.handler.ts` moves to `.server.ts` with every import naming
-// it, a server block's handler is exported, and a handler file whose server file is there already is
-// a note. Run again, nothing is left to move (38.200). THE REVERT: drop `toRpc` from the migrations;
-// nothing moves, and the handler file is still `getDeal.handler.ts`.
+// it, a server block's handler is exported bare — its `rpc` import gone where nothing else calls it —
+// and one with options is a note (16.70), as is a handler file whose server file is there already.
+// Run again, nothing is left to move (38.200). THE REVERT: drop `toRpc` from the migrations; nothing
+// moves, and the handler file is still `getDeal.handler.ts`. Dropping `bareExports` alone leaves
+// `export const listNotes = rpc(` in the server block.
 test('abide upgrade moves the five verbs to rpc and a handler file to a server file — 38.231, 38.200', async () => {
     const app = temporaryModule({
         'src/deals/getDeal.handler.ts': `import { GET } from '@abide/abide/server'
@@ -1035,6 +1037,12 @@ const rename = PATCH(({ name }: { name: string }) => name)
 
 <script>
 import getDeal from './getDeal.handler.ts'
+</script>
+`,
+        'src/deals/lib/DealNotes.abide': `<script server>
+import { GET } from '@abide/abide/server'
+
+const listNotes = GET(({ id }: { id: string }) => [id])
 </script>
 `,
         'src/deals/taken.handler.ts': `import { DELETE } from '@abide/abide/server'
@@ -1064,8 +1072,13 @@ export default rpc(({ id }: { id: string }) => id, { description: 'One deal.' })
     expect(after('src/deals/index.abide')).toContain(
         "import getDeal from './getDeal.server.ts'",
     )
+    expect(after('src/deals/lib/DealNotes.abide')).toBe(`<script server>
+export const listNotes = ({ id }: { id: string }) => [id]
+</script>
+`)
     expect(after('src/deals/taken.server.ts')).toBeUndefined()
     expect(notes).toEqual([
+        'src/deals/index.abide:4 a <script server> exports bare values, and `rpc` with options is a server file\'s',
         'src/deals/taken.handler.ts:1 abide upgrade moves a handler file to <name>.server.ts, and that file is already there',
     ])
     for (const edit of edits)

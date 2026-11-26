@@ -5,6 +5,7 @@ import { isEventName } from '#shared/isEventName.ts'
 import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import { isComponentTag, propKeyOf } from './classifyTemplate.ts'
+import { isAbideSpecifier } from './hookCalls.ts'
 import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import type { AbideFile } from './parseAbide.ts'
@@ -611,6 +612,7 @@ function project(file: AbideFile): Projection {
     // reads.
     refuseExport(modulesText, '<script module>')
     refuseExport(serversText, '<script server>')
+    refuseServerRpc(serversText)
     refuseExport(scriptsText, '<script>')
     // 16.70 — what the server block exports, given an address under a name no author writes, so the
     // checker reads each one as it reads a server file's `rpc`.
@@ -847,6 +849,23 @@ function refuseExport(
             )
         const refused = refusedModuleExport(tokens, index + 1)
         if (refused !== undefined) throw new Error(refused)
+    }
+}
+
+/**
+ * 16.70 — A `<script server>` EXPORTS BARE VALUES: each one is its component's, at the verbs its value
+ * derives, and options — an address, verbs, middleware, a listing — are a server file's `rpc`. So a
+ * server block importing abide's `rpc` is refused where it imports it, naming what to do instead.
+ */
+function refuseServerRpc(source: string): void {
+    if (!source.includes('rpc')) return
+    for (const statement of importStatements(source)) {
+        if (!isAbideSpecifier(statement.specifier)) continue
+        for (const binding of statement.bindings)
+            if (binding.imported === 'rpc')
+                throw new Error(
+                    "abide: a <script server> exports bare values — `export const name = value` — and each answers its component at the verbs its value derives. `rpc`, with its options, is a server file's: move it to a <name>.server.ts beside the component. RULEBOOK 16.70.",
+                )
     }
 }
 
