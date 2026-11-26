@@ -1,13 +1,7 @@
-<script server>
-import { rpc } from '@abide/abide/server'
-
-export const saveNote = rpc(({ note }: { id: string; note: string }) => note, {
-    methods: ['POST'],
-})
-</script>
-
 <script>
 import { reactive, watch } from '@abide/abide'
+
+import saveNote from './SaveNote.server.ts'
 
 let note = reactive('')
 let saved = reactive('')

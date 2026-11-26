@@ -1,10 +1,8 @@
 <script server>
-import { rpc } from '@abide/abide/server'
-
-export const getForecast = rpc(async () => {
+export const getForecast = async () => {
     await Bun.sleep(1500)
     return 128400
-})
+}
 </script>
 
 <script>

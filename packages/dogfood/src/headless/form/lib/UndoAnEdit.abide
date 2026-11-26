@@ -1,13 +1,7 @@
-<script server>
-import { rpc } from '@abide/abide/server'
-
-export const saveDeal = rpc((deal: { name: string }) => deal, {
-    methods: ['POST'],
-})
-</script>
-
 <script>
 import { form } from '@abide/abide'
+
+import saveDeal from './UndoAnEdit.server.ts'
 
 const deal = form(saveDeal)
 </script>

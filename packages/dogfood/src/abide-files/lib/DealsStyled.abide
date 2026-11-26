@@ -1,12 +1,10 @@
 <script server>
-import { rpc } from '@abide/abide/server'
-
 const DEALS = [
     { id: 'd1', name: 'Acme renewal', stage: 'proposal', value: 42 },
     { id: 'd2', name: 'Hopper onboarding', stage: 'won', value: 18 },
     { id: 'd3', name: 'Lovelace pilot', stage: 'lead', value: 7 },
 ]
-export const listDeals = rpc(() => DEALS)
+export const listDeals = () => DEALS
 </script>
 
 <script>

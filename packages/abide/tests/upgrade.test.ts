@@ -1078,7 +1078,7 @@ export const listNotes = ({ id }: { id: string }) => [id]
 `)
     expect(after('src/deals/taken.server.ts')).toBeUndefined()
     expect(notes).toEqual([
-        'src/deals/index.abide:4 a <script server> exports bare values, and `rpc` with options is a server file\'s',
+        "src/deals/index.abide:4 a <script server> exports bare values, and `rpc` with options is a server file's",
         'src/deals/taken.handler.ts:1 abide upgrade moves a handler file to <name>.server.ts, and that file is already there',
     ])
     for (const edit of edits)

@@ -6,6 +6,7 @@ import Section from '#src/lib/Section.abide'
 
 import ConfirmDelete from './lib/ConfirmDelete.abide'
 import confirmDelete from './lib/ConfirmDelete.abide' with { type: 'text' }
+import confirmDeleteServer from './lib/ConfirmDelete.server.ts' with { type: 'text' }
 import RenameDeal from './lib/RenameDeal.abide'
 import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
 </script>
@@ -66,7 +67,7 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
     <Section level={3} title="Ask before deleting a deal">
         <p><code>prompts.confirm</code> settles <code>true</code> only when the confirming button
             closed it. Cancel, Escape and the backdrop settle <code>false</code>.</p>
-        <Example code={confirmDelete}><ConfirmDelete /></Example>
+        <Example code={confirmDelete} server={confirmDeleteServer}><ConfirmDelete /></Example>
     </Section>
 
     <Section level={3} title="Make the company name be typed before a delete">

@@ -1,13 +1,7 @@
-<script server>
-import { rpc } from '@abide/abide/server'
-
-export const deleteDeal = rpc(({ id }: { id: string }) => id, {
-    methods: ['POST'],
-})
-</script>
-
 <script>
 import { prompts } from '@abide/abide'
+
+import deleteDeal from './ConfirmDelete.server.ts'
 
 type Deal = { id: string; name: string }
 const deal: Deal = { id: 'acme', name: 'Acme renewal' }

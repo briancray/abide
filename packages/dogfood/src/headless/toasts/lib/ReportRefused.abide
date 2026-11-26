@@ -1,14 +1,7 @@
-<script server>
-import { refuse, rpc } from '@abide/abide/server'
-
-export const sendStatement = rpc(
-    () => refuse(502, 'The mailer refused the statement'),
-    { methods: ['POST'] },
-)
-</script>
-
 <script>
 import { onRefusal, report, toasts } from '@abide/abide'
+
+import sendStatement from './ReportRefused.server.ts'
 
 onRefusal((refusal, call) => {
     toasts.notify(refusal.message, {

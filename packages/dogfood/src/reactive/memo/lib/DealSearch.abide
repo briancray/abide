@@ -1,11 +1,8 @@
 <script server>
-import { rpc } from '@abide/abide/server'
-
 const NAMES = ['Acme renewal', 'Babbage audit', 'Hopper & Co', 'Lovelace pilot']
 
-export const searchDeals = rpc(({ q }: { q: string }) =>
-    NAMES.filter((name) => name.toLowerCase().includes(q.toLowerCase())),
-)
+export const searchDeals = ({ q }: { q: string }) =>
+    NAMES.filter((name) => name.toLowerCase().includes(q.toLowerCase()))
 </script>
 
 <script>

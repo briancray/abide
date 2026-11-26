@@ -24,7 +24,7 @@ afterAll(removeTemporaryModules)
 
 // A file holding nothing but a server block declaring `body`.
 const SERVED = (body: string): string =>
-    `<script server>\nimport { rpc } from '@abide/abide/server'\n\n${body}\n</script>\n`
+    `<script server>\n${body}\n</script>\n`
 
 // 35.1 — A LAYOUT WRAPS EVERY PAGE BELOW ITS ROUTE, and 35.13 — one with no template wraps nothing. THE REVERT: give `layoutsAround` back a prefix over
 // the FILE's directory; `/media` is wrapped in no layout, against 1.
@@ -82,7 +82,7 @@ test('a ui directory is an ordinary one — 23.15', async () => {
             'media/ui/status.server.ts':
                 "import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 'up')\n",
             'media/index.abide': SERVED(
-                "import { format } from './ui/lib/format.ts'\n\nexport const count = rpc(() => format(1))",
+                "import { format } from './ui/lib/format.ts'\n\nexport const count = () => format(1)",
             ),
         }),
     )
@@ -130,12 +130,12 @@ test('two layouts at one route are refused, naming both — 35.12', async () => 
 test('a handler file answers at its path, and a private handler below /__abide/handlers — 16.2, 16.70, 23.3, 23.14', async () => {
     const { mounts, routes } = await compileApp(
         appFixture({
-            'media/[id]/index.abide': `${SERVED("export const rate = rpc(() => 1, { methods: ['POST'] })")}<p>one</p>`,
+            'media/[id]/index.abide': `${SERVED('export const rate = () => 1')}<p>one</p>`,
             'media/[id]/save.server.ts':
                 "import { rpc } from '@abide/abide/server'\n\nexport default rpc(({ id }: { id: string }) => id, { methods: ['POST'] })\n",
             'media/[id]/comments/addComment.server.ts':
                 "import { rpc } from '@abide/abide/server'\n\nexport default rpc(({ id }: { id: string }) => id, { methods: ['POST'] })\n",
-            'admin/lib/Panel.abide': `${SERVED('export const recent = rpc(() => 1)')}<p>panel</p>`,
+            'admin/lib/Panel.abide': `${SERVED('export const recent = () => 1')}<p>panel</p>`,
             'admin/index.abide': SERVED(''),
             'health.server.ts':
                 "import { rpc } from '@abide/abide/server'\n\nexport default rpc(() => 1)\n",
@@ -148,8 +148,8 @@ test('a handler file answers at its path, and a private handler below /__abide/h
         )
     expect(addresses.sort()).toEqual([
         'GET /__abide/handlers/admin/lib/Panel/recent private /admin',
+        'GET /__abide/handlers/media/id/index/rate private /media/[id]',
         'GET /health public /health',
-        'POST /__abide/handlers/media/id/index/rate private /media/[id]',
         'POST /media/[id]/comments/addComment public /media/[id]/comments/addComment',
         'POST /media/[id]/save public /media/[id]/save',
     ])
@@ -214,9 +214,7 @@ test('a server block under a public directory, and one exporting default, are re
         compileApp(
             appFixture({
                 'index.abide': '<p>home</p>',
-                'media/public/Rating.abide': SERVED(
-                    "export const rate = rpc(() => 1, { methods: ['POST'] })",
-                ),
+                'media/public/Rating.abide': SERVED('export const rate = () => 1'),
             }),
         ),
     )
@@ -225,7 +223,7 @@ test('a server block under a public directory, and one exporting default, are re
     const named = await refusal(
         compileApp(
             appFixture({
-                'index.abide': SERVED('export default rpc(() => 1)'),
+                'index.abide': SERVED('export default 1'),
             }),
         ),
     )
@@ -431,10 +429,8 @@ test("a component's browser module carries its private handlers' wrappers and no
     const { files } = await compileApp(
         appFixture({
             'media/[id]/lib/Rating.abide': `<script server>
-import { rpc } from '@abide/abide/server'
-
 const KEY = 'sk-not-for-browsers'
-export const rate = rpc(({ stars }: { stars: number }) => KEY.length + stars, { methods: ['POST'] })
+export const rate = ({ stars }: { stars: number }) => KEY.length + stars
 </script>
 
 <script>
@@ -448,7 +444,7 @@ let stars = reactive(0)
         }),
     )
     const client = files['media/[id]/lib/Rating.abide']?.client ?? ''
-    expect(client).toContain('const rate = __wire("POST"')
+    expect(client).toContain('const rate = __wire("GET"')
     expect(client).toContain('../handlers/media/id/lib/Rating/rate')
     expect(client).not.toContain('export const rate')
     expect(client).not.toContain('sk-not-for-browsers')
@@ -466,10 +462,9 @@ let stars = reactive(0)
 test('a server block importing what its <script> imports compiles as one binding — 34.22', async () => {
     const root = appFixture({
         'index.abide': `<script server>
-import { rpc } from '@abide/abide/server'
 import { reactive, refuse } from '@abide/abide'
 
-export const count = rpc(({ n }: { n: number }) => (n > 0 ? reactive(n)() : refuse(400)))
+export const count = ({ n }: { n: number }) => (n > 0 ? reactive(n)() : refuse(400))
 </script>
 
 <script>
@@ -508,7 +503,7 @@ import type { Contact } from './lib/schema.ts'
 const empty: Contact = { name: '' }
 </script>
 
-${SERVED("import { Contact } from './lib/schema.ts'\n\nexport const save = rpc((a: unknown) => Contact.parse(a), { methods: ['POST'] })")}
+${SERVED("import { Contact } from './lib/schema.ts'\n\nexport const save = (a: unknown) => Contact.parse(a)")}
 <p>{empty.name}</p>`,
     })
     const found = await checkApp(root)
@@ -527,7 +522,7 @@ test('a .abide default both a server block and its <script> import is refused �
         compileApp(
             appFixture({
                 'lib/Card.abide': '<p>card</p>',
-                'index.abide': `${SERVED("import Card from './lib/Card.abide'\n\nexport const preview = rpc(() => Card({}))")}
+                'index.abide': `${SERVED("import Card from './lib/Card.abide'\n\nexport const preview = () => Card({})")}
 <script>
 import Card from './lib/Card.abide'
 </script>
@@ -552,7 +547,7 @@ test('a comment inside a shared multi-line import leaves a server module that pa
     b,
 } from './lib/x.ts'
 
-const sum = rpc(() => a + b)`)}
+const sum = () => a + b`)}
 <script>
 import { a } from './lib/x.ts'
 </script>
@@ -573,7 +568,7 @@ import { a } from './lib/x.ts'
 test('a default import both blocks make merges beside the names only one makes — 34.22', async () => {
     const root = appFixture({
         'lib/x.ts': 'export default 1\nexport const y = 2',
-        'index.abide': `${SERVED("import X, { y } from './lib/x.ts'\n\nexport const total = rpc(() => X + y)")}
+        'index.abide': `${SERVED("import X, { y } from './lib/x.ts'\n\nexport const total = () => X + y")}
 <script>
 import X from './lib/x.ts'
 </script>
@@ -760,9 +755,7 @@ middleware((next, { request }) =>
 `,
         'admin/index.abide': `<script>\nimport Panel from './lib/Panel.abide'\n</script>\n\n<Panel/>`,
         'admin/lib/Panel.abide': `<script server>
-import { rpc } from '@abide/abide/server'
-
-export const save = rpc(() => 'saved', { methods: ['POST'] })
+export const save = () => 'saved'
 </script>
 
 <button onclick={() => save()}>save</button>`,
@@ -773,9 +766,7 @@ middleware(() => new Response('reports only', { status: 418 }))
 </script>
 `,
         'reports/lib/Chart.abide': `<script server>
-import { rpc } from '@abide/abide/server'
-
-export const draw = rpc(() => 'drawn', { methods: ['POST'] })
+export const draw = () => 'drawn'
 </script>
 
 <button onclick={() => draw()}>draw</button>`,
@@ -926,17 +917,13 @@ test("an unexpected error reaches the onError its route filed, and no other rout
 test('a private handler runs under the middleware its file is filed at, and no sibling route’s — 16.72', async () => {
     const save = (headers: Record<string, string>) =>
         Bun.fetch(`${base}/__abide/handlers/admin/lib/Panel/save`, {
-            method: 'POST',
             headers: { origin: base, ...headers },
         })
     const refused = await save({})
     const admitted = await save({ 'x-staff': 'yes' })
     const chart = await Bun.fetch(
         `${base}/__abide/handlers/reports/lib/Chart/draw`,
-        {
-            method: 'POST',
-            headers: { origin: base },
-        },
+        { headers: { origin: base } },
     )
     expect({
         refused: refused.status,

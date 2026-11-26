@@ -1,5 +1,5 @@
 <script server>
-import { refuse, rpc } from '@abide/abide/server'
+import { refuse } from '@abide/abide/server'
 
 import { crmDirectory } from './exampleDirectory.server.ts'
 import { folded } from './folded.ts'
@@ -81,7 +81,7 @@ async function ran(
 
 // A REAL COMMAND, RUN IN THE CRM AS ITS PAGE WRITES IT, and what it printed and exited with (40.45),
 // aimed by `ABIDE_APP_URL` at this server, where the CRM's handlers answer at their addresses (40.24).
-export const transcript = rpc(async ({ command }: { command: string }) => {
+export const transcript = async ({ command }: { command: string }) => {
     if (!COMMANDS.has(command))
         refuse(404, `docs: ${command} is not a command the docs run`)
     const origin = ownOrigin()
@@ -93,7 +93,7 @@ export const transcript = rpc(async ({ command }: { command: string }) => {
         running.catch(() => RAN.delete(key))
     }
     return running
-})
+}
 </script>
 
 <script>

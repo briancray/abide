@@ -858,7 +858,7 @@ export const rpc: Declare<true> = ((
     // one, imported from a server file, would answer it twice.
     if (isRpc(value))
         throw new Error(
-            'abide: this value is an `rpc` already, answered at its own address. A <script server> exports bare values; import a server file\'s `rpc` where it is called instead. RULEBOOK 16.70.',
+            "abide: this value is an `rpc` already, answered at its own address. A <script server> exports bare values; import a server file's `rpc` where it is called instead. RULEBOOK 16.70.",
         )
     const { methods, address: _address, columns, ...rest } = options ?? {}
     const brand = brandOf(value)

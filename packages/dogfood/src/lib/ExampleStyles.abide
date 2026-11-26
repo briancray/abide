@@ -3,8 +3,6 @@
 // after the first byte, and miss the page's markdown twin (see `Tests.abide`).
 import { readFileSync } from 'node:fs'
 
-import { rpc } from '@abide/abide/server'
-
 import { crmDirectory } from './exampleDirectory.server.ts'
 
 let stylesheet: string | undefined
@@ -18,7 +16,7 @@ function crmStylesheet(): string {
 
 // The `@utility` blocks of the CRM's stylesheet for the classes an example's markup writes, each
 // as written there with its comments dropped — the rules that style the example and nothing else.
-export const utilitiesFor = rpc(({ code }: { code: string }) => {
+export const utilitiesFor = ({ code }: { code: string }) => {
     const written = new Set<string>()
     for (const [, classes] of code.matchAll(/\bclass="([^"]*)"/g))
         for (const name of (classes as string).split(/\s+/)) written.add(name)
@@ -36,7 +34,7 @@ export const utilitiesFor = rpc(({ code }: { code: string }) => {
         )
     }
     return blocks
-})
+}
 </script>
 
 <script>

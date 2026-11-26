@@ -76,14 +76,12 @@ export const change = rpc(() => undefined, { methods: ['POST'] })
 test('the build writes what a GET declares for its copy into the wrapper, and no more', async () => {
     const app = appFixture({
         'index.abide': '<main>home</main>',
-        'library/lib/Handlers.abide': `<script server>
-${LIBRARY}</script>
-`,
+        'library/lib/handlers.server.ts': LIBRARY,
     })
     const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
     const wrapper =
-        (await builtCompilation(app)).files['library/lib/Handlers.abide']
+        (await builtCompilation(app)).handlers['library/lib/handlers.server.ts']
             ?.client ?? ''
     const line = (name: string): string =>
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
@@ -105,8 +103,7 @@ ${LIBRARY}</script>
 test('an option bound to a const carries its literal, and one the build cannot read is warned on', async () => {
     const app = appFixture({
         'index.abide': '<main>home</main>',
-        'named/lib/Handlers.abide': `<script server>
-import { reactive, rpc } from '@abide/abide/server'
+        'named/lib/handlers.server.ts': `import { reactive, rpc } from '@abide/abide/server'
 
 const KEY = 'isbn'
 const TAGS = ['shelf', 'named'] as const
@@ -119,13 +116,12 @@ export const named = rpc(
 )
 export const handed = rpc(reactive.derived(() => [{ isbn: '1' }], OPTIONS))
 export const unread = rpc(reactive.derived(() => [{ isbn: '1' }], { key: grown }))
-</script>
 `,
     })
     const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
     const wrapper =
-        (await builtCompilation(app)).files['named/lib/Handlers.abide']
+        (await builtCompilation(app)).handlers['named/lib/handlers.server.ts']
             ?.client ?? ''
     const line = (name: string): string =>
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
@@ -227,20 +223,18 @@ test('a copy answered max-age=0 is stale at once', async () => {
 test("the build writes a handler's parameter defaults into its wrapper, and refuses one it cannot read", async () => {
     const app = appFixture({
         'index.abide': '<main>home</main>',
-        'paged/lib/Handlers.abide': `<script server>
-import { memo, rpc } from '@abide/abide/server'
+        'paged/lib/handlers.server.ts': `import { memo, rpc } from '@abide/abide/server'
 
 export const list = rpc(async ({ page = 1, q = 'all' }: { page?: number; q?: string }) => [page, q])
 export const kept = rpc(({ size = 20 }: { size?: number }) => size, { key: 'id' })
 export const save = rpc(async ({ draft = true }: { draft?: boolean }) => draft, { methods: ['POST'] })
 export const plain = rpc(async ({ id }: { id: string }) => id)
-</script>
 `,
     })
     const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
     const wrapper =
-        (await builtCompilation(app)).files['paged/lib/Handlers.abide']
+        (await builtCompilation(app)).handlers['paged/lib/handlers.server.ts']
             ?.client ?? ''
     const line = (name: string): string =>
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
@@ -256,12 +250,10 @@ export const plain = rpc(async ({ id }: { id: string }) => id)
 
     const refused = appFixture({
         'index.abide': '<main>home</main>',
-        'paged/lib/Handlers.abide': `<script server>
-import { rpc } from '@abide/abide/server'
+        'paged/lib/handlers.server.ts': `import { rpc } from '@abide/abide/server'
 
 const PAGE_SIZE = 20
 export const list = rpc(async ({ size = PAGE_SIZE }: { size?: number }) => size)
-</script>
 `,
     })
     const stopped = await buildApp(refused)
@@ -353,8 +345,7 @@ test('a stale copy whose reload reaches no server goes on serving what it held â
 test("the build writes a GET's throttle or debounce into its wrapper â€” 16.110, 18.4, 18.15", async () => {
     const app = appFixture({
         'index.abide': '<main>home</main>',
-        'paced/lib/Handlers.abide': `<script server>
-import { memo, rpc } from '@abide/abide/server'
+        'paced/lib/handlers.server.ts': `import { memo, rpc } from '@abide/abide/server'
 
 const WINDOW = 250
 let grown = 100
@@ -363,13 +354,12 @@ grown += 1
 export const searched = rpc(({ q }: { q: string }) => [q], { debounce: 300 })
 export const served = rpc(memo(({ q }: { q: string }) => [q], { throttle: WINDOW }))
 export const unread = rpc(({ q }: { q: string }) => [q], { debounce: grown })
-</script>
 `,
     })
     const built = await buildApp(app)
     expect(built.exitCode).toBe(0)
     const wrapper =
-        (await builtCompilation(app)).files['paced/lib/Handlers.abide']
+        (await builtCompilation(app)).handlers['paced/lib/handlers.server.ts']
             ?.client ?? ''
     const line = (name: string): string =>
         wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??

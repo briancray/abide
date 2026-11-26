@@ -1,19 +1,7 @@
-<script server>
-import { rpc } from '@abide/abide/server'
-
-const COUNTS: Record<string, number> = { lead: 3, won: 2 }
-
-export const getStage = rpc(
-    async ({ stage }: { stage: string }) => {
-        await Bun.sleep(600)
-        return COUNTS[stage] ?? 0
-    },
-    { tags: ['board'] },
-)
-</script>
-
 <script>
 import { busy, reactive } from '@abide/abide'
+
+import getStage from './DimBoard.server.ts'
 
 const lead = reactive.derived(() => getStage({ stage: 'lead' }))
 const won = reactive.derived(() => getStage({ stage: 'won' }))

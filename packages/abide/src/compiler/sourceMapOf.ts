@@ -70,11 +70,22 @@ export function sourceMapOf(
                 const runEnd = origin.at + Math.max(origin.length, 1)
                 if (origin.at >= end || runEnd <= start) continue
                 const from = Math.max(origin.at, start)
-                place(
-                    line,
-                    from - start + shift,
-                    origin.source + (from - origin.at),
-                )
+                const projectedFrom = origin.source + (from - origin.at)
+                place(line, from - start + shift, projectedFrom)
+                // A run the projection itself wrote into — a wrapper it inserted (16.70) — moves
+                // the author's text after it: each of its own runs inside starts a segment, so a
+                // column past the insertion is the author's column and not one shifted by it.
+                const projectedTo =
+                    origin.source + (Math.min(runEnd, end) - origin.at)
+                for (const run of projected) {
+                    if (run.at <= projectedFrom) continue
+                    if (run.at >= projectedTo) break
+                    place(
+                        line,
+                        run.at - origin.source + origin.at - start + shift,
+                        run.at,
+                    )
+                }
             }
         }
     }

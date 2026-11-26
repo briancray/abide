@@ -6,6 +6,7 @@ import Section from '#src/lib/Section.abide'
 
 import SaveNote from './lib/SaveNote.abide'
 import saveNote from './lib/SaveNote.abide' with { type: 'text' }
+import saveNoteServer from './lib/SaveNote.server.ts' with { type: 'text' }
 </script>
 
 <Doc
@@ -33,7 +34,7 @@ import saveNote from './lib/SaveNote.abide' with { type: 'text' }
     <Section level={3} title="Save a note a beat after the typing stops">
         <p>The effect reads <code>note</code>, so each keystroke reruns it. The disposer clears the
             timer the run before started, so a burst of typing is one save.</p>
-        <Example code={saveNote}><SaveNote /></Example>
+        <Example code={saveNote} server={saveNoteServer}><SaveNote /></Example>
     </Section>
 
     <Section level={3} title="Wake only on the sources named">

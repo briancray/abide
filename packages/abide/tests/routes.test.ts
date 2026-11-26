@@ -56,11 +56,9 @@ import { homeAccess } from './lib/homeAccess.ts'
 
 export default rpc(() => 'opened', { methods: ['PUT'], middleware: homeAccess() })
 `,
-        // 16.70 — declared, not exported: the component's own, answered below `/__abide/handlers/`.
+        // 16.70 — exported bare from a server block: the component's own, answered below `/__abide/handlers/`.
         'media/lib/Card.abide': `<script server>
-import { rpc } from '@abide/abide/server'
-
-export const save = rpc(() => 'saved', { methods: ['POST'] })
+export const save = () => 'saved'
 </script>
 
 <button onclick={() => save()}>save</button>`,
@@ -87,7 +85,7 @@ test("abide routes --json lists every route, the private handler marked, each ha
                 middleware: [],
             },
             {
-                method: 'POST',
+                method: 'GET',
                 address: '/__abide/handlers/media/lib/Card/save',
                 file: 'media/lib/Card.abide',
                 kind: 'private',
@@ -153,7 +151,7 @@ test('abide routes prints the same map as text — 38.108', async () => {
     expect(lines.slice(0, 7).map((line) => line.split(/\s+/))).toEqual([
         ['GET', '/', 'index.abide'],
         [
-            'POST',
+            'GET',
             '/__abide/handlers/media/lib/Card/save',
             'media/lib/Card.abide',
             '(private)',

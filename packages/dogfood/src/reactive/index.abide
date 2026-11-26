@@ -17,6 +17,7 @@ import TabTitle from './lib/TabTitle.abide'
 import tabTitle from './lib/TabTitle.abide' with { type: 'text' }
 import WinLead from './lib/WinLead.abide'
 import winLead from './lib/WinLead.abide' with { type: 'text' }
+import winLeadServer from './lib/WinLead.server.ts' with { type: 'text' }
 </script>
 
 <Doc
@@ -77,7 +78,7 @@ import winLead from './lib/WinLead.abide' with { type: 'text' }
             on the next read instead, its
             <a href={url('/reactive/invalidate')}><code>invalidate</code></a> marks them stale and
             starts nothing.</p>
-        <Example code={winLead}><WinLead /></Example>
+        <Example code={winLead} server={winLeadServer}><WinLead /></Example>
     </Section>
 
     <Section title="An effect is the edge where a value leaves the page">

@@ -5,8 +5,8 @@ import { isEventName } from '#shared/isEventName.ts'
 import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import { isComponentTag, propKeyOf } from './classifyTemplate.ts'
-import { isAbideSpecifier } from './hookCalls.ts'
 import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
+import { isAbideSpecifier } from './hookCalls.ts'
 import { isNamedAlone } from './isNamedAlone.ts'
 import type { AbideFile } from './parseAbide.ts'
 import {
@@ -137,11 +137,12 @@ function project(file: AbideFile): Projection {
         bodies: string[],
         starts: number[],
         drops: (statement: ImportStatement, binding: ImportBinding) => boolean,
+        served = false,
     ): Span => {
         const start = text.length
         for (let at = 0; at < bodies.length; at += 1) {
             if (at > 0) text += '\n'
-            script(bodies[at] as string, starts[at], drops)
+            script(bodies[at] as string, starts[at], drops, served)
         }
         return { start, end: text.length }
     }
@@ -156,8 +157,11 @@ function project(file: AbideFile): Projection {
         body: string,
         origin: number | undefined,
         drops: (statement: ImportStatement, binding: ImportBinding) => boolean,
+        served = false,
     ): void => {
         const edits: { start: number; end: number; written: string }[] = []
+        // 16.70 — a server block's export is read as its component's browser receives it.
+        if (served) for (const edit of servedExports(body)) edits.push(edit)
         for (const one of attributedImports(body, 'text'))
             edits.push({
                 start: one.literalStart,
@@ -235,6 +239,7 @@ function project(file: AbideFile): Projection {
             if (value && !binding.typeOnly) refuseTwoFaces(statement, binding)
             return true
         },
+        true,
     )
     text += '\n;\n'
     const scripts = blocks(
@@ -614,9 +619,9 @@ function project(file: AbideFile): Projection {
     refuseExport(serversText, '<script server>')
     refuseServerRpc(serversText)
     refuseExport(scriptsText, '<script>')
-    // 16.70 — what the server block exports, given an address under a name no author writes, so the
-    // checker reads each one as it reads a server file's `rpc`.
-    // The app's own spelling of abide, which is what the checker reads the app's `rpc` by.
+    // 16.70 — each server block export under its private name, and the `rpc` it is read through
+    // (`servedExports`), in the app's own spelling of abide, which is what the checker reads the
+    // app's `rpc` by.
     text += privateExports(serversText, SERVER_SPECIFIER)
     return {
         text,
@@ -921,16 +926,136 @@ const REEXPORT_REFUSAL =
     'abide: a <script module> cannot re-export — import the name, then export it. RULEBOOK 34.35.'
 
 /**
- * 16.70 — each name a server block EXPORTS, given an address under a name no author writes: the
- * value in it, as `rpc` makes it answer (16.111). One spelling for the checker's view and the emitted
- * module, which the build's handler table reads a private value out of by the same name.
+ * 16.70 — A SERVER BLOCK'S EXPORT IS ITS COMPONENT'S `rpc`: what the browser binds is `rpc` over the
+ * value, so the checker reads the name through one — `export const x = v` as `rpc(v)`, and
+ * `export function x(…) {…}` as a `const` holding `rpc(function x(…) {…})`. Insertions alone, so
+ * every position the block's text maps to is where the file wrote it.
+ */
+function servedExports(
+    body: string,
+): { start: number; end: number; written: string }[] {
+    const edits: { start: number; end: number; written: string }[] = []
+    if (!body.includes(EXPORT)) return edits
+    const tokens = tokenize(body)
+    let depth = 0
+    for (let index = 0; index < tokens.length; index += 1) {
+        const token = tokens[index] as Token
+        const moved = nesting(token.kind)
+        if (moved !== 0) {
+            depth += moved
+            continue
+        }
+        if (depth !== 0 || token.text !== EXPORT) continue
+        const head = tokens[index + 1]
+        if (head === undefined) continue
+        if (
+            head.text === 'const' ||
+            head.text === 'let' ||
+            head.text === 'var'
+        ) {
+            if (tokens[index + 3]?.kind !== SyntaxKind.EqualsToken) continue
+            const first = index + 4
+            const last = statementEnd(body, tokens, first)
+            if (last < first) continue
+            edits.push({
+                start: (tokens[first] as Token).start,
+                end: (tokens[first] as Token).start,
+                written: `${PRIVATE_RPC}(`,
+            })
+            const end = (tokens[last] as Token).end
+            edits.push({ start: end, end, written: ')' })
+            continue
+        }
+        const keyword = head.text === 'async' ? tokens[index + 2] : head
+        if (keyword?.text !== 'function') continue
+        let at = tokens.indexOf(keyword) + 1
+        if (tokens[at]?.text === '*') at += 1
+        const name = tokens[at]
+        if (name?.kind !== SyntaxKind.Identifier) continue
+        // The body's braces: the first `{` at this depth after the parameters close.
+        const open = tokens.findIndex(
+            (each, position) =>
+                position > at &&
+                each.kind === SyntaxKind.OpenBraceToken &&
+                closerOf(tokens, at + 1) < position,
+        )
+        const close = open === -1 ? -1 : closerOf(tokens, open)
+        if (close === -1) continue
+        edits.push({
+            start: head.start,
+            end: head.start,
+            written: `const ${name.text} = ${PRIVATE_RPC}(`,
+        })
+        const end = (tokens[close] as Token).end
+        edits.push({ start: end, end, written: ')' })
+    }
+    return edits
+}
+
+/**
+ * The index of the last token of the expression starting at `first`: up to a `;` at its depth, or
+ * the token before a line opening the next top-level statement.
+ */
+function statementEnd(
+    body: string,
+    tokens: readonly Token[],
+    first: number,
+): number {
+    let depth = 0
+    for (let at = first; at < tokens.length; at += 1) {
+        const token = tokens[at] as Token
+        const moved = nesting(token.kind)
+        if (moved !== 0) {
+            depth += moved
+            if (depth < 0) return at - 1
+            continue
+        }
+        if (depth !== 0) continue
+        if (token.kind === SyntaxKind.SemicolonToken) return at - 1
+        if (
+            at > first &&
+            STATEMENT_HEADS.has(token.text) &&
+            body
+                .slice((tokens[at - 1] as Token).end, token.start)
+                .includes('\n')
+        )
+            return at - 1
+    }
+    return tokens.length - 1
+}
+
+/** What opens a top-level statement, where a line starting with one ends the expression above it. */
+const STATEMENT_HEADS = new Set([
+    'export',
+    'import',
+    'const',
+    'let',
+    'var',
+    'function',
+    'async',
+    'type',
+    'interface',
+    'class',
+    'enum',
+    'declare',
+    'if',
+    'for',
+    'while',
+])
+
+/**
+ * 16.70 — each name a server block EXPORTS, given an address under a name no author writes: its
+ * binding, which `servedExports` made the `rpc` over its value where it was declared — one spelling
+ * for the checker's view and the emitted module — and which the build's handler table reads a
+ * private value out of by this name. The import is the `rpc` those declarations call.
  */
 export function privateExports(servers: string, specifier: string): string {
     const names = serverExports(servers)
     if (names.length === 0) return ''
+    // Each binding holds its `rpc` already, wrapped where it was declared (`servedExports`).
     let out = `import { rpc as ${PRIVATE_RPC} } from ${JSON.stringify(specifier)}\n`
     for (const name of names)
-        out += `export const ${PRIVATE_EXPORT}${name} = ${PRIVATE_RPC}(${name})\n`
+        out += `export { ${name} as ${PRIVATE_EXPORT}${name} }\n`
     return out
 }
 

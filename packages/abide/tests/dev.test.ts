@@ -95,12 +95,10 @@ Promise.reject(new Error('nobody awaited this'))
         // itself rather than through dev's plugin. A private handler (16.70), so the module that
         // imports is the compiled `.abide`'s.
         'relative/index.abide':
-            "<script server>\nimport { rpc } from '@abide/abide/server'\nimport { greeting } from '../lib/greeting'\n\nexport const hello = rpc(() => greeting())\n</script>\n",
+            "<script server>\nimport { greeting } from '../lib/greeting'\n\nexport const hello = () => greeting()\n</script>\n",
         // 38.97 — a stack read on the server, and a line the browser's map places.
         'mapped/index.abide': `<script server>
-import { rpc } from '@abide/abide/server'
-
-export const where = rpc(() => new Error('placed').stack ?? '')
+export const where = () => new Error('placed').stack ?? ''
 </script>
 
 <script>
@@ -263,12 +261,12 @@ test('a server block importing an extensionless relative module answers — 38.4
 
 // 38.97 — A FRAME IN A COMPILED MODULE NAMES THE `.abide`, at the line and column the `new Error` is
 // written on. THE REVERT: `installSourceMaps` out of `serveCompilation`; the frame names
-// `__abide/mapped/index.ts`. Read a call site's column as counting from 0 and it names `:4:30`.
+// `__abide/mapped/index.ts`. Read a call site's column as counting from 0 and it names `:2:31`.
 test('a stack read on the server names the .abide line — 38.97', async () => {
     const stack = await (
         await Bun.fetch(`${base}/__abide/handlers/mapped/index/where`)
     ).text()
-    expect(stack).toMatch(/mapped\/index\.abide:4:36\b/)
+    expect(stack).toMatch(/mapped\/index\.abide:2:32\b/)
 })
 
 // 38.97 — THE BROWSER'S MAP READS THE `.abide`: the chunk's position of the script's own line is
@@ -289,7 +287,7 @@ test("a client chunk's source map places a script line in the .abide — 38.97",
         if (segment !== undefined)
             placed = `${map.sources[segment[1]]}:${segment[2] + 1}`
     }
-    expect(placed).toEndWith('mapped/index.abide:8')
+    expect(placed).toEndWith('mapped/index.abide:6')
 })
 
 // 16.28, 34.19 — THE MAP CARRIES THE `.abide` WITHOUT ITS SERVER BLOCK: it is served to a browser.

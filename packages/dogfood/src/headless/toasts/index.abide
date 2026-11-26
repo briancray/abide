@@ -8,8 +8,10 @@ import RemindAda from './lib/RemindAda.abide'
 import remindAda from './lib/RemindAda.abide' with { type: 'text' }
 import ReportRefused from './lib/ReportRefused.abide'
 import reportRefused from './lib/ReportRefused.abide' with { type: 'text' }
+import reportRefusedServer from './lib/ReportRefused.server.ts' with { type: 'text' }
 import SavePhone from './lib/SavePhone.abide'
 import savePhone from './lib/SavePhone.abide' with { type: 'text' }
+import savePhoneServer from './lib/SavePhone.server.ts' with { type: 'text' }
 import ToneEdges from './lib/ToneEdges.abide'
 import toneEdges from './lib/ToneEdges.abide' with { type: 'text' }
 </script>
@@ -82,14 +84,14 @@ import toneEdges from './lib/ToneEdges.abide' with { type: 'text' }
     <Section level={3} title="Say whether a save landed">
         <p>A notice takes itself down after three seconds, and an error's after ten, long enough
             to reach its action.</p>
-        <Example code={savePhone}><SavePhone /></Example>
+        <Example code={savePhone} server={savePhoneServer}><SavePhone /></Example>
     </Section>
 
     <Section level={3} title="Offer a report of a call that failed">
         <p><code>onRefusal</code> hands you the trace of every refused call. Pass it to
             <code>report</code> from the notice's action, and the report opens holding the
             server's lines for that call.</p>
-        <Example code={reportRefused}><ReportRefused /></Example>
+        <Example code={reportRefused} server={reportRefusedServer}><ReportRefused /></Example>
     </Section>
 
     <Section level={3} title="Show a repeated notice once">

@@ -1,10 +1,8 @@
 <script server>
-import { rpc } from '@abide/abide/server'
-
-export const getForecast = rpc(async () => {
+export const getForecast = async () => {
     await Bun.sleep(500)
     return Math.round(42_000 * (0.9 + Math.random() * 0.2))
-})
+}
 </script>
 
 <script>

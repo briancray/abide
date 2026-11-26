@@ -1,10 +1,8 @@
 <script server>
-import { rpc } from '@abide/abide/server'
-
 const NOTES: Record<string, string[]> = {
     d1: ['Wants a two-year term.', 'Legal reviews on Friday.'],
 }
-export const getNotes = rpc(({ id }: { id: string }) => NOTES[id] ?? [])
+export const getNotes = ({ id }: { id: string }) => NOTES[id] ?? []
 </script>
 
 <script>

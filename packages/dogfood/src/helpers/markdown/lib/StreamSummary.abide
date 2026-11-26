@@ -1,12 +1,10 @@
 <script server>
-import { rpc } from '@abide/abide/server'
-
-export const summarizeDeal = rpc(async function* () {
+export const summarizeDeal = async function* () {
     for (const word of '**Acme** wants the annual plan.'.split(' ')) {
         await Bun.sleep(150)
         yield `${word} `
     }
-})
+}
 </script>
 
 <script>

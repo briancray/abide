@@ -1,18 +1,11 @@
 <script server>
-import { rpc } from '@abide/abide/server'
-
 import getStatement from '../getStatement.server.ts'
 
 // Another site's browser, asking for the statement under its own origin.
-export const askAs = rpc(
-    async ({ origin }: { origin: string }) => {
-        const answer = await getStatement.raw(undefined, {
-            headers: { origin },
-        })
-        return answer.headers.get('access-control-allow-origin') ?? 'none'
-    },
-    { description: 'The origin the statement names back to a caller.' },
-)
+export const askAs = async ({ origin }: { origin: string }) => {
+    const answer = await getStatement.raw(undefined, { headers: { origin } })
+    return answer.headers.get('access-control-allow-origin') ?? 'none'
+}
 </script>
 
 <script>

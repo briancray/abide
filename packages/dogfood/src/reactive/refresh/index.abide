@@ -6,6 +6,7 @@ import Section from '#src/lib/Section.abide'
 
 import WinLead from './lib/WinLead.abide'
 import winLead from './lib/WinLead.abide' with { type: 'text' }
+import winLeadServer from './lib/WinLead.server.ts' with { type: 'text' }
 </script>
 
 <Doc
@@ -29,7 +30,7 @@ import winLead from './lib/WinLead.abide' with { type: 'text' }
         <p>Winning a lead changes <code>lead</code> and <code>won</code>. Call the handler's own
             <code>refresh</code> with a pattern of its args to reload those two entries, and every
             other stage stays as it is: <code>proposal</code> never reloads.</p>
-        <Example code={winLead}><WinLead /></Example>
+        <Example code={winLead} server={winLeadServer}><WinLead /></Example>
     </Section>
 
     <Section level={3} title="Reload every value about one stage by tag">

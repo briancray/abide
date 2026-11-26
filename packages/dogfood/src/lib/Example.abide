@@ -18,7 +18,9 @@ import { hooksOf, markupOf } from './markupOf.ts'
 import { groupOf } from './sitePages.ts'
 import { type Work, workNow, workSince } from './work.ts'
 
-const { code } = props<{ code: string }>()
+// `server` is the server file beside the example, where what it calls takes options a <script server>
+// export cannot (16.70): shown under the file that imports it.
+const { code, server } = props<{ code: string; server?: string }>()
 const form = groupOf(route.name())?.form
 
 const view = tabs({ items: ['result', 'html', 'css'] })
@@ -96,6 +98,7 @@ function counted(count: number, one: string, many: string): string {
 
 <div class="example">
     <Code language="abide" caption="abide" code={code} />
+    {#if server}<Code language="ts" caption="server" code={server} />{/if}
     {#if form === 'anatomy'}
         <div class="example-tabs" data-result {...view.list}>
             <button {...view.tab('result').button}>Result</button>

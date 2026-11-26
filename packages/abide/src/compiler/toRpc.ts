@@ -332,7 +332,11 @@ function withoutUnusedRpc(
             let end = statement.end
             if (body[end] === '\n') end += 1
             if (body[end] === '\n') end += 1
-            return `${body.slice(0, statement.start)}${body.slice(end)}`
+            // From its line's start, so the indent before it goes with it.
+            let start = statement.start
+            while (body[start - 1] === ' ' || body[start - 1] === '\t')
+                start -= 1
+            return `${body.slice(0, start)}${body.slice(end)}`
         }
         const edit = namedImports(body, statement, kept)
         return `${body.slice(0, edit.start)}${edit.text}${body.slice(edit.end)}`

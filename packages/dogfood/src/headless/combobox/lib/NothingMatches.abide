@@ -1,13 +1,11 @@
 <script server>
-import { rpc } from '@abide/abide/server'
-
 type Contact = { id: string; name: string }
 
-export const listContacts = rpc((): Contact[] => [
+export const listContacts = (): Contact[] => [
     { id: 'ada', name: 'Ada Lovelace' },
     { id: 'grace', name: 'Grace Hopper' },
     { id: 'katherine', name: 'Katherine Johnson' },
-])
+]
 </script>
 
 <script>
