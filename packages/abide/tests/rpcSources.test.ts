@@ -246,6 +246,33 @@ test("a memo's rpc is set, patched and refreshed over the wire — 16.117", asyn
     expect(runs).toBe(2)
 })
 
+// 16.89 — A VALUE'S WRITE REFRESHES WHAT ITS `refreshes` NAMES, as any mutation's does: the read takes
+// none, and the write faces take it. THE REVERT: leave `refreshes` out of `facesOptions`; the tagged
+// memo ran `1` time where `2` is due — and before this, declaring it at all threw 16.92's refusal.
+test("a value's write refreshes what its refreshes names — 16.89", async () => {
+    let runs = 0
+    const seen = memo(
+        () => {
+            runs += 1
+            return runs
+        },
+        { global: true, tags: ['seats'] },
+    )
+    const seats = rpc(
+        { seats: 10 },
+        { methods: ['GET', 'PUT'], refreshes: ['seats'] },
+    )
+    await using app = await inMemoryApp({
+        'account/seats.server.ts': { default: seats },
+    })
+    await seen()
+    expect(
+        await sent(app, 'PUT', '/account/seats', { given: [{ seats: 12 }] }),
+    ).toBe('200 {"seats":12}')
+    await seen()
+    expect(runs).toBe(2)
+})
+
 // 16.117 — A JOB'S RPC READS ITS STATUS AND RUNS IT; A PIPE'S READS ITS STATUS AND PUSHES AN ITEM; A
 // LEDGER'S READS ITS ENTRIES AND APPENDS. THE REVERT: attach no members to `main`; `digest.run` is not
 // a function.

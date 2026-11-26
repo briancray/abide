@@ -951,11 +951,6 @@ export const rpc: Declare<true> = ((
     if (brand === undefined && typeof value === 'function') {
         if (columns !== undefined) refuseColumns()
         const verbs = calledVerbs(methods)
-        // 16.92 — `refreshes` refreshes after a write, which a read-only `rpc` never makes.
-        if (rest.refreshes !== undefined && verbs[0] === 'GET')
-            throw new Error(
-                'abide: an `rpc` answering `GET` alone was declared with `refreshes`, which only a write takes. Refresh from the write that changed the value. RULEBOOK 16.92.',
-            )
         const main = declare(verbs[0] as Method)(
             value as never,
             rest as never,
@@ -973,13 +968,16 @@ export const rpc: Declare<true> = ((
             ? {}
             : SOURCE_MEMBERS[kind].members
     const verbs = sourceVerbs(members, methods, SOURCE_MEMBERS[kind].written)
-    if (rest.refreshes !== undefined && verbs.length === 1)
-        throw new Error(
-            'abide: an `rpc` answering `GET` alone was declared with `refreshes`, which only a write takes. Refresh from the write that changed the value. RULEBOOK 16.92.',
-        )
+    // 16.89 — `refreshes` is the writes', each face's. A value answering `GET` alone hands it to its
+    // read, which refuses it (16.92).
+    const { refreshes: _writes, ...read } = rest
     const main = declare('GET')(
         readOf(kind, value, brand, columns) as never,
-        readOptions(kind, rest, isPromise(value)) as never,
+        readOptions(
+            kind,
+            verbs.length === 1 ? rest : read,
+            isPromise(value),
+        ) as never,
     ) as unknown as Record<string, unknown> & {
         methods: readonly Method[]
         [FACES]: Partial<Record<Method, unknown>>
@@ -1216,6 +1214,7 @@ function isRpc(value: unknown): boolean {
 /** The options a value's write faces share with it: who may call them, and how. */
 function facesOptions(options: RpcOptions): RpcOptions {
     return {
+        refreshes: options.refreshes,
         description: options.description,
         middleware: options.middleware,
         timeout: options.timeout,
