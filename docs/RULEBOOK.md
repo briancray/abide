@@ -5271,9 +5271,6 @@ comparison other than `ne`, and for an array or an object nested where a value g
 `table` call and by `sql`, its stopped watch said once per database, and the writes made through its
 `table` MUST then be all that refresh what 47.29 names.
 
-47.39 A change 47.29 refreshes by MUST send a refresh to every browser's copy of a handler a run of
-which called a `table` of that table, save a copy fed from an entry 47.29 refreshed.
-
 # 48. Problem reports
 
 48.1 `report` MUST answer a `ReportDraft` holding among its `traces` the trace it was given, and the

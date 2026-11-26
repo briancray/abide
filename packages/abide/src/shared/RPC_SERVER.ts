@@ -50,11 +50,6 @@ export const RPC_SERVER: {
          */
         sweep(member: 'invalidate' | 'refresh', tags: string[] | null): void
         /**
-         * A refresh sent to every followed copy of `handlers`, each of which a run called a table
-         * that changed. 47.39.
-         */
-        sweepReaders(handlers: ReadonlySet<object>): void
-        /**
          * The `global` entry an answer came from, and the key it is filed under (`GLOBAL_GETS`).
          *
          * 18.8 — so a follower subscribed before it existed, or fed from one since evicted, is

@@ -44,7 +44,9 @@ import Section from '#src/lib/Section.abide'
 >
     <Section level={3} title="Read the targets by calling the table">
         <p>A table called answers its rows. A value whose run called it loads again after any
-            write to it — whichever code made it, and whatever connection.</p>
+            write to it — whichever code made it, and whatever connection. The rows are the same
+            for everyone, so the value is <code>global</code>, and every browser reading it is
+            sent them as they change.</p>
         <Code language="ts" caption="server" code={`
             import { memo } from '@abide/abide'
             import { targets } from '../pipeline/lib/targets.server.ts'
