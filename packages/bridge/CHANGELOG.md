@@ -1,5 +1,11 @@
 # @abide/bridge
 
+## 0.9.1
+
+### Patch Changes
+
+- a8ce49b: buildCompiledPage scratches through temporaryModule, harness stops publishing buildInjectable, two comments fixed ([`9efac50`](https://github.com/briancray/abide/commit/9efac50a3a05cfc4463e0b282b6b0bcf7e249669))
+
 ## 0.9.0
 
 ### Minor Changes
