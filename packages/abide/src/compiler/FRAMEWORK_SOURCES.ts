@@ -20,8 +20,10 @@ export const FRAMEWORK_SOURCES = {
     url: besideCompiler('../shared/url.ts'),
     /** `jsonSchema`, whose literal document a handler's `args` the build reads (19.28). */
     jsonSchema: besideCompiler('../shared/jsonSchema.ts'),
-    /** The five methods: `GET` is `declare('GET')` there and nowhere else. */
+    /** `rpc`, and the `declare` it is built on. */
     methods: besideCompiler('../shared/rpc.ts'),
+    /** `Failed`, the alias a refusal is typed by (15.10). */
+    failed: besideCompiler('../shared/Failed.ts'),
     /** `onConfig` (27.13). */
     hooks: besideCompiler('../server/hooks.ts'),
     /** `request`. */

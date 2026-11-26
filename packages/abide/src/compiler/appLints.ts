@@ -6,6 +6,7 @@ import {
     type Finding,
     placedFindings,
 } from './Diagnostics.ts'
+import { discardedFailuresIn, failedAliasIn } from './discardedFailuresIn.ts'
 import { projectShadow } from './projectShadow.ts'
 import { abideIn } from './reactiveTypes.ts'
 import type { ParsedSource } from './readSources.ts'
@@ -17,6 +18,7 @@ import { ShadowMap } from './ShadowMap.ts'
  *
  * 11.37 — `ambient`: every read of a request's ambient inside a `global` value's body, as errors.
  * 11.30 — `unkeyed`: every `args` defaulting a member its body's parameter does not, as warnings.
+ * 15.10 — and every statement whose value is a `Failed` nothing takes, among `ambient`'s errors.
  * Both over every `.ts` under `within` and each of `sources` as the shadow its reads registered
  * for it, because a keyed value is declared in a `.ts` as often as in a `.abide` — one walk of
  * the files for the two, each finding on its own line of the file an author wrote. `scripts`
@@ -34,6 +36,7 @@ export async function appLints(
         const checker = project.checker
         const abide = await abideIn(project)
         const ambientPaths = await ambientPathsIn(project)
+        const failed = await failedAliasIn(project)
         const authored = new Map<
             string,
             { source: (typeof sources)[number]; map: ShadowMap }
@@ -58,13 +61,21 @@ export async function appLints(
             files.map(async (path) => {
                 const sourceFile = await project.program.getSourceFile(path)
                 if (sourceFile === undefined) return
-                const [reads, defaults] = await Promise.all([
+                const [reads, defaults, dropped] = await Promise.all([
                     ambientPaths.size === 0
                         ? []
                         : ambientReadsIn(checker, sourceFile, ambientPaths),
                     argsDefaultsIn(checker, sourceFile, abide.jsonSchema),
+                    failed === undefined
+                        ? []
+                        : discardedFailuresIn(checker, sourceFile, failed),
                 ])
-                if (reads.length === 0 && defaults.length === 0) return
+                if (
+                    reads.length === 0 &&
+                    defaults.length === 0 &&
+                    dropped.length === 0
+                )
+                    return
                 const shadow = authored.get(host.keyOf(path))
                 const source = shadow?.source
                 const text =
@@ -84,7 +95,7 @@ export async function appLints(
                     ...placedFindings(
                         named,
                         text,
-                        ambientReads,
+                        [...ambientReads, ...dropped],
                         place,
                         'error',
                     ),

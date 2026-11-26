@@ -111,7 +111,7 @@ export type Abide = {
     props: string | undefined
     /** 27.13 — abide's `onConfig`, as the file the checker names it. */
     onConfig: string | undefined
-    /** 16.73 — the file declaring the five methods. */
+    /** 16.73 — the file declaring `rpc`. */
     methods: string | undefined
     /** 18.4 — the file declaring `deepEqual`. */
     deepEqual: string | undefined
