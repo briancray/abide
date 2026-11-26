@@ -10,7 +10,7 @@ const look = dialog({
     open: reactive(() => looking !== undefined),
     onclose: () => (looking = undefined),
 })
-const deal = () => deals.find((each) => each.id === looking)
+const deal = reactive(() => deals.find((each) => each.id === looking))
 </script>
 
 <ul class="fields stacked">
@@ -21,7 +21,7 @@ const deal = () => deals.find((each) => each.id === looking)
 </ul>
 
 <dialog {...look.dialog} class="m-auto w-80 rounded-xl border border-rule bg-raised p-5">
-    <h2>{deal()?.name}</h2>
-    <p>{format.money(deal()?.amount ?? 0, { maximumFractionDigits: 0 })}</p>
+    <h2>{deal?.name}</h2>
+    <p>{format.money(deal?.amount ?? 0, { maximumFractionDigits: 0 })}</p>
     <form method="dialog"><button>Close</button></form>
 </dialog>

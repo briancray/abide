@@ -4,7 +4,7 @@ import { busy } from '@abide/abide'
 import { createApp } from '@abide/abide/server'
 
 import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
-import { followUps } from './followUps.ts'
+import { followUps } from './followUps.server.ts'
 
 // Whatever is still a lead: another test may have won one.
 const leads = (): string[] =>

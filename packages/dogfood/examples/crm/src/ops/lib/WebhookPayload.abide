@@ -13,6 +13,7 @@ const payload = jsonInspector({ id: 'webhook', value: WEBHOOK })
     : (payload.inspected?.pointer ?? 'no value picked')}</p>
 <ul {...payload.tree} aria-label="Payload" class="tree">
     {#for row of payload.rows key row.pointer}
+        <!-- the row's depth in the tree, a rem a level -->
         <li {...payload.row(row).item}
             style:padding-inline-start="{row.level - 1}rem">
             {#if row.size !== undefined}

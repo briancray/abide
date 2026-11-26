@@ -18,7 +18,7 @@ const box = combobox({
 })
 </script>
 
-<label for="deal-team">On the deal</label>
+<label for={box.id}>On the deal</label>
 <div {...box.root} class="picker flex-row flex-wrap">
     {#for contact of box.value key contact.id}
         <span {...box.chip(contact).chip} class="rounded-md bg-signal/10 px-2"><span>{contact.name}</span>

@@ -3,7 +3,7 @@ const NOTES: Record<string, string[]> = {
     d1: ['Wants a three-year term.'],
 }
 
-// No export: this file is the one caller.
+// Private to this file: the browser gets a call in its place.
 export const getNotes = ({ id }: { id: string }) => NOTES[id] ?? []
 </script>
 
