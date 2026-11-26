@@ -3815,7 +3815,7 @@ function invalidateIn(cell: Cell, tags: string[] | null): void {
  * BODY, and a stream's body is a generator that only `startStream` knows how to run.
  */
 export function refreshOver(tags: string[] | null): void {
-    for (const cell of inReach(tags)) refreshIn(cell, tags)
+    refreshAll(inReach(tags), tags)
 }
 
 /**
@@ -3825,17 +3825,54 @@ export function refreshOver(tags: string[] | null): void {
  * for every caller (11.34), so a sign-in has nothing of its to reload.
  */
 export function refreshCallerHeld(): void {
-    for (const cell of inReach(null)) if (!cell.global) refreshIn(cell, null)
+    const held: Cell[] = []
+    for (const cell of inReach(null)) if (!cell.global) held.push(cell)
+    refreshAll(held, null)
 }
 
-function refreshIn(cell: Cell, tags: string[] | null): void {
-    // 13.16 — a mutation's reload is its write sent again, so a sweep marks it instead; 7.40 — and a
-    // job `App.stop` stopped is left to the next opening or a read, a stream one included.
-    if (cell.mutation || jobStopped(cell)) invalidateIn(cell, tags)
-    else if (subscribed(cell) || cell.stream !== null) {
+/**
+ * 13.7 — EVERY MARK BEFORE ANY RELOAD. A reload runs its body as it starts, and a memo that body calls
+ * reads nothing to be tracked by (11.6): left unmarked until later in the same sweep, it would answer
+ * what it held, and the value reloading from it would land one write late. So every entry is marked
+ * first — one something reads as well, so a body reaching it pulls its reload as it would an unread
+ * one's — and a read one the sweep reaches still marked has its own state back and reloads as before.
+ * The sweep's order is the order its entries were first reached, which puts a derived entry ahead of
+ * the sources its body then reached, and is why no order alone would do.
+ */
+function refreshAll(cells: Cell[], tags: string[] | null): void {
+    const reloading: { cell: Cell; state: number; direct: boolean }[] = []
+    for (const cell of cells)
+        if (!refreshReloads(cell)) markIn(cell, tags)
+        else {
+            reloading.push({ cell, state: cell.state, direct: cell.direct })
+            if (cell.body !== null) {
+                cell.state = DIRTY
+                cell.direct = false
+            }
+        }
+    for (const { cell, state, direct } of reloading) {
+        // Pulled by a body this sweep reloaded ahead of it: reloaded already.
+        if (cell.body !== null && cell.state !== DIRTY) continue
+        cell.state = state
+        cell.direct = direct
         if (tags === null) refreshOne(cell)
         else eachAdopted(cell, refreshOne)
-    } else if (cell.body !== null) {
+    }
+}
+
+// 13.16 — a mutation's reload is its write sent again, so a sweep marks it instead; 7.40 — and a job
+// `App.stop` stopped is left to the next opening or a read, a stream one included.
+function refreshReloads(cell: Cell): boolean {
+    return (
+        !cell.mutation &&
+        !jobStopped(cell) &&
+        (subscribed(cell) || cell.stream !== null)
+    )
+}
+
+function markIn(cell: Cell, tags: string[] | null): void {
+    if (cell.mutation || jobStopped(cell)) invalidateIn(cell, tags)
+    else if (cell.body !== null) {
         cell.state = DIRTY
         cell.direct = false
     }

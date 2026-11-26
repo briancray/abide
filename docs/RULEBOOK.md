@@ -996,7 +996,8 @@ load: a `store`, or a body that has handed back a pending answer or a stream, or
 41.20's script started that the server painted settled (41.27).
 
 13.7 A bare `refresh`, and `refresh` over a `Selection` that is not one `Reactive`, MUST reload
-only entries something subscribes to and MUST mark the rest.
+only entries something subscribes to and MUST mark the rest, and MUST mark every entry it reaches
+before it reloads any, so a reload reading another entry the same refresh reaches reads it reloaded.
 
 13.8 A `Selection` MUST be scope-bounded, and a tag MUST be scoped the same way.
 
