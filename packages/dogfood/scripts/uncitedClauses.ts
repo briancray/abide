@@ -32,11 +32,14 @@ const SCANNED = [
     'packages/dogfood/src',
     'packages/dogfood/scripts',
     'packages/dogfood/tests',
+    'packages/dogfood/examples/crm/src',
+    'packages/dogfood/examples/crm/e2e',
     'packages/harness/src',
     'packages/harness/tests',
     'packages/harness/e2e',
     'packages/bridge/bin',
     'packages/bridge/src',
+    'packages/bridge/tests',
 ]
 
 /**

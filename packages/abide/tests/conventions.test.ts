@@ -107,6 +107,9 @@ test('no test waits on a child process synchronously', async () => {
         'abide/e2e/**/*.ts',
         'harness/e2e/**/*.ts',
         'dogfood/e2e/**/*.ts',
+        'dogfood/examples/**/*.ts',
+        'bridge/tests/**/*.ts',
+        '../scripts/**/*.ts',
     ])
         for (const { path, text } of await sources(PACKAGES, pattern))
             for (const line of text.split('\n'))
