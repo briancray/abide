@@ -117,7 +117,23 @@ export type CallOptions<Args = unknown, Value = unknown> = {
  * the `ValidationError` the wire holds args to the annotation with (19.9), where `Annotated` says it
  * derives a schema at all.
  */
-export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
+export type Rpc<Value, Args, Failures = never, Produced = Value> = ReadRpc<
+    Value,
+    Args,
+    Failures,
+    Produced
+> & {
+    /** 11.76 — the owner's write of the value for `args`, past every rung; `set(value)` where it takes no args at all (11.80). */
+    set(...given: Written<Args, Value>): void
+    /** 11.76 — the owner's mutation of the value for `args` in place, past every rung; `patch(mutate)` where it takes no args at all (11.80). */
+    patch(...given: Written<Args, (value: Value) => void>): void
+}
+
+/**
+ * 16.111, 16.117 — an `Rpc` less the owner's writes: what an `rpc` over a source or a value is, its
+ * writes typed only where its verbs answer them (`Answering`). What a reader of any `Rpc` infers from.
+ */
+export type ReadRpc<Value, Args, Failures = never, Produced = Value> = ((
     ...args: undefined extends Args
         ? [args?: Args, options?: CallOptions<Args, NoInfer<Value>>]
         : [args: Args, options?: CallOptions<Args, NoInfer<Value>>]
@@ -131,10 +147,6 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
     /** 16.111 — every verb the `rpc` answers at its address, `method` first. */
     methods: readonly Method[]
     description: string | undefined
-    /** 11.76 — the owner's write of the value for `args`, past every rung; `set(value)` where it takes no args at all (11.80). */
-    set(...given: Written<Args, Value>): void
-    /** 11.76 — the owner's mutation of the value for `args` in place, past every rung; `patch(mutate)` where it takes no args at all (11.80). */
-    patch(...given: Written<Args, (value: Value) => void>): void
     /** 11.77 — the value for `args` now, then after each change. */
     readable(
         ...args: undefined extends Args ? [args?: Args] : [args: Args]
@@ -416,71 +428,149 @@ type Declare<Writes extends boolean> = {
         | RungRefusals<Answers>,
         BodyProduced<Result, Kept<Shaped>>
     >
-    // 16.6 — a memo, served as the keyed value it is: `GET(digest.status)`.
-    <Args, Result, Answers extends readonly unknown[] = unknown[]>(
+    // 16.6 — a memo, served as the keyed value it is: `rpc(digest.status)`. 16.111 — read alone, its
+    // writes typed where `methods` names their verbs.
+    <
+        Args,
+        Result,
+        Answers extends readonly unknown[] = unknown[],
+        const Methods extends readonly Method[] = ['GET'],
+    >(
         handler: Memo<Args, Result>,
-        options?: OptionsOf<Writes, Args, Answers>,
-    ): Rpc<
+        options?: OptionsOf<Writes, Args, Answers> & {
+            methods?: Methods | undefined
+        },
+    ): ReadRpc<
         MemoValue<Result>,
         Args,
         RungRefusals<Answers>,
         BodyProduced<Result, MemoValue<Result>>
-    >
+    > &
+        HeldWrites<Methods, Args, MemoValue<Result>>
     // 16.117 — a table: its rows read by a JSON match, written by key and deleted by a match.
     <
         Row extends Record<string, unknown>,
         Answers extends readonly unknown[] = unknown[],
+        const Methods extends readonly Method[] = [
+            'GET',
+            'PUT',
+            'PATCH',
+            'DELETE',
+        ],
     >(
         handler: TableFace<Row>,
-        options?: OptionsOf<Writes, Match<Row> | undefined, Answers>,
-    ): Rpc<Row[], Match<Row> | undefined, RungRefusals<Answers>> & {
-        set(rows: Row | readonly Row[]): Promise<unknown>
-        patch(rows: Partial<Row> | readonly Partial<Row>[]): Promise<unknown>
-        delete(match: Match<Row>): Promise<unknown>
-    }
+        options?: OptionsOf<Writes, Match<Row> | undefined, Answers> & {
+            methods?: Methods | undefined
+        },
+    ): ReadRpc<Row[], Match<Row> | undefined, RungRefusals<Answers>> &
+        Answering<
+            Methods,
+            'PUT',
+            { set(rows: Row | readonly Row[]): Promise<unknown> }
+        > &
+        Answering<
+            Methods,
+            'PATCH',
+            {
+                patch(
+                    rows: Partial<Row> | readonly Partial<Row>[],
+                ): Promise<unknown>
+            }
+        > &
+        Answering<
+            Methods,
+            'DELETE',
+            { delete(match: Match<Row>): Promise<unknown> }
+        >
     // 16.117 — a job: its status read and followed, and a run started ahead of its schedule.
-    <Status, Input, Answers extends readonly unknown[] = unknown[]>(
+    <
+        Status,
+        Input,
+        Answers extends readonly unknown[] = unknown[],
+        const Methods extends readonly Method[] = ['GET', 'POST'],
+    >(
         handler: JobFace<Status, Input>,
-        options?: OptionsOf<Writes, undefined, Answers>,
-    ): Rpc<Status, undefined, RungRefusals<Answers>> & {
-        run(input?: Input): Promise<Status>
-    }
+        options?: OptionsOf<Writes, undefined, Answers> & {
+            methods?: Methods | undefined
+        },
+    ): ReadRpc<Status, undefined, RungRefusals<Answers>> &
+        Answering<Methods, 'POST', { run(input?: Input): Promise<Status> }>
     // 16.117 — a ledger: its entries read in order from a position or a cursor, and appended to.
-    <Entry, Answers extends readonly unknown[] = unknown[]>(
+    <
+        Entry,
+        Answers extends readonly unknown[] = unknown[],
+        const Methods extends readonly Method[] = ['GET', 'POST'],
+    >(
         handler: LedgerFace<Entry>,
-        options?: OptionsOf<Writes, LedgerFrom | undefined, Answers>,
-    ): Rpc<Logged<Entry>[], LedgerFrom | undefined, RungRefusals<Answers>> & {
-        append(entry: Entry): Promise<number>
-    }
+        options?: OptionsOf<Writes, LedgerFrom | undefined, Answers> & {
+            methods?: Methods | undefined
+        },
+    ): ReadRpc<
+        Logged<Entry>[],
+        LedgerFrom | undefined,
+        RungRefusals<Answers>
+    > &
+        Answering<Methods, 'POST', { append(entry: Entry): Promise<number> }>
     // 16.117 — a pipe: its status read and followed, and an item pushed through it for its answer.
-    <In, Out, Answers extends readonly unknown[] = unknown[]>(
+    <
+        In,
+        Out,
+        Answers extends readonly unknown[] = unknown[],
+        const Methods extends readonly Method[] = ['GET', 'POST'],
+    >(
         handler: PipeFace<In, Out>,
-        options?: OptionsOf<Writes, undefined, Answers>,
-    ): Rpc<PipeStatus, undefined, RungRefusals<Answers>> & {
-        push(input: In): Promise<Out>
-    }
+        options?: OptionsOf<Writes, undefined, Answers> & {
+            methods?: Methods | undefined
+        },
+    ): ReadRpc<PipeStatus, undefined, RungRefusals<Answers>> &
+        Answering<Methods, 'POST', { push(input: In): Promise<Out> }>
     // 16.1 — a value, `reactive` given an address, which takes a `reactive`'s options beside the
     // address's (16.6), and no source's (11.81). Never a function: a handler's function is its body,
-    // the first signature's (16.1).
+    // the first signature's (16.1). 16.111 — read alone, its writes typed where `methods` names them.
     <
         Accepted,
         Shaped = Accepted,
         Gate = Schema<Accepted>,
         Answers extends readonly unknown[] = unknown[],
+        const Methods extends readonly Method[] = ['GET'],
     >(
         handler: [Accepted] extends [(...given: never[]) => unknown]
             ? never
             : Held<Accepted>,
         options?: HandlerShaping<Shaping<Accepted, Shaped, never, Gate>> &
             HandlerStore<undefined, NoInfer<Kept<Shaped>>> &
-            OptionsOf<Writes, undefined, Answers>,
-    ): Rpc<
+            OptionsOf<Writes, undefined, Answers> & {
+                methods?: Methods | undefined
+            },
+    ): ReadRpc<
         Kept<Shaped>,
         undefined,
         Refusals<Shaped, Gate, Accepted> | RungRefusals<Answers>
-    >
+    > &
+        HeldWrites<Methods, undefined, Kept<Shaped>>
 }
 
+/**
+ * 16.111, 16.117 — `Member` where `Methods` names the `Verb` it writes by, and nothing where it does
+ * not: an `rpc`'s face is the verbs it answers. `methods` the type cannot read names every verb.
+ */
+type Answering<
+    Methods extends readonly Method[],
+    Verb extends Method,
+    Member,
+> = Verb extends Methods[number] ? Member : unknown
+
+/** 16.115-16.117 — a memo's or a value's `set` by `PUT` and `patch` by `PATCH`, its owner's writes (11.76). */
+type HeldWrites<Methods extends readonly Method[], Args, Value> = Answering<
+    Methods,
+    'PUT',
+    { set(...given: Written<Args, Value>): void }
+> &
+    Answering<
+        Methods,
+        'PATCH',
+        { patch(...given: Written<Args, (value: Value) => void>): void }
+    >
 /** 16.117 — a table as `rpc` reads it: called for rows, and written by key. */
 type TableFace<Row> = ((match?: Match<Row>) => Row[]) & {
     set(rows: Row | readonly Row[]): void
@@ -885,8 +975,8 @@ export const rpc: Declare<true> = ((
         kind === 'memo' &&
         isForwarder((value as Record<symbol, unknown>)[KEYED_OF])
             ? {}
-            : SOURCE_MEMBERS[kind]
-    const verbs = sourceVerbs(members, methods)
+            : SOURCE_MEMBERS[kind].members
+    const verbs = sourceVerbs(members, methods, SOURCE_MEMBERS[kind].written)
     if (rest.refreshes !== undefined && verbs.length === 1)
         throw new Error(
             'abide: an `rpc` answering `GET` alone was declared with `refreshes`, which only a write takes. Refresh from the write that changed the value. RULEBOOK 16.92.',
@@ -996,18 +1086,20 @@ function calledVerbs(
 
 /**
  * 16.111, 16.112, 16.117 — the verbs a value or a source answers by: its read, `GET`, then each its
- * members write by, or the ones `methods` keeps of them — the read always among them.
+ * members write by where its kind is `written` by default, or the ones `methods` keeps of them — the
+ * read always among them.
  */
 function sourceVerbs(
     members: Record<string, Method>,
     declared: readonly Method[] | undefined,
+    written: boolean,
 ): readonly Method[] {
     const able: Method[] = ['GET']
     for (const member in members) {
         const verb = members[member] as Method
         if (!able.includes(verb)) able.push(verb)
     }
-    if (declared === undefined) return able
+    if (declared === undefined) return written ? able : ['GET']
     for (const verb of declared)
         if (!able.includes(verb))
             throw new Error(

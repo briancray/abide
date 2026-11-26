@@ -84,7 +84,7 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/rpcMethods.test.ts',
             from: [
-                'test("a value\'s PUT writes it and its PATCH patches it, each answering the value — 16.115"',
+                'test("a value\'s PUT writes it and its PATCH patches it where methods names them, each answering the value — 16.111, 16.115"',
             ],
         },
         {
@@ -368,14 +368,20 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Keep the team's seat count, written from any page">
-        <p>Hand <code>rpc</code> a value, and it answers <code>GET</code> with it and takes
-            <code>PUT</code> and <code>PATCH</code> to change it. It is the server's one value: a
-            page's <code>set</code> or <code>patch</code> shows at once, is sent, and the copy
-            then holds what the server answered.</p>
+        <p>Hand <code>rpc</code> a value, and it answers <code>GET</code> with it. Name
+            <code>PUT</code> and <code>PATCH</code> in <code>methods</code> to change it from a
+            page. It is the server's one value: a page's <code>set</code> or <code>patch</code>
+            shows at once, is sent, and the copy then holds what the server answered.</p>
         <Code language="ts" caption="server" code={`
             import { rpc } from '@abide/abide/server'
 
-            export default rpc({ seats: 40 }, { description: 'The seats the team holds.' })
+            export default rpc(
+                { seats: 40 },
+                {
+                    methods: ['GET', 'PUT', 'PATCH'],
+                    description: 'The seats the team holds.',
+                },
+            )
         `} />
         <Code language="ts" caption="browser" code={`
             import seats from './seats.server.ts'

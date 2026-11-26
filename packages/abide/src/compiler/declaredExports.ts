@@ -696,7 +696,7 @@ async function sourceKindOf(
 /**
  * 16.111, 16.112, 16.117 — the verbs an `rpc` answers, its call's first, and the members its copy
  * writes by: the `methods` its options write as a literal, or the ones its value answers by — a
- * function `GET`, a source or a plain value `GET` and each verb its members write by. A memo's writes
+ * function, a plain value and a memo `GET`, any other source `GET` and each verb its members write by. A memo's writes
  * are mounted where its options say `global: true` as written: a request's memo answers `GET` alone.
  */
 async function declaredMethods(
@@ -720,16 +720,29 @@ async function declaredMethods(
         ? {}
         : kind === 'memo' && !(await declaresGlobal(checker, value))
           ? {}
-          : { ...SOURCE_MEMBERS[kind ?? 'value'] }
+          : { ...SOURCE_MEMBERS[kind ?? 'value'].members }
     const able: Method[] = ['GET']
     for (const member in members) {
         const verb = members[member] as Method
         if (!able.includes(verb)) able.push(verb)
     }
-    let methods: Method[] = able
     const options = inlineOptions(call)
     const written =
         options === undefined ? undefined : optionNamed(options, 'methods')
+    // 16.111 — with no `methods`, a value and a memo answer their read alone. Options the build cannot
+    // read — built elsewhere, or spread — may name any verb the value can answer by, so its copy keeps
+    // every member.
+    const unread =
+        call.arguments[1] !== undefined &&
+        (options === undefined ||
+            (written === undefined &&
+                options.properties.some(isSpreadAssignment)))
+    let methods: Method[] =
+        written === undefined &&
+        !unread &&
+        !SOURCE_MEMBERS[kind ?? 'value'].written
+            ? ['GET']
+            : able
     if (written !== undefined && isArrayLiteralExpression(written)) {
         const named: Method[] = []
         for (const element of written.elements)

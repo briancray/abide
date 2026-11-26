@@ -11,7 +11,7 @@
 // nowhere to key by, and `{ '': string[] }` for that case is a wrapper every reader would
 // have to unwrap.
 
-import type { Rpc } from './rpc.ts'
+import type { ReadRpc } from './rpc.ts'
 
 type Down = [0, 0, 1, 2, 3, 4]
 
@@ -50,7 +50,7 @@ export type Paths<T, Limit extends number = 5> = Limit extends 0
  * refusal names the handler rather than spelling its `Args`.
  */
 export type Issues<T> =
-    T extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced>
+    T extends ReadRpc<infer _Value, infer Args, infer _Failures, infer _Produced>
         ? Issues<Args>
         : T extends object
           ? Partial<Record<Paths<T> | '', string[]>>

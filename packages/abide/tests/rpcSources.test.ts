@@ -49,11 +49,13 @@ afterEach(() => {
     globalThis.fetch = unstubbedFetch
 })
 
-// 16.117 — EACH KIND ANSWERS THE VERBS ITS MEMBERS WRITE BY, and `methods` keeps fewer. A memo whose
-// entries live a request answers `GET` alone: a write to one would land where no request reads it.
-// THE REVERT: give `rpc` no source arm (`brandOf` answering `undefined`); every source reads as a
-// function, `["GET"]` each where its verbs are due.
-test("an rpc answers the verbs a source's members write by — 16.117", () => {
+// 16.111, 16.117 — EACH KIND ANSWERS THE VERBS ITS MEMBERS WRITE BY, and `methods` keeps fewer; a memo
+// answers its read alone until `methods` names its writes. A memo whose entries live a request
+// answers `GET` alone whatever `methods` names: a write to one would land where no request reads it.
+// THE REVERTS: give `rpc` no source arm (`brandOf` answering `undefined`); every source reads as a
+// function, `["GET"]` each where its verbs are due. Answer `able` with no `methods` in
+// `sourceVerbs`; the global memo's first row is `["GET","PUT","PATCH","POST"]` where `["GET"]` is due.
+test("an rpc answers the verbs a source's members write by — 16.111, 16.117", () => {
     const deals = table<Deal>(crm(), 'deals')
     const digest = job({
         name: 'rpc-sources-digest',
@@ -62,6 +64,9 @@ test("an rpc answers the verbs a source's members write by — 16.117", () => {
     })
     const verbs = [
         rpc(memo(() => 1, { global: true })).methods,
+        rpc(memo(() => 1, { global: true }), {
+            methods: ['GET', 'PUT', 'PATCH', 'POST'],
+        }).methods,
         rpc(memo(() => 1)).methods,
         rpc(deals).methods,
         rpc(deals, { methods: ['GET'] }).methods,
@@ -71,6 +76,7 @@ test("an rpc answers the verbs a source's members write by — 16.117", () => {
     ]
     void digest.stop()
     expect(verbs).toEqual([
+        ['GET'],
         ['GET', 'PUT', 'PATCH', 'POST'],
         ['GET'],
         ['GET', 'PUT', 'PATCH', 'DELETE'],
@@ -85,6 +91,38 @@ test("an rpc answers the verbs a source's members write by — 16.117", () => {
             { methods: ['GET', 'PUT'] },
         ),
     ).toThrow('RULEBOOK 16.112, 16.117')
+})
+
+// 16.111, 16.117 — AN RPC'S FACE IS TYPED BY THE VERBS IT ANSWERS: a memo's and a value's writes are
+// members only where `methods` names their verbs, and a table's, a job's, a pipe's and a ledger's are
+// until `methods` leaves them out. THE REVERT: type the memo and value forms `Rpc` again and the
+// source forms' members unconditionally; each `@ts-expect-error` below is unused and fails
+// `bun run typecheck`.
+test("an rpc's members are typed by the verbs it answers — 16.111, 16.117", () => {
+    const board = rpc(memo(() => ({ n: 0 }), { global: true }))
+    const written = rpc(
+        memo(() => ({ n: 0 }), { global: true }),
+        { methods: ['GET', 'PATCH'] },
+    )
+    const theme = rpc({ mode: 'dark' })
+    const settable = rpc({ mode: 'dark' }, { methods: ['GET', 'PUT'] })
+    const deals = rpc(table<Deal>(crm(), 'deals'), { methods: ['GET', 'PUT'] })
+    const notes = rpc(ledger<string>(), { methods: ['GET'] })
+    // @ts-expect-error a memo answering `GET` alone is set by no verb
+    void board.set
+    // @ts-expect-error nor patched
+    void board.patch
+    // @ts-expect-error `methods` named `PATCH`, not `PUT`
+    void written.set
+    // @ts-expect-error a value answering `GET` alone is set by no verb
+    void theme.set
+    // @ts-expect-error a table whose `methods` leave out `DELETE`
+    void deals.delete
+    // @ts-expect-error a ledger read alone
+    void notes.append
+    expect(
+        [written.patch, settable.set, deals.set].map((member) => typeof member),
+    ).toEqual(['function', 'function', 'function'])
 })
 
 // 16.117 — A TABLE'S RPC READS ITS ROWS BY A JSON MATCH AND WRITES THEM BY KEY, over the wire as in
@@ -163,9 +201,9 @@ test("a table's rpc reads and writes the columns it names alone — 16.118", asy
     ).toThrow('RULEBOOK 16.118')
 })
 
-// 16.117 — A MEMO'S RPC IS WRITTEN AS ITS OWNER WRITES IT: `PUT` its `set`, `PATCH` its `patch` by the
-// JSON Patch the browser made, `POST` its `refresh`. THE REVERT: drop the held branch answering the
-// value in the face; `PUT` answers `null` where the value written is due.
+// 16.117 — A MEMO'S RPC IS WRITTEN AS ITS OWNER WRITES IT, where `methods` names the writes: `PUT` its
+// `set`, `PATCH` its `patch` by the JSON Patch the browser made, `POST` its `refresh`. THE REVERT: drop
+// the held branch answering the value in the face; `PUT` answers `null` where the value written is due.
 test("a memo's rpc is set, patched and refreshed over the wire — 16.117", async () => {
     let runs = 0
     const seats = rpc(
@@ -176,6 +214,7 @@ test("a memo's rpc is set, patched and refreshed over the wire — 16.117", asyn
             },
             { global: true },
         ),
+        { methods: ['GET', 'PUT', 'PATCH', 'POST'] },
     )
     await using app = await inMemoryApp({
         'account/seats.server.ts': { default: seats },

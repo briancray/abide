@@ -25,15 +25,15 @@ import {
     reactive,
     watch,
 } from './reactive/index.ts'
-import type { Rpc } from './rpc.ts'
+import type { ReadRpc } from './rpc.ts'
 import { runSchema } from './Schema.ts'
 
 // biome-ignore lint/suspicious/noExplicitAny: any handler at all, whatever it answers and refuses.
-type AnyRpc = Rpc<any, any, any, any>
+type AnyRpc = ReadRpc<any, any, any, any>
 
 /** The names a form's fields post under: the members of the handler's args. */
 export type FieldName<Handler> =
-    Handler extends Rpc<
+    Handler extends ReadRpc<
         infer _Value,
         infer Args,
         infer _Failures,
@@ -73,7 +73,7 @@ export type Form<Handler extends AnyRpc> = {
     /** Whether any field differs from its baseline. */
     get dirty(): boolean
     /** The args a submit would send, holding only the fields that differ from their baseline. */
-    get changes(): Handler extends Rpc<
+    get changes(): Handler extends ReadRpc<
         infer _Value,
         infer Args,
         infer _Failures,

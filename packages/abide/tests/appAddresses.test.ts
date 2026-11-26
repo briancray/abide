@@ -477,12 +477,15 @@ export const count = rpc(() => 1, { methods: ['POST'] })
     expect(() => rpc(rpc(() => 1))).toThrow('RULEBOOK 16.119')
 })
 
-// 16.70, 16.117 — A BARE SOURCE A SERVER BLOCK EXPORTS ANSWERS EVERY VERB ITS VALUE DOES, privately:
-// a global memo's read, `set`, `patch` and `refresh`, each below `/__abide/handlers` and listed
-// nowhere. THE REVERT: skip `servedExports` in `projectShadow`'s `script`; the export is the memo
-// itself, no `rpc`, and answers at no address — `[]` where four verbs are due.
-test('a memo a server block exports bare answers its writes at its private address — 16.70, 16.117', async () => {
-    const { mounts } = await compileApp(
+// 16.70, 16.111, 16.117 — A MEMO OR A VALUE ANSWERS ITS READ ALONE until `methods` names its writes:
+// one a server block exports bare is read at its private address below `/__abide/handlers` and
+// written by nothing, and a server file's `rpc` naming `PATCH` answers that too, its copy sending
+// `patch` and no other write. THE REVERTS: answer `able` with no `methods` in `declaredMethods`; the
+// bare memo answers `PUT`, `PATCH` and `POST` too, the plain value `PUT` and `PATCH`, and their
+// wrappers carry every verb. Skip `servedExports` in `projectShadow`'s `script`; the block's export
+// is the memo itself and answers at no address.
+test('a memo or a value answers its read alone until methods names its writes — 16.70, 16.111, 16.117', async () => {
+    const { mounts, files, handlers } = await compileApp(
         appFixture({
             'index.abide': `<script>\nimport Counter from './lib/Counter.abide'\n</script>\n\n<Counter/>`,
             'lib/Counter.abide': `<script server>
@@ -491,21 +494,34 @@ import { memo } from '@abide/abide'
 export const count = memo(() => ({ n: 0 }), { global: true })
 </script>
 
-<button onclick={() => count.patch((value) => { value.n += 1 })}>add</button>`,
+<button onclick={() => count()}>read</button>`,
+            'lib/board.server.ts': `import { memo } from '@abide/abide'
+import { rpc } from '@abide/abide/server'
+
+export const board = rpc(memo(() => ({ n: 0 }), { global: true }), {
+    methods: ['GET', 'PATCH'],
+})
+export const theme = rpc({ mode: 'dark' })
+`,
         }),
     )
     const answered: string[] = []
     for (const mount of mounts)
-        if (mount.address.endsWith('/count'))
-            answered.push(
-                `${mount.method} ${mount.address} ${mount.private ? 'private' : 'public'}`,
-            )
+        if (/\/(count|board|theme)$/.test(mount.address))
+            answered.push(`${mount.method} ${mount.address}`)
     expect(answered.sort()).toEqual([
-        'GET /__abide/handlers/lib/Counter/count private',
-        'PATCH /__abide/handlers/lib/Counter/count private',
-        'POST /__abide/handlers/lib/Counter/count private',
-        'PUT /__abide/handlers/lib/Counter/count private',
+        'GET /__abide/handlers/lib/Counter/count',
+        'GET /lib/board/board',
+        'GET /lib/board/theme',
+        'PATCH /lib/board/board',
     ])
+    expect(files['lib/Counter.abide']?.client ?? '').toContain(
+        'const count = __wire("GET"',
+    )
+    const face = handlers['lib/board.server.ts']?.client ?? ''
+    expect(face).toContain('export const board = __wire(["GET","PATCH"]')
+    expect(face).toContain('"faces":{"patch":"PATCH"}')
+    expect(face).toContain('export const theme = __wire("GET"')
 })
 
 // 34.22 — ONE FILE, ONE MODULE SCOPE ON THE SERVER: a server block importing a name its `<script>`

@@ -13,7 +13,7 @@
 import type { Failed } from '../Failed.ts'
 import type { Issues } from '../Issues.ts'
 import { OUTBOX_SENDING } from '../OUTBOX_SENDING.ts'
-import type { Annotated, Rpc } from '../rpc.ts'
+import type { Annotated, ReadRpc } from '../rpc.ts'
 import { RPC_SERVER } from '../RPC_SERVER.ts'
 import type { Schema } from '../Schema.ts'
 import type { CALL_ENTRY } from './CALL_ENTRY.ts'
@@ -202,7 +202,7 @@ export type AdoptedProduced<Computed, Otherwise> =
  * refusals its promise rejects with as its failures (16.8).
  */
 export type CallOf<Calls> =
-    Calls extends Rpc<infer Value, infer Args, infer Failures, infer Produced>
+    Calls extends ReadRpc<infer Value, infer Args, infer Failures, infer Produced>
         ? Reactive<
               Value,
               Value,
@@ -284,7 +284,7 @@ export function reactive<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(
  * as a value holding a handler.
  */
 export function reactive<Accepted>(): [
-    Accepted extends Rpc<
+    Accepted extends ReadRpc<
         infer _Value,
         infer _Args,
         infer _Failures,
