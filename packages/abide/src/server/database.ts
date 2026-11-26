@@ -8,6 +8,7 @@ import { isSubscribed } from '#shared/reactive/producer.ts'
 import { config, derived } from './config.ts'
 import { onStop } from './hooks.ts'
 import { isRunning } from './isRunning.ts'
+import { type Sql, sqlOver } from './sql.ts'
 import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
 /** 47.2, 47.3 — a name, opened as `<name>.sqlite`. A string neither a name nor a path is refused. */
@@ -64,6 +65,7 @@ export function database(
 ): (() => Database) & {
     close: (options?: { remove?: boolean | undefined }) => void
     changed: Reactive<number>
+    sql: Sql
 } {
     if (typeof file === 'string') checked(file)
     let opened: Database | undefined
@@ -166,7 +168,11 @@ export function database(
         queueMicrotask(follow)
         return outside
     })
-    return Object.assign(opener, { close, changed })
+    return Object.assign(opener, {
+        close,
+        changed,
+        sql: sqlOver(opener, opener),
+    })
 }
 
 function checked(file: unknown): string {

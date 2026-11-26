@@ -5164,8 +5164,8 @@ milliseconds, and MUST NOT increase for a write made through that `Database`.
 
 47.24 Checking an opener's `changed` MUST NOT open its `Database`.
 
-47.25 A `table`'s `readable` and `writable`, reached, MUST throw where the database holds no table
-of that name.
+47.25 A `table` called, and its `readable` and `writable` reached, MUST throw where the database
+holds no table of that name.
 
 47.26 `table` MUST record each insert, update and delete made to the table, by any statement and any
 connection, in the transaction that made it, naming every column the table held when `table` first
@@ -5183,6 +5183,22 @@ table, as `invalidate` over those tags does.
 and the rows written in one turn MUST be committed in one transaction.
 
 47.31 `table` MUST keep no more than the last 10000 changes of a table its watch has passed.
+
+47.32 An opener's `sql`, called as a tag, MUST bind every value interpolated as a parameter and
+never as text, MUST prepare one statement per call site per `Database`, and MUST answer, at once,
+the rows the statement returns.
+
+47.33 A run that reads a table through `sql` or a `table` call MUST be refreshed, per 13.7, when that
+table changes — by a write through the opener, or a commit any connection makes — the tables a
+statement reads being those SQLite compiles it to read, and MUST NOT be refreshed by a change to a
+table its last run did not read, nor where it is a mutation's run or wrote that table itself.
+
+47.34 The writes made through `sql` in one turn MUST refresh what 47.33 refreshes once per table, as
+the turn ends, and 47.29's watch MUST NOT refresh for them again.
+
+47.35 A `table` called MUST answer every row of the table, or with `match` the rows whose every
+column `match` names equals the value given, `null` matching a NULL, and MUST throw for a column the
+table does not hold.
 
 # 48. Problem reports
 

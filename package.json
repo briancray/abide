@@ -41,6 +41,7 @@
         "bench:inline": "bun packages/abide/bench/inlineRowShare.ts",
         "bench:spread-part": "bun packages/abide/bench/spreadPartShare.ts",
         "bench:mux": "bun packages/abide/bench/muxShare.ts",
+        "bench:sql": "bun packages/abide/bench/sqlShare.ts",
         "bench:first-chunk": "bun packages/abide/bench/firstChunkShare.ts",
         "bench:chart-vars": "bun packages/abide/bench/chartVarsShare.ts",
         "prepare": "git config core.hooksPath .githooks || true",

@@ -37,6 +37,7 @@ export const BUILTIN_TYPES = new Set([
     'Record',
     'Set',
     'Symbol',
+    'TemplateStringsArray',
     'Uint8Array',
     // Web platform
     'AbortSignal',
@@ -66,6 +67,8 @@ export const BUILTIN_TYPES = new Set([
     'CookieStoreDeleteOptions',
     // `bun:sqlite`'s connection, which `store.sqlite` takes.
     'Database',
+    // `bun:sqlite`'s bindable values, which an opener's `sql` takes.
+    'SQLQueryBindings',
     // `bun`'s Redis connection, which `store.redis` takes.
     'RedisClient',
     'Server',

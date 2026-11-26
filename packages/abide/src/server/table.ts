@@ -13,7 +13,10 @@ import type { Database } from 'bun:sqlite'
 
 import { namedLogger } from '#shared/log.ts'
 import { appStopSignal } from '#shared/reactive/abortSignal.ts'
+import type { Cell } from '#shared/reactive/cellShape.ts'
 import { invalidate } from '#shared/reactive/index.ts'
+import { refreshCells } from '#shared/reactive/producer.ts'
+import { SCOPING } from '#shared/reactive/scoping.ts'
 import { unrefTimer } from '#shared/reactive/unrefTimer.ts'
 
 import { SQL_IDENTIFIER } from './SQL_IDENTIFIER.ts'
@@ -39,15 +42,22 @@ export type Change<Row> = {
 /** Where each `Database` has had its change log made, and each table its triggers. */
 const PREPARED = new WeakMap<Database, Set<string>>()
 
+/** A table of the app's database: its rows read by calling it, its changes read out, rows written in. */
+export type Table<Row> = ((match?: Partial<Row>) => Row[]) & {
+    readonly readable: ReadableStream<Change<Row>>
+    readonly writable: WritableStream<Row>
+}
+
 /**
- * A table of `database` as a stream pair: `readable` its changes from the moment it is first read,
- * `writable` the rows to upsert by `key` (47.25-47.31).
+ * A table of `database`: called, its rows, or those `match` names (47.35), a read that refreshes the
+ * run it is made in when the table changes (47.32); `readable` its changes from the moment it is first
+ * read, `writable` the rows to upsert by `key` (47.25-47.31).
  */
 export function table<Row extends Record<string, unknown>>(
     database: Database | (() => Database),
     name: string,
     options?: { key?: (keyof Row & string) | undefined },
-): { readable: ReadableStream<Change<Row>>; writable: WritableStream<Row> } {
+): Table<Row> {
     if (!SQL_IDENTIFIER.test(name))
         throw new Error(
             `abide: table ${JSON.stringify(name)} is not an SQL identifier.`,
@@ -58,26 +68,97 @@ export function table<Row extends Record<string, unknown>>(
             `abide: table ${name}'s key ${JSON.stringify(key)} is not an SQL identifier.`,
         )
     const acquire = typeof database === 'function' ? database : () => database
-    const connection = (): Database => {
+    const connection = preparedConnection(acquire, name)
+    watchOf(database, connection, name)
+    let readable: ReadableStream<Change<Row>> | undefined
+    let writable: WritableStream<Row> | undefined
+    const names = [name]
+    const rows = selects<Row>(connection, name)
+    const read = (match?: Partial<Row>): Row[] => {
+        const answered = rows(match)
+        readTables(database, connection, names)
+        return answered
+    }
+    return Object.defineProperties(read, {
+        // 47.25 — reached, the table is prepared, and a table the database does not hold throws here.
+        readable: {
+            get() {
+                connection()
+                readable ??= changesOf<Row>(connection, name)
+                return readable
+            },
+        },
+        writable: {
+            get() {
+                connection()
+                writable ??= upserts<Row>(connection, name, key)
+                return writable
+            },
+        },
+    }) as Table<Row>
+}
+
+/** `acquire`'s `Database`, with `name`'s change log and triggers made on it (47.26). */
+export function preparedConnection(
+    acquire: () => Database,
+    name: string,
+): () => Database {
+    return () => {
         const db = acquire()
         prepare(db, name)
         return db
     }
-    watchTag(database, connection, name)
-    let readable: ReadableStream<Change<Row>> | undefined
-    let writable: WritableStream<Row> | undefined
-    return {
-        // 47.25 — reached, the table is prepared, and a table the database does not hold throws here.
-        get readable() {
-            connection()
-            readable ??= changesOf<Row>(connection, name)
-            return readable
-        },
-        get writable() {
-            connection()
-            writable ??= upserts<Row>(connection, name, key)
-            return writable
-        },
+}
+
+/**
+ * 47.35 — the rows of `name`, or those whose every column `match` names equals what it gives: one
+ * statement per set of columns matched, each column checked against the table's own.
+ */
+function selects<Row>(
+    connection: () => Database,
+    name: string,
+): (match?: Partial<Row>) => Row[] {
+    const statements = new Map<string, ReturnType<Database['query']>>()
+    let preparedOn: Database | undefined
+    let columns: Set<string> | undefined
+    return (match) => {
+        const db = connection()
+        if (db !== preparedOn) {
+            statements.clear()
+            preparedOn = db
+            columns = new Set()
+            for (const column of db
+                .query(`PRAGMA table_info(${name})`)
+                .all() as { name: string }[])
+                if (SQL_IDENTIFIER.test(column.name)) columns.add(column.name)
+        }
+        const values: unknown[] = []
+        const conditions: string[] = []
+        if (match !== undefined)
+            for (const column in match) {
+                const value = match[column as keyof Row]
+                if (value === undefined) continue
+                if (!(columns as Set<string>).has(column))
+                    throw new Error(
+                        `abide: table ${name} has no column ${JSON.stringify(column)}. RULEBOOK 47.35.`,
+                    )
+                if (value === null) conditions.push(`"${column}" IS NULL`)
+                else {
+                    conditions.push(`"${column}" = ?`)
+                    values.push(value)
+                }
+            }
+        const shape = conditions.join(' AND ')
+        let statement = statements.get(shape)
+        if (statement === undefined) {
+            statement = db.query(
+                shape === ''
+                    ? `SELECT * FROM ${name}`
+                    : `SELECT * FROM ${name} WHERE ${shape}`,
+            )
+            statements.set(shape, statement)
+        }
+        return statement.all(...(values as never[])) as Row[]
     }
 }
 
@@ -152,27 +233,45 @@ function looking(
     unrefTimer(timer)
 }
 
-/** 47.29 — per database or opener, the tables whose changes refresh what carries their name as a tag. */
-const WATCHED = new WeakMap<object, Set<string>>()
+/**
+ * 47.29, 47.32 — one table's watch: the last change it has passed, and the runs that read the table.
+ * A reader is held by its record, which holds its value weakly — a read is never a reason to keep one.
+ */
+type Watch = { name: string; seen: number | undefined; readers: Set<Reader> }
+
+/** One run's reads: the value whose run it is, which run, and the watches of the tables it read. */
+type Reader = {
+    value: WeakRef<Cell>
+    epoch: number
+    tables: Set<Watch>
+    wrote: Set<Watch>
+}
+
+/** 47.29 — per database or opener, each table's watch. */
+const WATCHED = new WeakMap<object, Map<string, Watch>>()
+
+/** 47.32 — each value's reads, as of its last run that read a table. */
+const READERS = new WeakMap<Cell, Reader>()
 
 /** 47.29, 47.31 — each change to `name` refreshes every value tagged `name`, and old changes go. */
-function watchTag(
+function watchOf(
     owner: object,
     connection: () => Database,
     name: string,
-): void {
-    let names = WATCHED.get(owner)
-    if (names === undefined) {
-        names = new Set()
-        WATCHED.set(owner, names)
+): Watch {
+    let watches = WATCHED.get(owner)
+    if (watches === undefined) {
+        watches = new Map()
+        WATCHED.set(owner, watches)
     }
-    if (names.has(name)) return
-    names.add(name)
-    const watched = names
+    const standing = watches.get(name)
+    if (standing !== undefined) return standing
     // 47.29 — the baseline taken where the table is named, so a write before the first look is heard.
-    let seen: number | undefined
+    const watch: Watch = { name, seen: undefined, readers: new Set() }
+    watches.set(name, watch)
+    const watched = watches
     try {
-        seen = lastChange(connection(), name)
+        watch.seen = lastChange(connection(), name)
     } catch {}
     let broken = false
     looking(
@@ -187,13 +286,13 @@ function watchTag(
                 return
             }
             const last = lastChange(db, name)
-            if (seen === undefined) {
-                seen = last
+            if (watch.seen === undefined) {
+                watch.seen = last
                 return
             }
-            if (last === seen) return
-            seen = last
-            invalidate({ tags: [name] })
+            if (last === watch.seen) return
+            watch.seen = last
+            changed(watch)
             if (last > CHANGES_KEPT)
                 db.query(
                     'DELETE FROM abide_changes WHERE tbl = ? AND seq <= ?',
@@ -203,7 +302,112 @@ function watchTag(
         // The app stopped: the next `table` call for this name watches again.
         () => watched.delete(name),
     )
+    return watch
 }
+
+/** 47.29, 47.32 — what a change to the watched table refreshes: its tag, and the runs that read it. */
+function changed(watch: Watch): void {
+    invalidate({ tags: [watch.name] })
+    const reloading: Cell[] = []
+    for (const reader of watch.readers) {
+        const cell = reader.value.deref()
+        // Collected, or run again since without reading the table: its last run did not read it.
+        if (cell === undefined || cell.runEpoch !== reader.epoch) {
+            watch.readers.delete(reader)
+            continue
+        }
+        reloading.push(cell)
+    }
+    if (reloading.length > 0) refreshCells(reloading)
+}
+
+/**
+ * 47.32, 47.33 — the run this is called in, where one is running that a table's change may refresh:
+ * not a mutation's (13.16), nor the continuation of a run already ended (7.24).
+ */
+function runReading(): Reader | undefined {
+    const mark = SCOPING.provider?.currentRun()
+    if (mark === undefined) return undefined
+    const cell = mark.cell
+    if (cell.mutation || mark.epoch !== cell.runEpoch) return undefined
+    let reader = READERS.get(cell)
+    if (reader !== undefined && reader.epoch === mark.epoch) return reader
+    // A new run: what the last one read is not what this one reads.
+    if (reader !== undefined)
+        for (const watch of reader.tables) watch.readers.delete(reader)
+    reader = {
+        value: new WeakRef(cell),
+        epoch: mark.epoch,
+        tables: new Set(),
+        wrote: new Set(),
+    }
+    READERS.set(cell, reader)
+    return reader
+}
+
+/** 47.32 — the run this is called in read `names`: a change to any of them refreshes it. */
+export function readTables(
+    owner: object,
+    connection: () => Database,
+    names: readonly string[],
+): void {
+    if (names.length === 0) return
+    const reader = runReading()
+    if (reader === undefined) return
+    for (const name of names) {
+        const watch = watchOf(owner, connection, name)
+        if (reader.tables.has(watch) || reader.wrote.has(watch)) continue
+        reader.tables.add(watch)
+        watch.readers.add(reader)
+    }
+}
+
+/** 47.33, 47.34 — the tables written in this turn through `sql`, refreshed once each as it ends. */
+const WRITTEN = new Set<Watch>()
+let flushing: (() => void) | undefined
+
+/**
+ * 47.33 — the run this is called in wrote `names`: it is no reader of them, and 47.34 refreshes what
+ * read them as the turn ends.
+ */
+export function wroteTables(
+    owner: object,
+    connection: () => Database,
+    names: readonly string[],
+): void {
+    if (names.length === 0) return
+    const reader = runReading()
+    for (const name of names) {
+        const watch = watchOf(owner, connection, name)
+        if (reader !== undefined) {
+            reader.wrote.add(watch)
+            reader.tables.delete(watch)
+            watch.readers.delete(reader)
+        }
+        WRITTEN.add(watch)
+        WROTE_ON.set(watch, connection)
+    }
+    if (flushing !== undefined) return
+    flushing = () => {
+        flushing = undefined
+        const watches = [...WRITTEN]
+        WRITTEN.clear()
+        for (const watch of watches) {
+            // 47.34 — heard here, so the watch's next look does not hear it again.
+            try {
+                watch.seen = lastChange(
+                    (WROTE_ON.get(watch) as () => Database)(),
+                    watch.name,
+                )
+            } catch {}
+            changed(watch)
+        }
+    }
+    setTimeout(flushing, 0)
+}
+
+/** The connection each written watch's write was made on, to read its log's last change from. */
+const WROTE_ON = new WeakMap<Watch, () => Database>()
 
 /** 47.27, 47.28 — the table's changes from the moment the stream is first read, in order. */
 function changesOf<Row>(
