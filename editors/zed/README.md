@@ -22,5 +22,5 @@ The first of:
 2. the project's own, `node_modules/.bin/abide`, run with `bun`
 3. `abide` on the `PATH`
 
-The server finds each file's app itself — the directory its `ui/` sits under — so a monorepo
+The server finds each file's app itself — the nearest package above it, and that package's `src` where it has one — so a monorepo
 opened at its root checks every app in it.

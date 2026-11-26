@@ -43,7 +43,7 @@ abide arm, and what lets an app measure itself with it. What measures abide live
 | --- | --- | --- |
 | `@abide/harness/measure` | DOM calls, from inside the page | bun **and** browser |
 | `@abide/harness/engine`  | what Blink did — style, layout, paint, per-layer shares | chromium, over CDP |
-| `@abide/harness/server`  | bytes, microtask turns, allocations | bun |
+| `@abide/harness/server`  | bytes, microtask turns, what a run leaves reachable | bun |
 
 ## Brand
 
@@ -78,7 +78,7 @@ THE DOCS ARE AN ABIDE APP, written the way an app author writes one: `packages/d
 - THE PROMPT AT THE TOP asks the visitor's own Claude Code, paired through `@abide/bridge` (and
   paired already in the native app), with the docs as its only tools — `src/ask/tools/*` search the
   pages, REGISTRY and RULEBOOK, and read a page, a clause or a CRM file (40.27). Its
-  answer streams through `src/ask/answer.handler.ts`, which renders the markdown block by block, and
+  answer streams through `src/ask/answer.server.ts`, which renders the markdown block by block, and
   a `<show …/>` line in it renders live: a CRM file, a signature, a clause, measured results, a
   link to a page, or the page under the answer opened (40.28).
 - Every page is also served as markdown at its address with `.md` on the end, and `/abide.md` is

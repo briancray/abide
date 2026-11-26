@@ -82,14 +82,14 @@ affected code saying what it did, and tell the user.
   `src/invoices/[id].abide` answers `/invoices/123`, and `layout.abide` wraps the pages below it;
   the outermost one writes `<html>`. Run `bun run routes` to see every address and the file behind it.
 - A `<name>.server.ts` beside the pages is a handler: `src/invoices/getInvoice.server.ts` holds
-  `export default GET(…)` and answers `/invoices/getInvoice`. It is the app's public API, for pages,
+  `export default rpc(…)` and answers `/invoices/getInvoice`. It is the app's public API, for pages,
   scripts, the CLI and MCP alike.
 - A `.abide` exports its component as its default, and by name whatever its `<script module>`
   exports — a function that drives the component, or a value its instances share:
-  `import Counter, { reset } from './Counter.abide'`. A `<script>` and a `<script server>` export
-  nothing (RULEBOOK 34.17).
-- A `<script server>` holds that file's private handlers (`const save = POST(…)`), callable by that
-  file alone, and its hooks (`onStart`, `middleware`, …).
+  `import Counter, { reset } from './Counter.abide'`. A `<script>` exports nothing, and a
+  `<script server>` exports its private handlers by name, each a bare value (RULEBOOK 34.17, 16.70).
+- A `<script server>` holds that file's private handlers (`export const save = async (…) => …`),
+  callable by that file alone, and its hooks (`onStart`, `middleware`, …).
 - A rung shared between handlers or layouts is typed `Middleware` and nothing else:
   `export const signedIn: Middleware = async (next) => (await principal.authenticated) ? next() : refuse(401)`
   fits a handler's `middleware: […]` and a layout's `middleware(…)` alike (RULEBOOK 37.14). No

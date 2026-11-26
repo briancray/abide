@@ -1084,7 +1084,8 @@ a wire again under 15.21.
 
 ## The handler and its `Rpc`
 
-16.1 A handler MUST be a `Reactive`, a `Keyed`, a plain function, or a value.
+16.1 A handler MUST be a plain function, a plain value or a promise of one, a `memo`, a `table`, a
+`job`, a `pipe` or a `ledger`.
 
 16.2 `rpc` MUST give the handler an address over http: a handler file's default `rpc` that file's
 path below the app's root without `.server.ts`, its brackets read as 23.14 reads a route's, and each

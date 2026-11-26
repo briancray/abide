@@ -4,11 +4,11 @@
 // browser gets in its place (16.28, `#ui/wire.ts`) — and it is `declare` over a body that fetches,
 // which is why this module is in the seam both reach rather than in the server's.
 //
-// A HANDLER IS A `reactive` OR BECOMES ONE (16.1), so an `Rpc` is not a second kind of value: the
-// call hands back the handler's own `Reactive` (16.3), and every probe, trigger and failure on it is
-// the reactive core's — the `Rpc`'s own `busy`, `ready`, `refresh` and `invalidate` are the
-// handler's, passed through. What this file adds is the normalizing — a plain function or a value becomes the
-// `reactive` it would have been (16.6) — and the method.
+// A HANDLER BECOMES A VALUE KEPT PER ARGS (16.1, 16.6), so an `Rpc` is not a second kind of value:
+// the call hands back that value's entry (16.3), and every probe, trigger and failure on it is the
+// reactive core's — the `Rpc`'s own `busy`, `ready`, `refresh` and `invalidate` are the handler's,
+// passed through. What this file adds is the normalizing — a plain function or a value becomes the
+// keyed value or `reactive` it would have been — and the method.
 //
 // A HANDLER DECLARING `middleware` IS REACHED THROUGH ITS RUNGS (16.11), in process as over the wire:
 // the call hands back a value whose body runs the onion once per args, per request, over the
