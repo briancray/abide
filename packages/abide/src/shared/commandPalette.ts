@@ -114,8 +114,7 @@ export function commandPalette(
 
     // 51.68 — shut first, so focus is back where it was before the command moves it.
     const run = (command: Command): void => {
-        open.set(false)
-        command.run()
+        if (open.set(false) === undefined) command.run()
     }
 
     const list = listbox({

@@ -48,11 +48,11 @@ export function accordion<Multiple extends boolean = false>(
             : now === key
     }
     // 51.121 — picking one, opening a key is the only key open, and closing it leaves none.
-    const write = (key: string, on: boolean): void => {
+    const write = (key: string, on: boolean): unknown => {
         if (!many) return open.set(on ? key : undefined)
         const now = (open.peek() as readonly string[] | undefined) ?? []
         const kept = now.filter((each) => each !== key)
-        open.set(on ? [...kept, key] : kept)
+        return open.set(on ? [...kept, key] : kept)
     }
     // 51.120 — each key's parts built once and kept, so a render asking again builds nothing.
     const items = new Map<string, Disclosure>()

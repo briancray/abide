@@ -4258,7 +4258,8 @@ MUST list none that writes a file or calls a handler that changes what the examp
 40.47 `Headless components` MUST list every page but its guide in runs per 40.37, and only in
 `Overlays`, `Inputs`, `Data`, `Navigation`, `Layout` and `Charts`, in that order.
 
-40.48 A headless component MUST be filed under `Overlays` where what it shows opens over the page.
+40.48 A headless component MUST be filed under `Overlays` where what it shows opens over the page, or
+where it is a bar of the controls opening what does.
 
 40.49 A headless component MUST be filed under `Inputs` where what it holds is a value a form would
 submit, any items it lists being choices for that value.
@@ -5334,8 +5335,8 @@ warn once on `abide:parts` where that popover is drawn while it is closed, and a
 the check.
 
 49.15 A click on a button among a headless component's parts that leaves that button disabled MUST, where
-it held focus, move focus on: `carousel`'s and `pages`' `previous` and `next` to the other, `wizard`'s
-`next` to its `previous` and its `previous` to its `next`, and `stepper`'s `increment` and `decrement`
+it held focus, move focus on: `carousel`'s and `pagination`'s `previous` and `next` to the other, `wizard`'s
+`next` to its `previous` and its `previous` to its `next`, and `spinbutton`'s `increment` and `decrement`
 to its `input`.
 
 49.16 A headless component over a list MUST take the list's items, telling them apart by its `key` (49.8),
@@ -5350,6 +5351,12 @@ own part for the same element, the part carrying both components' `data-` attrib
 MUST hand back that component's parts for elements it hands no part for whole, as a member named for
 that component, each carrying that component's own `data-` attribute.
 
+49.19 A headless component whose write to a `Reactive` it binds is refused (4.18) MUST leave as it
+stood every state of its own that the gesture making the write would have changed, MUST NOT move
+focus for that gesture, and MUST NOT call a callback it was handed for that gesture.
+
+49.20 49.19 MUST NOT hold the `save` `inlineEdit` calls before it writes `value` (56.25).
+
 # 50. Dialogs, toasts and popovers
 
 50.1 `dialog`'s part MUST hold the `<dialog>` it is spread on open while `open` is true, with
@@ -5357,7 +5364,8 @@ that component, each carrying that component's own `data-` attribute.
 
 50.2 Every close of a `dialog`'s `<dialog>`, whatever closed it, MUST write `false` to `open` and then call
 `onclose` with the `returnValue` that close set, and `''` where it set none, save that a close
-reported after the dialog has opened again MUST leave `open` true.
+reported after the dialog has opened again MUST leave `open` true, and a close whose write `open`
+refuses MUST show the dialog again and call no `onclose` (49.19).
 
 50.3 Escape, a click on a `dialog`'s backdrop, and a click whose target is the element its `backdrop`
 part is spread on MUST close it where `dismissible` is true, and MUST NOT where it is false.
@@ -5452,10 +5460,12 @@ opened it, and nothing in its menu where a pointer's rest or focus opened it (50
 50.30 In an open `menu`, ArrowDown and ArrowUp MUST move focus to the next and the previous menu
 item, wrapping, and Home and End to the first and the last.
 
-50.31 Escape in an open `menu`, and a click on one of its items carrying `role="menuitem"`, MUST
-write `false` to its `open` and return focus to its trigger.
+50.31 Escape in an open `menu`, and a click on one of its items carrying `role="menuitem"` and no
+`aria-haspopup`, MUST write `false` to its `open` and return focus to its trigger, save as 50.79 has a
+submenu's click do.
 
-50.32 ArrowDown and ArrowUp on a `menu`'s trigger MUST open it.
+50.32 ArrowDown and ArrowUp on a `menu`'s trigger MUST open it, save as 50.77 has a menu opening to a
+side.
 
 50.33 `prompts.prompt` MUST settle with the text in its input where its prompt closed by the
 confirming button, and `undefined` where it closed any other way.
@@ -5540,7 +5550,8 @@ pointer has been off its trigger or its anchor and the popover that many millise
 `popover` opened any other way MUST NOT close for a leave.
 
 50.57 While a `menu` of a `group` is open, a pointer entering the trigger of another `menu` of that
-`group`, or ArrowLeft or ArrowRight in its menu, MUST close it and open the other — for the keys, the
+`group`, or ArrowLeft or ArrowRight in its menu or a submenu of it that 50.77 does not take, MUST close
+it and open the other — for the keys, the
 one before or after it in the document order of their triggers, going round.
 
 50.58 A `menu` a `group` switches to MUST carry `data-from` naming the side the one it switched from
@@ -5602,6 +5613,22 @@ matches `:focus-visible`, and MUST NOT open for focus that does not.
 
 50.76 A `popover` focus opened MUST close once focus moves to an element outside its trigger or its
 anchor and the popover.
+
+50.77 A `menu` whose `side` is `left` or `right` MUST open from its trigger on the arrow key pointing
+to that side, in place of ArrowDown and ArrowUp, and MUST close, returning focus to its trigger, on
+the arrow key pointing back.
+
+50.78 A `menu` whose trigger is a menu item of another `menu` MUST be a submenu of that menu, and its
+menu items MUST NOT be that menu's, wherever its menu stands.
+
+50.79 A click on a menu item of a submenu carrying `role="menuitem"` and no `aria-haspopup` MUST close
+it and every `menu` it is a submenu of, returning focus to the trigger of the outermost.
+
+50.80 A `menu` closing MUST close every submenu of it.
+
+50.81 A `menu` MUST leave a key on its menu that a handler before it prevented the default of.
+
+50.82 Tab in an open `menu` MUST close it and every `menu` it is a submenu of.
 
 # 51. Lists and tables
 
@@ -5786,7 +5813,8 @@ included; its `dialog` part MUST be `dialog`'s, opened modal by `open`, with foc
 does, its input naming the active command as its `aria-activedescendant`.
 
 51.68 `commandPalette` MUST run a command chosen by Enter or a click after turning `open` off, so
-focus is back where it stood when the palette opened before the command moves it.
+focus is back where it stood when the palette opened before the command moves it, and MUST NOT run
+it where `open` refuses turning off (49.19).
 
 51.69 `commandPalette`'s input MUST leave Escape to the dialog it is in, which shuts on it, and Home
 and End to its caret.
@@ -5836,27 +5864,28 @@ in, and `tree` MUST write `aria-selected` on each item and `data-selected` on ea
 
 51.84 `tree` MUST hide the element holding a node's children while the node is collapsed.
 
-51.85 `range`'s parts MUST be a `role="group"` named by `label` and two thumbs, each `role="slider"`
-named by its entry of `labels`, with its value as `aria-valuenow`, what `format` writes for it as
-`aria-valuetext`, and the bounds the other thumb leaves it as `aria-valuemin` and `aria-valuemax`.
+51.85 `slider` given `range` MUST hand back a `role="group"` named by `label` and two thumbs, each
+`role="slider"` named by its entry of `labels`, with its value as `aria-valuenow`, what `format`
+writes for it as `aria-valuetext`, and the bounds the other thumb leaves it as `aria-valuemin` and
+`aria-valuemax`.
 
-51.86 `range` MUST keep its low thumb at most at its high thumb and its high thumb at least at its
-low, each at a whole number of `step`s from `min`, within `min` and `max`.
+51.86 `slider` MUST keep each thumb at a whole number of `step`s from `min`, within `min` and `max`,
+and a range's low thumb at most at its high thumb and its high thumb at least at its low.
 
-51.87 A thumb of a `range` MUST step up by `step` on ArrowUp and ArrowRight and down on ArrowDown
+51.87 A thumb of a `slider` MUST step up by `step` on ArrowUp and ArrowRight and down on ArrowDown
 and ArrowLeft, by a tenth of the way on Page Up and Page Down, and to the least and the greatest
 value it can take on Home and End, as a `chart`'s crosshair steps (52.69).
 
-51.88 A press on a `range`'s track MUST move the thumb nearer it to the value nearest the press and
+51.88 A press on a `slider`'s track MUST move the thumb nearer it to the value nearest the press and
 focus it, and the thumb MUST follow the pointer until it lets go.
 
-51.89 `range` MUST write each change it makes to `value`.
+51.89 `slider` MUST write each change it makes to `value`.
 
-51.90 `range` MUST write `data-dragging` on its root part while a pointer holds a thumb, and place its
-thumbs, and the fill part between them, as `style`.
+51.90 `slider` MUST write `data-dragging` on its root part while a pointer holds a thumb, and place its
+thumbs, and the fill part from `min` to its one thumb or between a range's two, as `style`.
 
-51.91 `range` given `name` MUST submit its low and then its high value with a form its two field
-parts are in, each as a field of that name.
+51.91 `slider` given `name` MUST submit its value, or a range's low and then its high value, with a
+form its field parts are in, each as a field of that name.
 
 51.92 A press on `combobox`'s input MUST open its list where it is shut, save where `search` is given
 and the input holds no text, and MUST shut it where it is open; focus reaching the input MUST NOT open
@@ -5964,22 +5993,22 @@ show, measured as the text resizes while `open` does not hold.
 
 51.124 `clamp`'s `button` part MUST be a `disclosure`'s `button` over its `text`, flipping `open`.
 
-51.125 `pages`' `items` MUST hold the same number of entries whatever `page` is: every page, in
+51.125 `pagination`'s `items` MUST hold the same number of entries whatever `page` is: every page, in
 order, where there are no more than `2 × around + 5`, and else exactly that many — the first page,
 the last, and a run of pages around `page`, with a `gap` where the pages between two of them are
 left out. The run MUST be the `2 × around + 1` pages centered on `page`, save where that would leave
 a gap standing for one page or none at an end, where the run MUST instead reach that end and hold
 `2 × around + 3` pages.
 
-51.126 A click on `pages`' `link` of a page MUST write that page to `page`, and where `href` is given
+51.126 A click on `pagination`'s `link` of a page MUST write that page to `page`, and where `href` is given
 the link MUST carry `href` naming that page's address.
 
-51.127 `pages`' `link` of the page `page` names MUST carry `aria-current="page"`.
+51.127 `pagination`'s `link` of the page `page` names MUST carry `aria-current="page"`.
 
-51.128 A click on `pages`' `previous` or `next` MUST write the page before or after to `page`, and
+51.128 A click on `pagination`'s `previous` or `next` MUST write the page before or after to `page`, and
 each MUST be disabled where there is no such page.
 
-51.129 `pages`' `nav` part MUST carry `aria-label` naming `label`, `Pages` where none is given.
+51.129 `pagination`'s `nav` part MUST carry `aria-label` naming `label`, `Pages` where none is given.
 
 51.130 While `playing` holds, `playback` MUST move `at` forward each frame by the milliseconds since
 the frame before times `rate`, and MUST ask for no frame while it does not.
@@ -6156,6 +6185,33 @@ they enter is `multiple`, join its `selected`.
 51.183 Items moved into another `sortableList` MUST be announced as 51.149 names, naming that list
 after `moved to` by its `aria-label`, else the text of the elements its `aria-labelledby` names, else
 as `another list`.
+
+51.184 `slider` not given `range` MUST hand back one thumb, `role="slider"` named by `label`, with its
+value as `aria-valuenow`, what `format` writes for it as `aria-valuetext`, and `min` and `max` as
+`aria-valuemin` and `aria-valuemax`.
+
+51.185 `toolbar`'s `toolbar` part MUST carry `role="toolbar"`, or `role="menubar"` given that `role`,
+named by `label`, with its `orientation` as `aria-orientation`.
+
+51.186 Of the elements carrying a `toolbar`'s `item` part, exactly one MUST carry `tabindex="0"` and
+every other `tabindex="-1"`, the one being the item focus reached last while it stands, and the
+first in document order otherwise.
+
+51.187 An arrow key along a `toolbar`'s `orientation`, Home or End on one of its items MUST move focus
+to the next, the previous, the first or the last of its items that is not disabled, going round its
+ends unless `wrap` is false.
+
+51.188 A `toolbar` MUST leave a key on its item where a handler before it prevented the key's
+default, or where the item is a field the key types into.
+
+51.189 A `toolbar`'s `item` part MUST carry `role="menuitem"` given `role: 'menubar'`, and no role
+otherwise.
+
+51.190 `combobox` given `create` MUST list last, while its list is open, the item `create` answers
+for its input's text with the whitespace at either end taken off, where that leaves any text and no
+item it lists or holds carries that text as its `label`, ignoring case.
+
+51.191 `combobox`'s `creating` MUST be the item 51.190 lists, and `undefined` where it lists none.
 
 # 52. Formatting, markdown and charts
 
@@ -6887,8 +6943,9 @@ file after file in the order taken, and its `attached` MUST be every block of `d
 part does not show.
 
 53.107 `chat` MUST send `draft` — through its composer, an Enter (53.33) and `submit` alike — as a
-user message of its blocks in order, less each text block holding only whitespace, and MUST then set
-`draft` to a user message holding no block.
+user message of its blocks in order, less each text block holding only whitespace, once it has set
+`draft` to a user message holding no block, and MUST send nothing where `draft` refuses that write
+(49.19).
 
 53.108 `chat`'s `attaching` MUST be true while an `attach` call has not settled, and a send while it
 is true MUST be held, and made once every call has settled.
@@ -7167,21 +7224,21 @@ disabled.
 
 56.28 An edit of `inlineEdit` ending MUST move focus to its `view`.
 
-56.29 `stepper`'s `input` part MUST carry `role="spinbutton"`, `aria-valuenow` naming `value`,
+56.29 `spinbutton`'s `input` part MUST carry `role="spinbutton"`, `aria-valuenow` naming `value`,
 `aria-valuemin` and `aria-valuemax` naming `min` and `max` where each is given, and `value` as its
 text.
 
-56.30 In `stepper`'s `input`, ArrowUp and ArrowDown MUST move `value` by `step`, PageUp and PageDown
+56.30 In `spinbutton`'s `input`, ArrowUp and ArrowDown MUST move `value` by `step`, PageUp and PageDown
 by ten steps, and Home and End to `min` and `max` where each is given, kept from `min` to `max`.
 
-56.31 `stepper`'s `increment` and `decrement` MUST move `value` by `step`, MUST stand outside the tab
+56.31 `spinbutton`'s `increment` and `decrement` MUST move `value` by `step`, MUST stand outside the tab
 order, and MUST be disabled where `value` is at `max` and at `min`.
 
-56.32 A `change` of `stepper`'s `input` MUST set `value` to the number its text holds, kept from `min`
+56.32 A `change` of `spinbutton`'s `input` MUST set `value` to the number its text holds, kept from `min`
 to `max` and to a whole number of steps from `min`, or from `0` where `min` is not given, and MUST
 write `value` back as the input's text, a text that is no number leaving `value` as it was.
 
-56.33 An `input` of `stepper`'s `input` MUST set `value` to the number its text holds where 56.32
+56.33 An `input` of `spinbutton`'s `input` MUST set `value` to the number its text holds where 56.32
 would keep that number as it is and would write back the text as it stands, and MUST otherwise leave
 both `value` and the text as they are until a `change`.
 

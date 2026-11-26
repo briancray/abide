@@ -9,6 +9,8 @@ import IconMenu from './lib/IconMenu.abide'
 import iconMenu from './lib/IconMenu.abide' with { type: 'text' }
 import MoveStage from './lib/MoveStage.abide'
 import moveStage from './lib/MoveStage.abide' with { type: 'text' }
+import MoveSubmenu from './lib/MoveSubmenu.abide'
+import moveSubmenu from './lib/MoveSubmenu.abide' with { type: 'text' }
 import OpenElsewhere from './lib/OpenElsewhere.abide'
 import openElsewhere from './lib/OpenElsewhere.abide' with { type: 'text' }
 import OpenLayout from './lib/OpenLayout.abide'
@@ -18,8 +20,34 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
 </script>
 
 <Doc
-    seeAlso={['/headless/tooltip', '/headless/popover', '/behaviors/hotkeys']}
+    seeAlso={['/headless/toolbar', '/headless/popover', '/behaviors/hotkeys']}
     tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealSubmenu.test.ts',
+            from: [
+                "test('ArrowRight opens a submenu, and ArrowDown walks past it'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealSubmenu.test.ts',
+            from: ["test('ArrowLeft or Escape closes the submenu alone'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealSubmenu.test.ts',
+            from: [
+                "test('a pick in a submenu closes every menu, and its trigger item opens it'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealSubmenu.test.ts',
+            from: ["test('the outer menu closing closes its submenu'"],
+        },
+        {
+            path: 'packages/abide/tests/menu.test.ts',
+            from: [
+                "test('Tab in a submenu standing apart closes it and the menu it opened from",
+            ],
+        },
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/DealActions.test.ts',
             from: ["test('the arrow keys skip the stage the deal is in'"],
@@ -64,6 +92,15 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
         <Example code={moveStage}><MoveStage /></Example>
     </Section>
 
+    <Section level={3} title="Open a submenu from an item">
+        <p>Spread a second menu's <code>trigger</code> on an item carrying
+            <code>role="menuitem"</code>, and that menu is a submenu of the one holding the item.
+            Give it <code>side: 'right'</code>, and ArrowRight opens it while ArrowLeft closes it,
+            back to its item. A pick in it closes every menu and hands focus to the first
+            button.</p>
+        <Example code={moveSubmenu}><MoveSubmenu /></Example>
+    </Section>
+
     <Section level={3} title="Open a menu from an icon">
         <p>The trigger is your own element, so it holds anything, and its
             <code>aria-label</code> names the menu. <code>menu</code> takes the options a
@@ -98,7 +135,8 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
             <code>openOnHover</code> opens one when a mouse rests on its trigger, and
             <code>closeOnLeave</code> closes a menu a pointer opened once the pointer has left it.
             A menu a key opened stays open. The menu switched to carries <code>data-from</code>,
-            the side the last one stood on, so it can slide in from there.</p>
+            the side the last one stood on, so it can slide in from there. For an app's menubar,
+            whose buttons share one tab stop, see <code>toolbar</code>.</p>
         <p>For a site's navigation links, a disclosure — a <code>popover</code> opened by a
             button — reads better to a screen reader than a menu, which announces commands.</p>
         <Example code={headerMenus}><HeaderMenus /></Example>

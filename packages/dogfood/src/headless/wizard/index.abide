@@ -19,7 +19,7 @@ import newDeal from './lib/NewDeal.abide' with { type: 'text' }
             ],
         },
         {
-            path: 'packages/abide/tests/stepper.test.ts',
+            path: 'packages/abide/tests/spinbutton.test.ts',
             from: ['test("a wizard\'s meter is of the step on among its steps'],
         },
     ]}

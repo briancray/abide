@@ -1,7 +1,7 @@
 // 52.26, 52.69, 51.85-51.90 — A POSITION ALONG AN AXIS, PICKED BY THE POINTER OR THE KEYBOARD: the
 // pointer takes the position nearest it, and the arrows step one position at a time, stopping at the
 // ends, with Home and End at the first and the last. Leaving picks none. What a `chart`'s crosshair
-// stands at and where a `range`'s thumb sits; each decides what standing there means.
+// stands at and where a `slider`'s thumb sits; each decides what standing there means.
 
 import { roving } from './roving.ts'
 

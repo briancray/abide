@@ -149,6 +149,7 @@ export function resizable(options: ResizableOptions = {}): Resizable {
             onkeydown: (event: KeyboardEvent) => {
                 const step = live(options.step) ?? 10
                 let next: number | undefined
+                let keptFrom = collapsedFrom
                 if (event.key === keys.grow || event.key === keys.shrink) {
                     const toward = event.key === keys.grow ? 1 : -1
                     next = measure() + toward * sign * step
@@ -161,20 +162,24 @@ export function resizable(options: ResizableOptions = {}): Resizable {
                 } else if (event.key === 'Enter') {
                     const now = measure()
                     if (collapsedFrom === undefined) {
-                        collapsedFrom = now
+                        keptFrom = now
                         next = min()
                     } else {
                         next = collapsedFrom
-                        collapsedFrom = undefined
+                        keptFrom = undefined
                     }
                 } else return
                 event.preventDefault()
-                if (Number.isFinite(next)) size.set(bound(next))
+                // 49.19 — what Enter restores moves only with a size that landed.
+                if (
+                    Number.isFinite(next) &&
+                    size.set(bound(next)) === undefined
+                )
+                    collapsedFrom = keptFrom
             },
             // 53.85
             ondblclick: () => {
-                collapsedFrom = undefined
-                size.set(undefined)
+                if (size.set(undefined) === undefined) collapsedFrom = undefined
             },
         },
         size,

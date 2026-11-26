@@ -1,8 +1,12 @@
-// 50.28-50.32, 50.37-50.40, 50.57, 50.58 — A BUTTON AND THE ACTIONS IT OPENS: WAI-ARIA's menu button, as
-// parts an app spreads onto elements of its own. The menu opens in a `popover` of its own (50.37): the
-// popover places it, shows it and closes it on a press outside, and the menu is the keyboard over its
-// items and what a pick does. Each part is the popover's with the menu's laid over it, so an app spreads
-// one per element.
+// 50.28-50.32, 50.37-50.40, 50.57, 50.58, 50.77-50.82 — A BUTTON AND THE ACTIONS IT OPENS: WAI-ARIA's
+// menu button, as parts an app spreads onto elements of its own. The menu opens in a `popover` of its
+// own (50.37): the popover places it, shows it and closes it on a press outside, and the menu is the
+// keyboard over its items and what a pick does. Each part is the popover's with the menu's laid over it,
+// so an app spreads one per element.
+//
+// A SUBMENU IS A MENU WHOSE TRIGGER IS ANOTHER MENU'S ITEM, found by where that trigger stands rather
+// than handed: the menus stand on `dismissible`'s stack in the order they opened, so a press in the
+// submenu stops short of the menu it opened from, and each menu's keys are its own focus's.
 
 import { type Live, live } from './live.ts'
 import { popoverLayer, type PopoverOptions } from './popover.ts'
@@ -41,9 +45,23 @@ type Member = {
     isOpen(): boolean
     /** Whether focus is in its menu. */
     holdsFocus(): boolean
-    switchTo(from: 'start' | 'end', focused: Focus, pointer: boolean): void
-    /** Marks it leaving toward `to`, and closes it. */
-    leaving(to: 'start' | 'end'): void
+    /** Opens it, then has `leave` close the one it switched from — both or neither (49.19). */
+    switchTo(
+        from: 'start' | 'end',
+        focused: Focus,
+        pointer: boolean,
+        leave: () => boolean,
+    ): void
+    /** Marks it leaving toward `to`, and closes it; false where its `open` refused. */
+    leaving(to: 'start' | 'end'): boolean
+    /** The id of its menu, by which a submenu finds the menu its trigger is an item of. */
+    menuId: string
+    /** The menu its trigger is an item of, where it is a submenu. */
+    parent(): Member | undefined
+    hide(): boolean
+    closeToTrigger(): void
+    /** 50.57 — opens the groupmate a step away, where it is in a group of two or more. */
+    switchBy(step: 1 | -1): boolean
 }
 const members = reactive<readonly Member[]>([])
 
@@ -53,6 +71,12 @@ type Focus = 'first' | 'last' | 'none'
 // 50.29 — the items the keys walk and a click picks.
 const ITEM =
     ':is([role=menuitem],[role=menuitemcheckbox],[role=menuitemradio]):not([disabled]):not([aria-disabled=true])'
+
+// 50.78 — whether `item` is `list`'s own rather than an item of a submenu standing inside it.
+const isOwnItem = (list: Element | null, item: Element): boolean => {
+    const holder = item.parentElement?.closest('[role=menu]')
+    return holder == null || holder === list || !list?.contains(holder)
+}
 
 /** WAI-ARIA's menu button: a trigger and the menu it opens, as parts to spread. */
 export function menu(options: MenuOptions = {}): Menu {
@@ -72,11 +96,25 @@ export function menu(options: MenuOptions = {}): Menu {
     const triggerOf = () => document.getElementById(triggerId)
     const typedTo = typeahead()
 
+    // 50.29, 50.78 — a submenu's items are its own, wherever it stands.
     const items = (): HTMLElement[] => {
         const list = menuOf()
-        return list === null
-            ? []
-            : [...list.querySelectorAll<HTMLElement>(ITEM)]
+        if (list === null) return []
+        const listed: HTMLElement[] = []
+        for (const item of list.querySelectorAll<HTMLElement>(ITEM))
+            if (isOwnItem(list, item)) listed.push(item)
+        return listed
+    }
+    // 50.77 — the arrow toward the side it opens on, and the one back toward its trigger, where it opens
+    // to a side; neither where it opens above or below.
+    const sideways = ():
+        readonly [toward: string, back: string] | undefined => {
+        const side = live(options.side)
+        return side === 'right'
+            ? ['ArrowRight', 'ArrowLeft']
+            : side === 'left'
+              ? ['ArrowLeft', 'ArrowRight']
+              : undefined
     }
 
     // Read as the popover opens, then put back: an opening nothing here asked for focuses as 50.28
@@ -88,43 +126,84 @@ export function menu(options: MenuOptions = {}): Menu {
     const goingTo = reactive<'start' | 'end' | undefined>(undefined)
 
     const isOpen = (): boolean => open.peek() === true
-    const show = (focused: Focus, pointer: boolean): void => {
-        if (isOpen()) return
+    const show = (focused: Focus, pointer: boolean): boolean => {
+        if (isOpen()) return true
         focusOnOpen = focused
         // 50.56 — a pointer switching menus opened this one, so a leave closes it.
-        layer.show(pointer ? 'hover' : undefined)
+        if (layer.show(pointer ? 'hover' : undefined)) return true
+        focusOnOpen = undefined
+        return false
     }
-    const hide = (): void => {
-        if (isOpen()) open.set(false)
-    }
+    const hide = layer.hide
     // 50.31 — a pick or an Escape closes the menu and hands focus back to its trigger.
     const closeToTrigger = (): void => {
-        hide()
-        triggerOf()?.focus()
+        if (hide()) triggerOf()?.focus()
     }
 
     const self: Member = {
+        menuId,
+        parent: () => {
+            const holder = triggerOf()?.parentElement?.closest('[role=menu]')
+            if (holder == null) return undefined
+            for (const mate of members.peek() ?? [])
+                if (mate.menuId === holder.id) return mate
+            return undefined
+        },
+        hide,
+        closeToTrigger,
+        switchBy: (step) => {
+            const group = self.group()
+            if (group === undefined) return false
+            const mates = inGroup(members, group)
+            const at = mates.indexOf(self)
+            if (mates.length < 2 || at === -1) return false
+            const to = mates[(at + step + mates.length) % mates.length]
+            ;(to as Member).switchTo(
+                step === 1 ? 'start' : 'end',
+                'first',
+                false,
+                () => self.leaving(step === 1 ? 'end' : 'start'),
+            )
+            return true
+        },
         group: () => live(options.group),
         element: triggerOf,
         isOpen,
         holdsFocus: () => menuOf()?.contains(document.activeElement) === true,
-        switchTo: (from, focused, pointer) => {
-            show(focused, pointer)
-            cameFrom.set(from)
+        switchTo: (from, focused, pointer, leave) => {
+            const wasOpen = isOpen()
+            if (!show(focused, pointer)) return
+            if (leave()) {
+                cameFrom.set(from)
+                return
+            }
+            if (wasOpen) return
+            focusOnOpen = undefined
+            hide()
         },
         leaving: (to) => {
+            const was = goingTo.peek()
             goingTo.set(to)
-            hide()
+            if (hide()) return true
+            goingTo.set(was)
+            return false
         },
     }
     join(members, self)
+    /** The menu no other is a submenu of, this one's or the one it was opened from at last. */
+    const outermost = (): Member => {
+        let at = self
+        for (let up = at.parent(); up !== undefined; up = up.parent()) at = up
+        return at
+    }
     /** Opens `to` from the open groupmate `from`, each marked with the side the other stands on. */
     const switchIn = (to: Member, from: Member, focused: Focus): void => {
         // A pointer on a trigger is the one switch that comes here; the keys switch in the menu's own.
         const mates = inGroup(members, self.group() as string)
         const ahead = mates.indexOf(to) > mates.indexOf(from)
-        from.leaving(ahead ? 'end' : 'start')
-        to.switchTo(ahead ? 'start' : 'end', focused, true)
+        to.switchTo(ahead ? 'start' : 'end', focused, true, () =>
+            from.leaving(ahead ? 'end' : 'start'),
+        )
     }
 
     // The popover's own state is the truth: every way it opens or closes arrives here, its trigger, a
@@ -144,6 +223,9 @@ export function menu(options: MenuOptions = {}): Menu {
             return
         }
         cameFrom.set(undefined)
+        // 50.80
+        for (const mate of members.peek() ?? [])
+            if (mate !== self && mate.parent() === self) mate.hide()
     }
 
     // The popover's trigger with the menu's laid over it; a pointer entering is the popover's where
@@ -152,9 +234,15 @@ export function menu(options: MenuOptions = {}): Menu {
     const trigger = withPart(withPart({}, layer.trigger), {
         'data-menu': 'trigger',
         'aria-haspopup': 'menu',
-        // 50.32
+        // 50.32, 50.77
         onkeydown: (event: KeyboardEvent) => {
-            const end = openingEnd(event.key, 'vertical')
+            const toSide = sideways()
+            const end =
+                toSide === undefined
+                    ? openingEnd(event.key, 'vertical')
+                    : event.key === toSide[0]
+                      ? 'first'
+                      : undefined
             if (end === undefined) return
             event.preventDefault()
             show(end, false)
@@ -197,31 +285,22 @@ export function menu(options: MenuOptions = {}): Menu {
         },
         ontoggle: toggled,
         onkeydown: (event: KeyboardEvent) => {
-            if (event.key === 'Escape') {
+            // 50.81 — a key a submenu standing inside it took.
+            if (event.defaultPrevented) return
+            const toSide = sideways()
+            // 50.31, 50.77
+            if (event.key === 'Escape' || event.key === toSide?.[1]) {
                 // Kept from `dismissible`'s stack (53.14), which would close it and leave focus inside.
                 event.preventDefault()
                 closeToTrigger()
                 return
             }
-            if (event.key === 'Tab') return hide()
-            // 50.57 — ArrowLeft and ArrowRight open the groupmate before and after this one.
-            const group = self.group()
-            if (
-                group !== undefined &&
-                (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-            ) {
-                const mates = inGroup(members, group)
-                const at = mates.indexOf(self)
-                if (mates.length < 2 || at === -1) return
-                event.preventDefault()
-                const step = event.key === 'ArrowRight' ? 1 : -1
-                const to = mates[(at + step + mates.length) % mates.length]
-                self.leaving(step === 1 ? 'end' : 'start')
-                ;(to as Member).switchTo(
-                    step === 1 ? 'start' : 'end',
-                    'first',
-                    false,
-                )
+            // 50.82
+            if (event.key === 'Tab') return outermost().hide()
+            // 50.57 — ArrowLeft and ArrowRight open the groupmate before and after the outermost menu.
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                if (outermost().switchBy(event.key === 'ArrowRight' ? 1 : -1))
+                    event.preventDefault()
                 return
             }
             const listed = items()
@@ -249,9 +328,16 @@ export function menu(options: MenuOptions = {}): Menu {
             handleEvent: (event: MouseEvent) => {
                 if (!(event.target instanceof Element)) return
                 const item = event.target.closest(ITEM)
-                if (item === null) return
-                if (item.getAttribute('role') !== 'menuitem') return
-                closeToTrigger()
+                // 50.78, 50.79 — a submenu's item is its own to answer, and an item opening a submenu
+                // opens it.
+                if (
+                    item === null ||
+                    !isOwnItem(menuOf(), item) ||
+                    item.getAttribute('role') !== 'menuitem' ||
+                    item.hasAttribute('aria-haspopup')
+                )
+                    return
+                outermost().closeToTrigger()
             },
         },
     })

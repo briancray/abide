@@ -59,7 +59,7 @@ export function toggleGroup<Item, Multiple extends boolean = false>(
     const itemId = (key: string) => `${base}-${encodeURIComponent(key)}`
 
     // 51.114 — picking one, the key in the tab order: the one picked, the first where none is listed.
-    // A memo, as `tabs`' is: every radio's `tabindex` reads it, so a pick walks the keys once.
+    // A computed, as `tabs`' is: every radio's `tabindex` reads it, so a pick walks the keys once.
     const current = computed((): string | undefined => {
         const listed = keysOf()
         const now = picks.selected() as string | undefined
@@ -140,8 +140,8 @@ export function toggleGroup<Item, Multiple extends boolean = false>(
                 ]
             if (next === undefined) return
             event.preventDefault()
-            picks.pick(next)
-            globalThis.document?.getElementById(itemId(next))?.focus()
+            if (picks.pick(next))
+                globalThis.document?.getElementById(itemId(next))?.focus()
         },
     }
 

@@ -3,7 +3,7 @@
 
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 
-import { flushSync, playback, reactive } from '#shared'
+import { flushSync, jsonSchema, playback, reactive } from '#shared'
 
 // The frames asked for, run when a test says, each handed the time it names.
 let queued: FrameRequestCallback[] = []
@@ -107,4 +107,29 @@ test('Space plays and pauses, and the arrows move it by its step, kept to its le
     expect(trip.at()).toBe(8000)
     key(trip.root, 'ArrowLeft')
     expect(trip.at()).toBe(5000)
+})
+
+// THE REVERT: rewind `at` before writing `playing`, and a refused play still moves it to 0 — `at` reads 0.
+test('a play its playing refuses leaves where it is — 49.19', () => {
+    const playing = reactive<boolean>(false, {
+        schema: jsonSchema<boolean>({ enum: [false] }),
+    })
+    const trip = playback({ duration: 1000, at: reactive(1000), playing })
+    press(trip.play)
+    expect([trip.playing(), trip.at()]).toEqual([false, 1000])
+})
+
+// THE REVERT: ignore what the tick's `at` write hands back, and a refused move leaves the clock playing
+// with a frame queued every frame — playing reads true and one frame is queued.
+test('a move its at refuses stops the clock rather than spinning on it — 49.19', () => {
+    const at = reactive<number>(0, {
+        schema: jsonSchema<number>({ type: 'number', maximum: 300 }),
+    })
+    const trip = playback({ duration: 1000, at })
+    press(trip.play)
+    frame(0)
+    frame(200)
+    expect(trip.at()).toBe(200)
+    frame(400)
+    expect([trip.at(), trip.playing(), queued.length]).toEqual([200, false, 0])
 })

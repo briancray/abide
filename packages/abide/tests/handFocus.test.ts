@@ -1,9 +1,9 @@
-// 49.15 — a button its own click disables hands focus on, in `pages`, `wizard` and `stepper`, their
+// 49.15 — a button its own click disables hands focus on, in `pagination`, `wizard` and `spinbutton`, their
 // parts spread on real buttons and clicked as a browser clicks them. `carousel`'s is its own test's.
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { flushSync, pages, reactive, stepper, wizard } from '#shared'
+import { flushSync, pagination, reactive, spinbutton, wizard } from '#shared'
 
 afterEach(() => document.body.replaceChildren())
 
@@ -35,11 +35,11 @@ const click = (element: HTMLElement) => {
     flushSync()
 }
 
-// THE REVERT: drop the hand-off from `pages`' `next`, and focus stays on a disabled button.
+// THE REVERT: drop the hand-off from `pagination`'s `next`, and focus stays on a disabled button.
 test("pages' next stepping to the last page hands focus to previous — 49.15", () => {
-    const list = pages({ count: 2 })
+    const list = pagination({ count: 2 })
     const nav = document.createElement('nav')
-    nav.setAttribute('data-pages', 'nav')
+    nav.setAttribute('data-pagination', 'nav')
     document.body.append(nav)
     const { previous, next } = spread({
         previous: list.previous,
@@ -66,10 +66,10 @@ test("wizard's next onto the last step hands focus to previous, and previous ont
     expect([steps.current(), document.activeElement]).toEqual(['account', next])
 })
 
-// THE REVERT: drop the hand-off from `stepper`'s buttons, and reaching a bound leaves the field's keys
+// THE REVERT: drop the hand-off from `spinbutton`'s buttons, and reaching a bound leaves the field's keys
 // unheard.
-test("stepper's button reaching its bound hands focus to its input — 49.15", () => {
-    const seats = stepper({ id: 'seats', value: reactive(1), max: 2 })
+test("spinbutton's button reaching its bound hands focus to its input — 49.15", () => {
+    const seats = spinbutton({ id: 'seats', value: reactive(1), max: 2 })
     const { input, increment } = spread({
         input: seats.input,
         increment: seats.increment,

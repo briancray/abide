@@ -65,15 +65,12 @@ type Member = {
     readonly order: Reactive<readonly string[]>
     /** The item of `key` among its own `items`. */
     find(key: string): unknown
-    place(block: readonly string[], before: number): void
-    /** Takes `block` out of its order and its selection, handing back those of them that were selected. */
-    leave(block: readonly string[]): string[]
-    /** Places `block` after `before` of its items, the first of them active and `picked` selected. */
-    enter(
-        block: readonly string[],
-        before: number,
-        picked: readonly string[],
-    ): void
+    /** Places `block` after `before` of its items, answering whether the write landed. */
+    place(block: readonly string[], before: number): boolean
+    /** Takes `block` out of its order and its selection, handing back those of them that were selected — `undefined`, and nothing changed, where the order's write is refused. */
+    leave(block: readonly string[]): string[] | undefined
+    /** Makes the first of `block`, placed here, active, and `picked` selected. */
+    enter(block: readonly string[], picked: readonly string[]): void
     grab(held: ReadonlySet<string>): void
     /** The middle of each of its items not `held`, top to bottom, as they stand. */
     middles(held: ReadonlySet<string>): number[]
@@ -83,13 +80,22 @@ const members = reactive<readonly Member[]>([])
 const NONE: ReadonlySet<string> = new Set()
 
 // 51.178 — out of one list's order and into the other's, the selection going with them (51.182).
+// 49.19 — both orders' writes land or neither: the target's first, put back where the source's is refused.
 function carry(
     from: Member,
     to: Member,
     block: readonly string[],
     before: number,
-): void {
-    to.enter(block, before, from.leave(block))
+): boolean {
+    const was = to.order.peek() ?? []
+    if (!to.place(block, before)) return false
+    const selected = from.leave(block)
+    if (selected === undefined) {
+        to.order.set(was)
+        return false
+    }
+    to.enter(block, selected)
+    return true
 }
 
 // 51.183 — a list's name as a screen reader reads it: its `aria-label`, else the text it is labelled by.
@@ -172,11 +178,11 @@ export function sortableList<Item, Multiple extends boolean = false>(
             : [taken]
     }
     // The items placed together, `before` of the others ahead of them.
-    const place = (block: readonly string[], before: number): void => {
+    const place = (block: readonly string[], before: number): boolean => {
         const held = new Set(block)
         const rest = keys().filter((key) => !held.has(key))
         rest.splice(Math.max(0, Math.min(rest.length, before)), 0, ...block)
-        order.set(rest)
+        return order.set(rest) === undefined
     }
     // How many of the others stand ahead of `key` as the list is now.
     const ahead = (key: string, block: readonly string[]): number => {
@@ -220,7 +226,8 @@ export function sortableList<Item, Multiple extends boolean = false>(
         // 51.182 — the items moved leave this list's selection.
         leave: (block) => {
             const held = new Set(block)
-            order.set(keys().filter((key) => !held.has(key)))
+            if (order.set(keys().filter((key) => !held.has(key))) !== undefined)
+                return undefined
             grabbed.set(NONE)
             if (!many) {
                 const selected = pickedOne.peek()
@@ -235,8 +242,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
             return gone
         },
         // 51.182 — the first of them active here, and those that were selected selected here.
-        enter: (block, before, selected) => {
-            place(block, before)
+        enter: (block, selected) => {
             choices.activate(block[0] as string)
             if (many && selected.length !== 0)
                 pickedMany.set([...picked(), ...selected])
@@ -330,11 +336,17 @@ export function sortableList<Item, Multiple extends boolean = false>(
                                 count += 1
                         if (into !== at) {
                             const to = standing[into] as Member
-                            carry(standing[at] as Member, to, block, count)
+                            if (
+                                !carry(standing[at] as Member, to, block, count)
+                            )
+                                return
                             to.grab(held)
                             at = into
-                        } else if (count !== before)
-                            (standing[at] as Member).place(block, count)
+                        } else if (
+                            count !== before &&
+                            !(standing[at] as Member).place(block, count)
+                        )
+                            return
                         before = count
                     }
                     const dropped = (): void => {
@@ -370,7 +382,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
         const to = standing[standing.indexOf(self) + step]
         if (to === undefined || to === self) return
         const block = moving(taken)
-        carry(self, to, block, ahead(block[0] as string, block))
+        if (!carry(self, to, block, ahead(block[0] as string, block))) return
         ;(to.element() as HTMLElement).focus()
         to.say(block, `moved to ${nameOf(to.element())}`)
     }
@@ -411,8 +423,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
                     0,
                     Math.min(others, ahead(block[0] as string, block) + step),
                 )
-                place(block, before)
-                say(block, 'moved')
+                if (place(block, before)) say(block, 'moved')
             },
         }),
         item,

@@ -1,0 +1,27 @@
+<script>
+import { menu, reactive, toggle, toolbar } from '@abide/abide'
+
+import { STAGES } from '#src/pipeline/lib/STAGES.ts'
+
+let stage = reactive('proposal')
+const tools = toolbar({ label: 'Deal actions' })
+const pin = toggle()
+const move = menu()
+</script>
+
+<div {...tools.toolbar} class="row">
+    <button type="button" {...pin.button} {...tools.item}>Pin</button>
+    <button type="button" {...move.trigger} {...tools.item}>Move to…</button>
+    <button type="button" disabled {...tools.item}>Archive</button>
+    <input aria-label="Note" {...tools.item}>
+</div>
+<div
+    {...move.menu}
+    class="m-0 flex-col gap-hair rounded-lg border border-rule bg-raised
+    p-tight open:flex"
+>
+    {#for next of STAGES}
+        <button role="menuitem" onclick={() => (stage = next)}>{next}</button>
+    {/for}
+</div>
+<p class="status">{stage}</p>

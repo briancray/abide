@@ -1,0 +1,87 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import DealMenus from './lib/DealMenus.abide'
+import dealMenus from './lib/DealMenus.abide' with { type: 'text' }
+import NoteFormatting from './lib/NoteFormatting.abide'
+import noteFormatting from './lib/NoteFormatting.abide' with { type: 'text' }
+import SideMenus from './lib/SideMenus.abide'
+import sideMenus from './lib/SideMenus.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/menu', '/headless/toggle', '/headless/toggle-group']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealToolbar.test.ts',
+            from: ["test('the toolbar is one tab stop, at its first item'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealToolbar.test.ts',
+            from: [
+                "test('the arrow keys move focus along the items, round the ends, past a disabled one'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealToolbar.test.ts',
+            from: ["test('the item focused last is the one Tab comes back to'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealToolbar.test.ts',
+            from: [
+                "test('a field keeps its arrow keys, and a menu trigger its own'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealMenubar.test.ts',
+            from: [
+                "test('a menubar holds menu items opening menus, one of them a tab stop'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealMenubar.test.ts',
+            from: [
+                "test('an open menu switches to the next on ArrowRight, and Escape returns to the bar'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealSideMenus.test.ts',
+            from: [
+                "test('ArrowDown walks a vertical menubar, and ArrowRight opens a menu'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealSideMenus.test.ts',
+            from: [
+                "test('ArrowLeft closes a menu opening to the right, back to the bar'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Put a row of controls behind one tab stop">
+        <p>Spread <code>toolbar</code> on the container and <code>item</code> on each control,
+            beside any part of its own, such as a <code>toggle</code>'s button. Tab reaches the
+            toolbar once, at the control focused last. The arrow keys move between the
+            controls, passing over a disabled one. A field keeps its own arrow keys, and so does
+            a control that handles them, such as a menu's button opening on ArrowDown.</p>
+        <Example code={noteFormatting}><NoteFormatting /></Example>
+    </Section>
+
+    <Section level={3} title="Make a menubar of menus">
+        <p>Given <code>role: 'menubar'</code>, each item is a menu item, so spread it on each
+            menu's trigger, and hand every menu the bar's <code>id</code> as its
+            <code>group</code>. The arrow keys walk the bar, ArrowDown opens a menu, and while one
+            is open, ArrowLeft and ArrowRight switch to the menu beside it. Escape hands focus
+            back to the bar.</p>
+        <Example code={dealMenus}><DealMenus /></Example>
+    </Section>
+
+    <Section level={3} title="Run a menubar down the side">
+        <p>Given <code>orientation: 'vertical'</code>, ArrowDown and ArrowUp walk the bar. Give
+            its menus <code>side: 'right'</code>, and each opens to the right of its item on
+            ArrowRight and closes back to it on ArrowLeft.</p>
+        <Example code={sideMenus}><SideMenus /></Example>
+    </Section>
+</Doc>

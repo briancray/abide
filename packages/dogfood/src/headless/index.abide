@@ -57,7 +57,7 @@ import turnChevron from './lib/TurnChevron.abide' with { type: 'text' }
 
     <Section title="Dim a button with nothing left to do">
         <p>A button that cannot act is <code>disabled</code>, so the <code>disabled:</code> variant
-            styles it. A <a href={url('/headless/stepper')}><code>stepper</code></a>'s
+            styles it. A <a href={url('/headless/spinbutton')}><code>spinbutton</code></a>'s
             <code>+</code> is disabled at its <code>max</code>.</p>
         <Example code={dimDisabled}><DimDisabled /></Example>
     </Section>
@@ -79,7 +79,7 @@ import turnChevron from './lib/TurnChevron.abide' with { type: 'text' }
 
     <Section title="Write the rule in plain CSS">
         <p>An attribute selector is all a rule needs. A <code>&lt;style&gt;</code> block of the file
-            is scoped to it, and the <a href={url('/headless/pages')}><code>pages</code></a> link for the page
+            is scoped to it, and the <a href={url('/headless/pagination')}><code>pagination</code></a> link for the page
             showing carries <code>aria-current="page"</code>.</p>
         <Example code={currentPage}><CurrentPage /></Example>
     </Section>

@@ -1,0 +1,34 @@
+<script>
+import { computed, reactive, slider } from '@abide/abide'
+
+const DEALS = [
+    { id: 'noether-pilot', name: 'Noether pilot', probability: 20 },
+    { id: 'turing-seats', name: 'Turing seats', probability: 55 },
+    { id: 'hopper-renewal', name: 'Hopper renewal', probability: 90 },
+]
+
+let least = reactive(50)
+const threshold = slider({
+    value: least,
+    label: 'Least win probability',
+    step: 5,
+    name: 'probability',
+    format: (each) => `${each}%`,
+})
+const shown = computed(() => DEALS.filter((deal) => deal.probability >= least))
+</script>
+
+<form class="fields stacked">
+    <div {...threshold.root} class="slider">
+        <div {...threshold.track}>
+            <div {...threshold.fill} />
+            <span {...threshold.thumb} />
+        </div>
+        <input {...threshold.input}>
+    </div>
+</form>
+<ul>
+    {#for deal of shown key deal.id}
+        <li>{deal.name}</li>
+    {/for}
+</ul>

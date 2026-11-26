@@ -5,7 +5,7 @@
 import { afterEach, expect, test } from 'bun:test'
 
 import { inScope } from '#server/requestScope.ts'
-import { flushSync, watch } from '#shared'
+import { flushSync, reactive, watch } from '#shared'
 import { autoscroll } from '#shared/autoscroll.ts'
 import { copy } from '#shared/copy.ts'
 import { copyToClipboard } from '#shared/copyToClipboard.ts'
@@ -392,6 +392,39 @@ test('a drop replaces the files, keeps one under multiple false, and one taking 
     drag(zone, 'drop', [CONTRACT, PHOTO])
     expect(one.files().map((file) => file.name)).toEqual(['ledger-audit.pdf'])
     one.stop()
+})
+
+// THE REVERT: set `turnedAway` and call the callbacks before writing `files`, unchecked, and the drop
+// whose files were refused hands `onfiles` the contract and reads the notes as turned away.
+test('a drop whose files are refused turns nothing away and calls nothing — 49.19', () => {
+    const zone = element()
+    const heard: string[] = []
+    const files = reactive<readonly File[]>([], {
+        schema: {
+            '~standard': {
+                version: 1,
+                vendor: 'test',
+                validate: (value: unknown) =>
+                    (value as File[]).length > 0
+                        ? { issues: [{ message: 'no uploads now' }] }
+                        : { value: value as readonly File[] },
+            },
+        },
+    })
+    const drop = hosted(
+        zone,
+        dropzone({
+            accept: '.pdf',
+            files,
+            onfiles: (taken) => heard.push(`files ${taken.length}`),
+            onreject: (away) => heard.push(`reject ${away.length}`),
+        }),
+    )
+    drag(zone, 'drop', [CONTRACT, new File(['x'], 'notes.txt')])
+    expect(drop.files()).toEqual([])
+    expect(drop.rejected).toEqual([])
+    expect(heard).toEqual([])
+    drop.stop()
 })
 
 /** A clipboard recording each item written to it as `type: text` per type, until the test ends. */

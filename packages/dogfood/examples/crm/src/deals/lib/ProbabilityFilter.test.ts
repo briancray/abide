@@ -8,7 +8,7 @@ import ProbabilityFilter from './ProbabilityFilter.abide'
 const listed = () =>
     [...document.querySelectorAll('li')].map((item) => item.textContent)
 
-// `range`'S PARTS on the filter's own markup: a group named by `label`, a track holding the span and
+// `slider`'S PARTS on the filter's own markup: a group named by `label`, a track holding the span and
 // two thumbs, each a slider whose keys write the bound value back. THE REVERT: drop `probability.root`
 // from the filter's group, and it has no role or name.
 test('the range is a group holding the track, the span and two thumbs the keys move', async () => {
@@ -16,8 +16,8 @@ test('the range is a group holding the track, the span and two thumbs the keys m
     const group = document.querySelector('[role=group]') as HTMLElement
     expect(group.getAttribute('aria-label')).toBe('Win probability')
     expect(
-        [...group.querySelectorAll('[data-range]')].map((part) =>
-            part.getAttribute('data-range'),
+        [...group.querySelectorAll('[data-slider]')].map((part) =>
+            part.getAttribute('data-slider'),
         ),
     ).toEqual(['track', 'fill', 'thumb', 'thumb'])
     expect(listed()).toEqual(['Turing seats', 'Hopper renewal'])

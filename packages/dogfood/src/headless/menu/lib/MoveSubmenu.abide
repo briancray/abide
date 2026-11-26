@@ -1,0 +1,19 @@
+<script>
+import { menu } from '@abide/abide'
+
+const actions = menu()
+// Its trigger is one of `actions`' items, so it opens as a submenu.
+const move = menu({ side: 'right' })
+</script>
+
+<button type="button" {...actions.trigger}>Actions</button>
+<div {...actions.menu} class="m-0 flex-col rounded-lg border border-rule
+    bg-raised p-tight open:flex">
+    <button role="menuitem" {...move.trigger}>Move to</button>
+    <div {...move.menu} class="m-0 flex-col rounded-lg border border-rule
+        bg-raised p-tight open:flex">
+        <button role="menuitem">Proposal</button>
+        <button role="menuitem">Won</button>
+    </div>
+    <button role="menuitem">Archive</button>
+</div>

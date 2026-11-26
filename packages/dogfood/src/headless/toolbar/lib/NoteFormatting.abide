@@ -1,0 +1,13 @@
+<script>
+import { toggle, toolbar } from '@abide/abide'
+
+const tools = toolbar({ label: 'Note formatting' })
+const bold = toggle()
+const italic = toggle()
+</script>
+
+<div {...tools.toolbar} class="row">
+    <button type="button" {...bold.button} {...tools.item}>Bold</button>
+    <button type="button" {...italic.button} {...tools.item}>Italic</button>
+    <button type="button" {...tools.item}>Link</button>
+</div>

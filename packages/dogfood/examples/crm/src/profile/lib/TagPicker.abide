@@ -1,0 +1,37 @@
+<script>
+import { combobox, jsonSchema, reactive } from '@abide/abide'
+
+const KNOWN = ['investor', 'speaker', 'mentor', 'advisor', 'founder']
+
+// The gate refuses a fourth tag; the picker leaves the field and the list as they stood.
+let tags = reactive<readonly string[]>(['investor'], {
+    schema: jsonSchema<readonly string[]>({ type: 'array', maxItems: 3 }),
+})
+const box = combobox({
+    options: KNOWN,
+    multiple: true,
+    value: tags,
+    create: (text) => text.toLowerCase(),
+})
+</script>
+
+<label for={box.id}>Tags</label>
+<div {...box.root} class="picker flex-row flex-wrap">
+    {#for tag of box.value key tag}
+        <span {...box.chip(tag).chip} class="rounded-full border px-2">{tag}
+            <button {...box.chip(tag).remove}>×</button></span>
+    {/for}
+    <input {...box.input} placeholder="Add a tag">
+    {#if box.open}
+        <div {...box.popup}>
+            <ul {...box.listbox}>
+                {#for tag of box.items key tag}
+                    <li {...box.option(tag)}>
+                        {tag === box.creating ? `Add “${tag}”` : tag}
+                    </li>
+                {/for}
+            </ul>
+        </div>
+    {/if}
+</div>
+<p class="status">{tags.length} of 3 tags</p>

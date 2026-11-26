@@ -4,7 +4,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { flushSync, reactive, tabs, watch } from '#shared'
+import { flushSync, jsonSchema, reactive, tabs, watch } from '#shared'
 
 afterEach(() => document.body.replaceChildren())
 
@@ -75,4 +75,30 @@ test("tabs over records are told apart by each record's id, and a key replaces i
 
     const byLabel = tabs({ items: VIEWS, key: (each) => each.label })
     expect(byLabel.selected()).toBe('Details')
+})
+
+// THE REVERT: focus the tab whatever the write to `selected` answered, and the refused ArrowRight
+// takes focus to `notes`' tab.
+test('a refused selection leaves focus on the tab it was on — 49.19', () => {
+    const view = tabs({
+        id: 'refused',
+        items: ['details', 'notes'],
+        selected: reactive<string | undefined>('details', {
+            schema: jsonSchema<string | undefined>({ enum: ['details'] }),
+        }),
+    })
+    for (const key of ['details', 'notes']) {
+        const button = document.createElement('button')
+        spread(button, view.tab(key).button)
+        document.body.append(button)
+    }
+    ;(document.getElementById('refused-tab-details') as HTMLElement).focus()
+    ;(view.list.onkeydown as (event: KeyboardEvent) => void)(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', cancelable: true }),
+    )
+    flushSync()
+    expect([view.selected(), document.activeElement?.id]).toEqual([
+        'details',
+        'refused-tab-details',
+    ])
 })

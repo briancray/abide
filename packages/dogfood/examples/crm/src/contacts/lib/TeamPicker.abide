@@ -7,8 +7,8 @@ type Contact = { id: string; name: string; company: string }
 
 const contacts = computed(() => listContacts())
 let team = reactive<Contact[]>([])
-// The picker as parts on markup of the page's own: each option names the contact's company under
-// them, and each chip is the contact's name with its own remove button.
+// Each option names the contact's company under them, and each chip is the contact's name with
+// its own remove button.
 const box = combobox({
     id: 'deal-team',
     options: () => contacts,

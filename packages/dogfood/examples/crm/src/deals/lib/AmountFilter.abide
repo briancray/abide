@@ -1,5 +1,5 @@
 <script>
-import { computed, format, range, reactive } from '@abide/abide'
+import { computed, format, reactive, slider } from '@abide/abide'
 
 const DEALS = [
     { id: 'noether-pilot', name: 'Noether pilot', amount: 6_500 },
@@ -9,7 +9,8 @@ const DEALS = [
 ]
 
 let amount = reactive<readonly [number, number]>([0, 50_000])
-const slider = range({
+const band = slider({
+    range: true,
     value: amount,
     label: 'Deal amount',
     max: 50_000,
@@ -25,14 +26,14 @@ const shown = computed(() =>
 </script>
 
 <form class="fields stacked">
-    <div class="range" {...slider.root}>
-        <div {...slider.track}>
-            <div {...slider.fill} />
-            <span {...slider.end(0).thumb} />
-            <span {...slider.end(1).thumb} />
+    <div class="slider" {...band.root}>
+        <div {...band.track}>
+            <div {...band.fill} />
+            <span {...band.end(0).thumb} />
+            <span {...band.end(1).thumb} />
         </div>
-        <input {...slider.end(0).input}>
-        <input {...slider.end(1).input}>
+        <input {...band.end(0).input}>
+        <input {...band.end(1).input}>
     </div>
 </form>
 <p class="status">

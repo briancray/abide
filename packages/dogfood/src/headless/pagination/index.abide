@@ -1,0 +1,59 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import CurrentPage from './lib/CurrentPage.abide'
+import currentPage from './lib/CurrentPage.abide' with { type: 'text' }
+import PageButtons from './lib/PageButtons.abide'
+import pageButtons from './lib/PageButtons.abide' with { type: 'text' }
+import PageLinks from './lib/PageLinks.abide'
+import pageLinks from './lib/PageLinks.abide' with { type: 'text' }
+import PageWindow from './lib/PageWindow.abide'
+import pageWindow from './lib/PageWindow.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/virtual-list', '/headless/sortable-table']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealPages.test.ts',
+            from: ["test('the deals turn a page at a time, the far pages folded'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealPageWindow.test.ts',
+            from: [
+                "test('a window of five pages slides with the page showing, no first, last or gap'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/pagination.test.ts',
+            from: ["test('the pages listed hold one length"],
+        },
+    ]}
+>
+    <Section level={3} title="Page through deals with buttons">
+        <p>Spread <code>nav</code> on a nav, and walk <code>items</code>: a number is a page
+            for <code>link(page)</code>, and a <code>gap</code> stands for the pages left out.
+            <code>previous</code> and <code>next</code> are disabled at the ends.</p>
+        <Example code={pageButtons}><PageButtons /></Example>
+    </Section>
+
+    <Section level={3} title="Link each page to its own address">
+        <p>Give <code>href</code>, and each part is a link to its page's address, so it works
+            before the page hydrates and a page can be shared.</p>
+        <Example code={pageLinks}><PageLinks /></Example>
+    </Section>
+
+    <Section level={3} title="Fill the button of the page showing">
+        <p>The page showing carries <code>aria-current="page"</code>.</p>
+        <Example code={currentPage}><CurrentPage /></Example>
+    </Section>
+
+    <Section level={3} title="Show five pages around the one showing, with no first or last">
+        <p><code>items</code> is one way to choose the numbers. <code>link(page)</code> takes any
+            page, so walk a window you work out instead; <code>previous</code> and
+            <code>next</code> still step and stop at the ends.</p>
+        <Example code={pageWindow}><PageWindow /></Example>
+    </Section>
+</Doc>

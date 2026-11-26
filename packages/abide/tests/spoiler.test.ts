@@ -2,7 +2,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { flushSync, reactive, spoiler } from '#shared'
+import { flushSync, jsonSchema, reactive, spoiler } from '#shared'
 
 import { bindPart } from './bindPart.ts'
 
@@ -53,4 +53,24 @@ test('an `open` of the app’s own covers the content again', () => {
     expect(secret.content.hidden).toBe(false)
     open.set(false)
     expect([secret.cover.hidden, secret.content.hidden]).toEqual([false, true])
+})
+
+// THE REVERT: queue the focus whatever the write answered, and a refused press hands focus to content
+// that stays hidden — `activeElement` reads the span.
+test('a press whose opening is refused leaves the cover and its focus — 49.19', async () => {
+    const open = reactive<boolean>(false, {
+        schema: jsonSchema<boolean>({ enum: [false] }),
+    })
+    const secret = spoiler({ open })
+    const cover = document.createElement('button')
+    const content = document.createElement('span')
+    document.body.append(cover, content)
+    content.tabIndex = -1
+    bound.push(bindPart(secret.content, content))
+    cover.focus()
+    ;(secret.cover.onclick as () => void)()
+    flushSync()
+    await Promise.resolve()
+    expect([open(), secret.content.hidden]).toEqual([false, true])
+    expect(document.activeElement).toBe(cover)
 })

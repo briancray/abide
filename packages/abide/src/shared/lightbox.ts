@@ -52,10 +52,12 @@ export function lightbox<Item>(options: LightboxOptions<Item>): Lightbox<Item> {
         }),
         carousel: pictures,
         open: shown.open,
-        // 50.67
+        // 50.67 — 49.19, both writes land or neither: a refused opening puts the pick back.
         show: (key: string) => {
-            pictures.selected.set(key)
-            shown.open.set(true)
+            const before = pictures.selected.peek()
+            if (pictures.selected.set(key) !== undefined) return
+            if (shown.open.set(true) !== undefined)
+                pictures.selected.set(before)
         },
     }
 }

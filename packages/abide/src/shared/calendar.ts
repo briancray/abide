@@ -322,12 +322,16 @@ export function calendar<Range extends boolean = false>(
         today,
     }
     // 52.91, 52.92, 52.97 — a pick: the day, or a range's start, then its end.
-    const pick = (date: string): void => {
-        if (!range) return selected.set(date)
+    // 49.19 — whether the pick landed.
+    const pick = (date: string): boolean => {
+        if (!range) return selected.set(date) === undefined
         const from = start.peek()
         if (from === undefined || end.peek() !== undefined)
-            selected.set([date, undefined])
-        else selected.set(date < from ? [date, from] : [from, date])
+            return selected.set([date, undefined]) === undefined
+        return (
+            selected.set(date < from ? [date, from] : [from, date]) ===
+            undefined
+        )
     }
 
     // 52.82, 52.83 — `month`'s whole weeks from the week's `first` day. 52.96 — a day of another
@@ -370,12 +374,17 @@ export function calendar<Range extends boolean = false>(
     }
 
     // 52.90 — a key moving the active day out of the months shown pages the fewest months that show it.
+    // 49.19 — a refused page leaves the active day and focus where they are.
     const moveTo = (date: string): void => {
-        focused.set(date)
         const month = date.slice(0, 7)
-        if (month < (shown.peek() as string)) picked.set(month)
-        else if (month > (last.peek() as string))
-            picked.set(monthOn(month, 1 - (count.peek() as number)))
+        const paged =
+            month < (shown.peek() as string)
+                ? month
+                : month > (last.peek() as string)
+                  ? monthOn(month, 1 - (count.peek() as number))
+                  : undefined
+        if (paged !== undefined && picked.set(paged) !== undefined) return
+        focused.set(date)
         flushSync()
         globalThis.document?.getElementById(cellId(date))?.focus()
     }
@@ -428,9 +437,7 @@ export function calendar<Range extends boolean = false>(
     // 52.92 — a click picks the day it lands in, and makes it the active one.
     const onclick = (event: MouseEvent) => {
         const date = dateAt(event)
-        if (date === undefined) return
-        pick(date)
-        moveTo(date)
+        if (date !== undefined && pick(date)) moveTo(date)
     }
     // 52.86 — focus put on a day by any means makes it the active one.
     const onfocusin = (event: FocusEvent) => {

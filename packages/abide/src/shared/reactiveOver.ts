@@ -5,10 +5,10 @@
 
 import type { Reactive } from './reactive/index.ts'
 
-/** `read` and `write` standing in for a `Reactive`: called and `peek`ed through `read`, `set` through `write`. */
+/** `read` and `write` standing in for a `Reactive`: called and `peek`ed through `read`, `set` through `write`, which hands back the refusal of the write it makes (4.18). */
 export function reactiveOver<Value>(
     read: () => Value,
-    write: (next: Value) => void,
+    write: (next: Value) => unknown,
 ): Reactive<Value> {
     return Object.assign(() => read(), {
         peek: read,

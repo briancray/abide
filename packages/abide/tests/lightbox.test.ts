@@ -3,7 +3,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { flushSync, lightbox } from '#shared'
+import { flushSync, jsonSchema, lightbox, reactive } from '#shared'
 
 const PHOTOS = ['front', 'side', 'back']
 const key = (viewer: { dialog: Record<string, unknown> }, name: string) => {
@@ -62,4 +62,23 @@ test("its backdrop is its dialog's: a click on it closes the lightbox, a click i
         false,
         'backdrop',
     ])
+})
+
+// THE REVERT: make both writes with no check between, and an opening refused still moves the pick —
+// `selected` reads 'back' with the lightbox shut; a refused pick still opens it — `open` reads true.
+test('show lands both of its writes or neither — 49.19', () => {
+    const open = reactive<boolean>(false, {
+        schema: jsonSchema<boolean>({ enum: [false] }),
+    })
+    const selected = reactive<string | undefined>('front', {
+        schema: jsonSchema<string | undefined>({ enum: ['front', 'back'] }),
+    })
+    const viewer = lightbox({ items: PHOTOS, open, selected })
+    viewer.show('back')
+    flushSync()
+    expect([open(), selected()]).toEqual([false, 'front'])
+    const shut = lightbox({ items: PHOTOS, selected })
+    shut.show('side')
+    flushSync()
+    expect([shut.open(), selected()]).toEqual([false, 'front'])
 })

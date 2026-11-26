@@ -269,7 +269,8 @@ export function chat(options: ChatOptions): ChatParts {
         for (const block of blocksOf(draft.peek()))
             if (isSendable(block)) content.push(block)
         if (content.length === 0) return
-        draft.set(blank())
+        // 53.107, 49.19
+        if (draft.set(blank()) !== undefined) return
         if (streaming()) {
             queued.set([...(queued() ?? []), ...content])
             return
@@ -388,13 +389,15 @@ export function chat(options: ChatOptions): ChatParts {
             } catch {
                 threw.push(file)
             }
-            if (blocks !== undefined && blocks.length > 0) {
-                for (const block of blocks) fromFiles.add(block)
+            if (
+                blocks !== undefined &&
+                blocks.length > 0 &&
                 draft.set({
                     role: 'user',
                     content: [...blocksOf(draft.peek()), ...blocks],
-                })
-            }
+                }) === undefined
+            )
+                for (const block of blocks) fromFiles.add(block)
             converting.set((converting.peek() ?? 0) - 1)
         }
         if (threw.length > 0) {

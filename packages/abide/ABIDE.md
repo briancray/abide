@@ -223,7 +223,7 @@ table.
   `markdown` (and `markdown.incremental`, a document as sections that keep their nodes while a stream
   grows it), `chat` (a conversation over an assistant handler: the transcript and the composer),
   `pairing` (the visitor's Claude Code paired with the page, and the step it stands at), `listbox`,
-  `menu`, `tabs`, `tree`, `commandPalette`, `range`, `sortableTable`, `combobox`, `time`, `dialog`,
+  `menu`, `tabs`, `tree`, `commandPalette`, `slider`, `sortableTable`, `combobox`, `time`, `dialog`,
   `dropzone` (a host to drop or paste files on, and a file input to pick them with), `chart`, `pie`
   and `sparkline` (headless components: parts spread on markup the app writes; `chart` carries the arithmetic
   under a chart as `chart.ticks`, `chart.scale`, `chart.path`, `chart.stack` and `chart.nearest`),

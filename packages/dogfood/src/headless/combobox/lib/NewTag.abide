@@ -1,0 +1,33 @@
+<script>
+import { combobox } from '@abide/abide'
+
+const box = combobox({
+    options: ['investor', 'speaker', 'mentor'],
+    multiple: true,
+    create: (text) => text.toLowerCase(),
+})
+</script>
+
+<div class="picker">
+    <label for={box.id}>Tags</label>
+    <div {...box.root} class="flex flex-wrap gap-1">
+        {#for tag of box.value key tag}
+            <span {...box.chip(tag).chip} class="rounded-full border px-2">
+                {tag}
+                <button {...box.chip(tag).remove}>✕</button>
+            </span>
+        {/for}
+        <input {...box.input} placeholder="Add a tag">
+    </div>
+    {#if box.open}
+        <div {...box.popup}>
+            <ul {...box.listbox}>
+                {#for tag of box.items key tag}
+                    <li {...box.option(tag)}>
+                        {tag === box.creating ? `Add “${tag}”` : tag}
+                    </li>
+                {/for}
+            </ul>
+        </div>
+    {/if}
+</div>

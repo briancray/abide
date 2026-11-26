@@ -1,7 +1,7 @@
 <script>
-import { pages } from '@abide/abide'
+import { pagination } from '@abide/abide'
 
-const list = pages({ count: 5 })
+const list = pagination({ count: 5 })
 </script>
 
 <nav class="row" {...list.nav}>
@@ -11,7 +11,7 @@ const list = pages({ count: 5 })
 </nav>
 
 <style>
-[data-pages=page][aria-current=page] {
+[data-pagination=page][aria-current=page] {
     color: var(--color-paper);
     background: var(--color-signal);
 }

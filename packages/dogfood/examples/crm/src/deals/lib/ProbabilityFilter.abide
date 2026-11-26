@@ -1,5 +1,5 @@
 <script>
-import { computed, range, reactive } from '@abide/abide'
+import { computed, reactive, slider } from '@abide/abide'
 
 const DEALS = [
     { id: 'noether-pilot', name: 'Noether pilot', probability: 20 },
@@ -14,7 +14,8 @@ const shown = computed(() =>
             deal.probability >= likely[0] && deal.probability <= likely[1],
     ),
 )
-const probability = range({
+const probability = slider({
+    range: true,
     value: likely,
     label: 'Win probability',
     step: 5,
@@ -22,7 +23,7 @@ const probability = range({
 })
 </script>
 
-<div {...probability.root} class="range">
+<div {...probability.root} class="slider">
     <div {...probability.track}>
         <div {...probability.fill} />
         <span {...probability.end(0).thumb} />

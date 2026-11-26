@@ -21,14 +21,14 @@ const REFERENCES = [
     'aria-owns',
 ] as const
 
-// A role WAI-ARIA requires inside another, and the one it requires.
+// A role WAI-ARIA requires inside another, and the roles it may stand in.
 const REQUIRED_PARENT: Record<string, string> = {
     option: 'listbox',
     tab: 'tablist',
     treeitem: 'tree',
-    menuitem: 'menu',
-    menuitemcheckbox: 'menu',
-    menuitemradio: 'menu',
+    menuitem: 'menu or menubar',
+    menuitemcheckbox: 'menu or menubar',
+    menuitemradio: 'menu or menubar',
 }
 
 const CLOSED_DRAWN =
@@ -60,7 +60,12 @@ function partsProblems(prefix: string, root: ParentNode): string[] {
         const parent = REQUIRED_PARENT[role]
         if (
             parent !== undefined &&
-            element.parentElement?.closest(`[role=${parent}]`) === null
+            element.parentElement?.closest(
+                parent
+                    .split(' or ')
+                    .map((each) => `[role=${each}]`)
+                    .join(),
+            ) === null
         )
             problems.add(
                 `a ${role} stands outside any ${parent}. RULEBOOK 49.7`,

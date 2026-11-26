@@ -36,6 +36,10 @@ export function dialog(options: DialogOptions = {}): DialogParts {
     const open = options.open ?? reactive(false)
     const modal = () => live(options.modal) ?? true
     const dismissible = () => live(options.dismissible) ?? true
+    const show = (element: HTMLDialogElement): void => {
+        if (modal()) element.showModal()
+        else element.show()
+    }
 
     return {
         open,
@@ -58,8 +62,7 @@ export function dialog(options: DialogOptions = {}): DialogParts {
                     if (element.open === showing) return
                     if (!showing) return element.close()
                     element.returnValue = ''
-                    if (modal()) element.showModal()
-                    else element.show()
+                    show(element)
                     // What renders with the opening lands after `showModal`'s own focusing ran (50.4).
                     queueMicrotask(() =>
                         element
@@ -71,13 +74,21 @@ export function dialog(options: DialogOptions = {}): DialogParts {
             // A `close` event is queued as a task, so one a close made in code fires after whatever ran
             // next: where that reopened the dialog, the close it reports is already over and `open`
             // stays as it is.
+            // 49.19 — a close the element made itself that `open` refuses shows it again, unreported.
             onclose: (event: Event) => {
                 const element = event.currentTarget as HTMLDialogElement
-                if (!element.open) open.set(false)
+                if (
+                    !element.open &&
+                    open.peek() &&
+                    open.set(false) !== undefined
+                )
+                    return show(element)
                 options.onclose?.(element.returnValue)
             },
+            // An Escape `open` refuses is held back before the element closes.
             oncancel: (event: Event) => {
-                if (!dismissible()) event.preventDefault()
+                if (!dismissible() || open.set(false) !== undefined)
+                    event.preventDefault()
             },
             // A click on the dialog itself, outside its box, is a click on the backdrop (50.3).
             onclick: (event: MouseEvent) => {
@@ -90,7 +101,7 @@ export function dialog(options: DialogOptions = {}): DialogParts {
                     event.clientY < box.top ||
                     event.clientY > box.bottom
                 )
-                    element.close()
+                    open.set(false)
             },
         },
     }

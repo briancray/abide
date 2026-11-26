@@ -1,11 +1,11 @@
 <script>
-import { computed, pages, reactive } from '@abide/abide'
+import { computed, pagination, reactive } from '@abide/abide'
 
 const DEALS = Array.from({ length: 23 }, (_, at) => `Deal ${at + 1}`)
 const PER_PAGE = 3
 const COUNT = Math.ceil(DEALS.length / PER_PAGE)
 let page = reactive(1)
-const list = pages({ count: COUNT, page })
+const list = pagination({ count: COUNT, page })
 // Five pages around the one showing, slid in from the ends: no first, no last, no gaps.
 const nearby = computed(() => {
     const from = Math.max(1, Math.min(page - 2, COUNT - 4))

@@ -4,7 +4,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { flushSync, reactive, sortableList } from '#shared'
+import { flushSync, type Reactive, reactive, sortableList } from '#shared'
 import { said } from '#shared/announce.ts'
 import type { SortableListOptions } from '#shared/sortableList.ts'
 
@@ -17,6 +17,24 @@ afterEach(() => {
 })
 
 const BOOKS = ['Dune', 'Emma', 'Ulysses', 'Beloved']
+
+// An order whose write `allowed` refuses is refused (4.18).
+const gated = (
+    initial: readonly string[],
+    allowed: (order: readonly string[]) => boolean,
+) =>
+    reactive<readonly string[]>(initial, {
+        schema: {
+            '~standard': {
+                version: 1,
+                vendor: 'test',
+                validate: (value: unknown) =>
+                    allowed(value as readonly string[])
+                        ? { value: value as readonly string[] }
+                        : { issues: [{ message: 'refused' }] },
+            },
+        },
+    })
 
 // The list and an item per book, each 40px tall from the top, every listener added as a spread adds it.
 function standing(
@@ -133,6 +151,17 @@ test('picking many, the selection moves as one, by the keys or a drag — 51.147
     expect(ranks.sorted).toEqual(['Beloved', 'Dune', 'Ulysses', 'Emma'])
 })
 
+// THE REVERT: announce the move whatever `place` answered, and a refused Alt+ArrowDown reads out
+// 'Dune moved, 1 of 4.' for an item that stayed where it stood.
+test('Alt with an arrow whose order is refused moves nothing and says nothing — 49.19', () => {
+    const order = gated(BOOKS, (keys) => keys[0] === 'Dune')
+    const { ranks, key } = standing({ order })
+    const before = said.peek()
+    key('ArrowDown', { altKey: true })
+    expect(ranks.sorted).toEqual(BOOKS)
+    expect(said.peek()).toBe(before)
+})
+
 // THE REVERT: put the grip in the tab order, and a keyboard stops on a grip that does nothing for it.
 test('each grip is hidden from the keyboard and from a screen reader — 51.151', () => {
     const { ranks } = standing()
@@ -150,10 +179,12 @@ function grouped(
     group: string,
     multiple = false,
     keyed: (book: string) => string = (book) => book,
+    orders: Record<string, Reactive<readonly string[]>> = {},
 ) {
     const make = (label: string, books: string[], left: number) => {
         const ranks = sortableList<string, boolean>({
             items: books,
+            order: orders[label],
             group,
             multiple,
             key: keyed,
@@ -255,6 +286,34 @@ test('Alt with ArrowLeft and ArrowRight carries the active item into the list be
         'Dune',
     ])
     expect(said.peek()?.text).toBe('Dune moved to Pool, 2 of 2.')
+})
+
+// THE REVERT: write the source's order before the target's, and Ranked refusing Ulysses still takes it
+// out of Pool's order — Pool reads ['Beloved', 'Ulysses']; write the target's with no check after it,
+// and Pool refusing to give Ulysses up leaves it in Ranked too — Ranked reads ['Ulysses', 'Dune', 'Emma'].
+test('a carry whose either order is refused leaves both lists, focus and the announcement as they stood — 49.19', () => {
+    const before = said.peek()
+    const full = grouped('target refused', false, undefined, {
+        Ranked: gated(['Dune', 'Emma'], (keys) => keys.length <= 2),
+    })
+    full.pool.list.focus()
+    full.pool.key('ArrowLeft', { altKey: true })
+    expect([full.ranked.ranks.sorted, full.pool.ranks.sorted]).toEqual([
+        ['Dune', 'Emma'],
+        ['Ulysses', 'Beloved'],
+    ])
+    const kept = grouped('source refused', false, undefined, {
+        Pool: gated(['Ulysses', 'Beloved'], (keys) => keys.length >= 2),
+    })
+    kept.pool.list.focus()
+    kept.pool.key('ArrowLeft', { altKey: true })
+    expect([kept.ranked.ranks.sorted, kept.pool.ranks.sorted]).toEqual([
+        ['Dune', 'Emma'],
+        ['Ulysses', 'Beloved'],
+    ])
+    expect(kept.ranked.ranks.order()).toEqual([])
+    expect(document.activeElement).toBe(kept.pool.list)
+    expect(said.peek()).toBe(before)
 })
 
 // THE REVERT: hand the list entered no selection, and the items moved together scatter on the next

@@ -1,4 +1,4 @@
-// 51.13-51.29, 51.55, 51.56, 51.57, 51.106 — A FIELD THAT LISTS WHAT MATCHES AS IT IS TYPED IN, as parts an app
+// 51.13-51.29, 51.55, 51.56, 51.57, 51.106, 51.190, 51.191, 49.19 — A FIELD THAT LISTS WHAT MATCHES AS IT IS TYPED IN, as parts an app
 // spreads onto an input, a popup and options of its own: WAI-ARIA's combobox with a list popup. Focus
 // stays in the input, which names the active option as its `aria-activedescendant`; the list is a
 // `listbox` the input's keys move through, opened in the top layer against the input as `popover`
@@ -34,6 +34,8 @@ export type ComboboxOptions<Item, Multiple extends boolean = false> = {
         | readonly Item[]
         | PromiseLike<readonly Item[]>
         | Reactive<readonly Item[], unknown, unknown, unknown>
+    /** 51.190 — an item for typed text no item listed or picked carries as its label, listed after the rest so a pick can add what is not there. */
+    create?(text: string): Item
     /** Milliseconds typing has to pause before `search` runs again. */
     debounce?: number | undefined
     /** 51.55 — whether it picks many: a pick adds an item or takes it out again. `false` by default. */
@@ -67,6 +69,8 @@ export type ComboboxParts<Item, Multiple extends boolean = false> = {
     readonly listbox: Record<string, unknown>
     /** The items listed for what was typed: what a keyed `{#for}` over `option` walks. */
     get items(): readonly Item[]
+    /** The item `create` answered for the typed text, listed last among `items`; `undefined` where none is listed (51.191). */
+    get creating(): Item | undefined
     /** An item's option: its role, id, `aria-selected`, `data-active`, `data-selected`, and the press that picks it. */
     option(item: Item): Record<string, unknown>
     /** An item's `label` in runs, each run of it the input's text is found in carrying the `match` part (51.106). */
@@ -142,9 +146,30 @@ export function combobox<Item, Multiple extends boolean = false>(
         debounce === undefined ? {} : { debounce },
     )
 
+    // 51.190 — what was typed, made an item where nothing listed or picked carries it as its label.
+    const creating = computed((): Item | undefined => {
+        const create = options.create
+        if (create === undefined || !open()) return undefined
+        const text = typed()?.trim()
+        if (!text) return undefined
+        const wanted = text.toLowerCase()
+        for (const item of found() as readonly Item[])
+            if (label(item).toLowerCase() === wanted) return undefined
+        const one = value()
+        for (const item of picks() ??
+            (one === undefined ? NOTHING : [one as Item]))
+            if (label(item).toLowerCase() === wanted) return undefined
+        return create(text)
+    })
+    const listed = computed((): readonly Item[] => {
+        const kept = found() as readonly Item[]
+        const extra = creating() as Item | undefined
+        return extra === undefined ? kept : [...kept, extra]
+    })
+
     const list = listbox({
         id,
-        options: () => found() as readonly Item[],
+        options: listed,
         key,
         onpick: pick,
         onescape: dismiss,
@@ -155,17 +180,23 @@ export function combobox<Item, Multiple extends boolean = false>(
         open.set(true)
     }
 
+    // 49.19 — a refused write leaves the typed text and the list as they stood.
     function pick(item: Item) {
-        typed.set(undefined)
         const held = picks.peek()
         if (held === undefined) {
-            value.set(item)
+            if (value.set(item) !== undefined) return
+            typed.set(undefined)
             open.set(false)
             return
         }
         const picked = key(item)
         const kept = held.filter((each) => key(each) !== picked)
-        value.set(kept.length === held.length ? [...held, item] : kept)
+        if (
+            value.set(kept.length === held.length ? [...held, item] : kept) !==
+            undefined
+        )
+            return
+        typed.set(undefined)
     }
 
     function unpick(item: Item) {
@@ -176,9 +207,13 @@ export function combobox<Item, Multiple extends boolean = false>(
     function dismiss() {
         if (open.peek()) open.set(false)
         else {
-            typed.set(undefined)
             // 51.55 — what is picked into an array is taken out one at a time, never by Escape.
-            if (picks.peek() === undefined) value.set(undefined)
+            if (
+                picks.peek() === undefined &&
+                value.set(undefined) !== undefined
+            )
+                return
+            typed.set(undefined)
         }
     }
 
@@ -310,7 +345,10 @@ export function combobox<Item, Multiple extends boolean = false>(
             },
         }),
         get items() {
-            return found() as readonly Item[]
+            return listed() as readonly Item[]
+        },
+        get creating() {
+            return creating() as Item | undefined
         },
         option: (item) =>
             withPart(list.option(item), {
@@ -321,7 +359,7 @@ export function combobox<Item, Multiple extends boolean = false>(
             }),
         runs: (item) => labelRuns(label(item), needles(), MATCH),
         get nothingFound() {
-            return !busy(found) && (found() as readonly Item[]).length === 0
+            return !busy(found) && listed().length === 0
         },
         empty: { role: 'status', 'data-combobox': 'empty' },
         value: value as Reactive<Picked<Item, Multiple>>,

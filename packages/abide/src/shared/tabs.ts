@@ -67,8 +67,8 @@ export function tabs<Item>(options: TabsOptions<Item>): Tabs<Item> {
 
     // 51.38 — a key that selects moves focus with it.
     const select = (key: string): void => {
-        picked.set(key)
-        globalThis.document?.getElementById(tabId(key))?.focus()
+        if (picked.set(key) === undefined)
+            globalThis.document?.getElementById(tabId(key))?.focus()
     }
 
     const list = {

@@ -3,7 +3,7 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { flushSync, reactive, toggle, toggleGroup } from '#shared'
+import { flushSync, jsonSchema, reactive, toggle, toggleGroup } from '#shared'
 
 afterEach(() => document.body.replaceChildren())
 
@@ -135,4 +135,30 @@ test("a radio group's tab stop is worked out once for every radio reading it —
         Array.prototype.includes = includes
     }
     expect(walks).toBe(1)
+})
+
+// THE REVERT: focus the next radio whatever `pick` answered, and the refused ArrowRight takes focus
+// to `board`'s radio.
+test('in a group picking one, a refused pick leaves focus on the radio it was on — 49.19', () => {
+    const view = toggleGroup({
+        id: 'refused',
+        items: ['list', 'board'],
+        value: reactive<string | undefined>('list', {
+            schema: jsonSchema<string | undefined>({ enum: ['list'] }),
+        }),
+    })
+    for (const key of ['list', 'board']) {
+        const button = document.createElement('button')
+        button.id = view.item(key).id as string
+        document.body.append(button)
+    }
+    ;(document.getElementById('refused-list') as HTMLElement).focus()
+    ;(view.group.onkeydown as (event: KeyboardEvent) => void)(
+        new KeyboardEvent('keydown', { key: 'ArrowRight', cancelable: true }),
+    )
+    flushSync()
+    expect([view.value(), document.activeElement?.id]).toEqual([
+        'list',
+        'refused-list',
+    ])
 })

@@ -1,0 +1,14 @@
+<script>
+import { reactive, slider } from '@abide/abide'
+
+let chance = reactive(50)
+const win = slider({ value: chance, label: 'Win chance', step: 5 })
+</script>
+
+<div {...win.root} class="slider">
+    <div {...win.track}>
+        <div {...win.fill} />
+        <span {...win.thumb} />
+    </div>
+</div>
+<p>{chance}%</p>

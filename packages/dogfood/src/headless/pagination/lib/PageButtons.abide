@@ -1,0 +1,16 @@
+<script>
+import { pagination } from '@abide/abide'
+
+const list = pagination({ count: 12 })
+</script>
+
+<nav class="row" {...list.nav}>
+    <button {...list.previous}>Previous</button>
+    {#for item of list.items}
+        {#if item === 'gap'}<span>…</span>{:else}
+            <button {...list.link(item)}>{item}</button>
+        {/if}
+    {/for}
+    <button {...list.next}>Next</button>
+</nav>
+<p>Page {list.page()}</p>
