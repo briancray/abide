@@ -355,13 +355,13 @@ two is a comparator answering directly.
 
 5.18 A read of a capped streaming producer MUST serve the accumulation as the last release left it.
 
-5.19 `throttle` and `debounce` on a `Keyed` MUST hold back starting a newly reached entry until the
+5.19 `throttle` and `debounce` on a `memo` MUST hold back starting a newly reached entry until the
 window allows it.
 
-5.20 An entry a `Keyed` window replaced with a later key before it started MUST NOT be started, and
+5.20 An entry a `memo`'s window replaced with a later key before it started MUST NOT be started, and
 MUST NOT be held.
 
-5.21 An entry a `Keyed` window is holding back MUST report `s.busy` true.
+5.21 An entry a `memo`'s window is holding back MUST report `s.busy` true.
 
 5.22 `key` MUST key an element by the property it names, or by what the function it is returns for
 that element.
@@ -370,6 +370,10 @@ that element.
 
 5.24 `throttle` and `debounce` MUST hold an `s.refresh` as they hold a production, and a refresh a
 window held MUST start one reload when the window closes.
+
+5.25 `throttle` and `debounce` on a `memo` MUST also cap each entry it starts, its owner's `set` and
+`patch` as a value's writes are capped, so every reader and follower of the entry is woken at that
+pace, and a call MUST answer the last value written.
 
 # 6. Expiry
 
@@ -1506,8 +1510,7 @@ one, MUST adopt the handler's value for those `Args` (11.12), as it would the va
 answers a `Reactive` MUST throw on the run that answers it, each naming a `memo`'s value, written
 with `rpc.set` and `rpc.patch`, as the way to serve a value the server writes.
 
-16.110 A handler MUST take a `memo`'s value options, and MUST NOT take `throttle` or `debounce`, which
-pace the reader of a value and are the `computed`'s that reads it.
+16.110 A handler MUST take a `memo`'s value options, `throttle` and `debounce` among them.
 
 # 17. Response helpers
 

@@ -1010,7 +1010,7 @@ function produce(cell: Cell, produced: unknown): number {
     // The same test `produce` already picks `capped` by, one frame down.
     if (cell.landed) {
         const previous =
-            cap === null || cell.body !== null ? cell.value : cap.minted
+            cap === null || !capsWrite(cell) ? cell.value : cap.minted
         if (
             cell.identityFn === null
                 ? // `Object.is` rather than `===` for one case: a repeated `NaN` is the
@@ -1053,7 +1053,7 @@ function produce(cell: Cell, produced: unknown): number {
     // A BODY'S CAP GATED THE RUN, NOT WHAT IT PRODUCED (5.11): the window has already
     // decided this run should happen, and holding its production too would delay it a
     // second window.
-    if (cap !== null && cell.body === null)
+    if (cap !== null && capsWrite(cell))
         return capped(cell, cap, produced, moved)
     serve(cell, produced)
     land(cell, moved)
@@ -2964,6 +2964,20 @@ function syncedNow(cell: Cell): boolean {
  */
 let writingDepth = 0
 
+/**
+ * 5.25 — an owner's write in progress (`produceInto`, `patchInto`): a memo's `set` and `patch`.
+ *
+ * A BODY'S CAP GATES ITS RUN (5.11), so its runs' productions go straight out — but an owner's write
+ * runs no body, and is a production the window has to hold as a bare value's is, or a memo's pace
+ * caps its reloads and lets every write through to its followers.
+ */
+let ownerWriting = 0
+
+/** Whether the window holds this production, rather than the run that made it (5.11, 5.25). */
+function capsWrite(cell: Cell): boolean {
+    return cell.body === null || ownerWriting > 0
+}
+
 /** 3.10 — marks a value with a producer as written here, telling the guards that asked. */
 function writtenHere(cell: Cell): void {
     if (cell.body === null || cell.local) return
@@ -3071,11 +3085,16 @@ export function answeredAtOnce(): void {
  */
 export function produceInto(value: Reactive<unknown>, next: unknown): void {
     const cell = cellOf(value)
-    // A stream's write stands over its accumulation (9.11), as `STREAM_PROTOTYPE.set` makes it.
-    if (ownStream(cell) !== null) writeStream(cell, next)
-    else {
-        cell.generation += 1
-        setThroughGates(cell, next)
+    ownerWriting += 1
+    try {
+        // A stream's write stands over its accumulation (9.11), as `STREAM_PROTOTYPE.set` makes it.
+        if (ownStream(cell) !== null) writeStream(cell, next)
+        else {
+            cell.generation += 1
+            setThroughGates(cell, next)
+        }
+    } finally {
+        ownerWriting -= 1
     }
     producedAgain(cell)
 }
@@ -3086,7 +3105,12 @@ export function patchInto(
     mutate: (value: unknown) => void,
 ): void {
     const cell = cellOf(value)
-    patchCell(cell, mutate)
+    ownerWriting += 1
+    try {
+        patchCell(cell, mutate)
+    } finally {
+        ownerWriting -= 1
+    }
     producedAgain(cell)
 }
 
@@ -3206,7 +3230,7 @@ function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
         // THE HEAD IS THE LAST PRODUCTION MINTED, which a window may be holding apart from the one
         // served: patching the served one overwrote the held production with it, and the write
         // the window held was never seen.
-        const head = cap?.holding && cell.body === null ? cap.held : cell.value
+        const head = cap?.holding && capsWrite(cell) ? cap.held : cell.value
         recordWrites(head, mutate, logOf(cell))
         // 5.7: REPLACES THE HEAD PRODUCTION RATHER THAN APPENDING ONE, so the ordinal does not
         // move: the follow's version tells a patch from a production by exactly that, and sends a
@@ -3274,7 +3298,7 @@ function firstWritten(
 
 function wakePatched(cell: Cell, head: unknown): void {
     const cap = cell.cap
-    if (cap === null || cell.body !== null || wakes(cell, cap, head)) {
+    if (cap === null || !capsWrite(cell) || wakes(cell, cap, head)) {
         cascade(cell)
         if (cell.store !== null) persist(cell, cell.store, cell.value)
     }

@@ -357,13 +357,17 @@ export function createKeyed<
     // unkeyed mechanism in every entry and evict nothing from this map.
     // `poll` STAYS ON THE ENTRY, which marks it for 7.28 and arms no timer of its own: one timer here
     // walks the entries rather than one per entry (7.20).
-    const { ttl, args, throttle, debounce, ...rest } = options ?? {}
+    // 5.19, 5.25: `throttle` AND `debounce` STAY ON THE ENTRY TOO — the window below holds back
+    // starting a key, and each entry's own caps what it produces once started: a key reached anew and
+    // a held key's new value are each paced, and every follower of an entry with it (16.110).
+    const { ttl, args, ...rest } = options ?? {}
+    const { throttle, debounce } = rest
     const poll = rest.poll
     const gate = args as Schema<Args> | undefined
     const entryOptions = rest
     // 5.14, at the factory: a keyed value is capped one way or the other.
     refuseBothCaps(`${label}()`, throttle, debounce)
-    // 5.19: A KEYED VALUE'S WINDOW HOLDS BACK STARTING A KEY, rather than capping each entry's wakes.
+    // 5.19: A KEYED VALUE'S WINDOW HOLDS BACK STARTING A KEY.
     const starts =
         throttle === undefined && debounce === undefined
             ? null

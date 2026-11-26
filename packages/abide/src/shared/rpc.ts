@@ -347,18 +347,12 @@ type OptionsOf<
  * 16.92 — `Writes` is false for `GET` alone, whose options have no `refreshes`.
  */
 /**
- * 16.110 — A HANDLER'S VALUE OPTIONS ARE A `memo`'S. `throttle` and `debounce` pace a reader's
- * wake-ups (5.8), and the `computed` reading a handler is the reader that takes them. And its `store`
- * is a memo's, any store a value can be kept in: typed by the value, `store.sqlite(db, 'calls')`
- * infers its own `Stored` as `unknown` and no longer fits.
+ * 16.110 — A HANDLER'S VALUE OPTIONS ARE A `memo`'S, its pace among them: `throttle` and `debounce`
+ * hold back what every follower is sent, which a reader's own pacing could not. And its `store` is a
+ * memo's, any store a value can be kept in: typed by the value, `store.sqlite(db, 'calls')` infers its
+ * own `Stored` as `unknown` and no longer fits.
  */
-type HandlerShaping<Shaping> = Omit<
-    Shaping,
-    'throttle' | 'debounce' | 'store'
-> & {
-    throttle?: undefined
-    debounce?: undefined
-}
+type HandlerShaping<Shaping> = Omit<Shaping, 'store'>
 type HandlerStore<Args> = {
     store?: Store<unknown> | ((args: Args) => Store<unknown>) | undefined
 }

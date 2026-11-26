@@ -20,7 +20,7 @@ import type { Identity, Reactive, Store } from './Reactive.ts'
 /**
  * What `memo` takes: how long an entry lives, what selects it, where it is kept, what its args and its
  * value must be, what it is shaped into, what makes a write a repeat, how its elements are told apart,
- * and how often an entry reloads. `Accepted` is what `fn` settles to; `Shaped` is read from
+ * how often an entry reloads, and the pace it produces at. `Accepted` is what `fn` settles to; `Shaped` is read from
  * `transform` alone, the rest naming the value it keeps without inferring it.
  */
 export type MemoOptions<Args, Accepted = unknown, Shaped = Accepted> = {
@@ -30,6 +30,10 @@ export type MemoOptions<Args, Accepted = unknown, Shaped = Accepted> = {
     args?: Schema<Args> | undefined
     key?: string | ((element: never) => unknown) | undefined
     poll?: Poll | undefined
+    // 5.19, 5.25, 16.110 — the pace a memo produces at: a key reached anew, and an entry's new value,
+    // each held to the window, for every reader and follower of it.
+    throttle?: number | undefined
+    debounce?: number | undefined
     // 11.79 — where each entry's value is kept, so a restart opens on it rather than running `fn`.
     store?: Store<unknown> | ((args: Args) => Store<unknown>) | undefined
     // 4.3, 4.6 — the gate on what `fn` settles to, then the shaping of it, as a `reactive`'s are.

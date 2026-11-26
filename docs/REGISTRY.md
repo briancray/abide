@@ -292,8 +292,8 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `args` | `Schema<Args>` | The gate on a keyed value's args. | 9.4, 11.28, 11.30, 11.40, 11.41, 11.56, 11.60, 11.68, 11.72 |
 | `global` | `boolean` | Opts out of the default scope into one cache shared by every caller in the process. | 11.34, 11.35, 11.36, 11.37, 11.38, 11.39, 11.53, 11.67, 26.24 |
 | `tags` | `string[] \| ((args: Args) => string[])` | What a `Selection` matches on. | 11.43, 11.44, 13.15, 18.4, 18.15 |
-| `throttle` | `number` | A ceiling on how often the value changes. | 5.8, 5.9, 5.11, 5.12, 5.14, 5.15, 5.17, 5.18, 5.19, 5.20, 5.21, 5.23, 5.24 |
-| `debounce` | `number` | A wait for the changes to stop before the value changes. | 5.8, 5.9, 5.11, 5.13, 5.14, 5.15, 5.17, 5.18, 5.19, 5.20, 5.21, 5.23, 5.24 |
+| `throttle` | `number` | A ceiling on how often the value changes. | 5.8, 5.9, 5.11, 5.12, 5.14, 5.15, 5.17, 5.18, 5.19, 5.20, 5.21, 5.23, 5.24, 5.25 |
+| `debounce` | `number` | A wait for the changes to stop before the value changes. | 5.8, 5.9, 5.11, 5.13, 5.14, 5.15, 5.17, 5.18, 5.19, 5.20, 5.21, 5.23, 5.24, 5.25 |
 
 ### Reads
 
@@ -351,7 +351,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- | --- |
 | `memo` | `<Args = undefined, Result = unknown, Shaped = Awaited<Result>>(fn: (args: Args) => Result, options?: MemoOptions<Args, Awaited<Result>, Shaped>) => Memo<Args, Result, Kept<Shaped>>` | `fn`'s value kept per set of args: a call answers its promise, or its stream, and its owner writes and follows it per key. | 11.2, 11.3, 11.4, 11.6, 11.74, 11.75, 11.76, 14.4, 15.19 |
 | `Memo` | `<Args, Result, Value = Awaited<Result>>((...args: undefined extends Args ? [args?: Args] : [args: Args]) => Promise<Value> \| AsyncIterable<unknown>) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void; set(args: Args, value): void; set(value): void where Args is undefined; patch(args: Args, mutate: (value) => void): void; patch(mutate: (value) => void): void where Args is undefined; readable(args: Args): ReadableStream }` | What `memo` hands back: the call, the triggers over the keys it holds, and the owner's writes and stream per key. | 11.2, 11.24, 11.27, 11.77, 11.78, 11.81, 13.12 |
-| `MemoOptions` | `<Args, Accepted = unknown, Shaped = Accepted>{ ttl?: number; tags?: string[] \| ((args: Args) => string[]); global?: boolean; args?: Schema<Args>; key?: string \| ((element) => unknown); poll?: number \| { every: number; after?: 'tick' \| 'settle'; delay?: number \| (() => number) }; store?: Store<unknown> \| ((args: Args) => Store<unknown>); schema?: Schema<Accepted>; transform?: (value: Accepted) => Shaped; identity?: (next: Kept<Shaped>, previous: Kept<Shaped>) => unknown }` | How long an entry lives, what selects it, where it is kept, what its args must be, what tells one element of its value from another, how often an entry reloads, and where its value is stored. | 11.32, 11.34, 11.40, 11.44, 11.45, 5.22, 7.20, 11.79, 11.80 |
+| `MemoOptions` | `<Args, Accepted = unknown, Shaped = Accepted>{ ttl?: number; tags?: string[] \| ((args: Args) => string[]); global?: boolean; args?: Schema<Args>; key?: string \| ((element) => unknown); poll?: number \| { every: number; after?: 'tick' \| 'settle'; delay?: number \| (() => number) }; throttle?: number; debounce?: number; store?: Store<unknown> \| ((args: Args) => Store<unknown>); schema?: Schema<Accepted>; transform?: (value: Accepted) => Shaped; identity?: (next: Kept<Shaped>, previous: Kept<Shaped>) => unknown }` | How long an entry lives, what selects it, where it is kept, what its args must be, what tells one element of its value from another, how often an entry reloads, where its value is stored, and the pace it produces at. | 11.32, 11.34, 11.40, 11.44, 11.45, 5.22, 7.20, 11.79, 11.80, 5.19, 5.25 |
 
 ## `watch`
 

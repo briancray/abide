@@ -1,6 +1,6 @@
 // 11.80 — A MEMO'S VALUE OPTIONS ARE A REACTIVE'S: what its function settles to is gated by `schema`,
 // shaped by `transform`, and a write `identity` calls a repeat reaches nobody. 16.110 — and a handler
-// takes those, and not `throttle` or `debounce`, which pace the computed reading it.
+// takes those, its pace included (5.19, 5.25).
 
 import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
@@ -59,13 +59,56 @@ test('a write a memo identity calls a repeat wakes no reader — 11.80', async (
     expect(`wakes: ${wakes}`).toBe('wakes: 1')
 })
 
-// 16.110 — the `@ts-expect-error` lines are the assertion: typecheck fails if a handler starts taking
-// a reader's pacing. THE REVERT: drop `Unpaced` from `Declare`; both directives go unused.
-test('a handler takes no throttle or debounce — 16.110', () => {
+// 5.25, 16.110 — A MEMO'S PACE IS ITS FOLLOWERS': an owner's writes inside one window reach a follower
+// as the first and the last, and the value a call answers is the last written. THE REVERT: have
+// `capsWrite` in Reactive.ts answer `cell.body === null` alone; the follower is sent every write,
+// `0,1,2,…,10` where `0,1,10` is due.
+test("a memo's throttle paces what its owner's writes send each follower — 5.25", async () => {
+    const progress = memo(() => 0, { throttle: 500 })
+    await progress()
+    const sent: unknown[] = []
+    const reader = progress.readable().getReader()
+    const reading = (async () => {
+        for (;;) {
+            const read = await reader.read()
+            if (read.done) return
+            sent.push(read.value)
+        }
+    })()
+    // A turn apart, as progress is written, and all well inside one window.
+    for (let step = 1; step <= 10; step += 1) {
+        progress.set(step)
+        await new Promise((resolve) => setImmediate(resolve))
+    }
+    expect(await progress()).toBe(10)
+    await Bun.sleep(700)
+    await reader.cancel()
+    await reading
+    expect(sent.join()).toBe('0,1,10')
+})
+
+// 5.19 — A KEY REACHED ANEW IS PACED TOO: search-as-you-type reaches a new key each keystroke, so a
+// debounce starts only the one the reaches stopped at. THE REVERT: drop `starts` in `createKeyed`;
+// every key runs, `a,ab,abc` where `abc` is due.
+test("a memo's debounce starts only the key its reaches stopped at — 5.19", async () => {
+    const ran: string[] = []
+    const search = memo(
+        (query: string) => {
+            ran.push(query)
+            return query.toUpperCase()
+        },
+        { debounce: 50 },
+    )
+    void search('a').catch(() => {})
+    void search('ab').catch(() => {})
+    expect(await search('abc')).toBe('ABC')
+    expect(ran.join()).toBe('abc')
+})
+
+// 16.110 — A HANDLER TAKES A MEMO'S PACE. Typed, never run; the assertion is that it compiles.
+test('a handler takes throttle or debounce, as a memo does — 16.110', () => {
     const typed = (): void => {
-        // @ts-expect-error pacing is the reading computed's
         GET(() => 1, { throttle: 100 })
-        // @ts-expect-error
         GET(() => 1, { debounce: 100 })
     }
     expect(typeof typed).toBe('function')
