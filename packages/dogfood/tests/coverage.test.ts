@@ -772,7 +772,7 @@ test('a signature is short above the examples and whole in Types', async () => {
 // form by parameter names alone reads the same for every one of them — `GET`'s nine all read
 // `(handler, options?) => Rpc<…>`. So the parameter whose type tells them apart keeps it. Read off
 // each page's tables above its Examples, as a reader sees them. THE REVERT: pass no `typed` to
-// `shortSignature` in `Registry.abide`'s `cellsShown`, and `/handlers/get` is named.
+// `shortSignature` in `Registry.abide`'s `cellsShown`, and `/handlers/rpc` is named.
 test('no two overloads of a name read the same in a short form', async () => {
     const same: string[] = []
     for (const [route, body] of await renderedMarkdown()) {
