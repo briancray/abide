@@ -29,8 +29,8 @@ import { serveDocsApp } from './serveDocsApp.ts'
 // A CONTENT-HEAVY PAGE AND A SHORTER ONE. The op somebody waits on is the whole
 // navigation, so the pair is two real docs addresses rather than a fixture: a fixture
 // would price a page nobody reads.
-const FROM = '/guide/make-it-live'
-const TO = '/guide/keep-it-current'
+const FROM = '/handlers/rpc'
+const TO = '/reactive/refresh'
 const RUNS = 5
 
 type Row = {

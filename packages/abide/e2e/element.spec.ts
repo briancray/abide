@@ -315,7 +315,7 @@ test('media hydrates the arm the server painted and swaps it without a warning �
 // 32.90 — THE BORDER BOX, PADDING AND BORDER IN: 200x100 with 10px of padding and a 2px border is
 // 224x124, and the same box written vertically is 224x124 too — its inline size is its height. THE
 // REVERT: write `contentRect` for a bordered element in `deliverSizes`; both read 200x100.
-// Turning the axes is the unit test's (`observe.test.ts`, 124x224 without it).
+// Turning the axes is the unit test's (`element.test.ts`, 124x224 without it).
 test("elementSize's box: 'border-box' writes the border box, in physical axes — 32.90", async ({
     page,
 }) => {

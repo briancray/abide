@@ -245,7 +245,7 @@ const LARGEST_ICON = 1024 * 1024
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 
 /**
- * The icon `site` publishes at `/icon.png`, abide's app icon (45.15), or `undefined` where
+ * The icon `site` publishes at `/icon.png`, abide's app icon (44.90), or `undefined` where
  * it publishes none, it is no PNG, or it is larger than any app icon — the question waits on it, so it
  * is given three seconds.
  */

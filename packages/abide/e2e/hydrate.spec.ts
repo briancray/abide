@@ -12,7 +12,7 @@ import { servedFixture } from './servedFixture.ts'
 // engines at once, and two tests of one project would each build into one tree.
 test.describe.configure({ mode: 'default' })
 
-// One handler file apiece (16.73), so each page imports its own as the file's default (16.74).
+// One handler file apiece (16.2), so each page imports its own as the file's default (16.74).
 const HANDLERS = {
     getValue: `import { rpc } from '@abide/abide/server'
 

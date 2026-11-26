@@ -769,7 +769,7 @@ test('a signature is short above the examples and whole in Types', async () => {
 })
 
 // 40.32 — AN OVERLOAD READS AS ITSELF: rows of one name in one table are its overloads, and a short
-// form by parameter names alone reads the same for every one of them — `GET`'s nine all read
+// form by parameter names alone reads the same for every one of them — `rpc`'s three all read
 // `(handler, options?) => Rpc<…>`. So the parameter whose type tells them apart keeps it. Read off
 // each page's tables above its Examples, as a reader sees them. THE REVERT: pass no `typed` to
 // `shortSignature` in `Registry.abide`'s `cellsShown`, and `/handlers/rpc` is named.

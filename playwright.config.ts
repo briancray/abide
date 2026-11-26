@@ -11,7 +11,7 @@ import { defineConfig, devices } from '@playwright/test'
 // apart by project name rather than by a config each.
 const PORT = 3131
 const BASE = `http://localhost:${PORT}`
-// THE SUB-PATH ARM IS A SERVER OF ITS OWN. `APP_URL`'s path is the mount (36.2, 16.10), and one
+// THE SUB-PATH ARM IS A SERVER OF ITS OWN. `APP_URL`'s path is the mount (19.17, 16.10), and one
 // process has one — so the same build is served twice, the second below `/docs`.
 const SUB_PORT = 3132
 const SUB_BASE = `http://localhost:${SUB_PORT}/docs`

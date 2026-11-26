@@ -117,7 +117,7 @@ async function main(): Promise<void> {
 /**
  * Prints the bytes a row's component anchors add, raw and gzipped.
  *
- * 32.17's anchors, in the bytes they actually add to a document — which is the form the claim has
+ * A component's anchors, in the bytes they actually add to a document — which is the form the claim has
  * to take, a marker being free to argue about and not free to send.
  */
 function bytes(flat: string, nested: string, size: number): void {

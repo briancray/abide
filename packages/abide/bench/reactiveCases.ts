@@ -142,7 +142,7 @@ function constructDerived(): Case {
         // the same two nodes and the same one edge.
         //
         // BOTH ARMS COMPUTE ONCE, and the hand-written one has to be TOLD to: its `dirty: true`
-        // computes on the first `read`, where abide's first run is at construction (3.16).
+        // computes on the first `read`, where abide's first run is at construction (1.7).
         // Without the read the ratio is a construction against a construction plus a run, and
         // `work` counts 0 body runs against 1.
         vanilla,

@@ -19,9 +19,10 @@ const PACKAGE = new URL('../../harness/', import.meta.url)
  * The package's public entries, READ OFF ITS `exports` MAP rather than listed — a list beside the
  * map is a second copy, and the one this replaced named five entries while the map had seven.
  *
- * 43.1's five are the three lanes and the two entries that are not lanes, `report` and `gate`.
- * The rest are surface all the same and are counted with them: `preload` registers the DOM,
- * `rows` is the contract a page reading runner output keeps, and `runner` writes those rows.
+ * 43.1 names the three lanes, `report` and the `abide` adapter. The rest are surface all the same
+ * and are counted with them: `gate` is the bun-side test vocabulary, `preload` registers the DOM,
+ * `abide/preload` is the adapter's, `rows` is the contract a page reading runner output keeps, and
+ * `runner` writes those rows.
  * `package.json` is not code and is not counted.
  */
 async function exportedEntries(): Promise<{
