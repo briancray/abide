@@ -1,5 +1,5 @@
 <script>
-import { reactive, toggleGroup } from '@abide/abide'
+import { format, reactive, toggleGroup } from '@abide/abide'
 
 import { topFive } from './topFive.ts'
 
@@ -12,7 +12,9 @@ const order = toggleGroup({
 const top = reactive(() => topFive(by))
 
 const shown = (deal: { amount: number; idle: number }) =>
-    by === 'amount' ? `$${deal.amount}` : `${deal.idle} days idle`
+    by === 'amount'
+        ? format.money(deal.amount, { maximumFractionDigits: 0 })
+        : `${deal.idle} days idle`
 </script>
 
 <div class="tabs" {...order.group}>

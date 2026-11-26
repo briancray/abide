@@ -1,5 +1,5 @@
 <script>
-import { reactive, toggleGroup } from '@abide/abide'
+import { format, reactive, toggleGroup } from '@abide/abide'
 
 import { summarizeStage } from './summarizeStage.ts'
 
@@ -19,6 +19,8 @@ const summary = reactive(() => summarizeStage(stage))
 </div>
 <ul class="tiles">
     <li><span>deals</span><strong>{summary.deals}</strong></li>
-    <li><span>value</span><strong>${summary.value}</strong></li>
-    <li><span>largest</span><strong>${summary.largest}</strong></li>
+    <li><span>value</span>
+        <strong>{format.money(summary.value, { maximumFractionDigits: 0 })}</strong></li>
+    <li><span>largest</span>
+        <strong>{format.money(summary.largest, { maximumFractionDigits: 0 })}</strong></li>
 </ul>

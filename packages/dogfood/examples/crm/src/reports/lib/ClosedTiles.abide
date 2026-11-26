@@ -1,5 +1,5 @@
 <script>
-import { reactive, toggleGroup } from '@abide/abide'
+import { format, reactive, toggleGroup } from '@abide/abide'
 
 import { closedTotals } from './closedTotals.ts'
 
@@ -15,5 +15,6 @@ const closed = reactive(() => closedTotals(Number(days)))
 </div>
 <ul class="tiles">
     <li><span>deals closed</span><strong>{closed.deals}</strong></li>
-    <li><span>revenue</span><strong>${closed.revenue}</strong></li>
+    <li><span>revenue</span>
+        <strong>{format.money(closed.revenue, { maximumFractionDigits: 0 })}</strong></li>
 </ul>

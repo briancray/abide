@@ -1,5 +1,5 @@
 <script>
-import { props } from '@abide/abide'
+import { format, props } from '@abide/abide'
 
 import { dealsOf, type ExportedDeal } from './dealsOf.ts'
 
@@ -12,7 +12,7 @@ const { deals = dealsOf(4) } = props<{ deals?: ExportedDeal[] }>()
         {#for deal of deals key deal.company}
             <tr>
                 <td>{deal.company}</td>
-                <td>${deal.amount}</td>
+                <td>{format.money(deal.amount, { maximumFractionDigits: 0 })}</td>
             </tr>
         {/for}
     </tbody>
