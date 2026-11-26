@@ -518,6 +518,8 @@ export class Cell {
      * reads it (`releaseOrphan`), which may be at once or when the last reader outside its owner leaves.
      */
     declare orphaned: boolean
+    /** 5.25 — a keyed entry a `memo`'s window is holding back, not yet started. */
+    declare held: boolean
     /** A cell's wake, which is a run of the graph: on the prototype, from `Reactive.ts` — see above. */
     declare notify: () => void
 
@@ -613,6 +615,7 @@ export class Cell {
         this.ref = null
         this.filed = false
         this.orphaned = false
+        this.held = false
         simpleShape(this)
     }
 }

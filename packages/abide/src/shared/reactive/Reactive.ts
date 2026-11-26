@@ -1729,6 +1729,9 @@ function mirror(cell: Cell, inner: Cell): void {
     // adoption is that value's next read. A mirror reached through a rerun finds it resolved
     // already; the first one `adopt` runs does not, and copied the held value over the mark.
     if (inner.state !== CLEAN) resolve(inner)
+    // 5.25: a key a window holds back is a change not yet made — what this served stands, busy,
+    // until the key starts and wakes this again.
+    if (inner.held && cell.servable) return
     const adopted = inner.stream
     if (adopted !== null) {
         forwardStream(cell, inner, adopted)
@@ -2705,7 +2708,13 @@ function walkReady(cell: Cell, pass: number): boolean {
     if (cell.sources.length === 0 && adoption === null) return true
     if (cell.probePass === pass) return true
     cell.probePass = pass
-    if (adoption !== null && !walkReady(adoption.source, pass)) return false
+    // 5.25: serving what it stood on while the window holds the next key, as a reload does (3.6).
+    if (
+        adoption !== null &&
+        !adoption.source.held &&
+        !walkReady(adoption.source, pass)
+    )
+        return false
     const sources = cell.sources
     for (let index = 0; index < sources.length; index += 1)
         if (!walkReady(sources[index] as Cell, pass)) return false
@@ -3313,7 +3322,11 @@ function open(cell: Cell, opening: unknown): void {
  * the window's call. Starting runs the producer the reach would have run.
  */
 export function startDeferred(value: unknown): void {
-    startProducer(cellOf(value))
+    const cell = cellOf(value)
+    cell.held = false
+    startProducer(cell)
+    // 5.25: an adopter left serving the key it stood on hears the start, and 11.16 clears it.
+    if (!cell.servable) cascade(cell)
 }
 
 /**
@@ -3323,7 +3336,9 @@ export function startDeferred(value: unknown): void {
  * and a reader still holding it hears that.
  */
 export function abandonDeferred(value: unknown): void {
-    endLoad(cellOf(value), false)
+    const cell = cellOf(value)
+    cell.held = false
+    endLoad(cell, false)
 }
 
 // ── `store` ──────────────────────────────────────────────────────────────────────────────
@@ -4307,6 +4322,7 @@ export function createReactive<
         if (initial === undefined) landOpening(cell)
         else if (initial !== NO_INITIAL) open(cell, initial)
     } else if (deferred) {
+        cell.held = true
         cell.loading = true
         if (LOADS !== null) keepLoad(cell)
     } else startProducer(cell)

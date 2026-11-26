@@ -372,6 +372,10 @@ window held MUST start one reload when the window closes.
 cap the entry's productions, so every reader and follower of the entry is woken at that pace, and a
 call MUST answer the last value written.
 
+5.25 A `Reactive` re-adopted onto an entry a `memo`'s window is holding back MUST go on serving what
+it served, reporting `s.busy` true and `s.ready` as it stood, until the entry starts, and 11.16 MUST
+then apply.
+
 # 6. Expiry
 
 6.1 An entry of a `memo` whose `ttl` runs out while something subscribes to it MUST be refreshed per
@@ -670,7 +674,8 @@ value.
 11.15 Adoption MUST forward members the adopted `Reactive` declares beyond the common face, by
 delegation to whatever is currently adopted.
 
-11.16 On re-adoption a `Reactive` MUST clear where the newly adopted `Reactive` has nothing to serve.
+11.16 On re-adoption a `Reactive` MUST clear where the newly adopted `Reactive` has nothing to serve,
+save where 5.25 holds the change back.
 
 11.17 Adoption MUST inherit the adopted `Reactive`'s `identity` where the outer declared none, for as
 long as it adopts it.

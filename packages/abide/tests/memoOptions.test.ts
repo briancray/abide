@@ -6,7 +6,7 @@ import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
 
 import { GET, store } from '#server'
-import { flushSync, isFailed, memo, watch } from '#shared'
+import { flushSync, isFailed, memo, reactive, watch } from '#shared'
 import { KEYED_OF } from '#shared/reactive/createMemo.ts'
 import type { Reactive } from '#shared/reactive/Reactive.ts'
 
@@ -103,6 +103,35 @@ test("a memo's debounce starts only the key its reaches stopped at — 5.18", as
     void search('ab').catch(() => {})
     expect(await search('abc')).toBe('ABC')
     expect(ran.join()).toBe('abc')
+})
+
+// 5.25 — A HELD ENTRY DELAYS THE CHANGE, as 5.13 has a debounce do: a derived re-pointed onto a key the
+// memo's window holds back goes on serving the key it stood on, busy, until the held key starts; then
+// 11.16 clears it for the run as for any load. THE REVERT: drop the `held` arm in `mirror`; the
+// derived reads `cleared` through the window where `AB` is due.
+test("a derived keeps the answer it served while a memo's window holds the next key — 5.25", async () => {
+    const search = memo(
+        async (query: string) => {
+            await new Promise((done) => setTimeout(done, 20))
+            return query.toUpperCase()
+        },
+        { debounce: 30 },
+    )
+    const query = reactive('ab')
+    const found = reactive.derived(() => search(query()))
+    const stop = watch(() => {
+        found.ready() ? found() : undefined
+    })
+    await new Promise((done) => setTimeout(done, 80))
+    query.set('abc')
+    flushSync()
+    const inWindow = `${found.ready() ? found() : 'cleared'} ${found.busy()}`
+    await new Promise((done) => setTimeout(done, 40))
+    const inRun = found.ready() ? found() : 'cleared'
+    await new Promise((done) => setTimeout(done, 40))
+    const settled = found.ready() ? found() : 'cleared'
+    stop()
+    expect(`${inWindow}, ${inRun}, ${settled}`).toBe('AB true, cleared, ABC')
 })
 
 // 16.110 — A HANDLER TAKES A MEMO'S PACE. Typed, never run; the assertion is that it compiles.
