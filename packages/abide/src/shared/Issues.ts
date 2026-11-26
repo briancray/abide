@@ -50,7 +50,12 @@ export type Paths<T, Limit extends number = 5> = Limit extends 0
  * refusal names the handler rather than spelling its `Args`.
  */
 export type Issues<T> =
-    T extends ReadRpc<infer _Value, infer Args, infer _Failures, infer _Produced>
+    T extends ReadRpc<
+        infer _Value,
+        infer Args,
+        infer _Failures,
+        infer _Produced
+    >
         ? Issues<Args>
         : T extends object
           ? Partial<Record<Paths<T> | '', string[]>>

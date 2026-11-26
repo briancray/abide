@@ -323,8 +323,7 @@ function readAloneNames(tokens: readonly Token[]): Set<string> {
 
 /** Whether `(…) =>` or `async (…) =>` begins at `at`. */
 function isArrowAt(tokens: readonly Token[], at: number): boolean {
-    const open =
-        tokens[at]?.kind === SyntaxKind.AsyncKeyword ? at + 1 : at
+    const open = tokens[at]?.kind === SyntaxKind.AsyncKeyword ? at + 1 : at
     if (tokens[open]?.kind !== SyntaxKind.OpenParenToken) return false
     const close = closerOf(tokens, open)
     return (

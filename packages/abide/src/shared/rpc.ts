@@ -505,11 +505,7 @@ type Declare<Writes extends boolean> = {
         options?: OptionsOf<Writes, LedgerFrom | undefined, Answers> & {
             methods?: Methods | undefined
         },
-    ): ReadRpc<
-        Logged<Entry>[],
-        LedgerFrom | undefined,
-        RungRefusals<Answers>
-    > &
+    ): ReadRpc<Logged<Entry>[], LedgerFrom | undefined, RungRefusals<Answers>> &
         Answering<Methods, 'POST', { append(entry: Entry): Promise<number> }>
     // 16.117 — a pipe: its status read and followed, and an item pushed through it for its answer.
     <

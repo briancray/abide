@@ -64,9 +64,12 @@ test("an rpc answers the verbs a source's members write by — 16.111, 16.117", 
     })
     const verbs = [
         rpc(memo(() => 1, { global: true })).methods,
-        rpc(memo(() => 1, { global: true }), {
-            methods: ['GET', 'PUT', 'PATCH', 'POST'],
-        }).methods,
+        rpc(
+            memo(() => 1, { global: true }),
+            {
+                methods: ['GET', 'PUT', 'PATCH', 'POST'],
+            },
+        ).methods,
         rpc(memo(() => 1)).methods,
         rpc(deals).methods,
         rpc(deals, { methods: ['GET'] }).methods,

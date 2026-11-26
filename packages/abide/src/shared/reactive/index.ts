@@ -202,7 +202,12 @@ export type AdoptedProduced<Computed, Otherwise> =
  * refusals its promise rejects with as its failures (16.8).
  */
 export type CallOf<Calls> =
-    Calls extends ReadRpc<infer Value, infer Args, infer Failures, infer Produced>
+    Calls extends ReadRpc<
+        infer Value,
+        infer Args,
+        infer Failures,
+        infer Produced
+    >
         ? Reactive<
               Value,
               Value,

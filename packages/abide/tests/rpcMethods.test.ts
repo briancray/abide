@@ -101,7 +101,10 @@ test("a value's PUT writes it and its PATCH patches it where methods names them,
         (
             await send(
                 'PATCH',
-                { given: [], ops: [{ op: 'replace', path: '/tier', value: 'pro' }] },
+                {
+                    given: [],
+                    ops: [{ op: 'replace', path: '/tier', value: 'pro' }],
+                },
                 'plan',
             )
         ).slice(0, 3),
