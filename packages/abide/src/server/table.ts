@@ -15,6 +15,7 @@ import { namedLogger } from '#shared/log.ts'
 import { appStopSignal } from '#shared/reactive/abortSignal.ts'
 import { invalidate } from '#shared/reactive/index.ts'
 import { unrefTimer } from '#shared/reactive/unrefTimer.ts'
+import type { Match } from '#shared/Match.ts'
 import { SOURCE_KIND } from '#shared/SOURCE_KIND.ts'
 
 import { SQL_IDENTIFIER } from './SQL_IDENTIFIER.ts'
@@ -40,24 +41,7 @@ export type Change<Row> = {
 /** Where each `Database` has had its change log made, and each table its triggers. */
 const PREPARED = new WeakMap<Database, Set<string>>()
 
-/**
- * 47.35, 47.36 — what a `table` call matches a column against, all of it JSON: a value it equals,
- * `null` for NULL, an array of values it is one of, or comparisons it meets every one of.
- */
-export type ColumnMatch<Value> =
-    | Value
-    | null
-    | readonly (Value | null)[]
-    | {
-          gt?: Value | undefined
-          gte?: Value | undefined
-          lt?: Value | undefined
-          lte?: Value | undefined
-          ne?: Value | null | undefined
-      }
-
-/** 47.35 — the columns a `table` call matches, each by a `ColumnMatch`. */
-export type Match<Row> = { [Column in keyof Row]?: ColumnMatch<Row[Column]> }
+export type { ColumnMatch, Match } from '#shared/Match.ts'
 
 /**
  * A table of the app's database: its rows read by calling it, rows written by key, its changes read

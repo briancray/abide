@@ -36,6 +36,7 @@ import {
     defaultsInSource,
 } from '#shared/reactive/parameterDefaults.ts'
 import type { Method } from '#shared/rpc.ts'
+import { SOURCE_MEMBERS } from '#shared/SOURCE_MEMBERS.ts'
 
 import { aliasedSymbol, namesAbide } from './aliasedSymbol.ts'
 import { defaultedMembers, parameterPattern } from './argsDefaultsIn.ts'
@@ -343,13 +344,24 @@ async function declaredBy(
         declarer.valueDeclaration?.path !== abide.methods
     )
         return undefined
-    // 16.111, 16.112 — the verbs it answers: the ones `methods` names, or the ones its value does.
-    const methods = await declaredMethods(checker, call)
+    // 16.111, 16.112, 16.117 — the verbs it answers: the ones `methods` names, or the ones its value
+    // does, and the members a source's copy writes by.
+    const { methods, faces, held, stream } = await declaredMethods(
+        checker,
+        call,
+    )
     const method = methods[0] as Method
     const declared =
         method === 'GET'
             ? await declaredCopy(checker, call, abide)
             : { copy: undefined, unread: [] }
+    if (faces !== undefined)
+        declared.copy = {
+            ...declared.copy,
+            faces,
+            ...(held ? { held: true as const } : {}),
+        }
+    if (stream) declared.copy = { ...declared.copy, stream: true }
     const body = await handlerBodyOf(checker, call.arguments[0])
     // 16.32 — A HANDLER RETURNING AN ASYNC GENERATOR ANSWERS A STREAM, and the browser's copy has to
     // read it as one rather than wait out the whole response: the one thing about it the build can
@@ -635,18 +647,82 @@ async function stringLiteralsOf(
     return names
 }
 
-/** What a plain value answers by: its read, then its writes (16.111). */
-const VALUE_METHODS: Method[] = ['GET', 'PUT', 'PATCH']
+/** 16.117 — a kind of addressable value whose writes are members of its face. */
+type SourceKind = keyof typeof SOURCE_MEMBERS
 
 /**
- * 16.111, 16.112 — the verbs an `rpc` answers, its call's first: the `methods` its options write as
- * a literal, or the ones its value answers by — a function `GET`, any other value `GET`, `PUT` and
- * `PATCH`. A `methods` the build cannot read is the value's, which the runtime checks it against.
+ * 16.117 — the members each source's TYPE answers by, which tell its kind apart without running it: a
+ * memo's owner writes and triggers with no address (an `Rpc` has `url`), a table's rows written by key,
+ * a job's run and status, a pipe's streams and status, a ledger's appends.
+ */
+const KIND_MEMBERS: readonly [SourceKind, readonly string[], readonly string[]][] = [
+    ['ledger', ['append', 'writable'], []],
+    ['pipe', ['status', 'readable', 'writable', 'stop'], []],
+    ['job', ['status', 'run', 'stop'], ['writable']],
+    ['table', ['set', 'patch', 'delete', 'readable', 'writable'], ['status']],
+    ['memo', ['set', 'patch', 'refresh', 'invalidate', 'readable'], ['url']],
+]
+
+/** 16.117 — the kind of source `value`'s type is, or `undefined` for a function or a plain value. */
+async function sourceKindOf(
+    checker: Checker,
+    value: Node | undefined,
+): Promise<SourceKind | undefined> {
+    if (value === undefined) return undefined
+    const type = await checker.getTypeAtLocation(value)
+    if (type === undefined) return undefined
+    for (const [kind, has, lacks] of KIND_MEMBERS) {
+        let matches = true
+        for (const name of has)
+            if ((await checker.getPropertyOfType(type, name)) === undefined) {
+                matches = false
+                break
+            }
+        if (!matches) continue
+        for (const name of lacks)
+            if ((await checker.getPropertyOfType(type, name)) !== undefined) {
+                matches = false
+                break
+            }
+        if (matches) return kind
+    }
+    return undefined
+}
+
+/**
+ * 16.111, 16.112, 16.117 — the verbs an `rpc` answers, its call's first, and the members its copy
+ * writes by: the `methods` its options write as a literal, or the ones its value answers by — a
+ * function `GET`, a source or a plain value `GET` and each verb its members write by. A memo's writes
+ * are mounted where its options say `global: true` as written: a request's memo answers `GET` alone.
  */
 async function declaredMethods(
     checker: Checker,
     call: CallExpression,
-): Promise<Method[]> {
+): Promise<{
+    methods: Method[]
+    faces: Record<string, Method> | undefined
+    held: boolean
+    stream: boolean
+}> {
+    const value = call.arguments[0]
+    const kind = await sourceKindOf(checker, value)
+    const type =
+        value === undefined ? undefined : await checker.getTypeAtLocation(value)
+    const called =
+        kind === undefined &&
+        type !== undefined &&
+        (await checker.getSignaturesOfType(type, SignatureKind.Call)).length > 0
+    const members: Record<string, Method> = called
+        ? {}
+        : kind === 'memo' && !(await declaresGlobal(checker, value))
+          ? {}
+          : { ...SOURCE_MEMBERS[kind ?? 'value'] }
+    const able: Method[] = ['GET']
+    for (const member in members) {
+        const verb = members[member] as Method
+        if (!able.includes(verb)) able.push(verb)
+    }
+    let methods: Method[] = able
     const options = inlineOptions(call)
     const written =
         options === undefined ? undefined : optionNamed(options, 'methods')
@@ -655,17 +731,38 @@ async function declaredMethods(
         for (const element of written.elements)
             if (isStringLiteral(element)) named.push(element.text as Method)
         if (named.length === written.elements.length && named.length > 0)
-            return named.includes('GET') && named[0] !== 'GET'
-                ? ['GET', ...named.filter((verb) => verb !== 'GET')]
-                : named
+            methods =
+                named.includes('GET') && named[0] !== 'GET'
+                    ? ['GET', ...named.filter((verb) => verb !== 'GET')]
+                    : named
     }
-    const value = call.arguments[0]
-    const type =
-        value === undefined ? undefined : await checker.getTypeAtLocation(value)
-    const called =
-        type !== undefined &&
-        (await checker.getSignaturesOfType(type, SignatureKind.Call)).length > 0
-    return called ? ['GET'] : [...VALUE_METHODS]
+    const faces: Record<string, Method> = {}
+    for (const member in members)
+        if (methods.includes(members[member] as Method))
+            faces[member] = members[member] as Method
+    return {
+        methods,
+        faces:
+            kind === undefined || Object.keys(faces).length === 0
+                ? undefined
+                : faces,
+        held: kind === 'memo',
+        stream: kind === 'ledger',
+    }
+}
+
+/** Whether the memo `value` names is declared with `global: true` written as a literal. */
+async function declaresGlobal(
+    checker: Checker,
+    value: Node | undefined,
+): Promise<boolean> {
+    const built = await declarationOf(checker, value)
+    if (built === undefined || !isCallExpression(built)) return false
+    const options = await declarationOf(checker, built.arguments[1])
+    if (options === undefined || !isObjectLiteralExpression(options))
+        return false
+    const global = optionNamed(options, 'global')
+    return global?.kind === SyntaxKind.TrueKeyword
 }
 
 /** 16.113 — the `address` an `rpc`'s options write as a literal, or `undefined`. */

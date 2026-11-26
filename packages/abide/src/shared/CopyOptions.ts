@@ -19,4 +19,11 @@ export type CopyOptions = {
      * 16.32.
      */
     stream?: true | undefined
+    /**
+     * 16.117 — the members a source's copy writes by, each to the verb it sends: `set`, `patch`,
+     * `delete`, `run`, `push` or `append`, as its kind has them.
+     */
+    faces?: Readonly<Record<string, 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>> | undefined
+    /** 16.117 — the copy's `set` and `patch` write the value it holds, as a memo's do. */
+    held?: true | undefined
 }

@@ -23,6 +23,8 @@ import { IN_PROCESS_ORIGIN } from './IN_PROCESS_ORIGIN.ts'
 import { isAsyncIterable } from './isAsyncIterable.ts'
 import { isServer } from './isServer.ts'
 import type { Issues } from './Issues.ts'
+import type { Logged } from './ledger.ts'
+import type { Match } from './Match.ts'
 import { namedLogger } from './log.ts'
 import { compose, type Rung } from './Middleware.ts'
 import { unmounted } from './mount.ts'
@@ -41,6 +43,7 @@ import {
 import type { CALL_ENTRY } from './reactive/CALL_ENTRY.ts'
 import { callLoad } from './reactive/callLoad.ts'
 import {
+    KEYED_OF,
     type KeptIn,
     type Memo,
     type MemoValue,
@@ -49,6 +52,7 @@ import {
     type Written,
 } from './reactive/createMemo.ts'
 import { DECLARED_TAGS } from './reactive/DECLARED_TAGS.ts'
+import { MEMO_BRAND } from './reactive/MEMO_BRAND.ts'
 import {
     type AdoptedFailures,
     type BodyProduced,
@@ -80,9 +84,12 @@ import {
 } from './reactive/producer.ts'
 import { isStreamBody } from './reactive/Reactive.ts'
 import { builtHere, isForwarder } from './reactive/scoped.ts'
-import { checkArgs } from './refuse.ts'
+import { checkArgs, refuse } from './refuse.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
+import { SOURCE_KIND } from './SOURCE_KIND.ts'
+import { SOURCE_MEMBERS } from './SOURCE_MEMBERS.ts'
 import { rpcRequest } from './rpcRequest.ts'
+import type { PipeStatus } from './pipe.ts'
 import type { Schema } from './Schema.ts'
 import { surfaceName } from './surfaceName.ts'
 
@@ -270,6 +277,8 @@ export type RpcOptions<
     methods?: readonly Method[] | undefined
     /** 16.113 — the address answered at, in place of the handler file's route. */
     address?: string | undefined
+    /** 16.118 — for a table: the columns its rows are read with, and the only ones a write may name. */
+    columns?: readonly string[] | undefined
     description?: string | undefined
     /**
      * 16.86 — one rung per answer in `Answers`, each read in context: a rung's own refusals are
@@ -323,7 +332,11 @@ type Refreshed = readonly (
  * value's option — `GET(reactive(f), { ttl })` — fell through its own arm to a plain one, and the
  * option was dropped by a value that had already been built.
  */
-export type Plain = { invalidate?: never | undefined }
+// 16.117 — and a source's stream, which a table, a pipe and a ledger take their own signature by.
+export type Plain = {
+    invalidate?: never | undefined
+    writable?: never | undefined
+}
 
 /**
  * What narrows a trigger on an `Rpc` beside its pattern: `caller`, the `principal.caller` of the one
@@ -413,6 +426,39 @@ type Declare<Writes extends boolean> = {
         RungRefusals<Answers>,
         BodyProduced<Result, MemoValue<Result>>
     >
+    // 16.117 — a table: its rows read by a JSON match, written by key and deleted by a match.
+    <
+        Row extends Record<string, unknown>,
+        Answers extends readonly unknown[] = unknown[],
+    >(
+        handler: TableFace<Row>,
+        options?: OptionsOf<Writes, Match<Row> | undefined, Answers>,
+    ): Rpc<Row[], Match<Row> | undefined, RungRefusals<Answers>> & {
+        set(rows: Row | readonly Row[]): Promise<unknown>
+        patch(rows: Partial<Row> | readonly Partial<Row>[]): Promise<unknown>
+        delete(match: Match<Row>): Promise<unknown>
+    }
+    // 16.117 — a job: its status read and followed, and a run started ahead of its schedule.
+    <Status, Input, Answers extends readonly unknown[] = unknown[]>(
+        handler: JobFace<Status, Input>,
+        options?: OptionsOf<Writes, undefined, Answers>,
+    ): Rpc<Status, undefined, RungRefusals<Answers>> & {
+        run(input?: Input): Promise<Status>
+    }
+    // 16.117 — a ledger: its entries read in order from a position or a cursor, and appended to.
+    <Entry, Answers extends readonly unknown[] = unknown[]>(
+        handler: LedgerFace<Entry>,
+        options?: OptionsOf<Writes, LedgerFrom | undefined, Answers>,
+    ): Rpc<Logged<Entry>[], LedgerFrom | undefined, RungRefusals<Answers>> & {
+        append(entry: Entry): Promise<number>
+    }
+    // 16.117 — a pipe: its status read and followed, and an item pushed through it for its answer.
+    <In, Out, Answers extends readonly unknown[] = unknown[]>(
+        handler: PipeFace<In, Out>,
+        options?: OptionsOf<Writes, undefined, Answers>,
+    ): Rpc<PipeStatus, undefined, RungRefusals<Answers>> & {
+        push(input: In): Promise<Out>
+    }
     // 16.1 — a value, `reactive` given an address, which takes a `reactive`'s options beside the
     // address's (16.6), and no source's (11.81). Never a function: a handler's function is its body,
     // the first signature's (16.1).
@@ -433,6 +479,38 @@ type Declare<Writes extends boolean> = {
         undefined,
         Refusals<Shaped, Gate, Accepted> | RungRefusals<Answers>
     >
+}
+
+/** 16.117 — a table as `rpc` reads it: called for rows, and written by key. */
+type TableFace<Row> = ((match?: Match<Row>) => Row[]) & {
+    set(rows: Row | readonly Row[]): void
+    patch(rows: Partial<Row> | readonly Partial<Row>[]): void
+    delete(match: Match<Row>): number
+    readonly writable: WritableStream<Row>
+}
+
+/** 16.117 — a job as `rpc` reads it: a status memo and a run. */
+type JobFace<Status, Input> = {
+    status: Memo<undefined, Status>
+    run: (input?: Input) => Promise<Status>
+    stop: () => Promise<Status>
+}
+
+/** 16.117 — a ledger as `rpc` reads it: a read from a position or a cursor, and an append. */
+type LedgerFace<Entry> = ((
+    from?: number | { cursor: string },
+) => ReadableStream<Logged<Entry>>) & {
+    append: (entry: Entry, options?: { key?: string | undefined }) => Promise<number>
+}
+
+/** 16.117 — where a ledger's `rpc` reads from: a position, or a named cursor. */
+type LedgerFrom = { from?: number | undefined; cursor?: string | undefined }
+
+/** 16.117 — a pipe as `rpc` reads it: a call for an item's answer, and its status. */
+type PipeFace<In, Out> = ((input: In, signal?: AbortSignal) => Promise<Out>) & {
+    readonly status: Memo<undefined, PipeStatus>
+    readonly readable: ReadableStream<unknown>
+    stop(): Promise<void>
 }
 
 /** What a handler's triggers do before a call has built its value: nothing, there being no entry (13.19). */
@@ -758,12 +836,16 @@ export const FACES = Symbol('abide.faces')
 
 /** What a function's or a built value's `methods` may name: one verb, its call's. */
 const ONE_VERB: readonly Method[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
-/** What a plain value answers by: its read, and its writes (16.111). */
-const VALUE_VERBS: readonly Method[] = ['GET', 'PUT', 'PATCH']
+
+/** 16.117 — a kind of addressable value whose writes are members of its face. */
+type SourceKind = keyof typeof SOURCE_MEMBERS
+
+/** What a source answers its kind by, and the tags a change to it refreshes (`SOURCE_KIND`). */
+type SourceBrand = { kind: SourceKind; tags?: readonly string[] | undefined }
 
 /**
  * A value, a function or a source given an address: what `GET` and the four mutations were, one
- * name over the verbs the value answers by (16.111), or the ones `methods` names (16.112).
+ * name over the verbs the value answers by (16.111, 16.117), or the ones `methods` names (16.112).
  */
 export const rpc: Declare<true> = ((
     value: unknown,
@@ -771,60 +853,249 @@ export const rpc: Declare<true> = ((
 ): unknown => {
     // 16.70 — an `rpc` already: a server block's export declared by one, given its private address.
     if (options === undefined && isRpc(value)) return value
-    const { methods, address: _address, ...rest } = options ?? {}
-    const verbs = verbsOf(value, methods)
-    const primary = verbs[0] as Method
-    // 16.92 — `refreshes` refreshes after a write, which a read-only `rpc` never makes.
-    if (rest.refreshes !== undefined && verbs.every((verb) => verb === 'GET'))
+    const { methods, address: _address, columns, ...rest } = options ?? {}
+    const brand = brandOf(value)
+    if (brand === undefined && typeof value === 'function') {
+        if (columns !== undefined) refuseColumns()
+        const verbs = calledVerbs(methods)
+        // 16.92 — `refreshes` refreshes after a write, which a read-only `rpc` never makes.
+        if (rest.refreshes !== undefined && verbs[0] === 'GET')
+            throw new Error(
+                'abide: an `rpc` answering `GET` alone was declared with `refreshes`, which only a write takes. Refresh from the write that changed the value. RULEBOOK 16.92.',
+            )
+        const main = declare(verbs[0] as Method)(
+            value as never,
+            rest as never,
+        ) as unknown as { methods: readonly Method[] }
+        main.methods = verbs
+        return main
+    }
+    const kind: SourceKind = brand?.kind ?? 'value'
+    if (columns !== undefined && kind !== 'table') refuseColumns()
+    // 16.117 — what the source writes by: none, for a memo whose entries live a request (11.32), as a
+    // write to one would land in a value no later request reads.
+    const members: Record<string, Method> =
+        kind === 'memo' && isForwarder((value as Record<symbol, unknown>)[KEYED_OF])
+            ? {}
+            : SOURCE_MEMBERS[kind]
+    const verbs = sourceVerbs(members, methods)
+    if (rest.refreshes !== undefined && verbs.length === 1)
         throw new Error(
             'abide: an `rpc` answering `GET` alone was declared with `refreshes`, which only a write takes. Refresh from the write that changed the value. RULEBOOK 16.92.',
         )
-    // 16.115 — A VALUE IS THE SERVER'S ONE VALUE, every request reading and writing the same entry:
-    // a value per request (11.32) would forget a write the moment its request answered.
-    const held =
-        typeof value === 'function' || isPromise(value) ? value : () => value
-    const shaped =
-        held === value
-            ? rest
-            : {
-                  ...rest,
-                  global:
-                      (rest as { global?: boolean | undefined }).global ?? true,
-              }
-    const main = declare(primary)(
-        held as never,
-        shaped as never,
-    ) as unknown as {
+    const main = declare('GET')(
+        readOf(kind, value, brand, columns) as never,
+        readOptions(kind, brand, rest) as never,
+    ) as unknown as Record<string, unknown> & {
         methods: readonly Method[]
         [FACES]: Partial<Record<Method, unknown>>
-        set(value: unknown): void
-        patch(mutate: (value: unknown) => void): void
-        (): unknown
+        (args?: unknown): unknown
     }
     main.methods = verbs
-    // 16.115, 16.116 — A VALUE'S WRITES ARE FACES OF THEIR OWN at its address, each a call whose args
-    // carry what the browser wrote, so every rung, gate and answer a call has, these have.
+    // 16.117 — EACH WRITE IS A MEMBER, in process here: the source's own, its rows checked against
+    // `columns` for a table. A memo's and a value's are the `Rpc`'s, which write the entry it serves.
+    const writer = (member: string): ((...given: unknown[]) => unknown) => {
+        if (kind === 'memo' || kind === 'value')
+            return main[member] as (...given: unknown[]) => unknown
+        if (kind === 'pipe' && member === 'push')
+            return (item) => (value as (item: unknown) => unknown)(item)
+        const own = (value as Record<string, (...given: unknown[]) => unknown>)[
+            member
+        ] as (...given: unknown[]) => unknown
+        if (columns === undefined) return own
+        return (given) => {
+            const checked = withinColumns(brand, columns, member, given)
+            return isFailed(checked) ? checked : own(checked)
+        }
+    }
     const faces: Partial<Record<Method, unknown>> = {}
     const shared = facesOptions(rest)
-    if (verbs.includes('PUT'))
-        faces.PUT = declare('PUT')(
-            (({ value: written }: { value: unknown }) => {
-                main.set(written)
-                return main()
+    for (const member in members) {
+        const verb = members[member] as Method
+        if (!verbs.includes(verb)) continue
+        const write = writer(member)
+        // One face on both sides: a member answers a promise here as it does on the browser's copy.
+        if (kind !== 'memo' && kind !== 'value')
+            main[member] = async (...given: unknown[]) => write(...given)
+        // 16.116 — WHAT THE BROWSER SENDS IS WHAT THE MEMBER IS GIVEN, and a `patch` handed a function
+        // sends the JSON Patch it made, applied here to the value as it stands.
+        faces[verb] = declare(verb)(
+            (async (args: {
+                given?: unknown[] | string
+                ops?: PatchOp[] | string
+            }) => {
+                // A `DELETE` carries its args in the query, each member JSON text where no schema
+                // read it back (16.9).
+                const given = jsonOf(args?.given) ?? []
+                const ops = jsonOf(args?.ops)
+                const handed =
+                    ops === undefined
+                        ? given
+                        : [...given, (held: unknown) => applyPatch(held, ops)]
+                const answered = await write(...handed)
+                // A held value's write answers the value it leaves, which the copy then holds.
+                if (
+                    (kind === 'memo' || kind === 'value') &&
+                    (member === 'set' || member === 'patch')
+                )
+                    return main(
+                        member === 'set' && given.length < 2
+                            ? undefined
+                            : given[0],
+                    )
+                return answered === undefined ? null : answered
             }) as never,
             shared as never,
         )
-    if (verbs.includes('PATCH'))
-        faces.PATCH = declare('PATCH')(
-            (({ ops }: { ops: PatchOp[] }) => {
-                main.patch((held) => applyPatch(held, ops))
-                return main()
-            }) as never,
-            shared as never,
-        )
+    }
     main[FACES] = faces
     return main
 }) as Declare<true>
+
+/** `value`, or what it reads as where it is JSON text. */
+function jsonOf<Value>(value: Value | string | undefined): Value | undefined {
+    return typeof value === 'string' ? (JSON.parse(value) as Value) : value
+}
+
+/** 16.117 — the brand a source carries, or a memo's, or `undefined` for a function or a value. */
+function brandOf(value: unknown): SourceBrand | undefined {
+    if (value === null || (typeof value !== 'object' && typeof value !== 'function'))
+        return undefined
+    if ((value as Record<symbol, unknown>)[MEMO_BRAND] === true)
+        return { kind: 'memo' }
+    return (value as Record<symbol, SourceBrand | undefined>)[SOURCE_KIND]
+}
+
+/** 16.111, 16.112 — a function's one verb: `GET`, or the one `methods` names. */
+function calledVerbs(declared: readonly Method[] | undefined): readonly Method[] {
+    if (declared === undefined) return ['GET']
+    for (const verb of declared)
+        if (!ONE_VERB.includes(verb))
+            throw new Error(
+                `abide: an \`rpc\` was declared with \`methods\` naming ${JSON.stringify(verb)}, which a function does not answer by. RULEBOOK 16.112.`,
+            )
+    if (declared.length !== 1)
+        throw new Error(
+            `abide: an \`rpc\` over a function was declared with \`methods\` naming ${declared.length} verbs, and a function is called by one. RULEBOOK 16.112.`,
+        )
+    return declared
+}
+
+/**
+ * 16.111, 16.112, 16.117 — the verbs a value or a source answers by: its read, `GET`, then each its
+ * members write by, or the ones `methods` keeps of them — the read always among them.
+ */
+function sourceVerbs(
+    members: Record<string, Method>,
+    declared: readonly Method[] | undefined,
+): readonly Method[] {
+    const able: Method[] = ['GET']
+    for (const member in members) {
+        const verb = members[member] as Method
+        if (!able.includes(verb)) able.push(verb)
+    }
+    if (declared === undefined) return able
+    for (const verb of declared)
+        if (!able.includes(verb))
+            throw new Error(
+                `abide: an \`rpc\` was declared with \`methods\` naming ${JSON.stringify(verb)}, which this value answers by only as ${able.join(', ')}. RULEBOOK 16.112, 16.117.`,
+            )
+    if (!declared.includes('GET'))
+        throw new Error(
+            'abide: an `rpc` over a value was declared with `methods` leaving out `GET`, which every value is read by. RULEBOOK 16.112.',
+        )
+    // The read first: it is what a call of the `rpc` sends.
+    return ['GET', ...declared.filter((verb) => verb !== 'GET')]
+}
+
+/** 16.117 — what a source's `GET` answers: its value, its rows, its status or its entries. */
+function readOf(
+    kind: SourceKind,
+    value: unknown,
+    brand: SourceBrand | undefined,
+    columns: readonly string[] | undefined,
+): unknown {
+    if (kind === 'memo') return value
+    if (kind === 'job' || kind === 'pipe')
+        return (value as { status: unknown }).status
+    if (kind === 'table') {
+        const rows = value as (match?: unknown) => Record<string, unknown>[]
+        return columns === undefined
+            ? (match?: Record<string, unknown>) => rows(match)
+            : (match?: Record<string, unknown>) => {
+                  const checked = withinColumns(brand, columns, 'match', match)
+                  return isFailed(checked)
+                      ? checked
+                      : projected(rows(checked), columns)
+              }
+    }
+    if (kind === 'ledger')
+        return async function* (
+            from?: { from?: number | undefined; cursor?: string | undefined },
+        ): AsyncGenerator<unknown> {
+            const read = value as (
+                from?: number | { cursor: string },
+            ) => ReadableStream<unknown>
+            yield* read(
+                from?.cursor !== undefined ? { cursor: from.cursor } : from?.from,
+            ) as unknown as AsyncIterable<unknown>
+        }
+    // 16.115 — A VALUE IS THE SERVER'S ONE VALUE, every request reading and writing the same entry:
+    // a value per request (11.32) would forget a write the moment its request answered.
+    return isPromise(value) ? value : () => value
+}
+
+/** 16.115, 16.117 — a source's read's options: one value for the server, a table's name its tag. */
+function readOptions(
+    kind: SourceKind,
+    brand: SourceBrand | undefined,
+    options: RpcOptions,
+): RpcOptions {
+    if (kind === 'memo' || kind === 'job' || kind === 'pipe') return options
+    const given = options as { global?: boolean | undefined; tags?: string[] | undefined }
+    const tags = brand?.tags === undefined ? given.tags : [...(given.tags ?? []), ...brand.tags]
+    return { ...options, global: given.global ?? true, tags } as RpcOptions
+}
+
+function refuseColumns(): never {
+    throw new Error(
+        'abide: an `rpc` was declared with `columns`, which only a table is read and written by. RULEBOOK 16.118.',
+    )
+}
+
+/** 16.118 — the rows with only the columns `columns` names. */
+function projected(
+    rows: readonly Record<string, unknown>[],
+    columns: readonly string[],
+): Record<string, unknown>[] {
+    const kept: Record<string, unknown>[] = []
+    for (const row of rows) {
+        const picked: Record<string, unknown> = {}
+        for (const column of columns) if (column in row) picked[column] = row[column]
+        kept.push(picked)
+    }
+    return kept
+}
+
+/** 16.118 — `given` refused where it names a column `columns` leaves out, else handed back. */
+function withinColumns(
+    brand: SourceBrand | undefined,
+    columns: readonly string[],
+    member: string,
+    given: unknown,
+): unknown {
+    const each = Array.isArray(given) ? given : [given]
+    for (const row of each) {
+        if (row === undefined || row === null) continue
+        for (const column of Object.keys(row as object))
+            if (!columns.includes(column))
+                return refuse(
+                    400,
+                    `${brand?.tags?.[0] ?? 'this table'}'s ${member} names ${JSON.stringify(column)}, which its rpc's columns leave out. RULEBOOK 16.118.`,
+                )
+    }
+    return given
+}
 
 /** Whether `value` is a promise, which a value `rpc` answers as it settles (16.1). */
 function isPromise(value: unknown): boolean {
@@ -846,37 +1117,6 @@ function facesOptions(options: RpcOptions): RpcOptions {
         crossOrigin: options.crossOrigin,
         maxBodySize: options.maxBodySize,
     }
-}
-
-/**
- * 16.111, 16.112 — the verbs `value` answers by, the one it reads by first: a function's or a built
- * value's one verb, `GET` unless `methods` names another; a plain value's read and writes, or the
- * ones `methods` keeps.
- */
-function verbsOf(
-    value: unknown,
-    declared: readonly Method[] | undefined,
-): readonly Method[] {
-    const called = typeof value === 'function'
-    if (declared === undefined) return called ? ['GET'] : VALUE_VERBS
-    const able = called ? ONE_VERB : VALUE_VERBS
-    for (const verb of declared)
-        if (!able.includes(verb))
-            throw new Error(
-                `abide: an \`rpc\` was declared with \`methods\` naming ${JSON.stringify(verb)}, which ${called ? 'a function does not answer by' : 'a value answers by only as GET, PUT or PATCH'}. RULEBOOK 16.112.`,
-            )
-    if (called && declared.length !== 1)
-        throw new Error(
-            `abide: an \`rpc\` over a function was declared with \`methods\` naming ${declared.length} verbs, and a function is called by one. RULEBOOK 16.112.`,
-        )
-    if (!called && !declared.includes('GET'))
-        throw new Error(
-            'abide: an `rpc` over a value was declared with `methods` leaving out `GET`, which every value is read by. RULEBOOK 16.112.',
-        )
-    // The read first: it is what a call of the `rpc` sends.
-    return called
-        ? declared
-        : ['GET', ...declared.filter((verb) => verb !== 'GET')]
 }
 
 /** The handler's mount address, or a throw naming where one comes from. */

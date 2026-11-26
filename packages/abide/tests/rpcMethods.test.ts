@@ -17,7 +17,7 @@ afterEach(() => {
 })
 
 // 16.111, 16.112 — THE VERBS ARE THE VALUE'S, or the ones `methods` names, and one it cannot answer by
-// is refused where it is declared. THE REVERT: drop the checks in `verbsOf`; the three refusals
+// is refused where it is declared. THE REVERT: drop the checks in `calledVerbs` and `sourceVerbs`; the three refusals
 // below are `ok` where `RULEBOOK 16.112` is due.
 test('an rpc answers the verbs its value does, or the ones methods names — 16.111, 16.112', () => {
     expect(rpc(() => 1).methods).toEqual(['GET'])
@@ -79,11 +79,12 @@ test("a value's PUT writes it and its PATCH patches it, each answering the value
         )
         return `${answer.status} ${await answer.text()}`
     }
-    expect(await send('PUT', { value: { theme: 'light', seats: 40 } })).toBe(
+    expect(await send('PUT', { given: [{ theme: 'light', seats: 40 }] })).toBe(
         '200 {"theme":"light","seats":40}',
     )
     expect(
         await send('PATCH', {
+            given: [],
             ops: [{ op: 'replace', path: '/seats', value: 45 }],
         }),
     ).toBe('200 {"theme":"light","seats":45}')
@@ -91,7 +92,7 @@ test("a value's PUT writes it and its PATCH patches it, each answering the value
 })
 
 // 16.116 — A BROWSER'S WRITE OF A VALUE IS SENT: `set` as a `PUT` of the value, `patch` as a `PATCH` of
-// the ops it made. THE REVERT: skip `sendsWrites` in `wire`; nothing is sent.
+// the ops it made. THE REVERT: skip `sendsMembers` in `wire`; nothing is sent.
 test("a browser's set and patch of a value are sent as PUT and PATCH — 16.116", async () => {
     const sent: string[] = []
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
@@ -114,7 +115,7 @@ test("a browser's set and patch of a value are sent as PUT and PATCH — 16.116"
     })
     await Bun.sleep(10)
     expect(sent).toEqual([
-        'PUT /account/seats {"value":{"seats":41}}',
-        'PATCH /account/seats {"ops":[{"op":"replace","path":"/seats","value":42}]}',
+        'PUT /account/seats {"given":[{"seats":41}]}',
+        'PATCH /account/seats {"given":[],"ops":[{"op":"replace","path":"/seats","value":42}]}',
     ])
 })

@@ -271,11 +271,18 @@ export function wire(
     // 16.9 — the address `rpc.url` and `rpc.raw` build on.
     rpc.address = address
     rpc.methods = methods
-    // 16.115, 16.116 — A WRITE OF A VALUE ANSWERING `PUT` OR `PATCH` IS THE SERVER'S: shown on this
-    // page's copy at once, sent, and the copy then holds what the server answered — or, refused, is
-    // loaded again from it.
-    if (methods.includes('PUT') || methods.includes('PATCH'))
-        sendsWrites(rpc as unknown as WrittenCopy, methods, route)
+    // 16.116, 16.117 — EACH WRITE OF THE SERVER'S FACE IS A MEMBER HERE TOO, sending its verb: a held
+    // value's `set` and `patch` shown on this page's copy at once, the rest answered and then read
+    // again.
+    const faces = options?.faces ?? valueFaces(methods)
+    if (faces !== undefined)
+        sendsMembers(
+            rpc as unknown as WrittenCopy,
+            faces,
+            options?.faces === undefined || options.held === true,
+            methods,
+            route,
+        )
     if (document !== undefined)
         (rpc as unknown as Record<typeof ARGS_DOCUMENT, JsonValue>)[
             ARGS_DOCUMENT
@@ -283,54 +290,87 @@ export function wire(
     return rpc
 }
 
-/** What `sendsWrites` reaches of a copy: its writes, its reload and its value now. */
-type WrittenCopy = {
+/** What `sendsMembers` reaches of a copy: its writes, its reload and its value now. */
+type WrittenCopy = Record<string, unknown> & {
     set(...given: unknown[]): void
     patch(...given: unknown[]): void
     refresh(): void
     (): PromiseLike<unknown>
 }
 
+/** 16.115 — a plain value's writes, where the build wrote no faces: `set` and `patch`, as it answers them. */
+function valueFaces(
+    methods: readonly Method[],
+): Record<string, Method> | undefined {
+    const faces: Record<string, Method> = {}
+    if (methods.includes('PUT')) faces.set = 'PUT'
+    if (methods.includes('PATCH')) faces.patch = 'PATCH'
+    return Object.keys(faces).length === 0 ? undefined : faces
+}
+
 /**
- * 16.115, 16.116 — sends a copy's `set` as a `PUT` of the value and its `patch` as a `PATCH` of the
- * JSON Patch it made, where the value answers by each. A value answering by these takes no args, so
- * a write is the value alone (11.80).
+ * 16.116, 16.117 — each member of `faces` sends its verb with what it was given, among the verbs the
+ * `rpc` answers. A held value's `set` and `patch` write this page's copy at once — a `patch` sending
+ * the JSON Patch it made — and the copy then holds what the server answered, or is read again where
+ * it refused. Every other member answers the server's answer, and the copy is read again after it.
  */
-function sendsWrites(
+function sendsMembers(
     copy: WrittenCopy,
+    faces: Readonly<Record<string, Method>>,
+    held: boolean,
     methods: readonly Method[],
     route: HandlerRoute,
 ): void {
     const setHere = copy.set.bind(copy)
     const patchHere = copy.patch.bind(copy)
-    const send = (verb: Method, args: Record<string, unknown>): void => {
-        const request = rpcRequest(verb, route, args, 'no-store')
-        void fetch(request.url, request.init)
+    const send = (
+        verb: Method,
+        body: Record<string, unknown>,
+    ): Promise<unknown> => {
+        const request = rpcRequest(verb, route, body, 'no-store')
+        return fetch(request.url, request.init)
             .then((response) => answerFrom(response, undefined, false))
-            .then((answer) => {
-                const value = answered(answer as Answer, request)
-                if (isFailed(value)) copy.refresh()
-                else setHere(value)
-            })
-            .catch(() => copy.refresh())
+            .then((answer) => answered(answer as Answer, request))
     }
-    if (methods.includes('PUT'))
-        copy.set = (...given: unknown[]): void => {
-            setHere(...given)
-            send('PUT', { value: given.at(-1) })
-        }
-    if (methods.includes('PATCH'))
-        copy.patch = (...given: unknown[]): void => {
-            const mutate = given.at(-1) as (value: unknown) => void
-            let ops: PatchOp[] = []
-            patchHere((value: unknown) => {
-                // The value a write reaches is the recording it makes, which is JSON, as the wire is.
-                const before: unknown = JSON.parse(JSON.stringify(value))
-                mutate(value)
-                ops = diffOps(before, value, null)
-            })
-            if (ops.length !== 0) send('PATCH', { ops })
-        }
+    for (const member in faces) {
+        const verb = faces[member] as Method
+        if (!methods.includes(verb)) continue
+        if (held && member === 'set')
+            copy.set = (...given: unknown[]): void => {
+                setHere(...given)
+                const args = given.slice(0, -1)
+                void send(verb, { given }).then(
+                    (value) =>
+                        isFailed(value)
+                            ? copy.refresh()
+                            : setHere(...args, value),
+                    () => copy.refresh(),
+                )
+            }
+        else if (held && member === 'patch')
+            copy.patch = (...given: unknown[]): void => {
+                const mutate = given.at(-1) as (value: unknown) => void
+                const args = given.slice(0, -1)
+                let ops: PatchOp[] = []
+                patchHere(...args, (value: unknown) => {
+                    // The value a write reaches is the recording it makes, which is JSON, as the wire is.
+                    const before: unknown = JSON.parse(JSON.stringify(value))
+                    mutate(value)
+                    ops = diffOps(before, value, null)
+                })
+                if (ops.length === 0) return
+                void send(verb, { given: args, ops }).then(
+                    (value) =>
+                        isFailed(value)
+                            ? copy.refresh()
+                            : setHere(...args, value),
+                    () => copy.refresh(),
+                )
+            }
+        else
+            copy[member] = (...given: unknown[]): Promise<unknown> =>
+                send(verb, { given }).finally(() => copy.refresh())
+    }
 }
 
 /** The token a chunk carries where it is an early call's continuation rather than a chunk (16.97). */
@@ -351,8 +391,8 @@ const UNANSWERED_RETRY_MS = 5_000
  * Checked against the value's own types where they were written, on the server; here they are data.
  */
 function copyOptions(options: CopyOptions): never {
-    // `stream` is the wire's to read, and not an option a value takes.
-    const { identity, stream: _, ...rest } = options
+    // `stream`, `faces` and `held` are the wire's to read, and not options a value takes.
+    const { identity, stream: _, faces: _faces, held: _held, ...rest } = options
     return (
         identity === 'deepEqual' ? { ...rest, identity: deepEqual } : rest
     ) as never
