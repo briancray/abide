@@ -10,7 +10,8 @@
 import type { Schema } from '../Schema.ts'
 import { answerOfCall } from './answerOfCall.ts'
 import { ARGS_GATE, type Gated, PARAMETER_DEFAULTS } from './argsContract.ts'
-import type { Kept } from './index.ts'
+import type { CALL_ENTRY } from './CALL_ENTRY.ts'
+import type { AdoptedFailures, Kept } from './index.ts'
 import type { Keyed } from './Keyed.ts'
 import { MEMO_BRAND } from './MEMO_BRAND.ts'
 import { isStreaming, patchInto, produceInto } from './producer.ts'
@@ -65,9 +66,15 @@ type EntryStore<Value> = {
  */
 export type Memo<Args, Result, Value = MemoValue<Result>> = ((
     ...args: undefined extends Args ? [args?: Args] : [args: Args]
-) => Awaited<Result> extends AsyncIterable<infer Chunk>
+) => (Awaited<Result> extends AsyncIterable<infer Chunk>
     ? AsyncIterable<Chunk>
     : Promise<Value>) & {
+    // Typed only, as a handler call's is: the refusals `fn`'s answer carries, which a
+    // `reactive.derived` adopting the call serves as its own (11.12).
+    readonly [CALL_ENTRY]?:
+        | { readonly value: Value; readonly failures: AdoptedFailures<Result> }
+        | undefined
+}) & {
     invalidate(pattern?: Partial<Args>): void
     refresh(pattern?: Partial<Args>): void
     set(...given: Written<Args, Value>): void
