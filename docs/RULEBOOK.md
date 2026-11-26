@@ -136,7 +136,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | thread | The worker a worker file's exports run in: a `Worker` on a server, a Web Worker in a browser. |
 | test file | A `.test.ts` file. |
 | declaration file | A `.d.ts` file. |
-| handler file | A server file of the app's own (`<name>.server.ts`), directly in a directory under no fence. |
+| handler file | A server file of the app's own (`<name>.server.ts`) exporting an `rpc`, wherever it stands. |
 | param file | A file of the app's own named `<NAME>.param.ts`, directly in a directory under no fence. |
 | matcher | What a param file declares, and what a segment naming it matches by. |
 | private handler | A value a `<script server>` exports. |
@@ -828,8 +828,7 @@ chunks, and each call MUST answer a stream handing on every chunk of that run fr
 
 11.76 `m.set(args, value)` MUST replace the value of a `memo`'s entry for `args`, and `m.patch(args,
 mutate)` MUST mutate it in place, each building the entry where none is held, MUST NOT run the
-function, and MUST stand until the next write, `ttl`, `refresh` or `invalidate` — save where the entry
-holds the rows a `table` call answered, which 47.40 writes to the table.
+function, and MUST stand until the next write, `ttl`, `refresh` or `invalidate`.
 
 11.77 `m.readable(args)` MUST answer a stream handing on the entry's value now and its value after
 each change, in order, each a copy no later change mutates.
@@ -1088,7 +1087,8 @@ a wire again under 15.21.
 16.1 A handler MUST be a `Reactive`, a `Keyed`, a plain function, or a value.
 
 16.2 `rpc` MUST give the handler an address over http: a handler file's default `rpc` that file's
-route, per 23.14, and each other `rpc` it exports that route and then the export's name.
+path below the app's root without `.server.ts`, its brackets read as 23.14 reads a route's, and each
+other `rpc` it exports that address and then the export's name.
 
 16.3 An `Rpc` called MUST answer a promise of the handler's value for those `Args`, rejected with its
 refusal, or where the handler streams, an async iterable of its chunks.
@@ -1300,8 +1300,8 @@ command line.
 16.72 A private handler MUST run under the `middleware` and `onError` filed at the route 37.1 files
 its file's hooks at.
 
-16.73 A handler file exporting no value declared by a call of abide's `rpc` MUST be a build error
-naming it.
+16.73 A server file exporting no value declared by a call of abide's `rpc` MUST be a module the
+server alone loads, answering at no address.
 
 16.74 A module of the client graph importing a handler file MUST receive the wrapper 16.28 states in
 place of each `rpc` it exports, under that export's name, and an import of any other export MUST be
@@ -1451,6 +1451,17 @@ each MUST answer the value then held.
 16.116 A browser's copy of a value answering `PUT` or `PATCH` MUST send its `set` as a `PUT` and
 its `patch` as a `PATCH` of the ops the mutation made, and MUST then hold what the server answers,
 or load the value again where the answer is a refusal.
+
+16.117 `rpc` over a `memo`, a `table`, a `job`, a `pipe` or a `ledger` MUST answer `GET` by its read —
+the memo's value, the table's rows for a `match`, the job's or the pipe's `status`, the ledger's
+entries from a position or a cursor — and each other verb by one member, the same member on the
+server and on a browser's copy: a memo's `set` by `PUT`, `patch` by `PATCH` and `refresh` by `POST`; a
+table's `set` by `PUT`, `patch` by `PATCH` and `delete` by `DELETE`; a job's `run`, a pipe's `push`
+and a ledger's `append` by `POST`; and a memo whose entries live a request MUST answer `GET` alone.
+
+16.118 `columns` MUST make a table's `rpc` read its rows with those columns alone, and MUST refuse at
+400 a write or a `match` naming any other; on any value but a table it MUST be refused as it is
+declared.
 
 # 17. Response helpers
 
@@ -1928,7 +1939,7 @@ entry nothing subscribes to (6.2).
 
 23.13 `reachable` MUST ask a host that names no scheme over https, and an origin as written.
 
-23.14 A route MUST be the path of its file below the app's `--root` without its extension, a handler
+23.14 A route MUST be the path of its file below the app's `--root` without its extension, a server
 file's being `.server.ts`, and an `index.abide`'s, a `layout.abide`'s and an `error.abide`'s MUST be
 its directory's.
 
@@ -1950,14 +1961,14 @@ error naming the mount.
 23.21 A `.abide` of the app's own directly in a directory under no fence MUST be a page, save a
 `layout.abide` and an `error.abide`.
 
-23.22 A file of the app's own directly in a directory under no fence MUST be a `.abide`, a handler
+23.22 A file of the app's own directly in a directory under no fence MUST be a `.abide`, a server
 file (`<name>.server.ts`), a param file (`<NAME>.param.ts`), a test file (`<name>.test.ts`), a bench
 file (`<name>.bench.ts`) or a declaration file (`<name>.d.ts`), and any other MUST be a build error
 naming the file and a `lib` directory — save a file directly in a root that holds its package's
 `package.json`, which MAY be any file but a `.ts`.
 
-23.23 A server file of the app's own under no `lib` directory, and no handler file, MUST be a build
-error naming the file and a `lib` directory.
+23.23 A server file of the app's own under no `lib` directory, and not directly in a directory under
+no fence, MUST be a build error naming the file and a `lib` directory.
 
 23.24 A param file MUST hold one `export const`, of the name it is filed under, whose value is a
 regular expression literal carrying no flag, and anything else, an import included, MUST be a build
@@ -5204,7 +5215,7 @@ reached, each as the row after and the row before.
 47.28 A write rolled back MUST hand on no change.
 
 47.29 A change to a table `table` was called for MUST refresh every value whose `tags` name the
-table, as `invalidate` over those tags does.
+table, as `refresh` over those tags does.
 
 47.30 Rows written to a `table`'s `writable` MUST be upserted by `key`, `id` where none is given,
 and the rows written in one turn MUST be committed in one transaction.
@@ -5213,15 +5224,16 @@ and the rows written in one turn MUST be committed in one transaction.
 
 47.32 An opener's `sql`, called as a tag, MUST bind every value interpolated as a parameter and
 never as text, MUST prepare one statement per call site per `Database` and per length of each list
-47.37 expands, and MUST answer, at once, the rows the statement returns.
+47.37 expands, MUST answer, at once, the rows the statement returns, and MUST refresh nothing by
+what the statement reads or writes.
 
-47.33 A run that reads a table through `sql` or a `table` call MUST be refreshed, per 13.7, when that
-table changes — by a write through the opener, or a commit any connection makes — the tables a
-statement reads being those SQLite compiles it to read, and MUST NOT be refreshed by a change to a
-table its last run did not read, nor where it is a mutation's run or wrote that table itself.
+47.33 A `table`'s `set` MUST upsert each row it is given by `key`, its `patch` MUST write the columns
+each row names onto the row with that row's `key` and leave the rest, and its `delete` MUST delete the
+rows a `match` names and answer how many; each MUST write in one transaction, and MUST throw for a row
+carrying no `key` or a `delete` whose `match` names no column.
 
-47.34 The writes made through `sql` in one turn MUST refresh what 47.33 refreshes once per table, as
-the turn ends, and 47.29's watch MUST NOT refresh for them again.
+47.34 A write through a `table`'s `set`, `patch` or `delete` MUST refresh 47.29's tag at once, and
+47.29's watch MUST NOT refresh it again for that write.
 
 47.35 A `table` called MUST answer every row of the table, or with `match` the rows whose every
 column `match` names the value given matches per 47.36, and MUST throw for a column the
@@ -5240,17 +5252,7 @@ comparison other than `ne`, and for an array or an object nested where a value g
 
 47.38 A database refusing 47.26's change log, a read-only one among them, MUST still be read by a
 `table` call and by `sql`, its stopped watch said once per database, and the writes made through its
-`sql` MUST then be all that refresh what reads it.
-
-47.39 A change 47.33 hears to a table a handler's run read MUST reach every browser following that
-handler as a tag naming the table would per 13.15, where the server holds no value of the handler
-for the change to refresh.
-
-47.40 An owner's `set` or `patch` of an entry holding the very rows a `table` call answered MUST write
-them to the table in one transaction — each row added or changed upserted by `key`, each row no
-longer there deleted, a patch made on a copy — MUST throw for a value that is not an array or a row
-carrying no `key`, and MUST then refresh at once every run 47.33 refreshes for the table, the
-entry's own among them, rather than hold the value written.
+`table` MUST then be all that refresh 47.29's tag.
 
 # 48. Problem reports
 

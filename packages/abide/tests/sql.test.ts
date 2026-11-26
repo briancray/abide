@@ -1,4 +1,4 @@
-// 47.29, 47.32-47.40 — SQL AS A TAG, A TABLE CALLED AND WRITTEN BY KEY: every interpolation a bound
+// 47.29, 47.32-47.38 — SQL AS A TAG, A TABLE CALLED AND WRITTEN BY KEY: every interpolation a bound
 // parameter, one statement per call site, a match as JSON — and what reads a table refreshed by the
 // tag its name is, at once for a write through the table and on the watch's next look for any other.
 
@@ -100,10 +100,10 @@ test('sql prepares one statement per call site — 47.32', () => {
     )
 })
 
-// 47.29, 47.40 — A WRITE THROUGH THE TABLE REFRESHES ITS TAG AT ONCE, the watch's next look not
+// 47.29, 47.34 — A WRITE THROUGH THE TABLE REFRESHES ITS TAG AT ONCE, the watch's next look not
 // hearing it again. THE REVERT: drop the `heard` call in the table's `wrote`; the total is still `100`
 // on the turn after the write, where `105` is due, and reaches it only on the watch's next look.
-test("a table's write refreshes what carries its name as a tag at once — 47.29, 47.40", async () => {
+test("a table's write refreshes what carries its name as a tag at once — 47.29, 47.34", async () => {
     const db = crm()
     const deals = table<Deal>(db, 'deals')
     const won = wonTotal(db)
@@ -136,11 +136,11 @@ test('a commit by another connection refreshes what carries the table as a tag �
     expect(won.seen()).toBe(140)
 })
 
-// 47.40 — A TABLE IS WRITTEN BY KEY: `set` upserts, `patch` writes only the columns a row names, and
+// 47.33 — A TABLE IS WRITTEN BY KEY: `set` upserts, `patch` writes only the columns a row names, and
 // `delete` removes what a match names, answering how many. A row without its key, and a delete naming
 // no column, are refused. THE REVERT: write `patch` through `upsert`; the patched row's `amount` is
 // refused NOT NULL where `d2:won:40` is due.
-test('a table is set, patched and deleted by key — 47.40', () => {
+test('a table is set, patched and deleted by key — 47.33', () => {
     const db = crm()
     const deals = table<Deal>(db, 'deals')
     deals.set([
@@ -165,7 +165,7 @@ test('a table is set, patched and deleted by key — 47.40', () => {
             write()
         } catch (thrown) {
             refusals.push(
-                (thrown as Error).message.includes('RULEBOOK 47.40')
+                (thrown as Error).message.includes('RULEBOOK 47.33')
                     ? 'refused'
                     : String(thrown),
             )

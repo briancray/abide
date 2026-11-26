@@ -48,11 +48,11 @@ export type { ColumnMatch, Match } from '#shared/Match.ts'
  * out and rows streamed in.
  */
 export type Table<Row> = ((match?: Match<Row>) => Row[]) & {
-    /** 47.40 — rows upserted by key: inserted, or replacing the row with their key. */
+    /** 47.33 — rows upserted by key: inserted, or replacing the row with their key. */
     set(rows: Row | readonly Row[]): void
-    /** 47.40 — the columns each row names written onto the row with its key; the rest are left. */
+    /** 47.33 — the columns each row names written onto the row with its key; the rest are left. */
     patch(rows: Partial<Row> | readonly Partial<Row>[]): void
-    /** 47.40 — the rows `match` names deleted, and how many there were. */
+    /** 47.33 — the rows `match` names deleted, and how many there were. */
     delete(match: Match<Row>): number
     readonly readable: ReadableStream<Change<Row>>
     readonly writable: WritableStream<Row>
@@ -85,7 +85,7 @@ export function table<Row extends Record<string, unknown>>(
     // 47.38 — READ ON THE CONNECTION AS IT IS: a database refusing the change log is still read.
     const read = selects<Row>(acquire, name)
     const writes = rowWrites<Row>(name, key)
-    // 47.29, 47.40 — a write made here is heard at once: what carries the table's name as a tag is
+    // 47.29, 47.34 — a write made here is heard at once: what carries the table's name as a tag is
     // refreshed now, and the watch's next look does not hear it again.
     const wrote = (count: number): number => {
         if (count > 0) heard(watchOf(database, connection, name), connection)
@@ -110,7 +110,7 @@ export function table<Row extends Record<string, unknown>>(
             Object.keys(match).length === 0
         )
             throw new Error(
-                `abide: a delete from table ${name} names no column, which would delete every row. RULEBOOK 47.40.`,
+                `abide: a delete from table ${name} names no column, which would delete every row. RULEBOOK 47.33.`,
             )
         return wrote(read.remove(connection(), match))
     }
@@ -162,7 +162,7 @@ const COMPARISONS: Record<string, string> = {
 /**
  * 47.35, 47.36 — the rows of `name`, or those every column `match` names matches: one statement per
  * shape of match — its columns, the length of each list and the comparisons named — each column
- * checked against the table's own; and 47.40 — the rows a match names deleted, by the same shapes.
+ * checked against the table's own; and 47.33 — the rows a match names deleted, by the same shapes.
  */
 function selects<Row>(
     acquire: () => Database,
@@ -236,12 +236,12 @@ function listOf<Row>(rows: Row | readonly Row[]): readonly Row[] {
     return Array.isArray(rows) ? (rows as readonly Row[]) : [rows as Row]
 }
 
-/** 47.40 — the key `row` carries, which a write by key cannot go without. */
+/** 47.33 — the key `row` carries, which a write by key cannot go without. */
 function keyOf(name: string, key: string, row: unknown): unknown {
     const id = (row as Record<string, unknown> | null)?.[key]
     if (id === undefined || id === null)
         throw new Error(
-            `abide: a row written to table ${name} carries no ${key}. RULEBOOK 47.40.`,
+            `abide: a row written to table ${name} carries no ${key}. RULEBOOK 47.33.`,
         )
     return id
 }
@@ -473,7 +473,7 @@ function changed(watch: Watch): void {
     refresh({ tags: [watch.name] })
 }
 
-/** 47.40 — a write made here, heard now, so the watch's next look does not hear it again. */
+/** 47.34 — a write made here, heard now, so the watch's next look does not hear it again. */
 function heard(watch: Watch, connection: () => Database): void {
     try {
         watch.seen = lastChange(connection(), watch.name)
@@ -556,7 +556,7 @@ function changesOf<Row>(
 }
 
 /**
- * 47.30, 47.40 — rows upserted by `key`, or the columns they name updated on the row with their key,
+ * 47.30, 47.33 — rows upserted by `key`, or the columns they name updated on the row with their key,
  * each batch one transaction. One statement per shape of row, its columns checked and its SQL written
  * once: a batch of rows with the same columns runs one prepared statement.
  */
