@@ -6,7 +6,7 @@
 import { withoutRestatedNotes } from './agentNotes.ts'
 import { toComputed } from './toComputed.ts'
 import { toComputedCall } from './toComputedCall.ts'
-import { toFetchAndHandle } from './toFetchAndHandle.ts'
+import { type Note, toFetchAndHandle } from './toFetchAndHandle.ts'
 import { toJob } from './toJob.ts'
 import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
@@ -15,6 +15,9 @@ import { toRefuseNamed } from './toRefuseNamed.ts'
 
 /** A file's text before and after `abide upgrade`. */
 export type Edit = { path: string; before: string; after: string }
+
+/** 38.226 — a line a migration changed the meaning of and left for the app to decide. */
+export type UpgradeNote = { path: string; line: number; message: string }
 
 /**
  * One release's change to the app under `directory`: the text of each file it changes, by path
@@ -26,6 +29,7 @@ type Migration = {
     migrate: (
         read: (path: string) => Promise<string | undefined>,
         sources: () => Promise<string[]>,
+        note: (path: string, line: string, message: string) => void,
     ) => Promise<Record<string, string>>
 }
 
@@ -35,14 +39,16 @@ const NOT_SOURCES = /(^|\/)(node_modules|\.abide|\.git|dist|build)\//
 
 /** A migration rewriting each source file by `rewrite`, keeping only the files it changed. */
 function eachSource(
-    rewrite: (text: string, path: string) => string,
+    rewrite: (text: string, path: string, note: Note) => string,
 ): Migration['migrate'] {
-    return async (read, sources) => {
+    return async (read, sources, note) => {
         const changed: Record<string, string> = {}
         for (const path of await sources()) {
             const text = await read(path)
             if (text === undefined) continue
-            const migrated = rewrite(text, path)
+            const migrated = rewrite(text, path, (line, message) =>
+                note(path, line, message),
+            )
             if (migrated !== text) changed[path] = migrated
         }
         return changed
@@ -82,11 +88,13 @@ const MIGRATIONS: Migration[] = [
 
 /**
  * 38.198 — every migration keyed past `from` (every one where it is `undefined`) over the app whose
- * package is `directory`, answered as the files it would change. Nothing is written.
+ * package is `directory`, answered as the files it would change, with each line it left the app to
+ * decide handed to `noteEach` (38.226). Nothing is written.
  */
 export async function upgrade(
     directory: string,
     from: string | undefined,
+    noteEach: (note: UpgradeNote) => void = () => {},
 ): Promise<Edit[]> {
     const before = new Map<string, string | undefined>()
     const after = new Map<string, string>()
@@ -111,6 +119,10 @@ export async function upgrade(
         listed.sort()
         return listed
     }
+    const noted: { path: string; line: string; message: string }[] = []
+    const note = (path: string, line: string, message: string): void => {
+        noted.push({ path, line, message })
+    }
     for (const migration of MIGRATIONS) {
         if (
             from !== undefined &&
@@ -118,7 +130,7 @@ export async function upgrade(
         )
             continue
         for (const [path, text] of Object.entries(
-            await migration.migrate(read, sources),
+            await migration.migrate(read, sources, note),
         )) {
             await read(path)
             after.set(path, text)
@@ -130,5 +142,33 @@ export async function upgrade(
         if (text !== original)
             edits.push({ path, before: original, after: text })
     }
+    for (const each of await numbered(noted, read)) noteEach(each)
     return edits
+}
+
+/**
+ * Each note at the number of the line it names, in the file as the migrations left it — the first
+ * line of that text no earlier note took, so two calls written alike are two lines.
+ */
+async function numbered(
+    noted: { path: string; line: string; message: string }[],
+    read: (path: string) => Promise<string | undefined>,
+): Promise<UpgradeNote[]> {
+    const taken = new Set<string>()
+    const notes: UpgradeNote[] = []
+    for (const { path, line, message } of noted) {
+        const lines = ((await read(path)) ?? '').split('\n')
+        let found = 0
+        for (let index = 0; index < lines.length; index += 1)
+            if (
+                lines[index] === line &&
+                !taken.has(`${path}:${index}:${message}`)
+            ) {
+                taken.add(`${path}:${index}:${message}`)
+                found = index + 1
+                break
+            }
+        notes.push({ path, line: found, message })
+    }
+    return notes
 }

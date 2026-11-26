@@ -755,3 +755,78 @@ const read = client.fetchData()
     const own = 'const fetchData = () => 1\nfetchData()'
     expect(toFetchAndHandle(own, 'src/own.ts')).toBe(own)
 })
+
+// 38.225 — WHERE THE ANSWER IS A NAME A FILE HANDS `isFailed`, the call catches its own `FetchFailed`
+// back into the answer, as `fetchData` resolved with it, and the check still fires. THE REVERT: drop
+// the `CAUGHT` edit in `toFetchAndHandle`; the call is renamed alone and the check never fires.
+test('abide upgrade keeps an isFailed check on a fetchData answer firing — 38.225', () => {
+    const text = `import { fetchData, isFailed } from '@abide/abide/server'
+
+export async function rates(): Promise<number | null> {
+    const answer = await fetchData<{ rate: number }>('https://rates.example')
+    if (isFailed(answer)) return null
+    return answer.rate
+}
+`
+    expect(toFetchAndHandle(text, 'src/rates.server.ts'))
+        .toBe(`import { fetchAndHandle, isFailed } from '@abide/abide/server'
+
+export async function rates(): Promise<number | null> {
+    const answer = await fetchAndHandle<{ rate: number }>('https://rates.example').catch((failed) => fetchAndHandle.isError(failed, 'FetchFailed') ? failed : Promise.reject(failed))
+    if (isFailed(answer)) return null
+    return answer.rate
+}
+`)
+})
+
+// 38.226 — WHAT A MIGRATION CANNOT REWRITE IS NAMED AT ITS LINE in the file it left: a `ttl` the call no
+// longer takes, and a call in a file that checks a failure whose answer it cannot follow. A file it
+// rewrote whole, run again, is changed and noted no more (38.200). THE REVERT: drop the `noted` pushes in
+// `toFetchAndHandle`; no line is named and both calls are renamed silently.
+test('abide upgrade names each fetchData call it cannot rewrite, at its line — 38.225, 38.226', async () => {
+    const app = temporaryModule({
+        'src/quote.server.ts': `import { fetchData, isFailed } from '@abide/abide/server'
+
+export const cached = () => fetchData('https://quotes.example', { ttl: 60_000 })
+
+export async function quote(): Promise<string> {
+    const answer: unknown = await fetchData('https://quotes.example')
+    return isFailed(answer) ? 'none' : String(answer)
+}
+`,
+    })
+    const notes: string[] = []
+    const edits = await upgrade(app, '0.143.0', (note) =>
+        notes.push(`${note.path}:${note.line} ${note.message.split(':')[0]}`),
+    )
+    expect(notes).toEqual([
+        'src/quote.server.ts:3 fetchAndHandle keeps no answer, so ttl does nothing',
+        'src/quote.server.ts:3 fetchAndHandle rejects with its FetchFailed where fetchData answered it',
+        'src/quote.server.ts:6 fetchAndHandle rejects with its FetchFailed where fetchData answered it',
+    ])
+    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    const again: unknown[] = []
+    expect(await upgrade(app, '0.143.0', (note) => again.push(note))).toEqual(
+        [],
+    )
+    expect(again).toEqual([])
+})
+
+// 38.226 — THE NOTES ARE PRINTED AFTER THE DIFFS, each as its path and line. THE REVERT: drop the
+// notes loop from `upgradeCommand` in bin/abide.ts; the diff prints and no line is named.
+test('abide upgrade prints each note after its diffs — 38.226', async () => {
+    const app = temporaryModule({
+        'package.json': JSON.stringify({ name: 'quotes', type: 'module' }),
+        'src/index.abide': '<main>quotes</main>',
+        'src/quote.server.ts': `import { fetchData } from '@abide/abide/server'
+
+export const cached = () => fetchData('https://quotes.example', { ttl: 60_000 })
+`,
+    })
+    const upgraded = await abide(app, 'upgrade', '--from', '0.143.0')
+    const noted = upgraded.stdout.indexOf(
+        'src/quote.server.ts:3 — fetchAndHandle keeps no answer',
+    )
+    expect(noted).toBeGreaterThan(upgraded.stdout.indexOf('+++ '))
+    expect(upgraded.exitCode).toBe(0)
+}, 30_000)

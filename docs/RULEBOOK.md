@@ -4025,7 +4025,13 @@ place that declares no parameter, MUST leave a `memo` whose body declares one, a
 `.handler.ts` file, or of `health`, and MUST import `computed` where it wraps one.
 
 38.225 The migration keyed to 0.144.0 MUST rename `fetchData` to `fetchAndHandle` where a file
-imports it from abide, at its import and at each use, and MUST leave a member of that name.
+imports it from abide, at its import and at each use, and MUST leave a member of that name; MUST, where
+a call's answer is declared to a name the file hands `isFailed`, catch the call's `FetchFailed` into
+that answer; and MUST note, by 38.226, every other call in a file that calls `isFailed`, and every call
+handed a `ttl`.
+
+38.226 `abide upgrade` MUST print, after its diffs, each line a migration noted as changed in meaning
+and not rewritten, as its path and line in the file the migrations left with what to do there.
 
 # 39. Head and view transitions
 

@@ -23,7 +23,7 @@ import { parseAbide } from '#compiler/parseAbide.ts'
 import { scaffold } from '#compiler/scaffold.ts'
 import { serveLanguage } from '#compiler/serveLanguage.ts'
 import { unifiedDiff } from '#compiler/unifiedDiff.ts'
-import { upgrade } from '#compiler/upgrade.ts'
+import { upgrade, type UpgradeNote } from '#compiler/upgrade.ts'
 import {
     abideModules,
     type Compilation,
@@ -878,12 +878,18 @@ async function upgradeCommand(
         return 1
     }
     const directory = packageDirectory(root)
-    const edits = await upgrade(directory, values.from)
+    const notes: UpgradeNote[] = []
+    const edits = await upgrade(directory, values.from, (note) =>
+        notes.push(note),
+    )
     for (const { path, before, after } of edits) {
         console.log(unifiedDiff(path, before, after))
         if (values.check !== true)
             await Bun.write(`${directory}/${path}`, after)
     }
+    // 38.226 — after the diffs, so the last thing read is what is left to do.
+    for (const { path, line, message } of notes)
+        console.log(`${path}:${line} — ${message}`)
     const files = `${edits.length} file${edits.length === 1 ? '' : 's'}`
     console.log(
         edits.length === 0
