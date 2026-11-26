@@ -38,7 +38,7 @@ async function sent(
         new Request(`http://app.invalid${address}`, {
             method,
             headers: { 'content-type': 'application/json' },
-            body: body === undefined ? undefined : JSON.stringify(body),
+            body: body === undefined ? null : JSON.stringify(body),
         }),
     )
     return `${answer.status} ${await answer.text()}`
@@ -143,7 +143,7 @@ test("a table's rpc reads and writes the columns it names alone — 16.118", asy
     await using app = await inMemoryApp({
         'crm/deals.server.ts': { default: deals },
     })
-    expect(await deals()).toEqual([
+    expect((await deals()) as unknown).toEqual([
         { id: 'd1', stage: 'won' },
         { id: 'd2', stage: 'lead' },
     ])
