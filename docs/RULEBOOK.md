@@ -3957,7 +3957,8 @@ and not rewritten, as its path and line in the file the migrations left with wha
 
 38.227 The migration keyed to 0.144.0 MUST rewrite a `memo`'s or a handler's `poll` as a `ttl` of its
 interval where it is a number or declares no `delay`, and MUST note, by 38.226, each `poll` it
-rewrote, each it left, and each `reactive` or `reactive.derived` given an option 11.81 refuses.
+rewrote, each it left, each `reactive` or `reactive.derived` given an option 11.81 refuses, and each
+given options not written out in place, whose members it cannot read.
 
 38.228 The migration keyed to 0.144.0 MUST spell every use of abide's `computed` as `reactive.derived`,
 MUST import `reactive` where the file did not, and MUST drop `computed` from the import.
@@ -3966,6 +3967,10 @@ MUST import `reactive` where the file did not, and MUST drop `computed` from the
 alone uses into calls of one handle declared at that file's module level from the first call's
 `create`, and MUST note, by 38.226, each call of a key several files use, each call whose key is no
 literal, and each call whose `create` differs from its handle's.
+
+38.230 The migration keyed to 0.144.0 MUST note, by 38.226, each handler declared over a name the app
+declares as a `reactive` or a `reactive.derived`, in the file of the handler or in the app file it
+imports the name from.
 
 # 39. Head and view transitions
 

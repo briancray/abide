@@ -13,6 +13,7 @@ import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
 import { toNamedParts } from './toNamedParts.ts'
 import { toRefuseNamed } from './toRefuseNamed.ts'
+import { toServedValues } from './toServedValues.ts'
 import { toShared } from './toShared.ts'
 import { toSourceOptions } from './toSourceOptions.ts'
 
@@ -97,6 +98,9 @@ const MIGRATIONS: Migration[] = [
     { version: '0.144.0', migrate: eachSource(toSourceOptions) },
     // 38.229 — a key shared down the tree is a handle: declared once, and called where it is wanted.
     { version: '0.144.0', migrate: toShared },
+    // 38.230 — a handler over a value the app declares as a `reactive` throws (16.109): noted, after
+    // 38.228 has spelled every such value `reactive` or `reactive.derived`.
+    { version: '0.144.0', migrate: toServedValues },
 ]
 
 /**

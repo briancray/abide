@@ -41,6 +41,8 @@ const POLL_IS_TTL =
     'poll is now ttl: this entry is refreshed only while something reads it, and let go when nothing does. Work that has to run whether or not anything reads it is a job writing the memo: job({ every, run }). RULEBOOK 6.1, 38.227.'
 const POLL_IS_A_JOB =
     'poll with a delay scheduled work whether or not anything read it, and poll is gone: make it a job writing the memo — job({ every, run }) — or a ttl. RULEBOOK 54.14, 38.227.'
+const VALUE_OPTIONS_UNREAD =
+    'these options are not written out here, so whether they carry a ttl, throttle, debounce, tags, global or poll cannot be read: reactive and reactive.derived take none of them — move any onto a memo, read through reactive.derived(() => m(args)), or make the value a memo (handlers serve one, never a Reactive). RULEBOOK 11.81, 16.109, 38.227.'
 const VALUE_TAKES_NONE =
     'reactive and reactive.derived take no ttl, throttle, debounce, tags, global or poll: declare them on a memo and read it through reactive.derived(() => m(args)), whose body then reruns only for its args. Work that has to run whether or not anything reads it is a job. RULEBOOK 11.6, 11.81, 38.227.'
 
@@ -95,12 +97,15 @@ function moved(code: string, note: Note): string {
         const second = commas[0]
         if (second === undefined) continue
         const properties = propertiesAt(tokens, second + 1)
-        if (properties === undefined) continue
         if (factory === VALUE) {
-            if (properties.some(({ key }) => SOURCED.has(key.text)))
+            if (properties?.some(({ key }) => SOURCED.has(key.text)))
                 noted.push({ at: token.start, message: VALUE_TAKES_NONE })
+            // A name, a call or a spread: what it carries is not on the page to read.
+            else if (properties === undefined || spreads(tokens, second + 1))
+                noted.push({ at: token.start, message: VALUE_OPTIONS_UNREAD })
             continue
         }
+        if (properties === undefined) continue
         const poll = properties.find(({ key }) => key.text === 'poll')
         if (poll === undefined) continue
         const every = everyOf(tokens, poll)
@@ -139,6 +144,18 @@ function moved(code: string, note: Note): string {
         )
     }
     return out
+}
+
+/** Whether the object written inline at `open` spreads another into itself, at its own depth. */
+function spreads(tokens: Token[], open: number): boolean {
+    const close = closerOf(tokens, open)
+    let depth = 0
+    for (let at = open + 1; at < close; at += 1) {
+        const kind = (tokens[at] as Token).kind
+        if (depth === 0 && kind === SyntaxKind.DotDotDotToken) return true
+        depth += nesting(kind)
+    }
+    return false
 }
 
 /**

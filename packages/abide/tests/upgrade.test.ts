@@ -959,3 +959,46 @@ const shown = theme()
         ),
     ).toEqual([])
 })
+
+// 38.227 FOR OPTIONS NOT WRITTEN OUT, AND 38.230 — A BODY'S OPTIONS HANDED BY NAME OR SPREAD IN HIDE
+// WHAT THEY CARRY, so 38.223 moves the body to a `reactive.derived` it cannot tell refuses them: a note.
+// And a handler over a value the app declares as one throws (16.109): a note where it is declared,
+// the value found in the file it is imported from, by a relative path or the package's own `imports`.
+// A memo served the same way is not one. THE REVERTS: drop the `VALUE_OPTIONS_UNREAD` arm in
+// `toSourceOptions`, and lines 4 and 5 go unnamed; drop `toServedValues` from the migrations, and the
+// two handlers do.
+test('abide upgrade names options it cannot read and handlers over a value — 38.227, 38.230, 38.226', async () => {
+    const app = temporaryModule({
+        'package.json': JSON.stringify({ imports: { '#src/*': './src/*' } }),
+        'src/ops.server.ts': `import { memo } from '@abide/abide'
+
+const HELD = { global: true, tags: ['ops'] }
+export const totals = memo(() => 1, HELD)
+export const counts = memo(() => 1, { ...HELD })
+export const rows = memo(async ({ id }: { id: string }) => id, HELD)
+`,
+        'src/getTotals.handler.ts': `import { GET } from '@abide/abide/server'
+
+import { totals } from './ops.server.ts'
+
+export default GET(totals)
+`,
+        'src/getCounts.handler.ts': `import { GET } from '@abide/abide/server'
+
+import { counts as served, rows } from '#src/ops.server.ts'
+
+export const counted = GET(served, { ttl: 5_000 })
+export const listed = GET(rows)
+`,
+    })
+    const notes: string[] = []
+    await upgrade(app, '0.143.0', (note) =>
+        notes.push(`${note.path}:${note.line} ${note.message.split(',')[0]}`),
+    )
+    expect(notes).toEqual([
+        'src/ops.server.ts:4 these options are not written out here',
+        'src/ops.server.ts:5 these options are not written out here',
+        'src/getCounts.handler.ts:5 a handler serves no Reactive',
+        'src/getTotals.handler.ts:5 a handler serves no Reactive',
+    ])
+})
