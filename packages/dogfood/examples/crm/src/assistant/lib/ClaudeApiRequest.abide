@@ -1,12 +1,12 @@
 <script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 import askClaude from '../askClaude.handler.ts'
 
 const QUESTION = 'Which company is Ada at?'
 
 let asked = reactive(false)
-const events = computed(() =>
+const events = reactive.derived(() =>
     asked ? askClaude({ messages: [{ role: 'user', content: QUESTION }] }) : [],
 )
 </script>

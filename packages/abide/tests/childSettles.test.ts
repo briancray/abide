@@ -24,21 +24,21 @@ export const getSlow = GET(async ({ id }: { id: string }) => {
 `
 
 const child = (call: string, title: string): string => `<script>
-import { computed, memo } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 import call from '#src/totals/${call}.handler.ts'
 import Grand from './Grand.abide'
 
-const total = computed(() => call({ id: '${call}' }))
+const total = reactive.derived(() => call({ id: '${call}' }))
 </script>
 
 <head><title>${title}</title></head>
 <p class="${call}">{total.busy() ? 'loading' : total().total}</p><Grand />`
 
 const GRAND = `<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import getTick from '#src/totals/getTick.handler.ts'
 
-const total = computed(() => getTick({ id: 'grand' }))
+const total = reactive.derived(() => getTick({ id: 'grand' }))
 </script>
 
 <b>{total.busy() ? 'loading' : total().total}</b>`
@@ -54,11 +54,11 @@ import Tick from './lib/Tick.abide'
 // A CALL MADE WHILE THE MARKUP IS BUILT, not in a setup: nothing defers it, so it is painted in
 // flight and answers a microtask after.
 const INLINE = `<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import getTick from '#src/totals/getTick.handler.ts'
 </script>
 
-<main><p>{computed(() => getTick({ id: 'inline' })).busy() ? 'loading' : 'done'}</p></main>`
+<main><p>{reactive.derived(() => getTick({ id: 'inline' })).busy() ? 'loading' : 'done'}</p></main>`
 
 // A BARE PROBE IN MARKUP reads every load in its scope, so it is built once the siblings after it
 // have been set up — as the browser's is, where every setup has run before a region chooses.

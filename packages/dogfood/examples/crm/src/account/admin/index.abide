@@ -1,9 +1,9 @@
 <script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 import getTeam from './getTeam.handler.ts'
 
-const team = computed(() => getTeam())
+const team = reactive.derived(() => getTeam())
 </script>
 
 <head><title>Admin — CRM</title></head>

@@ -1,5 +1,5 @@
 <script>
-import { computed, format, reactive, tabs } from '@abide/abide'
+import { format, reactive, tabs } from '@abide/abide'
 
 import getDeal from '../getDeal.handler.ts'
 
@@ -11,7 +11,7 @@ const VIEWS = [
 
 let tab = reactive<string | undefined>('details')
 const view = tabs({ items: VIEWS, selected: tab })
-const deal = computed(() => getDeal({ id: 'd1' }))
+const deal = reactive.derived(() => getDeal({ id: 'd1' }))
 </script>
 
 <div class="flex flex-col gap-snug">

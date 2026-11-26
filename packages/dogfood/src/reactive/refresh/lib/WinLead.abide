@@ -21,11 +21,11 @@ const winDeal = POST(() => {
 </script>
 
 <script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
-const lead = computed(() => getStage({ stage: 'lead' }))
-const won = computed(() => getStage({ stage: 'won' }))
-const proposal = computed(() => getStage({ stage: 'proposal' }))
+const lead = reactive.derived(() => getStage({ stage: 'lead' }))
+const won = reactive.derived(() => getStage({ stage: 'won' }))
+const proposal = reactive.derived(() => getStage({ stage: 'proposal' }))
 
 async function win() {
     await winDeal()

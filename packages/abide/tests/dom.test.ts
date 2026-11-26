@@ -16,7 +16,7 @@ import { expect, test } from 'bun:test'
 
 import { measure } from '@abide/harness/abide'
 
-import { computed, flushSync, reactive, watch } from '#shared'
+import { flushSync, reactive, watch } from '#shared'
 
 function bind(value: () => number, count: number): (() => void)[] {
     const list = document.createElement('ul')
@@ -67,7 +67,7 @@ test('a write that changes nothing touches no node', () => {
 // per fifty rows, and not one test that counts wakes moves.
 test('a load starting touches no node', async () => {
     const answer = 1
-    const value = computed(() => Promise.resolve(answer))
+    const value = reactive.derived(() => Promise.resolve(answer))
     await value
     const stops = bind(value as unknown as () => number, 50)
 

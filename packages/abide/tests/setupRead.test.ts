@@ -20,7 +20,7 @@ afterAll(removeTemporaryModules)
 // a value left in flight for ever is one a later render in this file waits on.
 type Gate = ReturnType<typeof Promise.withResolvers<{ title: string }>>
 const held = globalThis as { gate?: Gate | undefined }
-const DETAIL = `let detail = computed(() => globalThis.gate?.promise ?? { title: 'late' })`
+const DETAIL = `let detail = reactive.derived(() => globalThis.gate?.promise ?? { title: 'late' })`
 
 const SETUP_CHILD = `<script>
 import { props } from '@abide/abide'
@@ -32,7 +32,7 @@ const upper = detail.title.toUpperCase()
 <b>{upper}</b>`
 
 const SETUP_PAGE = `<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import Setup from './Setup.abide'
 
 ${DETAIL}
@@ -41,7 +41,7 @@ ${DETAIL}
 <main><Setup detail={detail}/></main>`
 
 const SETUP_ARM = `<script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 ${DETAIL}
 let open = reactive(false)
@@ -52,7 +52,7 @@ const upper = detail.title.toUpperCase()
 </script><b>{upper}</b>{/if}<button id="open" onclick={() => { open = true }}>open</button></main>`
 
 const SETUP_ROW = `<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 ${DETAIL}
 </script>

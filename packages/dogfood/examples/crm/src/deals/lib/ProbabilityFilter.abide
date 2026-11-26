@@ -1,5 +1,5 @@
 <script>
-import { computed, reactive, slider } from '@abide/abide'
+import { reactive, slider } from '@abide/abide'
 
 const DEALS = [
     { id: 'noether-pilot', name: 'Noether pilot', probability: 20 },
@@ -8,7 +8,7 @@ const DEALS = [
 ]
 
 let likely = reactive<readonly [number, number]>([50, 100])
-const shown = computed(() =>
+const shown = reactive.derived(() =>
     DEALS.filter(
         (deal) =>
             deal.probability >= likely[0] && deal.probability <= likely[1],

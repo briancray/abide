@@ -13,7 +13,7 @@ import { NotLanded } from './reactive/NotLanded.ts'
 export function setupThrown(thrown: unknown, inSetup: boolean): unknown {
     if (!inSetup || !(thrown instanceof NotLanded)) return thrown
     return new Error(
-        `abide: a <script> setup read a value that has not landed (${thrown.message}). A setup runs once and tracks nothing (RULEBOOK 14.7), so nothing runs it again when the value lands — read the value in the markup, or derive from it with computed(() => …), and that reruns when it lands. RULEBOOK 34.32.`,
+        `abide: a <script> setup read a value that has not landed (${thrown.message}). A setup runs once and tracks nothing (RULEBOOK 14.7), so nothing runs it again when the value lands — read the value in the markup, or derive from it with reactive.derived(() => …), and that reruns when it lands. RULEBOOK 34.32.`,
         { cause: thrown },
     )
 }

@@ -70,11 +70,11 @@ import Section from '#src/lib/Section.abide'
             <a href={url('/reactive/refresh')}><code>refresh</code></a> asks again.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { computed } from '@abide/abide'
+            import { reactive } from '@abide/abide'
             import listTargets from '../listTargets.handler.ts'
             import setTarget from '../setTarget.handler.ts'
 
-            const targets = computed(() => listTargets())
+            const targets = reactive.derived(() => listTargets())
 
             async function record() {
                 await setTarget({ target: 600_000 })

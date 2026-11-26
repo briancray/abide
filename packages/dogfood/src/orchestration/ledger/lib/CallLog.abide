@@ -1,8 +1,8 @@
 <script>
-import { computed, ledger } from '@abide/abide'
+import { ledger, reactive } from '@abide/abide'
 
 const calls = ledger<{ contact: string; minutes: number }>()
-const logged = computed(() => calls())
+const logged = reactive.derived(() => calls())
 </script>
 
 <button onclick={() => calls.append({ contact: 'Ada', minutes: 12 })}>

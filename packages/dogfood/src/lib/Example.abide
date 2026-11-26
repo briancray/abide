@@ -9,7 +9,7 @@
 // selectors its parts and states carry, and the CRM's own rules for the classes the file writes. In
 // a `work` group a readout under the frame counts what the reader's last interaction woke, read off
 // the counters the runtime publishes for the harness (43.21), so a value that does less work shows it.
-import { computed, props, raw, reactive, route, tabs } from '@abide/abide'
+import { props, raw, reactive, route, tabs } from '@abide/abide'
 
 import Code from './Code.abide'
 import ExampleStyles from './ExampleStyles.abide'
@@ -87,7 +87,7 @@ function watchWork(frame: Element): () => void {
 const QUIET = 1000
 const EVENTS = ['pointerdown', 'keydown', 'input', 'change'] as const
 
-const shownMarkup = computed(() => highlight(markup))
+const shownMarkup = reactive.derived(() => highlight(markup))
 
 function counted(count: number, one: string, many: string): string {
     return `${count} ${count === 1 ? one : many}`

@@ -1,9 +1,9 @@
 <script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 import getPool from '../getPool.handler.ts'
 
-const times = computed(() => getPool())
+const times = reactive.derived(() => getPool())
 </script>
 
 <ul class="fields stacked">

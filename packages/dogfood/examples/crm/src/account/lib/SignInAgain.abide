@@ -1,5 +1,5 @@
 <script>
-import { computed, onRefusal, principal, reactive, watch } from '@abide/abide'
+import { onRefusal, principal, reactive, watch } from '@abide/abide'
 
 import getCommission from '../getCommission.handler.ts'
 import SignInAs from './SignInAs.abide'
@@ -11,7 +11,7 @@ onRefusal((refusal) => {
     if (refusal.status === 401) signedOut = true
 })
 
-const commission = computed(() => getCommission())
+const commission = reactive.derived(() => getCommission())
 
 watch(principal.resolved, () => {
     signedOut = false

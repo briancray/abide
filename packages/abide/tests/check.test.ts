@@ -165,7 +165,7 @@ function bump() { clicks += 1 }
 `
 
 const WARNED = `<script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 let flag = reactive(true)
 let one = reactive(1)
@@ -178,19 +178,19 @@ let keyed = reactive(
     { key: 'id' },
 )
 let decoy = reactive([{ id: 1, key: 'someone' }])
-const picked = computed(() => (flag ? one : two))
-const same = computed(() => (flag ? flag : false))
-const late = computed(async () => {
+const picked = reactive.derived(() => (flag ? one : two))
+const same = reactive.derived(() => (flag ? flag : false))
+const late = reactive.derived(async () => {
     const early = two
     await Promise.resolve()
     return one + early
 })
-const later = computed(() => {
+const later = reactive.derived(() => {
     setTimeout(() => two, 0)
     return [1].map(() => one)
 })
-const fallback = computed(() => name ?? 'nobody')
-const unsure = computed(() => maybe ?? 'nobody')
+const fallback = reactive.derived(() => name ?? 'nobody')
+const unsure = reactive.derived(() => maybe ?? 'nobody')
 </script>
 
 {#for row of rows}<input value={row.id}/>{/for}
@@ -219,21 +219,21 @@ const constant = [{ id: 2 }]
 // 14.19 — each read below would be warned on, and the line above it silences the clause it names.
 // `misnamed` is the near miss: its directive names 14.14, and the warning it earns is 14.16.
 const IGNORED = `<script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 let flag = reactive(true)
 let one = reactive(1)
 let two = reactive(2)
-const late = computed(async () => {
+const late = reactive.derived(async () => {
     await Promise.resolve()
     // abide-ignore 14.14
     return one
 })
-const picked = computed(() =>
+const picked = reactive.derived(() =>
     // abide-ignore 14.14 14.15
     flag ? one : two,
 )
-const misnamed = computed(() => {
+const misnamed = reactive.derived(() => {
     // abide-ignore 14.14
     setTimeout(() => two, 0)
     return 1
@@ -282,11 +282,11 @@ let tally = reactive({ n: 0 })
 
 // 32.34 — a tag choosing by a value is held to the props of what it may hold, and may hold nothing.
 const CHOSEN = `<script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import Card from '#src/lib/Card.abide'
 
 let open = reactive(true)
-let Shown = computed(() => (open ? Card : undefined))
+let Shown = reactive.derived(() => (open ? Card : undefined))
 </script>
 
 <Shown title="x"/>
@@ -972,13 +972,13 @@ function clear() {
 test('a member a read built is checked as its value — 31.15', async () => {
     const built = appFixture({
         'index.abide': `<script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 type View = { x: number }
 let view = reactive<View>({ x: 1 })
 let hero = reactive({ frame: 0 })
-const glance = computed(() => ({ view, hero }))
-const longhand = computed(() => ({ view: view, list: [hero] }))
+const glance = reactive.derived(() => ({ view, hero }))
+const longhand = reactive.derived(() => ({ view: view, list: [hero] }))
 const x: number = glance.view.x
 const frame: number = glance.hero.frame
 const y: number = longhand.view.x + longhand.list[0].frame
@@ -1223,10 +1223,10 @@ const { rows } = props<{ rows: { step: number; label: string }[] }>()
 <p>{busy(rows) ? 'running' : rows.ready() ? rows.map((row) => row.label).join() : 'waiting'}</p>
 <p>{rows.map((row) => row.missing).join()}</p>`,
         'index.abide': `<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import Status from '#src/lib/Status.abide'
 import sweep from '#src/runs/sweep.handler.ts'
-const running = computed(() => sweep())
+const running = reactive.derived(() => sweep())
 </script>
 <Status rows={running}/>`,
     })

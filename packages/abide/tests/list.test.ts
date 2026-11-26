@@ -11,7 +11,7 @@ import { AsyncLocalStorage } from 'node:async_hooks' // bun implements AsyncLoca
 import { measure } from '@abide/harness/abide'
 
 import type { FollowedHandler } from '#server/mountHandlers.ts'
-import { computed, flushSync, reactive } from '#shared'
+import { flushSync, reactive } from '#shared'
 import { REGION_CLOSE, REGION_OPEN } from '#shared/ANCHORS.ts'
 import { List, updateList } from '#ui/List.ts'
 import { noUpdate } from '#ui/rows.ts'
@@ -1574,10 +1574,10 @@ test('a patch updates the one row it wrote to in place — 32.33, 32.67', async 
 // root; the row keeps showing 1.
 test("a list over a Map's values shows a patch written through get — 32.33", async () => {
     await mountPage(`<script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 const byId = reactive(new Map([['a', { id: 'a', n: 1 }], ['b', { id: 'b', n: 2 }]]))
-const rows = computed(() => [...byId.values()])
+const rows = reactive.derived(() => [...byId.values()])
 </script>
 
 <ul id="list">{#for row of rows key row.id}<li data-id={row.id}>{row.n}</li>{/for}</ul>
@@ -1883,7 +1883,9 @@ const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
     const warn = console.warn
     console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
     const call = wire('GET', address) as () => unknown
-    const copy = computed(() => call()) as unknown as { busy(): boolean }
+    const copy = reactive.derived(() => call()) as unknown as {
+        busy(): boolean
+    }
     const settle = async (): Promise<void> => {
         for (let task = 0; task < 20; task += 1) {
             await Bun.sleep(1)

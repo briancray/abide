@@ -11,7 +11,11 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { isAbideSpecifier } from './hookCalls.ts'
 import type { CodeRewrite } from './rewriteCode.ts'
-import { type ImportStatement, importStatements } from './splitImports.ts'
+import {
+    type ImportStatement,
+    importStatements,
+    namedImports,
+} from './splitImports.ts'
 import {
     afterTypeArguments,
     closerOf,
@@ -185,27 +189,13 @@ function withImported(
     if (!migrated) return text
     const statement = importOf(text, from, to)
     if (statement === undefined) return text
-    const open = text.indexOf('{', statement.start)
-    const close = text.indexOf('}', open)
-    const list = text.slice(open + 1, close)
     const names = statement.bindings.map((binding) => binding.written)
     const rest = text.slice(0, statement.start) + text.slice(statement.end)
     const stillCalled = calls(rest, from) || calls(elsewhere, from)
     const kept = stillCalled ? names : names.filter((name) => name !== from)
     kept.push(to)
-    kept.sort((a, b) =>
-        a
-            .replace(/^type\s+/, '')
-            .localeCompare(b.replace(/^type\s+/, ''), 'en', {
-                sensitivity: 'base',
-            }),
-    )
-    const multiline = list.includes('\n')
-    const indent = multiline ? (/\n([ \t]*)\S/.exec(list)?.[1] ?? '    ') : ''
-    const rendered = multiline
-        ? `{\n${kept.map((name) => `${indent}${name},`).join('\n')}\n}`
-        : `{ ${kept.join(', ')} }`
-    return text.slice(0, open) + rendered + text.slice(close + 1)
+    const list = namedImports(text, statement, kept)
+    return text.slice(0, list.start) + list.text + text.slice(list.end)
 }
 
 /**

@@ -1,11 +1,11 @@
 <script>
-import { computed, onRefusal, reactive, report } from '@abide/abide'
+import { onRefusal, reactive, report } from '@abide/abide'
 
 import listReports from '../listReports.handler.ts'
 import sendStatement from '../sendStatement.handler.ts'
 
 let failed = reactive<string | undefined>(undefined)
-const reports = computed(() => listReports())
+const reports = reactive.derived(() => listReports())
 
 // The report starts from the trace of the call that failed.
 onRefusal((_refusal, call) => {

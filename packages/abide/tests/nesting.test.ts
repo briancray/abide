@@ -853,15 +853,15 @@ let open = reactive(true)
 // where 0 are due.
 test('a row that leaves releases the values its <script> derived — 12.14', async () => {
     await mountPage(`<script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive(['one', 'two'])
 let level = reactive(0)
 </script>
 
 <ul>{#for row of rows key row}<script>
-const plus = computed(() => level + 1)
-const twice = computed(() => level * 2)
+const plus = reactive.derived(() => level + 1)
+const twice = reactive.derived(() => level * 2)
 </script><li>{row} {plus} {twice}</li>{/for}</ul>
 <button id="drop" onclick={() => { rows = [] }}>drop</button>
 <button id="bump" onclick={() => { level = level + 1 }}>bump</button>`)
@@ -886,7 +886,7 @@ const twice = computed(() => level * 2)
 // due.
 test('a derived value its owner left behind is current, followed or read — 12.14', async () => {
     await mountPage(`<script>
-import { computed, reactive, watch } from '@abide/abide'
+import { reactive, watch } from '@abide/abide'
 
 let on = reactive(true)
 let level = reactive(0)
@@ -899,7 +899,7 @@ function follow() {
 </script>
 
 {#if on}<script>
-const plus = computed(() => level + 1)
+const plus = reactive.derived(() => level + 1)
 seen.take = () => plus
 </script><b>{plus}</b>{/if}
 <button id="follow" onclick={follow}>follow</button>

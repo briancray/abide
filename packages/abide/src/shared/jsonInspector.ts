@@ -7,7 +7,7 @@ import type { JsonValue } from './JsonValue.ts'
 import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import { computed, type Reactive, reactive } from './reactive/index.ts'
+import { derived, type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { tree } from './tree.ts'
 import { withPart } from './withPart.ts'
@@ -119,7 +119,7 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
     const selected = options.selected ?? reactive<string | undefined>(undefined)
 
     // EVERY ROW, and each one's entries: one walk, again only when the value changes.
-    const parsed = computed(() => {
+    const parsed = derived(() => {
         const rows = new Map<string, JsonRow>()
         const entries = new Map<string, readonly JsonRow[]>()
         const visit = (
@@ -166,12 +166,12 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
         return { root, rows, entries }
     })
 
-    const needles = computed(() => needlesOf(query(), false))
+    const needles = derived(() => needlesOf(query(), false))
 
     // 51.160, 51.161 — WHAT A SEARCH KEEPS: each row matching, in order; each row's entries that
     // match or hold a match — all of them under a row that matches — and the rows holding a match.
     // None while the query is blank.
-    const found = computed(() => {
+    const found = derived(() => {
         const words = needles()
         if (words.length === 0) return undefined
         const { root, entries } = parsed()

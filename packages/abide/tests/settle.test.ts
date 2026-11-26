@@ -36,12 +36,12 @@ export default GET(async () => {
 const LAYOUT = `<main><slot/></main>`
 
 const PAGE = `<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import getInvoice from '#src/invoices/getInvoice.handler.ts'
 import getSlow from '#src/invoices/getSlow.handler.ts'
 
-const invoice = computed(() => getInvoice({ id: '4021' }))
-const slow = computed(() => getSlow())
+const invoice = reactive.derived(() => getInvoice({ id: '4021' }))
+const slow = reactive.derived(() => getSlow())
 </script>
 
 <p id="invoice">{invoice().id} {invoice().setups}</p><p id="slow">{slow()}</p>`
@@ -81,18 +81,18 @@ test('a value that answers within the turn is painted, and one that waits is a h
 // `second`'s body — `overlapped` reads false where true is due.
 test('a render starts every asynchronous read before any answers — 41.2', async () => {
     const source = `<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 const seen = ((globalThis as { overlap?: { firstDone: boolean; overlapped: boolean } }).overlap ??= {
     firstDone: false,
     overlapped: false,
 })
-const first = computed(async () => {
+const first = reactive.derived(async () => {
     await Bun.sleep(20)
     seen.firstDone = true
     return 'one'
 })
-const second = computed(async () => {
+const second = reactive.derived(async () => {
     seen.overlapped = !seen.firstDone
     await Bun.sleep(20)
     return 'two'

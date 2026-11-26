@@ -1,9 +1,11 @@
 <script>
-import { computed, cookies } from '@abide/abide'
+import { cookies, reactive } from '@abide/abide'
 
 const DENSITIES = ['comfortable', 'compact']
 
-const density = computed(() => cookies().get('density') ?? 'comfortable')
+const density = reactive.derived(
+    () => cookies().get('density') ?? 'comfortable',
+)
 </script>
 
 <div class="tabs">

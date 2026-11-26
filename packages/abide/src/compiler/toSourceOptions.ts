@@ -5,8 +5,9 @@
 // Whether the work had to run while nothing read it is the app's to say, so each one converted is a
 // note (38.226); one with a `delay` was scheduling work, which is a `job`'s, and is a note alone.
 //
-// `reactive` AND `computed` TAKE NONE OF A SOURCE'S OPTIONS (11.81), and moving one onto a `memo`
-// changes what the body reruns on (11.6) — so each is a note, naming the replacement.
+// `reactive` AND `reactive.derived` TAKE NONE OF A SOURCE'S OPTIONS (11.81), and moving one onto a
+// `memo` changes what the body reruns on (11.6) — so each is a note, naming the replacement. It runs
+// after 38.228, so a `reactive.derived` it notes is already spelled `reactive.derived`, the line its note names.
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
@@ -25,8 +26,8 @@ import {
 
 /** What declares a source's options: a `memo`, and a handler over a body. */
 const SOURCES = new Set(['memo', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
-/** What takes none of them. */
-const VALUES = new Set(['reactive', 'computed'])
+/** What takes none of them: `reactive`, and `reactive.derived` — `reactive.derived` as 38.228 leaves it. */
+const VALUE = 'reactive'
 export const SOURCED = new Set([
     'ttl',
     'throttle',
@@ -41,7 +42,7 @@ const POLL_IS_TTL =
 const POLL_IS_A_JOB =
     'poll with a delay scheduled work whether or not anything read it, and poll is gone: make it a job writing the memo — job({ every, run }) — or a ttl. RULEBOOK 54.14, 38.227.'
 const VALUE_TAKES_NONE =
-    'reactive and computed take no ttl, throttle, debounce, tags, global or poll: declare them on a memo and read it through a computed — computed(() => m(args)) — whose body then reruns only for its args. Work that has to run whether or not anything reads it is a job. RULEBOOK 11.6, 11.81, 38.227.'
+    'reactive and reactive.derived take no ttl, throttle, debounce, tags, global or poll: declare them on a memo and read it through reactive.derived(() => m(args)), whose body then reruns only for its args. Work that has to run whether or not anything reads it is a job. RULEBOOK 11.6, 11.81, 38.227.'
 
 /** 38.227 — `text`, a file at `path`, with each `poll` a `ttl`, and every line it cannot move noted. */
 export function toSourceOptions(
@@ -68,7 +69,7 @@ function moved(code: string, note: Note): string {
                 if (
                     !binding.typeOnly &&
                     (SOURCES.has(binding.imported) ||
-                        VALUES.has(binding.imported))
+                        binding.imported === VALUE)
                 )
                     named.set(binding.local, binding.imported)
     if (named.size === 0) return code
@@ -83,14 +84,19 @@ function moved(code: string, note: Note): string {
                 : undefined
         if (factory === undefined) continue
         if (tokens[at - 1]?.kind === SyntaxKind.DotToken) continue
-        const open = afterTypeArguments(tokens, at + 1)
+        // `reactive.derived(…)` is the value form's sibling, and takes what it takes.
+        const derived =
+            factory === VALUE &&
+            tokens[at + 1]?.kind === SyntaxKind.DotToken &&
+            tokens[at + 2]?.text === 'derived'
+        const open = afterTypeArguments(tokens, derived ? at + 3 : at + 1)
         if (tokens[open]?.kind !== SyntaxKind.OpenParenToken) continue
         const commas = argumentCommas(tokens, open)
         const second = commas[0]
         if (second === undefined) continue
         const properties = propertiesAt(tokens, second + 1)
         if (properties === undefined) continue
-        if (VALUES.has(factory)) {
+        if (factory === VALUE) {
             if (properties.some(({ key }) => SOURCED.has(key.text)))
                 noted.push({ at: token.start, message: VALUE_TAKES_NONE })
             continue

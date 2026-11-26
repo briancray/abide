@@ -1,11 +1,11 @@
 <script>
-import { calendar, computed, reactive } from '@abide/abide'
+import { calendar, reactive } from '@abide/abide'
 
 import listClosing from '../listClosing.handler.ts'
 
-const deals = computed(() => listClosing())
+const deals = reactive.derived(() => listClosing())
 // How many deals close on each day, by the day.
-const closing = computed(() => {
+const closing = reactive.derived(() => {
     const byDay = new Map<string, number>()
     for (const deal of deals)
         if (deal.closes !== undefined)

@@ -81,7 +81,7 @@ export { type Disposer, type Effect, watch } from './watch.ts'
  * What a free probe or trigger may be asked about: one `Reactive`, or `{ tags }`.
  *
  * 13.1 — A `memo` AND AN `Rpc` ARE NOT ONE. Their calls answer promises, which the language already
- * waits on; whether one is loading is asked of the `computed` that reads it. Their own `refresh` and
+ * waits on; whether one is loading is asked of the `reactive.derived` that reads it. Their own `refresh` and
  * `invalidate` are methods, narrowed by a pattern (13.12).
  *
  * 13.1'S LAST ARM IS `{ tags }`: every value carrying any of those tags, across values.
@@ -318,7 +318,7 @@ export function reactive(
  * A value `body` produces, run again when a value it read changes (11.1), and a stream where it hands
  * back an async iterable (9.6).
  *
- * `Value` IS READ ONLY THROUGH `Result`'s DEFAULT: `computed<number[]>(() => …)` names the value the
+ * `Value` IS READ ONLY THROUGH `Result`'s DEFAULT: `reactive.derived<number[]>(() => …)` names the value the
  * body produces, and with explicit type arguments the rest take their defaults. Inferred, it is
  * never read.
  *
@@ -326,7 +326,7 @@ export function reactive(
  * through `Awaited`, so a `Schema<{ id: number }>` beside an async body put `{ id: number }` in it
  * and the body's promise no longer fit.
  */
-export function computed<
+export function derived<
     Value = never,
     Result = Value,
     Shaped = BodyValue<Result>,
@@ -335,15 +335,15 @@ export function computed<
     body: () => Result,
     options?: Shaping<BodyValue<NoInfer<Result>>, Shaped, never, Gate>,
 ): ReactiveOf<never, Result, Shaped, Gate, never>
-export function computed(body: unknown, options?: unknown): unknown {
-    refuseValue(body, 'computed')
-    refuseSourced(options, 'computed')
+export function derived(body: unknown, options?: unknown): unknown {
+    refuseValue(body, 'reactive.derived')
+    refuseSourced(options, 'reactive.derived')
     return filed([body, options], false, buildBody)
 }
 
 /**
  * `fn`, remembered: what it answers for each `Args` key is kept and handed back as it answered — a
- * value, a promise, a refusal — to every later call with those args (11.2, 11.4). A `computed`
+ * value, a promise, a refusal — to every later call with those args (11.2, 11.4). A `reactive.derived`
  * calling it holds the answer as a value, and runs again when the key it called is refreshed or
  * invalidated (11.74).
  *
@@ -367,7 +367,7 @@ export function memo(fn: unknown, options?: unknown): unknown {
 
 /**
  * The keyed form an `Rpc` and the wire's copies are built on: one `Reactive` per `Args` key. Not app
- * surface — only `reactive` and `computed` hand an app a `Reactive`.
+ * surface — only `reactive` and `reactive.derived` hand an app a `Reactive`.
  */
 export function keyedValue<
     Value = never,
@@ -414,7 +414,7 @@ function refuseValue(body: unknown, name: string): void {
 
 /**
  * The options a source declares and a value does not (11.81): a `memo` paces, ages, tags and files
- * what it computes, and a `reactive` or a `computed` reading it is a view of that.
+ * what it computes, and a `reactive` or a `reactive.derived` reading it is a view of that.
  */
 const SOURCED = ['ttl', 'throttle', 'debounce', 'tags', 'global']
 
@@ -425,7 +425,7 @@ function refuseSourced(options: unknown, name: string): void {
     for (const option of SOURCED)
         if ((options as Record<string, unknown>)[option] !== undefined)
             throw new TypeError(
-                `abide: ${name} takes no ${option}. A source declares it: memo(fn, { ${option} }), read by a computed. RULEBOOK 11.81.`,
+                `abide: ${name} takes no ${option}. A source declares it: memo(fn, { ${option} }), read through reactive.derived. RULEBOOK 11.81.`,
             )
 }
 
@@ -467,7 +467,7 @@ function filed(
 }
 
 /**
- * `reactive` and `computed` for a framework ambient — `route`, `online` — filed per scope whatever the
+ * `reactive` and `reactive.derived` for a framework ambient — `route`, `online` — filed per scope whatever the
  * load order.
  *
  * A factory decides at construction, and a value abide itself builds at import can be built before
@@ -477,13 +477,13 @@ function filed(
  */
 export const ambient = ((...given: [first?: unknown, options?: unknown]) =>
     scoped(() => buildValue(given))) as unknown as typeof reactive
-export const ambientComputed = ((body: unknown, options?: unknown) =>
+export const ambientDerived = ((body: unknown, options?: unknown) =>
     scoped(() =>
         buildBody([body, options], false),
-    )) as unknown as typeof computed
+    )) as unknown as typeof derived
 
 /**
- * `reactive` and `computed` for a framework value that is one for the whole process — the log's
+ * `reactive` and `reactive.derived` for a framework value that is one for the whole process — the log's
  * records, the resolved configuration — where an app's would be a `memo` declaring `global` (11.34).
  */
 export const processWide = ((initial: unknown) =>
@@ -492,7 +492,7 @@ export const processWide = ((initial: unknown) =>
 >(
     initial: Value,
 ) => Reactive<Value>
-export const processWideComputed = ((body: unknown) =>
+export const processWideDerived = ((body: unknown) =>
     filed([body, { global: true }], false, buildBody)) as unknown as <Value>(
     body: () => Value,
 ) => Reactive<Value>
@@ -537,7 +537,7 @@ function buildBody(
             (options ?? undefined) as Parameters<typeof createKeyed>[2],
         )
     return createReactive(
-        'computed',
+        'derived',
         body as (args: unknown) => unknown,
         undefined,
         undefined,
@@ -622,3 +622,5 @@ export function invalidate<Chosen extends Selection>(selection?: Chosen): void {
 // 10.1 — `reactive.share` is a static on the factory rather than a free name, the registry's own
 // spelling: it CREATES where nothing holds the key, so it belongs with the factory it calls.
 reactive.share = share
+// 11.1 — `reactive.derived` is the value a body produces: a member of `reactive`, whose value it is.
+reactive.derived = derived

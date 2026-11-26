@@ -5,7 +5,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { gate, spawned } from '@abide/harness/gate'
 
-import { computed } from '#shared'
+import { reactive } from '#shared'
 import { chunksOfStream } from '#shared/reactive/producer.ts'
 
 import { handlerFiles, serveApp } from './builtApp.ts'
@@ -212,7 +212,7 @@ test('a streaming handler is framed as jsonl, a chunk per line, as it produces â
 async function elementsCopied(chunks: number): Promise<number> {
     const reverted = (globalThis as { REVERT_PEEK?: boolean | undefined })
         .REVERT_PEEK
-    const feed = computed(
+    const feed = reactive.derived(
         async function* () {
             for (let index = 0; index < chunks; index += 1) {
                 await new Promise((resolve) => setImmediate(resolve))

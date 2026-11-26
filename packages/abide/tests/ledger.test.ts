@@ -6,7 +6,7 @@ import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
 
 import { store } from '#server'
-import { computed, jsonSchema, ledger, type LogStore } from '#shared'
+import { jsonSchema, ledger, type LogStore, reactive } from '#shared'
 
 /**
  * The numbers of the entries `log` keeps, in order: read from 0 until a turn passes with nothing
@@ -96,7 +96,7 @@ test('a ledger reads nothing from its store until it is appended to or read — 
 test('a value whose body reads a ledger holds every entry, and each append — 58.5, 9.6', async () => {
     const calls = ledger<string>()
     await calls.append('Ada')
-    const listed = computed(() => calls())
+    const listed = reactive.derived(() => calls())
     await Bun.sleep(5)
     expect(`before: ${listed().length}`).toBe('before: 1')
     await calls.append('Grace')

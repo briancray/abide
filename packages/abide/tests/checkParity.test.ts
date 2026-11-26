@@ -18,7 +18,7 @@ import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 
 const PAGE = `<script>
-import { computed, jsonSchema, memo, principal } from '@abide/abide'
+import { jsonSchema, memo, principal, reactive } from '@abide/abide'
 
 const who = memo(() => principal, { global: true })
 const rows = memo(({ limit }: { limit?: number }) => limit, {

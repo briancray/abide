@@ -78,16 +78,16 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Show the deal a page picks">
-        <p>Import the handler file and call it inside a <code>computed</code>. The call answers a
-            promise, and the <code>computed</code> makes it live: the page reads
+        <p>Import the handler file and call it inside a <code>reactive.derived</code>. The call answers a
+            promise, and the <code>reactive.derived</code> makes it live: the page reads
             <code>deal.name</code> by name and loads again when <code>id</code> changes.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { computed, reactive } from '@abide/abide'
+            import { reactive } from '@abide/abide'
             import getDeal from './getDeal.handler.ts'
 
             let id = reactive('d1')
-            const deal = computed(() => getDeal({ id }))
+            const deal = reactive.derived(() => getDeal({ id }))
             </script>
 
             <button onclick={() => (id = 'd2')}>Next deal</button>
@@ -96,7 +96,7 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Send the activity archive an entry at a time">
-        <p>Write the handler as an async generator and it streams. A <code>computed</code>
+        <p>Write the handler as an async generator and it streams. A <code>reactive.derived</code>
             reading it holds every entry that has arrived, and its <code>busy()</code> stays true
             until the stream closes.</p>
         <Code language="ts" caption="server" code={`

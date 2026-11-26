@@ -9,9 +9,9 @@ const getDeal = GET(({ id }: { id: string }) => ({
 </script>
 
 <script>
-import { computed, synced } from '@abide/abide'
+import { reactive, synced } from '@abide/abide'
 
-let deal = computed(() => getDeal({ id: 'd2' }))
+let deal = reactive.derived(() => getDeal({ id: 'd2' }))
 </script>
 
 <p>{deal.name}: {deal.stage}</p>

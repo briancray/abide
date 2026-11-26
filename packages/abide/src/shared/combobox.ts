@@ -17,7 +17,7 @@ import { popoverOn } from './popover.ts'
 import { randomToken } from './randomToken.ts'
 import {
     busy,
-    computed,
+    derived,
     type Reactive,
     reactive,
     watch,
@@ -118,10 +118,10 @@ export function combobox<Item, Multiple extends boolean = false>(
     // What was typed since the last pick; the input shows the pick's label while nothing has been.
     const typed = reactive<string | undefined>(undefined)
     // 51.55 — the items picked, where it picks many; `undefined` where it picks one.
-    const picks = computed((): readonly Item[] | undefined =>
+    const picks = derived((): readonly Item[] | undefined =>
         many ? ((value() ?? []) as readonly Item[]) : undefined,
     )
-    const query = computed(() => {
+    const query = derived(() => {
         const text = typed()
         const one = value()
         if (text !== undefined) return text
@@ -130,7 +130,7 @@ export function combobox<Item, Multiple extends boolean = false>(
             : label(one as Item)
     })
     // 51.16, 51.106 — what the labels are narrowed by and marked with.
-    const needles = computed(() => needlesOf(query(), false))
+    const needles = derived(() => needlesOf(query(), false))
     const open = reactive(false)
     // 51.57 — what the open list is placed against.
     const input = reactive<HTMLInputElement | undefined>(undefined)
@@ -152,7 +152,7 @@ export function combobox<Item, Multiple extends boolean = false>(
     const searching = (): boolean => busy(found) || searchedFor() !== query()
 
     // Nothing is searched while the list is shut, and a search in flight keeps the last results listed.
-    const found = computed(() => {
+    const found = derived(() => {
         if (!open()) return NOTHING as readonly Item[]
         const text = searchedFor()
         const search = options.search
@@ -166,7 +166,7 @@ export function combobox<Item, Multiple extends boolean = false>(
     })
 
     // 51.190 — what was typed, made an item where nothing listed or picked carries it as its label.
-    const creating = computed((): Item | undefined => {
+    const creating = derived((): Item | undefined => {
         const create = options.create
         if (create === undefined || !open()) return undefined
         const text = typed()?.trim()
@@ -180,7 +180,7 @@ export function combobox<Item, Multiple extends boolean = false>(
             if (label(item).toLowerCase() === wanted) return undefined
         return create(text)
     })
-    const listed = computed((): readonly Item[] => {
+    const listed = derived((): readonly Item[] => {
         const kept = found() as readonly Item[]
         const extra = creating() as Item | undefined
         return extra === undefined ? kept : [...kept, extra]
@@ -284,7 +284,7 @@ export function combobox<Item, Multiple extends boolean = false>(
         list.onkeydown(event)
     }
 
-    const pickedKeys = computed(() => {
+    const pickedKeys = derived(() => {
         const held = picks()
         const one = value()
         const keys = new Set<string>()

@@ -14,7 +14,7 @@ import { resized } from './element/resized.ts'
 import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { lastAtOrBefore } from './lastAtOrBefore.ts'
 import { type Live, live } from './live.ts'
-import { computed, reactive } from './reactive/index.ts'
+import { derived, reactive } from './reactive/index.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
 import {
     offsetIn,
@@ -90,7 +90,7 @@ export function virtualList<Item>(
     const fits = reactive(0)
     const measured = reactive(false)
 
-    const shown = computed((): readonly VirtualListEntry<Item>[] => {
+    const shown = derived((): readonly VirtualListEntry<Item>[] => {
         const list = items()
         let from = 0
         let to = Math.min(list.length, initial)
@@ -112,7 +112,7 @@ export function virtualList<Item>(
     })
 
     // 51.62 — the rows before `shown` and after it, as the host's block padding.
-    const padding = computed(() => {
+    const padding = derived(() => {
         const list = items()
         const entries = shown()
         const per = measured() ? perRow() : 1
@@ -249,7 +249,7 @@ export function virtualList<Item>(
         }
     }
 
-    const sectionList = computed((): readonly VirtualListSection[] => {
+    const sectionList = derived((): readonly VirtualListSection[] => {
         const of = options.section
         if (of === undefined) return []
         const list = items()
@@ -269,7 +269,7 @@ export function virtualList<Item>(
         return all
     })
     // 51.64 — the section the first item in view stands in.
-    const current = computed(() => {
+    const current = derived(() => {
         const listed: VirtualListSection[] = []
         for (const section of sectionList())
             if (section.index !== -1) listed.push(section)

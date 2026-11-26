@@ -1,10 +1,10 @@
 <script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 import getGreeting from '#src/getGreeting.handler.ts'
 
 let count = reactive(0)
-const greeting = computed(() => getGreeting({ name: 'world' }))
+const greeting = reactive.derived(() => getGreeting({ name: 'world' }))
 </script>
 
 <head><title>Hello</title></head>

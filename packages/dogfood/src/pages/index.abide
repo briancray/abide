@@ -50,10 +50,10 @@ import SiteTree from '#src/lib/SiteTree.abide'
             answers at. <a href={url('/handlers/get')}><code>GET</code></a> declares one.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { computed } from '@abide/abide'
+            import { reactive } from '@abide/abide'
             import listContacts from '../listContacts.handler.ts'
 
-            const contacts = computed(() => listContacts())
+            const contacts = reactive.derived(() => listContacts())
             </script>
         `} />
         <p>The same handler, asked at its address when this page loaded:</p>

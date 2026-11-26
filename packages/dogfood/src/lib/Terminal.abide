@@ -99,14 +99,14 @@ const transcript = GET(async ({ command }: { command: string }) => {
 <script>
 // A TERMINAL: a command a page names, as typed, and what it printed and the code it exited with when
 // the CRM ran it — read rather than written, so the output on the page is the command's own.
-import { computed, props } from '@abide/abide'
+import { props, reactive } from '@abide/abide'
 
 import Code from './Code.abide'
 
 const { command } = props<{ command: string }>()
 
-const answer = computed(() => transcript({ command }))
-const printed = computed(() =>
+const answer = reactive.derived(() => transcript({ command }))
+const printed = reactive.derived(() =>
     answer
         ? [
               ...(answer.output === '' ? [] : [answer.output]),

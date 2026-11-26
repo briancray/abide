@@ -13,10 +13,10 @@ const getStage = GET(
 </script>
 
 <script>
-import { busy, computed } from '@abide/abide'
+import { busy, reactive } from '@abide/abide'
 
-const lead = computed(() => getStage({ stage: 'lead' }))
-const won = computed(() => getStage({ stage: 'won' }))
+const lead = reactive.derived(() => getStage({ stage: 'lead' }))
+const won = reactive.derived(() => getStage({ stage: 'won' }))
 </script>
 
 <ul class={busy({ tags: ['board'] }) ? 'tiles opacity-40' : 'tiles'}>

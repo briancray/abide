@@ -1,12 +1,12 @@
 <script>
-import { computed, format, reactive } from '@abide/abide'
+import { format, reactive } from '@abide/abide'
 
 import getStage from '../getStage.handler.ts'
 import { STAGES } from './STAGES.ts'
 
 let stage = reactive('lead')
-const totals = computed(() => getStage({ stage }))
-const average = computed(() =>
+const totals = reactive.derived(() => getStage({ stage }))
+const average = reactive.derived(() =>
     totals.ready() && totals.count > 0
         ? format.money(Math.round(totals.value / totals.count), {
               maximumFractionDigits: 0,

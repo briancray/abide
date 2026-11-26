@@ -43,14 +43,14 @@ const utilitiesFor = GET(({ code }: { code: string }) => {
 // THE CSS THAT REACHES AN EXAMPLE (40.41): the selectors the markup it made carries, read live, so
 // a state the reader causes joins them; and the rules of the CRM's stylesheet for the classes the
 // file writes. Tailwind's utilities on an element are in its fence already.
-import { computed, props } from '@abide/abide'
+import { props, reactive } from '@abide/abide'
 
 import Code from './Code.abide'
 
 const { code, hooks } = props<{ code: string; hooks: readonly string[] }>()
 
-const utilities = computed(() => utilitiesFor({ code }))
-const selectors = computed(() =>
+const utilities = reactive.derived(() => utilitiesFor({ code }))
+const selectors = reactive.derived(() =>
     hooks.length === 0
         ? '/* the selectors appear once the example runs */'
         : hooks.map((hook) => `${hook} { }`).join('\n'),

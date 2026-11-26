@@ -5,7 +5,7 @@
 import { afterEach, expect, test } from 'bun:test'
 
 import { GET } from '#server'
-import { computed } from '#shared'
+import { reactive } from '#shared'
 import { reachOf } from '#shared/rpc.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
@@ -185,7 +185,7 @@ test('a handler naming no timeout takes the environment one — 16.58', async ()
     expect(statusOf(value)).toBe(504)
 })
 
-// 16.107, 16.59 — A `computed` ADOPTING A CALL THAT TIMES OUT REFUSES 504 ONCE: the read the call made
+// 16.107, 16.59 — A `reactive.derived` ADOPTING A CALL THAT TIMES OUT REFUSES 504 ONCE: the read the call made
 // is let go with the adoption, so the refusal does not run the body again into a new load (16.62).
 // Counted as handler runs, which the value cannot show. THE REVERT: drop the cursor step back in
 // `run`'s adoption of a call's answer; the body calls again on each 504 and `runs` climbs past 1.
@@ -199,7 +199,7 @@ test('a computed adopting a call that times out refuses once — 16.107, 16.59',
         },
         { timeout: 40 },
     )
-    const answer = computed(() => ask({ q: 'a' }))
+    const answer = reactive.derived(() => ask({ q: 'a' }))
     answer.busy()
     await Bun.sleep(200)
     expect(

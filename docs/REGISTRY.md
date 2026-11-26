@@ -332,11 +332,11 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- | --- |
 | `s.watch` | `(effect: (value: Stored) => void \| Disposer) => () => void` | `watch` narrowed to this value. | 5.1, 12.9 |
 
-## `computed`
+## `reactive.derived`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `computed` | `<Value = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>>(body: () => Result, options?: Shaping<BodyValue<Result>, Shaped, never, Gate>) => ReactiveOf<never, Result, Shaped, Gate, never>` | A value `body` produces, run again when a value it read changes, and a stream where it hands back an async iterable. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.41, 11.49, 11.50, 11.51, 11.53, 11.56, 11.57, 11.59, 41.6, 11.61, 11.62, 11.64, 11.65, 12.14, 12.17, 19.24, 41.34, 41.35, 11.72, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 14.3, 7.22, 7.23, 11.73, 11.81 |
+| `reactive.derived` | `<Value = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>>(body: () => Result, options?: Shaping<BodyValue<Result>, Shaped, never, Gate>) => ReactiveOf<never, Result, Shaped, Gate, never>` | A value `body` produces, run again when a value it read changes, and a stream where it hands back an async iterable. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.41, 11.49, 11.50, 11.51, 11.53, 11.56, 11.57, 11.59, 41.6, 11.61, 11.62, 11.64, 11.65, 12.14, 12.17, 19.24, 41.34, 41.35, 11.72, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 14.3, 7.22, 7.23, 11.73, 11.81 |
 
 ## `memo`
 
@@ -1888,7 +1888,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97, 38.123, 38.136, 38.181 |
 | `abide native [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 38.175, 38.176, 38.178, 38.179, 38.180, 38.181, 38.182, 38.186, 38.187, 38.188, 38.189, 38.190, 38.191, 38.192, 38.193, 38.194, 44.77, 44.80 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118, 38.130 |
-| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215, 38.217, 38.219, 38.220, 38.221, 38.222, 38.223, 38.224, 38.225, 38.226, 38.227 |
+| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215, 38.217, 38.219, 38.220, 38.221, 38.222, 38.223, 38.224, 38.225, 38.226, 38.227, 38.228 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |
 

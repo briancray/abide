@@ -51,13 +51,13 @@ const callTool = (name: string, args: Record<string, string>) =>
     <Section title="Call it from a page by its name">
         <p>Import the file and call it. In the browser the call fetches the handler's address,
             and in the server render it runs the function. Either way it answers a promise, and
-            read inside a <code>computed</code> it is a value the page reads by name.</p>
+            read inside a <code>reactive.derived</code> it is a value the page reads by name.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { computed } from '@abide/abide'
+            import { reactive } from '@abide/abide'
             import getDeal from './getDeal.handler.ts'
 
-            const deal = computed(() => getDeal({ id: 'd1' }))
+            const deal = reactive.derived(() => getDeal({ id: 'd1' }))
             </script>
 
             <h2>{deal.name}</h2>

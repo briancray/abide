@@ -249,8 +249,8 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
-                route: '/reactive/computed',
-                title: '`computed`',
+                route: '/reactive/derived',
+                title: '`reactive.derived`',
                 description:
                     'Derive a value from others, or load or stream one from a handler, run again when what it read changes.',
                 where: 'anywhere',

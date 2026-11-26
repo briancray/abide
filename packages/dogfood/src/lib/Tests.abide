@@ -45,7 +45,7 @@ const testCases = GET(({ tests }: { tests: string[] }) => {
 // A PAGE'S TESTS: the cases of the workspace's own test files that exercise what the page documents,
 // each sliced by the line prefix its `from` names (40.15), and failing the page where one matches
 // none or two (40.18).
-import { computed, props } from '@abide/abide'
+import { props, reactive } from '@abide/abide'
 
 import Code from './Code.abide'
 import { EXCERPT, languageOf } from './highlight.ts'
@@ -54,7 +54,7 @@ import Section from './Section.abide'
 const { tests } = props<{
     tests: readonly { path: string; from: readonly string[] }[]
 }>()
-const cases = computed(() =>
+const cases = reactive.derived(() =>
     testCases({
         tests: tests.map((one) => JSON.stringify(one)),
     }),

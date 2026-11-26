@@ -9,7 +9,7 @@ import { expect, test } from 'bun:test'
 import { job } from '#server'
 import type { App, BootedApp } from '#server/createApp.ts'
 import { inOpenScope, scopeFor } from '#server/requestScope.ts'
-import { abortSignal, computed, log, reactive, watch } from '#shared'
+import { abortSignal, log, reactive, watch } from '#shared'
 import { appStopSignal } from '#shared/reactive/abortSignal.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
@@ -51,7 +51,7 @@ function warningsSince(before: number, mentioning: string): number {
 test('a revalidation giving up on abortSignal is not warned on — 4.12, 37.28', async () => {
     const before = (log.records.peek() ?? []).length
     let runs = 0
-    const landed = computed(() => {
+    const landed = reactive.derived(() => {
         runs += 1
         return runs === 1 ? 1 : givenUp(abortSignal())
     })
@@ -105,7 +105,7 @@ test('abortSignal is aborted from the stop through its drain, and fresh once the
 test('abortSignal in a memo body is its run’s own, ended by the next run — 7.22, 7.23', () => {
     const query = reactive('lead')
     const signals: AbortSignal[] = []
-    const found = computed(() => {
+    const found = reactive.derived(() => {
         const asked = query()
         signals.push(abortSignal())
         return asked
@@ -127,7 +127,7 @@ test('a memo released while it loads ends the signal its run asked for — 7.23,
     let asked: AbortSignal | undefined
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    const loading = computed(() => {
+    const loading = reactive.derived(() => {
         asked = abortSignal()
         return new Promise<number>(() => undefined)
     })
@@ -148,7 +148,7 @@ test('a memo released while it loads ends the signal its run asked for — 7.23,
 // `told: false`.
 test('a run that asked for its signal is told when the app stops — 7.23', async () => {
     let asked: AbortSignal | undefined
-    const feed = computed(() => {
+    const feed = reactive.derived(() => {
         asked = abortSignal()
         return givenUp(asked).catch(() => 0)
     })
@@ -167,7 +167,7 @@ test('a run that asked for its signal is told when the app stops — 7.23', asyn
 test('on a server, abortSignal after an await in a memo body is still its run’s own — 7.24', async () => {
     const query = reactive('lead')
     const signals: AbortSignal[] = []
-    const found = computed(async () => {
+    const found = reactive.derived(async () => {
         const asked = query()
         await Bun.sleep(0)
         signals.push(abortSignal())
@@ -191,7 +191,7 @@ test('a run asking after the next run started is handed a signal already aborted
     const query = reactive(1)
     let resume: () => void = () => undefined
     const asked: AbortSignal[] = []
-    const found = computed(async () => {
+    const found = reactive.derived(async () => {
         const run = query()
         if (run === 1) await new Promise<void>((resolve) => (resume = resolve))
         asked[run] = abortSignal()
@@ -222,7 +222,7 @@ test('a request and a run filed in it end as the request does — 7.23, 7.25', a
     let inRun: AbortSignal | undefined
     const deals = inOpenScope(scope, () => {
         inRequest = abortSignal()
-        return computed(async () => {
+        return reactive.derived(async () => {
             await Bun.sleep(0)
             inRun = abortSignal()
             return 1
@@ -246,7 +246,7 @@ test('in a browser, abortSignal after an await in a memo body is the app’s —
     try {
         let before: AbortSignal | undefined
         let after: AbortSignal | undefined
-        const found = computed(async () => {
+        const found = reactive.derived(async () => {
             before = abortSignal()
             await Bun.sleep(0)
             after = abortSignal()

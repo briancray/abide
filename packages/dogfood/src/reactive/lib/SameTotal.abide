@@ -1,11 +1,11 @@
 <script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 let deals = reactive([
     { name: 'Acme renewal', amount: 12_000 },
     { name: 'Babbage audit', amount: 8_000 },
 ])
-const total = computed(() => {
+const total = reactive.derived(() => {
     let sum = 0
     for (const deal of deals) sum += deal.amount
     return sum

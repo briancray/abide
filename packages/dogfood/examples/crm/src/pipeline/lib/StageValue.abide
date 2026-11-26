@@ -1,12 +1,12 @@
 <script>
-import { computed, format, reactive } from '@abide/abide'
+import { format, reactive } from '@abide/abide'
 
 import getStage from '../getStage.handler.ts'
 import { STAGES } from './STAGES.ts'
 
 // Its own stage, and no way to reach the count beside it.
 let stage = reactive('lead')
-const totals = computed(() => getStage({ stage }))
+const totals = reactive.derived(() => getStage({ stage }))
 </script>
 
 <ul class="fields stacked">

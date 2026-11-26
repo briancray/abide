@@ -49,10 +49,10 @@ import starContact from './lib/StarContact.abide' with { type: 'text' }
             value itself rather than a read of it.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { computed, type Reactive, refresh } from '@abide/abide'
+            import { type Reactive, reactive, refresh } from '@abide/abide'
             import listDeals from './listDeals.handler.ts'
 
-            const deals = computed(() => listDeals())
+            const deals = reactive.derived(() => listDeals())
             const held: Reactive<Deal[]> = deals
             </script>
 

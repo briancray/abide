@@ -6,6 +6,7 @@
 import { withoutRestatedNotes } from './agentNotes.ts'
 import { toComputed } from './toComputed.ts'
 import { toComputedCall } from './toComputedCall.ts'
+import { toDerived } from './toDerived.ts'
 import { type Note, toFetchAndHandle } from './toFetchAndHandle.ts'
 import { toJob } from './toJob.ts'
 import { toKey } from './toKey.ts'
@@ -85,7 +86,13 @@ const MIGRATIONS: Migration[] = [
     { version: '0.144.0', migrate: eachSource(toComputedCall) },
     // 38.225 — `fetchData` is `fetchAndHandle`.
     { version: '0.144.0', migrate: eachSource(toFetchAndHandle) },
-    // 38.227 — `poll` is a `ttl`, and a `reactive` or `computed` takes none of a source's options.
+    // 38.228 — `computed` is `reactive.derived`: after 38.223 and 38.224, which write `computed`, and
+    // ahead of 38.227, whose notes name the line as the migrations leave it.
+    {
+        version: '0.144.0',
+        migrate: eachSource((text, path) => toDerived(text, path)),
+    },
+    // 38.227 — `poll` is a `ttl`, and a `reactive` or `reactive.derived` takes none of a source's options.
     { version: '0.144.0', migrate: eachSource(toSourceOptions) },
 ]
 

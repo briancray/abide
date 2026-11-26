@@ -126,24 +126,24 @@ affected code saying what it did, and tell the user.
   `items = [...items, item]`). Bind through the path too: `bind:value={edits.kind}` (32.5), not a
   `{ get, set }` pair. In a `.ts` file the same write is
   `edits.patch((value) => { value.kind = kind })`, not `edits.set({ ...edits(), kind })`.
-- Derive a value with `computed(() => …)`. `watch` is only for reaching outside the reactive graph —
+- Derive a value with `reactive.derived(() => …)`. `watch` is only for reaching outside the reactive graph —
   the DOM, a timer, an imperative API — and its run never assigns state, a value computed from what
   it read being a derived value. What a timer or a call it started hands back is written when that
   lands, the way an event handler writes. A user action's effect belongs in its event handler. A `watch` runs during a server render too (RULEBOOK 12.5), so one that starts a
   timer or touches a browser global returns a `Disposer`.
 - A handler call answers what its body answers — a promise of the value that rejects with the
   refusal, or a stream — never a `Reactive` (RULEBOOK 1.1, 16.3). A page reads one as a value with
-  `const deal = computed(() => getDeal({ id }))`, which follows the server and is busy, ready and
+  `const deal = reactive.derived(() => getDeal({ id }))`, which follows the server and is busy, ready and
   refused as the call is (16.107); an event handler awaits it, catching a refusal with
   `getDeal.isError(error, 'Name')`. `memo(fn)` keeps what a function answered per set of args, and
-  a value per key is `memo((args) => computed(…))`.
+  a value per key is `memo((args) => reactive.derived(…))`.
 - A listener on the window or the document is `<window onkeydown={…}/>` or `<document …/>` at the
   top of the component: added when it mounts, removed when it leaves, never run on the server
   (RULEBOOK 39.21, 39.23) — not an `addEventListener` in a `watch` behind `isServer()` with a
   hand-written `removeEventListener`. A listener that needs options is an object, on any element as
   much as there: `onwheel={{ handleEvent: zoom, passive: false }}` (32.95).
 - A preference the page renders — a currency, a theme, a panel left open — lives in a cookie:
-  `const theme = computed(() => cookies().get('theme') ?? 'light')`, written with
+  `const theme = reactive.derived(() => cookies().get('theme') ?? 'light')`, written with
   `cookies().set('theme', next)`. `cookies()` is the request's on the server and the document's in
   the browser, and a read by name is tracked (RULEBOOK 22.2, 22.4), so the first paint is already
   right and a write repaints. The browser sends it, so check what it holds before trusting it.

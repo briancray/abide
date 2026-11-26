@@ -64,10 +64,10 @@ export default POST((args: { title: string }) => {
 })
 `,
             'meetings/index.abide': `<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import getMeetings from '#src/data/getMeetings.handler.ts'
 
-const meetings = computed(() => getMeetings())
+const meetings = reactive.derived(() => getMeetings())
 </script>
 
 <main id="meetings"><p id="listed">{meetings.ready() ? meetings().join(',') : ''}</p><a id="to-new" href="/meetings/new">new</a></main>`,
@@ -123,12 +123,12 @@ export default GET(() => ({ text: 'a saved note' }))
 export default GET(() => ['kept', 'offline'])
 `,
             'note/index.abide': `<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import getNote from '#src/data/getNote.handler.ts'
 import getTags from '#src/data/getTags.handler.ts'
 
-const note = computed(() => getNote())
-const tags = computed(() => getTags())
+const note = reactive.derived(() => getNote())
+const tags = reactive.derived(() => getTags())
 </script>
 
 <main id="note"><p id="text">{note().text}</p><ul id="tags">{#for tag of tags.ready() ? tags : []}<li>{tag}</li>{/for}</ul></main>`,
@@ -277,7 +277,7 @@ test('a page with a handler and no call kept opens no outbox database — 46.20'
 // THE REVERT: keep the line in memory alone (`memoryShelf` whatever the browser has); the reload
 // shows 0 waiting and the call is never delivered. And 46.18, 46.19 — after the reload the call still
 // carries its value, rebuilt from what was kept. THE REVERT: rebuild it in `valueStanding` as
-// `computed(() => settled)`; it reads saved.
+// `reactive.derived(() => settled)`; it reads saved.
 test('a call made offline survives a reload and is delivered once online — 46.2, 46.7', async ({
     page,
     context,

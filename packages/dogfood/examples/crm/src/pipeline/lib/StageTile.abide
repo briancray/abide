@@ -1,10 +1,10 @@
 <script>
-import { computed, props } from '@abide/abide'
+import { props, reactive } from '@abide/abide'
 
 import getStage from '../getStage.handler.ts'
 
 const { stage } = props<{ stage: string }>()
-const totals = computed(() => getStage({ stage }))
+const totals = reactive.derived(() => getStage({ stage }))
 </script>
 
 <li class={totals.busy() ? 'opacity-40' : ''}>

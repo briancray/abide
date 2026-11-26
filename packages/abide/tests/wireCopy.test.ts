@@ -48,7 +48,7 @@ afterAll(() => {
     removeTemporaryModules()
 })
 
-const LIBRARY = `import { computed, deepEqual, GET, memo, POST } from '@abide/abide/server'
+const LIBRARY = `import { deepEqual, GET, memo, POST, reactive } from '@abide/abide/server'
 
 const shelf = reactive([{ id: 'a' }], {
     global: true,
@@ -58,7 +58,7 @@ const shelf = reactive([{ id: 'a' }], {
 })
 
 const bound = GET(shelf)
-const inline = GET(computed(() => [{ isbn: '1' }], { key: 'isbn' }))
+const inline = GET(reactive.derived(() => [{ isbn: '1' }], { key: 'isbn' }))
 const keyedCopy = GET(({ id }: { id: string }) => [{ id }], { key: (row) => row.id,
         tags: ({ id }) => [id],
         identity: (next, previous) => next === previous })
@@ -106,7 +106,7 @@ test('an option bound to a const carries its literal, and one the build cannot r
     const app = appFixture({
         'index.abide': '<main>home</main>',
         'named/lib/Handlers.abide': `<script server>
-import { computed, GET } from '@abide/abide/server'
+import { GET, reactive } from '@abide/abide/server'
 
 const KEY = 'isbn'
 const TAGS = ['shelf', 'named'] as const
@@ -115,10 +115,10 @@ let grown = 'is'
 grown += 'bn'
 
 const named = GET(
-    computed(() => [{ isbn: '1' }], { key: KEY, tags: TAGS }),
+    reactive.derived(() => [{ isbn: '1' }], { key: KEY, tags: TAGS }),
 )
-const handed = GET(computed(() => [{ isbn: '1' }], OPTIONS))
-const unread = GET(computed(() => [{ isbn: '1' }], { key: grown }))
+const handed = GET(reactive.derived(() => [{ isbn: '1' }], OPTIONS))
+const unread = GET(reactive.derived(() => [{ isbn: '1' }], { key: grown }))
 </script>
 `,
     })

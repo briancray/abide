@@ -17,7 +17,7 @@ import { resized } from './element/resized.ts'
 import { isPlainClick } from './isPlainClick.ts'
 import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
-import { computed, reactive } from './reactive/index.ts'
+import { derived, reactive } from './reactive/index.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
 import {
     offsetIn,
@@ -58,7 +58,7 @@ export function scrollSpy<Item>(
     // The key the last scroll found current; none until the first measurement.
     const found = reactive<string | undefined>(undefined)
     // 51.169 — the first section until anything is measured, on a server as in a browser.
-    const current = computed(() => {
+    const current = derived(() => {
         const first = items()[0]
         return found() ?? (first === undefined ? undefined : keyOf(first))
     })

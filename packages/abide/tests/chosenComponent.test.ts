@@ -40,13 +40,13 @@ const { as: Inner } = props<{ as: (...args: any[]) => unknown }>()
 <section id="frame"><Inner label="framed"/></section>`
 
 const PAGE = `<script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import Bar from './Bar.abide'
 import Baz from './Baz.abide'
 
 let which = reactive(0)
 let label = reactive('one')
-let Shown = computed(() => (which % 2 === 0 ? Bar : Baz))
+let Shown = reactive.derived(() => (which % 2 === 0 ? Bar : Baz))
 </script>
 
 <div id="host"><Shown label={label}/></div>
@@ -108,11 +108,11 @@ let which = reactive(0)
 test('an absent value renders nothing, and the region fills when one arrives — 32.36', async () => {
     const { html } = await mountPage(
         `<script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import Bar from './Bar.abide'
 
 let open = reactive(false)
-let Shown = computed(() => (open ? Bar : undefined))
+let Shown = reactive.derived(() => (open ? Bar : undefined))
 </script>
 
 <div id="host"><Shown label="x"/></div>

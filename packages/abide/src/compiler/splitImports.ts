@@ -552,3 +552,33 @@ export function withoutProps(imports: string): string {
     }
     return (out + imports.slice(from)).replace(/\n{2,}/g, '\n')
 }
+
+/**
+ * The braces of `statement`'s named imports rewritten to hold `names`, sorted as a formatter sorts
+ * them and laid out as the braces were — one line, or one name a line.
+ */
+export function namedImports(
+    text: string,
+    statement: ImportStatement,
+    names: string[],
+): { start: number; end: number; text: string } {
+    const open = text.indexOf('{', statement.start)
+    const close = text.indexOf('}', open)
+    const list = text.slice(open + 1, close)
+    const sorted = [...names].sort((a, b) =>
+        a
+            .replace(/^type\s+/, '')
+            .localeCompare(b.replace(/^type\s+/, ''), 'en', {
+                sensitivity: 'base',
+            }),
+    )
+    const multiline = list.includes('\n')
+    const indent = multiline ? (/\n([ \t]*)\S/.exec(list)?.[1] ?? '    ') : ''
+    return {
+        start: open,
+        end: close + 1,
+        text: multiline
+            ? `{\n${sorted.map((name) => `${indent}${name},`).join('\n')}\n}`
+            : `{ ${sorted.join(', ')} }`,
+    }
+}

@@ -11,7 +11,6 @@ import { beforeAll, expect, test } from 'bun:test'
 
 import {
     busy,
-    computed,
     flushSync,
     invalidate,
     reactive,
@@ -44,7 +43,7 @@ beforeAll(unfileProducers)
 // `runs before a read: 2`; and dropping the bare branch leaves the mark unmade — `runs after a read: 1`.
 test('a bare invalidate marks every load, starts none of them, and skips a value with no producer — 13.6, 7.3', async () => {
     let runs = 0
-    const loaded = computed(async () => {
+    const loaded = reactive.derived(async () => {
         runs += 1
         return runs
     })
@@ -74,11 +73,11 @@ test('a bare invalidate marks every load, starts none of them, and skips a value
 test('a bare refresh reloads the subscribed loads and marks the rest — 13.7', async () => {
     let readRuns = 0
     let unreadRuns = 0
-    const read = computed(async () => {
+    const read = reactive.derived(async () => {
         readRuns += 1
         return readRuns
     })
-    const unread = computed(async () => {
+    const unread = reactive.derived(async () => {
         unreadRuns += 1
         return unreadRuns
     })
@@ -105,11 +104,11 @@ test('a bare refresh reloads the subscribed loads and marks the rest — 13.7', 
 test('a bare refresh reruns no synchronous derivation — 13.6', async () => {
     let loads = 0
     let derivationRuns = 0
-    const source = computed(async () => {
+    const source = reactive.derived(async () => {
         loads += 1
         return 2
     })
-    const doubled = computed(() => {
+    const doubled = reactive.derived(() => {
         derivationRuns += 1
         return source() * 2
     })
@@ -143,7 +142,7 @@ test('a guard over the bare selection subscribes once and wakes twice for n relo
     const loads = deferredLoads()
     const values = []
     for (let index = 0; index < 10; index += 1)
-        values.push(computed(() => loads.load()))
+        values.push(reactive.derived(() => loads.load()))
     // The ten are in flight from construction; land them so the guards open on a settled scope.
     loads.settleAll(1)
     await Bun.sleep(1)
@@ -190,11 +189,11 @@ test('a guard over the bare selection subscribes once and wakes twice for n relo
 test('refreshing on reconnect reloads what is read and marks the rest', async () => {
     let ordersRuns = 0
     let unreadRuns = 0
-    const orders = computed(async () => {
+    const orders = reactive.derived(async () => {
         ordersRuns += 1
         return ordersRuns
     })
-    const archive = computed(async () => {
+    const archive = reactive.derived(async () => {
         unreadRuns += 1
         return unreadRuns
     })

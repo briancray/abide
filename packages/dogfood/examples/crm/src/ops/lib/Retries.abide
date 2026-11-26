@@ -1,9 +1,9 @@
 <script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 import getRetries from '../getRetries.handler.ts'
 
-const policy = computed(() => getRetries())
+const policy = reactive.derived(() => getRetries())
 </script>
 
 <ul class="tiles">

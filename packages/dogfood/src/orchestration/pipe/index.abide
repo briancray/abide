@@ -7,11 +7,7 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={[
-        '/reactive/computed',
-        '/ambients/abort-signal',
-        '/orchestration/job',
-    ]}
+    seeAlso={['/reactive/derived', '/ambients/abort-signal', '/orchestration/job']}
     tests={[
         {
             path: 'packages/abide/tests/pipe.test.ts',
@@ -64,16 +60,16 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Show a save in progress">
-        <p>Call the pipe in a <a href={url('/reactive/computed')}><code>computed</code></a> to
+        <p>Call the pipe in a <a href={url('/reactive/derived')}><code>reactive.derived</code></a> to
             hold its answer as a value: it is <code>busy()</code> while the item runs, and a refusal
-            is its <code>error()</code>. A run the computed replaces aborts its item.</p>
+            is its <code>error()</code>. A run the derived value replaces aborts its item.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { computed, pipe } from '@abide/abide'
+            import { pipe, reactive } from '@abide/abide'
             import saveDeal from './saveDeal.handler.ts'
 
             const save = pipe([saveDeal], { retries: 2 })
-            const saved = computed(() =>
+            const saved = reactive.derived(() =>
                 save({ id: 'd2', name: 'Acme', company: 'Acme', amount: 9 }),
             )
             </script>

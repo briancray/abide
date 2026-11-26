@@ -14,7 +14,7 @@ import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
 
 <Doc
     seeAlso={[
-        '/reactive/computed',
+        '/reactive/derived',
         '/reactive/reactive',
         '/reactive/refresh',
         '/handlers/get',
@@ -24,7 +24,7 @@ import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/reactive.test.ts',
             from: [
-                "test('computed is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3'",
+                "test('reactive.derived is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3'",
             ],
         },
         {
@@ -44,7 +44,7 @@ import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
     <Section level={3} title="Keep one entry per stage">
         <p>A <code>memo</code> holds one entry per set of args, each held and reloaded on its own,
             so going back to a stage shows its count without loading it again. Read an entry by
-            calling the <code>memo</code> inside a <code>computed</code>, which follows the
+            calling the <code>memo</code> inside a <code>reactive.derived</code>, which follows the
             stage as it changes.</p>
         <Example code={stageEntries}><StageEntries /></Example>
     </Section>

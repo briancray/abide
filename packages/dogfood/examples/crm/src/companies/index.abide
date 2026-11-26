@@ -1,5 +1,5 @@
 <script>
-import { computed, url } from '@abide/abide'
+import { reactive, url } from '@abide/abide'
 
 import Announcements from '#src/lib/Announcements.abide'
 
@@ -7,7 +7,7 @@ import AccountTree from './lib/AccountTree.abide'
 import CampaignAccounts from './lib/CampaignAccounts.abide'
 import listCompanies from './listCompanies.handler.ts'
 
-const companies = computed(() => listCompanies())
+const companies = reactive.derived(() => listCompanies())
 </script>
 
 <Announcements />

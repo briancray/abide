@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import { createApp } from '@abide/abide/server'
 
 import { registrations } from './registrations.server.ts'
@@ -12,7 +12,9 @@ test('while the registry is down, every caller is served its last answer', async
     await using app = await createApp()
     const read = () =>
         app.run(async () => {
-            const entry = computed(() => registrations({ id: 'noether-group' }))
+            const entry = reactive.derived(() =>
+                registrations({ id: 'noether-group' }),
+            )
             await entry
             // Handed back inside a record: a `Reactive` is thenable, and `run` would settle it.
             return { entry }

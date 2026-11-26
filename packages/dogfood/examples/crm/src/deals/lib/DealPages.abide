@@ -1,11 +1,11 @@
 <script>
-import { computed, pagination, reactive } from '@abide/abide'
+import { pagination, reactive } from '@abide/abide'
 
 const DEALS = Array.from({ length: 23 }, (_, at) => `Deal ${at + 1}`)
 const PER_PAGE = 3
 let page = reactive(1)
 const list = pagination({ count: Math.ceil(DEALS.length / PER_PAGE), page })
-const shown = computed(() =>
+const shown = reactive.derived(() =>
     DEALS.slice((page - 1) * PER_PAGE, page * PER_PAGE),
 )
 </script>

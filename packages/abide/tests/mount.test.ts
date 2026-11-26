@@ -7,11 +7,11 @@ import { lastLinePrinted, serveApp } from './builtApp.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const PAGE = `<script>
-import { computed, url } from '@abide/abide'
+import { reactive, url } from '@abide/abide'
 import getInvoice from '#src/invoices/getInvoice.handler.ts'
 import '#src/lib/face.css'
 
-const invoice = computed(() => getInvoice({ id: '4' }))
+const invoice = reactive.derived(() => getInvoice({ id: '4' }))
 </script>
 
 <main><a id="home" href={url('/')}>home</a><a id="link" href={url('/invoices/[id]', { id: 4 })}>four</a><p id="total">{invoice().total}</p></main>`

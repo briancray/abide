@@ -6,7 +6,7 @@ import { handFocus, nearest } from './handFocus.ts'
 import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { type Meter, meter } from './meter.ts'
-import { computed, type Reactive, reactive } from './reactive/index.ts'
+import { derived, type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 
 /** The steps, how each is told apart, the one on, and whether the one on may be left forward. */
@@ -39,7 +39,7 @@ export type Wizard<Step> = {
 export function wizard<Step>(options: WizardOptions<Step>): Wizard<Step> {
     const picked = options.current ?? reactive<string | undefined>(undefined)
     const keyOf = (step: Step) => keyOfItem(options.key, step)
-    const steps = computed((): readonly string[] => {
+    const steps = derived((): readonly string[] => {
         const written: string[] = []
         for (const step of live(options.steps)) written.push(keyOf(step))
         return written

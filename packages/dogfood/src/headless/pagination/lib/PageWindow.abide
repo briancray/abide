@@ -1,10 +1,10 @@
 <script>
-import { computed, pagination, reactive } from '@abide/abide'
+import { pagination, reactive } from '@abide/abide'
 
 const COUNT = 8
 let page = reactive(1)
 const list = pagination({ count: COUNT, page })
-const nearby = computed(() => {
+const nearby = reactive.derived(() => {
     const from = Math.max(1, Math.min(page - 2, COUNT - 4))
     return Array.from({ length: 5 }, (_, at) => from + at)
 })

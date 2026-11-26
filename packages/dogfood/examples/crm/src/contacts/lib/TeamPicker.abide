@@ -1,11 +1,11 @@
 <script>
-import { combobox, computed, reactive } from '@abide/abide'
+import { combobox, reactive } from '@abide/abide'
 
 import listContacts from '../listContacts.handler.ts'
 
 type Contact = { id: string; name: string; company: string }
 
-const contacts = computed(() => listContacts())
+const contacts = reactive.derived(() => listContacts())
 let team = reactive<Contact[]>([])
 // Each option names the contact's company under them, and each chip is the contact's name with
 // its own remove button.

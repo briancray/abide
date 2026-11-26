@@ -1,9 +1,9 @@
 <script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 import exportCsv from '../exportCsv.handler.ts'
 
-const csv = computed(async () => (await exportCsv.raw()).text())
+const csv = reactive.derived(async () => (await exportCsv.raw()).text())
 </script>
 
 <pre class="rounded-md border border-rule bg-raised p-3">{csv}</pre>

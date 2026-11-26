@@ -8,9 +8,9 @@ const getForecast = GET(async () => {
 </script>
 
 <script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
-const forecast = computed(() => getForecast())
+const forecast = reactive.derived(() => getForecast())
 </script>
 
 {#if forecast.ready()}

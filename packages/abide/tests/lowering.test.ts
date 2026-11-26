@@ -185,29 +185,35 @@ out.push(later)
 // 31.3 line lower with a call after the member (`g().view().x`, `g()[0]().x`), and the script throws
 // that `o.view` is not a function.
 const INFERRED =
-    "import { computed, memo, reactive, type Reactive } from '@abide/abide'\ntype View = { x: number }\nlet view = reactive<View>({ x: 1 })\n"
+    "import { memo, reactive, type Reactive } from '@abide/abide'\ntype View = { x: number }\nlet view = reactive<View>({ x: 1 })\n"
 test('a member a read built is the value it holds — 31.15', async () => {
     const lowered = async (line: string): Promise<string> =>
         (await lower(`${INFERRED}${line}`)).slice(INFERRED.length)
     expect(
         await lowered(
-            'const g = computed(() => ({ view }))\nconst a = g.view.x',
-        ),
-    ).toBe('const g = computed(() => ({ view: view() }))\nconst a = g().view.x')
-    expect(
-        await lowered(
-            'const g = computed(() => ({ v: view }))\nconst a = g.v.x',
-        ),
-    ).toBe('const g = computed(() => ({ v: view() }))\nconst a = g().v.x')
-    expect(
-        await lowered('const g = computed(() => [view])\nconst a = g[0].x'),
-    ).toBe('const g = computed(() => [view()])\nconst a = g()[0].x')
-    expect(
-        await lowered(
-            'const g = computed(() => ({ inner: { view } }))\nconst a = g.inner.view.x',
+            'const g = reactive.derived(() => ({ view }))\nconst a = g.view.x',
         ),
     ).toBe(
-        'const g = computed(() => ({ inner: { view: view() } }))\nconst a = g().inner.view.x',
+        'const g = reactive.derived(() => ({ view: view() }))\nconst a = g().view.x',
+    )
+    expect(
+        await lowered(
+            'const g = reactive.derived(() => ({ v: view }))\nconst a = g.v.x',
+        ),
+    ).toBe(
+        'const g = reactive.derived(() => ({ v: view() }))\nconst a = g().v.x',
+    )
+    expect(
+        await lowered(
+            'const g = reactive.derived(() => [view])\nconst a = g[0].x',
+        ),
+    ).toBe('const g = reactive.derived(() => [view()])\nconst a = g()[0].x')
+    expect(
+        await lowered(
+            'const g = reactive.derived(() => ({ inner: { view } }))\nconst a = g.inner.view.x',
+        ),
+    ).toBe(
+        'const g = reactive.derived(() => ({ inner: { view: view() } }))\nconst a = g().inner.view.x',
     )
     expect(
         await lowered('const o = (() => ({ view }))()\nconst a = o.view.x'),
@@ -221,10 +227,10 @@ test('a member a read built is the value it holds — 31.15', async () => {
     )
     expect(
         await lowered(
-            'const g = computed(() => ({ view }))\nconst v = g.view\nconst a = v.x',
+            'const g = reactive.derived(() => ({ view }))\nconst v = g.view\nconst a = v.x',
         ),
     ).toBe(
-        'const g = computed(() => ({ view: view() }))\nconst v = g().view\nconst a = v.x',
+        'const g = reactive.derived(() => ({ view: view() }))\nconst v = g().view\nconst a = v.x',
     )
     // 31.3 — declared a `Reactive`, by a binding's annotation or a parameter's, it is held.
     expect(
@@ -252,7 +258,7 @@ out.push(o.view.x, o.v.x, o.list[0].x)
     ).toEqual([1, 1, 1])
     // A template slot is lowered from the same answer.
     const client = await clientOf(
-        `<script>${INFERRED}const g = computed(() => ({ view }))</script>\n<p>{g.view.x}</p>`,
+        `<script>${INFERRED}const g = reactive.derived(() => ({ view }))</script>\n<p>{g.view.x}</p>`,
     )
     expect(client).toContain('g().view.x')
     expect(client).not.toContain('view().x')

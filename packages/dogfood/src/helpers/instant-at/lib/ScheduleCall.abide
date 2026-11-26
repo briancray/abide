@@ -1,10 +1,10 @@
 <script>
-import { computed, instantAt, reactive } from '@abide/abide'
+import { instantAt, reactive } from '@abide/abide'
 
 let day = reactive('2026-12-15')
 let time = reactive('14:30')
 // The moment to keep: the day and the time as New York's clocks read them.
-const at = computed(() =>
+const at = reactive.derived(() =>
     instantAt(`${day}T${time}`, { timeZone: 'America/New_York' }),
 )
 </script>

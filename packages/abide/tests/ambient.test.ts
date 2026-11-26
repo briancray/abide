@@ -12,14 +12,14 @@ import { appFixture } from './builtApp.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
 import { refusal } from './typed.ts'
 
-const SESSION = `import { computed, cookies as jar, memo, principal } from '@abide/abide'
+const SESSION = `import { cookies as jar, memo, principal, reactive } from '@abide/abide'
 import { csp, GET, request, response } from '@abide/abide/server'
 
 export const who = memo(() => principal, { global: true })
 export const crumbs = memo(() => jar(), { global: true })
 export const nonce = memo(() => csp.nonce, { global: true })
 export const policy = memo(() => csp, { global: true })
-export const local = computed(() => request().url)
+export const local = reactive.derived(() => request().url)
 export const viewer = GET(() => principal.authenticated, { global: true })
 export const framed = GET(() => response.json(request.ip()), { global: true })
 `

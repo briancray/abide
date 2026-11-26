@@ -588,10 +588,10 @@ test("a page reads a handler file's answer by name, typed — 16.74", async () =
             'getPolicy.handler.ts':
                 "import { GET } from '@abide/abide/server'\n\nexport default GET(() => ({ retries: 3 }))\n",
             'index.abide': `<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import getPolicy from './getPolicy.handler.ts'
 
-const policy = computed(() => getPolicy())
+const policy = reactive.derived(() => getPolicy())
 const retries: number = policy.retries
 </script>
 
@@ -698,10 +698,10 @@ import { runs } from './lib/runs.server.ts'
 export default POST(() => runs.count)
 `,
         'uncommented/index.abide': `<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import getComments from '../comments/[id]/getComments.handler.ts'
 
-const blank = computed(() => getComments({ id: '' }))
+const blank = reactive.derived(() => getComments({ id: '' }))
 </script>
 
 <p id="refused">{blank.error()?.name} {blank.error()?.status}</p>`,

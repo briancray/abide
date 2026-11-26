@@ -1,5 +1,5 @@
 <script>
-import { computed, format, reactive, slider } from '@abide/abide'
+import { format, reactive, slider } from '@abide/abide'
 
 const DEALS = [
     { id: 'noether-pilot', name: 'Noether pilot', amount: 6_500 },
@@ -18,7 +18,7 @@ const band = slider({
     name: 'amount',
     format: (each) => format.money(each, { notation: 'compact' }),
 })
-const shown = computed(() =>
+const shown = reactive.derived(() =>
     DEALS.filter(
         (deal) => deal.amount >= amount[0] && deal.amount <= amount[1],
     ),

@@ -1,10 +1,10 @@
 <script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 // The same import reaches the same channel: no prop, no provider.
 import { activity } from './activity.ts'
 
-const last = computed(() => activity.at(-1))
+const last = reactive.derived(() => activity.at(-1))
 </script>
 
 <ul class="fields">

@@ -1,8 +1,8 @@
 <script>
-import { computed, props } from '@abide/abide'
+import { props, reactive } from '@abide/abide'
 
 const { name } = props<{ name: string }>()
-let draft = computed(() => name)
+let draft = reactive.derived(() => name)
 </script>
 
 <input bind:value={draft}>

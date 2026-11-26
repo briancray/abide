@@ -6,7 +6,7 @@ import { expect, test } from 'bun:test'
 
 import { GET, POST } from '#server'
 import type { Issues, JsonValue, StandardSchemaV1 } from '#shared'
-import { computed, jsonSchema, reactive, validateJson } from '#shared'
+import { jsonSchema, reactive, validateJson } from '#shared'
 import { keyedValue } from '#shared/reactive/index.ts'
 
 // THE TYPE ARGUMENT IS NOT DECORATION. `Issues<T>` answers a bare `string[]` where `T` is
@@ -642,7 +642,7 @@ test('a body is typed from the body, whatever schema gates it — 19.23, 19.24',
     const total: number = (await invoice({ id: 2 })).total
     expect(total).toBe(20)
 
-    const label = computed(() => 'seats', {
+    const label = reactive.derived(() => 'seats', {
         schema: jsonSchema({ type: 'string' }),
     })
     const read: string = label()
@@ -655,7 +655,9 @@ test('a body is typed from the body, whatever schema gates it — 19.23, 19.24',
             validate: (value) => ({ value: value as { id: number } }),
         },
     }
-    const loaded = computed(async () => ({ id: 7 }), { schema: standard })
+    const loaded = reactive.derived(async () => ({ id: 7 }), {
+        schema: standard,
+    })
     const id: number = (await loaded).id
     expect(id).toBe(7)
 })

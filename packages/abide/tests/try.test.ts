@@ -450,13 +450,13 @@ test('a value built before its source failed fails the body it is read in — 32
     failing.catch(() => undefined)
     ;(globalThis as { pairingRead?: Promise<string> }).pairingRead = failing
     await served(`<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
-const copy = computed(() => (globalThis as unknown as { pairingRead: Promise<string> }).pairingRead)
-const status = computed(() =>
+const copy = reactive.derived(() => (globalThis as unknown as { pairingRead: Promise<string> }).pairingRead)
+const status = reactive.derived(() =>
     copy.ready() || copy.error() !== undefined ? copy() : undefined,
 )
-const shown = computed(() => status())
+const shown = reactive.derived(() => status())
 </script>
 
 {#try}

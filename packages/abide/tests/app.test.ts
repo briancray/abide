@@ -307,9 +307,9 @@ let bumps = 0
 </script>
 
 <script>
-import { computed, watch } from '@abide/abide'
+import { reactive, watch } from '@abide/abide'
 
-const shown = computed(() => level())
+const shown = reactive.derived(() => level())
 const tally = ((globalThis as { tally?: { runs: number; disposed: number } }).tally ??= { runs: 0, disposed: 0 })
 watch(() => {
     shown()

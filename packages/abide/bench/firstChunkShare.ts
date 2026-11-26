@@ -31,10 +31,10 @@ export default GET(async function* ({ n }: { n: string }) {
 `
 
 const PAGE = `<script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import ticks from '#src/data/ticks.handler.ts'
 
-const a = computed(() => ticks({ n: 'a' }))
+const a = reactive.derived(() => ticks({ n: 'a' }))
 </script>
 
 <main><p id="a">{a.ready() ? a().length : 0}</p></main>`

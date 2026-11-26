@@ -1,9 +1,9 @@
 <script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 import listContacts from '../listContacts.handler.ts'
 
-const contacts = computed(() => listContacts())
+const contacts = reactive.derived(() => listContacts())
 </script>
 
 <ul class="fields">

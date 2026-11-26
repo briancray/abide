@@ -1,4 +1,4 @@
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 import { batch, type Batched } from '@abide/harness/report'
 
 import type { Activity } from './activity.ts'
@@ -9,7 +9,7 @@ function logging(count: number): () => void {
     for (let at = 0; at < count; at += 1)
         opening.push({ id: at, contact: `Contact ${at}`, kind: 'Email' })
     const activity = reactive(opening)
-    const last = computed(() => activity().at(-1))
+    const last = reactive.derived(() => activity().at(-1))
     last()
     return () => {
         activity.patch((entries) => {

@@ -22,10 +22,10 @@ export default GET(async ({ page = 1 }: { page?: number }) => {
 
 // One page leaves the member to the default and the other writes it.
 const pageCalling = (args: string): string => `<script>
-import { computed, memo } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 import list from '#src/pages/list.handler.ts'
 
-const shown = computed(() => list(${args}))
+const shown = reactive.derived(() => list(${args}))
 </script>
 
 <main><p>{shown().page}</p></main>`

@@ -10,6 +10,7 @@ import { spawned } from '@abide/harness/gate'
 import { paragraphsOf } from '#compiler/agentNotes.ts'
 import { toComputed } from '#compiler/toComputed.ts'
 import { toComputedCall } from '#compiler/toComputedCall.ts'
+import { toDerived } from '#compiler/toDerived.ts'
 import { toFetchAndHandle } from '#compiler/toFetchAndHandle.ts'
 import { toMemo } from '#compiler/toMemo.ts'
 import { upgrade } from '#compiler/upgrade.ts'
@@ -179,18 +180,18 @@ const found = reactive(async () => q.toUpperCase())
     const upgraded = await abide(app, 'upgrade')
     expect(upgraded.stdout).toContain('abide upgrade: 2 files changed')
     expect(await Bun.file(`${app}/src/lib/totals.ts`).text())
-        .toBe(`import { computed, memo, reactive } from '@abide/abide'
+        .toBe(`import { memo, reactive } from '@abide/abide'
 
 const score = (args: { id: string }) => args.id.length
 export const seats = reactive(5)
-export const total = computed(() => seats() * 40)
+export const total = reactive.derived(() => seats() * 40)
 export const scored = memo(score)
 `)
     expect(await Bun.file(`${app}/src/index.abide`).text()).toBe(`<script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 let q = reactive('')
-const found = computed(async () => q.toUpperCase())
+const found = reactive.derived(async () => q.toUpperCase())
 </script>
 
 <input bind:value={q}><p>{found}</p>`)
@@ -235,27 +236,27 @@ let rows = reactive(() => [{ id: 1 }])
     })
     const [row, edit] = await upgrade(app, '0.142.0')
     expect(row?.after).toBe(`<script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 1 }])
 </script>
 
 {#for row of rows key row.id}
     <script>
-    const label = computed(() => String(row.id))
+    const label = reactive.derived(() => String(row.id))
     </script>
     <b>{label}</b>
 {/for}
 `)
     expect(edit?.after).toBe(`<script>
-import { computed, reactive } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
-let rows = computed(() => [{ id: 1 }])
+let rows = reactive.derived(() => [{ id: 1 }])
 </script>
 
 {#for row of rows key row.id}
     <script>
-    const label = computed(() => String(row.id))
+    const label = reactive.derived(() => String(row.id))
     const count = reactive(0)
     </script>
     <b>{label}{count}</b>
@@ -326,10 +327,10 @@ const named = memo(() => rows, { key: by, tags: ['rows'] })
 {#for row of rows key by}<s>{row.id}</s>{/for}
 `)
     expect(after('src/lib/books.ts'))
-        .toBe(`import { computed, GET, reactive } from '@abide/abide'
+        .toBe(`import { GET, reactive } from '@abide/abide'
 
 const OPTIONS = { by: 'id' }
-export const books = GET(computed(() => [{ isbn: '1' }], { key: 'isbn' }))
+export const books = GET(reactive.derived(() => [{ isbn: '1' }], { key: 'isbn' }))
 export const kept = reactive<{ id: string }[]>([], {
     key(row) {
         return row.id
@@ -863,9 +864,39 @@ export const query = reactive('', { debounce: 300 })
         '5 poll is now ttl',
         '6 poll with a delay scheduled work whether or not anything read it, and poll is gone',
         '7 poll is now ttl',
-        '8 reactive and computed take no ttl, throttle, debounce, tags, global or poll',
-        '9 reactive and computed take no ttl, throttle, debounce, tags, global or poll',
+        '8 reactive and reactive.derived take no ttl, throttle, debounce, tags, global or poll',
+        '9 reactive and reactive.derived take no ttl, throttle, debounce, tags, global or poll',
     ])
     for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
     expect(await upgrade(app, '0.144.0')).toEqual([])
+})
+// 38.228 — `computed` IS `reactive.derived`: every use of abide's, `reactive` imported beside where it
+// was not, and an app's own `computed` and a member of that name left. Run again, nothing moves
+// (38.200). THE REVERT: drop the import edit in `toDerived`; `reactive` is never imported and the
+// renamed calls name nothing.
+test('abide upgrade spells computed reactive.derived — 38.228, 38.200', () => {
+    const page = `<script>
+import { computed, memo } from '@abide/abide'
+
+const total = computed(() => 1)
+const typed = computed<number>(() => 2)
+const options = { computed: true }
+const kept = options.computed
+</script>
+
+<p>{total}</p>`
+    const after = toDerived(page, 'src/index.abide')
+    expect(after).toBe(`<script>
+import { memo, reactive } from '@abide/abide'
+
+const total = reactive.derived(() => 1)
+const typed = reactive.derived<number>(() => 2)
+const options = { computed: true }
+const kept = options.computed
+</script>
+
+<p>{total}</p>`)
+    expect(toDerived(after, 'src/index.abide')).toBe(after)
+    const own = `import { computed } from './lib/computed.ts'\n\nexport const x = computed(() => 1)\n`
+    expect(toDerived(own, 'src/own.ts')).toBe(own)
 })

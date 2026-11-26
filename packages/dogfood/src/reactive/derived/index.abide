@@ -22,7 +22,7 @@ import seatTotal from './lib/SeatTotal.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/reactive.test.ts',
             from: [
-                "test('computed is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3'",
+                "test('reactive.derived is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3'",
             ],
         },
         {
@@ -56,10 +56,10 @@ import seatTotal from './lib/SeatTotal.abide' with { type: 'text' }
             <code>ReadableStream</code>. The value is every item handed on until now: ready from the
             first, busy until the stream ends.</p>
         <Code language="ts" caption="shared" code={`
-            import { computed } from '@abide/abide'
+            import { reactive } from '@abide/abide'
             import listDeals from './listDeals.handler.ts'
 
-            const waiting = computed(async function* () {
+            const waiting = reactive.derived(async function* () {
                 for (const deal of await listDeals())
                     if (deal.stage === 'lead') yield deal.name
             })

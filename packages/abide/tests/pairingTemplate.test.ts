@@ -108,7 +108,7 @@ async function settle(): Promise<void> {
 }
 
 // THE REVERT: give `status` the 8ec67742 body again — in flight until the copy lands, failing with
-// it, `computed(() => read.copy())`; in flight this reads `none | disabled: false` with no
+// it, `reactive.derived(() => read.copy())`; in flight this reads `none | disabled: false` with no
 // "Connecting…" and the attribute never written, and failed `unavailable none | disabled: false |
 // reported: 2` — the attribute's watch and the drop listener each threw the `HttpError`.
 test('status reads as undefined while in flight and where its read failed, its failure on error() — 44.69', async () => {

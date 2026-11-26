@@ -1,5 +1,5 @@
 <script>
-import { computed, reactive, slider } from '@abide/abide'
+import { reactive, slider } from '@abide/abide'
 
 const DEALS = [
     { id: 'noether-pilot', name: 'Noether pilot', probability: 20 },
@@ -15,7 +15,9 @@ const threshold = slider({
     name: 'probability',
     format: (each) => `${each}%`,
 })
-const shown = computed(() => DEALS.filter((deal) => deal.probability >= least))
+const shown = reactive.derived(() =>
+    DEALS.filter((deal) => deal.probability >= least),
+)
 </script>
 
 <form class="fields stacked">

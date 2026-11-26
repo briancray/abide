@@ -18,7 +18,6 @@ import {
 } from '#server/requestScope.ts'
 import { response } from '#server/response.ts'
 import {
-    computed,
     flushSync,
     invalidate,
     type Reactive,
@@ -29,7 +28,7 @@ import {
 import { cellOf } from '#shared/reactive/cellShape.ts'
 import {
     ambient,
-    ambientComputed,
+    ambientDerived,
     keyedValue,
     memo,
     processWide,
@@ -44,7 +43,7 @@ installServer()
 // reads the first one's `set` — 5 where 0 is due.
 test('a value built outside every request is one value per request — 11.32', async () => {
     let runs = 0
-    const visits = computed(() => {
+    const visits = reactive.derived(() => {
         runs += 1
         return 0
     })
@@ -74,7 +73,7 @@ test('an ambient first built inside a request derives its home outside it — 11
     let doubled: (() => number) | undefined
     await inScope(new Request('http://app/a'), async () => {
         base.set(5)
-        doubled = ambientComputed(() => base() * 2)
+        doubled = ambientDerived(() => base() * 2)
         expect(doubled()).toBe(10)
     })
     expect(doubled!()).toBe(2)
@@ -171,7 +170,7 @@ test("a value derived in a request lets go of a global at the request's teardown
     const level = processWide(0)
     for (const path of ['a', 'b'])
         await inScope(new Request(`http://app/${path}`), async () => {
-            const plus = computed(() => level() + 1)
+            const plus = reactive.derived(() => level() + 1)
             expect(plus()).toBe(1)
             releaseScope(currentRequestScope() as RequestScope)
         })
@@ -353,7 +352,7 @@ test('a body reruns under its own request, whichever request drained it — 11.3
     const quantity = reactive(1)
     const totals: Record<string, number> = {}
     const derive = (name: string) => (): void => {
-        const total = computed(() => quantity() * 10)
+        const total = reactive.derived(() => quantity() * 10)
         watch(() => {
             totals[name] = total()
         })
@@ -383,7 +382,7 @@ test('a body reruns under its own request, whichever request drained it — 11.3
 test('an effect a load aborted reruns under its own request, whichever request drained it — 11.62', async () => {
     const tenant = reactive('none')
     const opens: Record<string, (answer: string) => void> = {}
-    const profile = computed(
+    const profile = reactive.derived(
         () =>
             new Promise<string>((open) => {
                 opens[new URL(request().url).pathname.slice(1)] = open
@@ -500,7 +499,7 @@ test('a refresh by tag inside a request reaches a global value and its entries �
 // `inReach`'s bare branch; B's body runs again for A's refresh — 2 loads where 1 is due.
 test('a bare refresh reaches the request it was made in and no other — 13.8', async () => {
     let loads = 0
-    const stock = computed(async () => {
+    const stock = reactive.derived(async () => {
         loads += 1
         return 3
     })

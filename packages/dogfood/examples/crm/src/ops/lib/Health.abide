@@ -14,9 +14,9 @@ onHealth(() => ({ database: pool.connected ? 'connected' : 'closed' }))
 </script>
 
 <script>
-import { computed, health } from '@abide/abide'
+import { health, reactive } from '@abide/abide'
 
-const account = computed(() => health())
+const account = reactive.derived(() => health())
 </script>
 
 <ul class="fields stacked">

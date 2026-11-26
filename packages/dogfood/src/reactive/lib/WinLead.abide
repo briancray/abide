@@ -17,10 +17,10 @@ const moveAcme = POST(() => {
 </script>
 
 <script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
-const leads = computed(() => getStage({ stage: 'lead' }))
-const won = computed(() => getStage({ stage: 'won' }))
+const leads = reactive.derived(() => getStage({ stage: 'lead' }))
+const won = reactive.derived(() => getStage({ stage: 'won' }))
 
 async function move() {
     await moveAcme()

@@ -1,9 +1,9 @@
 <script>
-import { computed } from '@abide/abide'
+import { reactive } from '@abide/abide'
 
 import getFollowUps from '../getFollowUps.handler.ts'
 
-const leads = computed(() => getFollowUps())
+const leads = reactive.derived(() => getFollowUps())
 </script>
 
 <ul class="fields stacked">
