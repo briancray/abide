@@ -1777,8 +1777,15 @@ function mirror(cell: Cell, inner: Cell): void {
  * any more.
  */
 function dropAdoption(cell: Cell): void {
-    if (cell.adoption === null) return
+    const standing = cell.adoption
+    if (standing === null) return
+    // 11.19 MOVES WITH THE DROP, as with an adoption: a busy that was the adopted value's — a stream
+    // it is still running — ends here, and nothing the adopted value does will tell this one's
+    // guards and awaits (2.7) so, since it is no longer this one's.
+    probePasses += 1
+    const wasBusy = walkBusy(standing.source, probePasses)
     unfollow(cell)
+    if (wasBusy) probesMoved(cell)
     // 9.11: AN OWN STREAM'S `adoption` IS A WRITE IT FOLLOWS, not a stream it forwards — the
     // discriminator `adoptedCellOf` reads. Letting go of the write is all there is: the stream is
     // its own, so is its prototype, and `follow` never touched `identityFn`. Stopping it as a
