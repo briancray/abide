@@ -7,7 +7,7 @@ import Section from '#src/lib/Section.abide'
 <Doc
     seeAlso={[
         '/helpers/json-schema',
-        '/handlers/post',
+        '/handlers/rpc',
         '/reactive/reactive',
         '/helpers/refuse',
     ]}

@@ -7,7 +7,8 @@ import Section from '#src/lib/Section.abide'
 
 <Doc
     seeAlso={[
-        '/handlers/post',
+        '/browser/outbox',
+        '/middleware/middleware',
         '/handlers/mount-paths',
         '/helpers/validate-json',
         '/reactive/refresh',
@@ -59,6 +60,49 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/appAddresses.test.ts',
             from: [
                 "test('rpc.tool is the name MCP lists the handler by, under a mount too",
+            ],
+        },
+
+        {
+            path: 'packages/abide/tests/rpc.test.ts',
+            from: [
+                "test('a mutation runs again on a later call, where a read serves what it holds — 16.7'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/refreshes.test.ts',
+            from: [
+                "test('a call that answers refreshes its tags, and one refused refreshes nothing — 16.89'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/rpcMethods.test.ts',
+            from: [
+                "test('an rpc answers the verbs its value does, or the ones methods names — 16.111, 16.112'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/rpcMethods.test.ts',
+            from: [
+                'test("a value\'s PUT writes it and its PATCH patches it, each answering the value — 16.115"',
+            ],
+        },
+        {
+            path: 'packages/abide/tests/rpcMethods.test.ts',
+            from: [
+                'test("a browser\'s set and patch of a value are sent as PUT and PATCH — 16.116"',
+            ],
+        },
+        {
+            path: 'packages/abide/tests/rpcMethods.test.ts',
+            from: [
+                "test('a GET whose args outgrow its URL is sent as QUERY and answered as the GET — 16.114'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/appAddresses.test.ts',
+            from: [
+                "test('a server file answers its default at its route, each named rpc below it, and an address where it says — 16.2, 16.113'",
             ],
         },
     ]}
@@ -248,5 +292,124 @@ import Section from '#src/lib/Section.abide'
                 store: store.sqlite<Call[]>(crmDatabase, 'calls'),
             })
         `} />
+    </Section>
+    <Section level={3} title="Move a deal to another stage">
+        <p>Declare a write with <code>POST</code>, <code>PUT</code>, <code>PATCH</code> or
+            <code>DELETE</code>. Each takes what <code>GET</code> takes, and the page never names
+            the method.</p>
+        <Code language="ts" caption="server" code={`
+            import { refuse } from '@abide/abide'
+            import { rpc } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
+
+            export default rpc(
+                ({ id, stage }: { id: string; stage: string }) => {
+                    const deal = DEALS.find((each) => each.id === id)
+                    if (deal === undefined) return refuse(404)
+                    deal.stage = stage
+                    return { ...deal }
+                },
+                { methods: ['PATCH'], description: 'Moves a deal to another stage.' },
+            )
+        `} />
+        <p>Ask the CRM's address with another method and it answers 405, with the one it takes
+            in <code>allow</code>:</p>
+        <Exchange path="/deals/moveDeal" />
+    </Section>
+
+    <Section level={3} title="Run the write again on every click">
+        <p>A mutation keeps nothing, so each call runs the handler. Await the call for its answer,
+            or catch its refusal.</p>
+        <Code language="abide" caption="abide" code={`
+            <script>
+            import { reactive } from '@abide/abide'
+            import moveDeal from './moveDeal.server.ts'
+
+            let stage = reactive('proposal')
+            async function win() {
+                stage = (await moveDeal({ id: 'd2', stage: 'won' })).stage
+            }
+            </script>
+
+            <button onclick={win}>Mark won</button> {stage}
+        `} />
+    </Section>
+
+    <Section level={3} title="Reload every tab showing the stages a write changed">
+        <p>List the tags the write changes in <code>refreshes</code>. Before the write answers,
+            the server reloads the entries carrying them, in every tab following them.</p>
+        <Code language="ts" caption="server" code={`
+            import { rpc } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
+
+            export default rpc(
+                () => {
+                    const deal = DEALS.find((each) => each.stage === 'lead')
+                    if (deal) deal.stage = 'qualified'
+                    return deal?.id ?? null
+                },
+                { methods: ['POST'], refreshes: ['stage:lead', 'stage:qualified'] },
+            )
+        `} />
+    </Section>
+
+    <Section level={3} title="Log a call with no network">
+        <p>Give the call <code>offline</code>. Where the network fails, the call settles to what
+            it returns and the write waits in <code>outbox</code> to be sent.</p>
+        <Code language="ts" caption="browser" code={`
+            import listCalls from './listCalls.server.ts'
+            import logCall from './logCall.server.ts'
+
+            const call = { id: crypto.randomUUID(), note: 'Wants a demo' }
+            logCall(call, {
+                offline: () => listCalls.patch((held) => held.push(call)),
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Keep the team's seat count, written from any page">
+        <p>Hand <code>rpc</code> a value, and it answers <code>GET</code> with it and takes
+            <code>PUT</code> and <code>PATCH</code> to change it. It is the server's one value: a
+            page's <code>set</code> or <code>patch</code> shows at once, is sent, and the copy
+            then holds what the server answered.</p>
+        <Code language="ts" caption="server" code={`
+            import { rpc } from '@abide/abide/server'
+
+            export default rpc({ seats: 40 }, { description: 'The seats the team holds.' })
+        `} />
+        <Code language="ts" caption="browser" code={`
+            import seats from './seats.server.ts'
+
+            seats.patch((held) => {
+                held.seats += 1
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Answer the pipeline's reads from one server file">
+        <p>Export as many as the file needs. The default answers at the file's route, each named
+            one below it by its name, and anything else it exports stays on the server.</p>
+        <Code language="ts" caption="server" code={`
+            import { rpc } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
+
+            export default rpc(() => DEALS)
+            export const stages = rpc(() => ['lead', 'won'])
+        `} />
+    </Section>
+
+    <Section level={3} title="Publish the deals at an API path of their own">
+        <p>Give it an <code>address</code>, and it answers there in place of its file's route.</p>
+        <Code language="ts" caption="server" code={`
+            import { rpc } from '@abide/abide/server'
+            import { DEALS } from './lib/DEALS.server.ts'
+
+            export const v1 = rpc(() => DEALS, { address: '/api/v1/deals' })
+        `} />
+    </Section>
+
+    <Section level={3} title="Search the deals by a filter too long for a link">
+        <p>Call it as before. A call whose args would make its link longer than 2048 characters is
+            sent as a <code>QUERY</code>, its args in the body, and answered as the read it is.</p>
     </Section>
 </Doc>

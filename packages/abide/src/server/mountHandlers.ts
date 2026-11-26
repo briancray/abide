@@ -194,7 +194,7 @@ export async function mountHandlers(
         const mount = table[at] as Mount
         const exported = (modules[at] as Record<string, unknown>)[
             mount.export
-        ] as Mounted["handler"] & {
+        ] as Mounted['handler'] & {
             [FACES]?: Partial<Record<string, unknown>> | undefined
         }
         // 16.115 — a verb the `rpc` answers beside the one its call sends is a face of its own.

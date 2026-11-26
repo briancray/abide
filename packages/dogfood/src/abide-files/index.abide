@@ -79,7 +79,7 @@ import dealsStyled from './lib/DealsStyled.abide' with { type: 'text' }
 
     <Section title="Load the deals from the server">
         <p>The deals move into a <code>&lt;script server&gt;</code>, which never reaches the
-            browser. The <a href="/handlers/get"><code>GET</code></a> declared there is called by
+            browser. The <a href="/handlers/rpc"><code>GET</code></a> declared there is called by
             name from the component's <code>&lt;script&gt;</code>, and
             <a href="/reactive/memo"><code>memo</code></a> holds what it answers. See
             <a href="/abide-files/blocks">Script and style</a>.</p>

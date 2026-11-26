@@ -787,7 +787,10 @@ export const rpc: Declare<true> = ((
         held === value
             ? rest
             : { ...rest, global: (rest as { global?: boolean }).global ?? true }
-    const main = declare(primary)(held as never, shaped as never) as unknown as {
+    const main = declare(primary)(
+        held as never,
+        shaped as never,
+    ) as unknown as {
         methods: readonly Method[]
         [FACES]: Partial<Record<Method, unknown>>
         set(value: unknown): void

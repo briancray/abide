@@ -1421,10 +1421,8 @@ test('a check reports an export in an imported .abide at its file — 38.33, 34.
 test('a check reports every handler file refusal at its own file — 38.33, 16.73', async () => {
     const twice = appFixture({
         'index.abide': '<p>home</p>',
-        'media/getOne.server.ts':
-            'export const extra = 1\n',
-        'media/getTwo.server.ts':
-            'export const more = 2\n',
+        'media/getOne.server.ts': 'export const extra = 1\n',
+        'media/getTwo.server.ts': 'export const more = 2\n',
     })
     const at: string[] = []
     for (const diagnosis of await checkApp(twice))
@@ -1457,8 +1455,7 @@ import { user } from '../lib/user.ts'
 
 export default rpc(() => [{ user }])
 `,
-        'media/getTwo.server.ts':
-            'export const more = 2\n',
+        'media/getTwo.server.ts': 'export const more = 2\n',
     })
     const at: string[] = []
     for (const diagnosis of await checkApp(nesting))

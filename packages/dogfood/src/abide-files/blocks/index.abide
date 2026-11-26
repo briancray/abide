@@ -16,7 +16,7 @@ import leadBadge from './lib/LeadBadge.abide' with { type: 'text' }
     seeAlso={[
         '/abide-files/props',
         '/abide-files/components',
-        '/handlers/get',
+        '/handlers/rpc',
         '/pages/files',
     ]}
     tests={[

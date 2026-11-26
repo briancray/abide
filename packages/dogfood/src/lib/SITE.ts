@@ -894,7 +894,7 @@ const WRITTEN: readonly {
     {
         group: 'Handlers',
         description:
-            'A handler file is a server function a page calls by name, with its type the same on both sides, and the same handler is an OpenAPI operation, an MCP tool and a CLI command.',
+            'An `rpc` is a server function a page calls by name, with its type the same on both sides, and the same handler is an OpenAPI operation, an MCP tool and a CLI command.',
         form: 'exchange',
         pages: [
             {
@@ -907,18 +907,10 @@ const WRITTEN: readonly {
                 guide: true,
             },
             {
-                route: '/handlers/get',
-                title: '`GET`',
+                route: '/handlers/rpc',
+                title: '`rpc`',
                 description:
-                    'Declare a read in a handler file, call it from a page for its value, its stream or its link, and keep every reader following it.',
-                where: 'server',
-            },
-            {
-                route: '/handlers/post',
-                title: '`POST`, `PUT`, `PATCH` and `DELETE`',
-                nav: '`POST` and friends',
-                description:
-                    'Declare a write with `POST`, `PUT`, `PATCH` or `DELETE`, and refresh what it changed once it answers.',
+                    'Give a function or a value an address, call it from a page by name, and answer the verbs it does: a read to follow, a write, or a value to change.',
                 where: 'server',
             },
             {

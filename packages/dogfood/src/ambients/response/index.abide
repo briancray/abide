@@ -7,8 +7,7 @@ import Section from '#src/lib/Section.abide'
 <Doc
     seeAlso={[
         '/ambients/request',
-        '/handlers/post',
-        '/handlers/get',
+        '/handlers/rpc',
         '/handlers/headers',
         '/pages/render',
     ]}

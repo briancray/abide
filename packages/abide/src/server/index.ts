@@ -16,7 +16,6 @@ export type { PatchOp } from '#shared/reactive/patchLog.ts'
 export {
     type CallAnswer,
     type Clients,
-    type Method,
     type Rpc,
     type RpcOptions,
     rpc,

@@ -23,7 +23,7 @@ const callExport = JSON.stringify(
         '/handlers/mcp',
         '/cli/commands',
         '/middleware/middleware',
-        '/handlers/get',
+        '/handlers/rpc',
     ]}
     tests={[
         {

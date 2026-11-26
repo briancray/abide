@@ -9,7 +9,7 @@ import SiteTree from '#src/lib/SiteTree.abide'
     seeAlso={[
         '/pages/pages',
         '/orchestration/worker-files',
-        '/handlers/get',
+        '/handlers/rpc',
         '/abide-files/blocks',
         '/cli/commands',
     ]}

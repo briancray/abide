@@ -41,7 +41,7 @@ import Section from '#src/lib/Section.abide'
 
     <Section title="Read the rows in a handler, and a page calls the handler">
         <p>A page reaches the rows through a handler declared with
-            <a href={url('/handlers/get')}><code>GET</code></a>, which runs the query on the
+            <a href={url('/handlers/rpc')}><code>GET</code></a>, which runs the query on the
             server and answers the rows as JSON.</p>
         <Code language="ts" caption="server" code={`
             import { rpc } from '@abide/abide/server'
@@ -64,7 +64,7 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section title="A write on the server changes nothing a page holds">
-        <p>Write the row in a <a href={url('/handlers/post')}><code>POST</code></a>, then
+        <p>Write the row in a <a href={url('/handlers/rpc')}><code>POST</code></a>, then
             reload what read the table. The list a page holds is its last answer, and nothing
             tells the page a row was added until
             <a href={url('/reactive/refresh')}><code>refresh</code></a> asks again.</p>

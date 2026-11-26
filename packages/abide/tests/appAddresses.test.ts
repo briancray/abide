@@ -130,7 +130,7 @@ test('two layouts at one route are refused, naming both — 35.12', async () => 
 test('a handler file answers at its path, and a private handler below /__abide/handlers — 16.2, 16.70, 23.3, 23.14', async () => {
     const { mounts, routes } = await compileApp(
         appFixture({
-            'media/[id]/index.abide': `${SERVED('export const rate = rpc(() => 1, { methods: [\'POST\'] })')}<p>one</p>`,
+            'media/[id]/index.abide': `${SERVED("export const rate = rpc(() => 1, { methods: ['POST'] })")}<p>one</p>`,
             'media/[id]/save.server.ts':
                 "import { rpc } from '@abide/abide/server'\n\nexport default rpc(({ id }: { id: string }) => id, { methods: ['POST'] })\n",
             'media/[id]/comments/addComment.server.ts':
@@ -215,7 +215,7 @@ test('a server block under a public directory, and one exporting default, are re
             appFixture({
                 'index.abide': '<p>home</p>',
                 'media/public/Rating.abide': SERVED(
-                    'export const rate = rpc(() => 1, { methods: [\'POST\'] })',
+                    "export const rate = rpc(() => 1, { methods: ['POST'] })",
                 ),
             }),
         ),

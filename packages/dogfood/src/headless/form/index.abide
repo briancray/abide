@@ -21,7 +21,7 @@ import whatASaveChanges from './lib/WhatASaveChanges.abide' with { type: 'text' 
 
 <Doc
     seeAlso={[
-        '/handlers/post',
+        '/handlers/rpc',
         '/helpers/json-schema',
         '/helpers/refuse',
         '/browser/outbox',

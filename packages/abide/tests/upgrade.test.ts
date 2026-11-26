@@ -1050,7 +1050,8 @@ export default DELETE(() => 1)
     const after = (path: string) =>
         edits.find((edit) => edit.path === path)?.after
     expect(after('src/deals/getDeal.handler.ts')).toBeNull()
-    expect(after('src/deals/getDeal.server.ts')).toBe(`import { rpc } from '@abide/abide/server'
+    expect(after('src/deals/getDeal.server.ts'))
+        .toBe(`import { rpc } from '@abide/abide/server'
 
 export default rpc(({ id }: { id: string }) => id, { description: 'One deal.' })
 `)

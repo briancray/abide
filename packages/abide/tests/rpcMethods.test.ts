@@ -96,7 +96,8 @@ test("a browser's set and patch of a value are sent as PUT and PATCH — 16.116"
     const sent: string[] = []
     globalThis.fetch = (async (url: string, init?: RequestInit) => {
         const method = init?.method ?? 'GET'
-        if (method !== 'GET') sent.push(`${method} ${url} ${String(init?.body)}`)
+        if (method !== 'GET')
+            sent.push(`${method} ${url} ${String(init?.body)}`)
         return new Response(JSON.stringify({ seats: 41 }), {
             headers: { 'content-type': 'application/json' },
         })
