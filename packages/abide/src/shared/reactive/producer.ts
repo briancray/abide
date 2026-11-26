@@ -25,7 +25,6 @@ export {
     answeredAtOnce,
     chunksOfStream,
     closedRun,
-    dropAnswered,
     failedTransiently,
     isSubscribed,
     keepLoads,
@@ -70,13 +69,11 @@ export function followServed(
  * When the production `value` serves stops being servable, as a wall-clock time.
  *
  * 21.8 — WHEN THE PRODUCTION A VALUE IS SERVING STOPS BEING SERVABLE, as a wall-clock time: its
- * own `ttl` from when it was minted (6.5), or its entry's from when the entry last produced
- * (11.45), through whatever it adopts. Infinity where neither bounds it.
+ * entry's `ttl` from when the entry last produced (11.45), through whatever it adopts. Infinity
+ * where none bounds it.
  */
 export function deadlineOf(value: unknown): number {
-    const cell = adoptedCellOf(value)
-    if (cell.expiry !== null) return cell.expiry.at + cell.expiry.ms
-    return entryDeadline(cell)
+    return entryDeadline(adoptedCellOf(value))
 }
 
 /**

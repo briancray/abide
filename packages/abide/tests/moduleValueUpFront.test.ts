@@ -1,4 +1,4 @@
-// 41.34 AND 11.67 — A MODULE'S VALUE WHOSE BUILD STARTED A CALL IS BUILT IN THE RENDER'S SETUP, as a
+// 41.34 AND 11.66 — A MODULE'S VALUE WHOSE BUILD STARTED A CALL IS BUILT IN THE RENDER'S SETUP, as a
 // browser builds it at import. Built where the markup first reads it instead, the call started
 // halfway through the build: a region the page built inline painted it in flight, and a child 41.28
 // built after the turn painted it landed — one page carrying two answers, and whichever the browser
@@ -74,7 +74,7 @@ afterAll(() => {
 // THE REVERT: drop the `buildFiledLoads()` line from `composePage`. `me` is first built where the
 // page's markup reads `canEdit`, the inline region paints `view` and the deferred child, built a
 // turn later, `edit`.
-test("a module's value whose build made a call is painted one way across the page — 41.34, 11.67", async () => {
+test("a module's value whose build made a call is painted one way across the page — 41.34, 11.66", async () => {
     for (let visit = 0; visit < 3; visit += 1) {
         const html = await (await Bun.fetch(`${base}/owner/`)).text()
         expect(/<p id="inline">(\w+)/.exec(html)?.[1]).toBe('edit')

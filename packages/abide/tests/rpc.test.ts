@@ -482,10 +482,10 @@ test('every rpc carries the transport refusal in its failures — 16.8', async (
     expect((rebuilt as { data: unknown }).data).toBeUndefined()
 })
 
-// 11.61 — A VALUE ADOPTS A CALL CARRYING THE FAILURES IT CARRIES: a contact read through a `GET` and
+// 11.60 — A VALUE ADOPTS A CALL CARRYING THE FAILURES IT CARRIES: a contact read through a `GET` and
 // written through a `POST` both hold the transport's refusal. THE REVERT: type `set`'s `Reactive` arm
 // back to `Reactive<Accepted>` in `Reactive.ts` — the `set` below fails typecheck, failures `never`.
-test('a value adopts an rpc call whose failures it carries — 11.61, 16.8', async () => {
+test('a value adopts an rpc call whose failures it carries — 11.60, 16.8', async () => {
     const getContact = GET(async (_args: { id: string }) => ({ phone: '1' }))
     const updatePhone = POST(async ({ phone }: { phone: string }) => ({
         phone,

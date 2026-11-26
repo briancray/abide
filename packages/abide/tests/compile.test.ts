@@ -49,7 +49,7 @@ middleware((next, { request: asked }) =>
 )
 `
 
-// 11.67 — A MODULE ONLY A PAGE IMPORTS is first evaluated when a request renders that page.
+// 11.66 — A MODULE ONLY A PAGE IMPORTS is first evaluated when a request renders that page.
 const VISITS = `import { reactive } from '@abide/abide'
 
 export const visits = reactive(0)
@@ -170,13 +170,13 @@ test('the executable runs a worker file in a thread of its own — 55.1', async 
     expect(await answered.json()).toBe('thread')
 })
 
-// 11.67 — A MODULE'S `reactive` IS BUILT AFRESH IN EVERY REQUEST, even where the first request to
+// 11.66 — A MODULE'S `reactive` IS BUILT AFRESH IN EVERY REQUEST, even where the first request to
 // reach the page is what evaluated the module: an executable's `import()` carries the request's
 // async context into the evaluation, where `abide start`'s plugin-loaded module happened to lose it.
 // THE REVERT: in `render.ts`'s `boundPage`, call `loadedModules(page)` without `runInScope`; the
 // value is built as the first request's own and the counts read 1, 2, 3 — a refusal one signed-out
 // render left stood for every caller after it.
-test("a module's reactive is built afresh in each request that renders it — 11.67", async () => {
+test("a module's reactive is built afresh in each request that renders it — 11.66", async () => {
     const counts: string[] = []
     for (let visit = 0; visit < 3; visit += 1) {
         const page = await (await Bun.fetch(`${base}/visits/`)).text()

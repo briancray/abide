@@ -299,18 +299,20 @@ console.log(JSON.stringify(page.includes('never built')))
 test("a page's watch stops when the request that rendered it is answered — 12.5", async () => {
     const fresh = appFixture({
         'index.abide': `<script module>
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 
-const level = reactive(0, { global: true })
-;(globalThis as { bump?: () => void }).bump = () => level.set(level.peek() + 1)
+const level = memo(() => 0, { global: true })
+let bumps = 0
+;(globalThis as { bump?: () => void }).bump = () => level.set(++bumps)
 </script>
 
 <script>
-import { watch } from '@abide/abide'
+import { computed, watch } from '@abide/abide'
 
+const shown = computed(() => level())
 const tally = ((globalThis as { tally?: { runs: number; disposed: number } }).tally ??= { runs: 0, disposed: 0 })
 watch(() => {
-    level()
+    shown()
     tally.runs += 1
     return () => {
         tally.disposed += 1

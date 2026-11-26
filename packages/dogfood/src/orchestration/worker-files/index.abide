@@ -80,18 +80,25 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Rescore the pipeline every hour from a memo">
+    <Section level={3} title="Rescore the pipeline every hour from a job">
         <p>An export is an async function, so anything that takes one can take it. A
-            <code>memo</code> over it keeps the last scoring for every page to read, and its poll
-            runs the next scoring in a fresh thread.</p>
-        <Code language="ts" caption="shared" code={`
+            <code>memo</code> over it keeps the last scoring for every page to read, and a
+            <code>job</code> runs the next scoring in a fresh thread an hour after the last one
+            ends, whether or not a page is reading.</p>
+        <Code language="ts" caption="server" code={`
             import { memo } from '@abide/abide'
+            import { job } from '@abide/abide/server'
             import { scoreDeals } from './scoreDeals.worker.ts'
 
-            export const dealScores = memo(scoreDeals, {
-                global: true,
-                tags: ['scores'],
-                poll: { every: 3_600_000, after: 'settle', delay: 60_000 },
+            export const dealScores = memo(scoreDeals, { global: true, tags: ['scores'] })
+
+            export const rescoreDeals = job({
+                name: 'rescoreDeals',
+                every: 3_600_000,
+                run: async () => {
+                    dealScores.refresh()
+                    for await (const _ of dealScores());
+                },
             })
         `} />
     </Section>

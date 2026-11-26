@@ -296,7 +296,7 @@ function missed(rpc: object, key: string, why: string): void {
     )
 }
 
-/** 11.24's key, or `undefined` where 11.64 refuses the args — which the call itself then says. */
+/** 11.24's key, or `undefined` where 11.63 refuses the args — which the call itself then says. */
 function seedKey(args: unknown): string | undefined {
     try {
         return canonicalKey(args)

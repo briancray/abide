@@ -1,4 +1,4 @@
-// 41.34 AND 11.67 — A MODULE'S VALUE WHOSE BUILD STARTED A LOAD IS BUILT IN EVERY RENDER'S SETUP. A
+// 41.34 AND 11.66 — A MODULE'S VALUE WHOSE BUILD STARTED A LOAD IS BUILT IN EVERY RENDER'S SETUP. A
 // browser builds a module's values at import, before anything renders, so a call a body makes is in
 // flight before the first setup runs. A server builds a request's instance where the request first
 // reaches it (`scoped.ts`), and a value first reached in markup started its call halfway through the

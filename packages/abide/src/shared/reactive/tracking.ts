@@ -74,7 +74,7 @@ export type Subscriber = {
      * The value an adoption's mirror mirrors into, and `null` on every other reader.
      *
      * A probe move on the adopted value mints nothing, so it never reaches the mirror as a value —
-     * this is the edge `markProbes` follows to reach the adopter's guards instead (11.50).
+     * this is the edge `markProbes` follows to reach the adopter's guards instead (11.49).
      */
     adopter: Tracked | null
     /**

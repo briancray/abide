@@ -283,7 +283,7 @@ type PageModules = {
 }
 
 /**
- * A page's module and its layouts', imported OUTSIDE EVERY REQUEST — 11.67. A module is evaluated in
+ * A page's module and its layouts', imported OUTSIDE EVERY REQUEST — 11.66. A module is evaluated in
  * the async context its `import()` was called from, so the first request to reach a page evaluated
  * it, and every module it imports, inside that request's scope: a module's `reactive` saw a scope at
  * construction, was built as that request's own rather than as a forwarder (`scoped.ts`), and every

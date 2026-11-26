@@ -11,9 +11,8 @@
 
 import type { Schema } from '../Schema.ts'
 import { CELL } from './CELL.ts'
-import { type Expiry, expiryFor } from './Expiry.ts'
 import { MUTATION } from './MUTATION.ts'
-import type { Identity, Reactive, ReactiveOptions, Store } from './Reactive.ts'
+import type { CellOptions, Identity, Reactive, Store } from './Reactive.ts'
 import { currentScope, type Scope } from './scoping.ts'
 import { CLEAN, type Subscriber, type Tracked } from './tracking.ts'
 
@@ -75,13 +74,13 @@ export type Cap = {
      *
      * A BODY RUN THE WINDOW IS HOLDING BACK (5.11), against `holding`'s production. The two
      * are separate flags because they can stand together: a stream has a body AND tells its
-     * chunks through the window (5.17), so one close can owe a run and a telling at once.
+     * chunks through the window (5.16), so one close can owe a run and a telling at once.
      */
     owed: boolean
     /**
      * Whether the window is holding back a refresh, started when it closes.
      *
-     * 5.24 — A RELOAD THE WINDOW IS HOLDING BACK: a refresh made inside it, started when it closes.
+     * 5.23 — A RELOAD THE WINDOW IS HOLDING BACK: a refresh made inside it, started when it closes.
      * Started there rather than owed like a run, because 7.11 reloads whether or not anything reads
      * and an owed run waits for a read to pull it.
      */
@@ -159,14 +158,14 @@ export type Stream = {
      * Whether `value` is a write rather than a materialization.
      *
      * WHETHER `value` IS A WRITE rather than a materialization, while `materializedAt` stands. A value
-     * forwarding this stream serves the write the way it would have served a production (11.59).
+     * forwarding this stream serves the write the way it would have served a production (11.58).
      */
     written: boolean
     /**
      * How many chunks a reader has been told of.
      *
      * HOW MANY CHUNKS A READER HAS BEEN TOLD OF. Every chunk as it lands, without a cap; with one,
-     * only what the window has released (5.18) — the rest are in `chunks` for a cursor (5.10) and
+     * only what the window has released (5.17) — the rest are in `chunks` for a cursor (5.10) and
      * out of what a read materializes until the release.
      */
     visible: number
@@ -206,13 +205,7 @@ export type Stream = {
      * the forwarding begins so the adopter's cursor positions go on from its own.
      */
     ordinalOffset: number
-    /**
-     * Whether what is served is a run that closed.
-     *
-     * WHETHER WHAT IS SERVED IS A RUN THAT CLOSED, which is the only accumulation a deadline
-     * reaches (6.10). A run in flight has minted nothing, so `expiry.at` says nothing about it —
-     * without this the standing arm reads `at` as 0 and drops the value on its first read.
-     */
+    /** Whether what is served is a run that closed (41.27). */
     closed: boolean
 }
 
@@ -378,12 +371,6 @@ export class Cell {
      * cursor finds its place from the ordinal it holds.
      */
     declare ringBase: number
-    /**
-     * `null` on every value that declares no `ttl`, and on every value with no producer, whose
-     * `ttl` is 6.2's write back rather than an expiry. Its presence is also what holds `direct`
-     * false — see `serve`.
-     */
-    declare expiry: Expiry | null
     declare ordinal: number
     declare generation: number
     declare alive: boolean
@@ -409,12 +396,12 @@ export class Cell {
     declare running: boolean
     /**
      * The signal `abortSignal()` answered inside this value's current run, or `null` where the run
-     * never asked — made on the ask, so a run that does not ask allocates nothing (7.45).
+     * never asked — made on the ask, so a run that does not ask allocates nothing (7.22).
      */
     declare runStop: AbortController | null
     /**
-     * Which of this value's runs is current, counted at every end 7.46 names. A server carries the
-     * count a run started at across its `await`s (7.47), and a continuation holding an older one
+     * Which of this value's runs is current, counted at every end 7.23 names. A server carries the
+     * count a run started at across its `await`s (7.24), and a continuation holding an older one
      * belongs to a run already over.
      */
     declare runEpoch: number
@@ -450,7 +437,7 @@ export class Cell {
     /**
      * The declared `key`.
      *
-     * 5.22 — held as declared rather than as a function, so the property name is still there to send.
+     * 5.21 — held as declared rather than as a function, so the property name is still there to send.
      */
     declare key: string | ((element: unknown) => unknown) | null
     /** The probe pass this cell was last visited in. See `walkBusy` and `walkReady`. */
@@ -467,8 +454,7 @@ export class Cell {
     /**
      * Whether a read may ever take the field straight.
      *
-     * WHETHER A READ MAY EVER TAKE THE FIELD STRAIGHT: no expiry to check and no accumulation to
-     * materialize. Derived by `simpleShape`, at construction and where a forwarded stream comes
+     * WHETHER A READ MAY EVER TAKE THE FIELD STRAIGHT: no accumulation to materialize. Derived by `simpleShape`, at construction and where a forwarded stream comes
      * and goes. `setDirect` reads this one field where it
      * would otherwise read one per mechanism that needs the read to go a frame in.
      */
@@ -485,7 +471,7 @@ export class Cell {
      * Whether a gated write can take `SIMPLE_PROTOTYPE`'s short path.
      *
      * EVERYTHING A GATED WRITE WOULD OTHERWISE ASK, IN ONE FIELD: no cap holding the
-     * production back, no expiry, no store to persist through, no
+     * production back, no store to persist through, no
      * declared `identity`, and `bareWrite`'s own three. A value carrying none of them has a
      * `produce` -> `serve` -> `cascade` that reduces to three stores and a mark — which is
      * what `SIMPLE_PROTOTYPE.set` spells out rather than calls.
@@ -539,7 +525,7 @@ export class Cell {
         label: string,
         body: ((args: unknown) => unknown) | null,
         args: unknown,
-        options: ReactiveOptions<unknown, unknown, never> | undefined,
+        options: CellOptions<unknown, unknown, never> | undefined,
         streaming: boolean,
     ) {
         // Every field, in one order, `undefined` included.
@@ -572,14 +558,6 @@ export class Cell {
         this.schema = (options?.schema ?? null) as Schema<unknown> | null
         this.ring = EMPTY_RING
         this.ringBase = 0
-        // DECIDED ONCE, here rather than per production: a body is what makes a value a producer,
-        // and a plain state's `ttl` is 6.2's write back, not an expiry. See `expiryFor`.
-        this.expiry = expiryFor(
-            options?.ttl,
-            // A store is a producer too (8.2): there is somewhere to get the value back from, so
-            // `ttl` on a value holding one drops rather than being inert.
-            body !== null || options?.store !== undefined,
-        )
         this.ordinal = 0
         this.generation = 0
         this.alive = true
@@ -649,7 +627,7 @@ export type Callable = { [CELL]: Cell }
  * earliest moment that exists, and the one the app still has a stack for. Naming the value
  * is the clause's own requirement; without it a page declaring both on one of forty values
  * says only that something did. One statement for both producers of a window: a value's
- * (5.8) and a keyed value's, which caps starts rather than wakes (5.19).
+ * (5.8) and a keyed value's, which caps starts rather than wakes (5.18).
  */
 export function refuseBothCaps(
     label: string,
@@ -728,12 +706,12 @@ function comparatorFor(
  */
 export function simpleShape(cell: Cell): void {
     const streamless = cell.stream === null
-    cell.plain = streamless && cell.expiry === null
+    cell.plain = streamless
     cell.bareWrite =
         streamless && cell.schema === null && cell.transform === null
     cell.simple =
         cell.bareWrite &&
-        // `plain` carries `expiry === null` and `stream === null` already.
+        // `plain` carries `stream === null` already.
         cell.plain &&
         cell.cap === null &&
         cell.store === null &&

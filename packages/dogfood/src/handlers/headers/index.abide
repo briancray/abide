@@ -35,18 +35,14 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Let a browser keep the month's closed totals for a minute">
-        <p>Declare the read over a <code>global</code> value with a <code>ttl</code>. Its answer
-            says how long the production has left, in place of <code>no-store</code>.</p>
+        <p>Declare the read <code>global</code> with a <code>ttl</code>. Its answer says how long
+            the entry has left, in place of <code>no-store</code>.</p>
         <Code language="ts" caption="server" code={`
-            import { computed } from '@abide/abide'
             import { GET } from '@abide/abide/server'
             import { closedTotals } from './lib/closedTotals.ts'
 
-            const totals = computed(() => closedTotals(30), {
-                global: true,
-                ttl: 60_000,
-            })
-            export default GET(totals) // cache-control: private, max-age=60
+            // cache-control: private, max-age=60
+            export default GET(() => closedTotals(30), { global: true, ttl: 60_000 })
         `} />
     </Section>
 

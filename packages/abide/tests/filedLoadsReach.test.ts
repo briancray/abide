@@ -1,4 +1,4 @@
-// 41.34, 41.35 AND 11.73 — WHAT A RENDER BUILDS UP FRONT IS A MODULE'S DECLARATION, AND BUILDING ONE THAT
+// 41.34, 41.35 AND 11.72 — WHAT A RENDER BUILDS UP FRONT IS A MODULE'S DECLARATION, AND BUILDING ONE THAT
 // READS ITSELF ENDS. A value filed while its load was in flight is built in every render's setup; one
 // whose first run there read the value itself reached a request instance that was not yet filed, built
 // another, and recursed until the stack ran out — inside the render, which still answered 200. And a
@@ -43,7 +43,7 @@ await app.stop()
 // THE REVERT: drop the `filed.building === building` refusal from `built` in `scoped.ts`. Every read
 // of `self` in its first run builds one more request instance until the stack overflows —
 // `{ runs: 3798, failed: 'RangeError' }`, the count moving with the stack's depth.
-test('a filed value whose first run in a render reads itself fails that run — 11.73, 41.34', async () => {
+test('a filed value whose first run in a render reads itself fails that run — 11.72, 41.34', async () => {
     expect(
         await hosted(`let stop = false
 let runs = 0

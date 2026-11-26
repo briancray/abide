@@ -20,7 +20,7 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 const PAGE = `<script>
 import { computed, jsonSchema, memo, principal } from '@abide/abide'
 
-const who = computed(() => principal, { global: true })
+const who = memo(() => principal, { global: true })
 const rows = memo(({ limit }: { limit?: number }) => limit, {
     args: jsonSchema({ type: 'object', properties: { limit: { type: 'integer', default: 20 } } }),
 })

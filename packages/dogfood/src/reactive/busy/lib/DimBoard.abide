@@ -3,17 +3,20 @@ import { GET } from '@abide/abide/server'
 
 const COUNTS: Record<string, number> = { lead: 3, won: 2 }
 
-const getStage = GET(async ({ stage }: { stage: string }) => {
-    await Bun.sleep(600)
-    return COUNTS[stage] ?? 0
-})
+const getStage = GET(
+    async ({ stage }: { stage: string }) => {
+        await Bun.sleep(600)
+        return COUNTS[stage] ?? 0
+    },
+    { tags: ['board'] },
+)
 </script>
 
 <script>
 import { busy, computed } from '@abide/abide'
 
-const lead = computed(() => getStage({ stage: 'lead' }), { tags: ['board'] })
-const won = computed(() => getStage({ stage: 'won' }), { tags: ['board'] })
+const lead = computed(() => getStage({ stage: 'lead' }))
+const won = computed(() => getStage({ stage: 'won' }))
 </script>
 
 <ul class={busy({ tags: ['board'] }) ? 'tiles opacity-40' : 'tiles'}>

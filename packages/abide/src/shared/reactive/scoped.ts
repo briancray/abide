@@ -1,4 +1,4 @@
-// 11.32, 11.38 AND 11.67 — A VALUE BUILT OUTSIDE EVERY SCOPE, ON A SERVER. A module's `reactive` is built
+// 11.32, 11.38 AND 11.66 — A VALUE BUILT OUTSIDE EVERY SCOPE, ON A SERVER. A module's `reactive` is built
 // once, when the module is first imported, and every request after that reaches the same object —
 // so the value it hands back is a FORWARDER: outside a request it is the value built at import
 // (the HOME), and inside one it is an instance of its own, built the first time that request
@@ -26,7 +26,7 @@ const UNBUILT: unique symbol = Symbol('abide.unbuilt')
 /**
  * What a forwarder resolves through: the home, and how to build the same value again in a scope.
  *
- * 11.71 AND 16.64 — A HANDLER'S HOME, AND AN UNKEYED VALUE'S WITH A `store`, IS BUILT WHERE IT IS
+ * 11.70 AND 16.64 — A HANDLER'S HOME, AND AN UNKEYED VALUE'S WITH A `store`, IS BUILT WHERE IT IS
  * FIRST REACHED, and every other value's where it is declared. Building a value starts its body
  * (1.7) and reads its store (8.14), and at import that ran a handler for a request nobody had made,
  * and a store reading `cookies()` where there is no request.
@@ -44,7 +44,7 @@ class Filed {
      */
     declaredOwned: boolean
     /**
-     * 11.73 — the scope whose instance `make` is building now, or the `Filed` itself for the home,
+     * 11.72 — the scope whose instance `make` is building now, or the `Filed` itself for the home,
      * and `undefined` where nothing is. A body reaching the value it is the first run of reaches
      * this, where `instances` is still empty and a read built another instance, whose body reached
      * it again — until the stack ran out.
@@ -94,13 +94,13 @@ function instanceOf(filed: Filed): Record<PropertyKey, unknown> {
 }
 
 /**
- * 11.73 — what `make` builds for `building`, refusing a read that reaches it again before it has —
+ * 11.72 — what `make` builds for `building`, refusing a read that reaches it again before it has —
  * a body reading the value it is the first run of, which a browser refuses as the binding's TDZ.
  */
 function built(filed: Filed, building: object, make: () => unknown): unknown {
     if (filed.building === building)
         throw new ReferenceError(
-            'abide: a reactive read itself in its first run, before it was built. RULEBOOK 11.73.',
+            'abide: a reactive read itself in its first run, before it was built. RULEBOOK 11.72.',
         )
     const outer = filed.building
     filed.building = building

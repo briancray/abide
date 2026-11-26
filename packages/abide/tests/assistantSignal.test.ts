@@ -8,9 +8,9 @@ import { GET } from '../src/server/index.ts'
 import { inScope } from '../src/server/requestScope.ts'
 import { isFailed } from '../src/shared/Failed.ts'
 import {
+    abortStopSignal,
     renewStopSignal,
-    stopUnownedPolls,
-} from '../src/shared/reactive/poll.ts'
+} from '../src/shared/reactive/abortSignal.ts'
 
 const NEVER = new Promise<never>(() => {})
 
@@ -95,7 +95,7 @@ test('a request aborting ends a conversation whose provider is stuck — 44.57',
 
 // 44.57, 44.101 — A `global` VALUE'S CONVERSATION, mdn's shape: a one-shot turn streamed by a `GET`
 // declaring `global`, its answer shared by every reader. No request owns the run, so the first reader
-// leaving is not the end of it — the app stopping is, as it is the end of a `global` value's `poll`.
+// leaving is not the end of it — the app stopping is (7.20).
 // The run is in the first reader's request scope, as every `global` entry's is. THE REVERT: read the
 // request off that scope without asking `inGlobalRun`; the provider is handed the reader's signal,
 // and the reader leaving aborts it — `true` where `false` is due.
@@ -127,9 +127,8 @@ test('a global handler streams a conversation its first reader leaving does not 
     reader.abort()
     expect(said).toEqual([{ type: 'ping' }])
     expect(handed[0]?.aborted).toBe(false)
-    const drained = stopUnownedPolls()
+    abortStopSignal()
     expect(handed[0]?.aborted).toBe(true)
-    await drained()
     renewStopSignal()
 })
 

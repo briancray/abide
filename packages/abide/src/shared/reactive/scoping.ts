@@ -65,7 +65,7 @@ type Scoping = {
     filed(forwarder: unknown): void
     /**
      * `run`, as `mark`'s run of its value: what `abortSignal` reads after every `await` the run makes
-     * (7.47), which a browser has no way to carry.
+     * (7.24), which a browser has no way to carry.
      */
     runAs<Given, Result>(
         mark: RunMark,
@@ -77,12 +77,12 @@ type Scoping = {
     /** The run `runAs` carries to this point, or `undefined` outside every one. */
     currentRun(): RunMark | undefined
     /**
-     * The signal of the request `scope` answers, aborted by 7.38's stop too — or `undefined` where
-     * `scope` answers none (7.48).
+     * The signal of the request `scope` answers, aborted by 7.20's stop too — or `undefined` where
+     * `scope` answers none (7.25).
      */
     requestSignal(scope: Scope | undefined): AbortSignal | undefined
     /**
-     * The signal of the work running outside every run: the request's (7.48), or the `job` run's it
+     * The signal of the work running outside every run: the request's (7.25), or the `job` run's it
      * is owned by (54.35) — or `undefined` where neither is.
      */
     ownerSignal(): AbortSignal | undefined
@@ -125,7 +125,7 @@ export function runInScope<Given, Result>(
 }
 
 /**
- * `runInScope` for `cell`'s body, carried across its `await`s as that run on a server (7.47).
+ * `runInScope` for `cell`'s body, carried across its `await`s as that run on a server (7.24).
  *
  * A BROWSER PAYS ONE LOAD OF A `null`, and `abortSignal` reads its run off the stack instead.
  */

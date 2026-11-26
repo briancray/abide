@@ -13,28 +13,27 @@ import { ARGS_GATE, type Gated, PARAMETER_DEFAULTS } from './argsContract.ts'
 import type { Kept } from './index.ts'
 import type { Keyed } from './Keyed.ts'
 import { MEMO_BRAND } from './MEMO_BRAND.ts'
-import type { Poll } from './poll.ts'
 import { isStreaming, patchInto, produceInto } from './producer.ts'
 import type { Identity, Reactive, Store } from './Reactive.ts'
 
 /**
  * What `memo` takes: how long an entry lives, what selects it, where it is kept, what its args and its
  * value must be, what it is shaped into, what makes a write a repeat, how its elements are told apart,
- * how often an entry reloads, and the pace it produces at. `Accepted` is what `fn` settles to; `Shaped` is read from
+ * and the pace it produces at. `Accepted` is what `fn` settles to; `Shaped` is read from
  * `transform` alone, the rest naming the value it keeps without inferring it.
  */
 export type MemoOptions<Args, Accepted = unknown, Shaped = Accepted> = {
+    // 6.1, 6.2, 11.45 — how long an entry lives: refreshed where something follows it, else released.
     ttl?: number | undefined
     tags?: string[] | ((args: Args) => string[]) | undefined
     global?: boolean | undefined
     args?: Schema<Args> | undefined
     key?: string | ((element: never) => unknown) | undefined
-    poll?: Poll | undefined
-    // 5.19, 5.25, 16.110 — the pace a memo produces at: a key reached anew, and an entry's new value,
+    // 5.18, 5.24, 16.110 — the pace a memo produces at: a key reached anew, and an entry's new value,
     // each held to the window, for every reader and follower of it.
     throttle?: number | undefined
     debounce?: number | undefined
-    // 11.79 — where each entry's value is kept, so a restart opens on it rather than running `fn`.
+    // 11.78 — where each entry's value is kept, so a restart opens on it rather than running `fn`.
     store?: Store<unknown> | ((args: Args) => Store<unknown>) | undefined
     // 4.3, 4.6 — the gate on what `fn` settles to, then the shaping of it, as a `reactive`'s are.
     schema?: Schema<Accepted> | undefined
@@ -62,7 +61,7 @@ export type Memo<Args, Result, Value = MemoValue<Result>> = ((
 }
 
 /**
- * 11.81 — what an owner's write is handed: `(args, written)`, or `(written)` alone where the value takes
+ * 11.80 — what an owner's write is handed: `(args, written)`, or `(written)` alone where the value takes
  * no args at all. Where its args are optional a lone argument could be either, so the args are named.
  */
 export type Written<Args, What> = [Args] extends [undefined]
@@ -71,7 +70,7 @@ export type Written<Args, What> = [Args] extends [undefined]
 
 /**
  * A write's args and what it writes: `(args, written)`, or `(written)` alone for a memo whose args are
- * absent — the one-argument spelling a call without args has (11.77, 11.81).
+ * absent — the one-argument spelling a call without args has (11.76, 11.80).
  */
 export function writeOf(given: unknown[]): [args: unknown, written: unknown] {
     return given.length === 1 ? [undefined, given[0]] : [given[0], given[1]]
@@ -94,7 +93,7 @@ export function memoOver<Args, Value>(
     const face = keyed as Keyed<Value, Args, Value, never> & Gated<Args>
     const entryOf = (args: Args): Reactive<Value> =>
         (keyed as (args: Args) => Reactive<Value>)(args)
-    // 11.2, 11.76 — the promise of the entry's value, or its stream: a cursor of this caller's own
+    // 11.2, 11.75 — the promise of the entry's value, or its stream: a cursor of this caller's own
     // over the one run, from its start.
     const call = (...given: [args?: Args]): unknown => {
         const entry = entryOf(given[0] as Args)
@@ -107,7 +106,7 @@ export function memoOver<Args, Value>(
         [PARAMETER_DEFAULTS]: face[PARAMETER_DEFAULTS],
         invalidate: (pattern?: Partial<Args>): void => face.invalidate(pattern),
         refresh: (pattern?: Partial<Args>): void => face.refresh(pattern),
-        // 11.77 — the owner's writes, standing until the next write, `ttl`, `refresh` or `invalidate`.
+        // 11.76 — the owner's writes, standing until the next write, `ttl`, `refresh` or `invalidate`.
         // AN OWNER'S WRITE IS A PRODUCTION: the memo's value has no source but its function and its
         // owner, so what the owner writes is what the entry produced (`synced` stays true, 3.11).
         set: (...given: unknown[]): void => {
@@ -127,7 +126,7 @@ export function memoOver<Args, Value>(
 }
 
 /**
- * 11.78 — the entry's value now, then its value after each change, each a copy of its own: a reader
+ * 11.77 — the entry's value now, then its value after each change, each a copy of its own: a reader
  * keeping one is not handed a value a later patch mutates under it.
  */
 export function readableOf<Value>(

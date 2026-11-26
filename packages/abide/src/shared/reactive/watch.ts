@@ -323,7 +323,7 @@ export function watchTracked(effect: Effect): Disposer {
     opened(reader)
     // 11.32 — A RERUN READS THROUGH THE SCOPE THE WATCH WAS OPENED IN, not the ambient one. The
     // drain that reruns it runs in whichever request's turn scheduled it, so without this an
-    // effect a load aborted (11.63) reruns reading — and subscribing to — another request's
+    // effect a load aborted (11.62) reruns reading — and subscribing to — another request's
     // values. The same move `run` makes for a body.
     const scope = currentScope()
     reader.notify = (): void => {

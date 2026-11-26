@@ -8,7 +8,7 @@ import { track, TRACKING } from './tracking.ts'
  * its refusal (16.3), or where the handler streams, the stream of its chunks. Either carries `entry`,
  * so a `computed` handing it back whole adopts the value (11.12).
  *
- * 11.75 — CALLED IN A `computed`, THE CALL IS A READ OF THE VALUE: the reader is subscribed to it, so
+ * 11.74 — CALLED IN A `computed`, THE CALL IS A READ OF THE VALUE: the reader is subscribed to it, so
  * a body that awaits the answer runs again where the value moves — a server's production (18.10), a
  * refresh.
  *

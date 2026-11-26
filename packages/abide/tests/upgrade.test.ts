@@ -311,12 +311,13 @@ const deals = reactive([], { by: 'id' })
     const edits = await upgrade(app, '0.142.0')
     const after = (path: string) =>
         edits.find((edit) => edit.path === path)?.after
+    // 38.223 leaves the tagged body a `memo`: a `computed` takes no `tags` (11.81).
     expect(after('src/index.abide')).toBe(`<script>
-import { computed, reactive } from '@abide/abide'
+import { memo, reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 1, by: 'me' }], { key: 'id' })
 const by = (row: { id: number }) => row.id
-const named = computed(() => rows, { key: by, tags: ['rows'] })
+const named = memo(() => rows, { key: by, tags: ['rows'] })
 </script>
 
 {#for row of rows key row.id}<b>{row.by}</b>{/for}
@@ -830,3 +831,41 @@ export const cached = () => fetchData('https://quotes.example', { ttl: 60_000 })
     expect(noted).toBeGreaterThan(upgraded.stdout.indexOf('+++ '))
     expect(upgraded.exitCode).toBe(0)
 }, 30_000)
+
+// 38.227 — `poll` IS A `ttl` ON A MEMO AND A HANDLER: a number, and an `every` with no `delay`, move
+// across with a note each; a `delay` scheduled a job, and is a note alone, as is every `reactive` and
+// `computed` handed a source's option. Run again, nothing moves (38.200). THE REVERT: drop the
+// `edits.push` in `toSourceOptions`; the polls stay polls and `ttl: 300_000` is not found.
+test('abide upgrade moves poll to ttl and names what it cannot move — 38.227, 38.226', async () => {
+    const app = temporaryModule({
+        'src/ops.server.ts': `import { computed, memo, reactive } from '@abide/abide'
+import { GET } from '@abide/abide/server'
+
+export const followUps = memo(() => [], { global: true, poll: 300_000 })
+export const scores = memo(() => [], { poll: { every: 3_600_000, after: 'settle' } })
+export const digest = memo(() => [], { poll: { every: 60_000, delay: 5_000 } })
+export const rates = GET(() => 1, { poll: 60_000 })
+export const totals = computed(() => 1, { global: true })
+export const query = reactive('', { debounce: 300 })
+`,
+    })
+    const notes: string[] = []
+    const edits = await upgrade(app, '0.143.0', (note) =>
+        notes.push(`${note.line} ${note.message.split(':')[0]}`),
+    )
+    const after = edits.find((edit) => edit.path === 'src/ops.server.ts')?.after
+    expect(after).toContain('memo(() => [], { global: true, ttl: 300_000 })')
+    expect(after).toContain('memo(() => [], { ttl: 3_600_000 })')
+    expect(after).toContain('{ poll: { every: 60_000, delay: 5_000 } }')
+    expect(after).toContain('GET(() => 1, { ttl: 60_000 })')
+    expect(notes).toEqual([
+        '4 poll is now ttl',
+        '5 poll is now ttl',
+        '6 poll with a delay scheduled work whether or not anything read it, and poll is gone',
+        '7 poll is now ttl',
+        '8 reactive and computed take no ttl, throttle, debounce, tags, global or poll',
+        '9 reactive and computed take no ttl, throttle, debounce, tags, global or poll',
+    ])
+    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    expect(await upgrade(app, '0.144.0')).toEqual([])
+})

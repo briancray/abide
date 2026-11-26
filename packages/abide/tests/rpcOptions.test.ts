@@ -590,7 +590,7 @@ test.each(['streamed', 'arrowStreamed'])(
 // the value the call reaches is a stream of its own (9.6), not the one-shot generator the center
 // hands it. Joined is the body run once for those args — counted rather than compared, since each
 // call answers a promise of its own (16.3), and the handler awaiting them reruns as their value
-// moves (11.75). THE REVERT: drop the `isAsyncIterable` arm of `absorb`'s settle; the value holds
+// moves (11.74). THE REVERT: drop the `isAsyncIterable` arm of `absorb`'s settle; the value holds
 // the generator, and neither await is the chunks.
 test('two calls with the same args behind a rung join one stream and read all of it — 1.8, 9.6', async () => {
     expect(

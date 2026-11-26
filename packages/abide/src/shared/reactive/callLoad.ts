@@ -9,8 +9,8 @@
 
 import { beginLoadCall, endLoadCall, reachedInLoadCall } from '../loadCall.ts'
 import { refuse } from '../refuse.ts'
+import { armTimer } from './armTimer.ts'
 import { type Cell, cellOf } from './cellShape.ts'
-import { armTimer } from './Expiry.ts'
 // Through the barrel first, for the cycle it names: rpc reaches this module ahead of the barrel.
 import { isReactive, STREAMING } from './index.ts'
 import {

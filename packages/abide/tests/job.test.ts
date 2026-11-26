@@ -1,5 +1,5 @@
 // `job` — WORK ON A SCHEDULE (54.14-54.23). A file of its own: every job a file builds is filed for
-// the process and looked at again by every app the file opens after it (7.30), so each test stops
+// the process and looked at again by every app the file opens after it (54.14), so each test stops
 // the jobs it built that are still due.
 
 import { expect, test } from 'bun:test'
@@ -18,7 +18,7 @@ import {
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
-/** Runs `body` while an app is open, so every job's clock is running (7.30), and stops it after. */
+/** Runs `body` while an app is open, so every job's clock is running (54.14), and stops it after. */
 async function serving(body: () => Promise<void>): Promise<void> {
     const app: App = await inMemoryApp({})
     ;(app as BootedApp).openMux()
@@ -282,7 +282,7 @@ test('stop aborts the run in flight, waits on it, and starts no run after — 54
     expect(runs).toBe(1)
 })
 
-// 54.22, 7.45 — A RUN OUTLIVES THE LOOK THAT STARTED IT: under `from: 'start'` a look does not wait
+// 54.22, 7.22 — A RUN OUTLIVES THE LOOK THAT STARTED IT: under `from: 'start'` a look does not wait
 // on the run, so the looks after it are new runs of the job's own value — and a run whose signal
 // was that value's was aborted by the next look. THE REVERT: call `run` outside `ownedBy`, so
 // `abortSignal()` in it is the look's, and `aborted by a look: true`.
@@ -571,4 +571,31 @@ test('a job opens on its stored status and waits out its stored last run — 54.
         `result: ${now.lastResult}, runs: ${runs}, running: ${now.running}, waits: ${Date.parse(now.nextRun ?? '') - Date.now() > 3_400_000}`,
     ).toBe('result: sent 3, runs: 0, running: false, waits: true')
     await resumed.stop()
+})
+
+// 7.20, 54.43 — `App.stop` TELLS A JOB'S RUN TO STOP AND WAITS ON IT before it resolves: the run in
+// flight when the app stops is aborted, and winds down inside the stop rather than after it.
+// THE REVERT: drop `settleJobs` from the drain in `stopOnce`, and `ended at the stop: false`.
+test('App.stop aborts the run a job has in flight and waits on it — 7.20, 54.43', async () => {
+    let started = false
+    let ended = false
+    const digest = job({
+        name: 'drained',
+        every: 3_600_000,
+        run: async () => {
+            started = true
+            const signal = abortSignal()
+            await new Promise((done) =>
+                signal.addEventListener('abort', done, { once: true }),
+            )
+            await Bun.sleep(5)
+            ended = true
+        },
+    })
+    const app: App = await inMemoryApp({})
+    ;(app as BootedApp).openMux()
+    while (!started) await Bun.sleep(1)
+    await app.stop()
+    expect(`ended at the stop: ${ended}`).toBe('ended at the stop: true')
+    await digest.stop()
 })

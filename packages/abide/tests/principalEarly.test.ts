@@ -18,7 +18,7 @@ import {
     principalMembers,
 } from '#shared/principal.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
-import { computed, watch } from '#shared/reactive/index.ts'
+import { computed, keyedValue, watch } from '#shared/reactive/index.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import { seededDocument } from '#shared/seededDocument.ts'
 
@@ -486,13 +486,13 @@ test('a value painted settled is reloaded by a sign-in — 13.6, 26.24', async (
 // drop the `global` test from `refreshCallerHeld`; the shared value is loaded 2 times where 1 is due.
 test('a sign-in leaves a global value be — 26.24, 11.34', async () => {
     let sharedLoads = 0
-    const shared = computed(
+    const shared = keyedValue(
         async () => {
             sharedLoads += 1
             return sharedLoads
         },
         { global: true },
-    )
+    )()
     let ownLoads = 0
     const own = computed(async () => {
         ownLoads += 1

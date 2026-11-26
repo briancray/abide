@@ -61,6 +61,7 @@ import {
     type Refusals,
     type Selection,
     type Shaping,
+    type Sourced,
     type Store,
     STREAMING,
 } from './reactive/index.ts'
@@ -69,7 +70,6 @@ import { isThenable } from './reactive/isThenable.ts'
 import { MUTATION } from './reactive/MUTATION.ts'
 import {
     chunksOfStream,
-    dropAnswered,
     nameLoad,
     patchInto,
     produceInto,
@@ -118,11 +118,11 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
 >) & {
     method: Method
     description: string | undefined
-    /** 11.77 — the owner's write of the value for `args`, past every rung; `set(value)` where it takes no args at all (11.81). */
+    /** 11.76 — the owner's write of the value for `args`, past every rung; `set(value)` where it takes no args at all (11.80). */
     set(...given: Written<Args, Value>): void
-    /** 11.77 — the owner's mutation of the value for `args` in place, past every rung; `patch(mutate)` where it takes no args at all (11.81). */
+    /** 11.76 — the owner's mutation of the value for `args` in place, past every rung; `patch(mutate)` where it takes no args at all (11.80). */
     patch(...given: Written<Args, (value: Value) => void>): void
-    /** 11.78 — the value for `args` now, then after each change. */
+    /** 11.77 — the value for `args` now, then after each change. */
     readable(
         ...args: undefined extends Args ? [args?: Args] : [args: Args]
     ): ReadableStream<Value>
@@ -376,6 +376,7 @@ type Declare<Writes extends boolean> = {
         options?: HandlerShaping<
             Shaping<BodyValue<NoInfer<Result>>, Shaped, Args, Gate, ArgsGate>
         > &
+            Sourced<NoInfer<Args>> &
             HandlerStore<NoInfer<Args>> &
             OptionsOf<Writes, Args, Answers>,
     ): Rpc<
@@ -396,8 +397,9 @@ type Declare<Writes extends boolean> = {
         RungRefusals<Answers>,
         BodyProduced<Result, MemoValue<Result>>
     >
-    // 16.1 — a value, `reactive` given an address, which takes its options beside the address's
-    // (16.6). Never a function: a handler's function is its body, the first signature's (16.1).
+    // 16.1 — a value, `reactive` given an address, which takes a `reactive`'s options beside the
+    // address's (16.6), and no source's (11.81). Never a function: a handler's function is its body,
+    // the first signature's (16.1).
     <
         Accepted,
         Shaped = Accepted,
@@ -433,8 +435,9 @@ export function declare<Declared extends Method>(
             throw new Error(
                 'abide: a `GET` was declared with `refreshes`, which only a mutation takes. Refresh from the write that changed the value. RULEBOOK 16.92.',
             )
-        // 16.6, and 16.7's `ttl` of 0 on a mutation: each call is a write, so nothing a previous
-        // call produced is served to the next one. 13.16 — and marked, so a sweep never sends it again.
+        // 16.6, and 16.7's `ttl` of 0 on a mutation over a body: each call is a write, so nothing a
+        // previous call produced is served to the next one. 13.16 — and marked, so a sweep never
+        // sends it again. A value has no body to run again, and takes no `ttl` (11.81).
         const cacheOptions =
             method === 'GET' ? undefined : { ttl: 0, [MUTATION]: true as const }
         // 16.6 — A PLAIN FUNCTION'S VALUE IS BUILT WITH THE WHOLE OPTIONS OBJECT: `reactive` reads
@@ -442,7 +445,7 @@ export function declare<Declared extends Method>(
         // `ttl` is a default the handler's own overrides.
         const value = handlerValue(
             handler,
-            cacheOptions === undefined
+            cacheOptions === undefined || typeof handler !== 'function'
                 ? options
                 : {
                       ...cacheOptions,
@@ -494,11 +497,6 @@ export function declare<Declared extends Method>(
         // resolves to it and is a stream of its own from then (9.6), so a second call joining it
         // (1.8) reads the same accumulation. A refusal a rung answers with is the value's refusal.
         const center = async (args: unknown): Promise<unknown> => {
-            // 16.7 behind rungs — the handler's spent answer is dropped HERE, once the rungs let
-            // the call through: reading an unkeyed value's cell builds this request's instance,
-            // which starts its body (1.7), and dropped in `call` that ran the body ahead of every
-            // rung (16.11, 16.16).
-            if (cacheOptions !== undefined && !keyed) dropAnswered(value)
             const reached = reach(args)
             const started = performance.now()
             try {
@@ -578,11 +576,6 @@ export function declare<Declared extends Method>(
                     return computed(() => refused)
                 }
             }
-            // 16.7 — a mutation's call is a write each time, even where the last one settled this
-            // turn: a keyed value's reach evicts an outlived entry itself, and an unkeyed one's
-            // spent answer is dropped here — or, behind rungs, in the onion's center.
-            if (cacheOptions !== undefined && !keyed && wrapped === null)
-                dropAnswered(value)
             const reached = callLoad(
                 reachThrough,
                 args,
@@ -687,7 +680,7 @@ export function declare<Declared extends Method>(
                 for (const followers of RPC_SERVER.following)
                     followers.broadcast(rpc, name, pattern, caller)
             }
-        // 11.77, 11.78 — A HANDLER IS A MEMO WITH AN ADDRESS (16.6): its owner writes and follows the
+        // 11.76, 11.77 — A HANDLER IS A MEMO WITH AN ADDRESS (16.6): its owner writes and follows the
         // value for some args as a memo's does — reached past every rung, since the owner is no caller.
         // The handler's own value takes the owner's write as what it produced, and its followers are
         // sent it; a browser's copy takes it as a write to this page's copy, not synced until the
@@ -714,7 +707,7 @@ export function declare<Declared extends Method>(
         //
         // READ OFF THE VALUE rather than off the call: behind a rung the call settles to what the
         // value produced, and holds no way back to it. A keyed value is looked up without a reach,
-        // so asking starts nothing (11.55).
+        // so asking starts nothing (11.54).
         if (method === 'GET' && !isForwarder(value))
             GLOBAL_GETS.set(
                 rpc,
@@ -868,7 +861,7 @@ function refreshEach(
 /** The member a browser's copy is told it streams through, since its body is the wire's (16.32). */
 export const STREAMING_COPY = Symbol('abide.streamingCopy')
 
-/** The member a browser's copy is marked through: an owner's write to it is this page's (11.77). */
+/** The member a browser's copy is marked through: an owner's write to it is this page's (11.76). */
 export const WIRE_COPY = Symbol('abide.wireCopy')
 
 /** The handler's value for `args`, as `rpc` reached it: what abide's own callers hold (`REACH_CALL`). */

@@ -318,7 +318,7 @@ test('copyInstall copies the install command and holds copied — 44.72', async 
     expect(written).toEqual([UNPAIRED.install])
     expect(pair.copied()).toBe(true)
     jest.advanceTimersByTime(1200)
-    // The write back is the copy's ttl (6.2), and `step` follows it at the end of that turn.
+    // `copied` goes false `COPIED_FOR` after the copy (44.72), and `step` follows it at the end of that turn.
     flushSync()
     expect(`${pair.copied()} ${pair.step()}`).toBe('false click')
     dispose()
@@ -353,7 +353,7 @@ test('copyInstall copies on a page with no clipboard, through a selected textare
 // 44.73 — A DISPOSED PAIRING LEAVES NOTHING RUNNING: its read of `/__abide/pairing` and its follow, the
 // blur listener a click added, the wait it set and the write back a copy armed — asserted by what
 // they would have written, since bun's `jest.getTimerCount` still counts a cleared one. `copied`'s write
-// back is its ttl's, which the setup's end stops (6.14). THE REVERT: drop the `owned(…)` call in
+// back is its watch's timer, which the setup's end stops with the watch. THE REVERT: drop the `owned(…)` call in
 // `pairing.ts`; this reports `blur listeners: 1, step: install, copied: true, read aborted:
 // undefined, unfollowed: 0`.
 test("dispose stops the read, the blur listener, the wait and the copy's write back — 44.73", async () => {

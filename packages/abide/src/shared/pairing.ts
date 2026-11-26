@@ -78,7 +78,7 @@ export function pairing(
     // no read there is no sink for a render to hold open (3.4), where a read in flight would be one.
     const read = isServer() ? undefined : readPairing()
     // 44.73 — WHAT IS BUILT HERE STOPS WITH `stop`, collected rather than listed: the watch
-    // writing the status, `copied`'s write back (6.14) and the watch that ends the install step. `stop` is
+    // writing the status, the watch timing `copied` out that ends the install step. `stop` is
     // then handed to whatever owns this call, so a setup's dispose runs it, and a `pairing` built
     // anywhere else — a click handler — is stopped by its caller. A server's request already owns
     // all of it (12.5), so nothing is collected there to be stopped twice.
@@ -184,11 +184,16 @@ function setUp(
         })
     }
     const asked = reactive<Asked>('click')
-    // 44.72 — 6.2 writes `false` back `COPIED_FOR` after a copy, and that is what ends the install
-    // step.
-    const copied = reactive(false, { ttl: COPIED_FOR })
+    // 44.72 — `false` again `COPIED_FOR` after a copy, and that is what ends the install step. The
+    // timer is the watch's, so a stop clears it with the watch (44.73).
+    const copied = reactive(false)
     watch([copied], () => {
-        if (!copied.peek()) asked.set('click')
+        if (!copied.peek()) {
+            asked.set('click')
+            return
+        }
+        const timer = setTimeout(() => copied.set(false), COPIED_FOR)
+        return () => clearTimeout(timer)
     })
     // 53.48 — connecting for longer than `slowAfter`. A server is never slow: it renders `connecting`.
     const slow = reactive(false)

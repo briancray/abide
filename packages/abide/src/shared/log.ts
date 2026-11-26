@@ -13,7 +13,7 @@ import { APP_META } from './APP_META.ts'
 import { DEBUG_META } from './DEBUG_META.ts'
 import { numberFromText } from './numberFromText.ts'
 import { paint } from './paint.ts'
-import { type Reactive, reactive } from './reactive/index.ts'
+import { processWide, type Reactive } from './reactive/index.ts'
 
 type Level = 'debug' | 'info' | 'warning' | 'error'
 
@@ -83,7 +83,7 @@ function recordsValue(): Reactive<LogRecord[]> {
                 ? configured
                 : DEFAULT_BUFFER
         // 28.1 — one array for the process.
-        records = reactive<LogRecord[]>([], { global: true })
+        records = processWide<LogRecord[]>([])
     }
     return records
 }

@@ -3,8 +3,6 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
-import DealSearch from './lib/DealSearch.abide'
-import dealSearch from './lib/DealSearch.abide' with { type: 'text' }
 import PhoneDigits from './lib/PhoneDigits.abide'
 import phoneDigits from './lib/PhoneDigits.abide' with { type: 'text' }
 import PriceFormat from './lib/PriceFormat.abide'
@@ -45,11 +43,5 @@ import seats from './lib/Seats.abide' with { type: 'text' }
     <Section level={3} title="Store a phone number as digits">
         <p><code>transform</code> runs on every write, so the field shows back what was stored.</p>
         <Example code={phoneDigits}><PhoneDigits /></Example>
-    </Section>
-
-    <Section level={3} title="Search once the typing stops">
-        <p>Set <code>debounce</code> on the query, and the search reads one change per pause rather
-            than one per keystroke.</p>
-        <Example code={dealSearch}><DealSearch /></Example>
     </Section>
 </Doc>

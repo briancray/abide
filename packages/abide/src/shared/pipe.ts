@@ -12,6 +12,7 @@
 import { type Failed, isFailed, isTransient, retryAt } from './Failed.ts'
 import { isAsyncIterable } from './isAsyncIterable.ts'
 import { messageOf } from './messageOf.ts'
+import { appStopSignal } from './reactive/abortSignal.ts'
 import {
     abortSignal,
     isReactive,
@@ -21,7 +22,6 @@ import {
     watch,
 } from './reactive/index.ts'
 import { isThenable } from './reactive/isThenable.ts'
-import { appStopSignal } from './reactive/poll.ts'
 import { refuse } from './refuse.ts'
 import { type Backoff, backoffWait } from './retryWait.ts'
 import { sleep } from './sleep.ts'
@@ -254,7 +254,7 @@ class Runner {
 
     /** 57.5, 57.13 — one item, called: its answer, or every answer where a step fanned out; a refusal rejects. */
     async call(input: unknown, signal?: AbortSignal): Promise<unknown> {
-        // 57.13 — read where the call is made: inside a `memo` body, the run's own (7.45).
+        // 57.13 — read where the call is made: inside a `memo` body, the run's own (7.22).
         const told = abortSignal()
         const walked = await this.item(input, signal, told)
         if (walked.refusal !== undefined) throw walked.refusal
@@ -293,7 +293,7 @@ class Runner {
     /**
      * 57.13 — the signal an item ends on: the pipe's stop, the stop it was called under, and the
      * caller's. ONE SIGNAL FOR EVERY ITEM in the common case — called outside a body with no signal
-     * of its own — made again only where the app's stop has been renewed (7.39): a combined signal
+     * of its own — made again only where the app's stop has been renewed (7.21): a combined signal
      * per item was a third of a no-op item's cost against a hand-written lane.
      */
     endedBy(told: AbortSignal, signal: AbortSignal | undefined): AbortSignal {

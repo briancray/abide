@@ -1,10 +1,13 @@
 <script>
-import { computed, reactive } from '@abide/abide'
+import { computed, memo, reactive } from '@abide/abide'
 
 import searchDeals from '../searchDeals.handler.ts'
 
-let q = reactive('', { debounce: 300 })
-const found = computed(() => searchDeals({ q }))
+let q = reactive('')
+const searching = memo(({ q }: { q: string }) => searchDeals({ q }), {
+    debounce: 300,
+})
+const found = computed(() => searching({ q }))
 </script>
 
 <label>search deals

@@ -2,7 +2,7 @@
 // (55.4), posts the call to it, answers what the export answered there — a promise, or an async
 // generator pulled a chunk at a time (55.5) — and ends the thread once the call is done (55.11).
 
-import { abortSignal } from '../reactive/poll.ts'
+import { abortSignal } from '../reactive/abortSignal.ts'
 import type { FromWorker, ToWorker } from './WorkerMessage.ts'
 
 /** One call's thread: what posts to it, and what ends it — which a second time does nothing. */

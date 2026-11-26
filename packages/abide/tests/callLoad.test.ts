@@ -5,10 +5,11 @@
 
 import { afterEach, expect, test } from 'bun:test'
 
-import { computed, flushSync, reactive } from '#shared'
+import { computed, flushSync } from '#shared'
 import { startingLoadCall } from '#shared/loadCall.ts'
 import { callLoad } from '#shared/reactive/callLoad.ts'
 import { keyedValue } from '#shared/reactive/index.ts'
+import { createReactive } from '#shared/reactive/Reactive.ts'
 
 type Loading = (() => unknown) & {
     busy(): boolean
@@ -146,7 +147,16 @@ test('calls joining a load start no clock of their own — 16.61', async () => {
 // went on to serve the write, and the refusal stood beside it. THE REVERT: `loadOf` answering the
 // generation for a hold; the await resolves with 0, the value the window was replacing.
 test('a window holding a write back is no load for a call to time — 16.77, 5.15', async () => {
-    const value = reactive<number>(0, { debounce: 60 })
+    // A memo's entry, written by its owner: the one place a window holds a write back (5.24).
+    const value = createReactive<number, number, never>(
+        'memo',
+        null,
+        undefined,
+        0,
+        {
+            debounce: 60,
+        },
+    )
     value.set(1)
     expect(`busy: ${value.busy()}`).toBe('busy: true')
     callLoad(() => value, undefined, undefined, 20)

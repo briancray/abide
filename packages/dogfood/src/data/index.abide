@@ -89,16 +89,17 @@ import Section from '#src/lib/Section.abide'
     <Section title="Reload every value tagged with a table, whoever wrote the row">
         <p>A refresh after the CRM's own write misses a row the <code>sqlite3</code> shell or a
             second server commits. Name the table with
-            <a href={url('/data/table')}><code>table</code></a>, and every value whose
+            <a href={url('/data/table')}><code>table</code></a>, and every <code>memo</code> whose
             <code>tags</code> name it loads again after any committed change.</p>
         <Code language="ts" caption="server" code={`
-            import { computed, table } from '@abide/abide/server'
+            import { memo } from '@abide/abide'
+            import { table } from '@abide/abide/server'
             import { crmDatabase } from '../pipeline/lib/crmDatabase.server.ts'
 
             const latest = 'SELECT target FROM targets ORDER BY id DESC'
 
             table(crmDatabase, 'targets')
-            export const target = computed(() => crmDatabase().query(latest).get(), {
+            export const target = memo(() => crmDatabase().query(latest).get(), {
                 global: true,
                 tags: ['targets'],
             })

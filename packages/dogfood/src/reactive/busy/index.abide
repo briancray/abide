@@ -42,14 +42,13 @@ import dimBoard from './lib/DimBoard.abide' with { type: 'text' }
             nothing, every load in this scope and any call the outbox is sending.</p>
         <Code language="ts" caption="shared" code={`
             import { busy, computed } from '@abide/abide'
+            // declared GET(…, { tags: ['stages'] })
             import getStage from './getStage.handler.ts'
 
-            const won = computed(() => getStage({ stage: 'won' }), {
-                tags: ['stage:won'],
-            })
+            const won = computed(() => getStage({ stage: 'won' }))
 
             busy(won) // won.busy()
-            busy({ tags: ['stage:won'] })
+            busy({ tags: ['stages'] })
             busy()
         `} />
     </Section>

@@ -6,7 +6,7 @@ import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
 
 import { type Change, table } from '#server'
-import { computed } from '#shared'
+import { keyedValue } from '#shared/reactive/index.ts'
 
 type Deal = { id: string; name: string; amount: number }
 
@@ -127,7 +127,7 @@ test('a change refreshes every value tagged with the table — 47.29', async () 
     const db = deals()
     db.run("INSERT INTO deals VALUES ('d1', 'Acme', 100)")
     table<Deal>(db, 'deals')
-    const total = computed(
+    const total = keyedValue(
         () =>
             (
                 db.query('SELECT SUM(amount) AS total FROM deals').get() as {
@@ -135,7 +135,7 @@ test('a change refreshes every value tagged with the table — 47.29', async () 
                 }
             ).total,
         { tags: ['deals'] },
-    )
+    )()
     expect(`total: ${total()}`).toBe('total: 100')
     db.run("INSERT INTO deals VALUES ('d2', 'Globex', 50)")
     // The watch looks every 50 ms: waited for, with a deadline, rather than slept a fixed time.

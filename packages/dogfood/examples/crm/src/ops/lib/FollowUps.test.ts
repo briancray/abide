@@ -16,21 +16,28 @@ const found = async (): Promise<string[]> => {
     return names
 }
 
-test('stopping the app waits for the check in flight', async () => {
+// THE REVERT: drop the `stopping.aborted` check from `followUps`, and the check finds every lead after
+// the stop told it to end.
+test('stopping the app ends the check in flight', async () => {
     const app = await createApp()
     const checking = found()
     expect(busy({ tags: ['follow-ups'] })).toBe(true)
     await app.stop()
+    const names = await checking
     expect(busy({ tags: ['follow-ups'] })).toBe(false)
-    expect(await checking).toEqual(leads())
+    expect(`found after the stop: ${names.length < leads().length}`).toBe(
+        'found after the stop: true',
+    )
 })
 
 test('the panel reads the leads the last check found', async () => {
     await using app = await createApp()
-    await found()
+    const last = await found()
     const answer = await app.fetch(
         new Request('http://crm.invalid/ops/getFollowUps'),
     )
-    const lines = (await answer.text()).trim().split('\n')
-    expect(lines.map((line) => JSON.parse(line))).toEqual(leads())
+    const text = (await answer.text()).trim()
+    const names =
+        text === '' ? [] : text.split('\n').map((line) => JSON.parse(line))
+    expect(names).toEqual(last)
 })

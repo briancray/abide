@@ -1,6 +1,6 @@
-// 11.80 — A MEMO'S VALUE OPTIONS ARE A REACTIVE'S: what its function settles to is gated by `schema`,
+// 11.79 — A MEMO'S VALUE OPTIONS ARE A REACTIVE'S: what its function settles to is gated by `schema`,
 // shaped by `transform`, and a write `identity` calls a repeat reaches nobody. 16.110 — and a handler
-// takes those, its pace included (5.19, 5.25).
+// takes those, its pace included (5.18, 5.24).
 
 import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
@@ -12,7 +12,7 @@ import type { Reactive } from '#shared/reactive/Reactive.ts'
 
 // THE REVERT: drop `schema` and `transform` from what `memo` hands `keyedValue`; the call answers the
 // untrimmed text, ` dune ` where `4` is due, and the refused one resolves.
-test('a memo gates and shapes what its function settles to — 11.80', async () => {
+test('a memo gates and shapes what its function settles to — 11.79', async () => {
     const order: string[] = []
     const titled = memo((title: string) => title, {
         schema: (value: unknown) => {
@@ -40,7 +40,7 @@ test('a memo gates and shapes what its function settles to — 11.80', async () 
 
 // THE REVERT: drop `identity` from what `memo` hands `keyedValue`; the equal write is a change, and the
 // reader of the entry wakes 2 times where 1 is due.
-test('a write a memo identity calls a repeat wakes no reader — 11.80', async () => {
+test('a write a memo identity calls a repeat wakes no reader — 11.79', async () => {
     const shelf = memo((_none: undefined) => ({ id: 1, title: 'dune' }), {
         identity: (shelved: { id: number }) => shelved.id,
     })
@@ -59,11 +59,11 @@ test('a write a memo identity calls a repeat wakes no reader — 11.80', async (
     expect(`wakes: ${wakes}`).toBe('wakes: 1')
 })
 
-// 5.25, 16.110 — A MEMO'S PACE IS ITS FOLLOWERS': an owner's writes inside one window reach a follower
+// 5.24, 16.110 — A MEMO'S PACE IS ITS FOLLOWERS': an owner's writes inside one window reach a follower
 // as the first and the last, and the value a call answers is the last written. THE REVERT: have
 // `capsWrite` in Reactive.ts answer `cell.body === null` alone; the follower is sent every write,
 // `0,1,2,…,10` where `0,1,10` is due.
-test("a memo's throttle paces what its owner's writes send each follower — 5.25", async () => {
+test("a memo's throttle paces what its owner's writes send each follower — 5.24", async () => {
     const progress = memo(() => 0, { throttle: 500 })
     await progress()
     const sent: unknown[] = []
@@ -87,10 +87,10 @@ test("a memo's throttle paces what its owner's writes send each follower — 5.2
     expect(sent.join()).toBe('0,1,10')
 })
 
-// 5.19 — A KEY REACHED ANEW IS PACED TOO: search-as-you-type reaches a new key each keystroke, so a
+// 5.18 — A KEY REACHED ANEW IS PACED TOO: search-as-you-type reaches a new key each keystroke, so a
 // debounce starts only the one the reaches stopped at. THE REVERT: drop `starts` in `createKeyed`;
 // every key runs, `a,ab,abc` where `abc` is due.
-test("a memo's debounce starts only the key its reaches stopped at — 5.19", async () => {
+test("a memo's debounce starts only the key its reaches stopped at — 5.18", async () => {
     const ran: string[] = []
     const search = memo(
         (query: string) => {
@@ -133,11 +133,11 @@ test("a handler's store is any store, as a memo's is — 16.110", () => {
     expect(typeof typed).toBe('function')
 })
 
-// 11.81 — A LONE ARGUMENT TO A WRITE IS THE VALUE only where the memo takes no args at all: with args
+// 11.80 — A LONE ARGUMENT TO A WRITE IS THE VALUE only where the memo takes no args at all: with args
 // that are optional, `m.set({ page: 2 })` could name the entry or be its value, so the args are
 // named. Typed, never run; the `@ts-expect-error` lines are the assertion. THE REVERT: type `Written`
 // by `undefined extends Args` again; the two directives go unused.
-test('a write takes the value alone only where the memo takes no args — 11.81', () => {
+test('a write takes the value alone only where the memo takes no args — 11.80', () => {
     const shelf = memo(() => ['dune'])
     const paged = memo((query?: { page: number }) => [query?.page ?? 1])
     const typed = (): void => {

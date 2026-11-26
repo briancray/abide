@@ -15,10 +15,9 @@ import { compose } from '#shared/Middleware.ts'
 import { MOUNT, unmounted } from '#shared/mount.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import {
+    abortStopSignal,
     renewStopSignal,
-    startUnownedPolls,
-    stopUnownedPolls,
-} from '#shared/reactive/poll.ts'
+} from '#shared/reactive/abortSignal.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
 import { laneFailure } from './answerFailure.ts'
@@ -51,6 +50,7 @@ import {
     rootRungs,
 } from './hooks.ts'
 import { installServer } from './installServer.ts'
+import { startJobs, stopJobs } from './job.ts'
 import { followedIn, type Mount } from './mountHandlers.ts'
 import {
     admitsMux,
@@ -396,10 +396,10 @@ export async function bootEntered(
         (currentRequestScope()?.app?.answer ?? fetch)(request)
     RPC_SERVER.raw = answerRaw
 
-    // 7.30 — OPENED TO THE NETWORK, the app's jobs start: `App.listen` and `abide dev` both open the
+    // 54.14 — OPENED TO THE NETWORK, the app's jobs start: `App.listen` and `abide dev` both open the
     // mux, after `onStart` has run, and an `App` a test only `fetch`es never runs one.
     const openMux = (): Mux => {
-        startUnownedPolls()
+        startJobs()
         mux = new Mux(
             followedIn(booted.handlers),
             answering.followers,
@@ -429,16 +429,17 @@ export async function bootEntered(
         // stream ended, which a listener's stop otherwise waits on for as long as it streams.
         mux?.closeAll(1001, 'the app is stopping')
         endHeld()
-        // 7.38 — the app's stop signal aborted first, so the run a job has is told to end before 7.27 waits
-        // it out; 7.26 — and no job starts another while the app stops.
-        const settlePolls = stopUnownedPolls()
+        // 7.20 — the app's stop signal aborted first, so the run a job has is told to end before
+        // 54.43 waits it out; 54.14 — and no job starts another while the app stops.
+        abortStopSignal()
+        const settleJobs = stopJobs()
         const drain = (async () => {
             await bound?.stop()
             if (inFlight > 0)
                 await new Promise<void>((done) => {
                     drained = done
                 })
-            await settlePolls()
+            await settleJobs()
             return true
         })()
         // 42.17, 42.18 — THE DRAIN HAS A DEADLINE: past it, every connection still answering is
@@ -465,7 +466,7 @@ export async function bootEntered(
         // 16.42 — a stopped app answers no `raw` call made outside every request.
         if (RPC_SERVER.raw === answerRaw) RPC_SERVER.raw = null
         bound = undefined
-        // 7.39 — the signal says stop for the whole of the stop, `onStop` included, and no longer.
+        // 7.21 — the signal says stop for the whole of the stop, `onStop` included, and no longer.
         try {
             await compose(inOrder(HOOKS.stops), async () => {})(undefined)
         } finally {

@@ -15,7 +15,13 @@ import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
 import { popoverOn } from './popover.ts'
 import { randomToken } from './randomToken.ts'
-import { busy, computed, type Reactive, reactive } from './reactive/index.ts'
+import {
+    busy,
+    computed,
+    type Reactive,
+    reactive,
+    watch,
+} from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { openingEnd } from './roving.ts'
 import type { Picked } from './Selection.ts'
@@ -129,22 +135,35 @@ export function combobox<Item, Multiple extends boolean = false>(
     // 51.57 — what the open list is placed against.
     const input = reactive<HTMLInputElement | undefined>(undefined)
 
-    // Nothing is searched while the list is shut, and a search in flight keeps the last results listed.
-    const found = computed(
-        () => {
-            if (!open()) return NOTHING as readonly Item[]
+    // 51.18 — the text the list is found for: the query, or under `debounce` the query once it has
+    // stopped changing that long. A value the timer writes, rather than a window on the list, so the
+    // list it held back keeps being served (51.19).
+    let searchedFor: () => string = query
+    if (debounce !== undefined) {
+        const settled = reactive(query.peek() as string)
+        watch(() => {
             const text = query()
-            const search = options.search
-            if (search !== undefined) return search(text)
-            const needle = needles()[0]
-            const kept: Item[] = []
-            for (const item of live(options.options) ?? NOTHING)
-                if (needle === undefined || needle.test(label(item)))
-                    kept.push(item)
-            return kept
-        },
-        debounce === undefined ? {} : { debounce },
-    )
+            const timer = setTimeout(() => settled.set(text), debounce)
+            return () => clearTimeout(timer)
+        })
+        searchedFor = settled
+    }
+    // Whether a search is out, or held back until the typing stops.
+    const searching = (): boolean => busy(found) || searchedFor() !== query()
+
+    // Nothing is searched while the list is shut, and a search in flight keeps the last results listed.
+    const found = computed(() => {
+        if (!open()) return NOTHING as readonly Item[]
+        const text = searchedFor()
+        const search = options.search
+        if (search !== undefined) return search(text)
+        const needle = needles()[0]
+        const kept: Item[] = []
+        for (const item of live(options.options) ?? NOTHING)
+            if (needle === undefined || needle.test(label(item)))
+                kept.push(item)
+        return kept
+    })
 
     // 51.190 — what was typed, made an item where nothing listed or picked carries it as its label.
     const creating = computed((): Item | undefined => {
@@ -282,7 +301,7 @@ export function combobox<Item, Multiple extends boolean = false>(
                 return open() ? '' : undefined
             },
             get 'data-busy'() {
-                return open() && busy(found) ? '' : undefined
+                return open() && searching() ? '' : undefined
             },
         },
         input: {
@@ -359,7 +378,7 @@ export function combobox<Item, Multiple extends boolean = false>(
             }),
         runs: (item) => labelRuns(label(item), needles(), MATCH),
         get nothingFound() {
-            return !busy(found) && listed().length === 0
+            return !searching() && listed().length === 0
         },
         empty: { role: 'status', 'data-combobox': 'empty' },
         value: value as Reactive<Picked<Item, Multiple>>,

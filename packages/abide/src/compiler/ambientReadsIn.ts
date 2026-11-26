@@ -134,7 +134,7 @@ export async function ambientReadsIn(
 }
 
 /**
- * Whether a call builds a `global` value over a body written in place: `computed(() => …, { global:
+ * Whether a call builds a `global` value over a body written in place: `memo(() => …, { global:
  * true })` or `GET(() => …, { global: true })`, the option a literal `true`.
  */
 function isGlobalReactive(call: CallExpression): boolean {

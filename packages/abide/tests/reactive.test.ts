@@ -33,6 +33,7 @@ import { CELL } from '#shared/reactive/CELL.ts'
 import { cellOf } from '#shared/reactive/cellShape.ts'
 import { isKeyed, keyedValue } from '#shared/reactive/index.ts'
 import { chunksOfStream, isStreaming } from '#shared/reactive/producer.ts'
+import { type CellOptions, createReactive } from '#shared/reactive/Reactive.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'
 import { CLEAN } from '#shared/reactive/tracking.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
@@ -46,6 +47,35 @@ import { warningsWhile } from './warningsWhile.ts'
 // 12.6 — the `onError` hooks these tests file are handed what the core reports once a server wires
 // them in (`installServer`), and this file is no server.
 UNEXPECTED.report = handOnError
+
+// THE CELL A `memo`'s ENTRY IS (5.24), built with the options a memo hands each of its entries, so a
+// test can write it as the entry's owner does and count the wakes its pace lets through. `reactive`
+// and `computed` take none of these (11.81); a memo's entry is the one place they reach.
+function pacedValue<Value>(
+    initial: Value | undefined,
+    options: CellOptions<Value, Value>,
+): Reactive<Value> {
+    return createReactive<Value, Value, never>(
+        'memo',
+        null,
+        undefined,
+        initial,
+        options,
+    )
+}
+
+function pacedBody<Result>(
+    body: () => Result,
+    options: CellOptions<unknown, unknown>,
+): ReturnType<typeof computed<never, Result>> {
+    return createReactive(
+        'memo',
+        body as (args: unknown) => unknown,
+        undefined,
+        undefined,
+        options as CellOptions<never, never>,
+    ) as unknown as ReturnType<typeof computed<never, Result>>
+}
 
 // A wake counter that is not itself a reactive read — `watch` would re-enter the graph
 // and the count would include its own subscription.
@@ -195,7 +225,7 @@ test('busy propagates through a derived value while its source refreshes', async
     expect(doubled.busy()).toBe(true)
 })
 
-// THE ABORT. A body that reads an unlanded value is abandoned, mints nothing (11.52),
+// THE ABORT. A body that reads an unlanded value is abandoned, mints nothing (11.51),
 // and reruns when the source lands. The count is what matters: a body run to
 // completion against an unlanded read would have produced once with the wrong input.
 test('a body reading an unlanded value mints nothing and reruns on landing', async () => {
@@ -218,7 +248,7 @@ test('a body reading an unlanded value mints nothing and reruns on landing', asy
     await source
     // THE READ IS WHAT RERUNS IT (11.5). Nothing watches this value, so the source
     // landing marks it and stops; under eager the body had already run again by the time
-    // the `await` returned. The contract 2.12 and 11.52 state is unchanged either way — the
+    // the `await` returned. The contract 2.12 and 11.51 state is unchanged either way — the
     // body is abandoned rather than completed against an absent value, and it mints
     // nothing on the run that aborted.
     expect(runs).toBe(1)
@@ -229,7 +259,7 @@ test('a body reading an unlanded value mints nothing and reruns on landing', asy
 // 2.13 FOR A READER THAT ONLY GUARDS, which is the case the two around this one cannot reach. A
 // binding spelled `{#if unpaid.ready()}` subscribes to the PROBE and never to the value, so no
 // read of its will ever pull an aborted body forward — and the body cannot answer `ready` until it
-// has run for the value being probed (11.54). Left to push-pull the guard says "counting…" for as
+// has run for the value being probed (11.53). Left to push-pull the guard says "counting…" for as
 // long as the page is open, and every number on it is right.
 //
 // THE REVERT is dropping the `aborted` queue from `markReaders`: `after: counting… | counting…`.
@@ -316,11 +346,11 @@ test('computed is unkeyed and memo keyed, whatever the body declares — 11.1, 1
     expect(`runs: ${runs}`).toBe('runs: 2')
 })
 
-// 11.75, 16.107 — A `computed` CALLING A MEMO FOLLOWS THE KEY IT CALLED, and no other: one handing the
+// 11.74, 16.107 — A `computed` CALLING A MEMO FOLLOWS THE KEY IT CALLED, and no other: one handing the
 // call back whole adopts the entry, so a refresh reaches its value with no run of its body; one that
 // awaits the call runs again. Counted as body runs, which the values cannot show. THE REVERT: drop the
 // read `answerOfCall` makes; the awaiting body is never run again and `awaited: 3` stays at 4.
-test('a computed calling a memo follows the key it called — 11.75, 16.107', async () => {
+test('a computed calling a memo follows the key it called — 11.74, 16.107', async () => {
     let answer = 1
     const score = memo((args: { id: number }) => answer * args.id)
     let adoptingRuns = 0
@@ -349,11 +379,11 @@ test('a computed calling a memo follows the key it called — 11.75, 16.107', as
     ).toBe('shown: 10, awaited: 11, adopting runs: 1')
 })
 
-// 11.2, 11.76 — A MEMO RUNS ITS FUNCTION ONCE PER KEY: every call with one key is answered its one value,
+// 11.2, 11.75 — A MEMO RUNS ITS FUNCTION ONCE PER KEY: every call with one key is answered its one value,
 // and for a stream, one run that every call reads through a cursor of its own from its start. THE
 // REVERT: box an async iterable in `createMemo` as any answer is; the two calls share one iterator,
 // the second reads nothing the first took, and `two: ` is empty.
-test('a memo runs its function once per key, and shares a stream with a cursor per call — 11.2, 11.76', async () => {
+test('a memo runs its function once per key, and shares a stream with a cursor per call — 11.2, 11.75', async () => {
     let loads = 0
     const load = memo(async (args: { id: number }) => {
         loads += 1
@@ -409,10 +439,10 @@ test('a memo called with args its gate refuses rejects with the refusal — 11.2
     )
 })
 
-// 11.77 — A MEMO'S ENTRY IS WRITTEN BY ITS OWNER: `set` replaces the value for a key and `patch`
+// 11.76 — A MEMO'S ENTRY IS WRITTEN BY ITS OWNER: `set` replaces the value for a key and `patch`
 // mutates it in place, each reaching a `computed` that adopted the key, and neither running the
 // function. THE REVERT: drop `patch` from `memoOver`'s face; the call throws, `entries: 1,2` stays `1`.
-test('a memo entry is set and patched by its owner, and a reader follows — 11.77', async () => {
+test('a memo entry is set and patched by its owner, and a reader follows — 11.76', async () => {
     let runs = 0
     const feed = memo((_args: { account: string }) => {
         runs += 1
@@ -429,10 +459,10 @@ test('a memo entry is set and patched by its owner, and a reader follows — 11.
     expect(`entries: ${shown()}, runs: ${runs}`).toBe('entries: 9, runs: 1')
 })
 
-// 11.78 — `readable` HANDS ON THE ENTRY'S VALUE NOW, THEN AFTER EACH CHANGE, each a copy of its own, so a
+// 11.77 — `readable` HANDS ON THE ENTRY'S VALUE NOW, THEN AFTER EACH CHANGE, each a copy of its own, so a
 // reader keeping one is not handed a value a later patch mutates. THE REVERT: enqueue the value rather
 // than its copy in `readableOf`; the first value read is the patched one, `1,2` where `1` is due.
-test('a memo entry is read as a stream of its values — 11.78', async () => {
+test('a memo entry is read as a stream of its values — 11.77', async () => {
     const feed = memo((_args: { account: string }) => [1])
     await feed({ account: 'a' })
     const reader = feed.readable({ account: 'a' }).getReader()
@@ -467,7 +497,7 @@ test('a memo runs again for a key whose promise rejected — 15.19', async () =>
     )
 })
 
-// 11.64: WHAT THE CANONICAL WIRE FORM CANNOT WRITE IS REFUSED AT THE REACH. `JSON.stringify`
+// 11.63: WHAT THE CANONICAL WIRE FORM CANNOT WRITE IS REFUSED AT THE REACH. `JSON.stringify`
 // fails on none of it — a `Set`, a `Map` and a class instance each have no own enumerable keys
 // and canonicalize to `{}`, and a non-finite number is written `null` — so 1.8 joined the second
 // reach to the first's standing work and served it a value computed from other arguments.
@@ -801,7 +831,7 @@ test('a diamond whose value does not change wakes nobody', () => {
     woken.stop()
 })
 
-// 11.57, AND THE WHOLE OF WHAT PUSH-PULL BUYS. A write MARKS every derived value that
+// 11.56, AND THE WHOLE OF WHAT PUSH-PULL BUYS. A write MARKS every derived value that
 // read the source and runs none of them; the one that is read runs, and the other
 // forty-nine do not. A correctness test cannot see this — every one of the fifty serves
 // the right value on the read that asks — so the assertion is the body-run count.
@@ -2198,14 +2228,14 @@ test('refreshing over the same adoption wakes no reader', () => {
     expect(`wakes: ${woken}`).toBe('wakes: 0')
 })
 
-// 11.51: THE ADOPTED VALUE IS WHERE THE DATA IS. The outer's own body only hands back a
+// 11.50: THE ADOPTED VALUE IS WHERE THE DATA IS. The outer's own body only hands back a
 // reference, so rerunning it reloads nothing — without the reach a `refresh` on the value
 // an app holds is a spinner over a load that never happens.
 //
 // THE REVERT is dropping the reach from `eachAdopted`: `inner runs: 0`
 // on both lines.
-// 11.51 IS EVERY TRIGGER AND EVERY ADOPTER, including one that adopted through `s.set`
-// (11.61) rather than through a body. Both triggers reached `cell.adoption` only PAST the
+// 11.50 IS EVERY TRIGGER AND EVERY ADOPTER, including one that adopted through `s.set`
+// (11.60) rather than through a body. Both triggers reached `cell.adoption` only PAST the
 // "no producer" return, and an adopter made by a write has no body — so both were silent
 // no-ops on it, with nothing in the output saying the reload never happened.
 //
@@ -2254,7 +2284,7 @@ test('a trigger on an adopting value reaches the adopted one', () => {
     expect(outer.ready()).toBe(true)
 })
 
-// 11.50 ON A PROBE-ONLY MOVE. A production of the adopted value reaches the adopter through
+// 11.49 ON A PROBE-ONLY MOVE. A production of the adopted value reaches the adopter through
 // the mirror and moves the adopter's probes with it — but a move that mints nothing (a load
 // starting, a refresh landing an equal value, a stream closing) reached the mirror not at
 // all. `outer.busy()` answered right whenever it was asked and nothing ever asked it again,
@@ -2285,7 +2315,7 @@ test('a guard on an adopting value hears the adopted value start and stop loadin
     expect(`saw: ${saw.join(',')}`).toBe('saw: false,true,false')
 })
 
-// 11.50 FOR `error`, AND WHAT A FAILURE DOES THROUGH AN ADOPTION. The adopted value is where
+// 11.49 FOR `error`, AND WHAT A FAILURE DOES THROUGH AN ADOPTION. The adopted value is where
 // the load is, so its failure is the adopter's to report: `error()` answers it, a read with
 // nothing to serve throws it rather than `NotLanded` — "no", where `NotLanded` says "not yet"
 // and a tracked body waits on it forever (2.2) — and an await rejects with it (2.8). Before,
@@ -2327,7 +2357,7 @@ test('a failure of the adopted value is the adopter error, its read throw and it
     expect(await awaited).toBe('rejected: boom')
 })
 
-// 2.4 AND 11.50 TOGETHER: a revalidation of the adopted value that fails leaves the adopter
+// 2.4 AND 11.49 TOGETHER: a revalidation of the adopted value that fails leaves the adopter
 // serving what it held, with the failure standing beside it.
 test('a failed revalidation of the adopted value leaves the adopter serving, with the error', async () => {
     let loads = 0
@@ -2351,7 +2381,7 @@ test('a failed revalidation of the adopted value leaves the adopter serving, wit
 
 // ── The probe floor: a value is no better than the worst it was built from ───────
 
-// 11.20 AND 11.58. `busy` asks whether ANYTHING it reads is loading; `ready` whether
+// 11.20 AND 11.57. `busy` asks whether ANYTHING it reads is loading; `ready` whether
 // EVERYTHING it reads has something to serve. Only that pairing makes `busy && !ready`
 // one sentence, and only the second half was implemented.
 //
@@ -2384,7 +2414,7 @@ test('a derived value is not ready while a value it read has nothing to serve', 
     expect(derived.ready()).toBe(false)
 })
 
-// 11.58 THROUGH AN ABORT, where nothing upstream moved a probe. The write that re-points the body
+// 11.57 THROUGH AN ABORT, where nothing upstream moved a probe. The write that re-points the body
 // is a production on `flag`, and `pending` has never had anything to serve, so the only move a
 // guard on `derived.ready()` can hear is the one the abort makes when it stops serving.
 //
@@ -2617,7 +2647,7 @@ test('a capped body over a probe holds the run its probe moving marks', async ()
     const answer = 1
     const source = computed(() => Promise.resolve(answer))
     await source
-    const label = computed(() => (source.busy() ? 'busy' : 'idle'), {
+    const label = pacedBody(() => (source.busy() ? 'busy' : 'idle'), {
         debounce: WINDOW,
     })
     const seen: string[] = []
@@ -2654,7 +2684,7 @@ const WINDOW = 30
 const AFTER_WINDOW = 90
 
 test('a throttle lets the leading change through and holds the rest', () => {
-    const query = reactive<number>(undefined, { throttle: WINDOW })
+    const query = pacedValue<number>(undefined, { throttle: WINDOW })
     const woken = wakes(query)
     for (let write = 1; write <= 10; write += 1) query.set(write)
     // 5.12: the first change immediately, and then at most once per window — so nine of
@@ -2668,7 +2698,7 @@ test('a throttle lets the leading change through and holds the rest', () => {
 // debounce of `Infinity` holds forever (5.13). THE REVERT: `armWindow` leaving the timer `null` for
 // `Infinity` reads 3 — every set leads, because no window ever reads as open.
 test('a throttle of Infinity lets the first change through and no other', () => {
-    const query = reactive(0, { throttle: Number.POSITIVE_INFINITY })
+    const query = pacedValue(0, { throttle: Number.POSITIVE_INFINITY })
     query.set(1)
     query.set(2)
     query.set(3)
@@ -2682,7 +2712,7 @@ test('a throttle of Infinity lets the first change through and no other', () => 
 // THE REVERT, run: `passes` opening a throttle's window on the first landing reports
 // `read: false, wakes: 0, busy: true` — the set held behind a window construction opened.
 test('a throttle built with a value lets the first set through at once', () => {
-    const status = reactive({ running: false }, { throttle: WINDOW })
+    const status = pacedValue({ running: false }, { throttle: WINDOW })
     const woken = wakes(status)
     status.set({ running: true })
     status.set({ running: false })
@@ -2695,7 +2725,7 @@ test('a throttle built with a value lets the first set through at once', () => {
 test('a debounce holds every change after the first landing', () => {
     // The value has to have LANDED before a debounce has anything to do: the first
     // production goes straight out, having no held value to be held back from.
-    const query = reactive<number>(0, { debounce: WINDOW })
+    const query = pacedValue<number>(0, { debounce: WINDOW })
     const woken = wakes(query)
     for (let write = 1; write <= 10; write += 1) query.set(write)
     // 5.13: the change waits for the changes to STOP, so nobody has been woken and what
@@ -2706,7 +2736,7 @@ test('a debounce holds every change after the first landing', () => {
 })
 
 test('a window caps the wake at one for ten writes', async () => {
-    const feed = reactive<number>(undefined, { debounce: WINDOW })
+    const feed = pacedValue<number>(undefined, { debounce: WINDOW })
     feed.set(0)
     const woken = wakes(feed)
     for (let write = 1; write <= 10; write += 1) feed.set(write)
@@ -2720,7 +2750,7 @@ test('a window caps the wake at one for ten writes', async () => {
 })
 
 test('a held value goes on being served, and the window reads as busy', async () => {
-    const query = reactive<number>(undefined, { throttle: WINDOW })
+    const query = pacedValue<number>(undefined, { throttle: WINDOW })
     query.set(1)
     query.set(2)
     // 5.15: what a reader sees is the value the window released, not the one it holds.
@@ -2733,7 +2763,7 @@ test('a held value goes on being served, and the window reads as busy', async ()
 })
 
 test('the identity gate compares against the last production, not the last release', async () => {
-    const query = reactive<number>(undefined, { throttle: WINDOW })
+    const query = pacedValue<number>(undefined, { throttle: WINDOW })
     query.set(1)
     query.set(2)
     query.set(1)
@@ -2755,13 +2785,13 @@ test('the identity gate compares against the last production, not the last relea
 // about the OUTPUT moves — the sanity case beside this one is what says the gate still
 // wakes where the value really changed, which is the pairing that tells a fixed gate from
 // a dead one.
-// 5.23 — A PATCH IS CAPPED LIKE A PRODUCTION. The object changes at once, so what the window holds is
+// 5.22 — A PATCH IS CAPPED LIKE A PRODUCTION. The object changes at once, so what the window holds is
 // the wake: the first of ten patches wakes a reader at once (5.12) and the other nine reach it once,
 // when the window closes, carrying the last.
 // THE REVERT: cascade unconditionally in `patchCell`; the reader is woken 10 times inside the
 // window where 1 is due.
 test('a throttle caps the wakes a run of patches makes', async () => {
-    const rows = reactive([{ n: 0 }], { throttle: WINDOW })
+    const rows = pacedValue([{ n: 0 }], { throttle: WINDOW })
     const woken = wakes(rows)
     for (let write = 1; write <= 10; write += 1)
         rows.patch((list) => {
@@ -2777,12 +2807,12 @@ test('a throttle caps the wakes a run of patches makes', async () => {
     woken.stop()
 })
 
-// 5.24 — A REFRESH IS HELD LIKE A PRODUCTION: a throttle starts the first reload and holds the rest,
+// 5.23 — A REFRESH IS HELD LIKE A PRODUCTION: a throttle starts the first reload and holds the rest,
 // and what it held is ONE reload when the window closes. THE REVERT: drop the window arm from
 // `refreshOne`; three refreshes start 3 loads at once where 1 is due.
 test('a throttle collapses a run of refreshes into one reload per window', async () => {
     let loads = 0
-    const loaded = computed(
+    const loaded = pacedBody(
         async () => {
             loads += 1
             return loads
@@ -2800,12 +2830,12 @@ test('a throttle collapses a run of refreshes into one reload per window', async
     expect(loads - before).toBe(2)
 })
 
-// 5.24 AND 7.11 — a debounce holds every refresh until they stop, and the one reload it owes runs
+// 5.23 AND 7.11 — a debounce holds every refresh until they stop, and the one reload it owes runs
 // though nothing reads the value. THE REVERT: owe the run (`cap.owed`) instead of the reload; with
 // no reader the run is never pulled, and 0 loads start where 1 is due.
 test('a debounce holds refreshes until they stop, and reloads with nobody reading', async () => {
     let loads = 0
-    const loaded = computed(
+    const loaded = pacedBody(
         async () => {
             loads += 1
             return loads
@@ -2823,7 +2853,7 @@ test('a debounce holds refreshes until they stop, and reloads with nobody readin
 
 test('a throttled derived value that recomputes to the same figure wakes nobody', async () => {
     const source = reactive(1)
-    const derived = computed(() => source() > 0, { throttle: WINDOW })
+    const derived = pacedBody(() => source() > 0, { throttle: WINDOW })
     let woken = 0
     const stop = watch(() => {
         derived()
@@ -2844,7 +2874,7 @@ test('a throttled derived value that recomputes to the same figure wakes nobody'
 
 test('a throttled derived value that does move still wakes, once per window', async () => {
     const source = reactive(1)
-    const derived = computed(() => source() * 2, { throttle: WINDOW })
+    const derived = pacedBody(() => source() * 2, { throttle: WINDOW })
     let woken = 0
     const stop = watch(() => {
         derived()
@@ -2869,12 +2899,12 @@ test('a value declaring both throttle and debounce refuses, naming the value', (
     // rather than a returned refusal: this is not a value refusing a write, it is a value
     // that cannot be constructed.
     expect(() =>
-        reactive<number>(undefined, { throttle: 10, debounce: 10 }),
+        pacedValue<number>(undefined, { throttle: 10, debounce: 10 }),
     ).toThrow(/declares both throttle and debounce/)
 })
 
 test('a run of writes wakes once per window rather than twice at its edges', async () => {
-    const query = reactive<number>(undefined, { throttle: WINDOW })
+    const query = pacedValue<number>(undefined, { throttle: WINDOW })
     const woken = wakes(query)
     query.set(1)
     query.set(2)
@@ -2903,7 +2933,7 @@ test('a run of writes wakes once per window rather than twice at its edges', asy
 // under `--parallel` is rerun with `test:serial` before it is believed.
 test('a debounce waits for the changes to stop, not for the first of them', async () => {
     const LONG = 150
-    const query = reactive<number>(0, { debounce: LONG })
+    const query = pacedValue<number>(0, { debounce: LONG })
     const woken = wakes(query)
     for (let write = 1; write <= 12; write += 1) {
         query.set(write)
@@ -2921,14 +2951,16 @@ test('a window does not hold back the first landing', () => {
     // the first landing there is none — so a reader would get neither. A `debounce: 300`
     // left a value unreadable for 300 ms after construction, which is every form on a
     // page reading as not-ready on mount.
-    const typed = reactive<string>('', { debounce: WINDOW })
+    const typed = pacedValue<string>('', { debounce: WINDOW })
     expect(typed.ready()).toBe(true)
     expect(typed()).toBe('')
     expect(typed.busy()).toBe(false)
 
     // 4.16: an opening `undefined` is a landing the window never saw, so it is ready at once and the
     // FIRST write is already a change the debounce holds, served over the `undefined` it replaces.
-    const capped = reactive<number | undefined>(undefined, { debounce: WINDOW })
+    const capped = pacedValue<number | undefined>(undefined, {
+        debounce: WINDOW,
+    })
     expect(capped.ready()).toBe(true)
     capped.set(1)
     expect(capped()).toBeUndefined()
@@ -2946,7 +2978,7 @@ test('a window does not hold back the first landing', () => {
 test('a cap on the key spares the call a superseded key would have made', async () => {
     const LONG = 100
     let calls = 0
-    const region = reactive<string>('north', { debounce: LONG })
+    const region = pacedValue<string>('north', { debounce: LONG })
     const countOrders = keyedValue((args: { region: string }) => {
         calls += 1
         return `orders in ${args.region}`
@@ -3002,11 +3034,13 @@ function searchRig(options: Record<string, number>): {
     const keys: string[] = []
     let woken = 0
     const region = reactive<string>('north')
+    // THE SOURCE IS PACED, AND THE VIEW READS IT (5.18): a window on the keyed value holds back
+    // starting each key the view reaches, which is a search-as-you-type's request per keystroke.
     const countOrders = keyedValue((args: { region: string }) => {
         keys.push(args.region)
         return `n=${args.region}`
-    })
-    const orders = computed(() => countOrders({ region: region() }), options)
+    }, options)
+    const orders = computed(() => countOrders({ region: region() }))
     const stop = watch(() => {
         try {
             orders()
@@ -3037,6 +3071,8 @@ test('a debounced body runs once for a burst, with the last key', async () => {
 
 test('a throttled body runs the leading change and the trailing one', async () => {
     const rig = searchRig({ throttle: 150 })
+    // The view's own first reach of the source opened a window; the typing starts after it.
+    await Bun.sleep(200)
     await typeInto(rig.region, ['s', 'so', 'sou', 'south'])
     await Bun.sleep(450)
     flushSync()
@@ -3053,6 +3089,8 @@ test('a throttled body runs the leading change and the trailing one', async () =
 // window and the await answers 'n=s'.
 test('a throttled body is busy while its window holds a run, and an await waits for it', async () => {
     const rig = searchRig({ throttle: 150 })
+    // The view's own first reach of the source opened a window; the typing starts after it.
+    await Bun.sleep(200)
     rig.region.set('s')
     flushSync()
     expect(rig.orders.peek()).toBe('n=s')
@@ -3171,176 +3209,6 @@ test('a narrowed watch runs untracked inside a tracked body', () => {
     stop()
 })
 
-// ── `ttl`: the life of a production (RULEBOOK 6.1 through 6.6) ──────────────────────
-
-// A CLOCK READ IS WHAT AN EXPIRY COSTS, and counting them is the only assertion that can
-// tell the mechanism from a no-op branch — the value reads the same either way. It is a
-// performance contract rather than a tidiness one: `Date.now()` is several times a read of
-// an already-served value, and the design has one read per template slot per row.
-function clockReads(during: () => void): number {
-    const realNow = Date.now
-    let asked = 0
-    Date.now = (): number => {
-        asked += 1
-        return realNow.call(Date)
-    }
-    try {
-        during()
-    } finally {
-        Date.now = realNow
-    }
-    return asked
-}
-
-// THE REVERT: hoisting `Date.now()` out of the `expiry === null` test in `produce` — the
-// spelling that reads as tidier, one clock read per production instead of a branch —
-// reports 200 clock reads against 0. Two hundred rather than one hundred because the
-// derived value's recompute is a production too, which is the point: the cost is per
-// production in the graph, not per write an app makes.
-test('a value that declares no ttl never asks what time it is', () => {
-    const source = reactive(1)
-    const derived = computed(() => source() + 1)
-    const asked = clockReads(() => {
-        for (let index = 0; index < 100; index += 1) {
-            source.set(index)
-            derived()
-        }
-    })
-    expect(`clock reads: ${asked}`).toBe('clock reads: 0')
-})
-
-// 6.2 WRITES BACK, AND ONLY ON A WRITE — SO IT IS AN ALLOCATION CLAIM AS MUCH AS A BEHAVIOR ONE.
-// The expiry of 6.3 through 6.10 is a producer's, and a value with none builds no expiry record,
-// reads no clock and leaves `direct` alone: what 6.2 does to it happens on its seat's `set`, and a
-// value nothing writes holds what it opened on however late it is read. Asserting the value survived
-// would pass against a branch that expired it and had nothing to reload with.
-//
-// WHAT THE REVERT MOVES IS `direct`, NOT THE CLOCK, and the first spelling of this gate
-// asserted the clock alone and passed with the mechanism out — a plain state is guarded
-// twice over, by `expiryFor` here and by `expire`'s own test for a body, so dropping one
-// of them still reaches no `Date.now()` on a read. What it does reach is `readIndirect`,
-// on every read, for the life of the value.
-//
-// THE REVERT: dropping the `hasProducer` term from `expiryFor` reports `direct: false`
-// against `direct: true`, and 1 clock read against 0.
-test('ttl on a value with no producer costs its reads nothing — 6.2', () => {
-    let held = reactive<number>(41, { ttl: 1 })
-    const asked = clockReads(() => {
-        held = reactive<number>(41, { ttl: 1 })
-        held()
-        held.peek()
-    })
-    expect(`clock reads: ${asked}`).toBe('clock reads: 0')
-    expect(`direct: ${cellOf(held).direct}`).toBe('direct: true')
-    const realNow = Date.now()
-    setSystemTime(new Date(realNow + 60_000))
-    try {
-        expect(held()).toBe(41)
-        expect(held.ready()).toBe(true)
-    } finally {
-        setSystemTime()
-    }
-})
-
-// 6.5 AND 6.6 TOGETHER, which is what the user's ruling decided: past its `ttl` the
-// held value is not served, and the producer is what answers instead. A SYNCHRONOUS body
-// lands inside the read, so the expiry is never observable as an absence here — the read
-// returns the new value rather than refusing.
-//
-// The clock is moved rather than slept through, which is what isolates the READ's half:
-// `setSystemTime` does not move `setTimeout`, so 6.3's timer provably cannot have fired
-// and nothing but `readIndirect` can have noticed.
-//
-// THE REVERT: removing the `expire` call from `readIndirect` reports 'first' against
-// 'second', the producer never having been asked again.
-test('a read past the ttl runs the producer instead of serving the cache', () => {
-    let runs = 0
-    let answer = 'first'
-    const loaded = computed(
-        () => {
-            runs += 1
-            return answer
-        },
-        { ttl: 1_000 },
-    )
-    expect(loaded()).toBe('first')
-    expect(loaded()).toBe('first')
-    expect(`runs: ${runs}`).toBe('runs: 1')
-    answer = 'second'
-    const realNow = Date.now()
-    setSystemTime(new Date(realNow + 1_001))
-    try {
-        expect(loaded()).toBe('second')
-        expect(`runs: ${runs}`).toBe('runs: 2')
-        // And the production that just landed restarts the life rather than leaving every
-        // read after it expired.
-        expect(loaded()).toBe('second')
-        expect(`runs: ${runs}`).toBe('runs: 2')
-    } finally {
-        setSystemTime()
-    }
-})
-
-// AN INFINITE RELOAD RATHER THAN A STALE READ, which is why it is a run count and not a
-// value assertion — the value is right on every one of these reads and the producer is
-// being called on every one of them.
-//
-// 6.7 IS WHAT MAKES IT SAFE, and it was not always: while an expiry only stopped the
-// value being SERVED, a producer revalidating to the value already held minted nothing
-// (5.2), so the deadline stayed at the previous production's and the next read expired
-// again. Releasing the production clears `landed`, so there is nothing for the identity
-// gate to collapse against and the reload is a real production that moves the deadline.
-//
-// THE REVERT: removing `expiry.at = mintedAt` from `produce` reports 4 runs against 2 —
-// the reload lands but the deadline stays where it was, so the read after it expires
-// again, and the one after that.
-test('a producer that revalidates to the same value restarts the life', () => {
-    let runs = 0
-    const loaded = computed(
-        () => {
-            runs += 1
-            return 'steady'
-        },
-        { ttl: 1_000 },
-    )
-    expect(`runs: ${runs}`).toBe('runs: 1')
-    const realNow = Date.now()
-    setSystemTime(new Date(realNow + 1_001))
-    try {
-        expect(loaded()).toBe('steady')
-        expect(`runs: ${runs}`).toBe('runs: 2')
-        // The reload confirmed what was held, so the life restarts here — these two reads
-        // are inside the new window and must call nothing.
-        expect(loaded()).toBe('steady')
-        expect(loaded()).toBe('steady')
-        expect(`runs: ${runs}`).toBe('runs: 2')
-    } finally {
-        setSystemTime()
-    }
-})
-
-// 1.7 AND 6.6 AFTER THE TIMER HAS DROPPED THE PRODUCTION: awaiting is reaching, and nothing is
-// served and nothing is loading, so an await that starts no reload waits on a probe nothing moves.
-//
-// THE REVERT: removing the `expire` call from `settled` reports 'hung' with 1 run.
-test('an await after the ttl dropped the production reloads it', async () => {
-    let runs = 0
-    const loaded = computed(
-        async () => {
-            runs += 1
-            return runs
-        },
-        { ttl: 20 },
-    )
-    expect(await loaded).toBe(1)
-    await Bun.sleep(60)
-    const answer = await Promise.race([
-        loaded.then((value) => `loaded ${value}`),
-        Bun.sleep(300).then(() => 'hung'),
-    ])
-    expect(`${answer} with ${runs} runs`).toBe('loaded 2 with 2 runs')
-})
-
 // ── A keyed body does not track (RULEBOOK 14.4, 11.6, 11.23, 2.13) ─────────────────────
 
 // 14.4 AND 11.6: AN ENTRY IS HELD, NOT DERIVED. It comes back through `ttl`, a trigger or
@@ -3409,12 +3277,12 @@ test('a keyed entry is not busy because a value its body read is', async () => {
 // ── `args`: the gate on a keyed value's args (RULEBOOK 9.4, 11.26, 11.28, 11.40, 11.41) ──
 
 // THE BODY IS WHERE THE PRIVILEGED CALL IS, so a refused `Args` must never reach it — and the
-// refusal is NO ENTRY (11.72): args nobody should have sent would otherwise each hold a place, and
+// refusal is NO ENTRY (11.71): args nobody should have sent would otherwise each hold a place, and
 // on a `global` value hold it for the life of the process.
 //
 // THE REVERTS: build entries from the ungated body, and `body runs: 1` with nothing refused. Or
 // file the refusal under its key, and `entries: 1` where 0 are due.
-test('an args gate refuses before the body runs, and the refusal is no entry — 11.72', () => {
+test('an args gate refuses before the body runs, and the refusal is no entry — 11.71', () => {
     let runs = 0
     const invoice = keyedValue(
         (args: { id: number }) => {
@@ -3447,12 +3315,12 @@ test('an args gate refuses before the body runs, and the refusal is no entry —
     expect(invoice({ id: 4 })()).toBe(8)
 })
 
-// 11.72 — A REFUSAL IS BUILT WITH NONE OF THE VALUE'S OPTIONS: a `store` holding a value for the
+// 11.71 — A REFUSAL IS BUILT WITH NONE OF THE VALUE'S OPTIONS: a `store` holding a value for the
 // refused args would be restored over the refusal, and its read would answer what the gate refused.
 //
 // THE REVERT: build the refusal with the entry's options, and `read: 99` where the
 // ValidationError is due, with a watch nothing stops.
-test('a refused args reads its refusal, not a value its store holds — 11.72', () => {
+test('a refused args reads its refusal, not a value its store holds — 11.71', () => {
     let watches = 0
     const invoice = keyedValue((args: { id: number }) => args.id * 2, {
         args: (value: unknown) => {
@@ -3480,11 +3348,11 @@ test('a refused args reads its refusal, not a value its store holds — 11.72', 
     )
 })
 
-// 11.72 — THE GATE RUNS ONCE PER ENTRY, not once per run of it: the args an entry was filed under
+// 11.71 — THE GATE RUNS ONCE PER ENTRY, not once per run of it: the args an entry was filed under
 // do not change, so a refresh hands the body what the gate accepted the first time.
 //
 // THE REVERT is gating the body itself, as each run's wrapper: `gate runs: 3` where 1 is due.
-test('a refresh does not run the args gate again — 11.72', async () => {
+test('a refresh does not run the args gate again — 11.71', async () => {
     let gateRuns = 0
     const invoice = keyedValue((args: { id: number }) => args.id * 2, {
         args: (value: unknown) => {
@@ -3500,7 +3368,7 @@ test('a refresh does not run the args gate again — 11.72', async () => {
     expect(`gate runs: ${gateRuns}`).toBe('gate runs: 1')
 })
 
-// 11.28 AND 11.68: THE GATE DOES NOT DECIDE THE ENTRY, AND THE BODY GETS WHAT IT RETURNED. Two
+// 11.28 AND 11.67: THE GATE DOES NOT DECIDE THE ENTRY, AND THE BODY GETS WHAT IT RETURNED. Two
 // args the gate would normalize to one are still two keys, and each body sees the normalized form.
 //
 // THE REVERT is handing the body the args the caller sent: `body saw: string`.
@@ -3521,6 +3389,38 @@ test("an args gate that normalizes decides the body's args but not the entry", (
     keyed({ id: 7 })
     expect(`body saw: ${seen[0]}`).toBe('body saw: number')
     expect(`entries: ${keyed.entries.size}`).toBe('entries: 2')
+})
+
+// 11.81 — A VALUE TAKES NO SOURCE'S OPTIONS: `reactive` and `computed` each refuse a `ttl`, a pace, a
+// tag and `global` at construction, naming the `memo` that declares it — for JavaScript, and for a
+// spread the types cannot see. THE REVERT: drop `refuseSourced` from `computed`, and `refused: 5 of
+// 10`, every `computed` building a value that carries a source's option.
+test('reactive and computed refuse what a source declares — 11.81', () => {
+    const given = {
+        ttl: 10,
+        throttle: 10,
+        debounce: 10,
+        tags: ['t'],
+        global: true,
+    }
+    let refused = 0
+    for (const [option, value] of Object.entries(given)) {
+        const options = { [option]: value } as never
+        for (const build of [
+            () => reactive(0, options),
+            () => computed(() => 0, options),
+        ])
+            try {
+                build()
+            } catch (thrown) {
+                if (
+                    thrown instanceof TypeError &&
+                    thrown.message.includes(`memo(fn, { ${option} })`)
+                )
+                    refused += 1
+            }
+    }
+    expect(`refused: ${refused} of 10`).toBe('refused: 10 of 10')
 })
 
 // 11.41 AT CONSTRUCTION. The clause asks for a compile error and the checker cannot raise one —
@@ -3573,14 +3473,12 @@ test('an args gate on a keyed stream keeps it a stream, and refuses before it st
     )
 })
 
-// 11.45: A KEYED `ttl` IS THE LIFE OF AN ENTRY, evicted whole, and the
-// next reach of that key starts the work again from nothing. It is NOT the unkeyed
-// mechanism forwarded down — that would expire productions INSIDE an entry the clause says
-// should have been dropped, and leave the map holding every key ever reached.
+// 11.45, 6.2: A KEYED `ttl` IS THE LIFE OF AN ENTRY, and one nothing follows is evicted whole: the
+// next reach of that key starts the work again from nothing, and the map does not hold every key
+// ever reached.
 //
-// THE REVERT is forwarding `ttl` to `createReactive` in place of the lifetime: the entry
-// carries an expiry of its own, which is the first assertion to fail, and past the deadline
-// the map still reports `entries: 1`.
+// THE REVERT is `ranOut` refreshing whatever its life ran out on: past the deadline the map still
+// reports `entries: 1`, and the next reach joins the entry it held.
 test('a keyed entry past its ttl is evicted whole, and the next reach starts again', async () => {
     let runs = 0
     const keyed = keyedValue(
@@ -3592,7 +3490,6 @@ test('a keyed entry past its ttl is evicted whole, and the next reach starts aga
     )
     const first = keyed({ id: 1 })
     expect(first()).toBe(10)
-    expect(cellOf(first).expiry).toBeNull()
     expect(keyed.entries.size).toBe(1)
 
     await Bun.sleep(80)
@@ -3601,12 +3498,61 @@ test('a keyed entry past its ttl is evicted whole, and the next reach starts aga
     expect(`runs: ${runs}`).toBe('runs: 2')
 })
 
-// 11.69 — A LOAD IN FLIGHT OUTLIVES ITS TTL, AND ITS END STARTS THE LIFE AGAIN, however it ends. A
+// 6.1, 6.3 — AN ENTRY SOMETHING FOLLOWS IS REFRESHED WHEN ITS LIFE RUNS OUT, not released: it goes
+// on serving what it holds while the refresh is out (7.4), and its next life counts from when that
+// refresh LANDED — so a refresh slower than the life is followed by a whole life, not by another
+// refresh at once. The entry beside it, which nothing follows, is released (6.2).
+//
+// THE REVERTS: have `ranOut` release whatever follows, and `followed: entries 0, runs 1, served 1,
+// busy false`; drop the parking of an entry whose load is in flight from `Lifetime.sweep`, so the
+// age counts from the refresh's start, and `runs 3, served 3` — a second refresh superseding the
+// first before it landed.
+test('an entry past its ttl is refreshed while followed, serving what it held — 6.1, 6.3', async () => {
+    const runs = { followed: 0, alone: 0 }
+    let release = (): void => {}
+    const price = keyedValue(
+        async ({ id }: { id: 'followed' | 'alone' }) => {
+            runs[id] += 1
+            if (id === 'followed' && runs[id] === 2)
+                await new Promise<void>((done) => {
+                    release = done
+                })
+            return runs[id]
+        },
+        { ttl: 40 },
+    )
+    const shown = computed(() => price({ id: 'followed' }))
+    const stop = watch(() => {
+        shown.peek()
+        shown.busy()
+    })
+    await shown
+    await price({ id: 'alone' })
+    await Bun.sleep(120)
+    expect(
+        `followed: entries ${price.entries.size}, runs ${runs.followed}, served ${shown.peek()}, busy ${shown.busy()}`,
+    ).toBe('followed: entries 1, runs 2, served 1, busy true')
+    expect(`alone: runs ${runs.alone}`).toBe('alone: runs 1')
+    release()
+    await shown
+    expect(`served after the landing: ${shown.peek()}`).toBe(
+        'served after the landing: 2',
+    )
+    await Bun.sleep(15)
+    expect(`runs after the landing: ${runs.followed}`).toBe(
+        'runs after the landing: 2',
+    )
+    await price({ id: 'alone' })
+    expect(`alone after: runs ${runs.alone}`).toBe('alone after: runs 2')
+    stop()
+})
+
+// 11.68 — A LOAD IN FLIGHT OUTLIVES ITS TTL, AND ITS END STARTS THE LIFE AGAIN, however it ends. A
 // reload that lands the value it already held makes no production, so only the probe edge hears it
 // end; a load that fails leaves nothing to serve. THE REVERTS: drop `trackProbe` in
 // `Lifetime.follow` and the equal landing reads `entries: 1` for good; drop the `!cell.loading`
 // arm of its `notify` and so does the failure.
-test('a keyed entry is kept while its load is in flight, and lives a ttl from its end — 11.69', async () => {
+test('a keyed entry is kept while its load is in flight, and lives a ttl from its end — 11.68', async () => {
     let finish = (_: number): void => {}
     let loads = 0
     const equal = keyedValue(
@@ -3648,7 +3594,7 @@ test('a keyed entry is kept while its load is in flight, and lives a ttl from it
     expect(`failed: ${failing.entries.size}`).toBe('failed: 0')
 })
 
-// 11.49: A PRODUCTION MOVES AN ENTRY TO THE NEWEST POSITION, so a key that keeps producing
+// 6.3: A PRODUCTION MOVES AN ENTRY TO THE NEWEST POSITION, so a key that keeps producing
 // outlives one reached at the same moment and left alone. The margins are wide because
 // the deadlines are timers: `b` has been dead for 30 ms at the check and `a` has 30 ms left.
 //
@@ -3668,7 +3614,7 @@ test('an entry that produces takes the newest position and outlives one that doe
     expect(`entries: ${keyed.entries.size}`).toBe('entries: 0')
 })
 
-// 11.49 FOR A PATCH: an array appended to in place takes the newest position too, so a room people
+// 6.3 FOR A PATCH: an array appended to in place takes the newest position too, so a room people
 // keep posting to is not let go under them. Same margins as the case above.
 //
 // THE REVERT is the entry's lifetime follower counting only a moved ordinal, which a patch never
@@ -3709,7 +3655,7 @@ test('a keyed ttl holds one timer however many entries it reaches', () => {
     expect(`timers armed: ${armed}`).toBe('timers armed: 1')
 })
 
-// 6.3 PAST WHAT `setTimeout` HOLDS — a delay over 2^31 - 1 ms is run after 1 ms, so a deadline armed
+// 11.48 PAST WHAT `setTimeout` HOLDS — a delay over 2^31 - 1 ms is run after 1 ms, so a deadline armed
 // at one fires, finds nothing expired, and re-arms, a thousand times a second for the life of the
 // value. `Infinity` arms nothing and thirty days arms at the cap. THE REVERT: arm the delay as
 // given in `armTimer` and both read dozens of timers in 30 ms rather than one and none.
@@ -3731,7 +3677,7 @@ test('a ttl past what setTimeout holds arms one timer, not one a millisecond', a
             ['thirty days', 30 * 86_400_000],
         ] as const) {
             armed.length = 0
-            computed(() => 1, { ttl })()
+            keyedValue(() => 1, { ttl })()
             await Bun.sleep(30)
             // Delays under a day are other code's timers in this process, never this ttl's.
             read[name] = armed.filter((delay) => delay >= 86_400_000)
@@ -3740,82 +3686,6 @@ test('a ttl past what setTimeout holds arms one timer, not one a millisecond', a
         globalThis.setTimeout = realSetTimeout
     }
     expect(read).toEqual({ endless: [], 'thirty days': [2 ** 31 - 1] })
-})
-
-// 6.7, 6.8 AND 6.9 — WHAT THE DEADLINE ITSELF DOES, and all three are about a moment
-// nothing reads. The producer must NOT have been called (that is 6.6's job, on the read
-// that follows), the payload must be gone rather than merely unserved, and the two probes
-// must agree with each other: nothing to serve, and nothing in flight to wait for.
-//
-// SLEPT THROUGH RATHER THAN CLOCK-MOVED, which is the opposite of the read gate above:
-// what is under test here is the timer, so it has to actually fire.
-//
-// THE REVERT: dropping the `dropStanding` call from `sweepExpiry` reports
-// `ready=true busy=false released=false` against `ready=false busy=false released=true`.
-test('a deadline releases the value and starts nothing', async () => {
-    let runs = 0
-    const loaded = computed(
-        () => {
-            runs += 1
-            return { big: 'payload' }
-        },
-        { ttl: 20 },
-    )
-    expect(loaded.ready()).toBe(true)
-    await Bun.sleep(80)
-    // Read NOTHING before the probes: a read is what runs the producer, so touching the
-    // value here would measure 6.6 and report it as 6.8.
-    const ready = loaded.ready()
-    const busy = loaded.busy()
-    const released =
-        (loaded as unknown as { value: unknown }).value === undefined
-    expect(`ready=${ready} busy=${busy} released=${released}`).toBe(
-        'ready=false busy=false released=true',
-    )
-    // 6.1 again, and it is the clause that makes the rest of this shape hold: waking here
-    // would cause the read that runs the producer, and every `ttl` value in the design
-    // would reload on its deadline whether or not anything wanted it.
-    expect(`runs: ${runs}`).toBe('runs: 1')
-    // 6.6: and now the read calls it.
-    expect(loaded()).toEqual({ big: 'payload' })
-    expect(`runs: ${runs}`).toBe('runs: 2')
-})
-
-// A DERIVED VALUE IS NO BETTER THAN WHAT IT WAS BUILT FROM, and 6.7 is what makes that
-// free here: the drop moves `servable`, which is the field `walkReady` already reads. No
-// clock enters the probe walk, which is what the alternative — testing the deadline per
-// node — would have cost every graph in the design whether or not it declared a `ttl`.
-test('a source past its ttl makes what derives from it unready', async () => {
-    const source = computed(() => 2, { ttl: 20 })
-    const derived = computed(() => source() * 3)
-    expect(derived()).toBe(6)
-    expect(derived.ready()).toBe(true)
-    await Bun.sleep(80)
-    expect(`derived ready: ${derived.ready()}`).toBe('derived ready: false')
-    expect(`derived busy: ${derived.busy()}`).toBe('derived busy: false')
-})
-
-// A WRITE LANDING ON A RELEASED VALUE, which is the one path `expire` cannot clean up
-// after itself: the timer released the production and marked the value as waiting for a
-// producer, and then a `set` answered the question instead. Without the clear in
-// `produce` the mark survives the write, and the next read calls the body anyway —
-// discarding what was just written and reporting it as a reload.
-//
-// THE REVERT: removing `expiry.dropped = false` from `produce` reports 2 runs against 1.
-test('a write landing on a released value stops the read reloading', async () => {
-    let runs = 0
-    const loaded = computed(
-        () => {
-            runs += 1
-            return 'from the body'
-        },
-        { ttl: 20 },
-    )
-    await Bun.sleep(80)
-    // The deadline released it; a write answers before any read does.
-    loaded.set('from the app')
-    expect(loaded()).toBe('from the app')
-    expect(`runs: ${runs}`).toBe('runs: 1')
 })
 
 // ── `servable` implies `landed`, the invariant nothing was checking ──────────────────
@@ -3832,13 +3702,6 @@ test('a write landing on a released value stops the read reloading', async () =>
 // then the next one — the one this is for — would not be in the list. A sequence over the
 // public surface reaches whatever paths exist, so a transition added later is covered by
 // the operation that reaches it rather than by somebody remembering to extend a table.
-//
-// WHAT IT CANNOT SEE IS A STATE THAT DOES NOT SURVIVE ITS OWN OPERATION, and 6.7's is
-// one: the read that discovers an expiry runs the producer in the same frame (6.6), so
-// between two operations the value has always been put back. Removing `servable = false`
-// from `dropStanding` passes this walk for that reason. The gate under it is where that
-// transition is checked, and the split is the honest one rather than a slower fuzz that
-// would have to sleep through a timer on every step.
 function breachedBy(value: unknown): string | null {
     const cell = cellOf(value)
     if (!cell.servable || cell.landed) return null
@@ -3860,12 +3723,8 @@ function sequence(seed: number): () => number {
 
 // WHAT AN OPERATION'S OWN CLAUSE LETS IT DO SILENTLY, and nothing else is let off. 7.14 has an
 // invalidate wake no guard, which goes on showing what it showed until the next hit. 5.7 has a patch
-// wake over the same object, so a reader woken onto the value it already held is the clause working. 6.1 has an expiry wake
-// no reader, so one holding the released production until the reload lands is the clause too.
-type Allows =
-    | 'a guard stands until the next hit'
-    | 'the same value wakes'
-    | 'an expiry wakes no reader'
+// wake over the same object, so a reader woken onto the value it already held is the clause working.
+type Allows = 'a guard stands until the next hit' | 'the same value wakes'
 
 type Subject = {
     name: string
@@ -3874,8 +3733,7 @@ type Subject = {
 }
 
 // THE VALUES BOTH WALKS TAKE, built fresh per walk. Every arm `run` has, the adoption arms, a
-// retained value, and a `ttl` value both settled and loading — the loading one is the only way to
-// a reload that starts from the read path and is not over by the end of the operation.
+// retained value, a settled body, and a load — a reload that is not over by the end of the operation.
 function walkSubjects(): Subject[] {
     const source = reactive(1)
     const unlanded = reactive(new Promise<number>(() => {}))
@@ -3890,7 +3748,7 @@ function walkSubjects(): Subject[] {
     let rejectNow = false
 
     const plain = reactive({ n: 1 })
-    // The body reaches every arm `run` has: a production, the abort (11.52), a refusal,
+    // The body reaches every arm `run` has: a production, the abort (11.51), a refusal,
     // and an adoption whose source stops being servable (11.16).
     const derived = computed(() => {
         if (abortNow) return unlanded()
@@ -3901,35 +3759,18 @@ function walkSubjects(): Subject[] {
         if (adoptNow) return source
         return source() + 1
     })
-    // 6.7's transition, reached through the read rather than the timer so the walk stays
-    // contention-immune and runs in the parallel gate (CLAUDE.md, "counts run in bun test").
-    let ttlRuns = 0
-    const expiring = computed(
-        () => {
-            ttlRuns += 1
-            return { at: ttlRuns }
-        },
-        { ttl: 1_000 },
-    )
+    let settledRuns = 0
+    const settled = computed(() => {
+        settledRuns += 1
+        return { at: settledRuns }
+    })
     let loadRuns = 0
-    const reloading = computed(
-        () => {
-            loadRuns += 1
-            return rejectNow
-                ? Promise.reject(new Error('reload refused'))
-                : Promise.resolve({ at: loadRuns })
-        },
-        { ttl: 1_000 },
-    )
-    const expireThenRead = (value: Reactive<unknown>) => (): void => {
-        const now = Date.now()
-        setSystemTime(new Date(now + 1_001))
-        try {
-            value.peek()
-        } finally {
-            setSystemTime()
-        }
-    }
+    const reloading = computed(() => {
+        loadRuns += 1
+        return rejectNow
+            ? Promise.reject(new Error('reload refused'))
+            : Promise.resolve({ at: loadRuns })
+    })
     // 7.14: the mark wakes no guard, so a guard shows the probes from before it until the next hit
     // — and the walk's own probe IS a hit (3.2), which starts the reload the guard has not heard of.
     const invalidate = (value: Reactive<unknown>) => ({
@@ -3999,25 +3840,19 @@ function walkSubjects(): Subject[] {
             ],
         },
         {
-            name: 'a ttl value',
-            value: expiring as Reactive<unknown>,
+            name: 'a settled body',
+            value: settled as Reactive<unknown>,
             ops: [
-                {
-                    op: expireThenRead(expiring as Reactive<unknown>),
-                    allows: 'an expiry wakes no reader',
-                },
-                invalidate(expiring as Reactive<unknown>),
-                { op: () => expiring.refresh() },
+                { op: () => settled.peek() },
+                invalidate(settled as Reactive<unknown>),
+                { op: () => settled.refresh() },
             ],
         },
         {
-            name: 'a ttl load',
+            name: 'a load',
             value: reloading as Reactive<unknown>,
             ops: [
-                {
-                    op: expireThenRead(reloading as Reactive<unknown>),
-                    allows: 'an expiry wakes no reader',
-                },
+                { op: () => reloading.peek() },
                 invalidate(reloading as Reactive<unknown>),
                 { op: () => reloading.refresh() },
                 {
@@ -4182,8 +4017,7 @@ test('the wake contract holds across every transition', async () => {
                 cell.state === CLEAN &&
                 !(
                     subject === owner &&
-                    (allows.has('an expiry wakes no reader') ||
-                        allows.has('a guard stands until the next hit'))
+                    allows.has('a guard stands until the next hit')
                 )
             ) {
                 const error = subject.value.error()
@@ -4217,22 +4051,6 @@ test('the wake contract holds across every transition', async () => {
     }
     for (const { stops } of observers) for (const stop of stops) stop()
     expect(`steps walked: ${walked.length}`).toBe('steps walked: 600')
-})
-
-// THE TRANSITION THE WALK ABOVE STRUCTURALLY CANNOT OBSERVE. Only 6.3's timer leaves a
-// value sitting in the released state — every read that reaches it starts the producer on
-// the way past — so this is the one place the three fields can be read while 6.7 holds.
-//
-// THE REVERT: removing `cell.servable = false` from `dropStanding` reports
-// `servable=true landed=false`.
-test('a released value still reads servable implies landed', async () => {
-    const expiring = computed(() => ({ n: 1 }), { ttl: 20 })
-    expect(breachedBy(expiring)).toBeNull()
-    await Bun.sleep(80)
-    expect(`breach: ${breachedBy(expiring)}`).toBe('breach: null')
-    // And it is genuinely sitting in the released state rather than having been put back
-    // by something on the way here, or the line above holds for the wrong reason.
-    expect(`ready: ${expiring.ready()}`).toBe('ready: false')
 })
 
 // ── A refused write (RULEBOOK 4.6, 4.9, 4.10, 4.11, 4.12) ───────────────────────────
@@ -5482,7 +5300,7 @@ test('a capped value adopting a stream while its window holds a write keeps forw
     const run = feed.runs[0] as Run<number>
     run.push(1)
     await turns()
-    const outer = reactive<unknown>(0, { debounce: WINDOW })
+    const outer = pacedValue<unknown>(0, { debounce: WINDOW })
     outer.set(5)
     outer.set(inner)
     await Bun.sleep(AFTER_WINDOW)
@@ -5497,7 +5315,7 @@ test('a capped value adopting a stream while its window holds a write keeps forw
 // 11.16 UNDER A WINDOW: adopting a value with nothing to serve leaves nothing to serve, and the
 // window's close does not serve the write the adoption superseded.
 test('a capped value adopting an unlanded value while its window holds a write serves nothing — 11.16', async () => {
-    const outer = reactive<number>(0, { debounce: WINDOW })
+    const outer = pacedValue<number>(0, { debounce: WINDOW })
     outer.set(5)
     const inner = computed(() => new Promise<number>(() => {}))
     outer.set(inner)
@@ -5526,7 +5344,7 @@ test('a value that stops adopting a stream serves its own value again', async ()
     expect(`direct: ${cellOf(outer).direct}`).toBe('direct: true')
 })
 
-// ── Writes to a stream (RULEBOOK 9.11, 9.12, 9.13, 11.59) ───────────────────────────────
+// ── Writes to a stream (RULEBOOK 9.11, 9.12, 9.13, 11.58) ───────────────────────────────
 
 // 9.11: A WRITE OVER A STREAM LASTS UNTIL THE STREAM SAYS SOMETHING NEW. Nothing arriving leaves
 // it standing; the next chunk puts the accumulation back, the write having been a value the
@@ -5653,7 +5471,7 @@ test('a busy guard on a stream hears a write that follows a call in flight', asy
     expect(`seen: ${seen.join(',')}`).toBe('seen: false,true,false')
 })
 
-// 11.61 ON A STREAM IS 9.11's WRITE, FOLLOWING. A `Reactive` written over a stream is adopted, not
+// 11.60 ON A STREAM IS 9.11's WRITE, FOLLOWING. A `Reactive` written over a stream is adopted, not
 // stored — the read is the adopted value's, and a write to the adopted value wakes this one's readers
 // — and it stands as any write over a stream does: the next chunk puts the accumulation back and lets
 // go of what was adopted. Letting go is the WORK half and nothing in a value shows it, so the adopted
@@ -5720,7 +5538,7 @@ test('a Reactive set on a stream is followed until the next chunk', async () => 
 
 // A WRITE REPLACES A WRITE, and a followed `Reactive` is a write (9.11): a later `set` over the stream
 // lands on the stream rather than reaching through to what it was following — the reach-through of
-// 11.59 is an adopting value's, and a stream is not one — and lets go of it.
+// 11.58 is an adopting value's, and a stream is not one — and lets go of it.
 //
 // THE REVERT is `writeStream` not calling `unfollow`: `woken by the adopted write: 1` — the stale
 // follow overwrites the plain write the moment the adopted value moves.
@@ -5763,7 +5581,7 @@ test('a set over a followed Reactive on a stream replaces it', async () => {
     woken.stop()
 })
 
-// 11.19 AND 11.50 THROUGH A FOLLOW: while it stands, `busy`, `ready` and `error` answer as they would on
+// 11.19 AND 11.49 THROUGH A FOLLOW: while it stands, `busy`, `ready` and `error` answer as they would on
 // a value adopting the same `Reactive` — the stream's own open run still counts for `busy` (3.7) — and a
 // guard hears the adopted value's probes move. Once the stream closed, what `busy` reports is the
 // adopted value's load alone.
@@ -5833,7 +5651,7 @@ test('patch on a stream mutates its accumulation, and later chunks land after it
     expect(`after chunk: ${rows().join(',')}`).toBe('after chunk: 10,2,3')
 })
 
-// 11.59: THE ADOPTER HOLDS THE ADOPTED BUFFER BY REFERENCE, so a patch through it is a patch of
+// 11.58: THE ADOPTER HOLDS THE ADOPTED BUFFER BY REFERENCE, so a patch through it is a patch of
 // the stream — and has to be told to the stream, or the stream goes on serving the snapshot it
 // took before the buffer changed under it. A `set` reaches the stream too, and stands there until
 // the accumulation next changes (9.11).
@@ -5865,66 +5683,7 @@ test('patch and set through a value adopting a stream reach the stream', async (
     )
 })
 
-// `ttl` ON A STREAM IS THE LIFE OF A CLOSED RUN, and it needed no reading of its own: 6.10 starts
-// the clock at the run's close, so 6.5 and 6.6 are the same sentence they are
-// everywhere else. The run IN FLIGHT has produced nothing, so it has no deadline — which is what
-// stops a long stream expiring underneath the reader it is still filling.
-//
-// THE CLOCK IS MOVED RATHER THAN WAITED ON, and that tests the READ path (6.5) apart from the
-// timer that normally does the work — `setSystemTime` moves neither.
-//
-// THE REVERT is `retainRun` not setting `expiry.at`: `after: 3` — the accumulation goes on being
-// served past its life.
-test('a closed streaming run is not served past its ttl', async () => {
-    const feed = streamOf<number>()
-    const rows = computed(feed.body, { ttl: 50 })
-    const first = feed.runs[0] as Run<number>
-    first.push(1)
-    first.push(2)
-    first.close()
-    await turns()
-    expect(`closed: ${rows()?.length}`).toBe('closed: 2')
-
-    const realNow = Date.now()
-    setSystemTime(new Date(realNow + 500))
-    try {
-        // 6.5 AND 6.6: not served, and the read starts the producer — which on a stream is a
-        // new RUN rather than a recompute, so what answers is the next run's accumulation.
-        // `ready` is the TIMER's half of this (6.8) and the clock moved without firing it, so
-        // what is asserted here is the read.
-        expect(() => rows()).toThrow()
-        const second = feed.runs[1] as Run<number>
-        second.push(3)
-        second.close()
-        await turns()
-        expect(`after: ${rows()?.join(',')}`).toBe('after: 3')
-    } finally {
-        setSystemTime()
-    }
-})
-
-// THE RUN IN FLIGHT HAS NO DEADLINE, because nothing has been minted for one to run from. A
-// stream open for longer than its own `ttl` — a socket, a token stream over a slow model — must
-// go on being read, and only what it CLOSED with can expire.
-//
-// THE REVERT, run: `standingLive` reading a stream's run as live whether or not it closed:
-// `during: ` throws, the run expiring while it is still being filled.
-test('a streaming run in flight does not expire', async () => {
-    const feed = streamOf<number>()
-    const rows = computed(feed.body, { ttl: 50 })
-    const run = feed.runs[0] as Run<number>
-    run.push(1)
-    await turns()
-    const realNow = Date.now()
-    setSystemTime(new Date(realNow + 500))
-    try {
-        expect(`during: ${rows()?.join(',')}`).toBe('during: 1')
-    } finally {
-        setSystemTime()
-    }
-})
-
-// 5.17: A WINDOW ON A STREAM CAPS THE WAKE. Chunks go on landing and a cursor is handed every one
+// 5.16: A WINDOW ON A STREAM CAPS THE WAKE. Chunks go on landing and a cursor is handed every one
 // of them (5.10), but a reader of the value hears at most once per window — a table re-rendered per
 // chunk of a fast stream is the cost `throttle` exists to cap.
 //
@@ -5938,7 +5697,7 @@ test('a streaming run in flight does not expire', async () => {
 const STREAM_WINDOW = 300
 test('throttle on a stream wakes readers once per window, and a cursor still gets every chunk', async () => {
     const feed = streamOf<number>()
-    const rows = computed(feed.body, { throttle: STREAM_WINDOW })
+    const rows = pacedBody(feed.body, { throttle: STREAM_WINDOW })
     const run = feed.runs[0] as Run<number>
     let wakes = 0
     const stop = watch(() => {
@@ -5966,13 +5725,13 @@ test('throttle on a stream wakes readers once per window, and a cursor still get
     stop()
 })
 
-// 5.18: WHAT A READER SEES IS WHAT THE WINDOW RELEASED, not the chunks it is holding — the read
+// 5.17: WHAT A READER SEES IS WHAT THE WINDOW RELEASED, not the chunks it is holding — the read
 // agrees with the wake, so a value that has not been told of a chunk does not show it either.
 //
 // THE REVERT is `materialize` slicing the whole buffer: `during: 1,2,3`.
 test('a read of a throttled stream serves the accumulation as the last release left it', async () => {
     const feed = streamOf<number>()
-    const rows = computed(feed.body, { throttle: WINDOW })
+    const rows = pacedBody(feed.body, { throttle: WINDOW })
     const run = feed.runs[0] as Run<number>
     // No read until a chunk is held: a snapshot taken earlier would answer from its cache and prove
     // nothing about what the window has released. 1 lands the value and 2 is the leading change
@@ -5992,7 +5751,7 @@ test('a read of a throttled stream serves the accumulation as the last release l
 // awaiting the stream is never handed a partial accumulation (2.7).
 test('a debounced stream releases once the chunks stop, and its close releases what is held', async () => {
     const feed = streamOf<number>()
-    const rows = computed(feed.body, { debounce: WINDOW })
+    const rows = pacedBody(feed.body, { debounce: WINDOW })
     const run = feed.runs[0] as Run<number>
     run.push(1)
     await turns()
@@ -6018,8 +5777,10 @@ test('busy and ready over tags answer ANY and EVERY across the values carrying t
     const orders = keyedValue((_args: { customer: number }) => loads.load(), {
         tags: (args) => [`customer:${args?.customer}`],
     })
-    const profile = computed(() => Promise.resolve(7), { tags: ['customer:1'] })
-    const other = computed(() => Promise.resolve(8), { tags: ['customer:2'] })
+    const profile = pacedBody(() => Promise.resolve(7), {
+        tags: ['customer:1'],
+    })
+    const other = pacedBody(() => Promise.resolve(8), { tags: ['customer:2'] })
     orders({ customer: 1 })
     await profile
     await other
@@ -6041,21 +5802,21 @@ test('busy and ready over tags answer ANY and EVERY across the values carrying t
 // 13.1: a tag selection is every entry carrying ANY of its tags, and nothing else is touched.
 test('invalidate over tags reaches every value carrying any of them, and no other', () => {
     const runs = { a: 0, b: 0, c: 0 }
-    const a = computed(
+    const a = pacedBody(
         () => {
             runs.a += 1
             return 1
         },
         { tags: ['invoice'] },
     )
-    const b = computed(
+    const b = pacedBody(
         () => {
             runs.b += 1
             return 2
         },
         { tags: ['customer:1'] },
     )
-    const c = computed(
+    const c = pacedBody(
         () => {
             runs.c += 1
             return 3
@@ -6077,14 +5838,14 @@ test('invalidate over tags reaches every value carrying any of them, and no othe
 test('refresh over tags reloads what something reads and marks the rest', () => {
     let readRuns = 0
     let unreadRuns = 0
-    const read = computed(
+    const read = pacedBody(
         () => {
             readRuns += 1
             return readRuns
         },
         { tags: ['report'] },
     )
-    const unread = computed(
+    const unread = pacedBody(
         () => {
             unreadRuns += 1
             return unreadRuns
@@ -6113,7 +5874,7 @@ test('refresh over tags reloads what something reads and marks the rest', () => 
 test('a value a tag refresh marked while nothing read it loads when it is next adopted — 13.7', async () => {
     let answer = 'old'
     let loads = 0
-    const meetings = computed(
+    const meetings = pacedBody(
         () => {
             loads += 1
             return Promise.resolve(answer)
@@ -6150,7 +5911,7 @@ test('a guard over a tag selection subscribes once and comes back when the loads
     const loads = deferredLoads()
     const values = []
     for (let index = 0; index < 10; index += 1)
-        values.push(computed(() => loads.load(), { tags: ['feed'] }))
+        values.push(pacedBody(() => loads.load(), { tags: ['feed'] }))
     const saw: boolean[] = []
     const stop = watch(() => {
         saw.push(busy({ tags: ['feed'] }))
@@ -6203,7 +5964,7 @@ test('an evicted keyed entry leaves every selection', async () => {
 test('a refresh over tags reruns no synchronous derivation that carries none of them — 13.20', () => {
     let loads = 0
     let derivationRuns = 0
-    const stock = computed(
+    const stock = pacedBody(
         () => {
             loads += 1
             return loads
@@ -6341,7 +6102,7 @@ test('a restore runs neither schema nor transform', () => {
 // THE REVERT is `persist` ignoring `withheld`: `sets: 9,5,6`.
 test('set runs once per production, with the ttl, and never for the restore', () => {
     const memory = memoryStore<number>({ answer: () => 9 })
-    const value = reactive(4, { store: memory.store, ttl: 60_000 })
+    const value = pacedValue<number>(4, { store: memory.store, ttl: 60_000 })
     value.set(5)
     value.set(5)
     value.set(6)
@@ -6489,7 +6250,7 @@ test('refresh on a value with a store re-reads the store', () => {
 test('a stream is stored once at close, and a restore is a finished stream', async () => {
     const memory = memoryStore<number[]>({ answer: () => undefined })
     const feed = streamOf<number>()
-    // REACHED, since a server files a value with a store unbuilt until it is (11.71).
+    // REACHED, since a server files a value with a store unbuilt until it is (11.70).
     computed(feed.body, { store: memory.store }).peek()
     const run = feed.runs[0] as Run<number>
     run.push(1)
@@ -6513,39 +6274,6 @@ test('a stream is stored once at close, and a restore is a finished stream', asy
     const replayed = [(await cursor.next()).value, (await cursor.next()).value]
     await cursor.return?.()
     expect(`replayed: ${replayed.join(',')}`).toBe('replayed: 5,6')
-})
-
-// 8.6 SEEDS THE CHUNK BUFFER AND 8.7 KEEPS THE BODY OFF — and `closeRun`, which stamps the mint,
-// is reached only from `pump`. So a restored stream never became a CLOSED run: `standingLive`
-// answered false for the life of the value, which takes the `ttl` out of `expire` silently — it
-// never drops and never runs again.
-//
-// THE REVERT, run: `restoreStream` not calling `closeRun`; `dropped: false, runs: 0` — the read
-// past the `ttl` serves the restore for good. The value and the CURSOR are both right on either arm, which is
-// why the case above passes with this broken.
-test('a restored stream is a run that closed, not a run in flight', () => {
-    const restoredFeed = streamOf<number>()
-    const restoring = memoryStore<number[]>({ answer: () => [5, 6] })
-    const restored = computed(restoredFeed.body, {
-        store: restoring.store,
-        ttl: 50,
-    })
-    expect(`started: ${restoredFeed.runs.length}`).toBe('started: 0')
-    expect(restored()).toEqual([5, 6])
-    const realNow = Date.now()
-    setSystemTime(new Date(realNow + 500))
-    let dropped = false
-    try {
-        restored()
-    } catch (thrown) {
-        // Dropped, and the run the read started has not landed yet (6.6).
-        dropped = thrown instanceof NotLanded
-    } finally {
-        setSystemTime()
-    }
-    expect(`dropped: ${dropped}, runs: ${restoredFeed.runs.length}`).toBe(
-        'dropped: true, runs: 1',
-    )
 })
 
 // 11.42: A KEYED STORE IS A FUNCTION OF THE ARGS. Closing over one key gives every entry the same
@@ -6594,44 +6322,6 @@ test('a store is not read behind a write it has not confirmed', () => {
     expect(`value: ${value()}`).toBe('value: 99')
 
     slow.release()
-})
-
-// 8.19: A MISS WITH NOTHING LEFT TO SERVE IS A FAILURE, not a state to sit in. 6.7 released the
-// standing production and 6.6 ran the producer on the read that followed; on a value whose only
-// producer is its store there is nothing to fall through to when that producer answers nothing.
-//
-// EVERY PROBE IS ASSERTED BECAUSE EVERY PROBE WAS SILENT: `{#if s.busy()}` and `{#if s.error()}`
-// both rendered nothing while the value was gone, and the read threw `NotLanded` for the life of
-// the page — `expire` returning at `dropped` meant nothing ever asked the store again.
-//
-// THE REVERT: put `settleMiss`'s restoration back behind `if (cell.landed)`. This reports
-// `error: undefined` and `threw: NotLanded`.
-test('a store miss after a ttl drop lands an error rather than going silent', async () => {
-    let answer: number | undefined = 5
-    const store = {
-        get: () => answer,
-        set: () => undefined,
-    }
-    const value = reactive<number, number>(undefined as never, {
-        store: store as never,
-        ttl: 20,
-    })
-    expect(`first: ${value()}`).toBe('first: 5')
-
-    answer = undefined
-    await Bun.sleep(80)
-    let threw = 'nothing'
-    try {
-        value()
-    } catch (thrown) {
-        threw = (thrown as Error).name
-    }
-    expect(`threw: ${threw}`).toBe('threw: Error')
-    expect(
-        `error: ${(value.error() as Error | undefined)?.message.includes('RULEBOOK 8.19')}`,
-    ).toBe('error: true')
-    expect(`busy: ${value.busy()}`).toBe('busy: false')
-    expect(`ready: ${value.ready()}`).toBe('ready: false')
 })
 
 // 8.20: AN EDIT MADE WHERE THE VALUE LIVES IS READ BACK, NOT PRODUCED. The store's `changed` re-reads
@@ -6911,13 +6601,13 @@ test('awaiting a derived value settles once the source it aborted on lands', asy
     expect(`awaited: ${await awaited}`).toBe('awaited: 42')
 })
 
-// ── Writes through adoption, and `undefined` (RULEBOOK 11.59, 11.62, 4.14, 4.15) ───────────────
+// ── Writes through adoption, and `undefined` (RULEBOOK 11.58, 11.61, 4.14, 4.15) ───────────────
 
-// 11.61: A `Reactive` WRITTEN IS ADOPTED, which is 11.12's sentence about a body's return value,
+// 11.60: A `Reactive` WRITTEN IS ADOPTED, which is 11.12's sentence about a body's return value,
 // said once more about a write. Storing it instead is what 1.6 calls the hazard: the callable is
 // thenable, so the value would settle to one snapshot of what it was holding and stop following it.
 // After the write the two are one value — a production of the inner is a production of this, and a
-// write here reaches the inner through 11.59.
+// write here reaches the inner through 11.58.
 //
 // THE REVERT is `setThroughGates` accepting a `Reactive` as a value: `after: 1`, the outer frozen
 // on the snapshot it took.
@@ -6935,7 +6625,7 @@ test('a Reactive written with set is adopted rather than stored', () => {
     flushSync()
     expect(`after: ${held()}`).toBe('after: 2')
     expect(`woken: ${woken}`).toBe('woken: 1')
-    // 11.59 from the other end: the adopter's own write is the adopted value's.
+    // 11.58 from the other end: the adopter's own write is the adopted value's.
     held.set(9)
     flushSync()
     expect(`inner after a write to the adopter: ${inner()}`).toBe(
@@ -6944,7 +6634,7 @@ test('a Reactive written with set is adopted rather than stored', () => {
     stop()
 })
 
-// 11.61 AT CONSTRUCTION: `reactive(other)` opens on `other` the way `held.set(other)` writes it, by
+// 11.60 AT CONSTRUCTION: `reactive(other)` opens on `other` the way `held.set(other)` writes it, by
 // adopting it, so the factory and the write agree (31.8).
 //
 // THE REVERT is `open` absorbing a `Reactive` as any other opening value: the read hands back
@@ -6962,7 +6652,7 @@ test('a Reactive handed to reactive is adopted rather than stored', () => {
     expect(inner().name).toBe('written')
 })
 
-// 11.19 THROUGH 11.61: `paid = payInvoice(…)` over a `reactive()` that holds nothing. The guard
+// 11.19 THROUGH 11.60: `paid = payInvoice(…)` over a `reactive()` that holds nothing. The guard
 // asking `paid.busy()` subscribed before the write, and the write moves the probe by ADOPTING —
 // no production, and the mirror's `unserve` finds nothing to lose — so the guard has to be woken
 // by the adoption itself, onto true, and again onto false when the call lands.
@@ -6990,7 +6680,7 @@ test('a busy guard hears a write that adopts a call in flight', async () => {
     expect(`seen: ${seen.join(',')}`).toBe('seen: false,true,false')
 })
 
-// 11.59: AN ADOPTING VALUE IS THE VALUE IT ADOPTS, writes included. A write standing on the adopter
+// 11.58: AN ADOPTING VALUE IS THE VALUE IT ADOPTS, writes included. A write standing on the adopter
 // alone was the one member that did not reach through, so a value built over a shared entry held a
 // private copy of every edit made to it.
 //
@@ -7015,7 +6705,7 @@ test('set and patch on an adopting value reach the adopted value', () => {
     expect(outer().n).toBe(4)
 })
 
-// 11.62 AND 4.16: A KEYED VALUE WITH NOTHING TO LOAD answers `undefined`, which is a value like
+// 11.61 AND 4.16: A KEYED VALUE WITH NOTHING TO LOAD answers `undefined`, which is a value like
 // any other — loaded, ready, read. The opening `undefined` is not shaped: the `transform` is for
 // what is written.
 //
@@ -7114,9 +6804,9 @@ test('reactive() is empty and reactive(undefined) is loaded', () => {
     expect(loaded()).toBeUndefined()
 })
 
-// ── A window on a keyed value holds back starting a key (RULEBOOK 5.19, 5.20, 5.21) ─────────
+// ── A window on a keyed value holds back starting a key (RULEBOOK 5.18, 5.19, 5.20) ─────────
 
-// 5.19 AND 5.20: A DEBOUNCE STARTS THE KEY THE REACHES STOPPED AT. A search box typing `n`, `no`,
+// 5.18 AND 5.19: A DEBOUNCE STARTS THE KEY THE REACHES STOPPED AT. A search box typing `n`, `no`,
 // `nor` reaches three keys, and the two superseded before the window closed never make their call
 // — 5.11's "don't start work a window would discard", across keys. They are not held either, so a
 // later reach of one of them goes through the window again.
@@ -7135,7 +6825,7 @@ test('a debounce on a keyed value starts only the key the reaches stopped at', a
     search({ query: 'no' })
     const last = search({ query: 'nor' })
     expect(`calls: ${calls.join(',')}`).toBe('calls: ')
-    // 5.21: held back is busy, with nothing to serve yet.
+    // 5.20: held back is busy, with nothing to serve yet.
     expect(`busy: ${last.busy()}, ready: ${last.ready()}`).toBe(
         'busy: true, ready: false',
     )
@@ -7314,7 +7004,7 @@ test('a numeric step onto an absent level builds an array', () => {
     expect(writePath({}, ['a', 'b'], 7)).toEqual({ a: { b: 7 } })
 })
 
-// 11.59 and 11.61 make an adoption cycle constructible from ordinary app code, and every walk of
+// 11.58 and 11.60 make an adoption cycle constructible from ordinary app code, and every walk of
 // the chain — the write members, the triggers, the probes — is a plain loop to its end.
 // THE REVERT is dropping the walk from `adopt`: `b.set(a)` returns, and the first write through
 // either value hangs the process with the event loop blocked and nothing reported at all.
@@ -7378,7 +7068,7 @@ test('a schema runs untracked', () => {
     expect(bodyRuns).toBe(settled)
 })
 
-// 12.14 OVER A STREAM FOLLOWING A WRITE (9.11, 11.61). An own stream's `adoption` is the
+// 12.14 OVER A STREAM FOLLOWING A WRITE (9.11, 11.60). An own stream's `adoption` is the
 // `Reactive` its standing write follows, not a stream it forwards — and releasing the orphan
 // read it as a forward, nulled the stream's own record and left a wake already queued for it to
 // read a field off `null` on the next task. The revert is dropping the `stream.source === null`
@@ -7472,15 +7162,15 @@ test('a keyed guard asked before a key is reached wakes when that key starts loa
 
 // The other half of membership: an entry RELEASED takes its answer with it. A refused entry holds
 // `ready` false, and its eviction (11.45) moves no probe of its own — so a guard over the keyed
-// value goes on saying not-ready over a map that no longer holds anything unready. The revert is
-// dropping the `signalMoved(membership)` from `release` in `Keyed.ts`: `seen` ends `false` against
-// `true`.
+// value goes on saying not-ready over a map that no longer holds anything unready. A `ttl` of 0 is
+// released though the guard follows it (6.5). The revert is dropping the `signalMoved(membership)`
+// from `release` in `Keyed.ts`: `seen` ends `false` against `true`.
 test('a keyed guard wakes when an entry it was answering from is released', async () => {
     const lookup = keyedValue(
         (_args: { id: number }): number => {
             throw new Error('no')
         },
-        { ttl: 5 },
+        { ttl: 0 },
     )
     lookup({ id: 1 })
     const seen: boolean[] = []
@@ -7605,16 +7295,16 @@ test('reactive holds a function as its value — 4.20', () => {
     expect(held()(5)).toBe('€5')
 })
 
-// 11.74 — `computed` AND `memo` ARE HANDED A BODY: a value, or a `Reactive` already built, throws
+// 11.73 — `computed` AND `memo` ARE HANDED A BODY: a value, or a `Reactive` already built, throws
 // where it is written. THE REVERT: drop `refuseValue` from `memo`, and `value: built` — a number was
 // filed as a body every later run would call.
-test('memo refuses anything but a body at construction — 11.74', () => {
+test('memo refuses anything but a body at construction — 11.73', () => {
     const refusal = (given: unknown): string => {
         try {
             memo(given as () => unknown)
             return 'built'
         } catch (thrown) {
-            return (thrown as Error).message.includes('11.74')
+            return (thrown as Error).message.includes('11.73')
                 ? 'refused'
                 : 'other'
         }
@@ -7624,10 +7314,10 @@ test('memo refuses anything but a body at construction — 11.74', () => {
     ).toBe('value: refused, reactive: refused, body: built')
 })
 
-// 11.79 — A MEMO GIVEN A STORE OPENS AN ENTRY ON WHAT IT KEPT, without running its function, and keeps
+// 11.78 — A MEMO GIVEN A STORE OPENS AN ENTRY ON WHAT IT KEPT, without running its function, and keeps
 // what the owner writes. THE REVERT: drop `store` from the options `memo` hands its keyed value; the
 // function runs and `runs: 1`.
-test('a memo entry opens on its store, and keeps what is written — 11.79', async () => {
+test('a memo entry opens on its store, and keeps what is written — 11.78', async () => {
     const kept = new Map<string, unknown>([['a', ['from the store']]])
     let runs = 0
     const feed = memo(

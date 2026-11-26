@@ -12,8 +12,8 @@
 import type { Database } from 'bun:sqlite'
 
 import { namedLogger } from '#shared/log.ts'
+import { appStopSignal } from '#shared/reactive/abortSignal.ts'
 import { invalidate } from '#shared/reactive/index.ts'
-import { appStopSignal } from '#shared/reactive/poll.ts'
 import { unrefTimer } from '#shared/reactive/unrefTimer.ts'
 
 import { SQL_IDENTIFIER } from './SQL_IDENTIFIER.ts'

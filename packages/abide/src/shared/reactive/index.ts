@@ -4,7 +4,7 @@
 //
 // SPLIT BY NAME, NOT BY WHAT IS PASSED. One name read its first argument's type to pick a form, and
 // that made a function unholdable: `reactive(fn)` ran it. Now `reactive(fn)` holds `fn` (4.20), and
-// `memo` is handed a body or throws (11.74).
+// `memo` is handed a body or throws (11.73).
 //
 // The factory lives in the folder's address rather than in a file of its own: `reactive`
 // and `Reactive` differ only in case, and a case-insensitive filesystem makes those one
@@ -31,6 +31,7 @@ import { MEMO_BRAND } from './MEMO_BRAND.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import {
     busyOver,
+    type CellOptions,
     createReactive,
     invalidateOver,
     isStreamBody,
@@ -49,12 +50,13 @@ export { isReactive } from './isReactive.ts'
 export { type Memo, type MemoOptions } from './createMemo.ts'
 export { isKeyed, type Keyed } from './Keyed.ts'
 export { NotLanded } from './NotLanded.ts'
-export { abortSignal } from './poll.ts'
+export { abortSignal } from './abortSignal.ts'
 // The rest of the framework reaches the core through here rather than `./Reactive.ts`: `Reactive.ts` →
 // `log.ts` → this barrel → `scoped.ts` → `Reactive.ts` is a cycle, and a module loaded first that
 // imports the core directly meets `MEMBER_KEYS` before it is initialized. The verbs a producer
 // outside the core spends a value through are `producer.ts`'s, which comes through here first.
 export {
+    type CellOptions,
     flushSync,
     type Identity,
     moveItem,
@@ -170,6 +172,14 @@ export type Refusals<
     ArgsGate = Schema<never>,
     Args = never,
 > = Refused<Shaped> | Gated<Gate, Stored> | Gated<ArgsGate, Args>
+/**
+ * What a source declares for each entry beside a value's options: its life, its pace, its tags and
+ * whether it is one for the whole process — a `memo`'s and a handler's, never a `reactive`'s (11.81).
+ */
+export type Sourced<Args> = Pick<
+    CellOptions<unknown, unknown, never, Args>,
+    'ttl' | 'throttle' | 'debounce' | 'tags' | 'global'
+>
 /** The failures a body handing back a `Reactive` adopts from it (11.12). */
 export type AdoptedFailures<Computed> =
     Computed extends Reactive<unknown, never, infer Failures, unknown>
@@ -207,7 +217,7 @@ type StoredOf<Calls> =
         : never
 /**
  * What `reactive` holds: anything but a `Reactive` or a `Keyed`, which it adopts rather than holds
- * (11.61) — a plain function included (4.20). The promise turns a `Reactive` away too, being one
+ * (11.60) — a plain function included (4.20). The promise turns a `Reactive` away too, being one
  * (1.4), and `Accepted` read through it is the value it settles to. NOT DISTRIBUTED:
  * `Held<number | undefined>` spread over the union is `PromiseLike<number> | PromiseLike<undefined>`,
  * and a `Promise<number | undefined>` is neither.
@@ -300,6 +310,7 @@ export function reactive(
     // nothing calls directly, so the casts below are where the overloads' promises are made good.
     ...given: [first?: unknown, options?: unknown]
 ): unknown {
+    refuseSourced(given[1], 'reactive')
     return filed(given, false, buildValue)
 }
 
@@ -326,6 +337,7 @@ export function computed<
 ): ReactiveOf<never, Result, Shaped, Gate, never>
 export function computed(body: unknown, options?: unknown): unknown {
     refuseValue(body, 'computed')
+    refuseSourced(options, 'computed')
     return filed([body, options], false, buildBody)
 }
 
@@ -333,7 +345,7 @@ export function computed(body: unknown, options?: unknown): unknown {
  * `fn`, remembered: what it answers for each `Args` key is kept and handed back as it answered — a
  * value, a promise, a refusal — to every later call with those args (11.2, 11.4). A `computed`
  * calling it holds the answer as a value, and runs again when the key it called is refreshed or
- * invalidated (11.75).
+ * invalidated (11.74).
  *
  * NO PARAMETER IS SNIFFED: a function declaring none is kept on `undefined`, called as `m()`.
  */
@@ -366,7 +378,14 @@ export function keyedValue<
     ArgsGate = Schema<Args>,
 >(
     body: (args: Args) => Result,
-    options?: Shaping<BodyValue<NoInfer<Result>>, Shaped, Args, Gate, ArgsGate>,
+    options?: Shaping<
+        BodyValue<NoInfer<Result>>,
+        Shaped,
+        Args,
+        Gate,
+        ArgsGate
+    > &
+        Sourced<Args>,
 ): Keyed<
     Kept<Shaped>,
     Args,
@@ -379,7 +398,7 @@ export function keyedValue(body: unknown, options?: unknown): unknown {
     return filed([body, options], true, buildBody)
 }
 
-// 11.74 — at construction, the earliest moment there is: a value handed where a body belongs would
+// 11.73 — at construction, the earliest moment there is: a value handed where a body belongs would
 // otherwise be read as one by every later call.
 function refuseValue(body: unknown, name: string): void {
     if (
@@ -389,8 +408,25 @@ function refuseValue(body: unknown, name: string): void {
         (body as { [MEMO_BRAND]?: true | undefined })[MEMO_BRAND] === true
     )
         throw new TypeError(
-            `abide: ${name} takes a body, a function it runs. A value to hold is reactive(value). RULEBOOK 11.74.`,
+            `abide: ${name} takes a body, a function it runs. A value to hold is reactive(value). RULEBOOK 11.73.`,
         )
+}
+
+/**
+ * The options a source declares and a value does not (11.81): a `memo` paces, ages, tags and files
+ * what it computes, and a `reactive` or a `computed` reading it is a view of that.
+ */
+const SOURCED = ['ttl', 'throttle', 'debounce', 'tags', 'global']
+
+// 11.81 — at construction, as 11.59 is: the types refuse these, and this is for JavaScript and for a
+// spread the types could not see.
+function refuseSourced(options: unknown, name: string): void {
+    if (options === undefined || options === null) return
+    for (const option of SOURCED)
+        if ((options as Record<string, unknown>)[option] !== undefined)
+            throw new TypeError(
+                `abide: ${name} takes no ${option}. A source declares it: memo(fn, { ${option} }), read by a computed. RULEBOOK 11.81.`,
+            )
 }
 
 /**
@@ -398,7 +434,7 @@ function refuseValue(body: unknown, name: string): void {
  *
  * 11.32 — ON A SERVER, OUTSIDE A REQUEST, THE VALUE IS FILED: a forwarder to one instance per
  * request, and to the one built here where there is no request at all — or, for a value with a
- * `store`, built where it is first reached (11.71). `global` is what keeps a value process-wide
+ * `store`, built where it is first reached (11.70). `global` is what keeps a value process-wide
  * (11.34).
  */
 function filed(
@@ -445,6 +481,21 @@ export const ambientComputed = ((body: unknown, options?: unknown) =>
     scoped(() =>
         buildBody([body, options], false),
     )) as unknown as typeof computed
+
+/**
+ * `reactive` and `computed` for a framework value that is one for the whole process — the log's
+ * records, the resolved configuration — where an app's would be a `memo` declaring `global` (11.34).
+ */
+export const processWide = ((initial: unknown) =>
+    filed([initial, { global: true }], false, buildValue)) as unknown as <
+    Value,
+>(
+    initial: Value,
+) => Reactive<Value>
+export const processWideComputed = ((body: unknown) =>
+    filed([body, { global: true }], false, buildBody)) as unknown as <Value>(
+    body: () => Value,
+) => Reactive<Value>
 
 /**
  * A handler's body kept per `Args` key, or `reactive` over its value, for `declare` — or the

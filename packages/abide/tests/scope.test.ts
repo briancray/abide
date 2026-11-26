@@ -27,7 +27,13 @@ import {
     watch,
 } from '#shared'
 import { cellOf } from '#shared/reactive/cellShape.ts'
-import { ambient, ambientComputed, keyedValue } from '#shared/reactive/index.ts'
+import {
+    ambient,
+    ambientComputed,
+    keyedValue,
+    memo,
+    processWide,
+} from '#shared/reactive/index.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
 import { GET, POST, reachOf } from '#shared/rpc.ts'
 
@@ -77,11 +83,11 @@ test('an ambient first built inside a request derives its home outside it — 11
     expect(doubled!()).toBe(6)
 })
 
-// 11.71 — A STORE BUILT AT IMPORT ON A SERVER IS NOT READ UNTIL ITS VALUE IS REACHED, so a store
+// 11.70 — A STORE BUILT AT IMPORT ON A SERVER IS NOT READ UNTIL ITS VALUE IS REACHED, so a store
 // reading the request is read first inside one. THE REVERT: have `reactive` pass `lazy` false to
 // `scoped` — the store's `get` runs at import, 1 read where 0 is due, and throws on the `request()`
 // it reads.
-test('a value with a store built outside every request reads it where it is reached — 11.71', async () => {
+test('a value with a store built outside every request reads it where it is reached — 11.70', async () => {
     let storeReads = 0
     const session = reactive<string | undefined>(undefined, {
         store: {
@@ -107,7 +113,7 @@ test('a value with a store built outside every request reads it where it is reac
 // whatever `holds` reads — the watch is stopped while the body still holds, `disposed` 1 where 0
 // is due.
 test("a watch stops at its request's teardown, which a held body defers — 12.5", async () => {
-    const level = reactive(0, { global: true })
+    const level = processWide(0)
     let runs = 0
     let disposed = 0
     let release = (): void => {}
@@ -138,7 +144,7 @@ test("a watch stops at its request's teardown, which a held body defers — 12.5
 // `serverStops` answer a request's stops alone; the watch is owned by nothing, and a later write
 // wakes it — `{ runs: 2, disposed: 1 }` where `{ runs: 1, disposed: 1 }` is due.
 test('a watch a bare render opened stops once its document is written — 12.5', async () => {
-    const level = reactive(0, { global: true })
+    const level = processWide(0)
     let runs = 0
     let disposed = 0
     const component = (() => {
@@ -162,7 +168,7 @@ test('a watch a bare render opened stops once its document is written — 12.5',
 // reader list for the life of the process. THE REVERT: drop the `owned(() => orphan(cell))` in
 // `createReactive` — the global keeps 1 reader per request, 2 where 0 are due.
 test("a value derived in a request lets go of a global at the request's teardown — 12.14", async () => {
-    const level = reactive(0, { global: true })
+    const level = processWide(0)
     for (const path of ['a', 'b'])
         await inScope(new Request(`http://app/${path}`), async () => {
             const plus = computed(() => level() + 1)
@@ -289,7 +295,7 @@ test('a handler no call has reached runs nothing when triggered — 13.19, 16.64
 // `reactive` unfiled — request b reads request a's write, 5 where 0 is due.
 test('a value handler is one value per request, and one value under global — 16.1, 16.6', async () => {
     const count = GET(0)
-    const shared = GET(0, { global: true })
+    const shared = GET(memo(() => 0, { global: true }))
     await inScope(new Request('http://app/a'), async () => {
         ;(reachOf(count) as Reactive<number>).set(5)
         ;(reachOf(shared) as Reactive<number>).set(5)
@@ -365,7 +371,7 @@ test('a body reruns under its own request, whichever request drained it — 11.3
     expect(totals).toEqual({ a: 30, b: 20 })
 })
 
-// 11.63, 11.32 — AN EFFECT A LOAD ABORTED RERUNS UNDER ITS OWN REQUEST, whichever request's landing
+// 11.62, 11.32 — AN EFFECT A LOAD ABORTED RERUNS UNDER ITS OWN REQUEST, whichever request's landing
 // drained it. Each request's `watch` reads the module-level `tenant` and then `profile`, a load still
 // in flight, so its first run aborts. B lands first and schedules the one drain that reruns both, and
 // A's effect run under B's scope reads B's `tenant` and B's `profile` — and SUBSCRIBES to them, so
@@ -374,7 +380,7 @@ test('a body reruns under its own request, whichever request drained it — 11.3
 // directly in `watchTracked` rather than through `runInScope`; A's rerun reads `a:b:b` where `a:a:a`
 // is due, and B's later write wakes A's watch — 2 runs where 1 is due. The same in `watchOver`: its
 // rerun reads `a:b:b`.
-test('an effect a load aborted reruns under its own request, whichever request drained it — 11.63', async () => {
+test('an effect a load aborted reruns under its own request, whichever request drained it — 11.62', async () => {
     const tenant = reactive('none')
     const opens: Record<string, (answer: string) => void> = {}
     const profile = computed(
@@ -434,7 +440,7 @@ test('an effect a load aborted reruns under its own request, whichever request d
 // again for A's refresh — 2 loads where 1 is due.
 test('a refresh by tag reaches the request it was made in and no other — 13.8', async () => {
     let loads = 0
-    const stock = computed(
+    const stock = keyedValue(
         () => {
             loads += 1
             return 3
@@ -443,7 +449,7 @@ test('a refresh by tag reaches the request it was made in and no other — 13.8'
     )
     const subscribe = (): void => {
         watch(() => {
-            stock()
+            stock()()
         })
     }
     const a = held('a', subscribe, () => {
@@ -452,8 +458,8 @@ test('a refresh by tag reaches the request it was made in and no other — 13.8'
         flushSync()
     })
     const b = held('b', subscribe, () => {})
-    // The home's run at import, and one per request.
-    expect(loads).toBe(3)
+    // One run per request: a keyed value's entry runs where a request reaches it.
+    expect(loads).toBe(2)
     b.open()
     await b.done
     a.open()
@@ -466,13 +472,13 @@ test('a refresh by tag reaches the request it was made in and no other — 13.8'
 // REVERT: drop `|| cell.global` from `carrying`; neither body runs again — 0 loads where 2 are due.
 test('a refresh by tag inside a request reaches a global value and its entries — 13.13', () => {
     let loads = 0
-    const prices = computed(
+    const prices = keyedValue(
         () => {
             loads += 1
             return 3
         },
         { tags: ['prices'], global: true },
-    )
+    )()
     const price = keyedValue(
         (args: { id: number }) => {
             loads += 1
@@ -532,13 +538,13 @@ test('a bare refresh reaches the request it was made in and no other — 13.8', 
 // inside request B neither is reached — 0 loads where 2 are due.
 test('a bare invalidate and a bare refresh reach every global load in the process — 13.10', () => {
     let loads = 0
-    const rates = computed(
+    const rates = keyedValue(
         async () => {
             loads += 1
             return 3
         },
         { global: true },
-    )
+    )()
     const rate = keyedValue(
         async (args: { id: number }) => {
             loads += 1
@@ -568,10 +574,10 @@ test('a bare invalidate and a bare refresh reach every global load in the proces
 // 11.34 — `global` IS ONE VALUE FOR THE PROCESS. THE REVERT: drop the `global` test from
 // `outsideScope`; the second request reads 0 where the first wrote 7.
 test('a global value is shared by every request — 11.34', async () => {
-    const hits = reactive(0, { global: true })
-    inScope(new Request('http://app/a'), () => hits.set(7))
-    inScope(new Request('http://app/b'), () => {
-        expect(hits()).toBe(7)
+    const hits = memo(() => 0, { global: true })
+    await inScope(new Request('http://app/a'), () => hits.set(7))
+    await inScope(new Request('http://app/b'), async () => {
+        expect(await hits()).toBe(7)
     })
 })
 
@@ -593,10 +599,10 @@ test('request and response read the request being served, and throw outside one 
     expect(url).toBe('http://app/invoices')
 })
 
-// 11.26, 11.68 — A HANDLER WITH RUNGS KEYS ITS VALUE BY THE ARGS AS SENT, and its body gets what the
+// 11.26, 11.67 — A HANDLER WITH RUNGS KEYS ITS VALUE BY THE ARGS AS SENT, and its body gets what the
 // gate made of them, as one with no rungs does. THE REVERT: reach the value with `ctx.args()` at
 // the onion's center; the two spellings land on 1 entry rather than 2.
-test('a handler with rungs keys its value by the args as sent — 11.26, 11.68', async () => {
+test('a handler with rungs keys its value by the args as sent — 11.26, 11.67', async () => {
     const seen: string[] = []
     const invoice = keyedValue(
         (args: { id: string }) => {

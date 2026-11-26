@@ -16,8 +16,8 @@ import type { CallOf } from '#shared/reactive/index.ts'
 import { reachOf } from '#shared/rpc.ts'
 
 // KEEP THE CALL: a form keeps the call its write made — adopting the value the call reached — rather
-// than awaiting it in a `try` and copying the outcome out by hand. 16.4 issues the request at the call, 11.61 adopts the
-// call's value and 11.50 forwards every probe; 3.15 and 4.19 are the two this form adds.
+// than awaiting it in a `try` and copying the outcome out by hand. 16.4 issues the request at the call, 11.60 adopts the
+// call's value and 11.49 forwards every probe; 3.15 and 4.19 are the two this form adds.
 
 type Balance = { account: string; amount: number }
 
@@ -72,13 +72,13 @@ async function settled(
     flushSync()
 }
 
-// 11.61, 11.50 — THE CALL'S PROBES ARE THE FORM'S, and each reader wakes once per probe move: four
+// 11.60, 11.49 — THE CALL'S PROBES ARE THE FORM'S, and each reader wakes once per probe move: four
 // over two submits, `busy` true and false for each. `error` is filled by the refusal and dropped when
 // the second submit is adopted, since the probes are the call being kept; its reader also wakes on
 // the `busy` moves, which 3.3 subscribes it to together. Each reader records what it read, so a
 // fifth wake would show as a fifth entry. THE REVERT: drop `probe(cell)` from the `error` member in
 // `Reactive.ts`; the error reader reads `undefined` once and never wakes — 1 entry where 5 are owed.
-test('a kept call is busy in flight, refused, and dropped for the next call — 11.61, 11.50', async () => {
+test('a kept call is busy in flight, refused, and dropped for the next call — 11.60, 11.49', async () => {
     const saving = reactive<typeof recordBalance>()
     const busy: boolean[] = []
     const errors: (string | undefined)[] = []
@@ -120,11 +120,11 @@ test('a kept call is busy in flight, refused, and dropped for the next call — 
     ])
 })
 
-// 11.61, 16.7 — A SECOND SUBMIT IS A SECOND CALL, and the form follows it: the same args twice is a
+// 11.60, 16.7 — A SECOND SUBMIT IS A SECOND CALL, and the form follows it: the same args twice is a
 // mutation run twice (16.7), and the kept value adopts the call the second submit made. THE REVERT:
 // have `adopt` in `Reactive.ts` return early where an adoption already stands — the form reads
 // `busy()` false at the second submit, still holding the first answer.
-test('a second submit is adopted, and the form follows the new call — 11.61', async () => {
+test('a second submit is adopted, and the form follows the new call — 11.60', async () => {
     const saving = reactive<typeof recordBalance>()
     const busy: boolean[] = []
     using _busy = {
@@ -173,13 +173,13 @@ test('issues reads the standing ValidationError, and nothing else — 3.15', asy
     expect(saving.issues()).toBeUndefined()
 })
 
-// 3.3 and 11.50 for 3.15 — `issues` SUBSCRIBES as `error` does, and ADOPTING A CALL ALREADY REFUSED
+// 3.3 and 11.49 for 3.15 — `issues` SUBSCRIBES as `error` does, and ADOPTING A CALL ALREADY REFUSED
 // moves it: the `args` gate refuses at the call, so the adopted value is failed before the form
 // holds it and produces nothing afterwards. Two refusals in a row, the second with one field put
 // right, then an accepted call. THE REVERT: drop the `failureOf(cell) !== wasFailure` arm from
 // `adopt` in `Reactive.ts`; the reader never hears either refusal — `[[], [], []]` where three
 // different answers are owed.
-test('a reader of issues alone hears each refusal, as the call is adopted — 3.3, 3.15, 11.50', async () => {
+test('a reader of issues alone hears each refusal, as the call is adopted — 3.3, 3.15, 11.49', async () => {
     const saving = reactive<typeof recordBalance>()
     const fields: string[][] = []
     using _issues = {
@@ -274,13 +274,13 @@ test('then on a kept call follows each answer once, and leaves a refusal on erro
     expect(answered).toBe(true)
 })
 
-// 11.61, 11.16, 11.50 — KEEPING NO CALL IS ADOPTING A VALUE NOTHING HAS WRITTEN: `saving =
+// 11.60, 11.16, 11.49 — KEEPING NO CALL IS ADOPTING A VALUE NOTHING HAS WRITTEN: `saving =
 // reactive<typeof save>()` drops the standing refusal, reads not ready, and writes nothing into the
-// call it stops keeping — where `saving = undefined` is a write, which 11.59 hands to that call.
+// call it stops keeping — where `saving = undefined` is a write, which 11.58 hands to that call.
 // The `error` reader hears the drop once, after the call's `busy` move and its refusal. THE REVERT:
 // drop the `failureOf(cell) !== wasFailure` arm from `adopt` in `Reactive.ts`; the reader never
 // hears the refusal leave — 3 entries, the last `'AccountClosed'`, where a fourth is owed.
-test('a kept call is let go by keeping one nothing has written — 11.16, 11.50, 11.61', async () => {
+test('a kept call is let go by keeping one nothing has written — 11.16, 11.49, 11.60', async () => {
     const saving = reactive<typeof recordBalance>()
     const errors: (string | undefined)[] = []
     using _error = {
@@ -568,7 +568,7 @@ console.log('reported=' + reported, 'ran=' + ran, 'kept=' + kept.error()?.messag
     },
 )
 
-// 4.1, 4.2, 11.61 — ONE BUSY AND ONE ERROR OVER A STEP THAT IS NOT A CALL. A promise chain is a load
+// 4.1, 4.2, 11.60 — ONE BUSY AND ONE ERROR OVER A STEP THAT IS NOT A CALL. A promise chain is a load
 // like any other, so `saving = locate().then((place) => recordBalance(place))` keeps both steps: the
 // call the chain's handler returns is a thenable the chain settles with. `busy` moves once each way
 // across both steps, where two kept calls in a row would move it twice; whichever step failed is

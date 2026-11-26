@@ -225,23 +225,19 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Keep serving the last registry answer while the registry is down">
-        <p>Ask from a <code>computed</code> that polls, one per
-            company in a <code>global</code> <code>memo</code>. An ask that fails leaves the last
-            answer served to every caller, with the failure in <code>error</code> beside it.</p>
+        <p>Ask from a <code>global</code> <code>memo</code>, one entry per company, whose
+            <code>ttl</code> asks again an hour after the last answer while a page reads it. An ask
+            that fails leaves the last answer served to every caller, with the failure in
+            <code>error</code> beside it.</p>
         <Code language="ts" caption="server" code={`
-            import { computed, memo } from '@abide/abide'
-            import { fetchAndHandle } from '@abide/abide/server'
+            import { fetchAndHandle, memo } from '@abide/abide'
 
             export const registrations = memo(
                 ({ id }: { id: string }) =>
-                    computed(
-                        () =>
-                            fetchAndHandle<Registration>(
-                                \`https://registry.example/companies/\${id}\`,
-                            ),
-                        { poll: 3_600_000 },
+                    fetchAndHandle<Registration>(
+                        \`https://registry.example/companies/\${id}\`,
                     ),
-                { global: true },
+                { global: true, ttl: 3_600_000 },
             )
         `} />
     </Section>

@@ -6,6 +6,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import DealSearch from './lib/DealSearch.abide'
+import dealSearch from './lib/DealSearch.abide' with { type: 'text' }
 import StageEntries from './lib/StageEntries.abide'
 import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
 </script>
@@ -28,13 +30,13 @@ import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/reactive.test.ts',
             from: [
-                "test('memo refuses anything but a body at construction — 11.74'",
+                "test('memo refuses anything but a body at construction — 11.73'",
             ],
         },
         {
             path: 'packages/abide/tests/memoOptions.test.ts',
             from: [
-                "test('a memo gates and shapes what its function settles to — 11.80'",
+                "test('a memo gates and shapes what its function settles to — 11.79'",
             ],
         },
     ]}
@@ -45,6 +47,33 @@ import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
             calling the <code>memo</code> inside a <code>computed</code>, which follows the
             stage as it changes.</p>
         <Example code={stageEntries}><StageEntries /></Example>
+    </Section>
+
+    <Section level={3} title="Search once the typing stops">
+        <p>Set <code>debounce</code> on a <code>memo</code> the search reads through, and a new
+            query is searched once the typing pauses rather than once per keystroke. The pace is
+            the memo's, so every page reading it is held to it.</p>
+        <Example code={dealSearch}><DealSearch /></Example>
+    </Section>
+
+    <Section level={3} title="Look again five minutes after the last look, while the panel is open">
+        <p>Give the <code>memo</code> a <code>ttl</code>. An entry a page reads is looked at again
+            that long after its last answer landed, and the old answer stays up meanwhile; one
+            nothing reads is let go, and the next read looks afresh. Work that has to run whether or
+            not anything reads it is a <a href={url('/orchestration/job')}><code>job</code></a>
+            writing the memo.</p>
+        <Code language="ts" caption="shared" code={`
+            import { memo } from '@abide/abide'
+            import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
+
+            export const followUps = memo(
+                async function* () {
+                    for (const deal of DEALS)
+                        if (deal.stage === 'lead') yield deal.name
+                },
+                { global: true, tags: ['follow-ups'], ttl: 300_000 },
+            )
+        `} />
     </Section>
 
     <Section level={3} title="Keep only the headcount from each registry entry">

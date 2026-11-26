@@ -1,19 +1,20 @@
-// WORK ON A SCHEDULE: 54.14-54.23. A job is a `global` value on a `poll` nothing reads — the shape
-// `poll.ts` already calls a job — so `App.listen` makes its first look and `App.stop` stops it (7.26,
-// 7.30). What this adds is the bookkeeping written once: a status a handler can answer, one run at
-// a time, and when the last run ended.
+// WORK ON A SCHEDULE: 54.14-54.23. A job looks whether a run is due on a clock of its own, which an
+// app opening to the network starts and `App.stop` stops and waits on (54.14, 54.43). What it keeps
+// is the bookkeeping written once: a status a handler can answer, one run at a time, and when the
+// last run ended. Work that must happen whether or not anything follows a value is a job writing a
+// `memo` — a `memo`'s `ttl` refreshes only what something follows (6.1).
 
 import { isFailed } from '#shared/Failed.ts'
 import { log } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
+import { appStopSignal } from '#shared/reactive/abortSignal.ts'
+import { armTimer } from '#shared/reactive/armTimer.ts'
 import {
-    computed,
     type Memo,
     memo,
     type Reactive,
     type Store,
 } from '#shared/reactive/index.ts'
-import { appStopSignal } from '#shared/reactive/poll.ts'
 
 import { ownedBy } from './requestScope.ts'
 
@@ -72,6 +73,40 @@ export type JobOptions<Input = undefined> = {
           from?: never | undefined
       }
 )
+
+/**
+ * A job's clock, as the app opening and stopping drives it: started by `App.listen` and `abide dev`,
+ * stopped by `App.stop`, which then waits on the run in flight (54.14, 54.43).
+ */
+type Clock = {
+    start: () => void
+    halt: () => void
+    inFlight: () => Promise<unknown> | undefined
+}
+
+/** Every job built in the process, each looked at again by every app that opens after it (42.12). */
+const CLOCKS = new Set<Clock>()
+
+/** 54.14 — the app opened to the network: every job's first look, and its clock from there. */
+export function startJobs(): void {
+    for (const clock of CLOCKS) clock.start()
+}
+
+/**
+ * 54.14, 54.43 — every job's clock stopped, answering what waits on each run in flight, asked once
+ * the requests have drained so a run a request started is waited on too.
+ */
+export function stopJobs(): () => Promise<void> {
+    for (const clock of CLOCKS) clock.halt()
+    return async () => {
+        const inFlight: Promise<unknown>[] = []
+        for (const clock of CLOCKS) {
+            const running = clock.inFlight()
+            if (running !== undefined) inFlight.push(running)
+        }
+        await Promise.all(inFlight)
+    }
+}
 
 /** The longest a job waits between two looks at whether a run is due (54.14). */
 const LONGEST_LOOK = 60_000
@@ -141,7 +176,7 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
     }
 
     const runOnce = async (input: Input | undefined): Promise<Ran> => {
-        // 54.22 — the app's signal, not the look's: a run outlives the look that started it (7.45).
+        // 54.22 — the app's signal, not the look's: a run outlives the look that started it (7.22).
         const signal = AbortSignal.any([appStopSignal(), stopping.signal])
         const startedAt = Date.now()
         write({ running: true })
@@ -257,17 +292,45 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         return write({ nextRun: null })
     }
 
-    computed(look, {
-        global: true,
-        poll: {
-            every:
-                cron !== undefined
-                    ? CRON_LOOK
-                    : typeof every === 'number' && every > 0
-                      ? Math.min(every, LONGEST_LOOK)
-                      : LONGEST_LOOK,
-            after: 'settle',
+    // 54.14 — EACH LOOK IS SPACED FROM THE END OF THE ONE BEFORE, so a look waiting on a run is
+    // followed by the whole interval rather than at once. `turn` moves with every halt, so a look
+    // settling after one arms nothing.
+    const lookEvery =
+        cron !== undefined
+            ? CRON_LOOK
+            : typeof every === 'number' && every > 0
+              ? Math.min(every, LONGEST_LOOK)
+              : LONGEST_LOOK
+    const clock = {
+        timer: null as ReturnType<typeof setTimeout> | null,
+        running: false,
+        turn: 0,
+    }
+    const lookThenArm = (): void => {
+        const turn = clock.turn
+        look()
+            .catch((error: unknown) => logger.error('look failed', error))
+            .then(() => {
+                if (clock.turn !== turn) return
+                armTimer(clock, lookEvery, () => {
+                    clock.timer = null
+                    lookThenArm()
+                })
+            })
+    }
+    CLOCKS.add({
+        start: () => {
+            if (clock.running) return
+            clock.running = true
+            lookThenArm()
         },
+        halt: () => {
+            clock.running = false
+            clock.turn += 1
+            if (clock.timer !== null) clearTimeout(clock.timer)
+            clock.timer = null
+        },
+        inFlight: () => running,
     })
     return { status, run, stop }
 }

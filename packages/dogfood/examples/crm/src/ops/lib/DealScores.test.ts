@@ -4,7 +4,7 @@ import { busy } from '@abide/abide'
 import { createApp } from '@abide/abide/server'
 
 import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
-import { dealScores } from './dealScores.ts'
+import { dealScores } from './dealScores.server.ts'
 
 const scored = async (): Promise<string[]> => {
     const names: string[] = []

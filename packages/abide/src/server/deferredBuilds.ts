@@ -132,8 +132,8 @@ function ownedByDeferred(
 }
 
 // 41.26 — a stream is marked only where its run had closed: one still running is no load the wait
-// could see the end of, and nor is one whose first run has not begun — a `global` stream `poll`
-// starts later answers no load, and its call would run it while hydration waited.
+// could see the end of, and nor is one whose first run has not begun — it answers no load, and its
+// call would run it while hydration waited.
 function paintedSettled({ reached }: PageCall): boolean {
     return (
         isReactive(reached) &&

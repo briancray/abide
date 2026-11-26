@@ -16,7 +16,7 @@ import type { Framed } from '#shared/framing.ts'
 import type { Params } from '#shared/matchRoute.ts'
 import type { Principal } from '#shared/principal.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
-import { appStopSignal } from '#shared/reactive/poll.ts'
+import { appStopSignal } from '#shared/reactive/abortSignal.ts'
 import { type RunMark, type Scope, SCOPING } from '#shared/reactive/scoping.ts'
 import { settingUp } from '#shared/reactive/watch.ts'
 
@@ -85,7 +85,7 @@ export type RequestScope = Scope & {
      */
     received: Request | undefined
     /**
-     * 7.48 — what `abortSignal` answers in this request outside every run, and what a run filed in
+     * 7.25 — what `abortSignal` answers in this request outside every run, and what a run filed in
      * it ends with: the received request's signal and the app's stop as one. Made on the first ask.
      */
     abortSignal: AbortSignal | undefined
@@ -151,7 +151,7 @@ function currentStops(): (() => void)[] | undefined {
 // that request for what the run reaches through it.
 const GLOBAL_RUN = new AsyncLocalStorage<true>()
 
-// 7.47 — THE `memo` RUN THE WORK RUNNING BELONGS TO, carried across every `await` its body makes.
+// 7.24 — THE `memo` RUN THE WORK RUNNING BELONGS TO, carried across every `await` its body makes.
 // Apart from STORAGE: a run is narrower than its request, and ends without the request ending.
 const RUN = new AsyncLocalStorage<RunMark>()
 
@@ -167,7 +167,7 @@ export function ownedBy<Result>(
     return STORAGE.run(undefined, () => RUN.exit(() => OWNER.run(signal, body)))
 }
 
-/** 7.48 — the signal of the request `scope` answers, aborted by 7.38's stop too, or `undefined`. */
+/** 7.25 — the signal of the request `scope` answers, aborted by 7.20's stop too, or `undefined`. */
 function requestSignal(scope: Scope | undefined): AbortSignal | undefined {
     if (scope === undefined) return undefined
     const answering = scope as RequestScope

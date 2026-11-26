@@ -1,13 +1,20 @@
 // 38.223 — THE MIGRATION TO `computed`: every `memo(…)` handed a body that declares no parameter is a
 // `computed(…)` from the release this migration is keyed to on, since `memo` no longer reads a body's
 // parameters to decide its form (11.1, 11.2). A body handed by name is left for the checker, whose
-// declaration only it reads.
+// declaration only it reads, and a `memo` declaring a source's option stays one: a `computed` takes
+// none (11.81).
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { closesArrow, renameBodyCalls } from './renameBodyCalls.ts'
 import { rewriteCode } from './rewriteCode.ts'
-import { afterTypeArguments, closerOf, type Token } from './tokenize.ts'
+import {
+    afterTypeArguments,
+    argumentCommas,
+    closerOf,
+    type Token,
+} from './tokenize.ts'
+import { propertiesAt, SOURCED } from './toSourceOptions.ts'
 
 /** 38.223 — `text`, a file at `path`, with each `memo` handed a body declaring no parameter renamed `computed`. */
 export function toComputed(text: string, path: string): string {
@@ -48,4 +55,17 @@ function emptyParameters(tokens: Token[], open: number): boolean {
     )
 }
 
-const TO_COMPUTED = renameBodyCalls('memo', 'computed', isBodyWithoutParameter)
+/** Whether the call whose first argument starts at `at` declares an option only a source takes. */
+function declaresSourced(tokens: Token[], at: number): boolean {
+    const second = argumentCommas(tokens, at - 1)[0]
+    if (second === undefined) return false
+    const properties = propertiesAt(tokens, second + 1) ?? []
+    return properties.some(({ key }) => SOURCED.has(key.text))
+}
+
+const TO_COMPUTED = renameBodyCalls(
+    'memo',
+    'computed',
+    (tokens, at) =>
+        isBodyWithoutParameter(tokens, at) && !declaresSourced(tokens, at),
+)

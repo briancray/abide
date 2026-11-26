@@ -18,7 +18,7 @@ test('while the registry is down, every caller is served its last answer', async
             return { entry }
         })
     const { entry } = await read()
-    // What the hourly poll does: ask again. The registry now answers 503, three times.
+    // What the hour running out does while a page reads it: ask again. The registry now answers 503, three times.
     registrations.refresh({ id: 'noether-group' })
     while (registryAsked('noether-group') < 4 || entry.busy())
         await Bun.sleep(10)

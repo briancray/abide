@@ -286,7 +286,7 @@ test('an attempt past timeout is aborted through its signal and tried again — 
 
 // 57.13 — A CALL MADE IN A `memo` BODY ENDS WITH THE RUN: the next run's abort reaches the step.
 // THE REVERT: read no `abortSignal` in `call`, and `superseded step told: false`.
-test('a pipe called in a memo body is told when the run is superseded — 57.13, 7.46', async () => {
+test('a pipe called in a memo body is told when the run is superseded — 57.13, 7.23', async () => {
     const signals: AbortSignal[] = []
     const search = pipe(
         [

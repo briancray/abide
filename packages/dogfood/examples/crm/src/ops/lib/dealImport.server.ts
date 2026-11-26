@@ -1,10 +1,10 @@
-import { reactive } from '@abide/abide'
+import { memo } from '@abide/abide'
 import { job, log } from '@abide/abide/server'
 
 import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
 /** How many deals the last import pulled in, or `undefined` before one has. */
-export const importedDeals = reactive<number | undefined>(undefined, {
+export const importedDeals = memo((): number | undefined => undefined, {
     global: true,
 })
 

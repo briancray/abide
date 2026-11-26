@@ -33,5 +33,5 @@ test('an import asked for one stage imports only the deals at it', async () => {
     await dealImport.run()
     await app.run(() => pressImport({ stage: 'lead' }))
     await dealImport.run()
-    expect(`imported: ${importedDeals.peek()}`).toBe('imported: 3')
+    expect(`imported: ${await importedDeals()}`).toBe('imported: 3')
 })

@@ -55,10 +55,10 @@ import keepStage from './lib/KeepStage.abide' with { type: 'text' }
         <p>The server's <code>store</code> adds <code>sqlite</code> and <code>redis</code>. A string
             names the database file.</p>
         <Code language="ts" caption="server" code={`
-            import { reactive } from '@abide/abide'
+            import { memo } from '@abide/abide'
             import { store } from '@abide/abide/server'
 
-            export const lastDigest = reactive(0, {
+            export const lastDigest = memo((): number => 0, {
                 global: true,
                 store: store.sqlite<number>('crm', 'lastDigest'),
             })

@@ -12,6 +12,7 @@ import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
 import { toNamedParts } from './toNamedParts.ts'
 import { toRefuseNamed } from './toRefuseNamed.ts'
+import { toSourceOptions } from './toSourceOptions.ts'
 
 /** A file's text before and after `abide upgrade`. */
 export type Edit = { path: string; before: string; after: string }
@@ -84,6 +85,8 @@ const MIGRATIONS: Migration[] = [
     { version: '0.144.0', migrate: eachSource(toComputedCall) },
     // 38.225 — `fetchData` is `fetchAndHandle`.
     { version: '0.144.0', migrate: eachSource(toFetchAndHandle) },
+    // 38.227 — `poll` is a `ttl`, and a `reactive` or `computed` takes none of a source's options.
+    { version: '0.144.0', migrate: eachSource(toSourceOptions) },
 ]
 
 /**

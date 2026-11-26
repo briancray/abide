@@ -30,7 +30,7 @@ import { namedLogger } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
 import { parsedJson } from '#shared/parsedJson.ts'
 import { randomToken } from '#shared/randomToken.ts'
-import { abortSignal } from '#shared/reactive/poll.ts'
+import { abortSignal } from '#shared/reactive/abortSignal.ts'
 import { refuse } from '#shared/refuse.ts'
 import { wordsOf } from '#shared/wordsOf.ts'
 
@@ -223,7 +223,7 @@ async function* converse(
         asking === undefined ? NO_ASKER : askerOf(asking),
     )
     // 44.57 — the caller's signal and the request's are one: either ends the conversation. Where no
-    // request owns the run, the app's own life is the one it has, as a `global` value's `poll` (7.26).
+    // request owns the run, the app's own life is the one it has, as a `job`'s run does (7.20).
     const owner = asking === undefined ? abortSignal() : asking.signal
     const signal =
         options.signal === undefined

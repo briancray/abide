@@ -5,7 +5,7 @@
 
 import { expect, test } from 'bun:test'
 
-import { computed, GET, log, POST, principal, refuse, watch } from '#server'
+import { GET, log, POST, principal, refuse, watch } from '#server'
 import type { BootedApp } from '#server/createApp.ts'
 import type { Selection } from '#shared'
 import { keyedValue } from '#shared/reactive/index.ts'
@@ -13,14 +13,14 @@ import { keyedValue } from '#shared/reactive/index.ts'
 import { inMemoryApp } from './inMemoryApp.ts'
 
 const runs = { cars: 0, boats: 0, car1: 0, car2: 0 }
-const cars = computed(async () => ++runs.cars, {
+const cars = keyedValue(async () => ++runs.cars, {
     global: true,
     tags: ['refreshes:cars'],
-})
-const boats = computed(async () => ++runs.boats, {
+})()
+const boats = keyedValue(async () => ++runs.boats, {
     global: true,
     tags: ['refreshes:boats'],
-})
+})()
 const car = keyedValue(
     async ({ id }: { id: number }) => (id === 1 ? ++runs.car1 : ++runs.car2),
     { global: true, tags: ({ id }) => [`refreshes:car:${id}`] },
@@ -313,7 +313,7 @@ test('a refreshes that fails answers the write as it returned, and warns once â€
 // and the failure is still warned once (16.102). THE REVERT: drop the per-entry `try` in `refreshEach`
 // in `rpc.ts`; the throw leaves the loop, and `after +0` where `after +1` is due.
 let afterRuns = 0
-const after = computed(async () => ++afterRuns, { global: true })
+const after = keyedValue(async () => ++afterRuns, { global: true })()
 const broken = {
     refresh() {
         throw new Error('this entry broke')

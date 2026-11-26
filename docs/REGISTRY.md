@@ -61,7 +61,7 @@ A property written `name?: T` in a signature takes `undefined` as it takes the p
 | `const x: Reactive<…> = foo` / a `Reactive<…>`-typed parameter, object literal member, return or `bind:` operand | the `Reactive` | 31.3, 31.19 |
 | `await foo` | the settling of the `Reactive`, which is its value | 1.4, 2.7, 31.3 |
 | `refresh(foo)` / a `Selection`-typed parameter | the `Reactive` | 31.13 |
-| `foo = bar` | a write, or where `foo` holds nothing yet and `bar` is a `Reactive`, a binding to it | 31.4, 11.61, 31.18, 31.20 |
+| `foo = bar` | a write, or where `foo` holds nothing yet and `bar` is a `Reactive`, a binding to it | 31.4, 11.60, 31.18, 31.20 |
 | `foo.bar = v` | a write through a path | 31.8, 31.14, 31.16 |
 | `foo.push(v)` | a write through a path, run on a copy of the array | 31.8, 31.9 |
 | `const [a, b] = foo` / `...foo` | one read of the value | 31.12 |
@@ -81,7 +81,7 @@ A property written `name?: T` in a signature takes `undefined` as it takes the p
 | `name={expr}` | A reactive attribute or property. | 32.3, 32.20, 32.23, 32.37, 32.70, 32.71, 32.113, 32.114, 32.115 |
 | `on<event>={fn}` | A native listener on an element, and an ordinary prop on a component. | 32.4, 32.75, 32.95, 32.109 |
 | `name="…{expr}…"` | An interpolated quoted value. | 32.3, 32.71 |
-| `bind:value` | Two-way bind on an element. | 5.16, 32.5, 32.58, 32.59, 32.60, 32.61, 32.62, 32.72, 32.74, 32.75, 32.76, 32.78 |
+| `bind:value` | Two-way bind on an element. | 32.5, 32.58, 32.59, 32.60, 32.61, 32.62, 32.72, 32.74, 32.75, 32.76, 32.78 |
 | `bind:prop={state}` | Hands a component prop the caller's `Reactive`, or a `{get, set}` pair, to write through. | 32.6, 33.6, 33.8, 14.18, 32.76 |
 | `bind:checked` | A boolean bind on an input. | 32.7, 32.72, 32.74, 32.75, 32.76, 32.78 |
 | `bind:open` | A boolean bind on whether a `<details>` is open. | 32.7, 32.72, 32.74, 32.75, 32.76, 32.78 |
@@ -253,8 +253,8 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `Failures` | union of `Failed` | What a read hands back in place of a value. | 1.3 |
 | `Shaped` | `unknown` | What a `transform` hands back: the value to store, or a refusal. | 4.6, 4.9 |
 | `Produced` | `unknown` | What a production carries, where that differs from what is stored. | 1.2, 9.3 |
-| `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.4, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.64, 19.15 |
-| `reactive` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(initial: Held<Accepted> \| undefined, options?: Shaping<Accepted, Shaped, never, Gate>) => Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>` | The value form, for what the scope owns outright, opening at `initial`, at what a promise of it settles to, or at `undefined`. | 4.1, 4.2, 4.14, 4.15, 4.16, 4.20 |
+| `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.4, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.63, 19.15 |
+| `reactive` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(initial: Held<Accepted> \| undefined, options?: Shaping<Accepted, Shaped, never, Gate>) => Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>` | The value form, for what the scope owns outright, opening at `initial`, at what a promise of it settles to, or at `undefined`. | 4.1, 4.2, 4.14, 4.15, 4.16, 4.20, 11.81 |
 | `reactive` | `<Accepted>() => [Accepted extends Rpc<infer Value, infer Args, infer Failures, infer Produced> ? true : false] extends [true] ? Reactive<StoredOf<CallOf<Accepted>>, StoredOf<CallOf<Accepted>>, AdoptedFailures<CallOf<Accepted>>, AdoptedProduced<CallOf<Accepted>, StoredOf<CallOf<Accepted>>>> : Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>` | The empty form, for a value nothing has written yet. | 4.14, 4.19 |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | The shape of a `transform`. | 4.6, 4.7, 4.8 |
 | `Shared` | `interface Shared {}` | The app's declaration-merged registry of shared keys. | 10.3 |
@@ -286,14 +286,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `schema` | `Schema<Accepted>` | The gate on the way in. | 1.3, 4.3, 4.4, 4.5, 11.46, 11.47 |
 | `transform` | `(value: Accepted) => Shaped` | The shaping on the way to storage. | 4.6, 4.7, 4.8, 4.9, 11.14 |
 | `identity` | `(next: Stored, previous: Stored) => unknown` | What makes it the same value. | 5.1, 5.2, 5.3, 5.4, 5.5, 9.3, 11.17, 18.4 |
-| `key` | `(keyof Element & string) \| ((element: Element) => unknown)`, over the `Element` a `Stored` array holds | What tells one element of the value from another. | 5.22, 18.4, 18.15, 32.32 |
-| `ttl` | `number` | The life of a production, of a keyed entry, or of a write to a value with no producer. | 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11, 6.12, 6.13, 6.14, 6.15, 6.16, 11.6, 11.35, 11.45, 11.48, 11.49, 11.69 |
-| `poll` | `number \| { every: number; after?: 'tick' \| 'settle'; delay?: number \| (() => number) }` | How often the value refreshes itself, in milliseconds, with the spacing between runs and a job's wait before its first. | 7.20, 7.21, 7.22, 7.23, 7.24, 7.25, 7.26, 7.27, 7.28, 7.29, 7.30, 7.31, 7.32, 7.33, 7.34, 7.35, 7.36, 7.37, 7.40, 7.41, 7.42, 7.43, 7.44 |
-| `args` | `Schema<Args>` | The gate on a keyed value's args. | 9.4, 11.28, 11.30, 11.40, 11.41, 11.56, 11.60, 11.68, 11.72 |
-| `global` | `boolean` | Opts out of the default scope into one cache shared by every caller in the process. | 11.34, 11.35, 11.36, 11.37, 11.38, 11.39, 11.53, 11.67, 26.24 |
-| `tags` | `string[] \| ((args: Args) => string[])` | What a `Selection` matches on. | 11.43, 11.44, 13.15, 18.4, 18.15 |
-| `throttle` | `number` | A ceiling on how often the value changes. | 5.8, 5.9, 5.11, 5.12, 5.14, 5.15, 5.17, 5.18, 5.19, 5.20, 5.21, 5.23, 5.24, 5.25 |
-| `debounce` | `number` | A wait for the changes to stop before the value changes. | 5.8, 5.9, 5.11, 5.13, 5.14, 5.15, 5.17, 5.18, 5.19, 5.20, 5.21, 5.23, 5.24, 5.25 |
+| `key` | `(keyof Element & string) \| ((element: Element) => unknown)`, over the `Element` a `Stored` array holds | What tells one element of the value from another. | 5.21, 18.4, 18.15, 32.32 |
 
 ### Reads
 
@@ -312,17 +305,17 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `s.set` | `(value: Accepted \| Promise<Accepted> \| Reactive<Accepted, unknown, Failures, unknown>) => void \| Failures` | Write the current value here, gated by `identity`. | 3.6, 4.1, 4.2, 4.9, 4.13, 4.17, 4.18, 5.6, 9.4, 9.11, 9.12, 11.59, 11.61, 11.65, 11.66, 11.70 |
-| `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutate the value in place. | 5.7, 5.23, 9.13, 11.59, 18.11, 18.13, 32.33 |
+| `s.set` | `(value: Accepted \| Promise<Accepted> \| Reactive<Accepted, unknown, Failures, unknown>) => void \| Failures` | Write the current value here, gated by `identity`. | 3.6, 4.1, 4.2, 4.9, 4.13, 4.17, 4.18, 5.6, 9.4, 9.11, 9.12, 11.58, 11.60, 11.64, 11.65, 11.69 |
+| `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutate the value in place. | 5.7, 5.22, 9.13, 11.58, 18.11, 18.13, 32.33 |
 
 ### Probes
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `s.busy` | `() => boolean` | Work is in flight for this value. | 3.1, 3.2, 3.3, 3.4, 3.7, 3.9, 3.14, 5.15, 7.5, 7.8, 11.19, 11.20, 11.21, 11.22, 11.50 |
-| `s.ready` | `() => boolean` | There is a value to serve. | 3.1, 3.2, 3.3, 3.5, 3.6, 3.8, 3.14, 7.8, 11.20, 11.54, 11.58 |
+| `s.busy` | `() => boolean` | Work is in flight for this value. | 3.1, 3.2, 3.3, 3.4, 3.7, 3.9, 3.14, 5.15, 7.5, 7.8, 11.19, 11.20, 11.21, 11.22, 11.49 |
+| `s.ready` | `() => boolean` | There is a value to serve. | 3.1, 3.2, 3.3, 3.5, 3.6, 3.8, 3.14, 7.8, 11.20, 11.53, 11.57 |
 | `s.error` | `() => Failures \| undefined` | The standing refusal. | 3.1, 3.2, 3.3, 3.5, 3.14, 4.10, 4.11, 4.12 |
-| `s.issues` | `() => Extract<Failures, { name: 'ValidationError'; data: unknown }>['data'] \| undefined` | The issues of the standing validation refusal. | 3.1, 3.2, 3.3, 3.15, 11.50 |
+| `s.issues` | `() => Extract<Failures, { name: 'ValidationError'; data: unknown }>['data'] \| undefined` | The issues of the standing validation refusal. | 3.1, 3.2, 3.3, 3.15, 11.49 |
 | `s.synced` | `() => boolean` | What is held is what the producer made. | 3.1, 3.2, 3.3, 3.10, 3.11, 3.12, 3.13, 3.14 |
 | `s.isError` | `<Name extends Failures['name']>(error: unknown, name: Name) => error is Extract<Failures, { name: Name }>` | Whether a caught failure is the one named. | 3.1 |
 
@@ -330,8 +323,8 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `s.invalidate` | `() => void` | Drop the cache behind the value. | 7.1, 7.2, 7.3, 7.6, 7.7, 7.9, 7.10, 7.12, 7.13, 7.14, 7.15, 7.16, 7.17, 7.19, 11.51 |
-| `s.refresh` | `() => void` | Reload while continuing to serve what is held. | 4.12, 7.1, 7.4, 7.5, 7.6, 7.11, 7.18, 11.51, 5.24 |
+| `s.invalidate` | `() => void` | Drop the cache behind the value. | 7.1, 7.2, 7.3, 7.6, 7.7, 7.9, 7.10, 7.12, 7.13, 7.14, 7.15, 7.16, 7.17, 7.19, 11.50 |
+| `s.refresh` | `() => void` | Reload while continuing to serve what is held. | 4.12, 7.1, 7.4, 7.5, 7.6, 7.11, 7.18, 11.50, 5.23 |
 
 ### Effects
 
@@ -343,15 +336,15 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `computed` | `<Value = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>>(body: () => Result, options?: Shaping<BodyValue<Result>, Shaped, never, Gate>) => ReactiveOf<never, Result, Shaped, Gate, never>` | A value `body` produces, run again when a value it read changes, and a stream where it hands back an async iterable. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.41, 11.50, 11.51, 11.52, 11.53, 11.54, 11.57, 11.58, 11.60, 41.6, 11.62, 11.63, 11.65, 11.66, 12.14, 12.17, 19.24, 41.34, 41.35, 11.73, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 14.3, 7.45, 7.46, 11.74 |
+| `computed` | `<Value = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>>(body: () => Result, options?: Shaping<BodyValue<Result>, Shaped, never, Gate>) => ReactiveOf<never, Result, Shaped, Gate, never>` | A value `body` produces, run again when a value it read changes, and a stream where it hands back an async iterable. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.41, 11.49, 11.50, 11.51, 11.53, 11.56, 11.57, 11.59, 41.6, 11.61, 11.62, 11.64, 11.65, 12.14, 12.17, 19.24, 41.34, 41.35, 11.72, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 14.3, 7.22, 7.23, 11.73, 11.81 |
 
 ## `memo`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `memo` | `<Args = undefined, Result = unknown, Shaped = Awaited<Result>>(fn: (args: Args) => Result, options?: MemoOptions<Args, Awaited<Result>, Shaped>) => Memo<Args, Result, Kept<Shaped>>` | `fn`'s value kept per set of args: a call answers its promise, or its stream, and its owner writes and follows it per key. | 11.2, 11.3, 11.4, 11.6, 11.74, 11.75, 11.76, 14.4, 15.19 |
-| `Memo` | `<Args, Result, Value = Awaited<Result>>((...args: undefined extends Args ? [args?: Args] : [args: Args]) => Promise<Value> \| AsyncIterable<unknown>) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void; set(args: Args, value): void; set(value): void where Args is undefined; patch(args: Args, mutate: (value) => void): void; patch(mutate: (value) => void): void where Args is undefined; readable(args: Args): ReadableStream }` | What `memo` hands back: the call, the triggers over the keys it holds, and the owner's writes and stream per key. | 11.2, 11.24, 11.27, 11.77, 11.78, 11.81, 13.12 |
-| `MemoOptions` | `<Args, Accepted = unknown, Shaped = Accepted>{ ttl?: number; tags?: string[] \| ((args: Args) => string[]); global?: boolean; args?: Schema<Args>; key?: string \| ((element) => unknown); poll?: number \| { every: number; after?: 'tick' \| 'settle'; delay?: number \| (() => number) }; throttle?: number; debounce?: number; store?: Store<unknown> \| ((args: Args) => Store<unknown>); schema?: Schema<Accepted>; transform?: (value: Accepted) => Shaped; identity?: (next: Kept<Shaped>, previous: Kept<Shaped>) => unknown }` | How long an entry lives, what selects it, where it is kept, what its args must be, what tells one element of its value from another, how often an entry reloads, where its value is stored, and the pace it produces at. | 11.32, 11.34, 11.40, 11.44, 11.45, 5.22, 7.20, 11.79, 11.80, 5.19, 5.25 |
+| `memo` | `<Args = undefined, Result = unknown, Shaped = Awaited<Result>>(fn: (args: Args) => Result, options?: MemoOptions<Args, Awaited<Result>, Shaped>) => Memo<Args, Result, Kept<Shaped>>` | `fn`'s value kept per set of args: a call answers its promise, or its stream, and its owner writes and follows it per key. | 11.2, 11.3, 11.4, 11.6, 11.73, 11.74, 11.75, 14.4, 15.19 |
+| `Memo` | `<Args, Result, Value = Awaited<Result>>((...args: undefined extends Args ? [args?: Args] : [args: Args]) => Promise<Value> \| AsyncIterable<unknown>) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void; set(args: Args, value): void; set(value): void where Args is undefined; patch(args: Args, mutate: (value) => void): void; patch(mutate: (value) => void): void where Args is undefined; readable(args: Args): ReadableStream }` | What `memo` hands back: the call, the triggers over the keys it holds, and the owner's writes and stream per key. | 11.2, 11.24, 11.27, 11.76, 11.77, 11.80, 13.12 |
+| `MemoOptions` | `<Args, Accepted = unknown, Shaped = Accepted>{ ttl?: number; tags?: string[] \| ((args: Args) => string[]); global?: boolean; args?: Schema<Args>; key?: string \| ((element) => unknown); throttle?: number; debounce?: number; store?: Store<unknown> \| ((args: Args) => Store<unknown>); schema?: Schema<Accepted>; transform?: (value: Accepted) => Shaped; identity?: (next: Kept<Shaped>, previous: Kept<Shaped>) => unknown }` | How long an entry lives, what selects it, where it is kept, what its args must be, what tells one element of its value from another, where its value is stored, and the pace it produces at. | 11.32, 5.21, 11.78, 11.79, 6.1, 6.2, 6.3, 6.4, 6.5, 8.13, 11.6, 11.33, 11.35, 11.45, 11.48, 11.68, 5.8, 5.9, 5.11, 5.12, 5.14, 5.15, 5.16, 5.17, 5.18, 5.19, 5.20, 5.22, 5.23, 5.24, 5.13, 11.43, 11.44, 13.15, 18.4, 18.15, 11.34, 11.36, 11.37, 11.38, 11.39, 11.52, 11.66, 26.24, 9.4, 11.28, 11.30, 11.40, 11.41, 11.55, 11.59, 11.67, 11.71 |
 
 ## `watch`
 
@@ -385,7 +378,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Selection` | `Reactive<any, any, any, any> \| { tags: string[] }` | What `busy`, `ready`, `synced`, `refresh` and `invalidate` take: a value, or a set of tags. | 13.1, 13.8, 13.9, 13.13, 31.13 |
-| `refresh` | `<Chosen extends Selection>(selection?: Chosen) => void` | Stale-while-revalidate over the selection. | 13.4, 13.7, 13.10, 13.14, 13.15, 13.16, 13.17, 13.20, 26.24, 7.40 |
+| `refresh` | `<Chosen extends Selection>(selection?: Chosen) => void` | Stale-while-revalidate over the selection. | 13.4, 13.7, 13.10, 13.14, 13.15, 13.16, 13.17, 13.20, 26.24 |
 
 ## `invalidate`
 
@@ -1026,22 +1019,22 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `Rpc` | `<Value, Args, Failures = never, Produced = Value>(args?: Args, options?: { signal?: AbortSignal; offline?: (args: Args) => Value }) => CallAnswer<Value, Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, Produced>` | A handler reached over http, or in process on a server. | 1.1, 11.23, 11.55, 16.3, 16.107, 16.108, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27, 41.33, 16.79, 16.80, 16.85, 16.106 |
+| `Rpc` | `<Value, Args, Failures = never, Produced = Value>(args?: Args, options?: { signal?: AbortSignal; offline?: (args: Args) => Value }) => CallAnswer<Value, Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, Produced>` | A handler reached over http, or in process on a server. | 1.1, 11.23, 11.54, 16.3, 16.107, 16.108, 16.4, 16.8, 16.11, 16.25, 16.26, 16.27, 16.28, 16.29, 16.33, 16.43, 16.48, 16.49, 16.62, 41.5, 41.7, 41.12, 41.21, 41.22, 41.25, 41.26, 41.27, 41.33, 16.79, 16.80, 16.85, 16.106 |
 | `CallAnswer` | `<Value, Failures, Produced>Promise<Value> \| AsyncIterable<Produced>`, the stream where the handler's body is an async generator | What one call of an `Rpc` answers: the promise of the handler's value, rejected with its refusal, or the stream of its chunks. | 16.3, 16.107 |
 | `offline` | `(args: Args) => Value` | What a call settles to where a browser could not get its answer. | 16.81, 16.82, 16.83, 16.84 |
 | `Value` | `unknown` | What the addressed `Reactive` holds. | 16.3, 16.30 |
 | `Produced` | `unknown` | What the handler yields per production, per the unit rule. | 1.2, 16.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The arguments, in the body on a mutation and in the URL on a `GET` or `DELETE`. | 11.24, 16.18, 19.15, 19.27, 30.28 |
 | `Middleware` | `Middleware<Answer = never, Extra extends object = object, Refused extends Failed<string, unknown> = Failed<string, unknown>> = <Given extends { request: Request } & Extra, Result extends {} \| null \| undefined>(next: (ctx?: Given) => Promise<Result>, ctx: Given) => Result \| Answer \| Refused \| Promise<Result \| Answer \| Refused>` | One rung, written once for every lane whose context carries `Extra`. | 16.8, 16.14, 16.15, 16.16, 16.21, 16.86, 37.14, 37.15 |
-| `GET` | `<Args = undefined, Result = unknown, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>, Answers extends readonly unknown[] = unknown[]>(handler: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate> & Omit<RpcOptions<Args, Answers>, 'refreshes'>) => Rpc<Kept<Shaped>, Args, AdoptedFailures<Result> \| Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args> \| RungRefusals<Answers>, BodyProduced<Result, Kept<Shaped>>>` | Declares a read any surface may call, from a body or a `memo`: a value kept per args, a stream where it hands back an async iterable, its options (`ttl`, `global`, `store` and the rest, a `memo`'s) building the value it becomes beside its address. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.68, 16.76, 16.34, 16.35, 16.36, 16.37, 16.39, 16.105, 16.44, 16.45, 16.46, 16.47, 16.75, 16.50, 16.51, 16.52, 16.64, 12.17, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24, 18.27, 16.92, 16.93, 16.94, 16.95, 16.96, 16.97, 16.98, 16.99, 16.100, 16.7, 11.2, 16.87, 16.109, 18.40, 18.41, 18.42, 18.43, 18.44, 18.45, 18.46, 18.47, 16.110 |
+| `GET` | `<Args = undefined, Result = unknown, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>, ArgsGate = Schema<Args>, Answers extends readonly unknown[] = unknown[]>(handler: (args: Args) => Result, options?: Shaping<BodyValue<Result>, Shaped, Args, Gate, ArgsGate> & Sourced<Args> & Omit<RpcOptions<Args, Answers>, 'refreshes'>) => Rpc<Kept<Shaped>, Args, AdoptedFailures<Result> \| Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args> \| RungRefusals<Answers>, BodyProduced<Result, Kept<Shaped>>>` | Declares a read any surface may call, from a body or a `memo`: a value kept per args, a stream where it hands back an async iterable, its options (`ttl`, `global`, `store` and the rest, a `memo`'s) building the value it becomes beside its address. | 16.1, 16.2, 16.5, 16.6, 16.30, 16.31, 16.32, 16.68, 16.76, 16.34, 16.35, 16.36, 16.37, 16.39, 16.105, 16.44, 16.45, 16.46, 16.47, 16.75, 16.50, 16.51, 16.52, 16.64, 12.17, 18.1, 18.3, 18.6, 18.8, 18.10, 18.12, 18.21, 18.24, 18.27, 16.92, 16.93, 16.94, 16.95, 16.96, 16.97, 16.98, 16.99, 16.100, 16.7, 11.2, 16.87, 16.109, 18.40, 18.41, 18.42, 18.43, 18.44, 18.45, 18.46, 18.47, 16.110 |
 | `GET` | `<Built extends ((args: never) => unknown) & { invalidate: unknown }, Answers extends readonly unknown[] = unknown[]>(handler: Built, options?: Omit<RpcOptions<BuiltArgs<Built>, Answers>, 'refreshes'>) => BuiltRpc<Built, Answers>` | The built form, for a `memo` given an address and served as it is; a `Reactive` is refused (16.109). | 11.2, 16.1, 16.3, 16.6 |
 | `GET` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>, Answers extends readonly unknown[] = unknown[]>(handler: Held<Accepted>, options?: Shaping<Accepted, Shaped, never, Gate> & Omit<RpcOptions<undefined, Answers>, 'refreshes'>) => Rpc<Kept<Shaped>, undefined, Refusals<Shaped, Gate, Accepted> \| RungRefusals<Answers>>` | The value form, for what the handler owns outright, whose options build the value it becomes. | 16.1, 16.6, 16.7 |
 | `rpc.invalidate` | `(pattern?: Partial<Args>, options?: { caller?: string \| true }) => void` | `invalidate` narrowed to the handler's matching entries. | 7.2, 7.3, 13.4, 13.12, 13.19, 18.37, 18.38, 18.39 |
 | `rpc.refresh` | `(pattern?: Partial<Args>, options?: { caller?: string \| true }) => void` | `refresh` narrowed to the handler's matching entries. | 7.4, 7.5, 13.4, 13.12, 13.19, 18.37, 18.38, 18.39 |
 | `rpc.isError` | `<Name extends string>(error: unknown, name: Name) => error is Extract<Failures \| Failed<'HttpError', undefined> \| Annotated<Args>, { name: Name }>` | Whether a caught failure is the one named. | 16.8 |
-| `rpc.set` | `(args: Args, value: Value) => void` | The owner's write of the handler's value for those args, past every rung. | 11.77, 11.81 |
-| `rpc.patch` | `(args: Args, mutate: (value: Value) => void) => void` | The owner's mutation of the handler's value for those args in place, past every rung. | 11.77, 11.81 |
-| `rpc.readable` | `(args: Args) => ReadableStream<Value>` | The handler's value for those args now, then after each change. | 11.78 |
+| `rpc.set` | `(args: Args, value: Value) => void` | The owner's write of the handler's value for those args, past every rung. | 11.76, 11.80 |
+| `rpc.patch` | `(args: Args, mutate: (value: Value) => void) => void` | The owner's mutation of the handler's value for those args in place, past every rung. | 11.76, 11.80 |
+| `rpc.readable` | `(args: Args) => ReadableStream<Value>` | The handler's value for those args now, then after each change. | 11.77 |
 | `rpc.raw` | `(args: Args, init?: RequestInit) => Promise<Response>` | The handler's call, handed back as its raw `Response`. | 16.11, 16.42 |
 | `rpc.method` | `string` | The HTTP method. | 16.2 |
 | `rpc.url` | `(args?: Args) => string` | The address, resolved against the mount. | 16.9, 16.10, 30.28 |
@@ -1058,6 +1051,7 @@ and `Annotated` is the `ValidationError` of
 type Annotated<Args> = 0 extends 1 & Args ? never : unknown extends Args ? never : Derived<Exclude<Args, undefined>>
 type Derived<Member, Whole = Member> = Member extends readonly unknown[] | ((...given: never[]) => unknown) ? never : Member extends object ? [Whole] extends [Member] ? [keyof Member] extends [never] ? [string] extends [Member] ? Failed<'ValidationError', Issues<Whole>> : never : Failed<'ValidationError', Issues<Whole>> : never : never
 type Shaping<Accepted, Shaped, Args = never, Gate = Schema<Accepted>, ArgsGate = Schema<Args>> = Omit<ReactiveOptions<Accepted, Kept<NoInfer<Shaped>>, never, Args>, 'transform' | 'schema' | 'args'> & { transform?: (value: Accepted) => Shaped; schema?: Gate & Schema<Accepted>; args?: [Args] extends [never] ? never : ArgsGate & Schema<Args> }
+type Sourced<Args> = Pick<MemoOptions<Args>, 'ttl' | 'throttle' | 'debounce' | 'tags' | 'global'>
 type Refusals<Shaped, Gate, Stored, ArgsGate = Schema<never>, Args = never> = Refused<Shaped> | Gated<Gate, Stored> | Gated<ArgsGate, Args>
 type BuiltArgs<Built> = Built extends Keyed<unknown, infer Args, never, unknown, unknown> ? Args : undefined
 type BuiltRpc<Built, Answers extends readonly unknown[]> = Built extends Keyed<infer Stored, infer Args, never, infer Failures, infer Produced> ? Rpc<Stored, Args, Failures | RungRefusals<Answers>, Produced> : Built extends Reactive<infer Stored, never, infer Failures, infer Produced> ? Rpc<Stored, undefined, Failures | RungRefusals<Answers>, Produced> : never
@@ -1099,7 +1093,7 @@ type Reached = { readonly [REACHED]: true }
 | `x-content-type-options: nosniff` | everything | The declared content type, held against a browser's guess. | 21.1 |
 | `traceresponse` | everything | Correlates the answer, a failure included. | 21.2 |
 | `cache-control: private, no-store` | a page, an rpc answer, any refusal | The default a write through `response` overrides. | 21.3, 21.10 |
-| `cache-control: private, max-age=<ttl>` | a `GET` over a `global` `reactive` | The value's own duration, answered rather than restated. | 21.8, 21.9, 21.11, 21.16, 21.17, 18.14 |
+| `cache-control: private, max-age=<ttl>` | a `GET` declaring `global` | The entry's own duration, answered rather than restated. | 21.8, 21.9, 21.11, 21.16, 21.17, 18.14 |
 | `cache-control: no-store` | `/__abide/openapi.json`, `/__abide/mcp` | Refuses caching for an answer about the app's surfaces. | 21.4 |
 | `cache-control: public, max-age=31536000, immutable` | the built bundle | A chunk addressed by its own content hash. | 21.5 |
 | `cache-control: public, max-age=0, must-revalidate` | a file under a `public` directory | A file at an address the build never chose. | 21.12 |
@@ -1262,7 +1256,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `abortSignal` | `() => AbortSignal` | The signal that says stop to the work it is called in, from the innermost owner that work runs under. | 7.38, 7.39, 7.45, 7.46, 7.47, 7.48, 7.49, 54.35 |
+| `abortSignal` | `() => AbortSignal` | The signal that says stop to the work it is called in, from the innermost owner that work runs under. | 7.20, 7.21, 7.22, 7.23, 7.24, 7.25, 7.26, 54.35 |
 
 # Browser context
 
@@ -1299,8 +1293,8 @@ type Reached = { readonly [REACHED]: true }
 | `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
 | `App.fetch` | `(request: Request, options?: { principal?: Record<string, unknown>; caller?: string }) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6, 42.20, 42.21 |
 | `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request; principal?: Record<string, unknown>; caller?: string }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 42.19, 42.21, 11.38 |
-| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 16.23, 16.56, 18.28, 18.29, 18.30, 7.30 |
-| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 42.17, 37.4, 7.26, 7.27, 7.31, 7.37, 7.38, 7.40, 7.41, 7.42 |
+| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 16.23, 16.56, 18.28, 18.29, 18.30, 54.14 |
+| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 42.17, 37.4, 7.20, 54.43 |
 | `App[Symbol.asyncDispose]` | `() => Promise<void>` | `App.stop`, under the name `await using` calls. | 42.14 |
 
 ## Environment variables
@@ -1415,7 +1409,7 @@ type Reached = { readonly [REACHED]: true }
 | `store.redis` | `<Stored>(client: RedisClient \| string, key: string, options?: { schema?: Schema<Stored> }) => Store<Stored> & LogStore` | A `Store` kept in a Redis key through `bun`'s `RedisClient`, a member of `@abide/abide/server`'s `store` alone. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.31, 8.32, 8.33, 58.9, 58.12, 58.13 |
 | `store.indexedDB` | `<Stored>(key: string, options?: { table?: string; schema?: Schema<Stored> }) => Store<Stored> & LogStore` | A `Store` kept in the browser's IndexedDB. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.34, 8.35, 8.36, 58.9, 58.12 |
 | `store.cookies` | `<Stored>(name: string, options?: { path?: string; domain?: string; sameSite?: 'strict' \| 'lax' \| 'none'; secure?: boolean; schema?: Schema<Stored> }) => Store<Stored>` | A `Store` kept in a cookie. | 8.26, 8.27, 8.28, 8.29, 8.30, 8.37, 8.38, 8.39, 8.40 |
-| `store` | `Store<Stored> \| ((args: Args) => Store<Stored>)` | The option that keeps a value in a `Store`, or a keyed value's entries one `Store` each. | 8.1, 8.2, 8.3, 8.14, 9.5, 11.42, 11.71 |
+| `store` | `Store<Stored> \| ((args: Args) => Store<Stored>)` | The option that keeps a value in a `Store`, or a keyed value's entries one `Store` each. | 8.1, 8.2, 8.3, 8.14, 9.5, 11.42, 11.70 |
 
 ## `database`
 
@@ -1481,7 +1475,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `job` | `<Input = undefined>(options: JobOptions<Input>) => Job<Input>` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.14, 54.15, 54.17, 54.19, 54.21, 54.22, 54.25, 54.34, 54.35, 54.36, 54.37, 54.38 |
+| `job` | `<Input = undefined>(options: JobOptions<Input>) => Job<Input>` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.14, 54.43, 54.15, 54.17, 54.19, 54.21, 54.22, 54.25, 54.34, 54.35, 54.36, 54.37, 54.38 |
 | `Job` | `<Input = undefined>{ status: Memo<undefined, JobStatus>; run: (input?: Input) => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.14 |
 | `Job.status` | `Memo<undefined, JobStatus>` | Where the job stands, one value for every caller. | 54.18, 54.20 |
 | `Job.run` | `(input?: Input) => Promise<JobStatus>` | A run ahead of the schedule, handed the input it is called with. | 54.16, 54.22, 54.39 |
@@ -1608,7 +1602,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | `abide:openapi` | `warning` | A handler whose schema had no JSON Schema export. | 20.11, 28.8 |
 | `abide:render` | `warning` | An `error.abide` that itself failed. | 28.8 |
 | `abide:refuse` | `warning` | A message formatter that threw. | 15.13, 28.8 |
-| `abide:reactive` | `warning` | A failed revalidation over a value still being served, a failed run of a polled one, or a failed `refreshes` after a write. | 4.12, 7.28, 16.102, 28.8 |
+| `abide:reactive` | `warning` | A failed revalidation over a value still being served, or a failed `refreshes` after a write. | 4.12, 16.102, 28.8 |
 | `abide:watch` | `warning` | A `watch` effect or `Disposer` that threw. | 12.6, 28.8 |
 | `abide:hydrate` / `abide:navigate` | `warning` | A hydration or a client-side navigation that went wrong in the browser. | 28.8, 41.10, 41.15, 41.24, 45.10 |
 
@@ -1883,7 +1877,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105, 38.123, 38.138, 38.196, 38.197, 38.209, 38.210, 38.212, 38.218 |
 | `abide format [--check] [path…]` | The formatter over a `.abide` tree. | 38.25, 38.125, 38.126, 38.127, 38.128, 38.129, 38.137 |
 | `abide routes [--json]` | Every address the app answers, the file answering it, what each matcher takes, the rungs each handler names, and where each hook is filed. | 38.108, 38.123, 38.135 |
-| `abide dev [--port <n>] [--hostname <host>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97, 38.123, 38.136, 7.30 |
+| `abide dev [--port <n>] [--hostname <host>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97, 38.123, 38.136, 54.14 |
 | `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94, 38.123, 38.139, 38.218 |
 | `abide start [--port <n>] [--hostname <host>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97, 38.110, 38.123, 38.136, 38.139 |
 | `abide [--url <origin>] [--port <n>] [--hostname <host>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.7, 38.53, 38.54, 38.55, 38.58, 38.59, 38.60, 38.62, 38.123, 38.136 |
@@ -1894,7 +1888,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97, 38.123, 38.136, 38.181 |
 | `abide native [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 38.175, 38.176, 38.178, 38.179, 38.180, 38.181, 38.182, 38.186, 38.187, 38.188, 38.189, 38.190, 38.191, 38.192, 38.193, 38.194, 44.77, 44.80 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118, 38.130 |
-| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215, 38.217, 38.219, 38.220, 38.221, 38.222, 38.223, 38.224, 38.225, 38.226 |
+| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215, 38.217, 38.219, 38.220, 38.221, 38.222, 38.223, 38.224, 38.225, 38.226, 38.227 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |
 

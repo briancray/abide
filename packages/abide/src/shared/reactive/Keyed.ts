@@ -9,6 +9,7 @@
 import type { Failed } from '../Failed.ts'
 import { checkArgs } from '../refuse.ts'
 import type { Schema } from '../Schema.ts'
+import { endRun } from './abortSignal.ts'
 import {
     ARGS_GATE,
     canonicalKey,
@@ -16,6 +17,7 @@ import {
     normalized,
     PARAMETER_DEFAULTS,
 } from './argsContract.ts'
+import { armTimer, armWindow } from './armTimer.ts'
 import { CELL } from './CELL.ts'
 import {
     type Callable,
@@ -23,22 +25,21 @@ import {
     cellOf,
     refuseBothCaps,
 } from './cellShape.ts'
-import { armTimer, armWindow } from './Expiry.ts'
 import { isReactive } from './isReactive.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
 import { NotLanded } from './NotLanded.ts'
 import { parameterDefaults } from './parameterDefaults.ts'
-import { endRun, ownedPoll, refuseBadPoll } from './poll.ts'
 import {
     abandonDeferred,
+    type CellOptions,
     createReactive,
     failedTransiently,
     isStreamBody,
     type Reactive,
-    type ReactiveOptions,
     signalMoved,
     startDeferred,
+    subscribed,
     unwatchStore,
 } from './Reactive.ts'
 import { leaveSelections } from './selections.ts'
@@ -101,6 +102,7 @@ function argsOf(entry: unknown): unknown {
 // One entry of `Lifetime.followed`, which is in recency order: what an eviction needs beside when
 // the entry last produced.
 type Follower = {
+    key: string
     at: number
     ms: number
     cell: Cell
@@ -125,7 +127,7 @@ export function entryDeadline(cell: Cell): number {
 /**
  * The life of every entry of one `Keyed`, evicting each once `ttl` passes without a production.
  *
- * 11.45, 11.48, 11.49 — allocated only where a `ttl` was declared.
+ * 11.45, 11.48, 6.3 — allocated only where a `ttl` was declared.
  *
  * RECENCY IS THE ORDER OF A MAP. A production moves its key to the end by deleting and re-setting
  * it, so the oldest entry is always the first one and 11.48's "armed at the oldest" is one
@@ -164,7 +166,14 @@ class Lifetime {
         const cell = entry[CELL]
         // A MIRROR WITH NO ADOPTER — `Subscriber.isMirror` says why.
         const reader = newSubscriber([cell], null, true)
-        const follower: Follower = { at: 0, ms: this.ms, cell, reader, evict }
+        const follower: Follower = {
+            key,
+            at: 0,
+            ms: this.ms,
+            cell,
+            reader,
+            evict,
+        }
         ENTRY_LIVES.set(cell, follower)
         reader.notify = (): void => {
             // Or a parked entry's load ended with nothing to serve — a refusal ends a load too.
@@ -172,7 +181,7 @@ class Lifetime {
                 this.touch(key, follower)
         }
         cell.readers.push(reader)
-        // 11.69 — AND ITS PROBES, so a load ending is heard as one: the sweep parks an entry whose
+        // 11.68 — AND ITS PROBES, so a load ending is heard as one: the sweep parks an entry whose
         // load is in flight, and this is what starts its life again once the load is over.
         trackProbe(cell, reader)
         // The life starts at the reach: an entry whose load never lands still ends.
@@ -205,20 +214,38 @@ class Lifetime {
         for (const [key, follower] of this.followed) {
             if (follower.at > deadline) break
             this.followed.delete(key)
-            // 11.69 — PARKED, NOT EVICTED: a call reaching it joins the load, and the load's end
+            // 11.68 — PARKED, NOT EVICTED: a call reaching it joins the load, and the load's end
             // touches it back into the order.
             if (follower.cell.loading) continue
-            end(follower)
+            this.ranOut(follower)
         }
         this.arm()
     }
 
     /**
+     * 6.1, 6.2 — AN ENTRY WHOSE LIFE RAN OUT IS REFRESHED WHERE SOMETHING FOLLOWS IT, and released
+     * where nothing does. Out of the order either way: a refresh parks it as a load in flight does
+     * (11.68), and what lands touches it back in, so its age counts from the landing (6.3). A life of
+     * 0 — a mutation's, 16.7 — and a mutation's entry are released whoever follows them (6.5): refreshed,
+     * the one would run its body on every turn and the other send its write again (13.16).
+     */
+    ranOut(follower: Follower): boolean {
+        const cell = follower.cell
+        if (this.ms === 0 || cell.mutation || !subscribed(cell)) {
+            end(follower)
+            return true
+        }
+        ;(cell.callable as Reactive<unknown>).refresh()
+        // A refresh that started no load — a store answering at once — landed already.
+        if (!cell.loading) this.touch(follower.key, follower)
+        return false
+    }
+
+    /**
      * Evicts `key`'s entry where its life has run out and no load holds it, and says whether it did.
      *
-     * THE REACH'S HALF of the sweep, as 6.5 is the read's half of 6.3: a timer that has not fired
-     * yet — a `ttl` of 0 is past as the entry produces — leaves an entry a reach would otherwise
-     * join. 16.7's mutation called twice in one turn is the case: the second call is a second write.
+     * THE REACH'S HALF of the sweep: a timer that has not fired yet — a `ttl` of 0 is past as the
+     * entry produces — leaves an entry a reach would otherwise join. 16.7's mutation called twice in one turn is the case: the second call is a second write.
      */
     outlived(key: string): boolean {
         const follower = this.followed.get(key)
@@ -229,15 +256,14 @@ class Lifetime {
         )
             return false
         this.followed.delete(key)
-        end(follower)
-        return true
+        return this.ranOut(follower)
     }
 }
 
 /**
  * One throttle or debounce window for a whole keyed face, holding back starting what it reaches.
  *
- * 5.19, 5.20, 5.21. A throttle starts the first key at once and the latest reached inside its
+ * 5.18, 5.19, 5.20. A throttle starts the first key at once and the latest reached inside its
  * window when it ends; a debounce starts the latest once the reaches stop. Either way only the
  * LATEST held key starts — one reached and then superseded inside a window is work the window
  * would discard (5.11), so it is abandoned and dropped instead.
@@ -284,7 +310,7 @@ class StartWindow {
 }
 
 /**
- * `body` handed what the `args` gate accepted for one entry (11.68), rather than the args it was
+ * `body` handed what the `args` gate accepted for one entry (11.67), rather than the args it was
  * reached with.
  *
  * A STREAM STAYS A STREAM FROM CONSTRUCTION. 9.6 reads the body's KIND, so the wrapper around an
@@ -349,25 +375,20 @@ export function createKeyed<
 >(
     label: string,
     body: (args: Args) => unknown,
-    options: ReactiveOptions<Accepted, Stored, never, Args> | undefined,
+    options: CellOptions<Accepted, Stored, never, Args> | undefined,
 ): Keyed<Stored, Args, Accepted, Failures> & Gated<Args> {
     const entries = new Map<string, Reactive<Stored, Accepted, Failures>>()
-    // 11.45: A KEYED `ttl` IS THE LIFE OF AN ENTRY, not of a production inside one, so it is
-    // taken off the options every entry is built from — forwarded, it would build the
-    // unkeyed mechanism in every entry and evict nothing from this map.
-    // `poll` STAYS ON THE ENTRY, which marks it for 7.28 and arms no timer of its own: one timer here
-    // walks the entries rather than one per entry (7.20).
-    // 5.19, 5.25: `throttle` AND `debounce` STAY ON THE ENTRY TOO — the window below holds back
+    // 11.45: A KEYED `ttl` IS THE LIFE OF AN ENTRY, kept by the `Lifetime` below; on the entry it is
+    // only what a `store` is handed as its retention (8.13).
+    // 5.18, 5.24: `throttle` AND `debounce` STAY ON THE ENTRY TOO — the window below holds back
     // starting a key, and each entry's own caps what it produces once started: a key reached anew and
     // a held key's new value are each paced, and every follower of an entry with it (16.110).
-    const { ttl, args, ...rest } = options ?? {}
-    const { throttle, debounce } = rest
-    const poll = rest.poll
+    const { args, ...entryOptions } = options ?? {}
+    const { ttl, throttle, debounce } = entryOptions
     const gate = args as Schema<Args> | undefined
-    const entryOptions = rest
     // 5.14, at the factory: a keyed value is capped one way or the other.
     refuseBothCaps(`${label}()`, throttle, debounce)
-    // 5.19: A KEYED VALUE'S WINDOW HOLDS BACK STARTING A KEY.
+    // 5.18: A KEYED VALUE'S WINDOW HOLDS BACK STARTING A KEY.
     const starts =
         throttle === undefined && debounce === undefined
             ? null
@@ -393,12 +414,6 @@ export function createKeyed<
             for (const entry of entries.values()) unwatchStore(entry)
         })
 
-    // 7.20, 7.23 — one timer over the entries held at each tick: an evicted entry is out of the map.
-    if (poll !== undefined) {
-        refuseBadPoll(`${label}()`, poll)
-        ownedPoll(poll, () => entries.values(), null)
-    }
-
     function askMembership(): void {
         const reader = TRACKING.reader
         if (reader !== null) trackProbe(membership, reader)
@@ -412,7 +427,7 @@ export function createKeyed<
     ): void {
         entries.delete(key)
         const cell = cellOf(created)
-        // 7.46 — an entry released is a run nothing will read, so its signal says stop.
+        // 7.23 — an entry released is a run nothing will read, so its signal says stop.
         endRun(cell)
         leaveSelections(created)
         unwatchStore(created)
@@ -460,7 +475,7 @@ export function createKeyed<
             run as (args: unknown) => unknown,
             args,
             undefined,
-            entryOptions as ReactiveOptions<Accepted, Stored, Failures>,
+            entryOptions as CellOptions<Accepted, Stored, Failures>,
             starts !== null,
             true,
         )
@@ -471,7 +486,7 @@ export function createKeyed<
             })
         if (starts !== null)
             starts.reached(created, () => {
-                // 5.20: superseded before it started — not held, so a later reach starts afresh.
+                // 5.19: superseded before it started — not held, so a later reach starts afresh.
                 if (entries.get(key) === created) release(key, created)
             })
         signalMoved(membership)

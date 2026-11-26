@@ -1,6 +1,6 @@
 // 38.217 — THE MIGRATION OFF `by`: what tells one element from another is named `key` from the
 // release this migration is keyed to on, in a `{#for}` head (32.13) and in the options a `reactive`
-// or a `memo` is handed (5.22).
+// or a `memo` is handed (5.21).
 //
 // A SCAN, NOT A PARSE, as `toMemo` is. A head's `by` is the one `forSeparators` divides it on, so a
 // `by` that is the subject's own — `of row.by`, `of by` — is left. An option's `by` is a property
