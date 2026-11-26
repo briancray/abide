@@ -116,7 +116,8 @@ import SiteTree from '#src/lib/SiteTree.abide'
             fails the build. The CRM's companies live in
             <code>companies/lib/COMPANIES.server.ts</code>, and a handler reads them.</p>
         <Code language="ts" caption="server" code={`
-            import { refuse, rpc } from '@abide/abide/server'
+            import { refuse } from '@abide/abide'
+            import { rpc } from '@abide/abide/server'
             import { COMPANIES } from './lib/COMPANIES.server.ts'
 
             export default rpc(async ({ id }: { id: string }) => {

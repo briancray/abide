@@ -1,4 +1,5 @@
-import { onReport, principal, rpc } from '@abide/abide/server'
+import { principal } from '@abide/abide'
+import { onReport, rpc } from '@abide/abide/server'
 
 // Kept per browser, as the page is public; an app posts each to its tracker.
 const received = new Map<string, string[]>()
