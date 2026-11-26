@@ -9,9 +9,10 @@ import { type Reactive, reactive } from './reactive/index.ts'
 export type DropzoneOptions = {
     /**
      * The files taken, written as an `<input type="file">`'s `accept`: MIME types, `image/*`
-     * wildcards and `.pdf` extensions, separated by commas. Every file by default.
+     * wildcards and `.pdf` extensions, separated by commas. Every file by default; a function is
+     * read live.
      */
-    accept?: string | undefined
+    accept?: Live<string> | undefined
     /** Whether a paste of files into the host is taken as a drop. `false` by default; a function is read live. */
     paste?: Live<boolean> | undefined
     /** Whether more than the first accepted file is taken. `true` by default; a function is read live. */
@@ -46,7 +47,7 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
     // 49.11 — read where they are used.
     const multiple = () => live(options.multiple) ?? true
     const taken = (data: DataTransfer | null): File[] => {
-        const files = accepted(acceptOf(options.accept ?? ''), data)
+        const files = accepted(acceptOf(live(options.accept) ?? ''), data)
         return multiple() || files.length < 2 ? files : files.slice(0, 1)
     }
     const files = options.files ?? reactive<readonly File[]>([])
@@ -115,7 +116,8 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
     const input: Record<string, unknown> = {
         type: 'file',
         get accept() {
-            return options.accept === '' ? undefined : options.accept
+            const accept = live(options.accept)
+            return accept === '' ? undefined : accept
         },
         get multiple() {
             return multiple()

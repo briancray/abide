@@ -7,6 +7,7 @@
 // layers (50.25, 50.60); then a native `<dialog>`, whose close request an Escape anyone prevented never
 // makes.
 
+import { type Live, live } from './live.ts'
 import { reactive } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
 import { register } from './register.ts'
@@ -15,8 +16,8 @@ import { register } from './register.ts'
 type Layer = {
     element: Element
     dismiss: (event: PointerEvent | KeyboardEvent) => void
-    escape: boolean
-    outside: boolean
+    escape: Live<boolean>
+    outside: Live<boolean>
     inside: Iterable<Element | null | undefined>
 }
 
@@ -24,10 +25,10 @@ const layers = reactive<readonly Layer[]>([])
 
 /** Which of a press outside and an Escape dismiss: `dismissible`'s options. */
 export type DismissibleOptions = {
-    /** Whether Escape dismisses. `true` by default. */
-    escape?: boolean | undefined
-    /** Whether a press outside the element dismisses. `true` by default. */
-    outside?: boolean | undefined
+    /** Whether Escape dismisses. `true` by default; a function is read at each press. */
+    escape?: Live<boolean> | undefined
+    /** Whether a press outside the element dismisses. `true` by default; a function is read at each press. */
+    outside?: Live<boolean> | undefined
 }
 
 /** The two parts `dismissible` hands back: `<form {...edit.host}>`, `<button {...edit.inside}>`. */
@@ -119,7 +120,7 @@ function pressed(event: PointerEvent): void {
     for (let at = stacked.length - 1; at >= 0; at--) {
         const layer = stacked[at] as Layer
         if (target !== null && holds(layer, target)) return
-        if (layer.outside) layer.dismiss(event)
+        if (live(layer.outside)) layer.dismiss(event)
     }
 }
 
@@ -138,7 +139,7 @@ function escaped(event: KeyboardEvent): void {
     const stacked = layers.peek() ?? []
     for (let at = stacked.length - 1; at >= 0; at--) {
         const layer = stacked[at] as Layer
-        if (!layer.escape) continue
+        if (!live(layer.escape)) continue
         event.preventDefault()
         layer.dismiss(event)
         return

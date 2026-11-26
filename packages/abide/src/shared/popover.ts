@@ -14,6 +14,7 @@ import {
     type HoverAndFocusOptions,
     type OpenedBy,
 } from './hoverAndFocus.ts'
+import type { Live } from './live.ts'
 import type { PlaceOptions } from './place.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
@@ -27,10 +28,10 @@ export type PopoverOptions = PlaceOptions &
         id?: string | undefined
         /** Whether the popover is open: hand it a `Reactive` to read and write it, and every way it closes writes `false` back. */
         open?: Reactive<boolean> | undefined
-        /** 50.60 — whether Escape closes it. `true` by default. */
-        escape?: boolean | undefined
-        /** 50.60 — whether a press outside it and its trigger or anchor closes it. `true` by default. */
-        outside?: boolean | undefined
+        /** 50.60 — whether Escape closes it. `true` by default; a function is read at each press. */
+        escape?: Live<boolean> | undefined
+        /** 50.60 — whether a press outside it and its trigger or anchor closes it. `true` by default; a function is read at each press. */
+        outside?: Live<boolean> | undefined
     }
 
 /** The parts `popover` hands back: `<button {...filters.trigger}>`, `<div {...filters.popover}>`. */

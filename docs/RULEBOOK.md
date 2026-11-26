@@ -5357,11 +5357,14 @@ parts and data together; what a part reads that changes MUST be a `get` accessor
 among the parts MUST take an optional argument that changes what it answers, or take none to answer
 a value.
 
-49.10 Every option of a headless component that is a value — save a `Reactive` it binds, and one that
-takes a function of its own meaning — MUST take the value or a function answering it.
+49.10 Every option of a headless component that is a value — save a `Reactive` it binds, one that
+takes a function of its own meaning, and one 49.11 reads once — MUST take the value or a function
+answering it.
 
 49.11 A headless component MUST read each of its options where it uses it, save its `id`, a `multiple`,
-a `range`, a `debounce`, a `rowHeight` and a size a measurement replaces, which it MUST read once.
+a `range`, a `debounce`, a `rowHeight`, a size a measurement replaces, and what fixes the shape of
+its parts — a `drawer`'s `side`, a `resizable`'s `axis` and `edge` and a `toolbar`'s `role` — which
+it MUST read once.
 
 49.12 What `@abide/abide` does to an element an app writes MUST be handed out as a part, carrying
 under `bind:element` what needs the element in a browser (32.99), and MUST NOT be a function an

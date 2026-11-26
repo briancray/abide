@@ -60,8 +60,8 @@ export type ChatOptions = {
     disabled?: Live<boolean | undefined> | undefined
     /** 49.8, 53.105 — the user message being written: bind it to put a question back. Held by the parts, empty, where none is given. */
     draft?: Reactive<AssistantMessage> | undefined
-    /** The files its `dropzone` takes, as an `<input accept>` writes them: every file `assistantMessage` carries by default. */
-    accept?: string | undefined
+    /** The files its `dropzone` takes, as an `<input accept>` writes them: every file `assistantMessage` carries by default; a function is read live. */
+    accept?: Live<string> | undefined
     /** 53.37 — a file taken as the blocks it answers: `assistantMessage`'s by default. */
     attach?: ((file: File) => Promise<AssistantContent[]>) | undefined
     /** 53.37 — handed the files its `dropzone` turned away, and the files `attach` threw on. */

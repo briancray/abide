@@ -93,6 +93,29 @@ test('a press passes over a layer outside is off for, to close the one under it 
     stopMenu()
 })
 
+// 49.10, 49.11 — AN OPTION GIVEN AS A FUNCTION IS READ WHERE IT IS USED: `outside` asked at each
+// press, so a panel pinned after it was bound stays open. THE REVERT: read `layer.outside` as the
+// value it was given; the function is truthy, and the pinned panel closes — `closed: 2` where `1`.
+test("dismissible's outside, given as a function, is read at each press — 49.10", () => {
+    const panel = element()
+    let pinned = false
+    let closed = 0
+    const stop = bindPart(
+        dismissible(
+            () => {
+                closed += 1
+            },
+            { outside: () => !pinned },
+        ).host,
+        panel,
+    )
+    press(document.body)
+    pinned = true
+    press(document.body)
+    expect(`closed: ${closed}`).toBe('closed: 1')
+    stop()
+})
+
 test('the press that opened the panel closes nothing — 53.13', () => {
     const opener = element('button')
     const closed: string[] = []
