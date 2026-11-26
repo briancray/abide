@@ -48,7 +48,7 @@ import SiteTree from '#src/lib/SiteTree.abide'
     <Section title="Keep a page and the handlers it calls in one directory">
         <p>A component imports its handler by a relative path and calls it like a function. On the
             server the call runs the handler, and in the browser it fetches the address the file
-            answers at. <a href={url('/handlers/rpc')}><code>GET</code></a> declares one.</p>
+            answers at. <a href={url('/handlers/rpc')}><code>rpc</code></a> declares one.</p>
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'

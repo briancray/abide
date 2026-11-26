@@ -294,9 +294,9 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
     <Section level={3} title="Move a deal to another stage">
-        <p>Declare a write with <code>POST</code>, <code>PUT</code>, <code>PATCH</code> or
-            <code>DELETE</code>. Each takes what <code>GET</code> takes, and the page never names
-            the method.</p>
+        <p>Declare a write by naming its verb in <code>methods</code> — <code>POST</code>,
+            <code>PUT</code>, <code>PATCH</code> or <code>DELETE</code>. It takes what a read
+            takes, and the page never names the method.</p>
         <Code language="ts" caption="server" code={`
             import { refuse } from '@abide/abide'
             import { rpc } from '@abide/abide/server'

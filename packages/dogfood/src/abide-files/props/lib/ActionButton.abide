@@ -4,4 +4,4 @@ import { type Attributes, props } from '@abide/abide'
 const { label, ...rest } = props<{ label: string } & Attributes<'button'>>()
 </script>
 
-<button class="action" {...rest}>{label}</button>
+<button {...rest}>{label}</button>

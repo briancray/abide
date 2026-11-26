@@ -52,7 +52,7 @@ import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
         <p>Where the handler declares no pace, or one this page does not want, read it through a
             <code>memo</code> with a <code>debounce</code>, and a new query is searched once the
             typing pauses rather than once per keystroke. A pace every page should keep goes on the
-            <a href={url('/handlers/rpc')}><code>GET</code></a> itself.</p>
+            <a href={url('/handlers/rpc')}><code>rpc</code></a> itself.</p>
         <Example code={dealSearch}><DealSearch /></Example>
     </Section>
 
@@ -62,7 +62,7 @@ import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
             nothing reads is let go, and the next read looks afresh. Work that has to run whether or
             not anything reads it is a <a href={url('/orchestration/job')}><code>job</code></a>
             writing the memo.</p>
-        <Code language="ts" caption="shared" code={`
+        <Code language="ts" caption="server" code={`
             import { memo } from '@abide/abide'
             import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 

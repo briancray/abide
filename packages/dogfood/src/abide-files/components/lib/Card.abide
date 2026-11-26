@@ -4,7 +4,7 @@ import { props } from '@abide/abide'
 const { title } = props<{ title: string }>()
 </script>
 
-<section class="card">
+<section>
     <h4>{title}</h4>
     <slot />
 </section>

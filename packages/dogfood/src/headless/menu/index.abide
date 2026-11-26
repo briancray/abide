@@ -102,7 +102,7 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Open a menu from an icon">
-        <p>The trigger is your own element, so it holds anything, and its
+        <p>The trigger is an element, so it holds anything, and its
             <code>aria-label</code> names the menu. <code>menu</code> takes the options a
             <code>popover</code> does, so <code>align: 'end'</code> lines it up with the icon's
             end.</p>
@@ -112,7 +112,7 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
     <Section level={3} title="Pin a deal from a menu that stays open">
         <p>An item carrying <code>role="menuitemcheckbox"</code> or
             <code>role="menuitemradio"</code> leaves the menu open. Write its
-            <code>aria-checked</code> from your own state.</p>
+            <code>aria-checked</code> from the app's state.</p>
         <Example code={pinDeal}><PinDeal /></Example>
     </Section>
 
