@@ -1,17 +1,14 @@
 // 47.32 — WHAT THE `sql` TAG COSTS OVER THE VANILLA ARM: a statement the app prepared once by hand and
 // ran with `.all()`, against `opener.sql` at one call site, outside every run and inside a memo
-// entry's run (where it records what the statement read). One sample is a batch of `CALLS` reads, well
-// past the clock's resolution; the median of `SAMPLES` is reported.
+// entry's run. Each pair is one `batch()` (43.7, 43.11): interleaved, sized past the clock, the
+// first arm its own A/A control, and the ratio claimed only outside that floor.
 //
 // `bun packages/abide/bench/sqlShare.ts`
 
+import { batch, type Batched, claimOf, ratio } from '@abide/harness/report'
+
 import { database } from '#server'
 import { keyedValue } from '#shared/reactive/index.ts'
-
-import { median } from './median.ts'
-
-const CALLS = 100_000
-const SAMPLES = 7
 
 process.env.NODE_ENV = 'bench'
 const db = database(':memory:', {
@@ -23,43 +20,39 @@ const db = database(':memory:', {
 
 // THE VANILLA ARM: prepared by hand, held by the app, run.
 const byHand = db().prepare('SELECT amount FROM deals WHERE id = ?')
-const vanilla = (id: string) => byHand.all(id)
-const tagged = (id: string) => db.sql`SELECT amount FROM deals WHERE id = ${id}`
-
-function sample(read: (id: string) => unknown): number {
-    const start = Bun.nanoseconds()
-    for (let call = 0; call < CALLS; call += 1) read(call & 1 ? 'd1' : 'd2')
-    return (Bun.nanoseconds() - start) / CALLS
+let call = 0
+const id = () => (call++ & 1 ? 'd1' : 'd2')
+const arms = {
+    vanilla: () => {
+        byHand.all(id())
+    },
+    tagged: () => {
+        db.sql`SELECT amount FROM deals WHERE id = ${id()}`
+    },
 }
 
-/** The same batch inside one memo entry's run, where a read is recorded against the run. */
-function inRun(read: (id: string) => unknown): number {
-    let perCall = 0
-    keyedValue(() => {
-        perCall = sample(read)
-        return perCall
-    })()()
-    return perCall
+function report(label: string, measured: Batched): void {
+    const vanilla = measured.samples.vanilla
+    const tagged = measured.samples.tagged
+    if (vanilla === undefined || tagged === undefined) return
+    console.log(
+        `── ${label}   [n=${measured.n} A/A floor=${(measured.floor * 100).toFixed(2)}% ${measured.substrate}]`,
+    )
+    console.log(`  vanilla  ${vanilla.nanoseconds.toFixed(0)} ns/call`)
+    console.log(
+        `  tagged   ${tagged.nanoseconds.toFixed(0)} ns/call   ${claimOf(ratio(tagged, vanilla, { floor: measured.floor }))}`,
+    )
 }
 
-const arms: Record<string, number[]> = {
-    vanilla: [],
-    tagged: [],
-    vanillaInRun: [],
-    taggedInRun: [],
-}
-for (let round = 0; round < SAMPLES; round += 1) {
-    arms.vanilla?.push(sample(vanilla))
-    arms.tagged?.push(sample(tagged))
-    arms.vanillaInRun?.push(inRun(vanilla))
-    arms.taggedInRun?.push(inRun(tagged))
-}
-const ns = (arm: string) => median(arms[arm] as number[])
-for (const arm of Object.keys(arms))
-    console.log(`${arm.padEnd(14)} ${ns(arm).toFixed(0)} ns/call`)
-console.log(
-    `ratio outside a run: ${(ns('tagged') / ns('vanilla')).toFixed(2)}x`,
+report(
+    'outside a run',
+    batch({ case: 'sql outside a run', arms, emulated: null }),
 )
-console.log(
-    `ratio inside a run:  ${(ns('taggedInRun') / ns('vanillaInRun')).toFixed(2)}x`,
-)
+
+// The same pair inside one memo entry's run, where a read is made in the run it would refresh.
+let inside: Batched | undefined
+keyedValue(() => {
+    inside = batch({ case: 'sql inside a run', arms, emulated: null })
+    return 0
+})()()
+if (inside !== undefined) report('inside a run', inside)
