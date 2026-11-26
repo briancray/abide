@@ -16,7 +16,7 @@ import {
 } from '#shared/principal.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import { refuse } from '#shared/refuse.ts'
-import { declare, reachOf } from '#shared/rpc.ts'
+import { reachOf, rpc } from '#shared/rpc.ts'
 
 import { callerOf, callerOrMint, mintCaller } from './callerOf.ts'
 import { config, positiveSetting } from './config.ts'
@@ -327,7 +327,7 @@ function clear(): void {
 // started from the head (41.20), and the browser's own read takes that answer rather than asking
 // again. Built on the core's `declare` with no generated surface (20.1) — abide mounts it, not the
 // app's tree.
-const principalDocument = declare('GET')(resolvePrincipal, {
+const principalDocument = rpc(resolvePrincipal, {
     clients: { ui: false, mcp: false, cli: false, openapi: false },
 })
 

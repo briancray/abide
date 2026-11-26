@@ -10,7 +10,7 @@
 
 import { HEALTH_ADDRESS } from './ADDRESSES.ts'
 import type { Failed } from './Failed.ts'
-import { declare, type Rpc } from './rpc.ts'
+import { type Rpc, rpc } from './rpc.ts'
 import { seededDocument } from './seededDocument.ts'
 
 /** 25.4 — the account, which an app widens with what its `onHealth` adds, by declaration merging. */
@@ -44,7 +44,7 @@ export function browserHealthReport():
 }
 
 /** The account of the app this call is in. */
-export const health: Rpc<Health, undefined> = /* @__PURE__ */ declare('GET')(
+export const health: Rpc<Health, undefined> = /* @__PURE__ */ rpc(
     () => HEALTH.report(),
     // 20.1 — no generated surface: abide mounts it, not the app's tree.
     { clients: { ui: false, mcp: false, cli: false, openapi: false } },

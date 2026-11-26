@@ -12,7 +12,7 @@ import {
     type ReportContext,
     REPORTING,
 } from '#shared/report.ts'
-import { declare } from '#shared/rpc.ts'
+import { rpc } from '#shared/rpc.ts'
 
 import { fromNativeWindow } from './bridgeRelay.ts'
 import { appIdentity, config } from './config.ts'
@@ -148,7 +148,7 @@ const NO_SURFACE = {
 
 // 48.4, 48.5 — THE WINDOW'S, BY ITS CREDENTIAL (44.79): its user agent is a hint any client can
 // claim (38.141), and a browser claiming it would read the lines of every request but its own.
-const linesHandler = declare('GET')(
+const linesHandler = rpc(
     ({ traces }: { traces?: string | undefined }): LogRecord[] =>
         fromNativeWindow() && typeof traces === 'string'
             ? serverLines(traces.split(',').filter((trace) => trace !== ''))
@@ -186,7 +186,7 @@ function pageLines(value: unknown): LogRecord[] {
 
 // 48.6 — A BROWSER'S DRAFT: what it wrote and its own lines, with the server's for its traces added
 // back where it is the native app's window, as its draft showed them (48.4).
-const sendHandler = declare('POST')(
+const sendHandler = rpc(
     async (body: {
         id?: unknown
         summary?: unknown
@@ -223,7 +223,7 @@ const sendHandler = declare('POST')(
         })
         return id
     },
-    NO_SURFACE,
+    { ...NO_SURFACE, methods: ['POST'] },
 )
 
 /** The handlers abide mounts itself for a report: its lines, and its send. */

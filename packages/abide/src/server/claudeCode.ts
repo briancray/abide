@@ -29,7 +29,7 @@ import { BRIDGE_SCHEME } from '#shared/BRIDGE_SCHEME.ts'
 import type { BridgeStatus } from '#shared/BridgeStatus.ts'
 import { mounted } from '#shared/mount.ts'
 import { refuse } from '#shared/refuse.ts'
-import { declare } from '#shared/rpc.ts'
+import { rpc } from '#shared/rpc.ts'
 
 import {
     blocksOf,
@@ -395,7 +395,7 @@ export const claudeCode: typeof claudeCodeProvider & {
 //
 // 44.75, 18.36 — NOT A STREAM: a page follows it over the mux it already holds, and is sent a refresh
 // whenever the pairing changes or its code expires, so no http connection is held while it watches.
-const pairingHandler = declare('GET')(
+const pairingHandler = rpc(
     (): BridgeStatus | Promise<BridgeStatus> => {
         const configured = config.peek()?.ABIDE_BRIDGE_TOOLS
         const tools =
