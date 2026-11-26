@@ -408,12 +408,7 @@ export function keyedValue(body: unknown, options?: unknown): unknown {
 // 11.73 — at construction, the earliest moment there is: a value handed where a body belongs would
 // otherwise be read as one by every later call.
 function refuseValue(body: unknown, name: string): void {
-    if (
-        typeof body !== 'function' ||
-        isReactive(body) ||
-        isKeyed(body) ||
-        (body as { [MEMO_BRAND]?: true | undefined })[MEMO_BRAND] === true
-    )
+    if (!isBodyGiven(body))
         throw new TypeError(
             `abide: ${name} takes a function, which it runs. A value to hold is reactive(value). RULEBOOK 11.73.`,
         )
@@ -495,8 +490,8 @@ export const processWide = ((first: unknown) =>
 }
 
 /**
- * A handler's body kept per `Args` key, or `reactive` over its value, for `declare` — or the
- * `Reactive` itself, where it is one already.
+ * A handler's body kept per `Args` key, or `reactive` over its value, for `declare`: a `Keyed` or a
+ * `memo` as it is, and a `Reactive` refused (16.109).
  *
  * 16.6 — A BODY IS KEYED WHATEVER IT DECLARES: its args are the request's, and a body declaring
  * none is kept on `undefined`. Nothing reads its parameters, so a body is never started where the

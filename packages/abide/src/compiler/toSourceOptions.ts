@@ -7,7 +7,8 @@
 //
 // `reactive` AND `reactive.derived` TAKE NONE OF A SOURCE'S OPTIONS (11.81), and moving one onto a
 // `memo` changes what the body reruns on (11.6) — so each is a note, naming the replacement. It runs
-// after 38.228, so a `reactive.derived` it notes is already spelled `reactive.derived`, the line its note names.
+// after 38.228, so a `computed` it notes is already spelled `reactive.derived`, the line its note names;
+// the note itself names `reactive`, as 38.233 leaves the line before the notes are printed.
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
@@ -26,7 +27,7 @@ import {
 
 /** What declares a source's options: a `memo`, and a handler over a body. */
 const SOURCES = new Set(['memo', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
-/** What takes none of them: `reactive`, and `reactive.derived` — `reactive.derived` as 38.228 leaves it. */
+/** What takes none of them: `reactive`, and `reactive.derived` — `computed` as 38.228 leaves it. */
 const VALUE = 'reactive'
 export const SOURCED = new Set([
     'ttl',
@@ -42,9 +43,9 @@ const POLL_IS_TTL =
 const POLL_IS_A_JOB =
     'poll with a delay scheduled work whether or not anything read it, and poll is gone: make it a job writing the memo — job({ every, run }) — or a ttl. RULEBOOK 54.14, 38.227.'
 const VALUE_OPTIONS_UNREAD =
-    'these options are not written out here, so whether they carry a ttl, throttle, debounce, tags, global or poll cannot be read: reactive and reactive.derived take none of them — move any onto a memo, read through reactive.derived(() => m(args)), or make the value a memo (handlers serve one, never a Reactive). RULEBOOK 11.81, 16.109, 38.227.'
+    'these options are not written out here, so whether they carry a ttl, throttle, debounce, tags, global or poll cannot be read: reactive takes none of them — move any onto a memo, read through reactive(() => m(args)), or make the value a memo (handlers serve one, never a Reactive). RULEBOOK 11.81, 16.109, 38.227.'
 const VALUE_TAKES_NONE =
-    'reactive and reactive.derived take no ttl, throttle, debounce, tags, global or poll: declare them on a memo and read it through reactive.derived(() => m(args)), whose body then reruns only for its args. Work that has to run whether or not anything reads it is a job. RULEBOOK 11.6, 11.81, 38.227.'
+    'reactive takes no ttl, throttle, debounce, tags, global or poll: declare them on a memo and read it through reactive(() => m(args)), whose body then reruns only for its args. Work that has to run whether or not anything reads it is a job. RULEBOOK 11.6, 11.81, 38.227.'
 
 /** 38.227 — `text`, a file at `path`, with each `poll` a `ttl`, and every line it cannot move noted. */
 export function toSourceOptions(

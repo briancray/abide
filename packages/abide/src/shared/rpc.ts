@@ -337,12 +337,10 @@ type Refreshed = readonly (
 )[]
 
 /**
- * A handler `declare` builds the value of: a plain function or a value, which no `Reactive` or
- * `Keyed` is.
+ * A handler `declare` builds the value of: a plain function or a value, which no `memo` or source is.
  *
- * Told by a member both carry and neither of those does. Without it a value handed in with a
- * value's option — `GET(reactive(f), { ttl })` — fell through its own arm to a plain one, and the
- * option was dropped by a value that had already been built.
+ * Told by a member both carry and neither of those does, so a `memo` handed in takes its own
+ * overload, rather than a plain one that would drop the options it was built with.
  */
 // 16.117 — and a source's stream, which a table, a pipe and a ledger take their own signature by.
 export type Plain = {
@@ -366,22 +364,6 @@ type OptionsOf<
     : Omit<RpcOptions<Args, Answers>, 'refreshes'>
 
 /**
- * The signature `GET` and the four mutations share: a handler in, its `Rpc` out.
- *
- * THREE SIGNATURES, ONE PER IDEA, where each shape of handler was an overload of its own: a value, a
- * `Reactive` or `Keyed` already built, and a body, which `memo` reads (`BodyValue`, `ReactiveOf`'s
- * reading of `Args` and `Result`).
- *
- * THE BODY COMES FIRST: a generic call in the options — a rung helper, 16.86 — is resolved once,
- * against the contextual type of the first signature it is checked under, and that answer is kept
- * for the rest. The body's `Args` is read off the handler, a `Keyed`'s off its call signature as the
- * built form would; the value form's would be `undefined`, and every rung helper was typed for it.
- * The body's `& Plain` turns a `Reactive` or `Keyed` on to the built form, and the value form turns
- * every function away.
- *
- * 16.92 — `Writes` is false for `GET` alone, whose options have no `refreshes`.
- */
-/**
  * 16.110 — A HANDLER'S VALUE OPTIONS ARE A `memo`'S, its pace among them: `throttle` and `debounce`
  * hold back what every follower is sent, which a reader's own pacing could not. And its `store` is a
  * memo's, `KeptIn`: a store of the value, or one inferring nothing as `store.sqlite(db, 'calls')` does.
@@ -389,6 +371,18 @@ type OptionsOf<
 type HandlerShaping<Shaping> = Omit<Shaping, 'store'>
 type HandlerStore<Args, Value> = { store?: KeptIn<Args, Value> | undefined }
 
+/**
+ * What `rpc` and each verb's `declare` are: a handler in, its `Rpc` out — a body, a `memo`, each
+ * source and a plain value, one overload apiece.
+ *
+ * THE BODY COMES FIRST: a generic call in the options — a rung helper, 16.86 — is resolved once,
+ * against the contextual type of the first signature it is checked under, and that answer is kept
+ * for the rest. The body's `Args` is read off the handler; the value form's would be `undefined`,
+ * and every rung helper was typed for it. The body's `& Plain` turns a `memo` or a source on to its
+ * own overload, and the value form turns every function away.
+ *
+ * 16.92 — `Writes` is false for `GET` alone, whose options have no `refreshes`.
+ */
 type Declare<Writes extends boolean> = {
     // 16.70 — an `rpc` already, handed back as it is: a server block's export declared by one.
     <
@@ -520,7 +514,7 @@ type Declare<Writes extends boolean> = {
         },
     ): ReadRpc<PipeStatus, undefined, RungRefusals<Answers>> &
         Answering<Methods, 'POST', { push(input: In): Promise<Out> }>
-    // 16.1 — a value, `reactive` given an address, which takes a `reactive`'s options beside the
+    // 16.1 — a plain value given an address, held as `reactive` holds one, which takes a `reactive`'s options beside the
     // address's (16.6), and no source's (11.81). Never a function: a handler's function is its body,
     // the first signature's (16.1). 16.111 — read alone, its writes typed where `methods` names them.
     <
@@ -608,7 +602,7 @@ const UNREACHED = {
     invalidate: (): void => undefined,
 }
 
-/** Builds the handler declarer for one method — what `GET`, `POST` and the rest are. */
+/** Builds the handler declarer for one method, which `rpc` builds on for each verb it answers. */
 export function declare<Declared extends Method>(
     method: Declared,
 ): Declare<Declared extends 'GET' ? false : true> {
@@ -779,7 +773,7 @@ export function declare<Declared extends Method>(
         // THE HANDLER'S OWN TRIGGERS, handed the pattern, which a `Keyed` narrows by.
         //
         // 13.19 — AND NOT YET BUILT, NEITHER BUILDS IT: building an unkeyed value starts its body
-        // (1.7), so a trigger over a server's never-called `POST(async () => …)` would run the write.
+        // (1.7), so a trigger over a server's never-called write would run it.
         // Until a call reaches it the handler has no entry, and a trigger does nothing.
         const built = value as Record<
             'refresh' | 'invalidate',
@@ -933,8 +927,8 @@ type SourceKind = keyof typeof SOURCE_MEMBERS
 type SourceBrand = { kind: SourceKind; name?: string | undefined }
 
 /**
- * A value, a function or a source given an address: what `GET` and the four mutations were, one
- * name over the verbs the value answers by (16.111, 16.117), or the ones `methods` names (16.112).
+ * A value, a function or a source given an address: one name over the verbs the value answers by
+ * (16.111, 16.117), or the ones `methods` names (16.112).
  */
 export const rpc: Declare<true> = ((
     value: unknown,
@@ -1228,7 +1222,7 @@ function facesOptions(options: RpcOptions): RpcOptions {
 function addressOf(rpc: { address: string | undefined }): string {
     if (rpc.address === undefined)
         throw new Error(
-            "abide: this handler has no address yet. A handler is given one where it is mounted: a handler file's default (RULEBOOK 16.2), or a `const` in a <script server> (RULEBOOK 16.70).",
+            'abide: this handler has no address yet. A handler is given one where it is mounted: an `rpc` a server file exports (RULEBOOK 16.2), or a value a <script server> exports (RULEBOOK 16.70).',
         )
     return rpc.address
 }

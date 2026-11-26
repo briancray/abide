@@ -11,6 +11,7 @@
 
 import type { Database } from 'bun:sqlite'
 
+import { isPlainData } from '#shared/isPlainData.ts'
 import { namedLogger } from '#shared/log.ts'
 import type { Match } from '#shared/Match.ts'
 import { appStopSignal } from '#shared/reactive/abortSignal.ts'
@@ -24,7 +25,7 @@ import { SQL_IDENTIFIER } from './SQL_IDENTIFIER.ts'
 
 const WATCH_LOG = namedLogger('abide:table')
 
-/** 47.27 — how often a reader or the tag's watch looks for changes past the last it saw. */
+/** 47.27 — how often a reader or the table's watch looks for changes past the last it saw. */
 const LOOK_EVERY = 50
 
 /** 47.31 — the changes kept per table once every look has passed them. */
@@ -146,7 +147,7 @@ export function table<Row extends Record<string, unknown>>(
 }
 
 /** `acquire`'s `Database`, with `name`'s change log and triggers made on it (47.26). */
-export function preparedConnection(
+function preparedConnection(
     acquire: () => Database,
     name: string,
 ): () => Database {
@@ -329,9 +330,7 @@ function scalarOf(name: string, column: string, value: unknown): unknown {
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-    if (typeof value !== 'object' || value === null) return false
-    const prototype = Object.getPrototypeOf(value)
-    return prototype === Object.prototype || prototype === null
+    return !Array.isArray(value) && isPlainData(value)
 }
 
 /**

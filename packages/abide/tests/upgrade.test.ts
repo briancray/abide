@@ -879,8 +879,8 @@ export const query = reactive('', { debounce: 300 })
         '5 poll is now ttl',
         '6 poll with a delay scheduled work whether or not anything read it, and poll is gone',
         '7 poll is now ttl',
-        '8 reactive and reactive.derived take no ttl, throttle, debounce, tags, global or poll',
-        '9 reactive and reactive.derived take no ttl, throttle, debounce, tags, global or poll',
+        '8 reactive takes no ttl, throttle, debounce, tags, global or poll',
+        '9 reactive takes no ttl, throttle, debounce, tags, global or poll',
     ])
     for (const edit of edits)
         await Bun.write(`${app}/${edit.path}`, edit.after ?? '')

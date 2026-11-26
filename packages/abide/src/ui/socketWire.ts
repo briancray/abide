@@ -488,7 +488,7 @@ function muxFor(address: string): Mux {
 }
 
 /**
- * The follow standing per handler and args, one for the life of the page.
+ * The follow standing per handler and args, until 18.48's sweep lets go of one nothing reads.
  *
  * One however often the entry loads. A later answer names a later version, which is what a
  * reconnect then names (18.9).

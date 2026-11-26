@@ -522,7 +522,6 @@ class Runner {
         // 1.6 — a `Reactive` is thenable and iterable: its value is the step's answer, read first.
         if (isReactive(answer)) answer = await answer
         else if (isThenable(answer)) answer = await answer
-        if (isReactive(answer)) answer = await answer
         if (isAsyncIterable(answer)) {
             const iterator = answer[Symbol.asyncIterator]()
             const first = await iterator.next()

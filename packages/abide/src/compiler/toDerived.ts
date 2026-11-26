@@ -1,7 +1,7 @@
 // 38.228 — THE MIGRATION TO `reactive.derived`: `reactive.derived` is a member of `reactive` rather than an
-// export of its own, so every use of abide's `reactive.derived` is `reactive.derived`, and `reactive` is
+// export of its own, so every use of abide's `computed` is `reactive.derived`, and `reactive` is
 // imported where it was not. A scan, as `toMemo` is: what is renamed is the name the file imported
-// abide's `reactive.derived` as, wherever it is a value — never a member (`x.computed`) or an object's key.
+// abide's `computed` as, wherever it is a value — never a member (`x.computed`) or an object's key.
 //
 // A PAGE'S SCRIPTS ARE ONE SCOPE: a nested per-arm `<script>` reads what the top-level one imports, so
 // a use is renamed in every block once any block imports it.
@@ -18,7 +18,7 @@ import {
 import { type Token, tokenize } from './tokenize.ts'
 
 /**
- * 38.228 — `text`, a file at `path`, with abide's `reactive.derived` spelled `reactive.derived`. `isAbide`
+ * 38.228 — `text`, a file at `path`, with abide's `computed` spelled `reactive.derived`. `isAbide`
  * says which specifiers are abide's, so abide's own tests can be moved by the same scan.
  */
 export function toDerived(
@@ -118,7 +118,7 @@ function isValueUse(tokens: Token[], at: number): boolean {
 }
 
 /**
- * The import `statement` without abide's `reactive.derived`, and with `reactive` where `adding` — dropped
+ * The import `statement` without abide's `computed`, and with `reactive` where `adding` — dropped
  * whole where nothing is left of it.
  */
 function rewrittenImport(

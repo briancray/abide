@@ -16,7 +16,7 @@ type Note = (path: string, line: string, message: string) => void
 const HANDLERS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 
 const SERVES_A_VALUE = (name: string): string =>
-    `a handler serves no Reactive, and ${name} is a reactive or reactive.derived, so this throws where it is declared: make ${name} a memo — memo(fn, options) — and serve that; whatever awaited ${name} then calls ${name}(). RULEBOOK 16.109, 38.230.`
+    `a handler serves no Reactive, and ${name} is a reactive, so this throws where it is declared: make ${name} a memo — memo(fn, options) — and serve that; whatever awaited ${name} then calls ${name}(). RULEBOOK 16.109, 38.230.`
 
 /**
  * 38.230 — every handler the app declares over a value it declares as a `reactive` or a
