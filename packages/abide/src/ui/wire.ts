@@ -324,7 +324,8 @@ function sendsWrites(
             const mutate = given.at(-1) as (value: unknown) => void
             let ops: PatchOp[] = []
             patchHere((value: unknown) => {
-                const before = structuredClone(value)
+                // The value a write reaches is the recording it makes, which is JSON, as the wire is.
+                const before: unknown = JSON.parse(JSON.stringify(value))
                 mutate(value)
                 ops = diffOps(before, value, null)
             })

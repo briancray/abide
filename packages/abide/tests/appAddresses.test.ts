@@ -990,3 +990,34 @@ export default rpc(({ id }: { id: string }) => id)
     expect(face('getDeal')?.exports.default?.args).toBeDefined()
     expect(face('getDeal')?.client).not.toContain('"properties"')
 })
+
+// 16.2, 16.113 — A SERVER FILE ANSWERS EACH `rpc` IT EXPORTS: its default at its route, a named one
+// below it by its name, and one declaring `address` there; what it exports beside them answers
+// nothing. THE REVERTS: address every export at the file's route in `handlersUnder`; `stages` and
+// `/media/getGrid` collide (20.13). Drop `declaredAddress` from `declaredExports`; `v1` answers at
+// `/media/getGrid/v1`.
+test('a server file answers its default at its route, each named rpc below it, and an address where it says — 16.2, 16.113', async () => {
+    const { mounts } = await compileApp(
+        appFixture({
+            'index.abide': '<p>home</p>',
+            'media/getGrid.server.ts': `import { rpc } from '@abide/abide/server'
+
+const DB = { rows: [1, 2] }
+export default rpc(() => DB.rows)
+export const stages = rpc(() => ['lead', 'won'])
+export const v1 = rpc(() => DB.rows, { address: '/api/v1/grid' })
+export const save = rpc(() => 1, { methods: ['POST'] })
+export const db = DB
+`,
+        }),
+    )
+    const addresses: string[] = []
+    for (const mount of mounts)
+        addresses.push(`${mount.method} ${mount.address} ${mount.export}`)
+    expect(addresses.sort()).toEqual([
+        'GET /api/v1/grid v1',
+        'GET /media/getGrid default',
+        'GET /media/getGrid/stages stages',
+        'POST /media/getGrid/save save',
+    ])
+})

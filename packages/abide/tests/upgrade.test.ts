@@ -1010,3 +1010,65 @@ export const listed = GET(rows)
         'src/getTotals.server.ts:5 a handler serves no Reactive',
     ])
 })
+
+// 38.231 — THE FIVE VERBS ARE ONE `rpc`, and a handler file is a server file: a `GET` is an `rpc`, a
+// mutation keeps its verb in `methods`, a `.handler.ts` moves to `.server.ts` with every import naming
+// it, a server block's handler is exported, and a handler file whose server file is there already is
+// a note. Run again, nothing is left to move (38.200). THE REVERT: drop `toRpc` from the migrations;
+// nothing moves, and the handler file is still `getDeal.handler.ts`.
+test('abide upgrade moves the five verbs to rpc and a handler file to a server file — 38.231, 38.200', async () => {
+    const app = temporaryModule({
+        'src/deals/getDeal.handler.ts': `import { GET } from '@abide/abide/server'
+
+export default GET(({ id }: { id: string }) => id, { description: 'One deal.' })
+`,
+        'src/deals/moveDeal.handler.ts': `import { POST } from '@abide/abide/server'
+
+const OPTIONS = { description: 'Moves a deal.' }
+export default POST(({ id }: { id: string }) => id, OPTIONS)
+`,
+        'src/deals/index.abide': `<script server>
+import { PATCH } from '@abide/abide/server'
+
+const rename = PATCH(({ name }: { name: string }) => name)
+</script>
+
+<script>
+import getDeal from './getDeal.handler.ts'
+</script>
+`,
+        'src/deals/taken.handler.ts': `import { DELETE } from '@abide/abide/server'
+
+export default DELETE(() => 1)
+`,
+        'src/deals/taken.server.ts': 'export const kept = 1\n',
+    })
+    const notes: string[] = []
+    const edits = await upgrade(app, '0.144.0', (note) =>
+        notes.push(`${note.path}:${note.line} ${note.message.split(':')[0]}`),
+    )
+    const after = (path: string) =>
+        edits.find((edit) => edit.path === path)?.after
+    expect(after('src/deals/getDeal.handler.ts')).toBeNull()
+    expect(after('src/deals/getDeal.server.ts')).toBe(`import { rpc } from '@abide/abide/server'
+
+export default rpc(({ id }: { id: string }) => id, { description: 'One deal.' })
+`)
+    expect(after('src/deals/moveDeal.server.ts')).toContain(
+        "export default rpc(({ id }: { id: string }) => id, { methods: ['POST'], ...OPTIONS })",
+    )
+    expect(after('src/deals/index.abide')).toContain(
+        "export const rename = rpc(({ name }: { name: string }) => name, { methods: ['PATCH'] })",
+    )
+    expect(after('src/deals/index.abide')).toContain(
+        "import getDeal from './getDeal.server.ts'",
+    )
+    expect(after('src/deals/taken.server.ts')).toBeUndefined()
+    expect(notes).toEqual([
+        'src/deals/taken.handler.ts:1 abide upgrade moves a handler file to <name>.server.ts, and that file is already there',
+    ])
+    for (const edit of edits)
+        if (edit.after === null) await Bun.file(`${app}/${edit.path}`).delete()
+        else await Bun.write(`${app}/${edit.path}`, edit.after)
+    expect(await upgrade(app, '0.144.0')).toEqual([])
+})

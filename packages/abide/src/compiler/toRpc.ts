@@ -37,20 +37,18 @@ export async function toRpc(
     const paths = await sources()
     const present = new Set(paths)
     const moved = new Map<string, string>()
+    const taken = new Set<string>()
     for (const path of paths) {
         if (!path.endsWith('.handler.ts')) continue
         const target = `${path.slice(0, -'.handler.ts'.length)}.server.ts`
-        if (present.has(target)) {
-            const text = (await read(path)) ?? ''
-            note(path, text.split('\n')[0] ?? '', TAKEN)
-            continue
-        }
-        moved.set(path, target)
+        if (present.has(target)) taken.add(path)
+        else moved.set(path, target)
     }
     for (const path of paths) {
         const text = await read(path)
         if (text === undefined) continue
         const migrated = toRpcText(text, path, isSpecifier)
+        if (taken.has(path)) note(path, migrated.split('\n')[0] ?? '', TAKEN)
         const target = moved.get(path)
         if (target !== undefined) {
             changed[target] = migrated

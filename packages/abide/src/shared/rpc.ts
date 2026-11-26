@@ -779,7 +779,15 @@ export const rpc: Declare<true> = ((
         throw new Error(
             'abide: an `rpc` answering `GET` alone was declared with `refreshes`, which only a write takes. Refresh from the write that changed the value. RULEBOOK 16.92.',
         )
-    const main = declare(primary)(value as never, rest as never) as unknown as {
+    // 16.115 — A VALUE IS THE SERVER'S ONE VALUE, every request reading and writing the same entry:
+    // a value per request (11.32) would forget a write the moment its request answered.
+    const held =
+        typeof value === 'function' || isPromise(value) ? value : () => value
+    const shaped =
+        held === value
+            ? rest
+            : { ...rest, global: (rest as { global?: boolean }).global ?? true }
+    const main = declare(primary)(held as never, shaped as never) as unknown as {
         methods: readonly Method[]
         [FACES]: Partial<Record<Method, unknown>>
         set(value: unknown): void
@@ -810,6 +818,11 @@ export const rpc: Declare<true> = ((
     main[FACES] = faces
     return main
 }) as Declare<true>
+
+/** Whether `value` is a promise, which a value `rpc` answers as it settles (16.1). */
+function isPromise(value: unknown): boolean {
+    return value instanceof Promise
+}
 
 /** Whether `value` is an `Rpc` already. */
 function isRpc(value: unknown): boolean {
