@@ -1,5 +1,5 @@
 <script server>
-import { refuse } from '@abide/abide/server'
+import { memo, refuse } from '@abide/abide'
 
 import { crmDirectory } from './exampleDirectory.server.ts'
 import { folded } from './folded.ts'
@@ -34,9 +34,6 @@ async function programFile(program: string): Promise<string> {
     }
     return `${manifest.slice(0, manifest.lastIndexOf('/'))}/${bin[program]}`
 }
-
-// Run once per process and origin: an answer is the same on every load, and a check takes seconds.
-const RAN = new Map<string, Promise<{ output: string; code: number }>>()
 
 async function ran(
     command: string,
@@ -79,20 +76,20 @@ async function ran(
     return { output: lines.join('\n'), code }
 }
 
+// Run once per process and origin: an answer is the same on every load, and a check takes seconds. A
+// run that threw is run again by the next ask (15.19).
+const transcriptOf = memo(
+    ({ command, origin }: { command: string; origin: string }) =>
+        ran(command, origin),
+    { global: true },
+)
+
 // A REAL COMMAND, RUN IN THE CRM AS ITS PAGE WRITES IT, and what it printed and exited with (40.45),
 // aimed by `ABIDE_APP_URL` at this server, where the CRM's handlers answer at their addresses (40.24).
 export const transcript = async ({ command }: { command: string }) => {
     if (!COMMANDS.has(command))
         return refuse(404, `docs: ${command} is not a command the docs run`)
-    const origin = ownOrigin()
-    const key = `${origin} ${command}`
-    let running = RAN.get(key)
-    if (running === undefined) {
-        running = ran(command, origin)
-        RAN.set(key, running)
-        running.catch(() => RAN.delete(key))
-    }
-    return running
+    return transcriptOf({ command, origin: ownOrigin() })
 }
 </script>
 
