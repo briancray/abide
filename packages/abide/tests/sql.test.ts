@@ -5,7 +5,7 @@
 import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
 
-import { database, table } from '#server'
+import { database, GET, table } from '#server'
 import { flushSync, memo, reactive, watch } from '#shared'
 import { keyedValue } from '#shared/reactive/index.ts'
 
@@ -346,4 +346,77 @@ test('a read-only database is read, its stopped watch said once — 47.38', asyn
     } finally {
         console.warn = warn
     }
+})
+
+// 47.40 — AN OWNER'S WRITE OF THE ROWS A TABLE ANSWERED IS WRITTEN TO THE TABLE: a row edited or added
+// upserted by `key`, one taken out deleted, and the entry then holds what the table holds — its reader
+// woken once per write. THE REVERT: drop the `WRITES_THROUGH.set` from the table's call; the table
+// still reads `d1:100,d2:40` where `d1:5,d5:60` is due. And drop the `heard` after the rows are
+// written; the entry waits on the watch's next look, and answers `d1` where `d1,d5` is due.
+test("a memo's owner writes the rows a table call answered back to the table — 47.40", async () => {
+    const db = crm()
+    const deals = table<Deal>(db, 'deals')
+    const staged = memo(({ stage }: { stage: string }) => deals({ stage }))
+    const won = reactive.derived(() => staged({ stage: 'won' }))
+    let seen: Deal[] | undefined
+    let wakes = 0
+    const stop = watch(() => {
+        seen = won() as Deal[] | undefined
+        wakes += 1
+    })
+    await until(() => seen?.length === 1)
+    const before = wakes
+    staged.patch({ stage: 'won' }, (rows) => {
+        ;(rows[0] as Deal).amount = 5
+        rows.push({ id: 'd5', stage: 'won', amount: 60 })
+    })
+    // At once: the entry reloads as the write lands, not at the watch's next look.
+    const answered = await staged({ stage: 'won' })
+    await until(() => seen?.length === 2)
+    const tableHolds = () =>
+        db.sql<Deal>`SELECT * FROM deals ORDER BY id`
+            .map((row) => `${row.id}:${row.amount}`)
+            .join()
+    expect(
+        `${tableHolds()} answered: ${idsOf(answered)} wakes: ${wakes - before}`,
+    ).toBe('d1:5,d2:40,d5:60 answered: d1,d5 wakes: 1')
+    staged.set({ stage: 'won' }, [{ id: 'd5', stage: 'won', amount: 60 }])
+    await until(() => seen?.length === 1)
+    stop()
+    expect(`${tableHolds()} entry: ${idsOf(seen as Deal[])}`).toBe(
+        'd2:40,d5:60 entry: d5',
+    )
+})
+
+// 47.40 — ONLY THE ROWS A TABLE CALL ANSWERED: rows reshaped by the body are the memo's own value, and a
+// row with no key is refused rather than written as nothing.
+test('a write of rows the body reshaped stays in the entry, and a row with no key throws — 47.40', async () => {
+    const db = crm()
+    const deals = table<Deal>(db, 'deals')
+    const ids = memo((_none: undefined) => deals().map((row) => row.id))
+    await ids()
+    ids.set(['x'])
+    expect(`${await ids()} rows: ${deals().length}`).toBe('x rows: 2')
+    const all = memo((_none: undefined) => deals())
+    await all()
+    expect(() => all.set([{ stage: 'won', amount: 1 } as never])).toThrow(
+        'RULEBOOK 47.40',
+    )
+})
+
+// 47.40 — A HANDLER'S OWNER WRITES AS A MEMO'S DO (16.110): its entry answered by a table call, the
+// `patch` a POST makes is the table's rows.
+test("a GET's owner writes the rows a table call answered back to the table — 47.40", async () => {
+    const db = crm()
+    const deals = table<Deal>(db, 'deals')
+    const staged = GET(({ stage }: { stage: string }) => deals({ stage }), {
+        global: true,
+    })
+    await staged({ stage: 'lead' })
+    staged.patch({ stage: 'lead' }, (rows) => {
+        rows.length = 0
+    })
+    expect(
+        `${idsOf(db.sql<Deal>`SELECT id FROM deals`)} lead: ${idsOf(await staged({ stage: 'lead' }))}`,
+    ).toBe('d1 lead: ')
 })

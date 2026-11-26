@@ -83,6 +83,7 @@ import {
     untracked,
 } from './tracking.ts'
 import { owned, owning, watchOver } from './watch.ts'
+import { WRITES_THROUGH } from './WRITES_THROUGH.ts'
 
 /**
  * The shape of a `transform`: the accepted value in, the stored value or a refusal out.
@@ -2952,6 +2953,9 @@ export function answeredAtOnce(): void {
  */
 export function produceInto(value: Reactive<unknown>, next: unknown): void {
     const cell = cellOf(value)
+    // 47.40 — rows a table answered are written to the table, which then refreshes this entry.
+    const through = writesThrough(cell)
+    if (through !== undefined) return through(next)
     ownerWriting += 1
     try {
         // A stream's write stands over its accumulation (9.11), as `STREAM_PROTOTYPE.set` makes it.
@@ -2972,6 +2976,13 @@ export function patchInto(
     mutate: (value: unknown) => void,
 ): void {
     const cell = cellOf(value)
+    // 47.40 — patched on a copy: what stands is what the table holds once the rows are written.
+    const through = writesThrough(cell)
+    if (through !== undefined) {
+        const copy = structuredClone(cell.value)
+        mutate(copy)
+        return through(copy)
+    }
     ownerWriting += 1
     try {
         patchCell(cell, mutate)
@@ -2979,6 +2990,14 @@ export function patchInto(
         ownerWriting -= 1
     }
     producedAgain(cell)
+}
+
+/** 47.40 — where the value `cell` holds is written, if not into `cell`. */
+function writesThrough(cell: Cell): ((next: unknown) => void) | undefined {
+    const held = cell.value
+    return typeof held === 'object' && held !== null
+        ? WRITES_THROUGH.get(held)
+        : undefined
 }
 
 /**

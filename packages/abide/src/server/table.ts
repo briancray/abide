@@ -15,10 +15,12 @@ import { namedLogger } from '#shared/log.ts'
 import { appStopSignal } from '#shared/reactive/abortSignal.ts'
 import { CELL } from '#shared/reactive/CELL.ts'
 import type { Cell } from '#shared/reactive/cellShape.ts'
+import { deepEqual } from '#shared/reactive/deepEqual.ts'
 import { invalidate } from '#shared/reactive/index.ts'
 import { refreshCells } from '#shared/reactive/producer.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'
 import { unrefTimer } from '#shared/reactive/unrefTimer.ts'
+import { WRITES_THROUGH } from '#shared/reactive/WRITES_THROUGH.ts'
 
 import { SQL_IDENTIFIER } from './SQL_IDENTIFIER.ts'
 
@@ -95,9 +97,37 @@ export function table<Row extends Record<string, unknown>>(
     const names = [name]
     // 47.38 — READ ON THE CONNECTION AS IT IS: a database refusing the change log is still read.
     const rows = selects<Row>(acquire, name)
+    const writeRows = rowWrites<Row>(name, key)
+    // 47.40 — an owner's write of the rows answered, as the rows to upsert and the rows to delete.
+    const writeSlice = (before: readonly Row[], next: unknown): void => {
+        if (!Array.isArray(next))
+            throw new Error(
+                `abide: rows of table ${name} are written as an array of rows. RULEBOOK 47.40.`,
+            )
+        const standing = new Map<unknown, Row>()
+        for (const row of before) standing.set(row[key], row)
+        const upserted: Row[] = []
+        const kept = new Set<unknown>()
+        for (const row of next as Row[]) {
+            const id = row?.[key]
+            if (id === undefined || id === null)
+                throw new Error(
+                    `abide: a row written to table ${name} carries no ${key}. RULEBOOK 47.40.`,
+                )
+            kept.add(id)
+            const was = standing.get(id)
+            if (was === undefined || !deepEqual(was, row)) upserted.push(row)
+        }
+        const deleted: unknown[] = []
+        for (const id of standing.keys()) if (!kept.has(id)) deleted.push(id)
+        if (upserted.length === 0 && deleted.length === 0) return
+        writeRows(connection(), upserted, deleted)
+        heard(watchOf(database, connection, name), connection)
+    }
     const read = (match?: Match<Row>): Row[] => {
         const answered = rows(match)
         readTables(database, connection, names)
+        WRITES_THROUGH.set(answered, (next) => writeSlice(answered, next))
         return answered
     }
     return Object.defineProperties(read, {
@@ -446,6 +476,14 @@ function changed(watch: Watch): void {
     if (reloading.length > 0) refreshCells(reloading)
 }
 
+/** 47.34, 47.40 — a write made here, heard now, so the watch's next look does not hear it again. */
+function heard(watch: Watch, connection: () => Database): void {
+    try {
+        watch.seen = lastChange(connection(), watch.name)
+    } catch {}
+    changed(watch)
+}
+
 /**
  * 47.32, 47.33 — the run this is called in, where one is running that a table's change may refresh:
  * not a mutation's (13.16), nor the continuation of a run already ended (7.24).
@@ -535,16 +573,8 @@ export function wroteTables(
         flushing = undefined
         const watches = [...WRITTEN]
         WRITTEN.clear()
-        for (const watch of watches) {
-            // 47.34 — heard here, so the watch's next look does not hear it again.
-            try {
-                watch.seen = lastChange(
-                    (WROTE_ON.get(watch) as () => Database)(),
-                    watch.name,
-                )
-            } catch {}
-            changed(watch)
-        }
+        for (const watch of watches)
+            heard(watch, WROTE_ON.get(watch) as () => Database)
     }
     setTimeout(flushing, 0)
 }
@@ -626,29 +656,27 @@ function changesOf<Row>(
     )
 }
 
-/** 47.30 — rows upserted by `key`, a turn's writes one transaction. */
-function upserts<Row extends Record<string, unknown>>(
-    connection: () => Database,
+/**
+ * 47.30, 47.40 — rows upserted by `key` and rows deleted by it, all in one transaction. One statement
+ * per shape of row, its columns checked and its SQL written once: a batch of rows with the same
+ * columns runs one prepared statement.
+ */
+function rowWrites<Row extends Record<string, unknown>>(
     name: string,
     key: string,
-): WritableStream<Row> {
-    let buffered: Row[] = []
-    let flushing: Promise<void> | undefined
-    let failed: unknown
-    let timer: ReturnType<typeof setTimeout> | undefined
-    // One statement per shape of row, its columns checked and its SQL written once: a batch of rows
-    // with the same columns runs one prepared statement.
+): (
+    db: Database,
+    upserted: readonly Row[],
+    deleted: readonly unknown[],
+) => void {
     const statements = new Map<
         string,
         { columns: string[]; statement: ReturnType<Database['query']> }
     >()
+    let removal: ReturnType<Database['query']> | undefined
     // A statement is its database's: a `connection` handing back another starts the map over.
     let preparedOn: Database | undefined
     const statementFor = (db: Database, row: Row) => {
-        if (db !== preparedOn) {
-            statements.clear()
-            preparedOn = db
-        }
         const columns = Object.keys(row)
         const shape = columns.join(',')
         let prepared = statements.get(shape)
@@ -686,18 +714,39 @@ function upserts<Row extends Record<string, unknown>>(
         }
         return prepared
     }
-    const commit = (rows: Row[]): void => {
-        const db = connection()
+    return (db, upserted, deleted) => {
+        if (db !== preparedOn) {
+            statements.clear()
+            removal = undefined
+            preparedOn = db
+        }
         db.transaction(() => {
-            for (const row of rows) {
+            for (const row of upserted) {
                 const { columns, statement } = statementFor(db, row)
                 const values = new Array<unknown>(columns.length)
                 for (let at = 0; at < columns.length; at += 1)
                     values[at] = row[columns[at] as string]
                 statement.run(...(values as never[]))
             }
+            if (deleted.length === 0) return
+            removal ??= db.query(`DELETE FROM ${name} WHERE "${key}" = ?`)
+            for (const gone of deleted) removal.run(gone as never)
         })()
     }
+}
+
+/** 47.30 — rows upserted by `key`, a turn's writes one transaction. */
+function upserts<Row extends Record<string, unknown>>(
+    connection: () => Database,
+    name: string,
+    key: string,
+): WritableStream<Row> {
+    let buffered: Row[] = []
+    let flushing: Promise<void> | undefined
+    let failed: unknown
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const write = rowWrites<Row>(name, key)
+    const commit = (rows: Row[]): void => write(connection(), rows, [])
     const flush = (): Promise<void> => {
         if (timer !== undefined) clearTimeout(timer)
         timer = undefined

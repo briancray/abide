@@ -828,7 +828,8 @@ chunks, and each call MUST answer a stream handing on every chunk of that run fr
 
 11.76 `m.set(args, value)` MUST replace the value of a `memo`'s entry for `args`, and `m.patch(args,
 mutate)` MUST mutate it in place, each building the entry where none is held, MUST NOT run the
-function, and MUST stand until the next write, `ttl`, `refresh` or `invalidate`.
+function, and MUST stand until the next write, `ttl`, `refresh` or `invalidate` — save where the entry
+holds the rows a `table` call answered, which 47.40 writes to the table.
 
 11.77 `m.readable(args)` MUST answer a stream handing on the entry's value now and its value after
 each change, in order, each a copy no later change mutates.
@@ -5218,6 +5219,12 @@ comparison other than `ne`, and for an array or an object nested where a value g
 47.39 A change 47.33 hears to a table a handler's run read MUST reach every browser following that
 handler as a tag naming the table would per 13.15, where the server holds no value of the handler
 for the change to refresh.
+
+47.40 An owner's `set` or `patch` of an entry holding the very rows a `table` call answered MUST write
+them to the table in one transaction — each row added or changed upserted by `key`, each row no
+longer there deleted, a patch made on a copy — MUST throw for a value that is not an array or a row
+carrying no `key`, and MUST then refresh at once every run 47.33 refreshes for the table, the
+entry's own among them, rather than hold the value written.
 
 # 48. Problem reports
 
