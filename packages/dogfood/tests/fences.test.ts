@@ -192,3 +192,39 @@ test("every example's relative import names a file of the example app and a name
             }
     expect(invented).toEqual([])
 })
+
+const DOCS = new URL('../src/', import.meta.url).pathname
+
+// 40.35 — AND AN EXAMPLE KEPT AS A FILE UNDER ITS PAGE'S `lib` (40.14) is held to it too: each relative
+// import names a file of the example app and a name it exports, or a server file beside it that its
+// page shows as the example's `server` — the one stand-in an example may carry. THE REVERT: read
+// only `<Code>` fences, as this file did before; a lib example importing a file the CRM never had
+// passes, `[]` where its line is due.
+test("every lib example's relative import names a file of the example app, or a server file its page shows", async () => {
+    const byName = await appFilesByName()
+    const invented: string[] = []
+    for await (const file of new Glob('**/lib/*.abide').scan({ cwd: DOCS })) {
+        // The docs app's own components, not examples.
+        if (file.startsWith('lib/')) continue
+        const directory = file.slice(0, file.lastIndexOf('/'))
+        const page = `${directory.slice(0, directory.lastIndexOf('/'))}/index.abide`
+        const pageSource = await Bun.file(`${DOCS}${page}`)
+            .text()
+            .catch(() => '')
+        const code = await Bun.file(`${DOCS}${file}`).text()
+        for (const match of code.matchAll(RELATIVE_IMPORT)) {
+            const path = match[3] as string
+            if (path.startsWith('./') && path.endsWith('.server.ts')) {
+                const beside = `${directory}/${path.slice(2)}`
+                if (pageSource.includes(`server="${beside}"`)) continue
+            }
+            const name = path.slice(path.lastIndexOf('/') + 1)
+            // `#src/…` and the docs app's own aliases are not relative, and a sibling `.abide` is
+            // another example of the same page.
+            if (name.endsWith('.abide') && path.startsWith('./')) continue
+            if ((byName.get(name) ?? []).length === 0)
+                invented.push(`${file}: ${path}`)
+        }
+    }
+    expect(invented).toEqual([])
+})

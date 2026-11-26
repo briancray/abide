@@ -4218,7 +4218,8 @@ part's member standing for an earlier one of its name, once per parameter and ty
 side its code runs on.
 
 40.35 An example's relative import MUST name a file of the example app, and a name that file
-exports.
+exports, or a server file beside it under its page's `lib` that its page shows as the example's
+server.
 
 40.36 Every page MUST say, in its header, where the name it documents is written and on which side
 it runs, and a page whose name runs on one side only MUST carry a mark naming that side beside its
