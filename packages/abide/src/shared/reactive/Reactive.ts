@@ -1748,7 +1748,15 @@ function mirror(cell: Cell, inner: Cell): void {
     // 11.13 FOR A PATCH (5.7): the inner woke holding the reference this already serves. Only a patch
     // does that — a production of the same reference is stopped at the inner's own identity gate —
     // and the gate `accept` runs here would read it as no change at all, so it wakes as a patch.
-    if (cell.servable && !cell.loading && value === heldValue(cell)) {
+    // NOT ON THE MIRROR THAT ADOPTS IT: `adopt` names the source after its first mirror, and an inner
+    // newly adopted holding what this serves — a write this made through an earlier adoption of it
+    // (11.58) — is no change, so the gate is what answers it (5.1).
+    if (
+        cell.servable &&
+        !cell.loading &&
+        cell.adoption?.source === inner &&
+        value === heldValue(cell)
+    ) {
         wakePatched(cell, value)
         return
     }

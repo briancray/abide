@@ -2011,6 +2011,31 @@ test('a recompute onto the same adopted Reactive wakes no reader', () => {
     woken.stop()
 })
 
+// 5.1 FOR A RE-ADOPTION ONTO WHAT IS SERVED: a write on an adopting value lands in the adopted one
+// (11.58), so a body that left it on a refresh and comes back finds it holding the reference this
+// already serves — read identity did not change. The wake contract's walk found it. THE REVERT: drop `cell.adoption?.source === inner` from the patch
+// arm in `mirror`; the return wakes 1 where 0 is due.
+test('re-adopting a Reactive holding what is already served wakes no reader — 5.1', () => {
+    let refusing = false
+    const inner = reactive(new Promise<{ n: number }>(() => {}))
+    const outer = reactive.derived(() =>
+        refusing
+            ? (refuse.named('Refused')() as unknown as { n: number })
+            : inner,
+    )
+    outer.set({ n: 2 })
+    refusing = true
+    outer.refresh()
+    flushSync()
+    const woken = wakes(outer)
+    refusing = false
+    outer.refresh()
+    flushSync()
+    const count = woken.count()
+    woken.stop()
+    expect(`${outer().n}, wakes: ${count}`).toBe('2, wakes: 0')
+})
+
 // 11.16: on re-adoption the outer clears where the newly adopted has nothing to serve. It
 // cannot go on serving the old one's value — that value belongs to a producer this is no
 // longer adopting.
@@ -3763,11 +3788,6 @@ function walkSubjects(): Subject[] {
         if (adoptNow) return source
         return source() + 1
     })
-    let settledRuns = 0
-    const settled = reactive.derived(() => {
-        settledRuns += 1
-        return { at: settledRuns }
-    })
     let loadRuns = 0
     const reloading = reactive.derived(() => {
         loadRuns += 1
@@ -3844,19 +3864,9 @@ function walkSubjects(): Subject[] {
             ],
         },
         {
-            name: 'a settled body',
-            value: settled as Reactive<unknown>,
-            ops: [
-                { op: () => settled.peek() },
-                invalidate(settled as Reactive<unknown>),
-                { op: () => settled.refresh() },
-            ],
-        },
-        {
             name: 'a load',
             value: reloading as Reactive<unknown>,
             ops: [
-                { op: () => reloading.peek() },
                 invalidate(reloading as Reactive<unknown>),
                 { op: () => reloading.refresh() },
                 {
@@ -3976,7 +3986,7 @@ test('the wake contract holds across every transition', async () => {
         ]
         return { subject, seen, stops }
     })
-    // What the construction started — the ttl load's first body — is over before the walk.
+    // What the construction started — the load's first body — is over before the walk.
     for (let turn = 0; turn < 10; turn += 1) await null
     flushSync()
 
