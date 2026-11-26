@@ -83,7 +83,7 @@ async function ran(
 // aimed by `ABIDE_APP_URL` at this server, where the CRM's handlers answer at their addresses (40.24).
 export const transcript = async ({ command }: { command: string }) => {
     if (!COMMANDS.has(command))
-        refuse(404, `docs: ${command} is not a command the docs run`)
+        return refuse(404, `docs: ${command} is not a command the docs run`)
     const origin = ownOrigin()
     const key = `${origin} ${command}`
     let running = RAN.get(key)
