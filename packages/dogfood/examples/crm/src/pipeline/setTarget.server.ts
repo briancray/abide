@@ -9,6 +9,8 @@ export default rpc(
     },
     {
         methods: ['POST'],
+        // 16.89 — what reads the table, refreshed once the target is written.
+        refreshes: ['targets'],
         description: "Sets the team's target for the quarter.",
     },
 )

@@ -12,5 +12,9 @@ export default rpc(
         }>`SELECT target FROM targets ORDER BY id DESC LIMIT 1`
         return newest?.target ?? null
     },
-    { description: "Reads the team's target for the quarter." },
+    {
+        // 47.29 — read again when the table changes.
+        tags: ['targets'],
+        description: "Reads the team's target for the quarter.",
+    },
 )

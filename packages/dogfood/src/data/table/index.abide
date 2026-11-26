@@ -21,7 +21,7 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/sql.test.ts',
             from: [
-                "test('a table called answers its rows by equality, and refreshes its reader — 47.35'",
+                'test("a table\'s write refreshes what carries its name as a tag at once — 47.29, 47.34"',
             ],
         },
         {
@@ -32,21 +32,27 @@ import Section from '#src/lib/Section.abide'
         },
         {
             path: 'packages/abide/tests/sql.test.ts',
+            from: ["test('a table is set, patched and deleted by key — 47.33'"],
+        },
+        {
+            path: 'packages/abide/tests/rpcSources.test.ts',
             from: [
-                'test("a memo\'s owner writes the rows a table call answered back to the table — 47.40"',
+                'test("a table\'s rpc is read by a match and written by key over the wire — 16.117"',
             ],
         },
     ]}
 >
     <Section level={3} title="Read the targets by calling the table">
-        <p>A table called answers its rows. The value that read them loads again after any write
-            to the table — whichever code made it, and whatever connection.</p>
+        <p>A table called answers its rows. A value naming the table among its <code>tags</code>
+            loads again after any write to it — whichever code made it, and whatever
+            connection.</p>
         <Code language="ts" caption="server" code={`
             import { memo } from '@abide/abide'
             import { targets } from '../pipeline/lib/targets.server.ts'
 
             export const target = memo(() => targets().at(-1)?.target, {
                 global: true,
+                tags: ['targets'],
             })
         `} />
     </Section>
@@ -63,20 +69,28 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Write a memo's rows back to the table">
-        <p>Where a memo holds the rows a table call answered, its <code>set</code> and
-            <code>patch</code> write the table: rows added or changed are upserted by
-            <code>key</code>, and rows taken out are deleted. The memo then reads them back.</p>
+    <Section level={3} title="Write the targets by key">
+        <p><code>set</code> upserts rows by <code>key</code>, <code>patch</code> writes only the
+            columns a row names, and <code>delete</code> removes the rows a match names. What
+            carries the table's name as a tag reads it again at once.</p>
         <Code language="ts" caption="server" code={`
-            import { memo } from '@abide/abide'
             import { targets } from '../pipeline/lib/targets.server.ts'
 
-            export const log = memo(() => targets(), { global: true })
+            targets.patch({ id: 3, target: 450_000 })
+            targets.delete({ id: [7, 8] })
+        `} />
+    </Section>
 
-            // Takes back the last target set: its row leaves the table.
-            log.patch((rows) => {
-                rows.pop()
-            })
+    <Section level={3} title="Give the browser the table by its rpc">
+        <p>An <code>rpc</code> over a table answers its rows for a match by <code>GET</code>, and
+            its <code>set</code>, <code>patch</code> and <code>delete</code> by <code>PUT</code>,
+            <code>PATCH</code> and <code>DELETE</code> — the same calls on the server and in the
+            browser. <code>columns</code> keeps the rest of the row on the server.</p>
+        <Code language="ts" caption="server" code={`
+            import { rpc } from '@abide/abide/server'
+            import { targets } from './lib/targets.server.ts'
+
+            export default rpc(targets, { columns: ['id', 'target'] })
         `} />
     </Section>
 

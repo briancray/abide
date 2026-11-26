@@ -32,7 +32,7 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/sqlFollow.test.ts',
             from: [
-                'test("a write through the app\'s sql reaches a follower of a GET whose body read the table — 47.33"',
+                'test("a write through a table\'s rpc reaches a follower of a GET tagged with the table — 47.29, 16.117"',
             ],
         },
         {
@@ -65,9 +65,9 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="List the latest targets, and send each new one to the browser">
-        <p><code>sql</code> answers the rows at once. The tables a statement reads are the ones
-            SQLite compiles it to read, so a browser showing this list is sent the new rows when
-            anyone sets a target — no tag names the table.</p>
+        <p><code>sql</code> answers the rows at once. The table's name among the
+            <code>tags</code> is what sends a browser showing this list the new rows when anyone
+            sets a target.</p>
         <Code language="ts" caption="server" code={`
             import { rpc } from '@abide/abide/server'
             import { crmDatabase } from './lib/crmDatabase.server.ts'
@@ -75,6 +75,7 @@ import Section from '#src/lib/Section.abide'
             export default rpc(
                 () => crmDatabase.sql\`SELECT id, target, setAt FROM targets
                     ORDER BY id DESC LIMIT 5\`,
+                { tags: ['targets'] },
             )
         `} />
     </Section>
@@ -86,9 +87,12 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { crmDatabase } from './lib/crmDatabase.server.ts'
 
-            export default rpc(({ target }: { target: number }) => {
-                crmDatabase.sql\`INSERT INTO targets (target) VALUES (\${target})\`
-            })
+            export default rpc(
+                ({ target }: { target: number }) => {
+                    crmDatabase.sql\`INSERT INTO targets (target) VALUES (\${target})\`
+                },
+                { methods: ['POST'], refreshes: ['targets'] },
+            )
         `} />
     </Section>
 
