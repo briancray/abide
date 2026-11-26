@@ -854,11 +854,11 @@ export const rpc: Declare<true> = ((
     value: unknown,
     options?: RpcOptions,
 ): unknown => {
-    // 16.70 — an `rpc` is answered at the one address it was declared at: a server block exporting
+    // 16.119 — an `rpc` is answered at the one address it was declared at: a server block exporting
     // one, imported from a server file, would answer it twice.
     if (isRpc(value))
         throw new Error(
-            "abide: this value is an `rpc` already, answered at its own address. A <script server> exports bare values; import a server file's `rpc` where it is called instead. RULEBOOK 16.70.",
+            "abide: this value is an `rpc` already, answered at its own address. A <script server> exports bare values; import a server file's `rpc` where it is called instead. RULEBOOK 16.119.",
         )
     const { methods, address: _address, columns, ...rest } = options ?? {}
     const brand = brandOf(value)

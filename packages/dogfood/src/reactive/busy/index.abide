@@ -6,7 +6,6 @@ import Section from '#src/lib/Section.abide'
 
 import DimBoard from './lib/DimBoard.abide'
 import dimBoard from './lib/DimBoard.abide' with { type: 'text' }
-import dimBoardServer from './lib/DimBoard.server.ts' with { type: 'text' }
 </script>
 
 <Doc
@@ -34,7 +33,7 @@ import dimBoardServer from './lib/DimBoard.server.ts' with { type: 'text' }
     <Section level={3} title="Dim the board while any stage reloads">
         <p>Tag the tiles, and <code>busy</code> over the tag answers for every one of them, so
             reloading one stage dims the whole board.</p>
-        <Example code={dimBoard} server={dimBoardServer}><DimBoard /></Example>
+        <Example code={dimBoard} server="reactive/busy/lib/DimBoard.server.ts"><DimBoard /></Example>
     </Section>
 
     <Section level={3} title="Ask the derived value that reads a handler, not the handler">

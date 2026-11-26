@@ -17,7 +17,6 @@ import TabTitle from './lib/TabTitle.abide'
 import tabTitle from './lib/TabTitle.abide' with { type: 'text' }
 import WinLead from './lib/WinLead.abide'
 import winLead from './lib/WinLead.abide' with { type: 'text' }
-import winLeadServer from './lib/WinLead.server.ts' with { type: 'text' }
 </script>
 
 <Doc
@@ -59,7 +58,7 @@ import winLeadServer from './lib/WinLead.server.ts' with { type: 'text' }
     <Section title="A handler answers a promise, and reactive.derived makes it live">
         <p>Only <a href={url('/reactive/reactive')}><code>reactive</code></a> and
             <a href={url('/reactive/derived')}><code>reactive.derived</code></a> are live. A call to a
-            handler declared with <a href={url('/handlers/rpc')}><code>GET</code></a> answers a
+            handler declared with <a href={url('/handlers/rpc')}><code>rpc</code></a> answers a
             promise, as a <a href={url('/reactive/memo')}><code>memo</code></a>, a
             <a href={url('/orchestration/pipe')}><code>pipe</code></a> and
             <a href={url('/data/fetch-and-handle')}><code>fetchAndHandle</code></a> do, or a
@@ -78,7 +77,7 @@ import winLeadServer from './lib/WinLead.server.ts' with { type: 'text' }
             on the next read instead, its
             <a href={url('/reactive/invalidate')}><code>invalidate</code></a> marks them stale and
             starts nothing.</p>
-        <Example code={winLead} server={winLeadServer}><WinLead /></Example>
+        <Example code={winLead} server="reactive/lib/WinLead.server.ts"><WinLead /></Example>
     </Section>
 
     <Section title="An effect is the edge where a value leaves the page">

@@ -450,8 +450,8 @@ test('the click loads the module', async () => {
 }, 90_000)
 
 // 38.121 — A MOUNTED COMPONENT'S CALL TO ITS PRIVATE HANDLER, made by its browser module on a click,
-// is answered by the handler: the same one the render read, so a second click counts on from the
-// first. THE REVERT: load the browser module's `client` as compiled, wrappers and all, and each call
+// is answered by the value its server block exports — the same one the render read — each click
+// with the args it asked with. THE REVERT: load the browser module's `client` as compiled, wrappers and all, and each call
 // fetches `/abide-client:/…/src/handlers/lib/Private/bump`, which nothing answers — the click reads
 // "ERR HttpError: Service Unavailable", exit 1, `0 pass`.
 test('a mounted component calls its private handler from a click — 38.121', async () => {
@@ -464,21 +464,20 @@ test('a mounted component calls its private handler from a click — 38.121', as
         'bunfig.toml': BUNFIG,
         'src/index.abide': '<main>home</main>',
         'src/lib/Private.abide': `<script server>
-import { rpc } from '@abide/abide/server'
-
-let count = 0
-export const bump = rpc(() => ++count, { methods: ['POST'] })
-export const greet = rpc(() => 'hi')
+export const bump = ({ n }: { n: number }) => n * 10
+export const greet = () => 'hi'
 </script>
 
 <script>
 import { reactive } from '@abide/abide'
 
 let out = reactive('none')
+let pressedTimes = 0
 const greeting = reactive.derived(() => greet())
 const press = async () => {
+    pressedTimes += 1
     try {
-        out = String(await bump())
+        out = String(await bump({ n: pressedTimes }))
     } catch (thrown) {
         out = \`ERR \${thrown}\`
     }
@@ -502,8 +501,8 @@ async function pressed(was: string | null | undefined): Promise<string | null | 
 test('each click is answered by the handler', async () => {
     using _private = await mount(Private({}))
     expect(document.querySelector('#greeting')?.textContent).toBe('hi')
-    expect(await pressed('none')).toBe('1')
-    expect(await pressed('1')).toBe('2')
+    expect(await pressed('none')).toBe('10')
+    expect(await pressed('10')).toBe('20')
 })
 `,
     })
@@ -540,10 +539,8 @@ export default rpc(({ id, n }: { id: number; n: number }) => {
 }, { methods: ['POST'] })
 `,
         'src/lib/Form.abide': `<script server>
-import { rpc } from '@abide/abide/server'
-
 let saved = 0
-export const save = rpc(({ n }: { n: number }) => ++saved + n, { methods: ['POST'] })
+export const save = ({ n }: { n: number }) => ++saved + n
 </script>
 
 <script>
@@ -626,13 +623,11 @@ test('settled waits out a call a click made, and names one that never answers �
         'bunfig.toml': BUNFIG,
         'src/index.abide': '<main>home</main>',
         'src/lib/Slow.abide': `<script server>
-import { rpc } from '@abide/abide/server'
-
-export const save = rpc(async () => {
+export const save = async () => {
     await Bun.sleep(150)
     return 'saved'
-}, { methods: ['POST'] })
-export const hang = rpc(() => new Promise<string>(() => {}), { methods: ['POST'] })
+}
+export const hang = () => new Promise<string>(() => {})
 </script>
 
 <script>
@@ -663,7 +658,7 @@ test('a call that never answers is named', async () => {
     } catch (thrown) {
         named = String(thrown)
     }
-    expect(named).toContain('settled() waited 200 ms and 1 still loading (POST ')
+    expect(named).toContain('settled() waited 200 ms and 1 still loading (GET ')
 })
 
 test('a click is settled, past the call the test above left hanging', async () => {

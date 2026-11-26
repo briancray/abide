@@ -128,20 +128,6 @@ export async function handlersUnder(
         // path it has there.
         const below = place === 'dependency' ? relative : position
         const exported = declared.get(host.projectionOf(path)) ?? []
-        // 16.113 — an address is a server file's to publish; a server block's is its file's own.
-        try {
-            for (const each of exported)
-                if (
-                    each.name.startsWith(PRIVATE_EXPORT) &&
-                    each.address !== undefined
-                )
-                    throw new Error(
-                        `abide: ${relative}'s <script server> exports \`${each.name.slice(PRIVATE_EXPORT.length)}\` with an \`address\`, and what a server block exports answers for its own file alone. An \`rpc\` at an address of its own is a server file's (a <name>.server.ts). RULEBOOK 16.113.`,
-                    )
-        } catch (thrown) {
-            diagnostics.at(relative, thrown)
-            continue
-        }
         for (const each of exported) {
             if (each.method === undefined) continue
             if (!each.name.startsWith(PRIVATE_EXPORT)) continue

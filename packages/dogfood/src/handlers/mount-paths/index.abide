@@ -32,14 +32,15 @@ import Section from '#src/lib/Section.abide'
     ]}
 >
     <Section level={3} title="Find a handler's address from its file">
-        <p>Name a file <code>&lt;name&gt;.handler.ts</code> anywhere under <code>src</code>. Its
-            path, less the suffix, is the address it answers at.</p>
+        <p>Export an <code>rpc</code> from a file named <code>&lt;name&gt;.server.ts</code> anywhere
+            under <code>src</code>. Its path, less the suffix, is the address its default answers at,
+            and a named one answers below it by its name.</p>
         <Code code={`
             src/
-              health.handler.ts          GET  /health
+              health.server.ts           GET  /health
               deals/
-                getDeal.handler.ts       GET  /deals/getDeal
-                createDeal.handler.ts    POST /deals/createDeal
+                getDeal.server.ts        GET  /deals/getDeal
+                createDeal.server.ts     POST /deals/createDeal
         `} />
     </Section>
 
@@ -48,7 +49,7 @@ import Section from '#src/lib/Section.abide'
             handler's <code>Args</code>. A call with <code>&#123; id: 'd2' &#125;</code> goes to
             <code>/deals/d2/close</code>.</p>
         <Code language="ts" caption="server" code={`
-            // src/deals/[id]/close.handler.ts
+            // src/deals/[id]/close.server.ts
             import { rpc } from '@abide/abide/server'
             import { DEALS } from '../../lib/DEALS.server.ts'
 
@@ -61,9 +62,9 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Keep the notes handler inside the one card showing notes">
-        <p>Declare the handler as a <code>const</code> in the component's <code>&lt;script server&gt;</code>.
-            It answers under <code>/__abide/handlers</code> at the file's path and its name, and
-            no surface lists it.</p>
+        <p>Export the function from the component's <code>&lt;script server&gt;</code> as it is,
+            with no <code>rpc</code> around it. It answers under <code>/__abide/handlers</code> at the
+            file's path and its name, and no surface lists it.</p>
         <Code language="abide" caption="abide" code={`
             <script server>
             const NOTES: Record<string, string[]> = { d1: ['Wants a three-year term.'] }

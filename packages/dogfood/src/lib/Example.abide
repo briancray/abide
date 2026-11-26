@@ -1,3 +1,27 @@
+<script server>
+// `node:fs` for its synchronous read, which bun has no api for: an async read would answer after the
+// page's markdown twin read the render (see `Tests.abide`).
+import { readFileSync } from 'node:fs'
+
+import { directoryAbove } from './directoryAbove.ts'
+
+// A server file beside an example under the docs app's own `src` — never a path off it.
+const EXAMPLE_SERVER = /^(?:[\w-]+\/)+lib\/\w+\.server\.ts$/
+
+let root: string | undefined
+
+// THE SERVER FILE AN EXAMPLE CALLS, as its text: read here, since the browser never imports a server
+// file (16.29), and shown under the example that imports it.
+export const serverSource = ({ path }: { path: string }) => {
+    if (!EXAMPLE_SERVER.test(path))
+        throw new Error(`docs: ${path} is not a server file beside an example`)
+    root ??= directoryAbove('docs/RULEBOOK.md')
+    if (root === undefined)
+        throw new Error('docs: no workspace above the docs app')
+    return readFileSync(`${root}/packages/dogfood/src/${path}`, 'utf8')
+}
+</script>
+
 <script>
 // AN EXAMPLE THAT RUNS: a `.abide` file's text shown as its fence, and the same file mounted under it,
 // so what a reader reads is what the frame below it is running. The page imports the file twice —
@@ -18,9 +42,12 @@ import { hooksOf, markupOf } from './markupOf.ts'
 import { groupOf } from './sitePages.ts'
 import { type Work, workNow, workSince } from './work.ts'
 
-// `server` is the server file beside the example, where what it calls takes options a <script server>
-// export cannot (16.70): shown under the file that imports it.
+// `server` is the path below the docs app's `src` of the server file beside the example, where what
+// it calls takes options a <script server> export cannot (16.70): shown under the file importing it.
 const { code, server } = props<{ code: string; server?: string }>()
+const serverCode = reactive.derived(() =>
+    server === undefined ? '' : serverSource({ path: server }),
+)
 const form = groupOf(route.name())?.form
 
 const view = tabs({ items: ['result', 'html', 'css'] })
@@ -98,7 +125,7 @@ function counted(count: number, one: string, many: string): string {
 
 <div class="example">
     <Code language="abide" caption="abide" code={code} />
-    {#if server}<Code language="ts" caption="server" code={server} />{/if}
+    {#if server}<Code language="ts" caption="server" code={serverCode} />{/if}
     {#if form === 'anatomy'}
         <div class="example-tabs" data-result {...view.list}>
             <button {...view.tab('result').button}>Result</button>

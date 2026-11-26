@@ -23,8 +23,7 @@ import { refusal } from './typed.ts'
 afterAll(removeTemporaryModules)
 
 // A file holding nothing but a server block declaring `body`.
-const SERVED = (body: string): string =>
-    `<script server>\n${body}\n</script>\n`
+const SERVED = (body: string): string => `<script server>\n${body}\n</script>\n`
 
 // 35.1 — A LAYOUT WRAPS EVERY PAGE BELOW ITS ROUTE, and 35.13 — one with no template wraps nothing. THE REVERT: give `layoutsAround` back a prefix over
 // the FILE's directory; `/media` is wrapped in no layout, against 1.
@@ -214,7 +213,9 @@ test('a server block under a public directory, and one exporting default, are re
         compileApp(
             appFixture({
                 'index.abide': '<p>home</p>',
-                'media/public/Rating.abide': SERVED('export const rate = () => 1'),
+                'media/public/Rating.abide': SERVED(
+                    'export const rate = () => 1',
+                ),
             }),
         ),
     )
@@ -452,6 +453,59 @@ let stars = reactive(0)
     const server = files['media/[id]/lib/Rating.abide']?.server ?? ''
     expect(server).toContain('sk-not-for-browsers')
     expect(server).toContain('__fileRoute("/media/[id]")')
+})
+
+// 16.119 — A SERVER BLOCK EXPORTS BARE VALUES: one importing abide's `rpc` does not compile, and an
+// `rpc` handed to `rpc` — a server file's, re-exported from a block — is refused as it is declared.
+// THE REVERTS: drop `refuseServerRpc` from `projectShadow`; the block compiles and this reads ``. Let
+// `rpc` hand an `rpc` back as it is; nothing is thrown.
+test('a server block importing rpc does not compile, and an rpc over an rpc is refused — 16.119', async () => {
+    const refused = await refusal(
+        compileApp(
+            appFixture({
+                'index.abide': `<script server>
+import { rpc } from '@abide/abide/server'
+
+export const count = rpc(() => 1, { methods: ['POST'] })
+</script>
+
+<p>count</p>`,
+            }),
+        ),
+    )
+    expect(refused).toContain('RULEBOOK 16.119')
+    expect(() => rpc(rpc(() => 1))).toThrow('RULEBOOK 16.119')
+})
+
+// 16.70, 16.117 — A BARE SOURCE A SERVER BLOCK EXPORTS ANSWERS EVERY VERB ITS VALUE DOES, privately:
+// a global memo's read, `set`, `patch` and `refresh`, each below `/__abide/handlers` and listed
+// nowhere. THE REVERT: skip `servedExports` in `projectShadow`'s `script`; the export is the memo
+// itself, no `rpc`, and answers at no address — `[]` where four verbs are due.
+test('a memo a server block exports bare answers its writes at its private address — 16.70, 16.117', async () => {
+    const { mounts } = await compileApp(
+        appFixture({
+            'index.abide': `<script>\nimport Counter from './lib/Counter.abide'\n</script>\n\n<Counter/>`,
+            'lib/Counter.abide': `<script server>
+import { memo } from '@abide/abide'
+
+export const count = memo(() => ({ n: 0 }), { global: true })
+</script>
+
+<button onclick={() => count.patch((value) => { value.n += 1 })}>add</button>`,
+        }),
+    )
+    const answered: string[] = []
+    for (const mount of mounts)
+        if (mount.address.endsWith('/count'))
+            answered.push(
+                `${mount.method} ${mount.address} ${mount.private ? 'private' : 'public'}`,
+            )
+    expect(answered.sort()).toEqual([
+        'GET /__abide/handlers/lib/Counter/count private',
+        'PATCH /__abide/handlers/lib/Counter/count private',
+        'POST /__abide/handlers/lib/Counter/count private',
+        'PUT /__abide/handlers/lib/Counter/count private',
+    ])
 })
 
 // 34.22 — ONE FILE, ONE MODULE SCOPE ON THE SERVER: a server block importing a name its `<script>`

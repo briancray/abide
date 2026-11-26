@@ -29,7 +29,7 @@ const TAKEN =
 const SCRIPT = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g
 
 const OPTIONED =
-    "a <script server> exports bare values, and `rpc` with options is a server file's: move this one to a <name>.server.ts beside the component, and import it where it is called. RULEBOOK 16.70, 38.231."
+    "a <script server> exports bare values, and `rpc` with options is a server file's: move this one to a <name>.server.ts beside the component, and import it where it is called. RULEBOOK 16.119, 38.231."
 
 /**
  * 38.231 — every source the app holds with its handlers declared by `rpc`, and each handler file

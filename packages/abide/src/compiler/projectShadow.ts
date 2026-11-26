@@ -858,7 +858,7 @@ function refuseExport(
 }
 
 /**
- * 16.70 — A `<script server>` EXPORTS BARE VALUES: each one is its component's, at the verbs its value
+ * 16.119 — A `<script server>` EXPORTS BARE VALUES (16.70): each one is its component's, at the verbs its value
  * derives, and options — an address, verbs, middleware, a listing — are a server file's `rpc`. So a
  * server block importing abide's `rpc` is refused where it imports it, naming what to do instead.
  */
@@ -869,7 +869,7 @@ function refuseServerRpc(source: string): void {
         for (const binding of statement.bindings)
             if (binding.imported === 'rpc')
                 throw new Error(
-                    "abide: a <script server> exports bare values — `export const name = value` — and each answers its component at the verbs its value derives. `rpc`, with its options, is a server file's: move it to a <name>.server.ts beside the component. RULEBOOK 16.70.",
+                    "abide: a <script server> exports bare values — `export const name = value` — and each answers its component at the verbs its value derives. `rpc`, with its options, is a server file's: move it to a <name>.server.ts beside the component. RULEBOOK 16.119.",
                 )
     }
 }

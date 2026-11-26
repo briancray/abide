@@ -1290,7 +1290,8 @@ Details — and a reader MUST refuse with it after the chunks before it.
 16.69 A `[...rest]` segment MUST take the most parts of an address the segments after it leave, so
 a handler declared under one MUST answer at its own name.
 
-16.70 A private handler MUST be answered as `rpc` over it, MUST have an address below
+16.70 A private handler MUST be answered as `rpc` over its value, at the verbs that value answers by
+(16.111, 16.117), MUST have an address below
 `/__abide/handlers/`, named by its file's path below the root, a segment's brackets and dots
 dropped, and then its export's name, and MUST NOT take a parameter from the path.
 
@@ -1437,8 +1438,7 @@ of it MUST be sent as the first of them.
 16.112 `methods` naming a verb its value cannot answer by — a function more than one verb, a value
 any verb but `GET`, `PUT` and `PATCH`, or none of them `GET` — MUST be refused as it is declared.
 
-16.113 `address` MUST put an `rpc` at that address in place of the one 16.2 gives it, and a private
-handler declaring one MUST be a build error naming it.
+16.113 `address` MUST put an `rpc` at that address in place of the one 16.2 gives it.
 
 16.114 A `GET` call whose URL, its args in the query, would be longer than 2048 characters MUST be
 sent to its address as `QUERY`, its args as its JSON body, and a server MUST answer a `QUERY` as the
@@ -1462,6 +1462,9 @@ and a ledger's `append` by `POST`; and a memo whose entries live a request MUST 
 16.118 `columns` MUST make a table's `rpc` read its rows with those columns alone, and MUST refuse at
 400 a write or a `match` naming any other; on any value but a table it MUST be refused as it is
 declared.
+
+16.119 A `<script server>` importing abide's `rpc` MUST be a compile error, and `rpc` over a value
+that is an `rpc` already MUST be refused as it is declared.
 
 # 17. Response helpers
 
@@ -4009,7 +4012,8 @@ imports the name from.
 38.231 The migration keyed to 0.145.0 MUST rewrite each call of abide's `GET` as `rpc`, and each of
 `POST`, `PUT`, `PATCH` and `DELETE` as `rpc` whose options' `methods` names that verb; MUST move each
 `<name>.handler.ts` to `<name>.server.ts`, and every import specifier naming it with it, noting by
-38.226 one whose server file is already there; and MUST export each `rpc` a `<script server>` binds.
+38.226 one whose server file is already there; and MUST export each `rpc` a `<script server>` binds,
+as its value where the `rpc` takes no options, noting by 38.226 each one that takes them.
 
 # 39. Head and view transitions
 
