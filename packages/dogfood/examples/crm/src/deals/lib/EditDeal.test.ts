@@ -3,7 +3,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
 
-import { DEALS } from './DEALS.server.ts'
+import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 import EditDeal from './EditDeal.abide'
 
 const OPENED = { ...(DEALS[0] as (typeof DEALS)[number]) }

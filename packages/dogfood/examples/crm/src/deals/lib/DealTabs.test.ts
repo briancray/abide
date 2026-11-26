@@ -22,11 +22,14 @@ function press(key: string) {
 test('the arrow keys move between tabs, and the panel follows', async () => {
     using _tabs = await mount(DealTabs({}))
     await settled()
-    expect(shown()).toEqual(['Engine renewal', 'Analytical Engines'])
+    expect(shown()).toEqual([
+        'Analytical Engines renewal',
+        'Analytical Engines',
+    ])
     ;(tabs()[0] as HTMLElement).focus()
     press('ArrowRight')
     expect(document.activeElement?.textContent).toBe('Value')
-    expect(shown()).toEqual(['$12,000'])
+    expect(shown()).toEqual(['$42,000'])
     press('End')
     expect(shown()).toEqual(['proposal'])
     press('ArrowRight')

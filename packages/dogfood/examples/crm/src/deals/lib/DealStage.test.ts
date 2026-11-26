@@ -13,7 +13,7 @@ function press(label: string) {
 
 test('a closed deal is refused by name, and the page says why', async () => {
     using _stage = await mount(DealStage({}))
-    press('d3')
+    press('d5')
     await Bun.sleep(400)
     press('lead')
     await Bun.sleep(50)

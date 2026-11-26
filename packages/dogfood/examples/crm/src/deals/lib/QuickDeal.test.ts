@@ -3,7 +3,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
 
-import { DEALS } from './DEALS.server.ts'
+import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 import QuickDeal from './QuickDeal.abide'
 
 // One list for the app: take back the deal this adds

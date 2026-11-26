@@ -1,7 +1,7 @@
 import { refuse } from '@abide/abide'
 import { rpc } from '@abide/abide/server'
 
-import { DEALS } from './lib/DEALS.server.ts'
+import { DEALS } from '../pipeline/lib/DEALS.server.ts'
 
 /** Answers at /deals/getDeal?id=…; the argument type is the schema. */
 export default rpc(

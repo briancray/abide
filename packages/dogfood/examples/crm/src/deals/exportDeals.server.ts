@@ -1,6 +1,6 @@
 import { rpc } from '@abide/abide/server'
 
-import { DEALS } from './lib/DEALS.server.ts'
+import { DEALS } from '../pipeline/lib/DEALS.server.ts'
 
 /** A Blob answers with its own type: this one is a CSV file. */
 export default rpc(

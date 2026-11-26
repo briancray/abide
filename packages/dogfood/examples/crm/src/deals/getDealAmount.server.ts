@@ -1,6 +1,6 @@
 import { request, rpc } from '@abide/abide/server'
 
-import { DEALS } from './lib/DEALS.server.ts'
+import { DEALS } from '../pipeline/lib/DEALS.server.ts'
 
 /** A deal's amount, written the way the caller's language writes numbers. */
 export default rpc(

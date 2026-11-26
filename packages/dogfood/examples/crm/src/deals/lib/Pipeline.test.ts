@@ -12,9 +12,9 @@ test('a refresh is busy and still ready; a first load is not', async () => {
     using _pipeline = await mount(Pipeline({}))
     expect(status()).toBe('loading…')
     await Bun.sleep(500)
-    expect([status(), total()]).toEqual(['', '$16,800'])
+    expect([status(), total()]).toEqual(['', '$96,000'])
     document.querySelector('button')?.click()
     flushSync()
     // Busy and still ready: the figure on screen stays until the new one lands.
-    expect([status(), total()]).toEqual(['refreshing…', '$16,800'])
+    expect([status(), total()]).toEqual(['refreshing…', '$96,000'])
 })

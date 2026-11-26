@@ -22,7 +22,7 @@ async function move(stage: string) {
 </script>
 
 <div class="tabs">
-    {#for one of ['d2', 'd3']}
+    {#for one of ['d2', 'd5']}
         <button aria-pressed={id === one}
             onclick={() => {
                 id = one

@@ -38,7 +38,7 @@ const callTool = (name: string, args: Record<string, string>) =>
         <Code language="ts" caption="server" code={`
             import { refuse } from '@abide/abide'
             import { rpc } from '@abide/abide/server'
-            import { DEALS } from './lib/DEALS.server.ts'
+            import { DEALS } from '../pipeline/lib/DEALS.server.ts'
 
             export default rpc(
                 ({ id }: { id: string }) =>
