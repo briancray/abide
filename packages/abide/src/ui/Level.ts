@@ -44,7 +44,7 @@ export class Level {
      */
     markup: ((region: Region) => Scope | undefined) | undefined = undefined
     /**
-     * 10.5 — the share scope this level's setup ran in, for the level below to be set up inside.
+     * 10.3 — the share scope this level's setup ran in, for the level below to be set up inside.
      * `null` where the module left none.
      */
     share: ShareScope | null = null
@@ -144,7 +144,7 @@ export class Level {
 
     /** Runs `run` with this the level components add their `<head>` to (39.1). */
     mount<Result>(run: () => Result): Result {
-        // 39.1 — THE LEVEL RIDES THE SHARE SCOPE, so a component finds it as it finds a shared key,
+        // 39.1 — THE LEVEL RIDES THE SHARE SCOPE, so a component finds it as it finds a shared value,
         // whether it mounts now or in an arm or a row after (`contributeHead`).
         const back = enterShare(this)
         try {

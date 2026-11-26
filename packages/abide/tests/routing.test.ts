@@ -1116,35 +1116,36 @@ async function chained(): Promise<{
     }
 }
 
-// 10.5 — A PAGE IS A DESCENDANT OF ITS LAYOUT in the browser as on the server. The router mounts
+// 10.3 — A PAGE IS A DESCENDANT OF ITS LAYOUT in the browser as on the server. The router mounts
 // each level itself rather than inside the one above, so a page under a layout opened a share
 // chain of its own: the server painted the layout's value, hydration overwrote it with the page's,
 // and a write in the layout never reached the page. THE REVERT: drop the `resumeShare` around
-// `module.default` in `LevelChain.setUp` — the page reads `page-own` where `dark` is due.
-test("a page under a layout reads the layout's share, hydrated and navigated to — 10.5", async () => {
+// `module.default` in `LevelChain.setUp` — the page reads `own` where `dark` is due.
+test("a page under a layout reads the layout's share, hydrated and navigated to — 10.3", async () => {
     history.replaceState(null, '', '/')
     const sources = {
         Themed: `<script>
-import { reactive } from '@abide/abide'
+import { theme } from '${ROOT}src/shelf.ts'
 
-let theme = reactive.share('theme', () => reactive('dark'))
+let shown = theme()
+shown = 'dark'
 </script>
 
-<div id="themed"><button id="lighten" onclick={() => { theme = 'light' }}>{theme}</button><slot/></div>`,
+<div id="themed"><button id="lighten" onclick={() => { shown = 'light' }}>{shown}</button><slot/></div>`,
         First: `<script>
-import { reactive } from '@abide/abide'
+import { theme } from '${ROOT}src/shelf.ts'
 
-const theme = reactive.share('theme', () => reactive('page-own'))
+const shown = theme()
 </script>
 
-<p id="first">{theme}</p>`,
+<p id="first">{shown}</p>`,
         Second: `<script>
-import { reactive } from '@abide/abide'
+import { theme } from '${ROOT}src/shelf.ts'
 
-const theme = reactive.share('theme', () => reactive('page-own'))
+const shown = theme()
 </script>
 
-<p id="second">{theme}</p>`,
+<p id="second">{shown}</p>`,
     }
     const modules: Record<string, string> = {}
     for (const [name, source] of Object.entries(sources)) {

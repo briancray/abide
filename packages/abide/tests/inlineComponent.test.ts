@@ -62,18 +62,18 @@ test("an inline component reads its file's script by name, live — 32.42, 31.2"
     expect(work.wakes).toBe(2)
 })
 
-// 10.5, 32.46 — EACH INVOCATION IS AN INSTANCE, AND OPENS ITS OWN SHARE SCOPE, as two file
-// components side by side do: `reactive.share` in one creates where no ancestor holds the key
-// (10.6), and the sibling cannot see it. THE REVERT: drop `shareScope` from `clientComponent` and
+// 10.3, 32.46 — EACH INVOCATION IS AN INSTANCE, AND OPENS ITS OWN SHARE SCOPE, as two file
+// components side by side do: a handle called in one creates where no ancestor holds its value
+// (10.4), and the sibling cannot see it. THE REVERT: drop `shareScope` from `clientComponent` and
 // `serverComponent` — both counters are one value, so a click on the first moves the second too.
-test('two inline instances each share their own value — 10.5, 32.46', async () => {
+test('two inline instances each share their own value — 10.3, 32.46', async () => {
     const { html, mount } = await renderPage(`<script>
-import { reactive } from '@abide/abide'
+import { count } from '${TYPED_ROOT}src/shelf.ts'
 </script>
 
 {#component Counter({ name })}<script>
-let count = reactive.share('count', () => reactive(0))
-</script><button id={name} onclick={() => { count = count + 1 }}>{count}</button>{/component}
+let clicks = count()
+</script><button id={name} onclick={() => { clicks = clicks + 1 }}>{clicks}</button>{/component}
 
 <Counter name="first"/><Counter name="second"/>`)
     expect(html).toContain('>0</button>')

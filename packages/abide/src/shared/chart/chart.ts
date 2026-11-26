@@ -3,7 +3,7 @@
 // elements, SVG or HTML — `{#for point of plot.points}<circle {...point.circle} r="3" />` — with the
 // root's part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
 // against the crosshair in an element of the app's own. Callable, with the
-// arithmetic it draws with as its members, as `reactive` carries `reactive.share`: `chart.ticks` and the
+// arithmetic it draws with as its members, as `reactive` carries `reactive.shared`: `chart.ticks` and the
 // rest are what a chart of one's own draws with where even these parts are too much.
 
 import { anchored } from '../anchored.ts'

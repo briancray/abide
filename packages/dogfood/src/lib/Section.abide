@@ -1,8 +1,9 @@
 <script>
 // One heading and what it heads. The heading is listed in the page's rail as it is written, so
 // the rail is the page's own sections rather than a scan of its markup.
-import { props, raw, reactive } from '@abide/abide'
+import { props, raw } from '@abide/abide'
 
+import { docHeadings } from './docHeadings.ts'
 import { inline, slugify } from './inline.ts'
 
 const {
@@ -17,7 +18,7 @@ const {
 }>()
 const id = slugify(title)
 
-const headings = reactive.share('docHeadings', () => reactive([]))
+const headings = docHeadings()
 if (filed) headings = [...headings, { id, title, level }]
 </script>
 

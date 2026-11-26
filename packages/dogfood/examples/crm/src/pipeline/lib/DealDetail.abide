@@ -2,9 +2,10 @@
 import { reactive } from '@abide/abide'
 
 import listDeals from '../listDeals.handler.ts'
+import { selectedDeal } from './selectedDeal.ts'
 
 const deals = reactive.derived(() => listDeals())
-const selected = reactive.share('selectedDeal', () => reactive(''))
+const selected = selectedDeal()
 const deal = reactive.derived(() =>
     deals.ready() ? deals.find((each) => each.id === selected) : undefined,
 )

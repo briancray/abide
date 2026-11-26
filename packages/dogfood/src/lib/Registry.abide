@@ -1,5 +1,6 @@
 <script module>
 import REGISTRY from '../../../../docs/REGISTRY.md' with { type: 'text' }
+import { docHeadings } from './docHeadings.ts'
 // A PAGE'S SYNTAX, read off docs/REGISTRY.md as it renders (40.10): the rows directly under the
 // page's `##` as its Syntax, then each `###` under it as a heading of its own, every signature in its
 // short form, each object a row's parameter is typed by spelled out beneath its table (40.33) — and,
@@ -42,7 +43,7 @@ export function clausesOf(registry: string): string[] {
 </script>
 
 <script>
-import { props, raw, reactive, route } from '@abide/abide'
+import { props, raw, route } from '@abide/abide'
 
 import type { Heading } from './Heading.ts'
 import { inline, slugify } from './inline.ts'
@@ -161,7 +162,7 @@ function cellsShown(
 }
 
 // Types is filed by `Doc` with the parts after Examples, so only the Syntax side files its own.
-const headings = reactive.share('docHeadings', () => reactive([]))
+const headings = docHeadings()
 const filed: Heading[] = []
 if (!types)
     for (const section of shown) {

@@ -15,10 +15,20 @@ export class CheckerAnswer {
     readonly reads: readonly Read[]
     /** 14.2 — the start of every template position the checker proved reads nothing reactive. */
     private readonly statics: ReadonlySet<number>
+    /**
+     * 10.3 — whether the file calls a `reactive.shared` handle, and so opens a share scope of its own.
+     * A file with nothing to check declares no handle to call.
+     */
+    readonly shares: boolean
 
-    constructor(reads: readonly Read[], statics: ReadonlySet<number>) {
+    constructor(
+        reads: readonly Read[],
+        statics: ReadonlySet<number>,
+        shares: boolean,
+    ) {
         this.reads = reads
         this.statics = statics
+        this.shares = shares
     }
 
     /**
@@ -59,4 +69,4 @@ export class CheckerAnswer {
 }
 
 /** The answer where no checker was asked: no reads, and no position proven. */
-export const UNCHECKED = new CheckerAnswer([], new Set())
+export const UNCHECKED = new CheckerAnswer([], new Set(), false)

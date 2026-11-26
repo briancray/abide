@@ -18,13 +18,13 @@ import './zodJitless.ts'
 import {
     props,
     raw,
-    reactive,
     route,
     type RouteLiteral,
     scrollSpy,
     url,
 } from '@abide/abide'
 
+import { docHeadings } from './docHeadings.ts'
 import type { Heading } from './Heading.ts'
 import { inline } from './inline.ts'
 import Registry, { clausesOf, hasTypes } from './Registry.abide'
@@ -68,7 +68,7 @@ const markdown =
         ? url(markdownAddressOf(page.route) as RouteLiteral)
         : undefined
 
-const headings = reactive.share('docHeadings', () => reactive([]))
+const headings = docHeadings()
 
 // THE TRAILING PARTS ARE FILED HERE, known before the page renders, rather than by their own
 // `<Section>`: Tests and Rules wait on their calls, so a render streams them in after the rail

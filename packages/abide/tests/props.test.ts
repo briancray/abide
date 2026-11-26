@@ -12,16 +12,14 @@ import { afterAll, expect, test } from 'bun:test'
 import { measure } from '@abide/harness/abide'
 import { spawned } from '@abide/harness/gate'
 
-import { emitComponent, parseAbide } from '#compiler'
 import { buildFiles } from '#server/appBuild.ts'
 import { flushSync } from '#shared'
 
 import { click } from './click.ts'
 import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
-import { closeTyped, renderPage, TYPED_ROOT, typedSession } from './typed.ts'
+import { closeTyped, renderPage, TYPED_ROOT } from './typed.ts'
 
 afterAll(closeTyped)
-const session = await typedSession()
 afterAll(removeTemporaryModules)
 
 const TOTAL = `<script>
@@ -393,27 +391,27 @@ let rows = reactive(['one'])
     expect(grown.innerHTML.replace('two', 'one')).toBe(painted.innerHTML)
 })
 
-// 10 — `reactive.share(key, create)`, and the three shapes the corpus writes. A scope is the
-// COMPONENT INSTANCE and its descendants (10.5), which is why 10.7 refuses a process-wide one: a
-// map keyed by name would make the two shelves below one shelf.
+// 10 — `reactive.shared(create)`, a handle declared once and called where the value is wanted. A
+// scope is the COMPONENT INSTANCE and its descendants (10.3), which is why 10.5 refuses a
+// process-wide one: a map keyed by the handle alone would make the two shelves below one shelf.
+const SHELF = `${TYPED_ROOT}src/shelf.ts`
 const NOW_PLAYING = `<script>
-import { reactive } from '@abide/abide'
+import { nowPlaying } from '${SHELF}'
 
-let playing = reactive.share('nowPlaying', () => reactive('nothing'))
+let playing = nowPlaying()
 </script>
 
 <strong>{playing}</strong>`
 
-// 10.5, 10.6 — HELD ABOVE BOTH READERS, so each finds it on the way up rather than building one.
-// THE REVERT: create in the scope the key was FOUND in rather than the calling one — the two
-// shelves below then share one `queued` and the second test reads `jazz` in both.
-test('a key an ancestor holds is found on the way up — 10.5', async () => {
+// 10.3 — HELD ABOVE BOTH READERS, so each finds it on the way up rather than building one.
+// THE REVERT: have `shareOf` look in the calling scope alone — each reader builds its own `nothing`.
+test('a value an ancestor holds is found on the way up — 10.3', async () => {
     const { html } = await renderPage(
         `<script>
-import { reactive } from '@abide/abide'
+import { nowPlaying } from '${SHELF}'
 import NowPlaying from './NowPlaying.abide'
 
-reactive.share('nowPlaying', () => reactive('Kind of Blue'))
+nowPlaying().set('Kind of Blue')
 </script>
 <NowPlaying/><NowPlaying/>`,
         { NowPlaying: NOW_PLAYING },
@@ -423,28 +421,31 @@ reactive.share('nowPlaying', () => reactive('Kind of Blue'))
     expect(html.match(/Kind of Blue/g)?.length).toBe(2)
 })
 
-// 10.6 — CREATED IN THE CALLING SCOPE where no ancestor holds the key, which is what makes two
+// 10.4 — CREATED IN THE CALLING INSTANCE where no ancestor holds one, which is what makes two
 // instances of one component two values rather than one.
 //
-// THE PAGE HOLDS A SCOPE OF ITS OWN, and without that this test distinguishes nothing: a page
-// that shares nothing opens no scope, so each shelf is the root of its own chain and every
-// scheme agrees. It shares an UNRELATED key, which is the smallest thing that makes an ancestor
-// scope exist — and the revert then has both shelves reading `jazz`.
-test('two instances each hold their own where no ancestor does — 10.6', async () => {
+// THE PAGE HOLDS A SCOPE OF ITS OWN, and without that this test distinguishes nothing: a page that
+// calls no handle opens no scope, so each shelf is the root of its own chain and every scheme
+// agrees. It calls an UNRELATED handle, which is the smallest thing that makes an ancestor scope
+// exist. THE REVERT: have `opensShareScope` answer false, so no caller opens a scope of its own, and
+// the second shelf finds the first one's value in the page's.
+test('two instances each hold their own where no ancestor does — 10.4', async () => {
     const shelf = `<script>
-import { props, reactive } from '@abide/abide'
+import { props } from '@abide/abide'
+import { queued } from '${SHELF}'
 
 const { name } = props<{ name: string }>()
-let queued = reactive.share('queued', () => reactive(name))
+let held = queued()
+held = name
 </script>
 
-<li>{queued}</li>`
+<li>{held}</li>`
     const { html } = await renderPage(
         `<script>
-import { reactive } from '@abide/abide'
+import { library } from '${SHELF}'
 import Shelf from './Shelf.abide'
 
-reactive.share('library', () => reactive('everything'))
+library()
 </script>
 <ul><Shelf name="jazz"/><Shelf name="ambient"/></ul>`,
         { Shelf: shelf },
@@ -453,37 +454,17 @@ reactive.share('library', () => reactive('everything'))
     expect(html).toContain('<li>ambient</li>')
 })
 
-// 10.1 — ONE CALL GETS OR CREATES, so a second call in the same scope hands back the one that won
-// and the value it was given is not it. `share-winner` is the page that demonstrates it.
-test('a second call hands back the value that won — 10.1', async () => {
+// 10.1 — ONE CALL GETS OR CREATES, so a second call in the same scope hands back the value the
+// first one created. THE REVERT: have `shareOf` create on every call; `same: false`.
+test('a second call hands back the value the first created — 10.1', async () => {
     const { html } = await renderPage(`<script>
-import { reactive } from '@abide/abide'
+import { volume } from '${SHELF}'
 
-let volume = reactive.share('volume', () => reactive(4))
-const built = reactive(9)
-const shared = reactive.share('volume', () => built)
+const first = volume()
+const same = volume() === volume()
 </script>
-<em>{volume}</em><strong>{shared}</strong><span>{built}</span>`)
-    expect(html).toContain('<em>4</em><strong>4</strong><span>9</span>')
-})
-
-// 10.2 — THE KEY IS A LITERAL. The scope it gets or creates in is decided where it is written, so
-// a key computed at run time is a scope nobody can read off the page.
-test('a computed share key is refused — 10.2', async () => {
-    const file = parseAbide(`<script>
-import { reactive } from '@abide/abide'
-const key = 'volume'
-let volume = reactive.share(key, () => reactive(4))
-</script>
-<p>{volume}</p>`)
-    const reads = await session.reads(`${TYPED_ROOT}src/index.abide`, file)
-    let refused = ''
-    try {
-        emitComponent(file, reads)
-    } catch (thrown) {
-        refused = String(thrown)
-    }
-    expect(refused).toContain('RULEBOOK 10.2')
+<em>{first}</em><strong>same: {same}</strong>`)
+    expect(html).toContain('<em>4</em><strong>same: true</strong>')
 })
 
 // 32.17 INSIDE A `{#for}` — the case a list of components is, and the one the client could not
@@ -595,26 +576,27 @@ let titles = reactive(['a'])
     expect(text()).toEqual(['c', 'b', 'a'])
 })
 
-// 10.5 THROUGH A ROW ADDED LATER — a descendant is a descendant whenever it was created. The row
+// 10.3 THROUGH A ROW ADDED LATER — a descendant is a descendant whenever it was created. The row
 // the list grows by is mounted from a `watch` effect, with no caller on the stack, so the instance
 // captures its own share scope at mount and the deferred mount puts it back.
 // THE REVERT: drop the `resumes` arm in `mountFunction`; the added row reads `nothing` — it opened
 // a chain of its own and built the value the page already holds, which is the one failure mode a
 // scope has: two values under one key and each half of the page reading a different one.
-test('a row added after mount shares with the page above it — 10.5', async () => {
+test('a row added after mount shares with the page above it — 10.3', async () => {
     const row = `<script>
-import { reactive } from '@abide/abide'
+import { nowPlaying } from '${SHELF}'
 
-let playing = reactive.share('nowPlaying', () => reactive('nothing'))
+let playing = nowPlaying()
 </script>
 
 <li>{playing}</li>`
     const { mount } = await renderPage(
         `<script>
 import { reactive } from '@abide/abide'
+import { nowPlaying } from '${SHELF}'
 import Row from './Row.abide'
 
-reactive.share('nowPlaying', () => reactive('Kind of Blue'))
+nowPlaying().set('Kind of Blue')
 let titles = reactive(['one'])
 </script>
 

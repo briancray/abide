@@ -615,20 +615,22 @@ every chunk that run produced has reached that reader.
 
 # 10. Sharing
 
-10.1 `reactive.share` MUST get or create in one call.
+10.1 A handle `reactive.shared` hands back MUST get or create its value in one call.
 
-10.2 A key given to `reactive.share` MUST be a literal, and a non-literal MUST be a build error.
+10.2 A value a handle created MUST NOT be evicted within its scope.
 
-10.3 A key `Shared` declares MUST be checked against it, and a key it does not declare MUST be
-inferred from the thunk.
+10.3 The scope of a handle's value MUST be the component instance that created it and its
+descendants.
 
-10.4 A value created by `reactive.share` MUST NOT be evicted within its scope.
+10.4 A `Shared` handle MUST create its value in the calling component instance where no ancestor holds
+one for that handle, and MUST tell one handle from another by its identity alone.
 
-10.5 The scope of `reactive.share` MUST be the component instance and its descendants.
+10.5 An implementation MUST NOT provide a process-wide `reactive.shared`.
 
-10.6 `reactive.share` MUST create in the calling scope where no ancestor holds that key.
+10.6 A handle's value MUST be what `create` answers where it answers a `Reactive`, and a `reactive`
+holding what it answers otherwise.
 
-10.7 An implementation MUST NOT provide a process-wide `reactive.share`.
+10.7 A `Shared` handle called outside a component instance MUST throw, naming 10.3.
 
 # 11. Derived and keyed values
 
@@ -3951,6 +3953,11 @@ rewrote, each it left, and each `reactive` or `reactive.derived` given an option
 
 38.228 The migration keyed to 0.144.0 MUST spell every use of abide's `computed` as `reactive.derived`,
 MUST import `reactive` where the file did not, and MUST drop `computed` from the import.
+
+38.229 The migration keyed to 0.144.0 MUST turn the `reactive.share` calls of a literal key one file
+alone uses into calls of one handle declared at that file's module level from the first call's
+`create`, and MUST note, by 38.226, each call of a key several files use, each call whose key is no
+literal, and each call whose `create` differs from its handle's.
 
 # 39. Head and view transitions
 

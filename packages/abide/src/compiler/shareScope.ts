@@ -3,14 +3,14 @@ import type { Lowering } from './Lowering.ts'
 // Where a deferred level holds the share scope its setup ran in (41.19), for its build to resume.
 export const SETTLED_AT = '__settledAt'
 
-// The share scope an instance opens (10.5), named apart from the client's binding `Scope`: one is
+// The share scope an instance opens (10.3), named apart from the client's binding `Scope`: one is
 // what a component's descendants look a key up through, the other is what stops its bindings.
 const SHARED = '__shared'
 
 /**
  * The emitted lines that open and close the instance's own share scope, or two empty strings.
  *
- * 10.5 — opened around everything the instance does on either side, or nothing where it shares
+ * 10.3 — opened around everything the instance does on either side, or nothing where it shares
  * nothing. Closed in a `finally`, so an instance that threw leaves the scope it entered.
  */
 export function shareScope(
@@ -27,7 +27,7 @@ export function shareScope(
 /**
  * The emitted statements that put the share scope held in `at` back and leave it again.
  *
- * 10.5 — for work that runs later than the instance it belongs to, with that instance's scope no
+ * 10.3 — for work that runs later than the instance it belongs to, with that instance's scope no
  * longer current. The leave goes in a `finally`, wherever the caller's `try` is.
  */
 export function resumedShare(

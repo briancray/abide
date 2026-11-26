@@ -13,7 +13,7 @@ import { currentShare, inShare, type ShareScope } from './reactive/share.ts'
  * write, and on the client, where hydrating the layout first read the value before the page had
  * written it. This sets up and builds nothing; `setUp` leaves its level's build for the caller.
  *
- * 10.5 — A PAGE IS A DESCENDANT OF ITS LAYOUT, so each level is set up inside the share scope the
+ * 10.3 — A PAGE IS A DESCENDANT OF ITS LAYOUT, so each level is set up inside the share scope the
  * setup above it left — `outer` for the first, and whatever is current at the top of the chain.
  * Each level is called by the composer rather than from inside the one above it, so without this a
  * page opened a share chain of its own: the server painted the layout's value and hydration

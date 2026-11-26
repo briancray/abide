@@ -197,7 +197,7 @@ export class Cursor {
      *
      * A COMPONENT INVOKED HERE, OR A BLOCK WHOSE ARM OR ROW CARRIES A `<script>` (14.8) — each runs
      * a setup from a `watch` effect on a later swap or a grown row, and what decides is whether that
-     * setup has to resume its instance's share scope (10.5). Set from the region up through every
+     * setup has to resume its instance's share scope (10.3). Set from the region up through every
      * sink it stands inside, so a component three regions down marks all three.
      */
     defersSetup = false

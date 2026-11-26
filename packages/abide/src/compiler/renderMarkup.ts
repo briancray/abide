@@ -589,8 +589,8 @@ function serverComponent(
 ): string {
     const sink = placed(component.children, component.components)
     const { head, setup } = componentPrelude(component, lowering)
-    // 10.5, 32.46 — AN INSTANCE OPENS ITS OWN SHARE SCOPE, as a file component's does: two of it
-    // standing side by side are two instances, each creating what no ancestor holds (10.6).
+    // 10.3, 32.46 — AN INSTANCE OPENS ITS OWN SHARE SCOPE, as a file component's does: two of it
+    // standing side by side are two instances, each creating what no ancestor holds (10.4).
     const { opened, closed } = shareScope(lowering, '')
     return `function ${component.name}(${PROPS} = {}) {
 ${opened}${head}${guardedSetup(lowering, setup, `${definitions(sink, lowering)}return { head: '', body: ${renderMarkup(sink, lowering, SERVER_LANE)}, document: undefined }`)}${closed}

@@ -337,7 +337,11 @@ export async function readsIn(
         projection.scripts,
     ))
         warnings.push(warning)
-    const answer = new CheckerAnswer(reads, statics)
+    const answer = new CheckerAnswer(
+        reads,
+        statics,
+        await sharesIn(checker, abide, sourceFile),
+    )
     const [bindings, accesses] = await Promise.all([
         bindingsOfReads(checker, abide, names, reactive, answer),
         membersOfReads(
@@ -1053,6 +1057,30 @@ const ABSENT = TypeFlags.Undefined | TypeFlags.Null | TypeFlags.Void
  * ONE ROUND TRIP FOR THE TYPES, and the `Reactive` question asked only of an object's: a string
  * or a number is answered by its flags.
  */
+/**
+ * 10.3 — whether the file calls a `reactive.shared` handle anywhere, read off the callee's type: the
+ * one thing the emitters need from 10, since only an instance that calls one opens a scope of its
+ * own, and a descendant's walk passes straight through every other.
+ */
+async function sharesIn(
+    checker: Checker,
+    abide: Abide,
+    sourceFile: Node,
+): Promise<boolean> {
+    const shared = abide.shared
+    if (shared === undefined) return false
+    const callees: Node[] = []
+    const visit = (node: Node): void => {
+        if (isCallExpression(node)) callees.push(node.expression)
+        node.forEachChild(visit)
+    }
+    sourceFile.forEachChild(visit)
+    if (callees.length === 0) return false
+    for (const type of await checker.getTypeAtLocation(callees))
+        if ((await type?.getSymbol())?.id === shared.id) return true
+    return false
+}
+
 async function memberAccesses(
     checker: Checker,
     abide: Abide,

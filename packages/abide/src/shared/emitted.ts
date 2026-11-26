@@ -36,7 +36,7 @@ export {
 // 32.2's `raw`, an author's, rides along so an emitted module imports from ONE specifier; 32.30's
 // anchored run is the compiler's.
 export { markupRun, RAW_WRITES, raw } from './Raw.ts'
-// 10.5 — the share scope an emitted component opens for its instance.
+// 10.3 — the share scope an emitted component opens for its instance.
 export {
     currentShare,
     enterShare,

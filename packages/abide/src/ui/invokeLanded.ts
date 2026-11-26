@@ -42,7 +42,7 @@ export function invokeLanded(
     invoke(props)
 }
 
-// 10.5 — made from the watch, with no instance on the stack, so the child mounts inside the share
+// 10.3 — made from the watch, with no instance on the stack, so the child mounts inside the share
 // scope of the instance that holds it, as a chosen swap does (`ChosenRegion`).
 function invokeShared(
     invoke: (props: object) => void,

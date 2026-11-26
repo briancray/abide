@@ -44,7 +44,7 @@ import {
 import { outsideScope, scoped } from './scoped.ts'
 import { SCOPING } from './scoping.ts'
 import { SERVED_BODIES, SERVES_NO_REACTIVE } from './SERVED_BODIES.ts'
-import { share } from './share.ts'
+import { type Shared, shareOf } from './share.ts'
 
 export { isReactive } from './isReactive.ts'
 export { type Memo, type MemoOptions } from './createMemo.ts'
@@ -619,8 +619,22 @@ export function invalidate<Chosen extends Selection>(selection?: Chosen): void {
     }
 }
 
-// 10.1 — `reactive.share` is a static on the factory rather than a free name, the registry's own
-// spelling: it CREATES where nothing holds the key, so it belongs with the factory it calls.
-reactive.share = share
+/**
+ * A handle on one value per component subtree: called, the value the nearest instance holding one
+ * holds, or one `create` makes in the calling instance (10.1, 10.3, 10.4). `create` answers the
+ * opening value, held as `reactive` holds it, or a `Reactive` handed back as it is (10.6).
+ */
+function shared<Value>(create: () => Value | Reactive<Value>): Shared<Value> {
+    const handle = (): Reactive<Value> =>
+        shareOf(handle, () => {
+            const opening = create()
+            return isReactive(opening) ? opening : reactive(opening as never)
+        }) as Reactive<Value>
+    return handle
+}
+
+// 10.1 — `reactive.shared` is a static on the factory rather than a free name, the registry's own
+// spelling: what its handle creates is a `reactive`, so it belongs with the factory it calls.
+reactive.shared = shared
 // 11.1 — `reactive.derived` is the value a body produces: a member of `reactive`, whose value it is.
 reactive.derived = derived

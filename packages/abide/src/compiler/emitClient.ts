@@ -322,7 +322,7 @@ ${moduleRuns ? `${moduleSetup.body}\n` : ''}${mount}`
     const owning = scopedSetup(setup.body, lowering)
     const bindings = scopeBindings(owning, chain, lines, lowering)
 
-    // 10.5 on the other side, and the same scope: the child's `mount` is called from inside the
+    // 10.3 on the other side, and the same scope: the child's `mount` is called from inside the
     // parent's, so the chain a key is looked up is the component tree here too.
     const captured = capturedShare(page, lowering)
     const { opened, closed } = shareScope(lowering, '')
@@ -354,7 +354,7 @@ function scopedSetup(
     body: string,
     lowering: Lowering,
     /**
-     * 10.5 — a branch-local setup, which a later swap or a grown row runs from a `watch` effect with
+     * 10.3 — a branch-local setup, which a later swap or a grown row runs from a `watch` effect with
      * no share scope current, so it resumes its instance's (`SHARE_AT`).
      */
     resumes = false,
@@ -407,7 +407,7 @@ return ${SCOPE}`
  * read the value before the page had written it and disagreed with the document. So a level the
  * router mounts leaves its markup on the level it was handed, which the router runs once the whole
  * chain is set up; anything else that mounts the file runs it at once. The share scope the setup
- * ran in is resumed for it (10.5), as `emitComponent`'s deferred build resumes one — and left on
+ * ran in is resumed for it (10.3), as `emitComponent`'s deferred build resumes one — and left on
  * the level too, for the router to set the level below up inside it.
  */
 function deferredMarkup(
@@ -435,7 +435,7 @@ function filledEmpty(sink: Cursor, lowering: Lowering): string {
     return `${buildFunction('__build', sink, lowering)}\n${lowering.use('fillEmpty')}(${REGION_ROOT}, __build)\n`
 }
 
-// 10.5 — CAPTURED WHERE A DEFERRED MOUNT CAN NEED IT. A row or an arm mounted after the fact
+// 10.3 — CAPTURED WHERE A DEFERRED MOUNT CAN NEED IT. A row or an arm mounted after the fact
 // runs from a `watch` effect, with nothing on the stack; this is the scope it resumes.
 function capturedShare(sink: Cursor, lowering: Lowering): string {
     return sink.defersSetup
@@ -476,7 +476,7 @@ function clientComponent(
     const fill = sink.positions.length === 0 ? '' : filledEmpty(sink, lowering)
     const captured = capturedShare(sink, lowering)
     const bindings = scopeBindings(owning, chain, lines, lowering)
-    // 10.5, 32.46 — its own share scope per instance, as on the server (`serverComponent`).
+    // 10.3, 32.46 — its own share scope per instance, as on the server (`serverComponent`).
     const { opened, closed } = shareScope(lowering, '')
     return `function ${component.name}(${REGION_ROOT}, ${PROPS} = {}) {
 ${opened}${head}${owning.opened}${setup}${owning.handed}${[...defs, ...helpers].join('\n')}
@@ -966,7 +966,7 @@ function writeCall(
     return `${lowering.use(WRITES[write])}(${element}, ${JSON.stringify(name)}, ${value})`
 }
 
-// The share scope an instance captures for its deferred mounts (10.5), named apart from the one an
+// The share scope an instance captures for its deferred mounts (10.3), named apart from the one an
 // instance OPENS (`shareScope`): a page that shares nothing still carries this for a child that does.
 const SHARE_AT = '__shareAt'
 
@@ -1270,7 +1270,7 @@ function emitFillable(
     sink: Cursor,
     region: RegionEmission,
     /**
-     * 10.5 — CHILDREN ARE MOUNTED BY THE CHILD, so they are its descendants: the scope current when
+     * 10.3 — CHILDREN ARE MOUNTED BY THE CHILD, so they are its descendants: the scope current when
      * it mounts them is the one their components find, as it is the one the server built them in.
      * The caller's own is the fallback for a mount with none current.
      */
@@ -1338,11 +1338,11 @@ function mountFunction(
         `    }`,
         `    return ${SCOPE}`,
     ].join('\n')
-    // 10.5 — the instance's own scope, put back for a mount that happens later than its caller's.
+    // 10.3 — the instance's own scope, put back for a mount that happens later than its caller's.
     // Only where a component stands below this region: nothing else can read it.
     if (!resumes || resumed === SHARE_AT)
         return `const ${name}_mount = (${parameters}, __rebuilt) => {\n${resumes ? insideShare(lowering, resumed, mount) : mount}\n}`
-    // 10.5 — A SCOPE OTHER THAN THE INSTANCE'S IS WHAT EVERY REGION NESTED HERE RESUMES TOO, so it
+    // 10.3 — A SCOPE OTHER THAN THE INSTANCE'S IS WHAT EVERY REGION NESTED HERE RESUMES TOO, so it
     // shadows `SHARE_AT` for them: an arm or a row inside a caller's children, mounted later from a
     // `watch`, put back the CALLER's scope and missed the share of the component they were slotted
     // into, where the server had built them inside it.

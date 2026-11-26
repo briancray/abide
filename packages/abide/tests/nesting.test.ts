@@ -730,26 +730,27 @@ if (counted.kidRuns <= 25) throw new Error('kid')
     expect(counted.kidRuns).toBeLessThan(5)
 })
 
-// 10.5 — A BRANCH-LOCAL `<script>` IS INSIDE ITS INSTANCE'S SHARE SCOPE ON EVERY RUN, not just the
+// 10.3 — A BRANCH-LOCAL `<script>` IS INSIDE ITS INSTANCE'S SHARE SCOPE ON EVERY RUN, not just the
 // hydrating one. A later swap or a grown row runs it from a `watch` effect with no scope current,
-// so `reactive.share` threw "outside a component instance", the watch stopped (12.8) and the arm or
+// so a handle's call threw "outside a component instance", the watch stopped (12.8) and the arm or
 // row never rendered. THE REVERT: drop `resumes` from `emitArms`' and `rowSetUp`'s `scopedSetup`
 // — the reopened arm is missing and the grown row is too.
-test('an arm reopened and a row grown read the share their page holds — 10.5', async () => {
+test('an arm reopened and a row grown read the share their page holds — 10.3', async () => {
     await mountPage(`<script>
 import { reactive } from '@abide/abide'
+import { theme } from '${TYPED_ROOT}src/shelf.ts'
 
-reactive.share('theme', () => reactive('dark'))
+theme().set('dark')
 let on = reactive(true)
 let rows = reactive(['one'])
 </script>
 
 {#if on}<script>
-const theme = reactive.share('theme', () => reactive('arm-own'))
-</script><b>{theme}</b>{/if}
+const shown = theme()
+</script><b>{shown}</b>{/if}
 <ul>{#for row of rows key row}<script>
-const theme = reactive.share('theme', () => reactive('row-own'))
-</script><li>{row} {theme}</li>{/for}</ul>
+const shown = theme()
+</script><li>{row} {shown}</li>{/for}</ul>
 <button id="flip" onclick={() => { on = !on }}>flip</button>
 <button id="grow" onclick={() => { rows = [...rows, 'two'] }}>grow</button>`)
     flushSync()
@@ -762,26 +763,27 @@ const theme = reactive.share('theme', () => reactive('row-own'))
     ).toEqual(['one dark', 'two dark'])
 })
 
-// 10.5 — CHILDREN ARE DESCENDANTS OF THE COMPONENT THAT RENDERS THEM, in the browser as on the
+// 10.3 — CHILDREN ARE DESCENDANTS OF THE COMPONENT THAT RENDERS THEM, in the browser as on the
 // server. A `<Section>` slotted into a `<Doc>` finds the list `Doc` shares: the server built it inside
 // `Doc` and listed both, and the browser mounted it in its CALLER's scope, so it filled a list of its
 // own and the rail the server painted emptied as the page hydrated. THE REVERT: drop `true` from
 // `emitFillable(kids, children, region, true)`; the rail reads '' once mounted.
-test('children slotted into a component find the share it holds — 10.5', async () => {
+test('children slotted into a component find the share it holds — 10.3', async () => {
     const DOC = `<script>
-import { reactive } from '@abide/abide'
+import { headings } from '${TYPED_ROOT}src/shelf.ts'
 
-const headings = reactive.share('headings', () => reactive<string[]>([]))
+const listed = headings()
 </script>
 
 <main><slot/></main>
-<aside id="rail">{headings.join('|')}</aside>`
+<aside id="rail">{listed.join('|')}</aside>`
     const SECTION = `<script>
-import { props, reactive } from '@abide/abide'
+import { props } from '@abide/abide'
+import { headings } from '${TYPED_ROOT}src/shelf.ts'
 
 const { title } = props<{ title: string }>()
-let headings = reactive.share('headings', () => reactive<string[]>([]))
-headings = [...headings, title]
+let listed = headings()
+listed = [...listed, title]
 </script>
 
 <h2>{title}</h2>`
@@ -798,28 +800,29 @@ import Section from './Section.abide'
     expect(document.querySelector('#rail')?.textContent).toBe('one|two')
 })
 
-// 10.5 — AN ARM INSIDE SLOTTED CHILDREN IS A DESCENDANT OF THE COMPONENT TOO. The arm's mount resumed
+// 10.3 — AN ARM INSIDE SLOTTED CHILDREN IS A DESCENDANT OF THE COMPONENT TOO. The arm's mount resumed
 // the scope its CALLER captured, so a `<Section>` under an `{#if}` in a `<Doc>`'s children filled a
 // list of the caller's own on hydration, and again on every reopening: the server listed it, the
 // browser dropped it. THE REVERT: in `mountFunction`, resume `resumed` without shadowing `SHARE_AT`
 // for the regions nested in it — the rail reads 'one' once mounted, and after the reopening.
-test('an arm inside children slotted into a component finds the share it holds — 10.5', async () => {
+test('an arm inside children slotted into a component finds the share it holds — 10.3', async () => {
     const DOC = `<script>
-import { reactive } from '@abide/abide'
+import { headings } from '${TYPED_ROOT}src/shelf.ts'
 
-const headings = reactive.share('headings', () => reactive<string[]>([]))
+const listed = headings()
 </script>
 
 <main><slot/></main>
-<aside id="rail">{headings.join('|')}</aside>`
+<aside id="rail">{listed.join('|')}</aside>`
     const SECTION = `<script>
-import { props, reactive, watch } from '@abide/abide'
+import { props, watch } from '@abide/abide'
+import { headings } from '${TYPED_ROOT}src/shelf.ts'
 
 const { title } = props<{ title: string }>()
-const headings = reactive.share('headings', () => reactive<string[]>([]))
+const listed = headings()
 watch(() => {
-    headings.set([...(headings.peek() ?? []), title])
-    return () => headings.set((headings.peek() ?? []).filter((each) => each !== title))
+    listed.set([...(listed.peek() ?? []), title])
+    return () => listed.set((listed.peek() ?? []).filter((each) => each !== title))
 })
 </script>
 

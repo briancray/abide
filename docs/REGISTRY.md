@@ -257,8 +257,8 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `reactive` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(initial: Held<Accepted> \| undefined, options?: Shaping<Accepted, Shaped, never, Gate>) => Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>` | The value form, for what the scope owns outright, opening at `initial`, at what a promise of it settles to, or at `undefined`. | 4.1, 4.2, 4.14, 4.15, 4.16, 4.20, 11.81 |
 | `reactive` | `<Accepted>() => [Accepted extends Rpc<infer Value, infer Args, infer Failures, infer Produced> ? true : false] extends [true] ? Reactive<StoredOf<CallOf<Accepted>>, StoredOf<CallOf<Accepted>>, AdoptedFailures<CallOf<Accepted>>, AdoptedProduced<CallOf<Accepted>, StoredOf<CallOf<Accepted>>>> : Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>` | The empty form, for a value nothing has written yet. | 4.14, 4.19 |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | The shape of a `transform`. | 4.6, 4.7, 4.8 |
-| `Shared` | `interface Shared {}` | The app's declaration-merged registry of shared keys. | 10.3 |
-| `reactive.share` | `<Key extends string, Value>(key: Key, create: () => Reactive<Value>) => Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value>` | Get-or-create a reactive value in the component's scope by key. | 10.1, 10.2, 10.4, 10.5, 10.6, 10.7 |
+| `reactive.shared` | `<Value>(create: () => Value \| Reactive<Value>) => Shared<Value>` | A handle on one value per component subtree, made where a component first calls it. | 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7 |
+| `Shared` | `<Value>{ (): Reactive<Value> }` | What `reactive.shared` hands back: called, the value the nearest component holding one holds. | 10.1, 10.3, 10.4 |
 
 The aliases `memo` reads what a body is through — its value, what it streams, and the value or
 keyed value it builds — the one the value form turns a `Reactive` away with, those a transform's and
@@ -1888,7 +1888,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97, 38.123, 38.136, 38.181 |
 | `abide native [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 38.175, 38.176, 38.178, 38.179, 38.180, 38.181, 38.182, 38.186, 38.187, 38.188, 38.189, 38.190, 38.191, 38.192, 38.193, 38.194, 44.77, 44.80 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118, 38.130 |
-| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215, 38.217, 38.219, 38.220, 38.221, 38.222, 38.223, 38.224, 38.225, 38.226, 38.227, 38.228 |
+| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215, 38.217, 38.219, 38.220, 38.221, 38.222, 38.223, 38.224, 38.225, 38.226, 38.227, 38.228, 38.229 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |
 

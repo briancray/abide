@@ -102,6 +102,8 @@ export type Abide = {
     /** 23.9 — abide's `route`, as the file the checker names it. */
     route: string | undefined
     reactive: CheckedSymbol | undefined
+    /** 10.3 — abide's `Shared`, the type a `reactive.shared` handle is. */
+    shared: CheckedSymbol | undefined
     /**
      * 31.13 — abide's `Selection` alias, which a position may be typed as rather than as a `Reactive`.
      */
@@ -120,6 +122,7 @@ export type Abide = {
 export async function abideIn(project: Project): Promise<Abide> {
     const [
         declares,
+        shares,
         props,
         selects,
         route,
@@ -129,6 +132,7 @@ export async function abideIn(project: Project): Promise<Abide> {
         documents,
     ] = await Promise.all([
         project.program.getSourceFile(FRAMEWORK_SOURCES.reactive),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.share),
         project.program.getSourceFile(FRAMEWORK_SOURCES.props),
         project.program.getSourceFile(FRAMEWORK_SOURCES.selection),
         project.program.getSourceFile(FRAMEWORK_SOURCES.route),
@@ -148,21 +152,14 @@ export async function abideIn(project: Project): Promise<Abide> {
             )
             break
         }
-    let reactive: CheckedSymbol | undefined
-    for (const statement of declares?.statements ?? [])
-        if (
-            isTypeAliasDeclaration(statement) &&
-            statement.name.text === 'Reactive'
-        ) {
-            const literal = await project.checker.getTypeFromTypeNode(
-                statement.type,
-            )
-            reactive = await literal?.getSymbol()
-            break
-        }
+    const [reactive, shared] = await Promise.all([
+        literalSymbolOf(project, declares, 'Reactive'),
+        literalSymbolOf(project, shares, 'Shared'),
+    ])
     return {
         route: route?.path,
         reactive,
+        shared,
         selection,
         props: props?.path,
         onConfig: hooks?.path,
@@ -170,6 +167,23 @@ export async function abideIn(project: Project): Promise<Abide> {
         deepEqual: deepEqual?.path,
         jsonSchema: documents?.path,
     }
+}
+
+/**
+ * The symbol of the type literal the alias `name` in `file` is — the one every instantiation of it
+ * carries, which is how a position typed by it is told apart.
+ */
+async function literalSymbolOf(
+    project: Project,
+    file: Awaited<ReturnType<Project['program']['getSourceFile']>>,
+    name: string,
+): Promise<CheckedSymbol | undefined> {
+    for (const statement of file?.statements ?? [])
+        if (isTypeAliasDeclaration(statement) && statement.name.text === name)
+            return (
+                await project.checker.getTypeFromTypeNode(statement.type)
+            )?.getSymbol()
+    return undefined
 }
 
 /**

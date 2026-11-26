@@ -900,3 +900,62 @@ const kept = options.computed
     const own = `import { computed } from './lib/computed.ts'\n\nexport const x = computed(() => 1)\n`
     expect(toDerived(own, 'src/own.ts')).toBe(own)
 })
+
+// 38.229 — A KEY ONE FILE USES ALONE IS A HANDLE DECLARED AT ITS MODULE LEVEL, in a `<script module>`
+// it opens, which takes `reactive` from the instance's script; a key two files use is a note at each
+// call, as is a call whose `create` differs from its handle's. Run again, nothing moves (38.200).
+// THE REVERT: drop the `ACROSS` note in `toShared`; the two calls of `selectedDeal` go unnamed.
+test('abide upgrade moves reactive.share to a handle — 38.229, 38.226, 38.200', async () => {
+    const app = temporaryModule({
+        'src/index.abide': `<script>
+import { reactive } from '@abide/abide'
+
+reactive.share('theme', () => reactive('dark'))
+let on = reactive(true)
+</script>
+
+{#if on}<script>
+const shown = reactive.share('theme', () => reactive('arm-own'))
+</script><b>{shown}</b>{/if}`,
+        'src/lib/Picker.abide': `<script>
+import { reactive } from '@abide/abide'
+
+reactive.share('selectedDeal', () => reactive('d1'))
+</script>`,
+        'src/lib/Row.abide': `<script>
+import { reactive } from '@abide/abide'
+
+let selected = reactive.share('selectedDeal', () => reactive(''))
+</script>`,
+    })
+    const notes: string[] = []
+    const edits = await upgrade(app, '0.143.0', (note) =>
+        notes.push(`${note.path}:${note.line} ${note.message.split(':')[0]}`),
+    )
+    expect(edits.find((edit) => edit.path === 'src/index.abide')?.after)
+        .toBe(`<script module>
+import { reactive } from '@abide/abide'
+
+const theme = reactive.shared(() => reactive('dark'))
+</script>
+
+<script>
+theme()
+let on = reactive(true)
+</script>
+
+{#if on}<script>
+const shown = theme()
+</script><b>{shown}</b>{/if}`)
+    expect(notes).toEqual([
+        "src/index.abide:13 reactive.shared's create is the handle's, and this call's differed from the first",
+        'src/lib/Picker.abide:4 reactive.share is reactive.shared(create), a handle declared once',
+        'src/lib/Row.abide:4 reactive.share is reactive.shared(create), a handle declared once',
+    ])
+    for (const edit of edits) await Bun.write(`${app}/${edit.path}`, edit.after)
+    expect(
+        (await upgrade(app, '0.144.0')).filter(
+            (edit) => edit.path === 'src/index.abide',
+        ),
+    ).toEqual([])
+})

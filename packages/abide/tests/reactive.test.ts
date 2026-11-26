@@ -34,6 +34,7 @@ import { isKeyed, keyedValue } from '#shared/reactive/index.ts'
 import { chunksOfStream, isStreaming } from '#shared/reactive/producer.ts'
 import { type CellOptions, createReactive } from '#shared/reactive/Reactive.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'
+import { enterShare, leaveShare } from '#shared/reactive/share.ts'
 import { CLEAN } from '#shared/reactive/tracking.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
@@ -7345,4 +7346,23 @@ test('a memo entry opens on its store, and keeps what is written — 11.78', asy
     expect(`opened: ${opened}, runs: ${runs}, kept: ${kept.get('a')}`).toBe(
         'opened: from the store, runs: 0, kept: written',
     )
+})
+
+// 10.6, 10.7 — A HANDLE HANDS BACK WHAT `create` ANSWERS: a `Reactive` as it is, anything else held
+// by a `reactive`; and called outside every component instance it has no scope to create in, so it
+// throws. THE REVERTS: drop the `isReactive` arm in `shared`, and `adopted: false` — the handle wraps
+// the value it was handed; drop the `null` test in `shareOf`, and the throw names no clause.
+test('a handle hands back what create answers, and throws outside an instance — 10.6, 10.7', () => {
+    const held = reactive(1)
+    const adopted = reactive.shared(() => held)
+    const plain = reactive.shared(() => 2)
+    expect(() => plain()).toThrow(/RULEBOOK 10\.3/)
+    const previous = enterShare()
+    try {
+        expect(
+            `adopted: ${adopted() === held}, plain: ${isReactive(plain()) && plain()()}`,
+        ).toBe('adopted: true, plain: 2')
+    } finally {
+        leaveShare(previous)
+    }
 })

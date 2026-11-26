@@ -1,25 +1,27 @@
 import type { Reactive } from './Reactive.ts'
 
-// 10 — `reactive.share(key, create)`: get-or-create by key, in the component instance and its
-// descendants (10.5). One call does both (10.1), so there is no "has it" to race with a "make it".
+// 10 — `reactive.shared(create)`: a HANDLE, declared once, whose call gets or creates its value in the
+// component instance and its descendants (10.3). One call does both (10.1), so there is no "has it" to
+// race with a "make it", and the handle's own identity is what its value is filed under — two handles
+// are two values, whatever they create.
 //
-// 10.7 REFUSES A PROCESS-WIDE ONE, and that is what makes this a scope rather than a map. Two
-// `<Shelf/>` instances each holding `queued` are two values; a `<TrackRow/>` under a page that
+// 10.5 REFUSES A PROCESS-WIDE ONE, and that is what makes this a scope rather than a map. Two
+// `<Shelf/>` instances each calling `queued()` hold two values; a `<TrackRow/>` under a page that
 // holds `nowPlaying` finds the page's. The difference is the CHAIN, and the chain is the
 // component tree — which exists now that a component is invoked rather than written as markup.
 //
-// A SCOPE PER COMPONENT THAT SHARES, not per component. A file that never calls this needs no node
-// of its own: it is a link nothing is filed under, and a descendant's walk passes straight through
-// it to the ancestor that does hold the key. The emitters open one exactly where the call is, so
-// what a page pays for the mechanism is nothing unless it uses it.
+// A SCOPE PER COMPONENT THAT CALLS A HANDLE, not per component. A file that never calls one needs no
+// node of its own: it is a link nothing is filed under, and a descendant's walk passes straight
+// through it to the ancestor that does hold the value. The checker finds the call by the handle's
+// type (`sharesIn`), so what a page pays for the mechanism is nothing unless it uses it.
 
 export type ShareScope = {
     parent: ShareScope | null
-    values: Map<string, unknown>
+    values: Map<object, unknown>
     /**
      * 39.1 — the routed level the instance stands in, opaque here (`Level`). Carried down the chain
      * so a component mounted after its level — an arm opening, a row grown — finds the level its
-     * `<head>` joins through the scope it resumes, as it finds a shared key.
+     * `<head>` joins through the scope it resumes, as it finds a shared value.
      */
     level: unknown
 }
@@ -30,34 +32,33 @@ export type ShareScope = {
 let standingShare: ShareScope | null = null
 
 /**
- * The app's registry of shared keys, declaration-merged (10.3).
+ * What `reactive.shared` hands back: called, the value nearest the calling instance (10.3), created
+ * there where no ancestor holds one (10.4).
  *
- * Empty here: an app widens it, and a key it declares is checked against it where a key it does
- * not is inferred from the thunk.
+ * A TYPE LITERAL, as `Reactive` is: every instantiation carries one symbol, which is how the checker
+ * finds a component calling a handle and opens its scope (`sharesIn`).
  */
-// 10.3 — an app merges its own keys into this.
-export interface Shared {}
+export type Shared<Value> = {
+    (): Reactive<Value>
+}
 
-/** The value held under `key` by this component or its nearest ancestor, or one created here. */
-export function share<Key extends string, Value>(
-    key: Key,
-    create: () => Reactive<Value>,
-): Key extends keyof Shared ? Reactive<Shared[Key]> : Reactive<Value> {
+/** The value `handle` holds in this instance or its nearest ancestor holding one, or one `create`s here. */
+export function shareOf(handle: object, create: () => unknown): unknown {
     const scope = standingShare
     if (scope === null)
         throw new Error(
-            `abide: reactive.share('${key}') was called outside a component instance, and the scope it would get or create in is that instance. RULEBOOK 10.5.`,
+            'abide: a reactive.shared handle was called outside a component instance, and the scope it would get or create in is that instance. RULEBOOK 10.3.',
         )
     for (let at: ShareScope | null = scope; at !== null; at = at.parent) {
-        const held = at.values.get(key)
-        // 10.4 — held for the life of the scope, so a second call in a descendant finds this one
+        const held = at.values.get(handle)
+        // 10.2 — held for the life of the scope, so a second call in a descendant finds this one
         // rather than building a second value the first one's readers never hear from.
-        if (held !== undefined) return held as never
+        if (held !== undefined) return held
     }
-    // 10.6 — created HERE where no ancestor holds it, which is what makes two siblings two values.
+    // 10.4 — created HERE where no ancestor holds it, which is what makes two siblings two values.
     const made = create()
-    scope.values.set(key, made)
-    return made as never
+    scope.values.set(handle, made)
+    return made
 }
 
 /**
@@ -84,7 +85,7 @@ export function leaveShare(previous: ShareScope | null): void {
 /**
  * The share scope current now, for an instance to capture at mount and a deferred mount to resume.
  *
- * 10.5 THROUGH A MOUNT THAT HAPPENS LATER. A row the list grows by is mounted from a `watch`
+ * 10.3 THROUGH A MOUNT THAT HAPPENS LATER. A row the list grows by is mounted from a `watch`
  * effect, not from inside its caller's mount — so nothing is on the stack and `standingShare` is null,
  * and a child that shares would open a chain of its own and miss the key its page holds. The
  * instance captures its own scope at mount and the deferred mount resumes it, which is what makes

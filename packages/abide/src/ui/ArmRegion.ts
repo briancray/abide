@@ -137,7 +137,7 @@ function swapTo(region: ArmRegion, next: unknown): void {
  * invoked component already makes where no server painted (32.17). The props record is the
  * caller's accessors, so one record serves every child the value chooses.
  *
- * 10.5 — a swap after the first runs from the watch, with no instance on the stack, so the child
+ * 10.3 — a swap after the first runs from the watch, with no instance on the stack, so the child
  * mounts inside the share scope of the instance that holds it.
  */
 export class ChosenRegion extends ArmRegion {

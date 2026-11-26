@@ -105,7 +105,7 @@ ${heldToAnnotations(lowering, derived)}${privateExports(file.servers.join('\n'))
     // A child invoked inside `<head>` pushes to the same array from the head expression — and a
     // child invoked anywhere is a `renderComponent` call, the one writer of `HEADS`.
     const heads = lowering.used.has('renderComponent')
-    // 10.5 — around the setup that calls `reactive.share`, and the body whose children are
+    // 10.3 — around the setup that calls a `reactive.shared` handle, and the body whose children are
     // rendered inside it and find it on the way up.
     const { opened, closed } = shareScope(lowering, '    ')
 
@@ -126,7 +126,7 @@ ${heldToAnnotations(lowering, derived)}${privateExports(file.servers.join('\n'))
     }`
     // 41.19 — BUILT ON THE FIRST READ, and ONCE: `render` reads `head` and then `body`, and a
     // child the markup invokes must not be set up twice. The build resumes the share scope the
-    // setup ran in (10.5), since by the time it is read the caller's has long been left — and that
+    // setup ran in (10.3), since by the time it is read the caller's has long been left — and that
     // scope is `scope` on the answer, so `composePage` sets the level below up inside it too.
     const deferred =
         (): string => `    const ${SETTLED_AT} = ${lowering.use('currentShare')}()

@@ -13,6 +13,7 @@ import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
 import { toNamedParts } from './toNamedParts.ts'
 import { toRefuseNamed } from './toRefuseNamed.ts'
+import { toShared } from './toShared.ts'
 import { toSourceOptions } from './toSourceOptions.ts'
 
 /** A file's text before and after `abide upgrade`. */
@@ -94,6 +95,8 @@ const MIGRATIONS: Migration[] = [
     },
     // 38.227 — `poll` is a `ttl`, and a `reactive` or `reactive.derived` takes none of a source's options.
     { version: '0.144.0', migrate: eachSource(toSourceOptions) },
+    // 38.229 — a key shared down the tree is a handle: declared once, and called where it is wanted.
+    { version: '0.144.0', migrate: toShared },
 ]
 
 /**
