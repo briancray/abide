@@ -5185,8 +5185,8 @@ and the rows written in one turn MUST be committed in one transaction.
 47.31 `table` MUST keep no more than the last 10000 changes of a table its watch has passed.
 
 47.32 An opener's `sql`, called as a tag, MUST bind every value interpolated as a parameter and
-never as text, MUST prepare one statement per call site per `Database`, and MUST answer, at once,
-the rows the statement returns.
+never as text, MUST prepare one statement per call site per `Database` and per length of each list
+47.37 expands, and MUST answer, at once, the rows the statement returns.
 
 47.33 A run that reads a table through `sql` or a `table` call MUST be refreshed, per 13.7, when that
 table changes — by a write through the opener, or a commit any connection makes — the tables a
@@ -5197,8 +5197,23 @@ table its last run did not read, nor where it is a mutation's run or wrote that 
 the turn ends, and 47.29's watch MUST NOT refresh for them again.
 
 47.35 A `table` called MUST answer every row of the table, or with `match` the rows whose every
-column `match` names equals the value given, `null` matching a NULL, and MUST throw for a column the
+column `match` names the value given matches per 47.36, and MUST throw for a column the
 table does not hold.
+
+47.36 A `match` value MUST be JSON, and MUST match a column: a value by equality; `null` by IS NULL;
+an array by being one of its values, `null` among them matching a NULL and an empty array matching
+no row; and an object by meeting every one of `gt`, `gte`, `lt`, `lte` and `ne` it names, `ne`
+refusing only the value it names — `null` included, and no NULL it does not — and an object naming
+none matching every row. A `match` MUST throw for any other key in an object, for `null` given to a
+comparison other than `ne`, and for an array or an object nested where a value goes.
+
+47.37 An array interpolated into `sql` MUST be bound as a parenthesized list of its values, written
+`IN ${ids}` with no parentheses of the author's own, and an empty array MUST be a list of no row, so
+`IN` matches nothing and `NOT IN` everything; an array nested in one MUST throw.
+
+47.38 A database refusing 47.26's change log, a read-only one among them, MUST still be read by a
+`table` call and by `sql`, its stopped watch said once per database, and the writes made through its
+`sql` MUST then be all that refresh what reads it.
 
 # 48. Problem reports
 

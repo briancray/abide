@@ -214,3 +214,136 @@ test('a memo entry reading through sql follows the table — 47.32', async () =>
     stop()
     expect(`won: ${seen}`).toBe('won: 140')
 })
+
+/** The ids `rows` holds, in id order. */
+const idsOf = (rows: { id: string }[]): string =>
+    rows
+        .map((row) => row.id)
+        .sort()
+        .join()
+
+/** A database whose deals cover a NULL stage, for the JSON match. */
+function pipeline() {
+    opened += 1
+    return database(`sql-${opened}`, {
+        migrations: [
+            'CREATE TABLE deals (id TEXT PRIMARY KEY, stage TEXT, amount INTEGER NOT NULL)',
+            "INSERT INTO deals VALUES ('d1', 'won', 100), ('d2', 'lead', 40), ('d3', NULL, 70), ('d4', 'lost', 10)",
+        ],
+    })
+}
+
+// 47.36 — A MATCH IS JSON: a list is one of its values, an object comparisons met together, and both
+// as JSON reads them about `null` — a list holding it matches a NULL, and `ne` refuses no NULL it was
+// not given. THE REVERT: have `conditionOf` treat every value as `= ?`; the first list throws
+// `expected 1 values, received 2` where `d1,d2` is due.
+test('a table called matches a list, comparisons and null as JSON reads them — 47.36', () => {
+    const deals = table<{ id: string; stage: string | null; amount: number }>(
+        pipeline(),
+        'deals',
+    )
+    const answers = [
+        idsOf(deals({ stage: ['won', 'lead'] })),
+        idsOf(deals({ stage: ['won', null] })),
+        idsOf(deals({ stage: [] })),
+        idsOf(deals({ amount: { gte: 40, lt: 100 } })),
+        idsOf(deals({ stage: { ne: 'won' } })),
+        idsOf(deals({ stage: { ne: null } })),
+        idsOf(deals({ amount: {} })),
+    ]
+    expect(answers).toEqual([
+        'd1,d2',
+        'd1,d3',
+        '',
+        'd2,d3',
+        'd2,d3,d4',
+        'd1,d2,d4',
+        'd1,d2,d3,d4',
+    ])
+    const refusals: string[] = []
+    for (const match of [
+        { amount: { like: 4 } },
+        { amount: { gt: null } },
+        { amount: [[40]] },
+    ])
+        try {
+            deals(match as never)
+        } catch (thrown) {
+            refusals.push(
+                (thrown as Error).message.includes('RULEBOOK 47.36')
+                    ? 'refused'
+                    : 'other',
+            )
+        }
+    expect(refusals).toEqual(['refused', 'refused', 'refused'])
+})
+
+// 47.37 — A LIST INTERPOLATED IS A LIST BOUND, one statement per call site per length: two lists of
+// two prepare once, and a list of three once more. An empty list is no row, so `IN` matches nothing
+// and `NOT IN` everything. THE REVERT: drop the lengths from the cache key in `sqlOver`; the list of
+// three meets the two-slot statement and throws `expected 2 values, received 3` where `d1,d2,d3` is due.
+test('sql binds a list interpolated as one, a statement per length — 47.37', () => {
+    const db = pipeline()
+    const connection = db()
+    const prepare = connection.prepare.bind(connection)
+    let prepared = 0
+    connection.prepare = ((text: string) => {
+        if (!text.startsWith('EXPLAIN')) prepared += 1
+        return prepare(text)
+    }) as typeof connection.prepare
+    const among = (ids: string[]) =>
+        db.sql<{ id: string }>`SELECT id FROM deals WHERE id IN ${ids}`
+    const outside = (ids: string[]) =>
+        db.sql<{ id: string }>`SELECT id FROM deals WHERE id NOT IN ${ids}`
+    const answers = [
+        idsOf(among(['d1', 'd2'])),
+        idsOf(among(['d3', 'd4'])),
+        idsOf(among(['d1', 'd2', 'd3'])),
+        idsOf(among([])),
+        idsOf(outside([])),
+    ]
+    expect(`${answers.join(' | ')} prepared: ${prepared}`).toBe(
+        'd1,d2 | d3,d4 | d1,d2,d3 |  | d1,d2,d3,d4 prepared: 4',
+    )
+})
+
+// 47.38 — A DATABASE THAT REFUSES THE CHANGE LOG IS STILL READ: opened read-only, a table called and
+// a statement through `sql` both answer, and its stopped watch is said once for the database rather
+// than once per table. THE REVERT: read a called table on the connection that makes the change log
+// (`selects<Row>(connection, name)`); the call throws `attempt to write a readonly database`. AND
+// drop `WARNED`; the two tables say it `said: 2`.
+test('a read-only database is read, its stopped watch said once — 47.38', async () => {
+    opened += 1
+    const name = `sql-${opened}`
+    const migrations = [
+        'CREATE TABLE deals (id TEXT PRIMARY KEY, stage TEXT)',
+        'CREATE TABLE contacts (id TEXT PRIMARY KEY)',
+        "INSERT INTO deals VALUES ('d1', 'won')",
+    ]
+    database(name, { migrations })()
+    const readOnly = database(name, { readonly: true, migrations })
+    const warn = console.warn
+    let said = 0
+    console.warn = (...args: unknown[]) => {
+        if (String(args[0]).includes('RULEBOOK 47.38')) said += 1
+    }
+    try {
+        const deals = table<{ id: string; stage: string }>(readOnly, 'deals')
+        const answered = idsOf(deals({ stage: 'won' }))
+        const counted = followed(
+            () =>
+                readOnly.sql<{
+                    n: number
+                }>`SELECT (SELECT COUNT(*) FROM deals) + (SELECT COUNT(*) FROM contacts) AS n`[0]
+                    ?.n,
+        )
+        await until(() => said > 0)
+        await Bun.sleep(120)
+        counted.stop()
+        expect(`${answered} n: ${counted.seen()} said: ${said}`).toBe(
+            'd1 n: 1 said: 1',
+        )
+    } finally {
+        console.warn = warn
+    }
+})

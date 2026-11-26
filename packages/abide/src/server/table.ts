@@ -42,8 +42,27 @@ export type Change<Row> = {
 /** Where each `Database` has had its change log made, and each table its triggers. */
 const PREPARED = new WeakMap<Database, Set<string>>()
 
+/**
+ * 47.35, 47.36 — what a `table` call matches a column against, all of it JSON: a value it equals,
+ * `null` for NULL, an array of values it is one of, or comparisons it meets every one of.
+ */
+export type ColumnMatch<Value> =
+    | Value
+    | null
+    | readonly (Value | null)[]
+    | {
+          gt?: Value | undefined
+          gte?: Value | undefined
+          lt?: Value | undefined
+          lte?: Value | undefined
+          ne?: Value | null | undefined
+      }
+
+/** 47.35 — the columns a `table` call matches, each by a `ColumnMatch`. */
+export type Match<Row> = { [Column in keyof Row]?: ColumnMatch<Row[Column]> }
+
 /** A table of the app's database: its rows read by calling it, its changes read out, rows written in. */
-export type Table<Row> = ((match?: Partial<Row>) => Row[]) & {
+export type Table<Row> = ((match?: Match<Row>) => Row[]) & {
     readonly readable: ReadableStream<Change<Row>>
     readonly writable: WritableStream<Row>
 }
@@ -73,8 +92,9 @@ export function table<Row extends Record<string, unknown>>(
     let readable: ReadableStream<Change<Row>> | undefined
     let writable: WritableStream<Row> | undefined
     const names = [name]
-    const rows = selects<Row>(connection, name)
-    const read = (match?: Partial<Row>): Row[] => {
+    // 47.38 — READ ON THE CONNECTION AS IT IS: a database refusing the change log is still read.
+    const rows = selects<Row>(acquire, name)
+    const read = (match?: Match<Row>): Row[] => {
         const answered = rows(match)
         readTables(database, connection, names)
         return answered
@@ -110,14 +130,24 @@ export function preparedConnection(
     }
 }
 
+/** 47.36 — the comparisons a `ColumnMatch` object may name, each to the operator it is. */
+const COMPARISONS: Record<string, string> = {
+    gt: '>',
+    gte: '>=',
+    lt: '<',
+    lte: '<=',
+    ne: 'IS NOT',
+}
+
 /**
- * 47.35 — the rows of `name`, or those whose every column `match` names equals what it gives: one
- * statement per set of columns matched, each column checked against the table's own.
+ * 47.35, 47.36 — the rows of `name`, or those every column `match` names matches: one statement per
+ * shape of match — its columns, the length of each list and the comparisons named — each column
+ * checked against the table's own.
  */
 function selects<Row>(
     connection: () => Database,
     name: string,
-): (match?: Partial<Row>) => Row[] {
+): (match?: Match<Row>) => Row[] {
     const statements = new Map<string, ReturnType<Database['query']>>()
     let preparedOn: Database | undefined
     let columns: Set<string> | undefined
@@ -127,26 +157,29 @@ function selects<Row>(
             statements.clear()
             preparedOn = db
             columns = new Set()
-            for (const column of db
-                .query(`PRAGMA table_info(${name})`)
-                .all() as { name: string }[])
+            const found = db.query(`PRAGMA table_info(${name})`).all() as {
+                name: string
+            }[]
+            if (found.length === 0) {
+                preparedOn = undefined
+                throw new Error(
+                    `abide: table ${name} is not in the database. RULEBOOK 47.25.`,
+                )
+            }
+            for (const column of found)
                 if (SQL_IDENTIFIER.test(column.name)) columns.add(column.name)
         }
         const values: unknown[] = []
         const conditions: string[] = []
         if (match !== undefined)
             for (const column in match) {
-                const value = match[column as keyof Row]
+                const value: unknown = match[column as keyof Row]
                 if (value === undefined) continue
                 if (!(columns as Set<string>).has(column))
                     throw new Error(
                         `abide: table ${name} has no column ${JSON.stringify(column)}. RULEBOOK 47.35.`,
                     )
-                if (value === null) conditions.push(`"${column}" IS NULL`)
-                else {
-                    conditions.push(`"${column}" = ?`)
-                    values.push(value)
-                }
+                conditions.push(conditionOf(name, column, value, values))
             }
         const shape = conditions.join(' AND ')
         let statement = statements.get(shape)
@@ -160,6 +193,87 @@ function selects<Row>(
         }
         return statement.all(...(values as never[])) as Row[]
     }
+}
+
+/**
+ * 47.35, 47.36 — the condition `value` puts on `column`, its values pushed onto `values`. NULL-SAFE as
+ * JSON is: a list holding `null` matches a NULL, and `ne` is `IS NOT`, so a NULL is not a value
+ * `ne: 'won'` refuses. An empty list is no value at all and matches no row.
+ */
+function conditionOf(
+    name: string,
+    column: string,
+    value: unknown,
+    values: unknown[],
+): string {
+    const quoted = `"${column}"`
+    if (value === null) return `${quoted} IS NULL`
+    if (Array.isArray(value)) {
+        const slots: string[] = []
+        let nullable = false
+        for (const each of value as unknown[]) {
+            if (each === null) nullable = true
+            else {
+                slots.push('?')
+                values.push(scalarOf(name, column, each))
+            }
+        }
+        const listed =
+            slots.length === 0 ? '' : `${quoted} IN (${slots.join(', ')})`
+        if (nullable)
+            return listed === ''
+                ? `${quoted} IS NULL`
+                : `(${listed} OR ${quoted} IS NULL)`
+        return listed === '' ? '0' : listed
+    }
+    if (!isPlainObject(value)) return pushed(`${quoted} = ?`, values, value)
+    const met: string[] = []
+    for (const comparison in value) {
+        const operator = COMPARISONS[comparison]
+        if (operator === undefined)
+            throw new Error(
+                `abide: table ${name}'s match on ${column} names ${JSON.stringify(comparison)}, which is none of gt, gte, lt, lte, ne. RULEBOOK 47.36.`,
+            )
+        const bound = value[comparison]
+        if (bound === undefined) continue
+        if (bound === null) {
+            if (comparison !== 'ne')
+                throw new Error(
+                    `abide: table ${name}'s match on ${column} compares ${comparison} to null, which orders nothing. RULEBOOK 47.36.`,
+                )
+            met.push(`${quoted} IS NOT NULL`)
+            continue
+        }
+        met.push(
+            pushed(
+                `${quoted} ${operator} ?`,
+                values,
+                scalarOf(name, column, bound),
+            ),
+        )
+    }
+    // No comparison named is none to meet, as an AND of nothing is.
+    return met.length === 0 ? '1' : met.join(' AND ')
+}
+
+function pushed(condition: string, values: unknown[], value: unknown): string {
+    values.push(value)
+    return condition
+}
+
+/** A value a list or a comparison holds, which is one value: no list or object nested in it. */
+function scalarOf(name: string, column: string, value: unknown): unknown {
+    if (Array.isArray(value) || isPlainObject(value))
+        throw new Error(
+            `abide: table ${name}'s match on ${column} nests a list or an object where a value goes. RULEBOOK 47.36.`,
+        )
+    return value
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    if (typeof value !== 'object' || value === null) return false
+    const prototype = Object.getPrototypeOf(value)
+    return prototype === Object.prototype || prototype === null
 }
 
 /**
@@ -254,6 +368,9 @@ const WATCHED = new WeakMap<object, Map<string, Watch>>()
 const READERS = new WeakMap<Cell, Reader>()
 
 /** 47.29, 47.31 — each change to `name` refreshes every value tagged `name`, and old changes go. */
+/** 47.38 — the databases whose stopped watch has been said. */
+const WARNED = new WeakSet<object>()
+
 function watchOf(
     owner: object,
     connection: () => Database,
@@ -280,9 +397,16 @@ function watchOf(
             try {
                 db = connection()
             } catch (thrown) {
-                // 47.25 — said once by the watch, and thrown by every read and write of the table.
+                // 47.38 — a database refusing the change log, read-only among them: said once per
+                // database, and the writes made through `sql` are then all that refresh its readers.
                 broken = true
-                WATCH_LOG.warning(`the watch of ${name} stopped`, thrown)
+                if (!WARNED.has(owner)) {
+                    WARNED.add(owner)
+                    WATCH_LOG.warning(
+                        `the watch of ${name} stopped: only writes made through sql refresh what reads this database. RULEBOOK 47.38.`,
+                        thrown,
+                    )
+                }
                 return
             }
             const last = lastChange(db, name)
