@@ -5,23 +5,27 @@ test('the DOM preload ran', () => {
     expect(document.createElement('div').nodeName).toBe('DIV')
 })
 
-test('every lane entry resolves', async () => {
-    await expect(import('@abide/harness/measure')).resolves.toBeDefined()
-    await expect(import('@abide/harness/engine')).resolves.toBeDefined()
-    await expect(import('@abide/harness/server')).resolves.toBeDefined()
-})
-
-// THREE LANES AND THE ENTRIES THAT ARE NOT LANES. A lane is a DEPENDENCY partition —
-// `measure` needs nothing, `engine` needs CDP, `server` needs `bun:jsc` — and that is
-// one reason the harness is a package. `report` depends on nothing at all, `gate` on
-// `bun:test`, `rows` on nothing and `runner` on bun, so none is a fourth question; they
-// are named here so the next reader counting entries does not go looking for one.
-// `preload` is an entry too, and registers a DOM as it loads, which this process has.
-test('the entries that are not lanes resolve too', async () => {
-    await expect(import('@abide/harness/report')).resolves.toBeDefined()
-    await expect(import('@abide/harness/gate')).resolves.toBeDefined()
-    await expect(import('@abide/harness/rows')).resolves.toBeDefined()
-    await expect(import('@abide/harness/runner')).resolves.toBeDefined()
+// THREE LANES AND THE ENTRIES THAT ARE NOT LANES, read off the `exports` map rather than listed — a
+// list beside the map is a second copy, and the one this replaced named seven of ten. A lane is a
+// DEPENDENCY partition — `measure` needs nothing, `engine` needs CDP, `server` needs `bun:jsc` — and
+// that is one reason the harness is a package. `report` depends on nothing at all, `gate` on
+// `bun:test`, `rows` on nothing and `runner` on bun, so none is a fourth question. `preload`
+// registers a DOM as it loads, which this process has. `abide/preload` is left out: it builds the
+// app it is preloaded into, and this package is none.
+test('every entry the exports map names resolves', async () => {
+    const manifest = (await Bun.file(
+        new URL('../package.json', import.meta.url),
+    ).json()) as { exports: Record<string, string> }
+    const unresolved: string[] = []
+    for (const entry of Object.keys(manifest.exports)) {
+        if (entry === './package.json' || entry === './abide/preload') continue
+        try {
+            await import(`@abide/harness${entry.slice(1)}`)
+        } catch {
+            unresolved.push(entry)
+        }
+    }
+    expect(unresolved).toEqual([])
 })
 
 // THE HARNESS MEASURES ANYTHING, so nothing it ships may reach the thing it is measuring here. An
@@ -41,7 +45,15 @@ test('the entries that are not lanes resolve too', async () => {
 const IMPORT_SCANNER = new Bun.Transpiler({ loader: 'ts' })
 const SUBJECTS = /\/packages\/(?:abide|dogfood|bridge)\//
 
-async function subjectsInGraphOf(entry: string): Promise<string[]> {
+/**
+ * Every file the import graph from `entry` reaches where `stop` holds — recorded, and not followed —
+ * and, where `unresolved` is given, each specifier that resolves to nothing.
+ */
+async function stopsInGraphOf(
+    entry: string,
+    stop: (file: string) => boolean,
+    unresolved?: (specifier: string) => void,
+): Promise<string[]> {
     const seen = new Set<string>()
     const found: string[] = []
     const queue = [entry]
@@ -49,7 +61,7 @@ async function subjectsInGraphOf(entry: string): Promise<string[]> {
         const file = queue.pop() as string
         if (seen.has(file)) continue
         seen.add(file)
-        if (SUBJECTS.test(file)) {
+        if (stop(file)) {
             found.push(file)
             continue
         }
@@ -68,12 +80,15 @@ async function subjectsInGraphOf(entry: string): Promise<string[]> {
             try {
                 queue.push(Bun.resolveSync(imported.path, directory))
             } catch {
-                // unresolvable here is a typecheck problem, not this test's
+                unresolved?.(imported.path)
             }
         }
     }
     return found
 }
+
+const subjectsInGraphOf = (entry: string): Promise<string[]> =>
+    stopsInGraphOf(entry, (file) => SUBJECTS.test(file))
 
 const HARNESS = Bun.fileURLToPath(new URL('../', import.meta.url))
 
@@ -122,32 +137,15 @@ test('the graph walk finds abide when abide is there', async () => {
 test('the report leaf reaches nothing outside itself', async () => {
     const entry = new URL('../src/report/index.ts', import.meta.url).pathname
     const root = entry.slice(0, entry.lastIndexOf('/') + 1)
-    const seen = new Set<string>()
-    const outside: string[] = []
-    const queue = [entry]
-    while (queue.length > 0) {
-        const file = queue.pop() as string
-        if (seen.has(file)) continue
-        seen.add(file)
-        if (!file.startsWith(root)) {
-            outside.push(file)
-            continue
-        }
-        const directory = file.slice(0, file.lastIndexOf('/'))
-        for (const imported of IMPORT_SCANNER.scanImports(
-            await Bun.file(file).text(),
-        )) {
-            try {
-                queue.push(Bun.resolveSync(imported.path, directory))
-            } catch {
-                // A bare specifier that does not resolve from here is a typecheck
-                // problem, and it is also not a dependency this leaf can be said to
-                // have taken on.
-                outside.push(imported.path)
-            }
-        }
-    }
-    expect(outside).toEqual([])
+    // A bare specifier that does not resolve from here is a typecheck problem, and it is also not a
+    // dependency this leaf can be said to have taken on: it counts as outside.
+    const unresolved: string[] = []
+    const outside = await stopsInGraphOf(
+        entry,
+        (file) => !file.startsWith(root),
+        (specifier) => unresolved.push(specifier),
+    )
+    expect([...outside, ...unresolved]).toEqual([])
 })
 
 // The measure lane's browser arm is the SAME BYTES, so the injectable has to build
