@@ -5,7 +5,7 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={['/reactive/memo', '/reactive/refresh']}
+    seeAlso={['/orchestration/memo', '/reactive/refresh']}
     tests={[
         {
             path: 'packages/abide/tests/abortSignal.test.ts',

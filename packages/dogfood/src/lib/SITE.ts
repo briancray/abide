@@ -256,13 +256,6 @@ const WRITTEN: readonly {
                 where: 'anywhere',
             },
             {
-                route: '/reactive/memo',
-                title: '`memo`',
-                description:
-                    'Keep one value per set of args, computed when that set is first reached.',
-                where: 'anywhere',
-            },
-            {
                 route: '/reactive/watch',
                 title: '`watch`',
                 description:
@@ -1260,9 +1253,16 @@ const WRITTEN: readonly {
     {
         group: 'Orchestration',
         description:
-            'Work run in steps a few items at a time, on a schedule, or in a thread of its own.',
+            'Values kept per set of args, and work run in steps a few items at a time, on a schedule, or in a thread of its own.',
         form: 'authoring',
         pages: [
+            {
+                route: '/orchestration/memo',
+                title: '`memo`',
+                description:
+                    'Keep one value per set of args, computed when that set is first reached.',
+                where: 'anywhere',
+            },
             {
                 route: '/orchestration/pipe',
                 title: '`pipe`',

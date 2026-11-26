@@ -23,7 +23,7 @@ import winLead from './lib/WinLead.abide' with { type: 'text' }
     seeAlso={[
         '/reactive/reactive',
         '/reactive/derived',
-        '/reactive/memo',
+        '/orchestration/memo',
         '/reactive/watch',
         '/reactive/busy',
         '/reactive/ready',
@@ -59,7 +59,7 @@ import winLead from './lib/WinLead.abide' with { type: 'text' }
         <p>Only <a href={url('/reactive/reactive')}><code>reactive</code></a> and
             <a href={url('/reactive/derived')}><code>reactive.derived</code></a> are live. A call to a
             handler declared with <a href={url('/handlers/rpc')}><code>rpc</code></a> answers a
-            promise, as a <a href={url('/reactive/memo')}><code>memo</code></a>, a
+            promise, as a <a href={url('/orchestration/memo')}><code>memo</code></a>, a
             <a href={url('/orchestration/pipe')}><code>pipe</code></a> and
             <a href={url('/data/fetch-and-handle')}><code>fetchAndHandle</code></a> do, or a
             stream where it yields. Call it inside a <code>reactive.derived</code> and the total is live:

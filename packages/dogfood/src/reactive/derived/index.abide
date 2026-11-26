@@ -13,7 +13,7 @@ import seatTotal from './lib/SeatTotal.abide' with { type: 'text' }
 <Doc
     seeAlso={[
         '/reactive/reactive',
-        '/reactive/memo',
+        '/orchestration/memo',
         '/reactive/tracking',
         '/reactive/refresh',
         '/ambients/abort-signal',

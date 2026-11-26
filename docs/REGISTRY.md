@@ -338,14 +338,6 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | --- | --- | --- | --- |
 | `reactive.derived` | `<Value = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>>(body: () => Result, options?: Shaping<BodyValue<Result>, Shaped, never, Gate>) => ReactiveOf<never, Result, Shaped, Gate, never>` | A value `body` produces, run again when a value it read changes, and a stream where it hands back an async iterable. | 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.41, 11.49, 11.50, 11.51, 11.53, 11.56, 11.57, 11.59, 41.6, 11.61, 11.62, 11.64, 11.65, 12.14, 12.17, 19.24, 41.34, 41.35, 11.72, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 14.3, 7.22, 7.23, 11.73, 11.81 |
 
-## `memo`
-
-| Name | Signature | Meaning | Rules |
-| --- | --- | --- | --- |
-| `memo` | `<Args = undefined, Result = unknown, Shaped = Awaited<Result>>(fn: (args: Args) => Result, options?: MemoOptions<Args, Awaited<Result>, Shaped>) => Memo<Args, Result, Kept<Shaped>>` | `fn`'s value kept per set of args: a call answers its promise, or its stream, and its owner writes and follows it per key. | 11.2, 11.3, 11.4, 11.6, 11.73, 11.74, 11.75, 14.4, 15.19 |
-| `Memo` | `<Args, Result, Value = Awaited<Result>>((...args: undefined extends Args ? [args?: Args] : [args: Args]) => Promise<Value> \| AsyncIterable<unknown>) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void; set(args: Args, value): void; set(value): void where Args is undefined; patch(args: Args, mutate: (value) => void): void; patch(mutate: (value) => void): void where Args is undefined; readable(args: Args): ReadableStream }` | What `memo` hands back: the call, the triggers over the keys it holds, and the owner's writes and stream per key. | 11.2, 11.24, 11.27, 11.76, 11.77, 11.80, 13.12 |
-| `MemoOptions` | `<Args, Accepted = unknown, Shaped = Accepted>{ ttl?: number; tags?: string[] \| ((args: Args) => string[]); global?: boolean; args?: Schema<Args>; key?: string \| ((element) => unknown); throttle?: number; debounce?: number; store?: Store<unknown> \| ((args: Args) => Store<unknown>); schema?: Schema<Accepted>; transform?: (value: Accepted) => Shaped; identity?: (next: Kept<Shaped>, previous: Kept<Shaped>) => unknown }` | How long an entry lives, what selects it, where it is kept, what its args must be, what tells one element of its value from another, where its value is stored, and the pace it produces at. | 11.32, 5.21, 11.78, 11.79, 6.1, 6.2, 6.3, 6.4, 6.5, 8.13, 11.6, 11.33, 11.35, 11.45, 11.48, 11.68, 5.8, 5.9, 5.11, 5.12, 5.14, 5.15, 5.16, 5.17, 5.18, 5.19, 5.20, 5.22, 5.23, 5.24, 5.25, 5.13, 11.43, 11.44, 13.15, 18.4, 18.15, 11.34, 11.36, 11.37, 11.38, 11.39, 11.52, 11.66, 26.24, 9.4, 11.28, 11.30, 11.40, 11.41, 11.55, 11.59, 11.67, 11.71 |
-
 ## `watch`
 
 | Name | Signature | Meaning | Rules |
@@ -1442,6 +1434,14 @@ type Reached = { readonly [REACHED]: true }
 | `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'timeout' \| 'network' \| 'status' \| 'shape' }>` | The refusal a fetch that gave up rejects with. | 15.9, 54.12, 54.13, 54.27, 54.30 |
 
 # Orchestration
+
+## `memo`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `memo` | `<Args = undefined, Result = unknown, Shaped = Awaited<Result>>(fn: (args: Args) => Result, options?: MemoOptions<Args, Awaited<Result>, Shaped>) => Memo<Args, Result, Kept<Shaped>>` | `fn`'s value kept per set of args: a call answers its promise, or its stream, and its owner writes and follows it per key. | 11.2, 11.3, 11.4, 11.6, 11.73, 11.74, 11.75, 14.4, 15.19 |
+| `Memo` | `<Args, Result, Value = Awaited<Result>>((...args: undefined extends Args ? [args?: Args] : [args: Args]) => Promise<Value> \| AsyncIterable<unknown>) & { invalidate(pattern?: Partial<Args>): void; refresh(pattern?: Partial<Args>): void; set(args: Args, value): void; set(value): void where Args is undefined; patch(args: Args, mutate: (value) => void): void; patch(mutate: (value) => void): void where Args is undefined; readable(args: Args): ReadableStream }` | What `memo` hands back: the call, the triggers over the keys it holds, and the owner's writes and stream per key. | 11.2, 11.24, 11.27, 11.76, 11.77, 11.80, 13.12 |
+| `MemoOptions` | `<Args, Accepted = unknown, Shaped = Accepted>{ ttl?: number; tags?: string[] \| ((args: Args) => string[]); global?: boolean; args?: Schema<Args>; key?: string \| ((element) => unknown); throttle?: number; debounce?: number; store?: Store<unknown> \| ((args: Args) => Store<unknown>); schema?: Schema<Accepted>; transform?: (value: Accepted) => Shaped; identity?: (next: Kept<Shaped>, previous: Kept<Shaped>) => unknown }` | How long an entry lives, what selects it, where it is kept, what its args must be, what tells one element of its value from another, where its value is stored, and the pace it produces at. | 11.32, 5.21, 11.78, 11.79, 6.1, 6.2, 6.3, 6.4, 6.5, 8.13, 11.6, 11.33, 11.35, 11.45, 11.48, 11.68, 5.8, 5.9, 5.11, 5.12, 5.14, 5.15, 5.16, 5.17, 5.18, 5.19, 5.20, 5.22, 5.23, 5.24, 5.25, 5.13, 11.43, 11.44, 13.15, 18.4, 18.15, 11.34, 11.36, 11.37, 11.38, 11.39, 11.52, 11.66, 26.24, 9.4, 11.28, 11.30, 11.40, 11.41, 11.55, 11.59, 11.67, 11.71 |
 
 ## `pipe`
 

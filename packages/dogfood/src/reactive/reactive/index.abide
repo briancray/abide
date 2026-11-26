@@ -13,7 +13,7 @@ import seats from './lib/Seats.abide' with { type: 'text' }
 
 <Doc
     seeAlso={[
-        '/reactive/memo',
+        '/orchestration/memo',
         '/reactive/watch',
         '/data/store',
         '/helpers/deep-equal',
