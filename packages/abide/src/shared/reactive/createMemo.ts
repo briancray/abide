@@ -33,13 +33,30 @@ export type MemoOptions<Args, Accepted = unknown, Shaped = Accepted> = {
     // each held to the window, for every reader and follower of it.
     throttle?: number | undefined
     debounce?: number | undefined
-    // 11.78 — where each entry's value is kept, so a restart opens on it rather than running `fn`.
-    store?: Store<unknown> | ((args: Args) => Store<unknown>) | undefined
+    // 11.78 — where each entry's value is kept, so a restart opens on it rather than running `fn`:
+    // one typed by the value, or one inferring nothing, as `store.sqlite(db, 'calls')` does.
+    store?: KeptIn<Args, NoInfer<Kept<Shaped>>> | undefined
     // 4.3, 4.6 — the gate on what `fn` settles to, then the shaping of it, as a `reactive`'s are.
     schema?: Schema<Accepted> | undefined
     transform?: ((value: Accepted) => Shaped) | undefined
     // 5.3 — what makes a write or a production a repeat, which reaches no reader and no follower.
     identity?: Identity<NoInfer<Kept<Shaped>>> | undefined
+}
+
+/**
+ * A store a memo or a handler keeps each entry in, per entry where it is a function of the args.
+ *
+ * `set` IS A METHOD, SO ITS PARAMETER IS CHECKED BOTH WAYS: a `Store<T>` of the value fits, and so
+ * does one inferring nothing (`store.sqlite(db, 'calls')` is a `Store<unknown>`), while a store of
+ * another value does not — and an inline `set: (value) => …` still reads `value` as the value. A
+ * union of `Store<T>` and `Store<unknown>` would have given that arrow no contextual type.
+ */
+export type KeptIn<Args, Value> =
+    EntryStore<Value> | ((args: Args) => EntryStore<Value>)
+type EntryStore<Value> = {
+    get: Store<Value>['get'] | Store<unknown>['get']
+    set(value: Value, retention: { ttl: number }): void | Promise<void>
+    watch?: Store<Value>['watch'] | undefined
 }
 
 /**

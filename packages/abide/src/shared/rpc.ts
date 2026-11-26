@@ -39,6 +39,7 @@ import {
 import type { CALL_ENTRY } from './reactive/CALL_ENTRY.ts'
 import { callLoad } from './reactive/callLoad.ts'
 import {
+    type KeptIn,
     type Memo,
     type MemoValue,
     readableOf,
@@ -62,7 +63,6 @@ import {
     type Selection,
     type Shaping,
     type Sourced,
-    type Store,
     STREAMING,
 } from './reactive/index.ts'
 import { isReactive } from './reactive/isReactive.ts'
@@ -349,13 +349,10 @@ type OptionsOf<
 /**
  * 16.110 — A HANDLER'S VALUE OPTIONS ARE A `memo`'S, its pace among them: `throttle` and `debounce`
  * hold back what every follower is sent, which a reader's own pacing could not. And its `store` is a
- * memo's, any store a value can be kept in: typed by the value, `store.sqlite(db, 'calls')` infers its
- * own `Stored` as `unknown` and no longer fits.
+ * memo's, `KeptIn`: a store of the value, or one inferring nothing as `store.sqlite(db, 'calls')` does.
  */
 type HandlerShaping<Shaping> = Omit<Shaping, 'store'>
-type HandlerStore<Args> = {
-    store?: Store<unknown> | ((args: Args) => Store<unknown>) | undefined
-}
+type HandlerStore<Args, Value> = { store?: KeptIn<Args, Value> | undefined }
 
 type Declare<Writes extends boolean> = {
     // 11.2 — keyed where the body declares a parameter, an optional one included; 16.87 — `Args`
@@ -377,7 +374,7 @@ type Declare<Writes extends boolean> = {
             Shaping<BodyValue<NoInfer<Result>>, Shaped, Args, Gate, ArgsGate>
         > &
             Sourced<NoInfer<Args>> &
-            HandlerStore<NoInfer<Args>> &
+            HandlerStore<NoInfer<Args>, NoInfer<Kept<Shaped>>> &
             OptionsOf<Writes, Args, Answers>,
     ): Rpc<
         Kept<Shaped>,
@@ -410,7 +407,7 @@ type Declare<Writes extends boolean> = {
             ? never
             : Held<Accepted>,
         options?: HandlerShaping<Shaping<Accepted, Shaped, never, Gate>> &
-            HandlerStore<undefined> &
+            HandlerStore<undefined, NoInfer<Kept<Shaped>>> &
             OptionsOf<Writes, undefined, Answers>,
     ): Rpc<
         Kept<Shaped>,
