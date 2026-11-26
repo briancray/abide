@@ -332,6 +332,20 @@ test('a page importing a server file under a nested lib fails the build — 16.2
     expect(built.stderr).not.toContain('media/lib/format.ts')
 })
 
+// 16.29 — A SERVER FILE ANSWERING AT ITS ROUTE CROSSES AS ITS `rpc`s ALONE, and a page importing any
+// other export of it is refused in abide's words. THE REVERT: drop `serverExportImported` from
+// `clientBundle`; the build still fails, in the bundler's words, with no `16.29` in them.
+test("a page importing a server file's export that is no rpc fails the build — 16.29", async () => {
+    const fixture = appFixture({
+        'media/catalog.server.ts': `import { rpc } from '@abide/abide/server'\n\nexport const SECRET = 'hunter2'\n\nexport default rpc(() => 'shelf')\n`,
+        'index.abide': `<script>\nimport { SECRET } from '#src/media/catalog.server.ts'\n</script>\n\n<p>{SECRET}</p>`,
+    })
+    const built = await buildApp(fixture)
+    expect(built.exitCode).not.toBe(0)
+    expect(built.stderr).toContain('RULEBOOK 16.29')
+    expect(built.stderr).toContain('"SECRET"')
+})
+
 // 16.29 — EVERY EDGE INTO A SERVER FILE, not only a module's: a file's text (34.21) and a component
 // are as much the server's as a `.ts`. THE REVERT: register `fenceServer` after `abideModules`;
 // both build, the key and the component in the bundle.

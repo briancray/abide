@@ -20,6 +20,7 @@ import { appPlugins } from './appPlugins.ts'
 import { CLIENT_ENTRY } from './CLIENT_BUILD.ts'
 import { fenceServer } from './fenceServer.ts'
 import { type Manifest, manifestOf, NO_MANIFEST } from './manifestOf.ts'
+import { HANDLER_SUFFIX } from './MODULE_QUERIES.ts'
 import { type Encoding, negotiateEncoding } from './negotiateEncoding.ts'
 import { workerBundles } from './workerBundles.ts'
 
@@ -157,11 +158,14 @@ export async function clientBundle(
     // THROWN RATHER THAN LOGGED: a build that emitted server modules and no bundle is an app that
     // serves every page dead — the markup right and nothing wired — which is the one failure a
     // reader cannot see. Dev catches it (38.17); the build stops on it.
-    if (!built.success)
+    if (!built.success) {
+        const fenced = serverExportImported(built.logs)
+        if (fenced !== undefined) throw new Error(fenced)
         throw new AggregateError(
             built.logs,
             `abide ${mode}: the client bundle failed`,
         )
+    }
     outputs.push(...built.outputs)
     // The outputs are independent, so they are read at once rather than one after another.
     const read = await Promise.all(
@@ -248,3 +252,25 @@ export function bundleServer(
         return new Response(encoded(), { headers })
     }
 }
+
+/**
+ * 16.29 — the refusal of a browser import of a server file's export that is no `rpc`: the file crosses
+ * as its `rpc`s' wrappers (16.74), so the bundler meets a name its face does not export, and says so
+ * in its own words. Said in abide's, naming the file and the export, where a log is that one.
+ */
+function serverExportImported(
+    logs: Bun.BuildOutput['logs'],
+): string | undefined {
+    for (const log of logs) {
+        const found = SERVER_EXPORT_MISSING.exec(log.message)
+        if (found === null) continue
+        const [, file, name] = found
+        return `abide: the browser's bundle imports ${JSON.stringify(name)} from ${file}, a server file whose exports reach the browser only as its \`rpc\`s. Export it as one, or import it on the server alone. RULEBOOK 16.29.`
+    }
+    return undefined
+}
+
+/** The bundler's word for an import its face does not export: the file, and the name asked. */
+const SERVER_EXPORT_MISSING = new RegExp(
+    `No matching export in "([^"]*\\.server\\.[^"/]*?)(?:${RegExp.escape(HANDLER_SUFFIX)})?" for import "([^"]+)"`,
+)
