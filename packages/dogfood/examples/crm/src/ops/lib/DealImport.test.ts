@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test'
 import { createApp } from '@abide/abide/server'
 
 import importDeals from '../importDeals.server.ts'
-import { dealImport, importedDeals } from './dealImport.server.ts'
+import { dealImport } from './dealImport.server.ts'
 
 /** What the CRM answers a press of Import, a refusal included. */
 async function pressImport(options?: { stage?: string }) {
@@ -33,5 +33,7 @@ test('an import asked for one stage imports only the deals at it', async () => {
     await dealImport.run()
     await app.run(() => pressImport({ stage: 'lead' }))
     await dealImport.run()
-    expect(`imported: ${await importedDeals()}`).toBe('imported: 3')
+    expect(`imported: ${(await dealImport.status()).lastResult}`).toBe(
+        'imported: 3',
+    )
 })
