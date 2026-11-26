@@ -1,6 +1,6 @@
 // 47.25-47.31 — A TABLE AS A STREAM PAIR: every committed change read out in order, whoever wrote it,
 // none for a write rolled back; rows written in upserted a turn at a time; and a change refreshing
-// what is tagged with the table's name.
+// what called the table.
 
 import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
@@ -120,22 +120,17 @@ test('a column that is no SQL identifier is refused, whatever shape came before 
     ).toContain('is not an SQL identifier')
 })
 
-// 47.29 — A CHANGE REFRESHES WHAT CARRIES THE TABLE'S NAME AS A TAG: a value reading the table runs
-// again after a write it never heard about. THE REVERT: drop the `invalidate` from `watchTag`, and
-// `total: 100` stands.
-test('a change refreshes every value tagged with the table — 47.29', async () => {
+// 47.29 — A CHANGE REFRESHES WHAT CALLED THE TABLE: a value reading the table runs again after a
+// write it never heard about. THE REVERT: drop `readBy` from the table's call, and `total: 100` stands.
+test('a change refreshes every value that called the table — 47.29', async () => {
     const db = deals()
     db.run("INSERT INTO deals VALUES ('d1', 'Acme', 100)")
-    table<Deal>(db, 'deals')
-    const total = keyedValue(
-        () =>
-            (
-                db.query('SELECT SUM(amount) AS total FROM deals').get() as {
-                    total: number
-                }
-            ).total,
-        { tags: ['deals'] },
-    )()
+    const dealRows = table<Deal>(db, 'deals')
+    const total = keyedValue(() => {
+        let sum = 0
+        for (const deal of dealRows()) sum += deal.amount
+        return sum
+    })()
     expect(`total: ${total()}`).toBe('total: 100')
     db.run("INSERT INTO deals VALUES ('d2', 'Globex', 50)")
     // The watch looks every 50 ms: waited for, with a deadline, rather than slept a fixed time.

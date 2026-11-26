@@ -5,8 +5,8 @@
 // value interpolated is a parameter bound to it — never text. An array interpolated is a list of
 // them, `(?, ?, ?)`, so a call site is one statement per length of each list it is handed (47.37).
 //
-// A QUERY AND NOTHING ELSE: what reads it is refreshed by the tags it declares, which a change to a
-// table names (47.29) — a statement tracks nothing on its own.
+// A QUERY AND NOTHING ELSE: a statement tracks nothing, so what reads one is refreshed by the tags it
+// declares, refreshed by whoever writes — only a table called is followed by its changes (47.29).
 
 import type { Database, SQLQueryBindings, Statement } from 'bun:sqlite'
 

@@ -33,6 +33,7 @@ export {
     pendingWork,
     produceInto,
     refreshCallerHeld,
+    refreshCells,
     refuseInto,
     standIn,
     streamingOrSettled,

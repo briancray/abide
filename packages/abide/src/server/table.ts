@@ -14,8 +14,12 @@ import type { Database } from 'bun:sqlite'
 import { namedLogger } from '#shared/log.ts'
 import type { Match } from '#shared/Match.ts'
 import { appStopSignal } from '#shared/reactive/abortSignal.ts'
-import { refresh } from '#shared/reactive/index.ts'
+import { CELL } from '#shared/reactive/CELL.ts'
+import type { Cell } from '#shared/reactive/cellShape.ts'
+import { refreshCells } from '#shared/reactive/producer.ts'
+import { SCOPING } from '#shared/reactive/scoping.ts'
 import { unrefTimer } from '#shared/reactive/unrefTimer.ts'
+import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 import { SOURCE_KIND } from '#shared/SOURCE_KIND.ts'
 
 import { SQL_IDENTIFIER } from './SQL_IDENTIFIER.ts'
@@ -60,7 +64,7 @@ export type Table<Row> = ((match?: Match<Row>) => Row[]) & {
 
 /**
  * A table of `database`: called, its rows, or those `match` names (47.35), a read that refreshes the
- * run it is made in when the table changes (47.32); `readable` its changes from the moment it is first
+ * run it is made in when the table changes (47.29); `readable` its changes from the moment it is first
  * read, `writable` the rows to upsert by `key` (47.25-47.31).
  */
 export function table<Row extends Record<string, unknown>>(
@@ -85,8 +89,8 @@ export function table<Row extends Record<string, unknown>>(
     // 47.38 — READ ON THE CONNECTION AS IT IS: a database refusing the change log is still read.
     const read = selects<Row>(acquire, name)
     const writes = rowWrites<Row>(name, key)
-    // 47.29, 47.34 — a write made here is heard at once: what carries the table's name as a tag is
-    // refreshed now, and the watch's next look does not hear it again.
+    // 47.29, 47.34 — a write made here is heard at once: what read the table is refreshed now, and
+    // the watch's next look does not hear it again.
     const wrote = (count: number): number => {
         if (count > 0) heard(watchOf(database, connection, name), connection)
         return count
@@ -114,9 +118,14 @@ export function table<Row extends Record<string, unknown>>(
             )
         return wrote(read.remove(connection(), match))
     }
-    return Object.defineProperties((match?: Match<Row>) => read.rows(match), {
-        // 16.117 — read by `rpc` for its face: a change to the table refreshes its name as a tag.
-        [SOURCE_KIND]: { value: { kind: 'table', tags: [name] } },
+    const called = (match?: Match<Row>): Row[] => {
+        const rows = read.rows(match)
+        readBy(watchOf(database, connection, name))
+        return rows
+    }
+    return Object.defineProperties(called, {
+        // 16.117 — read by `rpc` for its face.
+        [SOURCE_KIND]: { value: { kind: 'table', name } },
         set: { value: set },
         patch: { value: patch },
         delete: { value: remove },
@@ -398,8 +407,23 @@ function looking(
     unrefTimer(timer)
 }
 
-/** 47.29 — one table's watch: its name, and the last change it has passed. */
-type Watch = { name: string; seen: number | undefined }
+/**
+ * 47.29, 47.39 — one table's watch: its name, the last change it has passed, the runs whose last run
+ * called the table, and the handlers a run of which did. A reader is held by its record, which holds
+ * its value weakly — a read is never a reason to keep one.
+ */
+type Watch = {
+    name: string
+    seen: number | undefined
+    readers: Set<Reader>
+    handlers: Set<object>
+}
+
+/** One run's calls of tables: the value whose run it is, which run, and the tables it called. */
+type Reader = { value: WeakRef<Cell>; epoch: number; tables: Set<Watch> }
+
+/** 47.29 — each value's reads, as of its last run that called a table. */
+const READERS = new WeakMap<Cell, Reader>()
 
 /** 47.29 — per database or opener, each table's watch. */
 const WATCHED = new WeakMap<object, Map<string, Watch>>()
@@ -420,7 +444,12 @@ function watchOf(
     const standing = watches.get(name)
     if (standing !== undefined) return standing
     // 47.29 — the baseline taken where the table is named, so a write before the first look is heard.
-    const watch: Watch = { name, seen: undefined }
+    const watch: Watch = {
+        name,
+        seen: undefined,
+        readers: new Set(),
+        handlers: new Set(),
+    }
     watches.set(name, watch)
     const watched = watches
     try {
@@ -439,7 +468,7 @@ function watchOf(
                 if (!WARNED.has(owner)) {
                     WARNED.add(owner)
                     WATCH_LOG.warning(
-                        `the watch of ${name} stopped: only writes made through its table refresh what is tagged with it. RULEBOOK 47.38.`,
+                        `the watch of ${name} stopped: only writes made through its table refresh what read it. RULEBOOK 47.38.`,
                         thrown,
                     )
                 }
@@ -466,11 +495,69 @@ function watchOf(
 }
 
 /**
- * 47.29 — what a change to the watched table refreshes: what carries its name as a tag, reloaded
- * where something reads it (13.7) and kept until then, so a reader never meets it empty.
+ * 47.29, 47.39 — what a change to the watched table refreshes: the values whose last run called it,
+ * reloaded where something reads them (13.7) and kept until then, so a reader never meets one empty;
+ * and the browser copies of each handler a run of which called it.
  */
 function changed(watch: Watch): void {
-    refresh({ tags: [watch.name] })
+    const reloading: Cell[] = []
+    for (const reader of watch.readers) {
+        const cell = reader.value.deref()
+        // Collected, or run again since without calling the table: its last run did not read it.
+        if (cell === undefined || cell.runEpoch !== reader.epoch) {
+            watch.readers.delete(reader)
+            continue
+        }
+        reloading.push(cell)
+    }
+    if (reloading.length > 0) refreshCells(reloading)
+    if (watch.handlers.size > 0)
+        for (const followers of RPC_SERVER.following)
+            followers.sweepReaders(watch.handlers)
+}
+
+/**
+ * 47.29 — the run this is called in called the table: a change to it refreshes that run's value. Not
+ * a mutation's run (13.16), nor the continuation of a run already ended (7.24).
+ */
+function readBy(watch: Watch): void {
+    const mark = SCOPING.provider?.currentRun()
+    if (mark === undefined) return
+    const cell = mark.cell
+    if (cell.mutation || mark.epoch !== cell.runEpoch) return
+    let reader = READERS.get(cell)
+    if (reader === undefined || reader.epoch !== mark.epoch) {
+        // A new run: what the last one called is not what this one calls.
+        if (reader !== undefined)
+            for (const called of reader.tables) called.readers.delete(reader)
+        reader = {
+            value: new WeakRef(cell),
+            epoch: mark.epoch,
+            tables: new Set(),
+        }
+        READERS.set(cell, reader)
+    }
+    reader.tables.add(watch)
+    watch.readers.add(reader)
+}
+
+/**
+ * 47.39 — `handler`'s run that produced `value` called the tables it did: their changes reach the
+ * handler's browser copies from now on. The value's own run, or the run of what it adopted, as a
+ * handler's call adopts its entry.
+ */
+export function readByHandler(handler: object, value: unknown): void {
+    let cell: Cell | undefined = (value as { [CELL]?: Cell | undefined })?.[
+        CELL
+    ]
+    while (cell !== undefined) {
+        const reader = READERS.get(cell)
+        if (reader !== undefined && reader.epoch === cell.runEpoch) {
+            for (const watch of reader.tables) watch.handlers.add(handler)
+            return
+        }
+        cell = cell.adoption?.source
+    }
 }
 
 /** 47.34 — a write made here, heard now, so the watch's next look does not hear it again. */

@@ -20,6 +20,7 @@ import type { FollowedHandler, Mounted } from './mountHandlers.ts'
 import { takeSeeded } from './PageRender.ts'
 import { currentRequestScope, rungsTook, timed } from './requestScope.ts'
 import { type Outcome, outcomeOf } from './seedBuffer.ts'
+import { readByHandler } from './table.ts'
 
 /**
  * What the origin gate makes of a call from `crossing`: the refusal it is answered with, or the
@@ -131,6 +132,8 @@ export async function invokeHandler(
     const reached = seeded === undefined ? reachOf(handler, args) : undefined
     const outcome =
         seeded === undefined ? await outcomeOf(reached, started) : await seeded
+    // 47.39 — the tables this run called, whose changes reach the handler's followers from now on.
+    if (reached !== undefined) readByHandler(handler, reached)
     const entry = key === undefined ? undefined : global?.at(key)
     const run: Run =
         seeded !== undefined

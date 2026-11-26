@@ -303,6 +303,22 @@ export class Followers {
     }
 
     /**
+     * 47.39 — A TABLE CHANGED THAT A RUN OF EACH OF `handlers` CALLED: every copy a browser follows
+     * of them is sent a refresh, save one fed from an entry here, which the table's own refresh of
+     * that entry reloaded.
+     */
+    sweepReaders(handlers: ReadonlySet<object>): void {
+        for (const rpc of handlers) {
+            const handlerFollowers = this.handlers.get(rpc)
+            if (handlerFollowers === undefined) continue
+            for (const follower of handlerFollowers.all) {
+                if (this.attach(rpc, follower) !== undefined) continue
+                follower.peer.send(follower.id, TRIGGERS.refresh)
+            }
+        }
+    }
+
+    /**
      * 18.8 — AN ENTRY ANSWERED THAT NOBODY IS FED FROM: one made after a follower subscribed for its
      * args, or rebuilt after the one it was fed from was evicted. An entry already fed is the common
      * answer, and asks nothing more; one that is not reaches the followers filed under its key.

@@ -3718,6 +3718,11 @@ export function refreshCallerHeld(): void {
     refreshAll(held, null)
 }
 
+/** 13.7's refresh over `cells` alone, as a sweep over them: the runs 47.29's table call reached. */
+export function refreshCells(cells: Cell[]): void {
+    refreshAll(cells, null)
+}
+
 /**
  * 13.7 — EVERY MARK BEFORE ANY RELOAD. A reload runs its body as it starts, and a memo that body calls
  * reads nothing to be tracked by (11.6): left unmarked until later in the same sweep, it would answer

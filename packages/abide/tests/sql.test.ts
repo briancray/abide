@@ -1,11 +1,12 @@
 // 47.29, 47.32-47.38 — SQL AS A TAG, A TABLE CALLED AND WRITTEN BY KEY: every interpolation a bound
-// parameter, one statement per call site, a match as JSON — and what reads a table refreshed by the
-// tag its name is, at once for a write through the table and on the watch's next look for any other.
+// parameter, one statement per call site, a match as JSON — and what called a table refreshed by its
+// changes, at once for a write through the table and on the watch's next look for any other, while
+// what reads it through `sql` is refreshed by its own tags alone.
 
 import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
 
-import { database, table } from '#server'
+import { database, type Table, table } from '#server'
 import { flushSync, memo, reactive, watch } from '#shared'
 
 type Deal = { id: string; stage: string; amount: number }
@@ -32,18 +33,25 @@ async function until(done: () => boolean): Promise<void> {
     while (!done() && Date.now() < deadline) await Bun.sleep(10)
 }
 
-/** A global memo totalling the deals through `sql`, tagged with the table, followed by a watch. */
-function wonTotal(db: ReturnType<typeof crm>) {
+/**
+ * A global memo totalling the won deals, followed by a watch: read by calling the table, or through
+ * `sql` and tagged with the table's name.
+ */
+function wonTotal(db: ReturnType<typeof crm>, deals?: Table<Deal>) {
     let runs = 0
     const total = memo(
         () => {
             runs += 1
-            return (
-                db.sql<{
-                    total: number
-                }>`SELECT SUM(amount) AS total FROM deals WHERE stage = 'won'`[0]
-                    ?.total ?? 0
-            )
+            if (deals === undefined)
+                return (
+                    db.sql<{
+                        total: number
+                    }>`SELECT SUM(amount) AS total FROM deals WHERE stage = 'won'`[0]
+                        ?.total ?? 0
+                )
+            let sum = 0
+            for (const deal of deals({ stage: 'won' })) sum += deal.amount
+            return sum
         },
         { global: true, tags: ['deals'] },
     )
@@ -100,13 +108,13 @@ test('sql prepares one statement per call site — 47.32', () => {
     )
 })
 
-// 47.29, 47.34 — A WRITE THROUGH THE TABLE REFRESHES ITS TAG AT ONCE, the watch's next look not
-// hearing it again. THE REVERT: drop the `heard` call in the table's `wrote`; the total is still `100`
-// on the turn after the write, where `105` is due, and reaches it only on the watch's next look.
-test("a table's write refreshes what carries its name as a tag at once — 47.29, 47.34", async () => {
+// 47.29, 47.34 — A WRITE THROUGH THE TABLE REFRESHES WHAT CALLED IT AT ONCE, the watch's next look
+// not hearing it again. THE REVERT: drop the `heard` call in the table's `wrote`; the total is still
+// `100` on the turn after the write, where `105` is due, and reaches it only on the watch's next look.
+test("a table's write refreshes what called the table at once — 47.29, 47.34", async () => {
     const db = crm()
     const deals = table<Deal>(db, 'deals')
-    const won = wonTotal(db)
+    const won = wonTotal(db, deals)
     await until(() => won.seen() === 100)
     // Past the watch's first look, so the runs counted are the write's alone.
     await Bun.sleep(120)
@@ -120,13 +128,12 @@ test("a table's write refreshes what carries its name as a tag at once — 47.29
     expect(`${atOnce} runs: ${won.runs() - before}`).toBe('105 runs: 1')
 })
 
-// 47.29 — A COMMIT ANOTHER CONNECTION MAKES REFRESHES THE TAG on the watch's next look: the change log
-// is written by the table's triggers, whoever wrote. THE REVERT: drop `invalidate` from `changed`; the
-// total stands at `100`.
-test('a commit by another connection refreshes what carries the table as a tag — 47.29', async () => {
+// 47.29 — A COMMIT ANOTHER CONNECTION MAKES REFRESHES WHAT CALLED THE TABLE on the watch's next look:
+// the change log is written by the table's triggers, whoever wrote. THE REVERT: drop `refreshCells`
+// from `changed`; the total stands at `100`.
+test('a commit by another connection refreshes what called the table — 47.29', async () => {
     const db = crm()
-    table<Deal>(db, 'deals')
-    const won = wonTotal(db)
+    const won = wonTotal(db, table<Deal>(db, 'deals'))
     await until(() => won.seen() === 100)
     const other = new Database(db().filename)
     other.run("INSERT INTO deals VALUES ('d4', 'won', 40)")
@@ -134,6 +141,26 @@ test('a commit by another connection refreshes what carries the table as a tag �
     await until(() => won.seen() === 140)
     won.stop()
     expect(won.seen()).toBe(140)
+})
+
+// 47.29 — A TABLE'S NAME IS NO TAG: a value reading it through `sql` and tagged with its name is
+// refreshed by neither a write through the table nor another connection's commit. THE REVERT: put
+// `refresh({ tags: [watch.name] })` back in `changed`; the total moves to `145` in `2` runs.
+test("a change to a table refreshes no value for carrying the table's name as a tag — 47.29", async () => {
+    const db = crm()
+    const deals = table<Deal>(db, 'deals')
+    const won = wonTotal(db)
+    await until(() => won.seen() === 100)
+    await Bun.sleep(120)
+    const before = won.runs()
+    deals.set({ id: 'd3', stage: 'won', amount: 5 })
+    const other = new Database(db().filename)
+    other.run("INSERT INTO deals VALUES ('d4', 'won', 40)")
+    other.close()
+    // Past the watch's next look, which would hear the other connection's commit.
+    await Bun.sleep(150)
+    won.stop()
+    expect(`${won.seen()} in ${won.runs() - before} runs`).toBe('100 in 0 runs')
 })
 
 // 47.33 — A TABLE IS WRITTEN BY KEY: `set` upserts, `patch` writes only the columns a row names, and

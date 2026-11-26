@@ -13,7 +13,7 @@ export default rpc(
         return newest?.target ?? null
     },
     {
-        // 47.29 — read again when the table changes.
+        // 16.89 — read again when `setTarget` refreshes the tag.
         tags: ['targets'],
         description: "Reads the team's target for the quarter.",
     },

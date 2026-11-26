@@ -30,9 +30,9 @@ import Section from '#src/lib/Section.abide'
             ],
         },
         {
-            path: 'packages/abide/tests/sqlFollow.test.ts',
+            path: 'packages/abide/tests/sql.test.ts',
             from: [
-                'test("a write through a table\'s rpc reaches a follower of a GET tagged with the table — 47.29, 16.117"',
+                'test("a change to a table refreshes no value for carrying the table\'s name as a tag — 47.29"',
             ],
         },
         {
@@ -65,9 +65,9 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="List the latest targets, and send each new one to the browser">
-        <p><code>sql</code> answers the rows at once. The table's name among the
-            <code>tags</code> is what sends a browser showing this list the new rows when anyone
-            sets a target.</p>
+        <p><code>sql</code> answers the rows at once and follows nothing, so the list carries a
+            tag, and the rpc that sets a target refreshes it with <code>refreshes</code> — which
+            sends a browser showing this list the new rows.</p>
         <Code language="ts" caption="server" code={`
             import { rpc } from '@abide/abide/server'
             import { crmDatabase } from './lib/crmDatabase.server.ts'

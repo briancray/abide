@@ -1231,7 +1231,7 @@ const WRITTEN: readonly {
                 route: '/data/table',
                 title: '`table`',
                 description:
-                    'Read every change committed to a SQLite table as a stream, refresh what is tagged with it, and upsert rows in batches.',
+                    'Read every change committed to a SQLite table as a stream, refresh what called it, and upsert rows in batches.',
                 where: 'server',
             },
             {

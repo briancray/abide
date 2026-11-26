@@ -929,8 +929,8 @@ const ONE_VERB: readonly Method[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 /** 16.117 — a kind of addressable value whose writes are members of its face. */
 type SourceKind = keyof typeof SOURCE_MEMBERS
 
-/** What a source answers its kind by, and the tags a change to it refreshes (`SOURCE_KIND`). */
-type SourceBrand = { kind: SourceKind; tags?: readonly string[] | undefined }
+/** What a source answers its kind by, and a table's name (`SOURCE_KIND`). */
+type SourceBrand = { kind: SourceKind; name?: string | undefined }
 
 /**
  * A value, a function or a source given an address: what `GET` and the four mutations were, one
@@ -979,7 +979,7 @@ export const rpc: Declare<true> = ((
         )
     const main = declare('GET')(
         readOf(kind, value, brand, columns) as never,
-        readOptions(kind, brand, rest, isPromise(value)) as never,
+        readOptions(kind, rest, isPromise(value)) as never,
     ) as unknown as Record<string, unknown> & {
         methods: readonly Method[]
         [FACES]: Partial<Record<Method, unknown>>
@@ -1149,25 +1149,17 @@ function readOf(
     return isPromise(value) ? value : () => value
 }
 
-/** 16.115, 16.117 — a source's read's options: one value for the server, a table's name its tag. */
+/** 16.115, 16.117 — a source's read's options: one value for the server. */
 function readOptions(
     kind: SourceKind,
-    brand: SourceBrand | undefined,
     options: RpcOptions,
     // A promise is the value form's own (16.1), which takes no source's options (11.81).
     promised: boolean,
 ): RpcOptions {
     if (kind === 'memo' || kind === 'job' || kind === 'pipe' || promised)
         return options
-    const given = options as {
-        global?: boolean | undefined
-        tags?: string[] | undefined
-    }
-    const tags =
-        brand?.tags === undefined
-            ? given.tags
-            : [...(given.tags ?? []), ...brand.tags]
-    return { ...options, global: given.global ?? true, tags } as RpcOptions
+    const given = options as { global?: boolean | undefined }
+    return { ...options, global: given.global ?? true } as RpcOptions
 }
 
 function refuseColumns(): never {
@@ -1205,7 +1197,7 @@ function withinColumns(
             if (!columns.includes(column))
                 return refuse(
                     400,
-                    `${brand?.tags?.[0] ?? 'this table'}'s ${member} names ${JSON.stringify(column)}, which its rpc's columns leave out. RULEBOOK 16.118.`,
+                    `${brand?.name ?? 'this table'}'s ${member} names ${JSON.stringify(column)}, which its rpc's columns leave out. RULEBOOK 16.118.`,
                 )
     }
     return given

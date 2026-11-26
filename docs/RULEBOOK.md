@@ -5231,8 +5231,8 @@ reached, each as the row after and the row before.
 
 47.28 A write rolled back MUST hand on no change.
 
-47.29 A change to a table `table` was called for MUST refresh every value whose `tags` name the
-table, as `refresh` over those tags does.
+47.29 A change to a table `table` was called for MUST refresh every value whose last run called a
+`table` of it, as `refresh` over those values does, and MUST refresh no value for its `tags`.
 
 47.30 Rows written to a `table`'s `writable` MUST be upserted by `key`, `id` where none is given,
 and the rows written in one turn MUST be committed in one transaction.
@@ -5249,8 +5249,8 @@ each row names onto the row with that row's `key` and leave the rest, and its `d
 rows a `match` names and answer how many; each MUST write in one transaction, and MUST throw for a row
 carrying no `key` or a `delete` whose `match` names no column.
 
-47.34 A write through a `table`'s `set`, `patch` or `delete` MUST refresh 47.29's tag at once, and
-47.29's watch MUST NOT refresh it again for that write.
+47.34 A write through a `table`'s `set`, `patch` or `delete` MUST refresh what 47.29 names at once,
+and 47.29's watch MUST NOT refresh it again for that write.
 
 47.35 A `table` called MUST answer every row of the table, or with `match` the rows whose every
 column `match` names the value given matches per 47.36, and MUST throw for a column the
@@ -5269,7 +5269,10 @@ comparison other than `ne`, and for an array or an object nested where a value g
 
 47.38 A database refusing 47.26's change log, a read-only one among them, MUST still be read by a
 `table` call and by `sql`, its stopped watch said once per database, and the writes made through its
-`table` MUST then be all that refresh 47.29's tag.
+`table` MUST then be all that refresh what 47.29 names.
+
+47.39 A change 47.29 refreshes by MUST send a refresh to every browser's copy of a handler a run of
+which called a `table` of that table, save a copy fed from an entry 47.29 refreshed.
 
 # 48. Problem reports
 

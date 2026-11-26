@@ -1,6 +1,7 @@
-// 47.29, 16.117, 18.3 — A TABLE IS FOLLOWED THROUGH ITS TAG: a write through its `rpc`, or a commit
-// another connection makes, reaches a browser following the table's own `rpc` and every `GET` that
-// carries the table's name as a tag.
+// 47.29, 47.39, 16.117, 18.3 — A TABLE IS FOLLOWED THROUGH WHAT CALLED IT: a write through its `rpc`,
+// or a commit another connection makes, reaches a browser following the table's own `rpc` and every
+// `GET` whose run called the table — the value where the server holds one, a refresh where it does
+// not.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
@@ -20,12 +21,15 @@ const db = database(${JSON.stringify(FILE)}, {
         "INSERT INTO deals VALUES ('d1', 'won'), ('d2', 'lead'), ('d3', 'lead')",
     ],
 })
-export const deals = rpc(table<{ id: string; stage: string }>(db, 'deals'))
+const dealRows = table<{ id: string; stage: string }>(db, 'deals')
+export const deals = rpc(dealRows)
 
 export const won = rpc(
-    () => db.sql<{ id: string }>\`SELECT id FROM deals WHERE stage = 'won' ORDER BY id\`.map((row) => row.id),
-    { global: true, tags: ['deals'] },
+    () => dealRows({ stage: 'won' }).map((row) => row.id).sort(),
+    { global: true },
 )
+
+export const staged = rpc(({ stage }: { stage: string }) => dealRows({ stage }).map((row) => row.id))
 
 // 47.4 — the file the server opened, a scratch one under test, which another connection opens too.
 export const where = rpc(() => db().filename)
@@ -63,10 +67,10 @@ function landed(held: unknown, frames: Record<string, unknown>[]) {
     return sent?.op === 'value' ? sent.value : patched(held, sent)
 }
 
-// 47.29, 16.117 — A WRITE THROUGH THE TABLE'S `rpc` REACHES A FOLLOWER OF A `GET` TAGGED WITH IT, at
-// once. THE REVERT: drop the `refresh` from `changed` in table.ts; the follower is sent no frame where
+// 47.29, 16.117 — A WRITE THROUGH THE TABLE'S `rpc` REACHES A FOLLOWER OF A `GET` THAT CALLED IT, at
+// once. THE REVERT: drop `refreshCells` from `changed` in table.ts; the follower is sent no frame where
 // `["d1"] -> ["d1","d2"]` is due.
-test("a write through a table's rpc reaches a follower of a GET tagged with the table — 47.29, 16.117", async () => {
+test("a write through a table's rpc reaches a follower of a GET that called the table — 47.29, 16.117", async () => {
     const frames = await client(`const answered = await get('won')
 const version = Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, ''))
 frames.push({ op: 'answered', value: await answered.json() })
@@ -100,4 +104,20 @@ await until((frames) => frames.some((frame) => frame.op === 'patch' || frame.op 
     const now = landed(held, frames) as { id: string }[]
     const ids = (rows: { id: string }[]) => rows.map((row) => row.id)
     expect(ids(now).filter((id) => !ids(held).includes(id))).toEqual(['d3'])
+})
+
+// 47.39 — A `GET` THE SERVER HOLDS NO VALUE OF between requests: its follower is sent a refresh, to
+// fetch again. THE REVERT: drop `readByHandler` from `invokeHandler`; the browser is sent `[]` where
+// `['refresh']` is due.
+test('a follower of a GET the server holds no value of is sent a refresh when the table it called changes — 47.39', async () => {
+    const frames = await client(`await (await get('staged?stage=lead')).json()
+send({ op: 'sub', id: 2, address: '/crm/staged', args: { stage: 'lead' } })
+await settled()
+const { Database } = await import('bun:sqlite')
+const other = new Database(await (await get('where')).json())
+other.run("INSERT INTO deals VALUES ('d9', 'lead')")
+other.close()
+await until((frames) => frames.length > 0)
+`)
+    expect(frames.map((frame) => frame.op)).toEqual(['refresh'])
 })
