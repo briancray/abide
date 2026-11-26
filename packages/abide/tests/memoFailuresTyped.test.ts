@@ -1,5 +1,5 @@
 // 11.12, 11.4 — A MEMO CARRIES THE FAILURES ITS FUNCTION'S ANSWER CARRIES: a memo over a handler hands
-// back the call it answers (11.4), and a `reactive.derived` calling it adopts that call's refusal as its
+// back the call it answers (11.4), and a derived `reactive` calling it adopts that call's refusal as its
 // own (11.12), so `s.error()` is typed with the handler's refusals rather than as nothing.
 
 import { expect, test } from 'bun:test'
@@ -15,7 +15,7 @@ const tooBig = refuse.named('TooBig', {
 test("a derived over a memo of a handler is typed with the handler's refusals — 11.12", async () => {
     const bounded = rpc(({ n }: { n: number }) => (n > 10 ? tooBig({ n }) : n))
     const paced = memo(bounded, { debounce: 0 })
-    const shown = reactive.derived(() => paced({ n: 99 }))
+    const shown = reactive(() => paced({ n: 99 }))
     await Promise.resolve(shown).then(
         () => undefined,
         () => undefined,

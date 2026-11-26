@@ -57,13 +57,13 @@ import {
     type AdoptedFailures,
     type BodyProduced,
     type BodyValue,
-    derived,
     handlerValue,
     type Held,
     isKeyed,
     type Kept,
     keyedValue,
     type Reactive,
+    reactive,
     refresh,
     type Refusals,
     type Selection,
@@ -196,7 +196,7 @@ export type CallAnswer<Value, Failures, Produced> = ([Value] extends [Produced]
         ? Promise<Value>
         : AsyncIterable<Produced>
     : AsyncIterable<Produced>) & {
-    // Typed only: the value and the refusals a `reactive.derived` adopting the answer serves as its own
+    // Typed only: the value and the refusals a derived `reactive` adopting the answer serves as its own
     // (11.12), and what the build reads a handler's value off (19.21).
     readonly [CALL_ENTRY]?:
         | {
@@ -748,7 +748,7 @@ export function declare<Declared extends Method>(
                 args = acceptedArgs(rpc, given)
             } catch (refused) {
                 if (!isFailed(refused)) throw refused
-                return derived(() => refused)
+                return reactive(() => refused)
             }
             const route =
                 rpc.address === undefined ? undefined : routeAt(rpc.address)
@@ -756,7 +756,7 @@ export function declare<Declared extends Method>(
                 try {
                     route.path(args as Record<string, unknown> | undefined)
                 } catch (refused) {
-                    return derived(() => refused)
+                    return reactive(() => refused)
                 }
             }
             const reached = callLoad(
@@ -773,7 +773,7 @@ export function declare<Declared extends Method>(
         }
         // 16.3 — WHAT A CALL ANSWERS IS WHAT THE HANDLER'S BODY ANSWERS: a promise of the value or
         // its refusal, or the stream of its chunks. The value the call reached stays the handler's,
-        // carried on the answer for a `reactive.derived` handing it back whole to adopt (11.12).
+        // carried on the answer for a derived `reactive` handing it back whole to adopt (11.12).
         const call = (given?: unknown, options?: CallOptions): unknown =>
             answerOfCall(reachCall(given, options), streams)
         // THE HANDLER'S OWN TRIGGERS, handed the pattern, which a `Keyed` narrows by.

@@ -26,9 +26,9 @@ const PAGE = `<script>
 import { reactive } from '@abide/abide'
 import ticks from '#src/data/ticks.server.ts'
 
-const a = reactive.derived(() => ticks({ n: 'a' }))
-const b = reactive.derived(() => ticks({ n: 'b' }))
-const c = reactive.derived(() => ticks({ n: 'c' }))
+const a = reactive(() => ticks({ n: 'a' }))
+const b = reactive(() => ticks({ n: 'b' }))
+const c = reactive(() => ticks({ n: 'c' }))
 </script>
 
 <main>

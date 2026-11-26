@@ -5,7 +5,7 @@ import listTargets from '../listTargets.server.ts'
 import setTarget from '../setTarget.server.ts'
 
 let next = reactive<number | undefined>(600_000)
-const targets = reactive.derived(() => listTargets())
+const targets = reactive(() => listTargets())
 
 // The log reads the targets table, so a target set loads it again.
 async function record() {

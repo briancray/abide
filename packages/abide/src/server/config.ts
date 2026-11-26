@@ -8,7 +8,7 @@ import { homedir } from 'node:os' // bun exposes no home directory of its own
 
 import { isRecord } from '#shared/isRecord.ts'
 import { numberFromText } from '#shared/numberFromText.ts'
-import { processWideDerived } from '#shared/reactive/index.ts'
+import { processWide } from '#shared/reactive/index.ts'
 import { refuse } from '#shared/refuse.ts'
 import { runSchema } from '#shared/Schema.ts'
 
@@ -65,7 +65,7 @@ export function addDerived(values: Record<string, string>): void {
 }
 
 /** The resolved configuration: abide's derived values, then `onConfig`'s defaults, then the env. */
-export const config = processWideDerived(resolve)
+export const config = processWide(resolve)
 
 function resolve(): Config {
     const document = unchecked()

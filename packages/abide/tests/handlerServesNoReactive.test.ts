@@ -14,7 +14,7 @@ test('a handler declared over a Reactive throws at construction — 16.109', () 
 // THE REVERT: hand `keyedValue` the body unwrapped in `handlerValue`; the call adopts the computed and
 // resolves to 2.
 test('a handler whose body answers a Reactive throws on that run — 16.109', async () => {
-    const doubled = reactive.derived(() => 2)
+    const doubled = reactive(() => 2)
     const served = rpc(() => doubled)
     const answered = await Promise.resolve(served()).then(
         (value) => `resolved ${String(value)}`,

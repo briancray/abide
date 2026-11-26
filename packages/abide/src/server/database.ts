@@ -2,7 +2,7 @@ import { Database, type DatabaseOptions } from 'bun:sqlite'
 import { mkdirSync, readdirSync, rmSync } from 'node:fs' // bun exposes no directory creation or listing, nor synchronous removal, of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path resolution of its own
 
-import { processWideDerived, type Reactive } from '#shared/reactive/index.ts'
+import { processWide, type Reactive } from '#shared/reactive/index.ts'
 import { isSubscribed } from '#shared/reactive/producer.ts'
 
 import { config, derived } from './config.ts'
@@ -164,7 +164,7 @@ export function database(
         clock.unref()
         tick()
     }
-    const changed: Reactive<number> = processWideDerived(() => {
+    const changed: Reactive<number> = processWide(() => {
         queueMicrotask(follow)
         return outside
     })

@@ -1,10 +1,11 @@
-// THE FACTORIES, and the barrel they are the address of. `reactive` holds what the scope owns and
-// `memo` runs a body (11.1, 11.2): two names for two contracts — what a write means differs between
-// them — over one `Reactive` type, whose reads, probes and triggers are the same on both.
+// THE FACTORIES, and the barrel they are the address of. `reactive` holds what the scope owns, or
+// runs a body it is handed (11.1), and `memo` keeps what a function answers per key (11.2): two names
+// for two contracts — what a write means differs between them — over one `Reactive` type, whose
+// reads, probes and triggers are the same on both.
 //
-// SPLIT BY NAME, NOT BY WHAT IS PASSED. One name read its first argument's type to pick a form, and
-// that made a function unholdable: `reactive(fn)` ran it. Now `reactive(fn)` holds `fn` (4.20), and
-// `memo` is handed a body or throws (11.73).
+// `reactive` READS WHAT IT IS HANDED: a plain function is a body, and anything else — a `Reactive`, a
+// `memo` and a `Keyed` included — is the value form's (4.20). A function to hold is the answer of a
+// body that hands it back, `reactive(() => fn)`.
 //
 // The factory lives in the folder's address rather than in a file of its own: `reactive`
 // and `Reactive` differ only in case, and a case-insensitive filesystem makes those one
@@ -81,7 +82,7 @@ export { type Disposer, type Effect, watch } from './watch.ts'
  * What a free probe or trigger may be asked about: one `Reactive`, or `{ tags }`.
  *
  * 13.1 — A `memo` AND AN `Rpc` ARE NOT ONE. Their calls answer promises, which the language already
- * waits on; whether one is loading is asked of the `reactive.derived` that reads it. Their own `refresh` and
+ * waits on; whether one is loading is asked of the derived `reactive` that reads it. Their own `refresh` and
  * `invalidate` are methods, narrowed by a pattern (13.12).
  *
  * 13.1'S LAST ARM IS `{ tags }`: every value carrying any of those tags, across values.
@@ -222,14 +223,21 @@ type StoredOf<Calls> =
         : never
 /**
  * What `reactive` holds: anything but a `Reactive` or a `Keyed`, which it adopts rather than holds
- * (11.60) — a plain function included (4.20). The promise turns a `Reactive` away too, being one
- * (1.4), and `Accepted` read through it is the value it settles to. NOT DISTRIBUTED:
+ * (11.60), and a plain function, which is a body (4.20). The promise turns a `Reactive` away too,
+ * being one (1.4), and `Accepted` read through it is the value it settles to. NOT DISTRIBUTED:
  * `Held<number | undefined>` spread over the union is `PromiseLike<number> | PromiseLike<undefined>`,
  * and a `Promise<number | undefined>` is neither.
  */
 export type Held<Accepted> = [Accepted] extends [{ invalidate: unknown }]
     ? never
-    : Accepted | (PromiseLike<Accepted> & { invalidate?: never | undefined })
+    : [Accepted] extends [(...args: never) => unknown]
+      ? never
+      : Accepted | (PromiseLike<Accepted> & { invalidate?: never | undefined })
+/**
+ * What `reactive` runs: a plain function, never a `Reactive` or a `memo`, which are callable too and
+ * which the value form adopts (11.60).
+ */
+type Body<Result> = (() => Result) & { invalidate?: never | undefined }
 /**
  * What a body's value is, read off what it returns: the chunks an async iterable yields where it
  * streams (9.6), else what it settles to. A `Reactive` handed back is unwrapped by `Awaited` first,
@@ -264,6 +272,27 @@ export type ReactiveOf<Args, Result, Shaped, Gate, ArgsGate> = [Args] extends [
           BodyProduced<Result, Kept<Shaped>>
       >
 
+/**
+ * A value `body` produces, run again when a value it read changes (11.1), and a stream where it hands
+ * back an async iterable (9.6). FIRST, so a function is never tried as a value the scope owns.
+ *
+ * `Value` IS READ ONLY THROUGH `Result`'s DEFAULT: `reactive<number[]>(() => …)` names the value the
+ * body produces, and with explicit type arguments the rest take their defaults. Inferred, it is
+ * never read.
+ *
+ * 19.24 — `Result` IS READ OFF THE BODY ALONE, hence `NoInfer` in the options: the checker infers
+ * through `Awaited`, so a `Schema<{ id: number }>` beside an async body put `{ id: number }` in it
+ * and the body's promise no longer fit.
+ */
+export function reactive<
+    Value = never,
+    Result = Value,
+    Shaped = BodyValue<Result>,
+    Gate = Schema<BodyValue<Result>>,
+>(
+    body: Body<Result>,
+    options?: Shaping<BodyValue<NoInfer<Result>>, Shaped, never, Gate>,
+): ReactiveOf<never, Result, Shaped, Gate, never>
 /**
  * A value the scope owns outright, opening at `initial`, or at what a promise of it settles to.
  *
@@ -316,39 +345,12 @@ export function reactive(
     ...given: [first?: unknown, options?: unknown]
 ): unknown {
     refuseSourced(given[1], 'reactive')
-    return filed(given, false, buildValue)
-}
-
-/**
- * A value `body` produces, run again when a value it read changes (11.1), and a stream where it hands
- * back an async iterable (9.6).
- *
- * `Value` IS READ ONLY THROUGH `Result`'s DEFAULT: `reactive.derived<number[]>(() => …)` names the value the
- * body produces, and with explicit type arguments the rest take their defaults. Inferred, it is
- * never read.
- *
- * 19.24 — `Result` IS READ OFF THE BODY ALONE, hence `NoInfer` in the options: the checker infers
- * through `Awaited`, so a `Schema<{ id: number }>` beside an async body put `{ id: number }` in it
- * and the body's promise no longer fit.
- */
-export function derived<
-    Value = never,
-    Result = Value,
-    Shaped = BodyValue<Result>,
-    Gate = Schema<BodyValue<Result>>,
->(
-    body: () => Result,
-    options?: Shaping<BodyValue<NoInfer<Result>>, Shaped, never, Gate>,
-): ReactiveOf<never, Result, Shaped, Gate, never>
-export function derived(body: unknown, options?: unknown): unknown {
-    refuseValue(body, 'reactive.derived')
-    refuseSourced(options, 'reactive.derived')
-    return filed([body, options], false, buildBody)
+    return filed(given, false, buildEither)
 }
 
 /**
  * `fn`, remembered: what it answers for each `Args` key is kept and handed back as it answered — a
- * value, a promise, a refusal — to every later call with those args (11.2, 11.4). A `reactive.derived`
+ * value, a promise, a refusal — to every later call with those args (11.2, 11.4). A derived `reactive`
  * calling it holds the answer as a value, and runs again when the key it called is refreshed or
  * invalidated (11.74).
  *
@@ -372,7 +374,7 @@ export function memo(fn: unknown, options?: unknown): unknown {
 
 /**
  * The keyed form an `Rpc` and the wire's copies are built on: one `Reactive` per `Args` key. Not app
- * surface — only `reactive` and `reactive.derived` hand an app a `Reactive`.
+ * surface — only `reactive` hands an app a `Reactive`.
  */
 export function keyedValue<
     Value = never,
@@ -413,13 +415,13 @@ function refuseValue(body: unknown, name: string): void {
         (body as { [MEMO_BRAND]?: true | undefined })[MEMO_BRAND] === true
     )
         throw new TypeError(
-            `abide: ${name} takes a body, a function it runs. A value to hold is reactive(value). RULEBOOK 11.73.`,
+            `abide: ${name} takes a function, which it runs. A value to hold is reactive(value). RULEBOOK 11.73.`,
         )
 }
 
 /**
  * The options a source declares and a value does not (11.81): a `memo` paces, ages, tags and files
- * what it computes, and a `reactive` or a `reactive.derived` reading it is a view of that.
+ * what it computes, and a `reactive` reading it is a view of that.
  */
 const SOURCED = ['ttl', 'throttle', 'debounce', 'tags', 'global']
 
@@ -430,7 +432,7 @@ function refuseSourced(options: unknown, name: string): void {
     for (const option of SOURCED)
         if ((options as Record<string, unknown>)[option] !== undefined)
             throw new TypeError(
-                `abide: ${name} takes no ${option}. A source declares it: memo(fn, { ${option} }), read through reactive.derived. RULEBOOK 11.81.`,
+                `abide: ${name} takes no ${option}. A source declares it: memo(fn, { ${option} }), read through reactive(() => m(args)). RULEBOOK 11.81.`,
             )
 }
 
@@ -472,8 +474,7 @@ function filed(
 }
 
 /**
- * `reactive` and `reactive.derived` for a framework ambient — `route`, `online` — filed per scope whatever the
- * load order.
+ * `reactive` for a framework ambient — `route`, `online` — filed per scope whatever the load order.
  *
  * A factory decides at construction, and a value abide itself builds at import can be built before
  * the server has installed its provider, which made it one value for every request in the process.
@@ -481,26 +482,17 @@ function filed(
  * value it always was, behind one more call.
  */
 export const ambient = ((...given: [first?: unknown, options?: unknown]) =>
-    scoped(() => buildValue(given))) as unknown as typeof reactive
-export const ambientDerived = ((body: unknown, options?: unknown) =>
-    scoped(() =>
-        buildBody([body, options], false),
-    )) as unknown as typeof derived
+    scoped(() => buildEither(given))) as unknown as typeof reactive
 
 /**
- * `reactive` and `reactive.derived` for a framework value that is one for the whole process — the log's
- * records, the resolved configuration — where an app's would be a `memo` declaring `global` (11.34).
+ * `reactive` for a framework value that is one for the whole process — the log's records, the
+ * resolved configuration — where an app's would be a `memo` declaring `global` (11.34).
  */
-export const processWide = ((initial: unknown) =>
-    filed([initial, { global: true }], false, buildValue)) as unknown as <
-    Value,
->(
-    initial: Value,
-) => Reactive<Value>
-export const processWideDerived = ((body: unknown) =>
-    filed([body, { global: true }], false, buildBody)) as unknown as <Value>(
-    body: () => Value,
-) => Reactive<Value>
+export const processWide = ((first: unknown) =>
+    filed([first, { global: true }], false, buildEither)) as unknown as {
+    <Value>(body: () => Value): Reactive<Value>
+    <Value>(initial: Value): Reactive<Value>
+}
 
 /**
  * A handler's body kept per `Args` key, or `reactive` over its value, for `declare` — or the
@@ -548,6 +540,20 @@ function buildBody(
         undefined,
         options as Parameters<typeof createReactive>[4],
     )
+}
+
+/** 4.20 — a plain function is a body; anything else, a `Reactive`, a `memo` and a `Keyed` among them, is held or adopted. */
+function isBodyGiven(first: unknown): boolean {
+    return (
+        typeof first === 'function' &&
+        !isReactive(first) &&
+        !isKeyed(first) &&
+        (first as { [MEMO_BRAND]?: true | undefined })[MEMO_BRAND] !== true
+    )
+}
+
+function buildEither(given: [first?: unknown, options?: unknown]): unknown {
+    return isBodyGiven(given[0]) ? buildBody(given, false) : buildValue(given)
 }
 
 function buildValue(given: [first?: unknown, options?: unknown]): unknown {
@@ -633,7 +639,9 @@ function shared<Value>(create: () => Value | Reactive<Value>): Shared<Value> {
     const handle = (): Reactive<Value> =>
         shareOf(handle, () => {
             const opening = create()
-            return isReactive(opening) ? opening : reactive(opening as never)
+            return isReactive(opening)
+                ? opening
+                : (buildValue([opening]) as Reactive<Value>)
         }) as Reactive<Value>
     return handle
 }
@@ -641,5 +649,3 @@ function shared<Value>(create: () => Value | Reactive<Value>): Shared<Value> {
 // 10.1 — `reactive.shared` is a static on the factory rather than a free name, the registry's own
 // spelling: what its handle creates is a `reactive`, so it belongs with the factory it calls.
 reactive.shared = shared
-// 11.1 — `reactive.derived` is the value a body produces: a member of `reactive`, whose value it is.
-reactive.derived = derived

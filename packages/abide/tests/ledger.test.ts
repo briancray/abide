@@ -96,7 +96,7 @@ test('a ledger reads nothing from its store until it is appended to or read — 
 test('a value whose body reads a ledger holds every entry, and each append — 58.5, 9.6', async () => {
     const calls = ledger<string>()
     await calls.append('Ada')
-    const listed = reactive.derived(() => calls())
+    const listed = reactive(() => calls())
     await Bun.sleep(5)
     expect(`before: ${listed().length}`).toBe('before: 1')
     await calls.append('Grace')

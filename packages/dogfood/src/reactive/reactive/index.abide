@@ -1,20 +1,28 @@
 <script>
+import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import Forecast from './lib/Forecast.abide'
+import forecast from './lib/Forecast.abide' with { type: 'text' }
 import PhoneDigits from './lib/PhoneDigits.abide'
 import phoneDigits from './lib/PhoneDigits.abide' with { type: 'text' }
 import PriceFormat from './lib/PriceFormat.abide'
 import priceFormat from './lib/PriceFormat.abide' with { type: 'text' }
 import Seats from './lib/Seats.abide'
 import seats from './lib/Seats.abide' with { type: 'text' }
+import SeatTotal from './lib/SeatTotal.abide'
+import seatTotal from './lib/SeatTotal.abide' with { type: 'text' }
 </script>
 
 <Doc
     seeAlso={[
         '/orchestration/memo',
         '/reactive/watch',
+        '/reactive/tracking',
+        '/reactive/refresh',
+        '/ambients/abort-signal',
         '/data/store',
         '/helpers/deep-equal',
     ]}
@@ -25,7 +33,27 @@ import seats from './lib/Seats.abide' with { type: 'text' }
         },
         {
             path: 'packages/abide/tests/reactive.test.ts',
-            from: ["test('reactive holds a function as its value — 4.20'"],
+            from: [
+                "test('reactive runs a function as a body, and holds one a body hands back — 4.20'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('reactive given a body is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('an async generator body streams: ready from its first chunk, busy until it closes'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/reactive.test.ts',
+            from: [
+                "test('a body handing back a ReadableStream streams its chunks — 9.6'",
+            ],
         },
     ]}
 >
@@ -34,14 +62,42 @@ import seats from './lib/Seats.abide' with { type: 'text' }
         <Example code={seats}><Seats /></Example>
     </Section>
 
-    <Section level={3} title="Hold a formatter the page swaps">
-        <p>A function is a value like any other: <code>reactive</code> holds it rather than running
-            it. Read it by name to get the function, then call that.</p>
-        <Example code={priceFormat}><PriceFormat /></Example>
-    </Section>
-
     <Section level={3} title="Store a phone number as digits">
         <p><code>transform</code> runs on every write, so the field shows back what was stored.</p>
         <Example code={phoneDigits}><PhoneDigits /></Example>
+    </Section>
+
+    <Section level={3} title="Derive a total from the values a body reads">
+        <p>Pass a function and it is a body. The total reruns when <code>seats</code> or
+            <code>price</code> changes, and on nothing else: type a note, and the total stays where
+            it was.</p>
+        <Example code={seatTotal}><SeatTotal /></Example>
+    </Section>
+
+    <Section level={3} title="Load a forecast from a handler">
+        <p>A body that calls a handler loads. Ask <code>ready()</code> before showing the figure,
+            and <code>refresh()</code> reloads it while the old figure stays.</p>
+        <Example code={forecast}><Forecast /></Example>
+    </Section>
+
+    <Section level={3} title="Stream the leads still waiting on a follow-up">
+        <p>A body that hands back an async iterable streams: a generator, or a
+            <code>ReadableStream</code>. The value is every item handed on until now: ready from the
+            first, busy until the stream ends.</p>
+        <Code language="ts" caption="shared" code={`
+            import { reactive } from '@abide/abide'
+            import listDeals from './listDeals.server.ts'
+
+            const waiting = reactive(async function* () {
+                for (const deal of await listDeals())
+                    if (deal.stage === 'lead') yield deal.name
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Hold a formatter the page swaps">
+        <p>A function handed to <code>reactive</code> runs, so a function to hold is what a body
+            hands back. Read it by name to get the function, then call that.</p>
+        <Example code={priceFormat}><PriceFormat /></Example>
     </Section>
 </Doc>

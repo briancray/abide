@@ -19,7 +19,7 @@ beforeAll(async () => {
         'index.abide': `<script>
 import { doubled } from '#src/lib/doubled.worker.ts'
 
-const answer = reactive.derived(() => doubled(21))
+const answer = reactive(() => doubled(21))
 </script>
 
 <main id="answer">{answer}</main>`,

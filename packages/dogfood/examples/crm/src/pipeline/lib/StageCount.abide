@@ -5,7 +5,7 @@ import getStage from '../getStage.server.ts'
 import { STAGES } from './STAGES.ts'
 
 let stage = reactive('lead')
-const totals = reactive.derived(() => getStage({ stage }))
+const totals = reactive(() => getStage({ stage }))
 </script>
 
 <ul class="fields stacked">

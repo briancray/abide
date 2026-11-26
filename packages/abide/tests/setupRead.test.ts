@@ -20,7 +20,7 @@ afterAll(removeTemporaryModules)
 // a value left in flight for ever is one a later render in this file waits on.
 type Gate = ReturnType<typeof Promise.withResolvers<{ title: string }>>
 const held = globalThis as { gate?: Gate | undefined }
-const DETAIL = `let detail = reactive.derived(() => globalThis.gate?.promise ?? { title: 'late' })`
+const DETAIL = `let detail = reactive(() => globalThis.gate?.promise ?? { title: 'late' })`
 
 const SETUP_CHILD = `<script>
 import { props } from '@abide/abide'

@@ -46,7 +46,7 @@ import Baz from './Baz.abide'
 
 let which = reactive(0)
 let label = reactive('one')
-let Shown = reactive.derived(() => (which % 2 === 0 ? Bar : Baz))
+let Shown = reactive(() => (which % 2 === 0 ? Bar : Baz))
 </script>
 
 <div id="host"><Shown label={label}/></div>
@@ -112,7 +112,7 @@ import { reactive } from '@abide/abide'
 import Bar from './Bar.abide'
 
 let open = reactive(false)
-let Shown = reactive.derived(() => (open ? Bar : undefined))
+let Shown = reactive(() => (open ? Bar : undefined))
 </script>
 
 <div id="host"><Shown label="x"/></div>

@@ -12,7 +12,7 @@ let q = reactive('')
 const searching = memo(({ q }: { q: string }) => searchDeals({ q }), {
     debounce: 300,
 })
-const found = reactive.derived(() => searching({ q }))
+const found = reactive(() => searching({ q }))
 </script>
 
 <input bind:value={q}>

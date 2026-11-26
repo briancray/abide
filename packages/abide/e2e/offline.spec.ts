@@ -67,7 +67,7 @@ export default rpc((args: { title: string }) => {
 import { reactive } from '@abide/abide'
 import getMeetings from '#src/data/getMeetings.server.ts'
 
-const meetings = reactive.derived(() => getMeetings())
+const meetings = reactive(() => getMeetings())
 </script>
 
 <main id="meetings"><p id="listed">{meetings.ready() ? meetings().join(',') : ''}</p><a id="to-new" href="/meetings/new">new</a></main>`,
@@ -127,8 +127,8 @@ import { reactive } from '@abide/abide'
 import getNote from '#src/data/getNote.server.ts'
 import getTags from '#src/data/getTags.server.ts'
 
-const note = reactive.derived(() => getNote())
-const tags = reactive.derived(() => getTags())
+const note = reactive(() => getNote())
+const tags = reactive(() => getTags())
 </script>
 
 <main id="note"><p id="text">{note().text}</p><ul id="tags">{#for tag of tags.ready() ? tags : []}<li>{tag}</li>{/for}</ul></main>`,
@@ -277,7 +277,7 @@ test('a page with a handler and no call kept opens no outbox database — 46.20'
 // THE REVERT: keep the line in memory alone (`memoryShelf` whatever the browser has); the reload
 // shows 0 waiting and the call is never delivered. And 46.18, 46.19 — after the reload the call still
 // carries its value, rebuilt from what was kept. THE REVERT: rebuild it in `valueStanding` as
-// `reactive.derived(() => settled)`; it reads saved.
+// `reactive(() => settled)`; it reads saved.
 test('a call made offline survives a reload and is delivered once online — 46.2, 46.7', async ({
     page,
     context,

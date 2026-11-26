@@ -3,7 +3,7 @@ import { elementRect, reactive } from '@abide/abide'
 
 const board = elementRect()
 const card = elementRect()
-const offset = reactive.derived(() => (card.top ?? 0) - (board.top ?? 0))
+const offset = reactive(() => (card.top ?? 0) - (board.top ?? 0))
 </script>
 
 <section class="flex flex-col gap-snug" {...board.host}>

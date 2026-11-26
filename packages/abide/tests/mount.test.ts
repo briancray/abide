@@ -11,7 +11,7 @@ import { reactive, url } from '@abide/abide'
 import getInvoice from '#src/invoices/getInvoice.server.ts'
 import '#src/lib/face.css'
 
-const invoice = reactive.derived(() => getInvoice({ id: '4' }))
+const invoice = reactive(() => getInvoice({ id: '4' }))
 </script>
 
 <main><a id="home" href={url('/')}>home</a><a id="link" href={url('/invoices/[id]', { id: 4 })}>four</a><p id="total">{invoice().total}</p></main>`

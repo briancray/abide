@@ -18,7 +18,7 @@ const {
 // Written inside an indented template literal, the code is shown flush: its first and last blank
 // lines dropped and the margin every line shares taken off. A memo, since an example's live
 // markup is code that changes as the reader works the example.
-const flush = reactive.derived(() =>
+const flush = reactive(() =>
     dedent(
         code
             .replace(/^\s*\n/, '')

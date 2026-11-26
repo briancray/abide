@@ -55,7 +55,7 @@ import Section from '#src/lib/Section.abide'
 
             onConfig(() => ({ RETRIES: 3 }))
 
-            export default rpc(reactive.derived(() => ({ retries: config().RETRIES })))
+            export default rpc(reactive(() => ({ retries: config().RETRIES })))
         `} />
         <p>The CRM's <code>.env</code> sets <code>RETRIES=5</code>. Its retry count, asked when
             this page loaded:</p>

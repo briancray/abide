@@ -15,9 +15,7 @@ function panels(count: number): () => void {
         }
     }
     const stages = [reactive('lead'), reactive('lead'), reactive('lead')]
-    const readers = stages.map((stage) =>
-        reactive.derived(() => entries.get(stage())),
-    )
+    const readers = stages.map((stage) => reactive(() => entries.get(stage())))
     for (const reader of readers) reader()
     let at = 0
     return () => {

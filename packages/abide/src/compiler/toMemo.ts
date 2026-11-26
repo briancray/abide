@@ -1,6 +1,6 @@
 // 38.215 — THE MIGRATION OFF A BODY HANDED TO `reactive`: every `reactive(…)` whose first argument is
-// a function is a `memo(…)` from the release this migration is keyed to on, since `reactive` holds a
-// function rather than running it (4.20, 11.73).
+// a function is a `memo(…)` from the release this migration is keyed to on, since that release had
+// `reactive` hold a function rather than run it (11.73) — what 38.232 reverses.
 
 import { isBody, renameBodyCalls } from './renameBodyCalls.ts'
 import { rewriteCode } from './rewriteCode.ts'

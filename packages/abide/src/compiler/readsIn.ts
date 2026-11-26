@@ -434,7 +434,7 @@ async function bindingsOfReads(
  * (`reactiveReads`).
  *
  * 31.15 — A MEMBER INFERRED FROM A READ IS TYPED FROM THE `Reactive` IN THE PROJECTION, and the read
- * is of its value. `reactive.derived(() => ({ view }))` is `{ view: Reactive<View> }` as written and
+ * is of its value. `reactive(() => ({ view }))` is `{ view: Reactive<View> }` as written and
  * `{ view: view() }` as it runs, so `glance.view` asked of the projection alone was a `Reactive`,
  * lowered to `glance().view()`, and called a `View`.
  *

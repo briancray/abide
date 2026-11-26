@@ -205,7 +205,7 @@ test('given no target, each of the eight is read by name — 32.110', async () =
 import { elementRect, reactive } from '@abide/abide'
 
 const placed = elementRect()
-const wide = reactive.derived(() => {
+const wide = reactive(() => {
     ;(globalThis as { __WIDE__?: number }).__WIDE__ = ((globalThis as { __WIDE__?: number }).__WIDE__ ?? 0) + 1
     return placed.width ?? 'none'
 })
@@ -251,7 +251,7 @@ test('a frame reading the rectangle already held wakes nobody — 32.84', async 
 import { elementRect, reactive } from '@abide/abide'
 
 let rect = reactive<{ top: number } | undefined>(undefined)
-const shown = reactive.derived(() => {
+const shown = reactive(() => {
     ;(globalThis as { __TOPS__?: number }).__TOPS__ = ((globalThis as { __TOPS__?: number }).__TOPS__ ?? 0) + 1
     return rect === undefined ? 'unmeasured' : String(rect.top)
 })

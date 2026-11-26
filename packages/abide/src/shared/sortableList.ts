@@ -14,7 +14,7 @@ import {
 } from './itemKey.ts'
 import { type Listbox, listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
-import { derived, type Reactive, reactive } from './reactive/index.ts'
+import { type Reactive, reactive } from './reactive/index.ts'
 import { inGroup, join } from './register.ts'
 import type { Picked } from './Selection.ts'
 import { withPart } from './withPart.ts'
@@ -123,7 +123,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
     // 51.145, 51.179 — the order put, then any item it does not name, in the order given; in a group, a
     // key it names is found among another list's items too, and an item another list names is that
     // list's.
-    const sorted = derived((): Item[] => {
+    const sorted = reactive((): Item[] => {
         const byKey = new Map<string, Item>()
         for (const item of live(options.items)) byKey.set(keyOf(item), item)
         const named = group()

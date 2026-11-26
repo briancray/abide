@@ -24,8 +24,8 @@ const find = async (id: number) => id
 async function* each(list: number[]) {
     yield* list
 }
-const operand = reactive.derived(async () => (await find(one)) + two)
-const looped = reactive.derived(async () => {
+const operand = reactive(async () => (await find(one)) + two)
+const looped = reactive(async () => {
     for await (const item of each(three)) return item + name
     return 0
 })

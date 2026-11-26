@@ -3,7 +3,7 @@ import { format, reactive } from '@abide/abide'
 
 import listDeals from '../listDeals.server.ts'
 
-const deals = reactive.derived(() => listDeals())
+const deals = reactive(() => listDeals())
 
 // Each update names one deal and its new amount.
 const UPDATES = [

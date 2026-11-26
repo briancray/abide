@@ -149,7 +149,7 @@ export const filesUnder = async ({ directory }: { directory: string }) => {
 import { props, reactive, type RouteLiteral, url } from '@abide/abide'
 
 const { directory } = props<{ directory: string }>()
-const entries = reactive.derived(() => filesUnder({ directory }))
+const entries = reactive(() => filesUnder({ directory }))
 </script>
 
 {#if entries}

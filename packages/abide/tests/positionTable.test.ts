@@ -119,7 +119,7 @@ test('a reactive body wrapped in a type still tracks — 14.16', async () => {
 import { reactive } from '@abide/abide'
 
 let one = reactive(1)
-const later = reactive.derived((() => setTimeout(() => one, 0)) satisfies () => unknown)
+const later = reactive((() => setTimeout(() => one, 0)) satisfies () => unknown)
 </script>`),
     ).toEqual([5])
 })

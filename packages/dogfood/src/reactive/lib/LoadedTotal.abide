@@ -17,7 +17,7 @@ export const getStage = async ({ stage }: { stage: string }) => {
 import { reactive } from '@abide/abide'
 
 let stage = reactive('lead')
-const total = reactive.derived(() => getStage({ stage }))
+const total = reactive(() => getStage({ stage }))
 </script>
 
 <select bind:value={stage}>

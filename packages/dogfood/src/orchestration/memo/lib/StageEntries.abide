@@ -12,7 +12,7 @@ import { memo, reactive } from '@abide/abide'
 
 const stageCounts = memo(({ stage }: { stage: string }) => getStage({ stage }))
 let stage = reactive('lead')
-const count = reactive.derived(() => stageCounts({ stage }))
+const count = reactive(() => stageCounts({ stage }))
 </script>
 
 <div class="row">

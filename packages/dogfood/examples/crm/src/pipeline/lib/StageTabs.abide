@@ -5,7 +5,7 @@ import listDeals from '../listDeals.server.ts'
 
 const STAGES = ['lead', 'qualified', 'proposal']
 
-const deals = reactive.derived(() => listDeals())
+const deals = reactive(() => listDeals())
 let stage = reactive<string | undefined>('lead')
 const view = tabs({ items: STAGES, selected: stage })
 </script>

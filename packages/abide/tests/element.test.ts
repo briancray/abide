@@ -174,7 +174,7 @@ import { elementSize } from '@abide/abide'
 
 let box = reactive({ width: 10, height: 10 })
 let calls = reactive(0)
-const area = reactive.derived(() => {
+const area = reactive(() => {
     ;(globalThis as { __AREAS__?: number }).__AREAS__ = ((globalThis as { __AREAS__?: number }).__AREAS__ ?? 0) + 1
     return box.width * box.height
 })
@@ -208,7 +208,7 @@ import { elementSize, elementVisible, reactive } from '@abide/abide'
 
 const size = elementSize()
 const seen = elementVisible()
-const wide = reactive.derived(() => {
+const wide = reactive(() => {
     ;(globalThis as { __WIDTHS__?: number }).__WIDTHS__ = ((globalThis as { __WIDTHS__?: number }).__WIDTHS__ ?? 0) + 1
     return size.width ?? 'none'
 })
@@ -270,7 +270,7 @@ import { elementVisible, reactive } from '@abide/abide'
 
 let scroller = reactive<HTMLElement>()
 let rooted = reactive(true)
-const root = reactive.derived(() => (rooted ? scroller : undefined))
+const root = reactive(() => (rooted ? scroller : undefined))
 let rows = reactive(Array.from({ length: 20 }, (_, index) => ({ id: index, seen: reactive(true) })))
 </script>
 
@@ -425,7 +425,7 @@ import { elementSize, reactive } from '@abide/abide'
 let flat = reactive({ width: 0, height: 0 })
 let upright = reactive({ width: 0, height: 0 })
 let content = reactive(false)
-const box = reactive.derived(() => (content ? 'content-box' : 'border-box') as 'content-box' | 'border-box')
+const box = reactive(() => (content ? 'content-box' : 'border-box') as 'content-box' | 'border-box')
 </script>
 
 <button id="toggle" onclick={() => { content = !content }}>toggle</button>

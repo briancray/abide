@@ -3,8 +3,8 @@ import { busy, reactive } from '@abide/abide'
 
 import getStage from './DimBoard.server.ts'
 
-const lead = reactive.derived(() => getStage({ stage: 'lead' }))
-const won = reactive.derived(() => getStage({ stage: 'won' }))
+const lead = reactive(() => getStage({ stage: 'lead' }))
+const won = reactive(() => getStage({ stage: 'won' }))
 </script>
 
 <ul class={busy({ tags: ['board'] }) ? 'tiles opacity-40' : 'tiles'}>

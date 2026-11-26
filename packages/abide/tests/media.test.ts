@@ -116,7 +116,7 @@ test('media and online hydrate as the server answered, and swap after without a 
 import { isServer, media, online, reactive } from '@abide/abide'
 
 const wide = media('(min-width: 700px)')
-const browser = reactive.derived(() => !isServer())
+const browser = reactive(() => !isServer())
 </script>
 
 {#if wide}<p id="wide">wide</p>{:else}<p id="narrow">narrow</p>{/if}

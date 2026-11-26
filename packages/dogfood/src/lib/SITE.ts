@@ -245,14 +245,7 @@ const WRITTEN: readonly {
                 route: '/reactive/reactive',
                 title: '`reactive`',
                 description:
-                    'Hold a value the page owns, a function included, with reads, writes, probes and triggers on one type.',
-                where: 'anywhere',
-            },
-            {
-                route: '/reactive/derived',
-                title: '`reactive.derived`',
-                description:
-                    'Derive a value from others, or load or stream one from a handler, run again when what it read changes.',
+                    'Hold a value the page owns, or derive, load or stream one from a body that runs again when what it read changes.',
                 where: 'anywhere',
             },
             {

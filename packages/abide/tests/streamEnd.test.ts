@@ -31,7 +31,7 @@ let handoffs = 0
 // handler answers no `Reactive` (16.109).
 let current: unknown
 const chunksOfCurrent = (): AsyncIterable<unknown> =>
-    chunksOfStream(reactive.derived(() => current as never))
+    chunksOfStream(reactive(() => current as never))
 const ticks = rpc(chunksOfCurrent)
 
 /** A `global` stream of `count` chunks, each released by the test, returning as it yields its last. */
@@ -146,7 +146,7 @@ type Lane = (app: App, value: unknown) => Promise<unknown[]>
 
 const LANES: Record<string, Lane> = {
     async 'for await over a forwarding value'(_app, value) {
-        const forwarding = reactive.derived(
+        const forwarding = reactive(
             () => value as never,
         ) as unknown as AsyncIterable<unknown>
         const read: unknown[] = []
@@ -154,12 +154,12 @@ const LANES: Record<string, Lane> = {
         return read
     },
     async 'await of a forwarding value'(_app, value) {
-        return (await reactive.derived(() => value as never)) as unknown[]
+        return (await reactive(() => value as never)) as unknown[]
     },
     async 'the wire’s chunks of a forwarding value'(_app, value) {
         const read: unknown[] = []
         for await (const chunk of chunksOfStream(
-            reactive.derived(() => value as never),
+            reactive(() => value as never),
         ))
             read.push(chunk)
         return read
@@ -256,7 +256,7 @@ test('a run failing as it yields its last chunk throws after every chunk it prod
     const read: unknown[] = []
     const reading = (async () => {
         try {
-            for await (const chunk of reactive.derived(
+            for await (const chunk of reactive(
                 () => value as never,
             ) as unknown as AsyncIterable<unknown>)
                 read.push(chunk)

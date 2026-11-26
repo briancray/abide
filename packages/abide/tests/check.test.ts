@@ -178,19 +178,19 @@ let keyed = reactive(
     { key: 'id' },
 )
 let decoy = reactive([{ id: 1, key: 'someone' }])
-const picked = reactive.derived(() => (flag ? one : two))
-const same = reactive.derived(() => (flag ? flag : false))
-const late = reactive.derived(async () => {
+const picked = reactive(() => (flag ? one : two))
+const same = reactive(() => (flag ? flag : false))
+const late = reactive(async () => {
     const early = two
     await Promise.resolve()
     return one + early
 })
-const later = reactive.derived(() => {
+const later = reactive(() => {
     setTimeout(() => two, 0)
     return [1].map(() => one)
 })
-const fallback = reactive.derived(() => name ?? 'nobody')
-const unsure = reactive.derived(() => maybe ?? 'nobody')
+const fallback = reactive(() => name ?? 'nobody')
+const unsure = reactive(() => maybe ?? 'nobody')
 </script>
 
 {#for row of rows}<input value={row.id}/>{/for}
@@ -224,16 +224,16 @@ import { reactive } from '@abide/abide'
 let flag = reactive(true)
 let one = reactive(1)
 let two = reactive(2)
-const late = reactive.derived(async () => {
+const late = reactive(async () => {
     await Promise.resolve()
     // abide-ignore 14.14
     return one
 })
-const picked = reactive.derived(() =>
+const picked = reactive(() =>
     // abide-ignore 14.14 14.15
     flag ? one : two,
 )
-const misnamed = reactive.derived(() => {
+const misnamed = reactive(() => {
     // abide-ignore 14.14
     setTimeout(() => two, 0)
     return 1
@@ -286,7 +286,7 @@ import { reactive } from '@abide/abide'
 import Card from '#src/lib/Card.abide'
 
 let open = reactive(true)
-let Shown = reactive.derived(() => (open ? Card : undefined))
+let Shown = reactive(() => (open ? Card : undefined))
 </script>
 
 <Shown title="x"/>
@@ -977,8 +977,8 @@ import { reactive } from '@abide/abide'
 type View = { x: number }
 let view = reactive<View>({ x: 1 })
 let hero = reactive({ frame: 0 })
-const glance = reactive.derived(() => ({ view, hero }))
-const longhand = reactive.derived(() => ({ view: view, list: [hero] }))
+const glance = reactive(() => ({ view, hero }))
+const longhand = reactive(() => ({ view: view, list: [hero] }))
 const x: number = glance.view.x
 const frame: number = glance.hero.frame
 const y: number = longhand.view.x + longhand.list[0].frame
@@ -1226,7 +1226,7 @@ const { rows } = props<{ rows: { step: number; label: string }[] }>()
 import { reactive } from '@abide/abide'
 import Status from '#src/lib/Status.abide'
 import sweep from '#src/runs/sweep.server.ts'
-const running = reactive.derived(() => sweep())
+const running = reactive(() => sweep())
 </script>
 <Status rows={running}/>`,
     })

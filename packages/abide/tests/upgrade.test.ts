@@ -157,8 +157,9 @@ test('the AGENTS.md abide scaffold writes states nothing of abide but where ABID
 
 // 38.215 — A BODY HANDED TO `reactive` IS HANDED TO `memo`, in a module and in a page's script, and
 // `memo` is imported beside what is still a `reactive`. A value is left, and a name bound to a body
-// is read as one. Run again it changes nothing (38.200). THE REVERT: drop the 0.143.0 migration from
-// `MIGRATIONS`, and `abide upgrade: nothing to change`.
+// is read as one. A body declaring no parameter comes back to `reactive` through 38.223 and 38.228,
+// so only the keyed one moves. Run again it changes nothing (38.200). THE REVERT: drop the 0.143.0
+// migration from `MIGRATIONS`, and `abide upgrade: nothing to change`.
 test('abide upgrade hands a body written for reactive to memo — 38.215, 38.200', async () => {
     const app = temporaryModule({
         'package.json': JSON.stringify({ name: 'ledger', type: 'module' }),
@@ -179,20 +180,20 @@ const found = reactive(async () => q.toUpperCase())
 <input bind:value={q}><p>{found}</p>`,
     })
     const upgraded = await abide(app, 'upgrade')
-    expect(upgraded.stdout).toContain('abide upgrade: 2 files changed')
+    expect(upgraded.stdout).toContain('abide upgrade: 1 file changed')
     expect(await Bun.file(`${app}/src/lib/totals.ts`).text())
         .toBe(`import { memo, reactive } from '@abide/abide'
 
 const score = (args: { id: string }) => args.id.length
 export const seats = reactive(5)
-export const total = reactive.derived(() => seats() * 40)
+export const total = reactive(() => seats() * 40)
 export const scored = memo(score)
 `)
     expect(await Bun.file(`${app}/src/index.abide`).text()).toBe(`<script>
 import { reactive } from '@abide/abide'
 
 let q = reactive('')
-const found = reactive.derived(async () => q.toUpperCase())
+const found = reactive(async () => q.toUpperCase())
 </script>
 
 <input bind:value={q}><p>{found}</p>`)
@@ -235,29 +236,36 @@ let rows = reactive(() => [{ id: 1 }])
 {/for}
 `,
     })
-    const [row, edit] = await upgrade(app, '0.142.0')
-    expect(row?.after).toBe(`<script>
-import { reactive } from '@abide/abide'
+    const row = toMemo(
+        await Bun.file(`${app}/src/Row.abide`).text(),
+        'src/Row.abide',
+    )
+    const edit = toMemo(
+        await Bun.file(`${app}/src/index.abide`).text(),
+        'src/index.abide',
+    )
+    expect(row).toBe(`<script>
+import { memo, reactive } from '@abide/abide'
 
 let rows = reactive([{ id: 1 }])
 </script>
 
 {#for row of rows key row.id}
     <script>
-    const label = reactive.derived(() => String(row.id))
+    const label = memo(() => String(row.id))
     </script>
     <b>{label}</b>
 {/for}
 `)
-    expect(edit?.after).toBe(`<script>
-import { reactive } from '@abide/abide'
+    expect(edit).toBe(`<script>
+import { memo, reactive } from '@abide/abide'
 
-let rows = reactive.derived(() => [{ id: 1 }])
+let rows = memo(() => [{ id: 1 }])
 </script>
 
 {#for row of rows key row.id}
     <script>
-    const label = reactive.derived(() => String(row.id))
+    const label = memo(() => String(row.id))
     const count = reactive(0)
     </script>
     <b>{label}{count}</b>
@@ -331,7 +339,7 @@ const named = memo(() => rows, { key: by, tags: ['rows'] })
         .toBe(`import { reactive, rpc } from '@abide/abide'
 
 const OPTIONS = { by: 'id' }
-export const books = rpc(reactive.derived(() => [{ isbn: '1' }], { key: 'isbn' }))
+export const books = rpc(reactive(() => [{ isbn: '1' }], { key: 'isbn' }))
 export const kept = reactive<{ id: string }[]>([], {
     key(row) {
         return row.id
@@ -876,7 +884,7 @@ export const query = reactive('', { debounce: 300 })
     ])
     for (const edit of edits)
         await Bun.write(`${app}/${edit.path}`, edit.after ?? '')
-    expect(await upgrade(app, '0.144.0')).toEqual([])
+    expect(await upgrade(app, '0.145.0')).toEqual([])
 })
 // 38.228 — `computed` IS `reactive.derived`: every use of abide's, `reactive` imported beside where it
 // was not, and an app's own `computed` and a member of that name left. Run again, nothing moves
@@ -907,6 +915,42 @@ const kept = options.computed
     expect(toDerived(after, 'src/index.abide')).toBe(after)
     const own = `import { computed } from './lib/computed.ts'\n\nexport const x = computed(() => 1)\n`
     expect(toDerived(own, 'src/own.ts')).toBe(own)
+})
+
+// 38.232, 38.233 — A FUNCTION `reactive` HELD IS HANDED BACK BY A BODY, and `reactive.derived` IS
+// `reactive`: a held function written in place or bound to the name handed is wrapped, and nothing
+// else — a value, and a `reactive.derived` body, which 38.233 then spells `reactive`. Another
+// object's `derived` is left. Run again from 0.145.0, nothing moves (38.200). THE REVERT: drop the
+// 38.232 entry from `MIGRATIONS`, and `held` stays `reactive(format)`, which now runs `format` as a
+// body; drop the 38.233 entry, and `total` stays `reactive.derived(…)`, which is no longer a name.
+test('abide upgrade hands a held function back from a body, and spells reactive.derived reactive — 38.232, 38.233, 38.200', async () => {
+    const app = temporaryModule({
+        'src/format.ts': `import { reactive } from '@abide/abide'
+
+const format = (amount: number) => String(amount)
+const shapes = { derived: (value: number) => value }
+export const held = reactive(format)
+export const inPlace = reactive((amount: number) => String(amount))
+export const count = reactive(0)
+export const total = reactive.derived(() => count() * 2)
+export const typed = reactive.derived<number>(() => shapes.derived(1))
+`,
+    })
+    const edits = await upgrade(app, '0.144.0')
+    const after = edits.find((edit) => edit.path === 'src/format.ts')?.after
+    expect(after).toBe(`import { reactive } from '@abide/abide'
+
+const format = (amount: number) => String(amount)
+const shapes = { derived: (value: number) => value }
+export const held = reactive(() => format)
+export const inPlace = reactive(() => (amount: number) => String(amount))
+export const count = reactive(0)
+export const total = reactive(() => count() * 2)
+export const typed = reactive<number>(() => shapes.derived(1))
+`)
+    for (const edit of edits)
+        await Bun.write(`${app}/${edit.path}`, edit.after ?? '')
+    expect(await upgrade(app, '0.145.0')).toEqual([])
 })
 
 // 38.229 — A KEY ONE FILE USES ALONE IS A HANDLE DECLARED AT ITS MODULE LEVEL, in a `<script module>`
@@ -970,7 +1014,7 @@ const shown = theme()
 })
 
 // 38.227 FOR OPTIONS NOT WRITTEN OUT, AND 38.230 — A BODY'S OPTIONS HANDED BY NAME OR SPREAD IN HIDE
-// WHAT THEY CARRY, so 38.223 moves the body to a `reactive.derived` it cannot tell refuses them: a note.
+// WHAT THEY CARRY, so 38.223 moves the body to a derived `reactive` it cannot tell refuses them: a note.
 // And a handler over a value the app declares as one throws (16.109): a note where it is declared,
 // the value found in the file it is imported from, by a relative path or the package's own `imports`.
 // A memo served the same way is not one. THE REVERTS: drop the `VALUE_OPTIONS_UNREAD` arm in

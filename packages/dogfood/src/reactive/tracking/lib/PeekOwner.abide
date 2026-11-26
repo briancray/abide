@@ -3,7 +3,7 @@ import { reactive } from '@abide/abide'
 
 let stage = reactive('lead')
 let owner = reactive('ada')
-const label = reactive.derived(() => `${stage} (${owner.peek()})`)
+const label = reactive(() => `${stage} (${owner.peek()})`)
 </script>
 
 <p>{label}</p>

@@ -521,7 +521,7 @@ test('a value adopts an rpc call whose failures it carries — 11.60, 16.8', asy
         }),
         { methods: ['POST'] },
     )
-    const contact = reactive.derived(() => getContact({ id: '4021' }))
+    const contact = reactive(() => getContact({ id: '4021' }))
     await contact
     contact.set(updatePhone({ phone: '2' }))
     await contact
@@ -599,7 +599,7 @@ test('a pattern matches args holding its arrays and nested members — 13.12', a
     expect(loads.join()).toBe('won-lost')
 })
 
-// 13.1, 13.12 — AN `Rpc` IS NO SELECTION: whether one is loading is asked of the `reactive.derived` that reads
+// 13.1, 13.12 — AN `Rpc` IS NO SELECTION: whether one is loading is asked of the derived `reactive` that reads
 // it, and its triggers' pattern is checked against `Args`. The `@ts-expect-error` lines are the
 // assertion: typecheck fails if a probe starts taking an `Rpc`, or a trigger a pattern outside
 // `Args`. THE REVERT: put `busy` back on `Rpc`; the first directive is unused, a typecheck error.

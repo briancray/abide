@@ -58,7 +58,7 @@ const shelf = reactive([{ id: 'a' }], {
 })
 
 export const bound = rpc(shelf)
-export const inline = rpc(reactive.derived(() => [{ isbn: '1' }], { key: 'isbn' }))
+export const inline = rpc(reactive(() => [{ isbn: '1' }], { key: 'isbn' }))
 export const keyedCopy = rpc(({ id }: { id: string }) => [{ id }], { key: (row) => row.id,
         tags: ({ id }) => [id],
         identity: (next, previous) => next === previous })
@@ -112,10 +112,10 @@ let grown = 'is'
 grown += 'bn'
 
 export const named = rpc(
-    reactive.derived(() => [{ isbn: '1' }], { key: KEY, tags: TAGS }),
+    reactive(() => [{ isbn: '1' }], { key: KEY, tags: TAGS }),
 )
-export const handed = rpc(reactive.derived(() => [{ isbn: '1' }], OPTIONS))
-export const unread = rpc(reactive.derived(() => [{ isbn: '1' }], { key: grown }))
+export const handed = rpc(reactive(() => [{ isbn: '1' }], OPTIONS))
+export const unread = rpc(reactive(() => [{ isbn: '1' }], { key: grown }))
 `,
     })
     const built = await buildApp(app)
@@ -379,7 +379,7 @@ test('a copy given a debounce sends one request for the keys a page reaches insi
         debounce: 40,
     }) as (args: { q: string }) => (() => unknown) & PromiseLike<unknown>
     const q = reactive('')
-    const found = reactive.derived(() => searched({ q: q() }))
+    const found = reactive(() => searched({ q: q() }))
     const stop = watch(() => {
         try {
             found()

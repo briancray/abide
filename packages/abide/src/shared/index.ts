@@ -3,7 +3,7 @@
 // types its probes narrow to live here, and nothing in this seam may import #ui or
 // #server.
 //
-// ONE FACTORY, ONE TYPE. `reactive` holds a value and `reactive.derived` runs a body, and both hand
+// ONE FACTORY, ONE TYPE. `reactive` holds a value or runs a body, and either way hands
 // back a `Reactive` — a channel is a `reactive` whose array every caller appends to.
 //
 // ONE REFUSAL TYPE beside it. `Failed` is the only thing a producer answers in place of a

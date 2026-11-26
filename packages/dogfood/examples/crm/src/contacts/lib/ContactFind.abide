@@ -3,7 +3,7 @@ import { highlight, reactive } from '@abide/abide'
 
 const CONTACTS = ['Ada Lovelace', 'Grace Hopper', 'Katherine Johnson']
 let query = reactive('')
-const kept = reactive.derived(() =>
+const kept = reactive(() =>
     CONTACTS.filter((name) => highlight(name, query).some((run) => run.match)),
 )
 </script>

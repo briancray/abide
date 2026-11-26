@@ -42,19 +42,19 @@ const MODULE_VALUE = {
     'lib/me.ts': `import { reactive } from '@abide/abide'
 import whoami from '#src/data/whoami.server.ts'
 
-export const me = reactive.derived(() => whoami())
+export const me = reactive(() => whoami())
 `,
     'lib/canEdit.ts': `import { reactive } from '@abide/abide'
 import { me } from './me.ts'
 
-export const canEdit = reactive.derived(() => me.ready() && me().owner)
+export const canEdit = reactive(() => me.ready() && me().owner)
 `,
     'lib/Deferred.abide': `<script>
 import { reactive } from '@abide/abide'
 import getValue from '#src/data/getValue.server.ts'
 import { canEdit } from './canEdit.ts'
 
-const value = reactive.derived(() => getValue({ id: 'deferred' }))
+const value = reactive(() => getValue({ id: 'deferred' }))
 </script>
 
 <p id="deferred">{#if canEdit()}<b>edit</b>{:else}<i>view</i>{/if}{value.busy() ? '' : value().word}</p>`,
@@ -73,7 +73,7 @@ const pageOver = (handler: string) => `<script>
 import { memo, reactive } from '@abide/abide'
 import ${handler} from '#src/data/${handler}.server.ts'
 
-const value = reactive.derived(() => ${handler}({ id: 'one' }))
+const value = reactive(() => ${handler}({ id: 'one' }))
 const pressed = reactive('')
 </script>
 
@@ -86,12 +86,12 @@ const MODULE_CALL = {
     'lib/early.ts': `import { reactive } from '@abide/abide'
 import getValue from '#src/data/getValue.server.ts'
 
-export const early = reactive.derived(() => getValue({ id: 'module' }))
+export const early = reactive(() => getValue({ id: 'module' }))
 `,
     'lib/late.ts': `import { reactive } from '@abide/abide'
 import getSlow from '#src/data/getSlow.server.ts'
 
-export const late = reactive.derived(() => getSlow({ id: 'module' }))
+export const late = reactive(() => getSlow({ id: 'module' }))
 `,
     'early/index.abide': `<script>
 import { early } from '../lib/early.ts'

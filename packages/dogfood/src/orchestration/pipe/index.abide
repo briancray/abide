@@ -7,7 +7,11 @@ import Section from '#src/lib/Section.abide'
 </script>
 
 <Doc
-    seeAlso={['/reactive/derived', '/ambients/abort-signal', '/orchestration/job']}
+    seeAlso={[
+        '/reactive/reactive',
+        '/ambients/abort-signal',
+        '/orchestration/job',
+    ]}
     tests={[
         {
             path: 'packages/abide/tests/pipe.test.ts',
@@ -60,7 +64,7 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Show a save in progress">
-        <p>Call the pipe in a <a href={url('/reactive/derived')}><code>reactive.derived</code></a> to
+        <p>Call the pipe in a <a href={url('/reactive/reactive')}><code>reactive</code></a> to
             hold its answer as a value: it is <code>busy()</code> while the item runs, and a refusal
             is its <code>error()</code>. A run the derived value replaces aborts its item.</p>
         <Code language="abide" caption="abide" code={`
@@ -69,7 +73,7 @@ import Section from '#src/lib/Section.abide'
             import saveDeal from './saveDeal.server.ts'
 
             const save = pipe([saveDeal], { retries: 2 })
-            const saved = reactive.derived(() =>
+            const saved = reactive(() =>
                 save({ id: 'd2', name: 'Acme', company: 'Acme', amount: 9 }),
             )
             </script>

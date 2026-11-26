@@ -4,7 +4,7 @@ import { reactive } from '@abide/abide'
 import { summarizeStage } from './summarizeStage.ts'
 
 let stage = reactive('qualified')
-const summary = reactive.derived(() => summarizeStage(stage))
+const summary = reactive(() => summarizeStage(stage))
 </script>
 
 <div class="tabs">

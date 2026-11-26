@@ -47,7 +47,7 @@ function wonTotal(db: ReturnType<typeof crm>) {
         },
         { global: true, tags: ['deals'] },
     )
-    const read = reactive.derived(() => total())
+    const read = reactive(() => total())
     let seen: unknown
     const stop = watch(() => {
         try {

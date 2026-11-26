@@ -269,7 +269,7 @@ test('the app stopping aborts a call in flight — 55.8, 37.28', async () => {
 // THE REVERT: write every stand-in as `(...args)` — it declares a parameter whatever its export
 // declares, so `counted` reads as a keyed body, and `reactive` hands back a `Keyed` with no `error`.
 test('a reactive reads a stand-in as it reads the export: keyed where it declares a parameter, by its defaults — 55.14', async () => {
-    const unkeyed = reactive.derived(thread.counted) as unknown as {
+    const unkeyed = reactive(thread.counted) as unknown as {
         error: unknown
     }
     expect(typeof unkeyed.error).toBe('function')

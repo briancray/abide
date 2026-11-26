@@ -26,13 +26,13 @@ export const getTick = rpc(async () => {
 const ME = `import { reactive } from '@abide/abide'
 import whoami from '#src/who/whoami.server.ts'
 
-export const me = reactive.derived(() => whoami())
+export const me = reactive(() => whoami())
 `
 
 const CAN_EDIT = `import { reactive } from '@abide/abide'
 import { me } from './me.ts'
 
-export const canEdit = reactive.derived(() => me.ready() && me().owner)
+export const canEdit = reactive(() => me.ready() && me().owner)
 `
 
 // The child's setup makes a call, so 41.28 builds it after the turn.
@@ -41,7 +41,7 @@ import { reactive } from '@abide/abide'
 import getTick from '#src/who/getTick.server.ts'
 import { canEdit } from './canEdit.ts'
 
-const tick = reactive.derived(() => getTick())
+const tick = reactive(() => getTick())
 </script>
 
 <b id="deferred">{canEdit() ? 'edit' : 'view'}</b><i>{tick.busy() ? 0 : tick()}</i>`

@@ -22,7 +22,6 @@ import winLead from './lib/WinLead.abide' with { type: 'text' }
 <Doc
     seeAlso={[
         '/reactive/reactive',
-        '/reactive/derived',
         '/orchestration/memo',
         '/reactive/watch',
         '/reactive/busy',
@@ -43,7 +42,7 @@ import winLead from './lib/WinLead.abide' with { type: 'text' }
     </Section>
 
     <Section title="A derived total reruns only when what it read changes">
-        <p>A <a href={url('/reactive/derived')}><code>reactive.derived</code></a> body subscribes to what it reads,
+        <p>A <a href={url('/reactive/reactive')}><code>reactive</code></a> body subscribes to what it reads,
             the way a template does. Pick a stage and the total reruns, and one binding with it. Type
             a note and nothing the total reads has changed, so no binding runs.</p>
         <Example code={stageTotal}><StageTotal /></Example>
@@ -55,14 +54,13 @@ import winLead from './lib/WinLead.abide' with { type: 'text' }
         <Example code={sameTotal}><SameTotal /></Example>
     </Section>
 
-    <Section title="A handler answers a promise, and reactive.derived makes it live">
-        <p>Only <a href={url('/reactive/reactive')}><code>reactive</code></a> and
-            <a href={url('/reactive/derived')}><code>reactive.derived</code></a> are live. A call to a
+    <Section title="A handler answers a promise, and reactive makes it live">
+        <p>Only a <a href={url('/reactive/reactive')}><code>reactive</code></a> is live. A call to a
             handler declared with <a href={url('/handlers/rpc')}><code>rpc</code></a> answers a
             promise, as a <a href={url('/orchestration/memo')}><code>memo</code></a>, a
             <a href={url('/orchestration/pipe')}><code>pipe</code></a> and
             <a href={url('/data/fetch-and-handle')}><code>fetchAndHandle</code></a> do, or a
-            stream where it yields. Call it inside a <code>reactive.derived</code> and the total is live:
+            stream where it yields. Call it inside a <code>reactive</code> and the total is live:
             read by name, run again when <code>stage</code> changes, and
             <a href={url('/reactive/ready')}><code>ready()</code></a> says when it first has a
             figure to show.</p>

@@ -5,7 +5,7 @@
 
 import { number, percent } from '../format/index.ts'
 import { type Live, live } from '../live.ts'
-import { derived } from '../reactive/index.ts'
+import { reactive } from '../reactive/index.ts'
 import type { Disposer } from '../reactive/watch.ts'
 import { tipAgainst } from '../tooltip/tip.ts'
 
@@ -76,7 +76,7 @@ export function pie(options: PieOptions): PieParts {
         return kept.bind
     }
 
-    const ring = derived(() => {
+    const ring = reactive(() => {
         drawing = new Map()
         const slices = live(options.slices)
         const hole =

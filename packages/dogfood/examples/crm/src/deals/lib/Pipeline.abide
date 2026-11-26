@@ -3,9 +3,9 @@ import { format, reactive, refresh } from '@abide/abide'
 
 import listDeals from '../listDeals.server.ts'
 
-const deals = reactive.derived(() => listDeals())
+const deals = reactive(() => listDeals())
 
-const total = reactive.derived(() => {
+const total = reactive(() => {
     let sum = 0
     for (const deal of deals) if (deal.stage !== 'won') sum += deal.amount
     return sum

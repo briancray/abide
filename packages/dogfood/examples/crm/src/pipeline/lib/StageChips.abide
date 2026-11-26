@@ -17,7 +17,7 @@ const chips = toggleGroup({
     value: stages,
     label: 'Stages',
 })
-const shown = reactive.derived(() =>
+const shown = reactive(() =>
     stages.length === 0
         ? DEALS
         : DEALS.filter((deal) => stages.includes(deal.stage)),

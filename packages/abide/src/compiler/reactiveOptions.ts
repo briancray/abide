@@ -9,7 +9,6 @@ import {
     isFunctionExpression,
     isIdentifier,
     isObjectLiteralExpression,
-    isPropertyAccessExpression,
     isPropertyAssignment,
 } from 'typescript/unstable/ast/is'
 
@@ -42,16 +41,12 @@ export function inlineOptions(
         : undefined
 }
 
-/** Whether a call is `reactive(…)`, `reactive.derived(…)` or `memo(…)`, by the callee's spelling. */
+/** Whether a call is `reactive(…)` or `memo(…)`, by the callee's spelling. */
 export function isReactiveCall(call: Node & { expression: Node }): boolean {
     const callee = call.expression
-    if (isIdentifier(callee))
-        return callee.text === 'reactive' || callee.text === 'memo'
     return (
-        isPropertyAccessExpression(callee) &&
-        isIdentifier(callee.expression) &&
-        callee.expression.text === 'reactive' &&
-        callee.name.text === 'derived'
+        isIdentifier(callee) &&
+        (callee.text === 'reactive' || callee.text === 'memo')
     )
 }
 

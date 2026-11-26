@@ -8,7 +8,7 @@ import { checkParts } from './checkParts.ts'
 import { number } from './format/index.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import { derived, type Reactive, reactive } from './reactive/index.ts'
+import { type Reactive, reactive } from './reactive/index.ts'
 import { scrub, type ScrubPosition } from './scrub.ts'
 
 /** 51.184 — what a slider picks: a value, or a range's low and high end where it picks a range. */
@@ -89,7 +89,7 @@ export function slider<Range extends boolean = false>(
         )) as Reactive<SliderValue<boolean>>
 
     // The values a thumb stops at, by index from `min`.
-    const last = derived(() =>
+    const last = reactive(() =>
         Math.max(0, Math.floor((max() - min()) / step())),
     )
     const indexOf = (each: number) =>

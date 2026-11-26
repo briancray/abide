@@ -6,7 +6,7 @@ import { STAGES } from './STAGES.ts'
 
 // Its own stage, and no way to reach the count beside it.
 let stage = reactive('lead')
-const totals = reactive.derived(() => getStage({ stage }))
+const totals = reactive(() => getStage({ stage }))
 </script>
 
 <ul class="fields stacked">

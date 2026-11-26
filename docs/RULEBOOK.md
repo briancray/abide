@@ -124,7 +124,7 @@ REGISTRY.md because none of them is a name an app author writes.
 | namespace | The name a log line is written under, and what `DEBUG` selects. |
 | entry | One key's slot in a `Keyed`. |
 | scope | The lifetime a value is filed under and dropped with. |
-| adoption | What a `reactive.derived` body does with a `Reactive` it returned. |
+| adoption | What a `reactive` body does with a `Reactive` it returned. |
 | forwarding | The delegation between an adopting `Reactive` and the one it adopted. |
 | propagation | The derivation of a probe from the values a body read. |
 | sink | What 35.7 defines. |
@@ -150,7 +150,7 @@ RFC 2119 keywords are used as that document defines them: **MUST**, **MUST NOT**
 
 # 1. The reactive value
 
-1.1 `reactive` and `reactive.derived` MUST hand back a `Reactive`, and a call of an `Rpc`, a `memo`, a
+1.1 `reactive` MUST hand back a `Reactive`, and a call of an `Rpc`, a `memo`, a
 `ledger` or a `pipe` MUST NOT hand back one of its own making.
 
 1.2 `Produced` MUST be the unit the producer yielded: `Stored` for every producer but a streaming one,
@@ -309,8 +309,8 @@ escape the write.
 MUST be typed as one `Reactive` over the value a call of each of them answers, its refusals as its
 failures.
 
-4.20 `reactive` given a function that is neither a `Reactive` nor a `Keyed` MUST hold it as its
-value.
+4.20 `reactive` given a function that is neither a `Reactive`, a `Keyed` nor a `memo` MUST run it as
+a body, per 11.1, and MUST NOT hold it as its value.
 
 # 5. Productions and identity
 
@@ -442,14 +442,14 @@ drains what is in flight.
 7.21 The signal 7.20 aborts MUST stay aborted from that abort until `App.stop` resolves, `onStop`
 included, and MUST be one not aborted from then on.
 
-7.22 `abortSignal` called while a `reactive.derived` or `memo` body runs, its synchronous part or a step of its stream,
+7.22 `abortSignal` called while a `reactive` or `memo` body runs, its synchronous part or a step of its stream,
 MUST answer a signal of that run's own.
 
 7.23 The signal 7.22 answers MUST abort where a new run of that value starts, where the value or its
 entry is released, and where its owner's signal aborts: 7.25's for a value filed in a request
 (11.32), and 7.20's for any other, a `global` value's included.
 
-7.24 On a server, `abortSignal` called in work a `reactive.derived` or `memo` run carries across an `await` MUST answer
+7.24 On a server, `abortSignal` called in work a `reactive` or `memo` run carries across an `await` MUST answer
 7.22's signal of that run, and a signal already aborted once a new run of that value has started or
 the value or its entry has been released.
 
@@ -457,7 +457,7 @@ the value or its entry has been released.
 that aborts where the received request's signal does, 18.18's close of a connection among them, and
 where 7.20 aborts.
 
-7.26 In a browser, `abortSignal` called outside a `reactive.derived` or `memo` body's synchronous part and the steps of its
+7.26 In a browser, `abortSignal` called outside a `reactive` or `memo` body's synchronous part and the steps of its
 stream MUST answer 7.20's signal.
 
 # 8. Stores
@@ -584,7 +584,7 @@ read that asks for it.
 
 9.5 A `store` MUST round-trip the latest production.
 
-9.6 A `reactive.derived` or `memo` body declared as an async generator function MUST be a streaming producer from
+9.6 A `reactive` or `memo` body declared as an async generator function MUST be a streaming producer from
 construction, and a body whose run hands back an async iterable that is not a `Reactive` — an async
 generator or a `ReadableStream` among them — or a promise resolving to one, MUST be one from that
 run on, and a run replaced by a later one MUST cancel the stream it was reading.
@@ -641,17 +641,17 @@ holding what it answers otherwise.
 
 # 11. Derived and keyed values
 
-11.1 `reactive.derived` MUST produce an unkeyed, tracked `Reactive`.
+11.1 `reactive` given a body MUST produce an unkeyed, tracked `Reactive`.
 
 11.2 A `memo` called MUST answer a promise of its function's value for that call's `Args` key, or where
 the function answers an async iterable, a stream of its chunks; it MUST run the function only for a
 key it holds no value for, and MUST key a function that declares no parameter on `undefined`.
 
-11.3 `memo` and `reactive.derived` MUST NOT read a body's parameters to decide what they produce.
+11.3 `memo` and `reactive` MUST NOT read a body's parameters to decide what they produce.
 
 11.4 A `memo` MUST hold one entry per `Args` key, computed when that key is first called.
 
-11.5 A `reactive.derived` MUST recompute on the first read that follows a change to a value its
+11.5 A derived `reactive` MUST recompute on the first read that follows a change to a value its
 body read.
 
 11.6 A `memo` MUST NOT run its function again for that reason, and `ttl`, `invalidate`, `refresh`
@@ -659,15 +659,15 @@ and eviction MUST be its only ways back.
 
 11.7 Both `memo` forms MUST accept a write.
 
-11.8 A write to a `reactive.derived` that is not adopting MUST stand until the next recompute replaces it.
+11.8 A write to a derived `reactive` that is not adopting MUST stand until the next recompute replaces it.
 
-11.9 An implementation MUST NOT warn on a write to a `reactive.derived`.
+11.9 An implementation MUST NOT warn on a write to a derived `reactive`.
 
-11.10 A write of a settled value to a `reactive.derived` MUST move no probe.
+11.10 A write of a settled value to a derived `reactive` MUST move no probe.
 
-11.11 A write of an unsettled value to a `reactive.derived` MUST be a load, per 4.2 and 1.6.
+11.11 A write of an unsettled value to a derived `reactive` MUST be a load, per 4.2 and 1.6.
 
-11.12 A `Reactive` returned from a `reactive.derived` or `memo` body MUST be adopted, and MUST NOT be stored as a
+11.12 A `Reactive` returned from a `reactive` or `memo` body MUST be adopted, and MUST NOT be stored as a
 value.
 
 11.13 Adoption MUST mirror the adopted productions into the adopting `Reactive`.
@@ -690,7 +690,7 @@ it.
 
 11.20 `s.busy` and `s.ready` MUST be the probes that propagate.
 
-11.21 A `reactive.derived` MUST report `s.busy` for its own load, or for any value its body read.
+11.21 A derived `reactive` MUST report `s.busy` for its own load, or for any value its body read.
 
 11.22 An implementation MUST derive a propagated probe on the read that asks for it, and MUST NOT
 hold a subscription per source for it.
@@ -717,7 +717,7 @@ both sides, and the parameter's defaults MUST apply to an absent `Args` as to `{
 
 11.31 A reactive value in an argument position MUST be read, and `Args` MUST be plain args.
 
-11.32 A `reactive`, a `reactive.derived`, and a `memo` without `global`, MUST be request-local on a server and
+11.32 A `reactive` and a `memo` without `global`, MUST be request-local on a server and
 process-local in a browser.
 
 11.33 `ttl: Infinity` without `global` MUST mean to the end of that scope.
@@ -739,7 +739,7 @@ readers that remain.
 
 11.40 `args` on a `memo` MUST check `Args`.
 
-11.41 `args` MUST be unspellable on a `reactive.derived`, and spelling it MUST be a compile error naming it.
+11.41 `args` MUST be unspellable on a derived `reactive`, and spelling it MUST be a compile error naming it.
 
 11.42 `store` on a `Keyed` MUST accept a function of the `Args`.
 
@@ -772,14 +772,14 @@ refusal.
 
 11.55 An implementation MUST NOT warn where two `Args` keys differ only in the case of a value.
 
-11.56 A `reactive.derived` MUST NOT recompute before a read or an `Effect` asks for its value.
+11.56 A derived `reactive` MUST NOT recompute before a read or an `Effect` asks for its value.
 
-11.57 A `reactive.derived` MUST report `s.ready` only where every value its body read reports it.
+11.57 A derived `reactive` MUST report `s.ready` only where every value its body read reports it.
 
 11.58 `s.set` and `s.patch` on an adopting `Reactive`, given anything but a `Reactive`, MUST reach the
 adopted `Reactive`.
 
-11.59 `args` spelled on a `reactive.derived` MUST refuse at construction.
+11.59 `args` spelled on a derived `reactive` MUST refuse at construction.
 
 11.60 `s.set` given a `Reactive`, and `reactive` opened on one, MUST adopt it per 11.12, and MUST NOT
 store it as a value — on a streaming producer, as a write that 11.58 does not reach through.
@@ -797,7 +797,7 @@ naming the cycle.
 
 11.65 `s.set` MUST throw 11.64's refusal, and a body whose answer 11.64 refuses MUST fail with it.
 
-11.66 A `reactive`, a `reactive.derived`, and a `memo` without `global`, MUST be built afresh in each request that reaches it
+11.66 A `reactive` and a `memo` without `global`, MUST be built afresh in each request that reaches it
 or whose `render` builds it under 41.34, from its declaration and never from what a write outside
 every request left.
 
@@ -808,7 +808,7 @@ start again when the load ends.
 
 11.69 `s.set` MUST take only a `Reactive` whose `Failures` are this value's.
 
-11.70 A `reactive.derived` with a `store`, built on a server outside every request, MUST NOT run
+11.70 A derived `reactive` with a `store`, built on a server outside every request, MUST NOT run
 the `store`'s `get` before it is reached.
 
 11.71 A `Keyed` MUST NOT hold an entry for an `Args` its `args` gate refuses, and the gate MUST run
@@ -817,10 +817,10 @@ once per entry.
 11.72 A body's first run in a scope that reads the `memo` it is building MUST fail with a
 `ReferenceError`.
 
-11.73 `reactive.derived` or `memo` given anything but a function, or given a `Reactive` or a `memo`, MUST
+11.73 `memo` given anything but a function, or given a `Reactive` or a `memo`, MUST
 throw at construction.
 
-11.74 A `reactive.derived` that called a `memo` MUST run again where the `memo`'s entry for the key it called
+11.74 A derived `reactive` that called a `memo` MUST run again where the `memo`'s entry for the key it called
 is refreshed or invalidated, and MUST NOT run again for another key's.
 
 11.75 A `memo` whose function answers an async iterable MUST run it once per `Args` key and keep its
@@ -842,7 +842,7 @@ as 4.3, 4.6 and 5.3 apply them to a `reactive`'s.
 11.80 `m.set` and `m.patch` MUST take the write alone only where the `memo` takes no `Args` at all,
 and MUST take `args` before it where its `Args` are optional.
 
-11.81 `reactive` and `reactive.derived` given a `ttl`, a `throttle`, a `debounce`, `tags` or `global` MUST throw
+11.81 `reactive` given a `ttl`, a `throttle`, a `debounce`, `tags` or `global` MUST throw
 a `TypeError` at construction naming the `memo` that declares it.
 
 # 12. Effects
@@ -890,7 +890,7 @@ save where a clause orders them.
 12.16 A stream released under 12.14 MUST stop its run, and the later read MUST start it once more,
 whether or not the stopped run had closed.
 
-12.17 A `reactive`, a `reactive.derived` or a `memo` declared where 12.4, 12.5 and 12.13 would own no `watch` MUST NOT be
+12.17 A `reactive` or a `memo` declared where 12.4, 12.5 and 12.13 would own no `watch` MUST NOT be
 owned by one current where it is first reached, save the instance a request builds of it under
 11.66, which that request owns.
 
@@ -968,7 +968,7 @@ them, which MUST recompute from the load it reads.
 
 14.2 A template expression MUST track the `Reactive` values it reads.
 
-14.3 A `reactive.derived` body MUST track.
+14.3 A `reactive` body MUST track.
 
 14.4 A `memo` body MUST NOT track.
 
@@ -996,7 +996,7 @@ against nothing.
 the read.
 
 14.15 The compiler MUST warn on a reactive read in a condition position inside a
-`reactive.derived` body, where what the condition decides reads another value, naming the read.
+`reactive` body, where what the condition decides reads another value, naming the read.
 
 14.16 The compiler MUST warn on a reactive read inside a function a tracked body creates and
 does not call synchronously, naming the read.
@@ -1418,10 +1418,10 @@ naming the handler and the path to it.
 16.106 A release that changes the shape of a request an `Rpc` sends MUST, in that release and each
 one before the next minor release after it, answer a request sent in the shape before the change.
 
-16.107 A `reactive.derived` body handing back an `Rpc` call's answer whole, and a `Reactive` set or opened on
+16.107 A `reactive` body handing back an `Rpc` call's answer whole, and a `Reactive` set or opened on
 one, MUST adopt the handler's value for those `Args` (11.12), as it would the value itself.
 
-16.108 An `Rpc` called in a `reactive.derived` body MUST subscribe the body to the handler's value for those
+16.108 An `Rpc` called in a `reactive` body MUST subscribe the body to the handler's value for those
 `Args`, so a body that awaits the answer runs again where that value moves.
 
 16.109 A handler declared over a `Reactive` MUST throw at construction, and a handler whose body
@@ -4021,6 +4021,13 @@ address answers a verb it did not; MUST write that `methods` as a formatter woul
 38.226 one whose server file is already there; and MUST export each `rpc` a `<script server>` binds,
 as its value where the `rpc` takes no options, noting by 38.226 each one that takes them.
 
+38.232 The migration keyed to 0.145.0 MUST, ahead of 38.233, hand back from a body every function
+abide's `reactive` is handed that its file writes in place or binds to the name it is handed, as
+the answer of a body written in its place, and MUST leave every other `reactive`.
+
+38.233 The migration keyed to 0.145.0 MUST spell every `derived` member of abide's `reactive` as
+`reactive`, and MUST leave a `derived` member of anything else.
+
 # 39. Head and view transitions
 
 39.1 A `<head>` element in a `.abide` file MUST contribute its children to the document head.
@@ -4287,7 +4294,7 @@ inline, and the rest MUST be picked up by the client's own request.
 41.5 Data MUST reach a browser by answering that browser's own `Rpc` call from the seed buffer, and
 a document MUST NOT carry a copy of an answer.
 
-41.6 Hydration MUST re-execute setup: every `<script>` and every `reactive.derived` body runs
+41.6 Hydration MUST re-execute setup: every `<script>` and every `reactive` body runs
 again, and a serialized setup result MUST NOT be adopted.
 
 41.7 The `Rpc` calls that re-execution makes MUST be answered from the seed buffer.
@@ -4375,7 +4382,7 @@ MUST hold every chunk of that run, its run closed, as hydration adopts the page.
 a module declared outside every request whose build there left a load in flight, before it sets up a
 page or a layout.
 
-41.35 A `render` MUST NOT build under 41.34 a `reactive` or a `reactive.derived` built in a component's setup or
+41.35 A `render` MUST NOT build under 41.34 a `reactive` built in a component's setup or
 in another `render`, nor one nothing reaches.
 
 # 42. The app object

@@ -39,7 +39,7 @@ import Section from '#src/lib/Section.abide'
             import logCall from './logCall.server.ts'
             import listCalls from './listCalls.server.ts'
 
-            const calls = reactive.derived(() => listCalls())
+            const calls = reactive(() => listCalls())
             function log(note) {
                 const call = { id: crypto.randomUUID(), note }
                 logCall(call, {

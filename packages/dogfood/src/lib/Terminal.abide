@@ -105,8 +105,8 @@ import Code from './Code.abide'
 
 const { command } = props<{ command: string }>()
 
-const answer = reactive.derived(() => transcript({ command }))
-const printed = reactive.derived(() =>
+const answer = reactive(() => transcript({ command }))
+const printed = reactive(() =>
     answer
         ? [
               ...(answer.output === '' ? [] : [answer.output]),

@@ -55,7 +55,7 @@ const script = (imports = ''): string => `<script>
 import { memo, reactive } from '@abide/abide'
 ${imports}
 let page = reactive<{ kind: string } | undefined>({ kind: 'atlas' })
-const section = reactive.derived(() => (page?.kind === 'atlas' ? page.kind : undefined))
+const section = reactive(() => (page?.kind === 'atlas' ? page.kind : undefined))
 const rows = reactive(['a'])
 </script>
 <button id="close" onclick={() => (page = undefined)}>close</button>`

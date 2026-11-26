@@ -7,7 +7,7 @@ import moveDeal from '../moveDeal.server.ts'
 let id = reactive('d2')
 let refusal = reactive('')
 
-let deal = reactive.derived(() => getDeal({ id }))
+let deal = reactive(() => getDeal({ id }))
 
 async function move(stage: string) {
     try {

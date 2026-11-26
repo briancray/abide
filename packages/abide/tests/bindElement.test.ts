@@ -148,7 +148,7 @@ import Second from './Second.abide'
 
 let count = reactive(0)
 let swapped = reactive(false)
-let Shown = reactive.derived(() => (swapped ? Second : First))
+let Shown = reactive(() => (swapped ? Second : First))
 </script>
 
 <button id="swap" onclick={() => { swapped = true }}>swap</button>

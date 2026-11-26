@@ -166,7 +166,7 @@ test('store.sqlite keeps a value in a row of its table, made where missing — 8
     const path = `${Bun.env.TMPDIR ?? '/tmp'}/abide-sqlite-store-${process.pid}.db`
     const kept = database(path)
     try {
-        const first = reactive.derived(() => ({ list: [1, 2] }), {
+        const first = reactive(() => ({ list: [1, 2] }), {
             store: store.sqlite<{ list: number[] }>(path, 'doc', {
                 table: 'kept',
             }),
@@ -178,7 +178,7 @@ test('store.sqlite keeps a value in a row of its table, made where missing — 8
             .get(`${APP}:doc`)
         expect(row).toEqual({ value: '{"list":[1,2]}', expires: null })
         let runs = 0
-        const second = reactive.derived(
+        const second = reactive(
             () => {
                 runs += 1
                 return { list: [] as number[] }
@@ -236,7 +236,7 @@ test('a store re-reading unchanged text wakes no reader — 8.30', () => {
     )
     value.set({ wide: true })
     let runs = 0
-    const reader = reactive.derived(() => {
+    const reader = reactive(() => {
         runs += 1
         return value().wide
     })

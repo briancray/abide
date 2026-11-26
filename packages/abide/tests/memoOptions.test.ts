@@ -118,7 +118,7 @@ test("a derived keeps the answer it served while a memo's window holds the next 
         { debounce: 30 },
     )
     const query = reactive('ab')
-    const found = reactive.derived(() => search(query()))
+    const found = reactive(() => search(query()))
     const stop = watch(() => {
         found.ready() ? found() : undefined
     })
@@ -198,7 +198,7 @@ test('an entry a window starts onto a refused call settles its awaits — 5.20',
     })
     const bounded = rpc(({ n }: { n: number }) => (n > 10 ? tooBig({ n }) : n))
     const paced = memo(bounded, { debounce: 10 })
-    const shown = reactive.derived(() => paced({ n: 99 }))
+    const shown = reactive(() => paced({ n: 99 }))
     const answered = await Promise.race([
         Promise.resolve(shown).then(
             (value) => `resolved ${String(value)}`,
@@ -219,7 +219,7 @@ test('an entry a window starts onto a refused call settles its awaits — 5.20',
 // are due, 48 of them onto a state it had already read.
 test('a write a window holds behind another wakes no probe reader — 3.3, 5.15', () => {
     const status = memo(() => ({ n: -1 }), { throttle: 60_000 })
-    const followed = reactive.derived(() => status())
+    const followed = reactive(() => status())
     const seen: string[] = []
     const stop = watch(() => {
         let n: number | string = 'unlanded'

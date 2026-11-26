@@ -94,8 +94,8 @@ function trackedKind(functionNode: Node): Body['kind'] | undefined {
     if (!isCallExpression(parent) || parent.arguments[0] !== child)
         return undefined
     const name = calleeName(parent)
-    // 14.4 — a `memo` is keyed, and does not track.
-    if (name === 'derived') return 'derived'
+    // 14.4 — a `memo` is keyed, and does not track; a function handed to `reactive` is a body (4.20).
+    if (name === 'reactive') return 'derived'
     if (name === 'watch') return 'watch'
     return undefined
 }

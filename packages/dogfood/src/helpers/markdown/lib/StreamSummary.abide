@@ -10,7 +10,7 @@ export const summarizeDeal = async function* () {
 <script>
 import { markdown, raw, reactive } from '@abide/abide'
 
-const summary = reactive.derived(() => summarizeDeal())
+const summary = reactive(() => summarizeDeal())
 const doc = markdown.incremental({ source: () => summary.join('') })
 </script>
 

@@ -10,7 +10,7 @@ const COLUMNS: Column<Company>[] = [
     { key: 'city', label: 'City' },
 ]
 
-const companies = reactive.derived(() => listCompanies())
+const companies = reactive(() => listCompanies())
 const table = sortableTable({
     rows: () => companies,
     columns: COLUMNS,

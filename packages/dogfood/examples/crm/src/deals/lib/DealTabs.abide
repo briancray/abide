@@ -11,7 +11,7 @@ const VIEWS = [
 
 let tab = reactive<string | undefined>('details')
 const view = tabs({ items: VIEWS, selected: tab })
-const deal = reactive.derived(() => getDeal({ id: 'd1' }))
+const deal = reactive(() => getDeal({ id: 'd1' }))
 </script>
 
 <div class="flex flex-col gap-snug">

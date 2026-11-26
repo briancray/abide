@@ -11,7 +11,7 @@ export const listContacts = (): Contact[] => [
 <script>
 import { combobox, reactive } from '@abide/abide'
 
-const contacts = reactive.derived(() => listContacts())
+const contacts = reactive(() => listContacts())
 let contact = reactive<Contact | undefined>(undefined)
 const box = combobox({
     id: 'deal-contact',

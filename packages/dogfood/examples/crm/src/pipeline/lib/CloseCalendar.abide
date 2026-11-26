@@ -3,9 +3,9 @@ import { calendar, reactive } from '@abide/abide'
 
 import listClosing from '../listClosing.server.ts'
 
-const deals = reactive.derived(() => listClosing())
+const deals = reactive(() => listClosing())
 // The deals closing on each day, by the day.
-const closing = reactive.derived(() => {
+const closing = reactive(() => {
     const byDay = new Map<string, { id: string; name: string }[]>()
     for (const deal of deals)
         if (deal.closes !== undefined)

@@ -7,7 +7,7 @@ import AccountTree from './lib/AccountTree.abide'
 import CampaignAccounts from './lib/CampaignAccounts.abide'
 import listCompanies from './listCompanies.server.ts'
 
-const companies = reactive.derived(() => listCompanies())
+const companies = reactive(() => listCompanies())
 </script>
 
 <Announcements />

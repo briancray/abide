@@ -30,13 +30,19 @@ import { holdUntil } from '#shared/Failed.ts'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { CELL } from '#shared/reactive/CELL.ts'
 import { cellOf } from '#shared/reactive/cellShape.ts'
-import { isKeyed, keyedValue } from '#shared/reactive/index.ts'
+import {
+    type BodyValue,
+    isKeyed,
+    keyedValue,
+    type ReactiveOf,
+} from '#shared/reactive/index.ts'
 import { chunksOfStream, isStreaming } from '#shared/reactive/producer.ts'
 import { type CellOptions, createReactive } from '#shared/reactive/Reactive.ts'
 import { SCOPING } from '#shared/reactive/scoping.ts'
 import { enterShare, leaveShare } from '#shared/reactive/share.ts'
 import { CLEAN } from '#shared/reactive/tracking.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
+import type { Schema } from '#shared/Schema.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
 import { WORK } from '#shared/WORK.ts'
 import { writePath } from '#shared/writePath.ts'
@@ -50,7 +56,7 @@ UNEXPECTED.report = handOnError
 
 // THE CELL A `memo`'s ENTRY IS (5.24), built with the options a memo hands each of its entries, so a
 // test can write it as the entry's owner does and count the wakes its pace lets through. `reactive`
-// and `reactive.derived` take none of these (11.81); a memo's entry is the one place they reach.
+// takes none of these (11.81); a memo's entry is the one place they reach.
 function pacedValue<Value>(
     initial: Value | undefined,
     options: CellOptions<Value, Value>,
@@ -67,14 +73,26 @@ function pacedValue<Value>(
 function pacedBody<Result>(
     body: () => Result,
     options: CellOptions<unknown, unknown>,
-): ReturnType<typeof reactive.derived<never, Result>> {
+): ReactiveOf<
+    never,
+    Result,
+    BodyValue<Result>,
+    Schema<BodyValue<Result>>,
+    never
+> {
     return createReactive(
         'memo',
         body as (args: unknown) => unknown,
         undefined,
         undefined,
         options as CellOptions<never, never>,
-    ) as unknown as ReturnType<typeof reactive.derived<never, Result>>
+    ) as unknown as ReactiveOf<
+        never,
+        Result,
+        BodyValue<Result>,
+        Schema<BodyValue<Result>>,
+        never
+    >
 }
 
 // A wake counter that is not itself a reactive read — `watch` would re-enter the graph
@@ -123,7 +141,7 @@ test('a read throws NotLanded where nothing has landed, and peek does not', () =
 // The trigger named by the state it produces: busy AND ready.
 test('refresh keeps serving while it reloads', async () => {
     let answer = 1
-    const held = reactive.derived(() => Promise.resolve(answer))
+    const held = reactive(() => Promise.resolve(answer))
     await held
     expect(held()).toBe(1)
     answer = 2
@@ -140,7 +158,7 @@ test('refresh keeps serving while it reloads', async () => {
 // served (7.8) and, over an async body, the first load starts again — and the read agrees with it.
 test('invalidate keeps serving until a probe or a read runs the producer', async () => {
     const answer = 1
-    const held = reactive.derived(() => Promise.resolve(answer))
+    const held = reactive(() => Promise.resolve(answer))
     await held
     held.invalidate()
     expect(`busy: ${held.busy()}`).toBe('busy: true')
@@ -168,8 +186,8 @@ test('invalidate keeps serving until a probe or a read runs the producer', async
 // DIFFERENT value passes either way, which is exactly why nothing caught this.
 test('a reload that lands the value already held frees the bodies that aborted', async () => {
     const answer = 1
-    const held = reactive.derived(() => Promise.resolve(answer))
-    const doubled = reactive.derived(() => held() * 2)
+    const held = reactive(() => Promise.resolve(answer))
+    const doubled = reactive(() => held() * 2)
     await held
     expect(doubled()).toBe(2)
 
@@ -190,8 +208,8 @@ test('a reload that lands the value already held frees the bodies that aborted',
 // was skipping, so the guard never came back either.
 test('a guard over an aborted body comes back when the reload lands what was held', async () => {
     const answer = 1
-    const held = reactive.derived(() => Promise.resolve(answer))
-    const doubled = reactive.derived(() => held() * 2)
+    const held = reactive(() => Promise.resolve(answer))
+    const doubled = reactive(() => held() * 2)
     const seen: boolean[] = []
     const stop = watch(() => {
         seen.push(doubled.ready())
@@ -213,9 +231,9 @@ test('a guard over an aborted body comes back when the reload lands what was hel
 // recompute — so nothing but a walk of the source list can report it.
 test('busy propagates through a derived value while its source refreshes', async () => {
     const answer = 1
-    const invoice = reactive.derived(() => Promise.resolve(answer))
+    const invoice = reactive(() => Promise.resolve(answer))
     await invoice
-    const doubled = reactive.derived(() => invoice() * 2)
+    const doubled = reactive(() => invoice() * 2)
     expect(doubled()).toBe(2)
     expect(doubled.busy()).toBe(false)
 
@@ -236,7 +254,7 @@ test('a body reading an unlanded value mints nothing and reruns on landing', asy
         }),
     )
     let runs = 0
-    const derived = reactive.derived(() => {
+    const derived = reactive(() => {
         runs += 1
         return source() + 1
     })
@@ -268,9 +286,9 @@ test('a body something only guards reruns when the value it aborted on lands', a
     const pending = new Promise<{ paid: boolean }[]>((resolve) => {
         landRows = resolve
     })
-    const rows = reactive.derived(() => pending)
+    const rows = reactive(() => pending)
     let bodyRuns = 0
-    const unpaid = reactive.derived(() => {
+    const unpaid = reactive(() => {
         bodyRuns += 1
         return rows().filter((row) => !row.paid)
     })
@@ -303,7 +321,7 @@ test('a watched derived value reruns on the write, not on a later read', async (
         }),
     )
     let runs = 0
-    const derived = reactive.derived(() => {
+    const derived = reactive(() => {
         runs += 1
         return source() + 1
     })
@@ -323,8 +341,8 @@ test('a watched derived value reruns on the write, not on a later read', async (
 // 11.1, 11.2, 11.3 — THE NAME IS THE FORM, never the body's parameters: a `memo` whose function
 // declares none is kept on `undefined`, and runs once for every call of `m()`, each call answering a
 // promise of its value. THE REVERT: build a keyed value per call in `memo`; `runs: 2` after the second.
-test('reactive.derived is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3', async () => {
-    const unkeyed = reactive.derived(() => 7)
+test('reactive given a body is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3', async () => {
+    const unkeyed = reactive(() => 7)
     expect(unkeyed()).toBe(7)
 
     let runs = 0
@@ -346,7 +364,7 @@ test('reactive.derived is unkeyed and memo keyed, whatever the body declares —
     expect(`runs: ${runs}`).toBe('runs: 2')
 })
 
-// 11.74, 16.107 — A `reactive.derived` CALLING A MEMO FOLLOWS THE KEY IT CALLED, and no other: one handing the
+// 11.74, 16.107 — A derived `reactive` CALLING A MEMO FOLLOWS THE KEY IT CALLED, and no other: one handing the
 // call back whole adopts the entry, so a refresh reaches its value with no run of its body; one that
 // awaits the call runs again. Counted as body runs, which the values cannot show. THE REVERT: drop the
 // read `answerOfCall` makes; the awaiting body is never run again and `awaited: 3` stays at 4.
@@ -354,11 +372,11 @@ test('a computed calling a memo follows the key it called — 11.74, 16.107', as
     let answer = 1
     const score = memo((args: { id: number }) => answer * args.id)
     let adoptingRuns = 0
-    const shown = reactive.derived(() => {
+    const shown = reactive(() => {
         adoptingRuns += 1
         return score({ id: 2 })
     })
-    const awaited = reactive.derived(async () => (await score({ id: 2 })) + 1)
+    const awaited = reactive(async () => (await score({ id: 2 })) + 1)
     shown.peek()
     awaited.peek()
     await Bun.sleep(5)
@@ -440,7 +458,7 @@ test('a memo called with args its gate refuses rejects with the refusal — 11.2
 })
 
 // 11.76 — A MEMO'S ENTRY IS WRITTEN BY ITS OWNER: `set` replaces the value for a key and `patch`
-// mutates it in place, each reaching a `reactive.derived` that adopted the key, and neither running the
+// mutates it in place, each reaching a derived `reactive` that adopted the key, and neither running the
 // function. THE REVERT: drop `patch` from `memoOver`'s face; the call throws, `entries: 1,2` stays `1`.
 test('a memo entry is set and patched by its owner, and a reader follows — 11.76', async () => {
     let runs = 0
@@ -448,7 +466,7 @@ test('a memo entry is set and patched by its owner, and a reader follows — 11.
         runs += 1
         return [1]
     })
-    const shown = reactive.derived(() => feed({ account: 'a' }))
+    const shown = reactive(() => feed({ account: 'a' }))
     shown.peek()
     await Bun.sleep(1)
     feed.patch({ account: 'a' }, (entries) => {
@@ -791,10 +809,10 @@ gate(
 // intermediate cannot be observed.
 test('a diamond produces once, and never a value the system was not in', () => {
     const a = reactive(10)
-    const b = reactive.derived(() => a() * 10)
-    const c = reactive.derived(() => a() * 10 + 100)
+    const b = reactive(() => a() * 10)
+    const c = reactive(() => a() * 10 + 100)
     let runs = 0
-    const d = reactive.derived(() => {
+    const d = reactive(() => {
         runs += 1
         return b() + c()
     })
@@ -818,9 +836,9 @@ test('a diamond produces once, and never a value the system was not in', () => {
 // `Object.is(produced, previous)` in `produce`: `woken` is 1 against 0.
 test('a diamond whose value does not change wakes nobody', () => {
     const a = reactive(1)
-    const b = reactive.derived(() => a() > 0)
-    const c = reactive.derived(() => a() < 100)
-    const both = reactive.derived(() => b() && c())
+    const b = reactive(() => a() > 0)
+    const c = reactive(() => a() < 100)
+    const both = reactive(() => b() && c())
     const woken = wakes(both)
 
     a.set(2)
@@ -853,7 +871,7 @@ test('a write runs no derived body, and the read runs one', () => {
     const fan: (() => number)[] = []
     for (let index = 0; index < 50; index += 1)
         fan.push(
-            reactive.derived(() => {
+            reactive(() => {
                 runs += 1
                 return source() + index
             }) as unknown as () => number,
@@ -897,9 +915,7 @@ test('a write runs no derived body, and the read runs one', () => {
 // why the existing reorder case beside this one passes either way.
 test('a body that reads one value twice keeps it when a later run reads it once', () => {
     const name = reactive<string>('ada')
-    const shown = reactive.derived(() =>
-        name() ? name().toUpperCase() : 'anon',
-    )
+    const shown = reactive(() => (name() ? name().toUpperCase() : 'anon'))
     expect(shown()).toBe('ADA')
     // The falsy run reads `name` ONCE, so it truncates the second slot.
     name.set('')
@@ -1000,7 +1016,7 @@ test('disposing the readers of one value reads none of the readers left', () => 
     expect(cellOf(selected).readers.length).toBe(0)
 })
 
-// AND A ROW THAT DERIVES OFF THE VALUE IS TORN DOWN THE SAME WAY. A row's `reactive.derived(() => selected()
+// AND A ROW THAT DERIVES OFF THE VALUE IS TORN DOWN THE SAME WAY. A row's `reactive(() => selected()
 // === row.id)` is released as an orphan once its binding stops (12.14), and that release dropped the
 // derived value from the page value's readers by scanning them — n rows paid n²/2 again, one level
 // down from the binding the test above holds. Keyed-replace order, as above.
@@ -1015,7 +1031,7 @@ test('tearing down rows that derive off one value reads none of its readers', ()
         for (let index = 0; index < rows; index += 1) {
             const previous = collectWatches(stops)
             const id = from + index
-            const isSelected = reactive.derived(() => selected() === id)
+            const isSelected = reactive(() => selected() === id)
             watch(() => {
                 isSelected()
             })
@@ -1047,7 +1063,7 @@ test('a released orphan read again holds one subscription — 12.14', () => {
     })
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    const derived = reactive.derived(() => source() + 1)
+    const derived = reactive(() => source() + 1)
     collectWatches(previous)
     expect(derived()).toBe(2)
     for (const stop of stops) stop()
@@ -1080,7 +1096,7 @@ test('a released stream read again starts once more — 12.16', async () => {
     let gate: () => void = (): void => {}
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    const s = reactive.derived(async function* () {
+    const s = reactive(async function* () {
         starts += 1
         yield 1
         await new Promise<void>((resolve) => {
@@ -1117,7 +1133,7 @@ test('a refresh of a released stream starts it once, and the read after it does 
     let starts = 0
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    const s = reactive.derived(async function* () {
+    const s = reactive(async function* () {
         starts += 1
         yield starts
     })
@@ -1146,7 +1162,7 @@ test('a refresh of a released stream starts it once, and the read after it does 
 // holds its last chunk — "[1]" where "[1,2]" is due.
 test('a released value forwarding a stream adopts it again when read — 12.14', async () => {
     let gate: () => void = (): void => {}
-    const s = reactive.derived(async function* () {
+    const s = reactive(async function* () {
         yield 1
         await new Promise<void>((resolve) => {
             gate = resolve
@@ -1155,7 +1171,7 @@ test('a released value forwarding a stream adopts it again when read — 12.14',
     })
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    const forwarding = reactive.derived(() => s)
+    const forwarding = reactive(() => s)
     collectWatches(previous)
     await Bun.sleep(5)
     let seen: unknown
@@ -1207,7 +1223,7 @@ test('the last live reader leaving takes the dead ones with it', () => {
 // against the 100 of the one walk below.
 test('a flip that reruns every guard over one value reads its probe readers once', () => {
     const flag = reactive(0)
-    const shared = reactive.derived(() => {
+    const shared = reactive(() => {
         const at = flag()
         return at % 2 === 0 ? at : new Promise<number>(() => {})
     })
@@ -1239,7 +1255,7 @@ test('a body that reorders its sources keeps every one of them subscribed', () =
     const third = reactive('c')
     const swapped = reactive(false)
     let runs = 0
-    const joined = reactive.derived(() => {
+    const joined = reactive(() => {
         runs += 1
         return swapped()
             ? `${first()}${third()}${second()}`
@@ -1268,11 +1284,11 @@ test('a body that reorders its sources keeps every one of them subscribed', () =
 // mis-memoizing walk would have passed it.
 test('busy propagates through three levels of derivation', async () => {
     const answer = 1
-    const source = reactive.derived(() => Promise.resolve(answer))
+    const source = reactive(() => Promise.resolve(answer))
     await source
-    const one = reactive.derived(() => source() * 2)
-    const two = reactive.derived(() => one() * 2)
-    const three = reactive.derived(() => two() * 2)
+    const one = reactive(() => source() * 2)
+    const two = reactive(() => one() * 2)
+    const three = reactive(() => two() * 2)
     expect(three()).toBe(8)
     expect(three.busy()).toBe(false)
 
@@ -1285,8 +1301,8 @@ test('busy propagates through three levels of derivation', async () => {
 // a probe must terminate rather than recurse forever.
 test('a probe over a cycle terminates', () => {
     let other: (() => number) | null = null
-    const first = reactive.derived(() => (other === null ? 1 : other()))
-    const second = reactive.derived(() => first() + 1)
+    const first = reactive(() => (other === null ? 1 : other()))
+    const second = reactive(() => first() + 1)
     other = second as unknown as () => number
     first.refresh()
     expect(first.busy()).toBe(false)
@@ -1404,9 +1420,9 @@ test('a value is directly servable again after a mark that changed nothing', () 
     // A diamond whose value does not move: `both` is marked CHECK, resolves to no
     // change, and must go back to being served from the field.
     const source = reactive(1)
-    const left = reactive.derived(() => source() > 0)
-    const right = reactive.derived(() => source() < 100)
-    const both = reactive.derived(() => left() && right())
+    const left = reactive(() => source() > 0)
+    const right = reactive(() => source() < 100)
+    const both = reactive(() => left() && right())
     expect(both()).toBe(true)
     expect(inner(both).direct).toBe(true)
 
@@ -1452,7 +1468,7 @@ async function walked<Value>(
 test('for await over a value yields its settled value once and ends — 2.5', async () => {
     const room = reactive('a')
     expect(await walked(room)).toEqual(['a'])
-    const loading = reactive.derived(async () => {
+    const loading = reactive(async () => {
         await Bun.sleep(5)
         return 'b'
     })
@@ -1461,7 +1477,7 @@ test('for await over a value yields its settled value once and ends — 2.5', as
 
 // 2.5 AND 2.8: a value that failed is what `await` throws, and the loop throws it too.
 test('for await over a value that failed throws its failure — 2.5', async () => {
-    const failing = reactive.derived(async (): Promise<string> => {
+    const failing = reactive(async (): Promise<string> => {
         throw new Error('no')
     })
     let caught: unknown
@@ -1595,7 +1611,7 @@ function effectReports(
 // `handed: 0, warned: 0, threw: 1`.
 test('on a server, an effect that throws reaches onError and warns on abide:watch — 12.6', () => {
     const source = reactive(0)
-    const failing = reactive.derived((): number => {
+    const failing = reactive((): number => {
         throw new Error('unreadable')
     })
     let runs = 0
@@ -1861,8 +1877,8 @@ test('a derived and an adopting value stop reading when their owner stops — 12
     const source = reactive(1)
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    const derived = reactive.derived(() => source() + 1)
-    const adopting = reactive.derived(() => source)
+    const derived = reactive(() => source() + 1)
+    const adopting = reactive(() => source)
     collectWatches(previous)
     expect(derived()).toBe(2)
     expect(adopting()).toBe(1)
@@ -1890,7 +1906,7 @@ test('a derived and an adopting value stop reading when their owner stops — 12
 // producer. A `Reactive` held as data goes inside a record.
 test('a body that hands back a Reactive adopts it rather than storing it', () => {
     const inner = reactive(1)
-    const outer = reactive.derived(() => inner)
+    const outer = reactive(() => inner)
     expect(outer()).toBe(1)
     // And it goes on serving what the adopted one serves.
     inner.set(2)
@@ -1935,13 +1951,13 @@ test('a transform runs untracked, whatever reader made the write', () => {
 // read says 3, where both are due 4.
 test('an adopted derived value mirrors what it recomputes to — 11.13', () => {
     const cents = reactive(300)
-    const dollars = reactive.derived(() => cents() / 100)
-    const watched = reactive.derived(() => dollars)
+    const dollars = reactive(() => cents() / 100)
+    const watched = reactive(() => dollars)
     const seen: unknown[] = []
     const stop = watch(() => {
         seen.push(watched())
     })
-    const read = reactive.derived(() => dollars)
+    const read = reactive(() => dollars)
     read()
     cents.set(400)
     flushSync()
@@ -1952,11 +1968,11 @@ test('an adopted derived value mirrors what it recomputes to — 11.13', () => {
 
 // 11.13 FOR A PATCH, which is the one production that keeps its reference (5.7). The mirror copied
 // the inner's value into the adopter through the identity gate, found the reference it already
-// held, and woke nobody — so `reactive.derived(() => getRows())` never showed a row a server patched.
+// held, and woke nobody — so `reactive(() => getRows())` never showed a row a server patched.
 // THE REVERT: drop the same-reference arm in `mirror`; the adopter's watch runs once, not twice.
 test('a patch of an adopted value wakes the adopter — 11.13, 5.7', () => {
     const rows = reactive([{ id: 1, watched: false }])
-    const adopter = reactive.derived(() => rows)
+    const adopter = reactive(() => rows)
     const seen: boolean[] = []
     const stop = watch(() => {
         seen.push((adopter() as { watched: boolean }[])[0]?.watched ?? false)
@@ -1971,7 +1987,7 @@ test('a patch of an adopted value wakes the adopter — 11.13, 5.7', () => {
 
 test('adopted productions mirror into the outer value, through its own transform', () => {
     const feed = reactive(1)
-    const outer = reactive.derived(() => feed, {
+    const outer = reactive(() => feed, {
         transform: (value: number) => value * 10,
     })
     const seen: number[] = [outer()]
@@ -1997,7 +2013,7 @@ test('adopted productions mirror into the outer value, through its own transform
 test('a recompute onto the same adopted Reactive wakes no reader', () => {
     const trigger = reactive(0)
     const held = reactive(1)
-    const outer = reactive.derived(() => {
+    const outer = reactive(() => {
         trigger()
         return held
     })
@@ -2018,7 +2034,7 @@ test('a recompute onto the same adopted Reactive wakes no reader', () => {
 test('re-adopting a Reactive holding what is already served wakes no reader — 5.1', () => {
     let refusing = false
     const inner = reactive(new Promise<{ n: number }>(() => {}))
-    const outer = reactive.derived(() =>
+    const outer = reactive(() =>
         refusing
             ? (refuse.named('Refused')() as unknown as { n: number })
             : inner,
@@ -2043,7 +2059,7 @@ test('re-adopting something with nothing to serve clears the outer', () => {
     const pick = reactive(0)
     const landed = reactive(41)
     const pending = reactive(new Promise<number>(() => {}))
-    const outer = reactive.derived(() => (pick() === 0 ? landed : pending))
+    const outer = reactive(() => (pick() === 0 ? landed : pending))
     expect(outer()).toBe(41)
     expect(outer.ready()).toBe(true)
 
@@ -2064,7 +2080,7 @@ test('re-adopting something with nothing to serve clears the outer', () => {
 test('a read a ready guard admitted does not throw — 3.2', () => {
     const playing = reactive(false)
     const pending = reactive(new Promise<number[]>(() => {}))
-    const keyframes = reactive.derived(() => (playing() ? pending : []))
+    const keyframes = reactive(() => (playing() ? pending : []))
     expect(keyframes()).toEqual([])
     playing.set(true)
     const guarded = (): unknown =>
@@ -2083,7 +2099,7 @@ test('a read a ready guard admitted does not throw — 3.2', () => {
 test('a guard on ready hears an input move the body to a load — 3.2', () => {
     const playing = reactive(false)
     const pending = reactive(new Promise<number[]>(() => {}))
-    const keyframes = reactive.derived(() => (playing() ? pending : []))
+    const keyframes = reactive(() => (playing() ? pending : []))
     const seen: boolean[] = []
     const stop = watch(() => {
         seen.push(keyframes.ready())
@@ -2112,7 +2128,7 @@ test('re-adopting something with nothing to serve wakes the guards too', () => {
     const landed = reactive(1)
     const pending = reactive(new Promise<number>(() => {}))
     const flag = reactive(true)
-    const outer = reactive.derived(() => (flag() ? landed : pending))
+    const outer = reactive(() => (flag() ? landed : pending))
     const seen: boolean[] = []
     const stop = watch(() => {
         seen.push(outer.ready())
@@ -2140,7 +2156,7 @@ test('an adopting value inherits the identity it did not declare', () => {
     const first = reactive({ id: 1 }, { identity: deepEqual })
     const second = reactive({ id: 1 }, { identity: deepEqual })
     const pick = reactive(true)
-    const outer = reactive.derived(() => (pick() ? first : second))
+    const outer = reactive(() => (pick() ? first : second))
     const woken = wakes(outer)
 
     pick.set(false)
@@ -2159,9 +2175,7 @@ test('a value that stops adopting goes back to the identity it declared', () => 
     const inner = reactive({ id: 1 }, { identity: (row) => row.id })
     const adopting = reactive(true)
     const count = reactive(0)
-    const outer = reactive.derived((): unknown =>
-        adopting() ? inner : count(),
-    )
+    const outer = reactive((): unknown => (adopting() ? inner : count()))
     expect(outer()).toEqual({ id: 1 })
     adopting.set(false)
     expect(outer()).toBe(0)
@@ -2187,7 +2201,7 @@ test('a re-adoption takes the identity of what it adopts now', () => {
     const keyed = reactive({ id: 1, name: 'a' }, { identity: (row) => row.id })
     const plain = reactive({ id: 1, name: 'a' })
     const pick = reactive(true)
-    const outer = reactive.derived(() => (pick() ? keyed : plain))
+    const outer = reactive(() => (pick() ? keyed : plain))
     expect(outer()).toEqual({ id: 1, name: 'a' })
     pick.set(false)
     expect(outer()).toEqual({ id: 1, name: 'a' })
@@ -2208,7 +2222,7 @@ test('busy propagates from the adopted value', async () => {
             settle = resolve
         }),
     )
-    const outer = reactive.derived(() => loading)
+    const outer = reactive(() => loading)
     expect(outer.busy()).toBe(true)
     expect(outer.ready()).toBe(false)
 
@@ -2228,7 +2242,7 @@ test('busy propagates from the adopted value', async () => {
 // `busy: true`, and the read throws `NotLanded` with the value sitting in the inner.
 test('a trigger on an adopting value settles it again over the same adoption', () => {
     const inner = reactive(1)
-    const outer = reactive.derived(() => inner)
+    const outer = reactive(() => inner)
     expect(outer()).toBe(1)
 
     outer.invalidate()
@@ -2249,7 +2263,7 @@ test('a trigger on an adopting value settles it again over the same adoption', (
 // THE REVERT is `mirror` calling `produce(cell, inner.value, false)` — ungated: `wakes: 1`.
 test('refreshing over the same adoption wakes no reader', () => {
     const inner = reactive(1)
-    const outer = reactive.derived(() => inner)
+    const outer = reactive(() => inner)
     const counter = wakes(outer)
     outer.refresh()
     const woken = counter.count()
@@ -2271,7 +2285,7 @@ test('refreshing over the same adoption wakes no reader', () => {
 // THE REVERT is the adoption reach sitting after that return: `calls: 1` against 2.
 test('a trigger on a value that adopted through set reaches the adopted one', async () => {
     let calls = 0
-    const src = reactive.derived(async () => {
+    const src = reactive(async () => {
         calls += 1
         return calls
     })
@@ -2289,12 +2303,12 @@ test('a trigger on an adopting value reaches the adopted one', () => {
     // gate cannot collapse and the outer serving it is proof the production arrived.
     let produced = 0
     let runs = 0
-    const inner = reactive.derived(() => {
+    const inner = reactive(() => {
         runs += 1
         produced += 1
         return produced
     })
-    const outer = reactive.derived(() => inner)
+    const outer = reactive(() => inner)
     expect(outer()).toBe(1)
 
     runs = 0
@@ -2323,14 +2337,14 @@ test('a trigger on an adopting value reaches the adopted one', () => {
 test('a guard on an adopting value hears the adopted value start and stop loading', async () => {
     let settle: (value: number) => void = (): void => {}
     let loads = 0
-    const inner = reactive.derived(() => {
+    const inner = reactive(() => {
         loads += 1
         if (loads === 1) return 1
         return new Promise<number>((resolve) => {
             settle = resolve
         })
     })
-    const outer = reactive.derived(() => inner)
+    const outer = reactive(() => inner)
     const saw: boolean[] = []
     const stop = watch(() => {
         saw.push(outer.busy())
@@ -2358,7 +2372,7 @@ test('a failure of the adopted value is the adopter error, its read throw and it
             fail = reject
         }),
     )
-    const outer = reactive.derived(() => inner)
+    const outer = reactive(() => inner)
     const guard: unknown[] = []
     const stop = watch(() => {
         guard.push((outer.error() as unknown as Error | undefined)?.message)
@@ -2391,14 +2405,14 @@ test('a failure of the adopted value is the adopter error, its read throw and it
 test('a failed revalidation of the adopted value leaves the adopter serving, with the error', async () => {
     let loads = 0
     let fail: (error: unknown) => void = (): void => {}
-    const inner = reactive.derived(() => {
+    const inner = reactive(() => {
         loads += 1
         if (loads === 1) return 1
         return new Promise<number>((_resolve, reject) => {
             fail = reject
         })
     })
-    const outer = reactive.derived(() => inner)
+    const outer = reactive(() => inner)
     inner.refresh()
     fail(new Error('revalidate failed'))
     await Bun.sleep(1)
@@ -2420,9 +2434,9 @@ test('a failed revalidation of the adopted value leaves the adopter serving, wit
 // flips to true and no other test in this file moves.
 test('a derived value is not ready while a value it read has nothing to serve', async () => {
     const answer = 1
-    const source = reactive.derived(() => Promise.resolve(answer))
+    const source = reactive(() => Promise.resolve(answer))
     await source
-    const derived = reactive.derived(() => source() * 2)
+    const derived = reactive(() => source() * 2)
     expect(derived()).toBe(2)
     expect(derived.ready()).toBe(true)
 
@@ -2452,7 +2466,7 @@ test('a derived value is not ready while a value it read has nothing to serve', 
 test('a derived value that aborts wakes the guard asking whether it is ready', () => {
     const flag = reactive(false)
     const pending = reactive<number>()
-    const derived = reactive.derived(() => (flag() ? pending() : 0))
+    const derived = reactive(() => (flag() ? pending() : 0))
     const seen: boolean[] = []
     const guard = watch(() => {
         seen.push(derived.ready())
@@ -2475,9 +2489,9 @@ test('the floor reaches the adopted value as well as the read ones', async () =>
     const answer = 41
     // A producer, since `invalidate` is inert on a value with no body (7.x) — there is
     // nothing to rerun and nothing to be invalid against.
-    const inner = reactive.derived(() => Promise.resolve(answer))
+    const inner = reactive(() => Promise.resolve(answer))
     await inner
-    const outer = reactive.derived(() => inner)
+    const outer = reactive(() => inner)
     expect(outer()).toBe(41)
     expect(outer.ready()).toBe(true)
 
@@ -2529,7 +2543,7 @@ test('a guard on a probe comes back when the value lands', async () => {
 // runs once, at subscription, and never reports the load at all.
 test('a refresh wakes a reader that asked whether it was busy', async () => {
     const answer = 1
-    const source = reactive.derived(() => Promise.resolve(answer))
+    const source = reactive(() => Promise.resolve(answer))
     await source
     const seen: boolean[] = []
     const stop = watch(() => {
@@ -2573,9 +2587,9 @@ test('a ready guard wakes when busy flips under it', async () => {
 // served (7.17), and not at the mark (7.14).
 test('the hit after an invalidate wakes a reader that asked whether it was ready', async () => {
     const answer = 1
-    const source = reactive.derived(() => Promise.resolve(answer))
+    const source = reactive(() => Promise.resolve(answer))
     await source
-    const derived = reactive.derived(() => source() * 2)
+    const derived = reactive(() => source() * 2)
     const seen: boolean[] = []
     const stop = watch(() => {
         seen.push(derived.ready())
@@ -2597,9 +2611,9 @@ test('the hit after an invalidate wakes a reader that asked whether it was ready
 // never initialized and the first such body threw on `undefined.length`.
 test('a derived body may read a probe and wakes when it moves', async () => {
     const answer = 1
-    const source = reactive.derived(() => Promise.resolve(answer))
+    const source = reactive(() => Promise.resolve(answer))
     await source
-    const label = reactive.derived(() => (source.busy() ? 'loading' : 'idle'))
+    const label = reactive(() => (source.busy() ? 'loading' : 'idle'))
     expect(label()).toBe('idle')
 
     source.refresh()
@@ -2618,11 +2632,11 @@ test('a derived body may read a probe and wakes when it moves', async () => {
 // stale edge makes reaches a value nothing pulls and the revert reports nothing.
 test('a probe a body stops reading stops waking it', async () => {
     const answer = 1
-    const watched = reactive.derived(() => Promise.resolve(answer))
+    const watched = reactive(() => Promise.resolve(answer))
     await watched
     const use = reactive(true)
     let bodyRuns = 0
-    const body = reactive.derived(() => {
+    const body = reactive(() => {
         bodyRuns += 1
         return use() ? watched.busy() : false
     })
@@ -2657,10 +2671,10 @@ test('a probe a body stops reading stops waking it', async () => {
 // (the debounce bypassed, the body rerun at once).
 test('a guard over a body that reads only a probe wakes when that probe moves', async () => {
     const answer = 1
-    const source = reactive.derived(() => Promise.resolve(answer))
+    const source = reactive(() => Promise.resolve(answer))
     await source
     const { promise: never } = Promise.withResolvers<string>()
-    const label = reactive.derived(() => (source.busy() ? never : 'idle'))
+    const label = reactive(() => (source.busy() ? never : 'idle'))
     const seen: boolean[] = []
     const stop = watch(() => {
         seen.push(label.busy())
@@ -2674,7 +2688,7 @@ test('a guard over a body that reads only a probe wakes when that probe moves', 
 
 test('a capped body over a probe holds the run its probe moving marks', async () => {
     const answer = 1
-    const source = reactive.derived(() => Promise.resolve(answer))
+    const source = reactive(() => Promise.resolve(answer))
     await source
     const label = pacedBody(() => (source.busy() ? 'busy' : 'idle'), {
         debounce: WINDOW,
@@ -3012,7 +3026,7 @@ test('a cap on the key spares the call a superseded key would have made', async 
         calls += 1
         return `orders in ${args.region}`
     })
-    const orders = reactive.derived(() => countOrders({ region: region() }))
+    const orders = reactive(() => countOrders({ region: region() }))
     const stop = watch(() => {
         orders()
     })
@@ -3069,7 +3083,7 @@ function searchRig(options: Record<string, number>): {
         keys.push(args.region)
         return `n=${args.region}`
     }, options)
-    const orders = reactive.derived(() => countOrders({ region: region() }))
+    const orders = reactive(() => countOrders({ region: region() }))
     const stop = watch(() => {
         try {
             orders()
@@ -3165,7 +3179,7 @@ test('an uncapped body runs for every key, which is what the cap is against', as
 // instead leaves the second at `[undefined]`.
 test('a failed load wakes the guards that asked about it', async () => {
     let refuse: ((reason: unknown) => void) | undefined
-    const load = reactive.derived(
+    const load = reactive(
         () =>
             new Promise<number>((_settle, reject) => {
                 refuse = reject
@@ -3200,7 +3214,7 @@ test('a failed load wakes the guards that asked about it', async () => {
 test('a body that stops handing back a Reactive stops mirroring it', () => {
     const inner = reactive(1)
     const adopting = reactive(true)
-    const outer = reactive.derived(() => (adopting() ? inner : 99))
+    const outer = reactive(() => (adopting() ? inner : 99))
     expect(outer()).toBe(1)
 
     adopting.set(false)
@@ -3292,7 +3306,7 @@ test('a keyed body aborted on a value that had not landed reruns when it lands, 
 // a load of this entry's, because nothing about this entry will be recomputed from it.
 test('a keyed entry is not busy because a value its body read is', async () => {
     let answer = 1
-    const source = reactive.derived(() => Promise.resolve(answer))
+    const source = reactive(() => Promise.resolve(answer))
     await source
     const keyed = keyedValue((args: { times: number }) => source() * args.times)
     const entry = keyed({ times: 3 })
@@ -3420,10 +3434,10 @@ test("an args gate that normalizes decides the body's args but not the entry", (
     expect(`entries: ${keyed.entries.size}`).toBe('entries: 2')
 })
 
-// 11.81 — A VALUE TAKES NO SOURCE'S OPTIONS: `reactive` and `reactive.derived` each refuse a `ttl`, a pace, a
+// 11.81 — A VALUE TAKES NO SOURCE'S OPTIONS: `reactive` each refuse a `ttl`, a pace, a
 // tag and `global` at construction, naming the `memo` that declares it — for JavaScript, and for a
-// spread the types cannot see. THE REVERT: drop `refuseSourced` from `reactive.derived`, and `refused: 5 of
-// 10`, every `reactive.derived` building a value that carries a source's option.
+// spread the types cannot see. THE REVERT: drop `refuseSourced` from `reactive`, and `refused: 5 of
+// 10`, every derived `reactive` building a value that carries a source's option.
 test('reactive and computed refuse what a source declares — 11.81', () => {
     const given = {
         ttl: 10,
@@ -3437,7 +3451,7 @@ test('reactive and computed refuse what a source declares — 11.81', () => {
         const options = { [option]: value } as never
         for (const build of [
             () => reactive(0, options),
-            () => reactive.derived(() => 0, options),
+            () => reactive(() => 0, options),
         ])
             try {
                 build()
@@ -3461,7 +3475,7 @@ test('reactive and computed refuse what a source declares — 11.81', () => {
 test('args on a value with no parameter refuses at construction', () => {
     let refusal: unknown
     try {
-        reactive.derived(() => 1, { args: (value: unknown) => value } as never)
+        reactive(() => 1, { args: (value: unknown) => value } as never)
     } catch (thrown) {
         refusal = thrown
     }
@@ -3550,7 +3564,7 @@ test('an entry past its ttl is refreshed while followed, serving what it held �
         },
         { ttl: 40 },
     )
-    const shown = reactive.derived(() => price({ id: 'followed' }))
+    const shown = reactive(() => price({ id: 'followed' }))
     const stop = watch(() => {
         shown.peek()
         shown.busy()
@@ -3779,7 +3793,7 @@ function walkSubjects(): Subject[] {
     const plain = reactive({ n: 1 })
     // The body reaches every arm `run` has: a production, the abort (11.51), a refusal,
     // and an adoption whose source stops being servable (11.16).
-    const derived = reactive.derived(() => {
+    const derived = reactive(() => {
         if (abortNow) return unlanded()
         if (failNow) throw new Error('refused')
         // 15.5: a refusal handed back rather than thrown, which `run` lands on its own arm.
@@ -3789,7 +3803,7 @@ function walkSubjects(): Subject[] {
         return source() + 1
     })
     let loadRuns = 0
-    const reloading = reactive.derived(() => {
+    const reloading = reactive(() => {
         loadRuns += 1
         return rejectNow
             ? Promise.reject(new Error('reload refused'))
@@ -4143,7 +4157,7 @@ test('an accepted write clears the standing refusal', () => {
 // reports 1 wake against 0.
 test('a failed revalidation goes on serving and wakes nobody', async () => {
     let failNext = false
-    const loaded = reactive.derived(() =>
+    const loaded = reactive(() =>
         failNext
             ? Promise.reject(new Error('the reload failed'))
             : Promise.resolve('held'),
@@ -4192,13 +4206,13 @@ test('a failed revalidation warns once on abide:reactive naming the value, and g
     const failing = (): never => {
         throw new Error('the reload failed')
     }
-    const loaded = reactive.derived(() =>
+    const loaded = reactive(() =>
         fail
             ? Promise.reject(new Error('the reload failed'))
             : Promise.resolve('held'),
     )
-    const body = reactive.derived(() => (fail ? failing() : 'held'))
-    const stream = reactive.derived(async function* () {
+    const body = reactive(() => (fail ? failing() : 'held'))
+    const stream = reactive(async function* () {
         yield 'held'
         if (fail) failing()
     })
@@ -4232,7 +4246,7 @@ test('a failed revalidation warns once on abide:reactive naming the value, and g
 
 test('a first load that fails, and a failed run a source started, are not revalidations — 4.12, 2.2', async () => {
     const firstLoad = await reactiveWarnings(async () => {
-        const never = reactive.derived(() =>
+        const never = reactive(() =>
             Promise.reject(new Error('the first load failed')),
         )
         await never.then(undefined, () => undefined)
@@ -4241,7 +4255,7 @@ test('a first load that fails, and a failed run a source started, are not revali
         'first load warned: 0',
     )
     const source = reactive(1)
-    const derived = reactive.derived(() =>
+    const derived = reactive(() =>
         source() === 1
             ? Promise.resolve('held')
             : Promise.reject(new Error('rerun failed')),
@@ -4268,7 +4282,7 @@ test('a first load that fails, and a failed run a source started, are not revali
 test('a body that fails over a value still being served wakes nobody, thrown or returned', () => {
     for (const how of ['thrown', 'returned']) {
         let failNext = false
-        const loaded = reactive.derived(() => {
+        const loaded = reactive(() => {
             if (!failNext) return 'held'
             if (how === 'thrown') throw new Error('the reload failed')
             return refuse.named('Reload')() as unknown as string
@@ -4296,7 +4310,7 @@ test('a body that fails over a value still being served wakes nobody, thrown or 
 // `answered: reactive has not landed` — the reader parked on the abort and never told.
 test('a reload that fails over an invalidated value wakes the reader it left waiting', async () => {
     let failNext = false
-    const loaded = reactive.derived(() =>
+    const loaded = reactive(() =>
         failNext
             ? Promise.reject(new Error('the reload failed'))
             : Promise.resolve('held'),
@@ -4335,17 +4349,17 @@ test('a reload that fails over an invalidated value wakes the reader it left wai
 // where 1 is due.
 test('a body that fails over its opening undefined serves the failure, to what was built on it before — 2.2, 4.16', async () => {
     let fail!: (failure: Error) => void
-    const copy = reactive.derived(
+    const copy = reactive(
         () =>
             new Promise<string>((_, reject) => {
                 fail = reject
             }),
     )
-    const status = reactive.derived(() =>
+    const status = reactive(() =>
         copy.ready() || copy.error() !== undefined ? copy() : undefined,
     )
-    const derived = reactive.derived(() => status())
-    const twice = reactive.derived(() => derived())
+    const derived = reactive(() => status())
+    const twice = reactive(() => derived())
     const seen: string[] = []
     const stop = watch(() => {
         try {
@@ -4358,7 +4372,7 @@ test('a body that fails over its opening undefined serves the failure, to what w
     await Bun.sleep(5)
     flushSync()
     stop()
-    const after = reactive.derived(() => status())
+    const after = reactive(() => status())
     const rows: string[] = []
     for (const [name, value] of [
         ['status', status],
@@ -4389,19 +4403,19 @@ test('a body that fails over its opening undefined serves the failure, to what w
 // watch, and `status` runs twice — the opening, and the read of the landed copy — either way.
 test('a body over its opening undefined that lands wakes its readers once — 4.16, 5.1', async () => {
     let land!: (value: string) => void
-    const copy = reactive.derived(
+    const copy = reactive(
         () =>
             new Promise<string>((resolve) => {
                 land = resolve
             }),
     )
     let statusRuns = 0
-    const status = reactive.derived(() => {
+    const status = reactive(() => {
         statusRuns += 1
         return copy.ready() || copy.error() !== undefined ? copy() : undefined
     })
-    const derived = reactive.derived(() => status())
-    const twice = reactive.derived(() => derived())
+    const derived = reactive(() => status())
+    const twice = reactive(() => derived())
     const seen: string[] = []
     const stop = watch(() => {
         seen.push(`${twice()}`)
@@ -4420,7 +4434,7 @@ test('a body over its opening undefined that lands wakes its readers once — 4.
 // on `!cell.landed`; this reads `hung`.
 test('an await of an invalidated value whose reload fails rejects with the failure', async () => {
     let failNext = false
-    const loaded = reactive.derived(() =>
+    const loaded = reactive(() =>
         failNext
             ? Promise.reject(new Error('the reload failed'))
             : Promise.resolve('held'),
@@ -4577,7 +4591,7 @@ test('a refused write hands its refusal back, and an accepted one does not', () 
 // a network, so it is the way in that most needs the gate.
 test('a schema gates what a body produced', () => {
     let answer: unknown = 3
-    const loaded = reactive.derived(() => answer, {
+    const loaded = reactive(() => answer, {
         schema: (value: unknown) => {
             if (typeof value !== 'number') throw new Error('must be a number')
             return value
@@ -4603,7 +4617,7 @@ test('a schema gates what a body produced', () => {
 test('awaiting a value mid-refresh resolves with what the refresh lands', async () => {
     let settle: (value: number) => void = (): void => {}
     let loads = 0
-    const loaded = reactive.derived(() => {
+    const loaded = reactive(() => {
         loads += 1
         if (loads === 1) return 1
         return new Promise<number>((resolve) => {
@@ -4684,7 +4698,7 @@ async function turns(): Promise<void> {
 // rather than dropping at the first chunk the way a single load's would.
 test('an async generator body streams: ready from its first chunk, busy until it closes', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     expect(`busy: ${rows.busy()}`).toBe('busy: true')
     expect(`ready: ${rows.ready()}`).toBe('ready: false')
     expect(rows.peek()).toBeUndefined()
@@ -4713,7 +4727,7 @@ test('an async generator body streams: ready from its first chunk, busy until it
 // `run`; the value holds the generator, and `rows()` is no array at all.
 test('a body handing back an async generator streams as one declared so — 9.6, 9.7', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(() => feed.body())
+    const rows = reactive(() => feed.body())
     expect(`busy: ${rows.busy()}`).toBe('busy: true')
     expect(`ready: ${rows.ready()}`).toBe('ready: false')
 
@@ -4741,7 +4755,7 @@ test('a body handing back an async generator streams as one declared so — 9.6,
 test('a body that hands back a generator on a later run streams from that run — 9.6', async () => {
     const feed = streamOf<number>()
     const live = reactive(false)
-    const rows = reactive.derived(() => (live() ? feed.body() : 0))
+    const rows = reactive(() => (live() ? feed.body() : 0))
     expect(rows()).toBe(0)
     live.set(true)
     rows()
@@ -4756,7 +4770,7 @@ test('a body that hands back a generator on a later run streams from that run �
 // the value holds the generator.
 test('a body whose promise resolves to an async generator streams — 9.6', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(async () => feed.body())
+    const rows = reactive(async () => feed.body())
     await turns()
     const run = feed.runs[0] as Run<number>
     run.push(1)
@@ -4774,7 +4788,7 @@ test('a body whose promise resolves to an async generator streams — 9.6', asyn
 test('a body handing back a ReadableStream streams its chunks — 9.6', async () => {
     const controllers: ReadableStreamDefaultController<number>[] = []
     let cancelled = 0
-    const rows = reactive.derived(
+    const rows = reactive(
         () =>
             new ReadableStream<number>({
                 start: (controller) => {
@@ -4807,7 +4821,7 @@ test('a body handing back a ReadableStream streams its chunks — 9.6', async ()
 // as objects in `isAsyncIterable`; the source is streamed rather than adopted, and the read throws.
 test('a body handing back a Reactive adopts it rather than streaming it — 9.6, 11.12', () => {
     const source = reactive(1)
-    const follows = reactive.derived(() => source)
+    const follows = reactive(() => source)
     expect(follows()).toBe(1)
     source.set(2)
     expect(follows()).toBe(2)
@@ -4822,7 +4836,7 @@ test('a body handing back a Reactive adopts it rather than streaming it — 9.6,
 test('a stream materializes its accumulation on the read, not per chunk', async () => {
     const feed = streamOf<number>()
     let transforms = 0
-    const rows = reactive.derived(feed.body, {
+    const rows = reactive(feed.body, {
         transform: (chunks: number[]) => {
             transforms += 1
             return chunks
@@ -4842,8 +4856,8 @@ test('a stream materializes its accumulation on the read, not per chunk', async 
 // every production after the first at the identity gate.
 test('each read of a moved stream is a snapshot of its own', async () => {
     const feed = streamOf<string>()
-    const rows = reactive.derived(feed.body)
-    const count = reactive.derived(() => rows().length)
+    const rows = reactive(feed.body)
+    const count = reactive(() => rows().length)
     const run = feed.runs[0] as Run<string>
     run.push('a')
     await turns()
@@ -4864,7 +4878,7 @@ test('each read of a moved stream is a snapshot of its own', async () => {
 // THE REVERT is swapping the buffer in `startStream`: `during: ` reads an empty list.
 test('refreshing a stream serves the old accumulation until the new first chunk', async () => {
     const feed = streamOf<string>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const first = feed.runs[0] as Run<string>
     first.push('old')
     first.close()
@@ -4887,7 +4901,7 @@ test('refreshing a stream serves the old accumulation until the new first chunk'
 // a chunk it had already queued lands nowhere.
 test('a chunk from a superseded stream lands nowhere', async () => {
     const feed = streamOf<string>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const first = feed.runs[0] as Run<string>
     first.push('a')
     await turns()
@@ -4901,7 +4915,7 @@ test('a chunk from a superseded stream lands nowhere', async () => {
 // over all three and then each one the run goes on to land.
 test('a cursor over a stream replays the run in flight from its first chunk', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     run.push(1)
     run.push(2)
@@ -4922,7 +4936,7 @@ test('a cursor over a stream replays the run in flight from its first chunk', as
 // 'still waiting', which is the hang an app looping over a streamed call hit.
 test('for await over a stream ends when its run closes — 2.6', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     const walking = walked(rows, 500)
     run.push(1)
@@ -4938,7 +4952,7 @@ test('for await over a stream ends when its run closes — 2.6', async () => {
 // from the ring — the turn reads `undefined`, the last chunk lost to whichever settled first.
 test('a chunk landing in the same turn as the close is not lost — 2.6', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     run.push(1)
     await turns()
@@ -4956,7 +4970,7 @@ test('a chunk landing in the same turn as the close is not lost — 2.6', async 
 // `runChunks`; `1 caught: nothing`.
 test('for await over a stream that fails yields its chunks and then throws — 9.15', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     const seen: number[] = []
     let caught = 'nothing'
@@ -4979,7 +4993,7 @@ test('for await over a stream that fails yields its chunks and then throws — 9
 // end; `[] caught: refresh failed`.
 test('for await over a stream does not throw a revalidation that failed before it — 9.15', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const first = feed.runs[0] as Run<number>
     first.push(1)
     first.close()
@@ -5005,7 +5019,7 @@ test('for await over a stream does not throw a revalidation that failed before i
 // goes on into the new run and reads 'still waiting'.
 test('for await over a stream ends where a refresh replaces its run — 9.16', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const first = feed.runs[0] as Run<number>
     first.push(1)
     await turns()
@@ -5022,7 +5036,7 @@ test('for await over a stream ends where a refresh replaces its run — 9.16', a
 // `runChunks`; `[1,2]` where `[10,20]` is due.
 test('for await opened on a refresh in flight walks the new run — 9.18', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const first = feed.runs[0] as Run<number>
     first.push(1)
     first.push(2)
@@ -5043,7 +5057,7 @@ test('for await opened on a refresh in flight walks the new run — 9.18', async
 // ends it rather than splicing the new run's chunks on at the old run's index.
 test('a streamed answer ends where a refresh replaces its run — 9.16, 16.76', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const first = feed.runs[0] as Run<number>
     first.push(1)
     first.push(2)
@@ -5064,7 +5078,7 @@ test('a streamed answer ends where a refresh replaces its run — 9.16, 16.76', 
 // failed with — a refusal or a throw alike.
 test('a streamed answer throws what its run failed on after its chunks — 9.15, 16.76', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     const seen: number[] = []
     let caught = 'nothing'
@@ -5087,7 +5101,7 @@ test('a streamed answer throws what its run failed on after its chunks — 9.15,
 // `Promise.all([it.next(), it.next()])` — and both are answered in order.
 test('two turns asked for before either lands are both answered', async () => {
     const feed = streamOf<string>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<string>
     await turns()
     const cursor = rows[Symbol.asyncIterator]()
@@ -5104,7 +5118,7 @@ test('two turns asked for before either lands are both answered', async () => {
 // reader list for the life of the page — and nothing about the output would say so.
 test('leaving a loop over a stream drops its subscriber', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     run.push(1)
     await turns()
@@ -5117,7 +5131,7 @@ test('leaving a loop over a stream drops its subscriber', async () => {
 // resolving there would hand an awaiting caller a list with most of it missing.
 test('awaiting a stream holds until it closes', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     let settled: number[] | null = null
     rows.then((value) => {
@@ -5136,7 +5150,7 @@ test('awaiting a stream holds until it closes', async () => {
 // accumulation of no chunks is an empty list.
 test('a stream that closes without a chunk lands an empty accumulation', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     ;(feed.runs[0] as Run<number>).close()
     await turns()
     expect(`ready: ${rows.ready()}`).toBe('ready: true')
@@ -5149,7 +5163,7 @@ test('a stream that closes without a chunk lands an empty accumulation', async (
 // has nothing to serve and its read throws the failure.
 test('a stream that fails keeps what it accumulated, and one with nothing throws', async () => {
     const partial = streamOf<number>()
-    const rows = reactive.derived(partial.body)
+    const rows = reactive(partial.body)
     const run = partial.runs[0] as Run<number>
     run.push(1)
     await turns()
@@ -5160,7 +5174,7 @@ test('a stream that fails keeps what it accumulated, and one with nothing throws
     expect((rows.error() as unknown as Error).message).toBe('socket closed')
 
     const empty = streamOf<number>()
-    const nothing = reactive.derived(empty.body)
+    const nothing = reactive(empty.body)
     ;(empty.runs[0] as Run<number>).fail(new Error('refused'))
     await turns()
     let thrown: unknown
@@ -5195,7 +5209,7 @@ test('a keyed async generator body streams each entry', async () => {
 // `wakeLater`: `wakes: 1000`, `transforms: 1000`.
 test('a burst of chunks in one task wakes a reader once', async () => {
     let transforms = 0
-    const rows = reactive.derived(
+    const rows = reactive(
         async function* () {
             for (let chunk = 0; chunk < 1000; chunk += 1) yield chunk
         },
@@ -5231,7 +5245,7 @@ test('a burst of chunks in one task wakes a reader once', async () => {
 test('flushSync delivers a stream wake held for the next task', async () => {
     let close = (): void => {}
     const held = new Promise<void>((resolve) => (close = resolve))
-    const rows = reactive.derived(async function* () {
+    const rows = reactive(async function* () {
         yield 'a'
         yield 'b'
         await held
@@ -5251,7 +5265,7 @@ test('flushSync delivers a stream wake held for the next task', async () => {
 
 // ── Adopting a stream: RULEBOOK 11.15 forwarding what a stream declares ─────────────
 
-// `reactive.derived(() => salesByRegion(args))` IS HOW A PAGE HOLDS A STREAM, so the adopting value
+// `reactive(() => salesByRegion(args))` IS HOW A PAGE HOLDS A STREAM, so the adopting value
 // is the one a template reads, iterates and awaits — and it has to BE the stream to each of
 // those, not a value holding copies of it. A cursor over it hands over chunks (1.2), it holds
 // for the close when awaited (2.7), and a guard on its `busy` comes back when the stream ends.
@@ -5261,8 +5275,8 @@ test('flushSync delivers a stream wake held for the next task', async () => {
 // cursor hands over whole accumulations where the chunks should be.
 test('a value adopting a stream is that stream to a cursor, a guard and an await', async () => {
     const feed = streamOf<number>()
-    const inner = reactive.derived(feed.body)
-    const rows = reactive.derived(() => inner)
+    const inner = reactive(feed.body)
+    const rows = reactive(() => inner)
     const run = feed.runs[0] as Run<number>
     const guard: boolean[] = []
     const stop = watch(() => {
@@ -5305,9 +5319,9 @@ test('a value adopting a stream is that stream to a cursor, a guard and an await
 // THE REVERT is the same as above: `outer transforms before a read: 3`.
 test('a value adopting a stream materializes nothing until it is read, through its own transform', async () => {
     const feed = streamOf<number>()
-    const inner = reactive.derived(feed.body)
+    const inner = reactive(feed.body)
     let transforms = 0
-    const total = reactive.derived(() => inner, {
+    const total = reactive(() => inner, {
         transform: (chunks: number[]) => {
             transforms += 1
             return [chunks.reduce((sum, chunk) => sum + chunk, 0)]
@@ -5333,7 +5347,7 @@ test('a value adopting a stream materializes nothing until it is read, through i
 // read as a chunk that ended a followed write, dropping the forward.
 test('a capped value adopting a stream while its window holds a write keeps forwarding — 11.13, 11.19', async () => {
     const feed = streamOf<number>()
-    const inner = reactive.derived(feed.body)
+    const inner = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     run.push(1)
     await turns()
@@ -5354,7 +5368,7 @@ test('a capped value adopting a stream while its window holds a write keeps forw
 test('a capped value adopting an unlanded value while its window holds a write serves nothing — 11.16', async () => {
     const outer = pacedValue<number>(0, { debounce: WINDOW })
     outer.set(5)
-    const inner = reactive.derived(() => new Promise<number>(() => {}))
+    const inner = reactive(() => new Promise<number>(() => {}))
     outer.set(inner)
     await Bun.sleep(AFTER_WINDOW)
     expect(`ready: ${outer.ready()} peek: ${outer.peek()}`).toBe(
@@ -5369,9 +5383,9 @@ test('a capped value adopting an unlanded value while its window holds a write s
 // forwarded record, and every read of the value goes on paying the indirect path.
 test('a value that stops adopting a stream serves its own value again', async () => {
     const feed = streamOf<number>()
-    const inner = reactive.derived(feed.body)
+    const inner = reactive(feed.body)
     const flag = reactive(true)
-    const outer = reactive.derived(() => (flag() ? inner : [99]))
+    const outer = reactive(() => (flag() ? inner : [99]))
     ;(feed.runs[0] as Run<number>).push(1)
     await turns()
     expect(outer()).toEqual([1])
@@ -5393,7 +5407,7 @@ test('a value that stops adopting a stream serves its own value again', async ()
 // write read back as the empty accumulation.
 test('a set on a stream stands until the next chunk overwrites it', async () => {
     const feed = streamOf<string>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<string>
     run.push('1')
     run.push('2')
@@ -5407,7 +5421,7 @@ test('a set on a stream stands until the next chunk overwrites it', async () => 
     expect(`after chunk: ${rows().join(',')}`).toBe('after chunk: 1,2,3')
 
     const silent = streamOf<string>()
-    const early = reactive.derived(silent.body)
+    const early = reactive(silent.body)
     early.set(['early'])
     expect(`before any chunk: ${early().join(',')}`).toBe(
         'before any chunk: early',
@@ -5427,7 +5441,7 @@ test('a patch that reshapes a stream keeps its cursors in step', async () => {
         (chunks: string[]) => chunks.splice(0, 1),
     ]) {
         const feed = streamOf<string>()
-        const rows = reactive.derived(feed.body)
+        const rows = reactive(feed.body)
         const run = feed.runs[0] as Run<string>
         run.push('1')
         run.push('2')
@@ -5458,7 +5472,7 @@ test('a patch that reshapes a stream keeps its cursors in step', async () => {
 // turn hands over `undefined`.
 test('a set on a stream moves no cursor over it', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     run.push(1)
     run.push(2)
@@ -5485,7 +5499,7 @@ test('a set on a stream moves no cursor over it', async () => {
 // THE REVERT is dropping the `probesMoved` at the end of `follow`: `seen: false,false`.
 test('a busy guard on a stream hears a write that follows a call in flight', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     run.fail(new Error('the feed dropped'))
     await turns()
@@ -5520,7 +5534,7 @@ test('a busy guard on a stream hears a write that follows a call in flight', asy
 // `adopted readers after: 1`.
 test('a Reactive set on a stream is followed until the next chunk', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     run.push(1)
     run.push(2)
@@ -5581,7 +5595,7 @@ test('a Reactive set on a stream is followed until the next chunk', async () => 
 // follow overwrites the plain write the moment the adopted value moves.
 test('a set over a followed Reactive on a stream replaces it', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     run.push(1)
     await turns()
@@ -5626,7 +5640,7 @@ test('a set over a followed Reactive on a stream replaces it', async () => {
 // THE REVERT is the follow not setting `adoption`: `busy while the adopted loads: false`.
 test('a followed Reactive on a closed stream reports its probes', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     run.push(1)
     run.close()
@@ -5660,7 +5674,7 @@ test('a followed Reactive on a closed stream reports its probes', async () => {
     expect(`value after: ${rows().join(',')}`).toBe('value after: 4')
     expect(`guard heard it: ${guardRuns >= 2}`).toBe('guard heard it: true')
 
-    const failing = reactive.derived<number[]>(() => {
+    const failing = reactive<number[]>(() => {
         throw new Error('nope')
     })
     rows.set(failing as never)
@@ -5674,7 +5688,7 @@ test('a followed Reactive on a closed stream reports its probes', async () => {
 // THE REVERT is `patch` mutating `cell.value` on a stream: `after chunk: 1,2,3`.
 test('patch on a stream mutates its accumulation, and later chunks land after it', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const run = feed.runs[0] as Run<number>
     run.push(1)
     run.push(2)
@@ -5697,8 +5711,8 @@ test('patch on a stream mutates its accumulation, and later chunks land after it
 // `forwardStream` not taking a write standing on the stream: `outer after set: 9`.
 test('patch and set through a value adopting a stream reach the stream', async () => {
     const feed = streamOf<number>()
-    const inner = reactive.derived(feed.body)
-    const outer = reactive.derived(() => inner)
+    const inner = reactive(feed.body)
+    const outer = reactive(() => inner)
     const run = feed.runs[0] as Run<number>
     run.push(1)
     await turns()
@@ -5902,7 +5916,7 @@ test('refresh over tags reloads what something reads and marks the rest', () => 
 })
 
 // 13.7 THROUGH AN ADOPTION — A MARK IS SETTLED BY THE NEXT READ, AND ADOPTING IS ONE. A page's
-// `reactive.derived(() => getMeetings())` reads its handler's entry by adopting it: the entry a write's
+// `reactive(() => getMeetings())` reads its handler's entry by adopting it: the entry a write's
 // `refresh({ tags })` marked while no page held it is adopted by the next page to want it, and
 // that adoption has to load it rather than copy what it held over the mark.
 //
@@ -5921,14 +5935,14 @@ test('a value a tag refresh marked while nothing read it loads when it is next a
     // The page that read it, built under its owner (12.14) and left.
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    const earlier = reactive.derived(() => meetings)
+    const earlier = reactive(() => meetings)
     collectWatches(previous)
     expect(await earlier).toBe('old')
     for (const stop of stops) stop()
     answer = 'new'
     refresh({ tags: ['meetings'] })
     expect(`loads before a read: ${loads}`).toBe('loads before a read: 1')
-    const later = reactive.derived(() => meetings)
+    const later = reactive(() => meetings)
     const served = await later
     expect(`loads after the adoption: ${loads}`).toBe(
         'loads after the adoption: 2',
@@ -6008,7 +6022,7 @@ test('a refresh over tags reruns no synchronous derivation that carries none of 
         },
         { tags: ['stock'] },
     )
-    const doubled = reactive.derived(() => {
+    const doubled = reactive(() => {
         derivationRuns += 1
         return stock() * 2
     })
@@ -6185,7 +6199,7 @@ test('a store miss falling back to the initial value does not write it, and a bo
     const value = reactive<Record<string, number>>({}, { store: initial.store })
     expect(value()).toEqual({})
     const body = memoryStore<number>({ answer: () => undefined })
-    const derived = reactive.derived(() => 7, { store: body.store })
+    const derived = reactive(() => 7, { store: body.store })
     expect(derived()).toBe(7)
     expect(
         `sets: ${initial.sets.length}, body: ${body.sets.map((write) => write.value).join(',')}`,
@@ -6240,7 +6254,7 @@ test('a failed store write warns, reaches onError, and the next production is st
 test('a store in front of a body is read first, and the body runs on a miss and on a trigger', () => {
     let runs = 0
     const hit = memoryStore<number>({ answer: () => 41 })
-    const cached = reactive.derived(
+    const cached = reactive(
         () => {
             runs += 1
             return 1
@@ -6257,7 +6271,7 @@ test('a store in front of a body is read first, and the body runs on a miss and 
 
     const miss = memoryStore<number>({ answer: () => undefined })
     let missRuns = 0
-    const derived = reactive.derived(
+    const derived = reactive(
         () => {
             missRuns += 1
             return 7
@@ -6288,7 +6302,7 @@ test('a stream is stored once at close, and a restore is a finished stream', asy
     const memory = memoryStore<number[]>({ answer: () => undefined })
     const feed = streamOf<number>()
     // REACHED, since a server files a value with a store unbuilt until it is (11.70).
-    reactive.derived(feed.body, { store: memory.store }).peek()
+    reactive(feed.body, { store: memory.store }).peek()
     const run = feed.runs[0] as Run<number>
     run.push(1)
     run.push(2)
@@ -6302,7 +6316,7 @@ test('a stream is stored once at close, and a restore is a finished stream', asy
 
     const restoredFeed = streamOf<number>()
     const restoring = memoryStore<number[]>({ answer: () => [5, 6] })
-    const restored = reactive.derived(restoredFeed.body, {
+    const restored = reactive(restoredFeed.body, {
         store: restoring.store,
     })
     expect(`started: ${restoredFeed.runs.length}`).toBe('started: 0')
@@ -6374,7 +6388,7 @@ test('a store that says it changed is read again, and neither runs the body nor 
     let changed = (): void => {}
     let runs = 0
     let sets = 0
-    const document = reactive.derived(
+    const document = reactive(
         () => {
             runs += 1
             return 'from the body'
@@ -6419,7 +6433,7 @@ test('a store watch stops with the owner that built its value, keyed or not — 
     // A setup, as a component's is collected.
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    reactive.derived(() => 'body', { store: watching(0) })()
+    reactive(() => 'body', { store: watching(0) })()
     keyedValue((args: { id: number }) => `body ${args.id}`, {
         store: () => watching(1),
     })({ id: 1 })()
@@ -6438,7 +6452,7 @@ test('a store watch stops with the owner that built its value, keyed or not — 
 test('invalidate runs nothing until the next read, which runs fresh', () => {
     let answer = 1
     let runs = 0
-    const held = reactive.derived(() => {
+    const held = reactive(() => {
         runs += 1
         return answer
     })
@@ -6458,7 +6472,7 @@ test('invalidate runs nothing until the next read, which runs fresh', () => {
 // pulls the reload, and the value readers wake 1 time where 0 are due.
 test('invalidate wakes no reader, and the next hit reloads', () => {
     let answer = 1
-    const held = reactive.derived(() => answer)
+    const held = reactive(() => answer)
     let valueWakes = 0
     const stopValue = watch(() => {
         held()
@@ -6486,8 +6500,8 @@ test('invalidate wakes no reader, and the next hit reloads', () => {
 // THE REVERT is `readIndirect` not pulling what is owed: `derived: 10`.
 test('a read of a derived value runs the producer an invalidate marked upstream', () => {
     let answer = 1
-    const source = reactive.derived(() => answer)
-    const derived = reactive.derived(() => source() * 10)
+    const source = reactive(() => answer)
+    const derived = reactive(() => source() * 10)
     expect(derived()).toBe(10)
     answer = 2
     source.invalidate()
@@ -6498,7 +6512,7 @@ test('a read of a derived value runs the producer an invalidate marked upstream'
 // wrong, so its answer lands nowhere; the read that follows starts the one that counts.
 test('invalidate discards the load it finds in flight', async () => {
     const settles: ((value: number) => void)[] = []
-    const held = reactive.derived(
+    const held = reactive(
         () =>
             new Promise<number>((resolve) => {
                 settles.push(resolve)
@@ -6519,7 +6533,7 @@ test('invalidate discards the load it finds in flight', async () => {
 // starts a new one.
 test('invalidate stops a stream in flight, and the next read starts a new run', async () => {
     const feed = streamOf<number>()
-    const rows = reactive.derived(feed.body)
+    const rows = reactive(feed.body)
     const first = feed.runs[0] as Run<number>
     first.push(1)
     await turns()
@@ -6542,7 +6556,7 @@ test('invalidate stops a stream in flight, and the next read starts a new run', 
 // waiting on a load nothing started.
 test('awaiting an invalidated value runs its producer', async () => {
     let answer = 1
-    const held = reactive.derived(() => Promise.resolve(answer))
+    const held = reactive(() => Promise.resolve(answer))
     await held
     answer = 2
     held.invalidate()
@@ -6552,8 +6566,8 @@ test('awaiting an invalidated value runs its producer', async () => {
 // 7.13 THROUGH AN ADOPTION: the adopter's read reaches the adopted value's owed reload.
 test('reading a value adopting an invalidated one runs the adopted producer', () => {
     let answer = 1
-    const inner = reactive.derived(() => answer)
-    const outer = reactive.derived(() => inner)
+    const inner = reactive(() => answer)
+    const outer = reactive(() => inner)
     expect(outer()).toBe(1)
     answer = 2
     inner.invalidate()
@@ -6570,7 +6584,7 @@ test('reading a value adopting an invalidated one runs the adopted producer', ()
 test('a write over an invalidated value is served, and the owed reload is not run', async () => {
     for (const options of [undefined, { identity: deepEqual }]) {
         let runs = 0
-        const held = reactive.derived(async () => {
+        const held = reactive(async () => {
             runs += 1
             return 'loaded'
         }, options)
@@ -6590,7 +6604,7 @@ test('a write over an invalidated value is served, and the owed reload is not ru
 // THE REVERT is `standWrite` leaving `owes` standing: `ready: false`.
 test('a write over an invalidated stream is served, and the owed run is not started', async () => {
     let runs = 0
-    const held = reactive.derived(async function* () {
+    const held = reactive(async function* () {
         runs += 1
         yield 'chunk'
     })
@@ -6609,11 +6623,11 @@ test('a write over an invalidated stream is served, and the owed run is not star
 //
 // THE REVERT is `refreshOne` clearing the debt without unserving: `ready: true`.
 test('a refresh over an invalidated value does not serve what the mark said was wrong', async () => {
-    const settled = reactive.derived(() => 1)
+    const settled = reactive(() => 1)
     settled.invalidate()
     settled.refresh()
     expect(settled()).toBe(1)
-    const loading = reactive.derived(() => Promise.resolve(1))
+    const loading = reactive(() => Promise.resolve(1))
     await loading.then(() => {
         loading.invalidate()
         loading.refresh()
@@ -6634,7 +6648,7 @@ test('awaiting a derived value settles once the source it aborted on lands', asy
             settle = resolve
         }),
     )
-    const doubled = reactive.derived(() => source() * 2)
+    const doubled = reactive(() => source() * 2)
     const awaited = doubled.then((value) => value)
     settle(21)
     expect(`awaited: ${await awaited}`).toBe('awaited: 42')
@@ -6726,7 +6740,7 @@ test('a busy guard hears a write that adopts a call in flight', async () => {
 // THE REVERT is `ADOPTING_PROTOTYPE`'s `set` writing the adopter itself: `source after set: 1`.
 test('set and patch on an adopting value reach the adopted value', () => {
     const source = reactive({ n: 1 })
-    const outer = reactive.derived(() => source)
+    const outer = reactive(() => source)
     expect(outer().n).toBe(1)
     outer.set({ n: 2 })
     expect(`source after set: ${source().n}`).toBe('source after set: 2')
@@ -6795,7 +6809,7 @@ test('a body with an optional parameter is typed keyed — 11.2', async () => {
     expect(await tags({ type: 'mood' })).toBe('mood')
     // @ts-expect-error — a type the parameter does not take.
     void tags({ type: 'color' })
-    const count = reactive.derived(() => 1)
+    const count = reactive(() => 1)
     const counted: number = count()
     const invoice = keyedValue(({ id }: { id: number }) => id)
     // @ts-expect-error — a required parameter stays required.
@@ -7076,7 +7090,7 @@ test('an adoption that would close a cycle is refused where it forms', () => {
 
 test('a body answering with a value that adopts it fails with the refusal', () => {
     let other: unknown = 1
-    const a = reactive.derived(() => other)
+    const a = reactive(() => other)
     const b = reactive(2)
     b.set(a as never)
     other = b
@@ -7120,7 +7134,7 @@ test('releasing an orphaned stream that follows a write keeps the stream its own
     let push: (value: number) => void = (): void => {}
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    const s = reactive.derived(async function* () {
+    const s = reactive(async function* () {
         yield 1
         yield await new Promise<number>((resolve) => {
             push = resolve
@@ -7155,7 +7169,7 @@ test('a stream whose close throws refuses the run rather than rejecting into not
         escaped = error
     }
     process.on('unhandledRejection', reported)
-    const s = reactive.derived(
+    const s = reactive(
         async function* () {
             yield 1
         },
@@ -7237,7 +7251,7 @@ test('a body that diverges near its front dedups its reads in linear work', () =
     const width = 1000
     const rows = Array.from({ length: width }, (_, index) => reactive(index))
     const list = reactive(rows)
-    const sum = reactive.derived(() => {
+    const sum = reactive(() => {
         let total = 0
         for (const row of list()) total += row()
         return total
@@ -7270,7 +7284,7 @@ test('a long body that reads one value many times holds one subscription of it',
     const flip = reactive(false)
     // The flip puts `one` at the second slot, so the run diverges there and every read after it
     // is deduped by `track`.
-    const total = reactive.derived(() => {
+    const total = reactive(() => {
         let sum = flip() ? one() : 0
         for (const row of rows) sum += row() + repeated()
         return sum
@@ -7297,7 +7311,7 @@ test('a patch that reshapes a stream skips nothing a cursor behind it has still 
         (chunks: string[]) => chunks.splice(0, 1),
     ]) {
         const feed = streamOf<string>()
-        const rows = reactive.derived(feed.body)
+        const rows = reactive(feed.body)
         const run = feed.runs[0] as Run<string>
         run.push('1')
         run.push('2')
@@ -7325,19 +7339,22 @@ test('a patch that reshapes a stream skips nothing a cursor behind it has still 
     expect(outcomes).toEqual(['2,3,x,4', '2,3,4'])
 })
 
-// 4.20 — `reactive` HOLDS A FUNCTION RATHER THAN RUNNING IT: the factory a value is built with says
-// which contract it has, and a callback is a value like any other. THE REVERT: build a body from a
-// function in `buildValue`, and `held: number` — the function ran and its answer was stored.
-test('reactive holds a function as its value — 4.20', () => {
+// 4.20 — A FUNCTION HANDED TO `reactive` IS A BODY, and a function to hold is the answer of one:
+// `reactive(() => format)` holds `format`, and a write of another function stores it as it is.
+// THE REVERT: build every first argument with `buildValue` in `buildEither`, and `derived: function`
+// — the body was stored as the value rather than run.
+test('reactive runs a function as a body, and holds one a body hands back — 4.20', () => {
+    const derived = reactive(() => 2)
+    expect(`derived: ${typeof derived()}`).toBe('derived: number')
     const format = (amount: number): string => `$${amount}`
-    const held = reactive(format)
+    const held = reactive(() => format)
     expect(`held: ${typeof held()}`).toBe('held: function')
     expect(held()(5)).toBe('$5')
     held.set((amount: number) => `€${amount}`)
     expect(held()(5)).toBe('€5')
 })
 
-// 11.73 — `reactive.derived` AND `memo` ARE HANDED A BODY: a value, or a `Reactive` already built, throws
+// 11.73 — `memo` IS HANDED A BODY: a value, or a `Reactive` already built, throws
 // where it is written. THE REVERT: drop `refuseValue` from `memo`, and `value: built` — a number was
 // filed as a body every later run would call.
 test('memo refuses anything but a body at construction — 11.73', () => {

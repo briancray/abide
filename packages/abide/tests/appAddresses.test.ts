@@ -665,7 +665,7 @@ test("a page reads a handler file's answer by name, typed — 16.74", async () =
 import { reactive } from '@abide/abide'
 import getPolicy from './getPolicy.server.ts'
 
-const policy = reactive.derived(() => getPolicy())
+const policy = reactive(() => getPolicy())
 const retries: number = policy.retries
 </script>
 
@@ -777,7 +777,7 @@ export default rpc(() => runs.count, { methods: ['POST'] })
 import { reactive } from '@abide/abide'
 import getComments from '../comments/[id]/getComments.server.ts'
 
-const blank = reactive.derived(() => getComments({ id: '' }))
+const blank = reactive(() => getComments({ id: '' }))
 </script>
 
 <p id="refused">{blank.error()?.name} {blank.error()?.status}</p>`,

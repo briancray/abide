@@ -19,7 +19,7 @@ export const who = memo(() => principal, { global: true })
 export const crumbs = memo(() => jar(), { global: true })
 export const nonce = memo(() => csp.nonce, { global: true })
 export const policy = memo(() => csp, { global: true })
-export const local = reactive.derived(() => request().url)
+export const local = reactive(() => request().url)
 export const viewer = rpc(() => principal.authenticated, { global: true })
 export const framed = rpc(() => response.json(request.ip()), { global: true })
 `

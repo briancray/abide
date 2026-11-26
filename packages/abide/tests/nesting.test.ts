@@ -863,8 +863,8 @@ let level = reactive(0)
 </script>
 
 <ul>{#for row of rows key row}<script>
-const plus = reactive.derived(() => level + 1)
-const twice = reactive.derived(() => level * 2)
+const plus = reactive(() => level + 1)
+const twice = reactive(() => level * 2)
 </script><li>{row} {plus} {twice}</li>{/for}</ul>
 <button id="drop" onclick={() => { rows = [] }}>drop</button>
 <button id="bump" onclick={() => { level = level + 1 }}>bump</button>`)
@@ -902,7 +902,7 @@ function follow() {
 </script>
 
 {#if on}<script>
-const plus = reactive.derived(() => level + 1)
+const plus = reactive(() => level + 1)
 seen.take = () => plus
 </script><b>{plus}</b>{/if}
 <button id="follow" onclick={follow}>follow</button>

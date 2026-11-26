@@ -25,7 +25,7 @@ const pageCalling = (args: string): string => `<script>
 import { memo, reactive } from '@abide/abide'
 import list from '#src/pages/list.server.ts'
 
-const shown = reactive.derived(() => list(${args}))
+const shown = reactive(() => list(${args}))
 </script>
 
 <main><p>{shown().page}</p></main>`

@@ -11,12 +11,7 @@ import { wallClockOf } from './format/wallClockOf.ts'
 import { type Live, live } from './live.ts'
 import { LOCALE } from './LOCALE.ts'
 import { randomToken } from './randomToken.ts'
-import {
-    derived,
-    flushSync,
-    type Reactive,
-    reactive,
-} from './reactive/index.ts'
+import { flushSync, type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving, stepOf } from './roving.ts'
 
@@ -267,46 +262,46 @@ export function calendar<Range extends boolean = false>(
     if (process.env.NODE_ENV !== 'production') checkParts('calendar', base)
 
     // 52.84 — today is the day it is now in the zone named, else the one `format.date` writes in.
-    const today = derived(() =>
+    const today = reactive(() =>
         dayIn(
             Date.now(),
             live(options.timeZone) ?? timeZone() ?? visitorZone(),
         ),
     )
     // A range's ends, or the day picked as both.
-    const start = derived((): string | undefined => {
+    const start = reactive((): string | undefined => {
         const value = selected()
         return Array.isArray(value) ? value[0] : (value as string | undefined)
     })
-    const end = derived((): string | undefined => {
+    const end = reactive((): string | undefined => {
         const value = selected()
         return Array.isArray(value) ? value[1] : (value as string | undefined)
     })
     // 52.85 — the first month shown: the month written, else the picked day's, else today's.
-    const shown = derived((): string => {
+    const shown = reactive((): string => {
         for (const wanted of [picked(), start()])
             if (wanted !== undefined && MONTH.test(wanted))
                 return wanted.slice(0, 7)
         return today().slice(0, 7)
     })
     // 52.96 — how many months are shown, and the last of them.
-    const count = derived(() =>
+    const count = reactive(() =>
         Math.max(1, Math.trunc(live(options.months) ?? 1)),
     )
-    const last = derived(() => monthOn(shown(), count() - 1))
+    const last = reactive(() => monthOn(shown(), count() - 1))
     // Whether `date` falls in a month shown; `YYYY-MM` strings order as the months do.
     const isShown = (date: string) => {
         const month = date.slice(0, 7)
         return MONTH.test(date) && month >= shown() && month <= last()
     }
-    const firstDay = derived(
+    const firstDay = reactive(
         () => live(options.firstDay) ?? firstDayIn(localeOf()),
     )
 
     // 52.86 — the active day: the one focused last, else the one picked, else today, while it is in
     // a month shown, and the first month's first day where none is.
     const focused = reactive<string | undefined>(undefined)
-    const active = derived((): string => {
+    const active = reactive((): string => {
         for (const wanted of [focused(), start(), today()])
             if (wanted !== undefined && isShown(wanted)) return wanted
         return `${shown()}-01`
@@ -475,7 +470,7 @@ export function calendar<Range extends boolean = false>(
 
     // 52.82, 52.94, 52.96 — THE MONTHS SHOWN, again only when the first, the count, the week's
     // first day or the locale changes.
-    const months = derived((): CalendarMonth[] => {
+    const months = reactive((): CalendarMonth[] => {
         const lowest = shown()
         const total = count()
         const first = firstDay()
@@ -505,7 +500,7 @@ export function calendar<Range extends boolean = false>(
     })
 
     // 52.87 — the weekdays in the order a week runs, named in the locale.
-    const weekdays = derived((): CalendarWeekday[] => {
+    const weekdays = reactive((): CalendarWeekday[] => {
         const locale = localeOf()
         const first = firstDay()
         const long = cached(

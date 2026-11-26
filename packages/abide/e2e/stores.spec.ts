@@ -48,7 +48,7 @@ let count = reactive(0, { store: store.indexedDB('count') })
 import { ledger, reactive, store } from '@abide/abide'
 
 const visits = ledger<string>({ store: store.indexedDB('visits') })
-const kept = reactive.derived(() => visits())
+const kept = reactive(() => visits())
 </script>
 
 <main id="visits"><p id="head">{kept.ready() ? kept.length : 0}</p><button id="visit" onclick={() => visits.append('visit')}>visit</button></main>`,
@@ -56,7 +56,7 @@ const kept = reactive.derived(() => visits())
 import { ledger, reactive, store } from '@abide/abide'
 
 const drafts = ledger<string>({ store: store.indexedDB('drafts'), retain: 1 })
-const kept = reactive.derived(() => drafts())
+const kept = reactive(() => drafts())
 </script>
 
 <main id="drafts"><p id="last">{kept.ready() ? kept.at(-1)?.seq : 0}</p><button id="save" onclick={() => drafts.append('save', { key: 'k1' })}>save</button><button id="other" onclick={() => drafts.append('other')}>other</button></main>`,

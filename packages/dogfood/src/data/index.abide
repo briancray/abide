@@ -74,7 +74,7 @@ import Section from '#src/lib/Section.abide'
             import listTargets from '../listTargets.server.ts'
             import setTarget from '../setTarget.server.ts'
 
-            const targets = reactive.derived(() => listTargets())
+            const targets = reactive(() => listTargets())
 
             async function record() {
                 await setTarget({ target: 600_000 })

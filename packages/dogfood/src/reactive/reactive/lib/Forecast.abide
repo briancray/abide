@@ -8,7 +8,7 @@ export const getForecast = async () => {
 <script>
 import { reactive } from '@abide/abide'
 
-const forecast = reactive.derived(() => getForecast())
+const forecast = reactive(() => getForecast())
 </script>
 
 {#if forecast.ready()}

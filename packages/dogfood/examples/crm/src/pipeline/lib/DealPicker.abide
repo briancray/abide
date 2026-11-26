@@ -6,7 +6,7 @@ import DealDetail from './DealDetail.abide'
 import DealRow from './DealRow.abide'
 import { selectedDeal } from './selectedDeal.ts'
 
-const deals = reactive.derived(() => listDeals())
+const deals = reactive(() => listDeals())
 
 // Held HERE, above both readers, so each finds this one on the way up — opening on the first deal.
 let selected = selectedDeal()

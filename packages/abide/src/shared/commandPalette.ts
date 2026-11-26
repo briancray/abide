@@ -11,7 +11,7 @@ import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import { derived, type Reactive, reactive, watch } from './reactive/index.ts'
+import { type Reactive, reactive, watch } from './reactive/index.ts'
 import { withPart } from './withPart.ts'
 
 /** One thing the palette can do. */
@@ -92,10 +92,10 @@ export function commandPalette(
     const query = reactive('')
 
     // 51.66, 51.107 — what the commands are narrowed by and their labels marked with.
-    const needles = derived(() => needlesOf(query(), true))
+    const needles = reactive(() => needlesOf(query(), true))
 
     // 51.66 — a command is listed while every word typed is in its label or one of its keywords.
-    const found = derived(() => {
+    const found = reactive(() => {
         const words = needles()
         const kept: Command[] = []
         for (const command of commandsOf())

@@ -134,7 +134,7 @@ const PAGE = `<script>
 import { reactive } from '@abide/abide'
 import getInvoice from '#src/invoices/getInvoice.server.ts'
 
-const invoice = reactive.derived(() => getInvoice({ id: '4021' }))
+const invoice = reactive(() => getInvoice({ id: '4021' }))
 </script>
 
 <main><p id="total">{invoice().total}</p></main>`
@@ -984,7 +984,7 @@ test('a handler with clients.ui false gets no browser wrapper — 20.4', async (
 import { reactive } from '@abide/abide'
 import internal from '#src/staff/internal.server.ts'
 
-const value = reactive.derived(() => internal())
+const value = reactive(() => internal())
 </script>
 
 <p>{value()}</p>`,
@@ -999,7 +999,7 @@ const value = reactive.derived(() => internal())
 import { reactive } from '@abide/abide'
 import open from '#src/staff/open.server.ts'
 
-const value = reactive.derived(() => open())
+const value = reactive(() => open())
 </script>
 
 <p>{value()}</p>`,

@@ -3,9 +3,9 @@ import { reactive } from '@abide/abide'
 
 import { getStage, winDeal } from './WinLead.server.ts'
 
-const lead = reactive.derived(() => getStage({ stage: 'lead' }))
-const won = reactive.derived(() => getStage({ stage: 'won' }))
-const proposal = reactive.derived(() => getStage({ stage: 'proposal' }))
+const lead = reactive(() => getStage({ stage: 'lead' }))
+const won = reactive(() => getStage({ stage: 'won' }))
+const proposal = reactive(() => getStage({ stage: 'proposal' }))
 
 async function win() {
     await winDeal()

@@ -10,7 +10,7 @@ const COMPANIES = [
 
 let id = reactive('hopper-and-co')
 
-const registration = reactive.derived(() => getRegistration({ id }))
+const registration = reactive(() => getRegistration({ id }))
 
 // Whether there is an answer from the registry to show.
 const answered = () => registration.ready() && !registration.error()

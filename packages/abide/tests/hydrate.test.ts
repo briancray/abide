@@ -151,7 +151,7 @@ test('a render continues past a value still in flight — 41.4, 32.23', async ()
     const { html, mount } = await renderPage(`<script>
 import { reactive } from '@abide/abide'
 
-const invoice = reactive.derived(() => Promise.resolve({ number: 'INV-1' }))
+const invoice = reactive(() => Promise.resolve({ number: 'INV-1' }))
 </script>
 
 <main><h1 id="static">Invoice</h1><strong id="slot">{invoice.number}</strong></main>`)
@@ -188,7 +188,7 @@ test('a render continues past a {#for} subject still in flight — 41.4, 32.22',
     const { html, mount } = await renderPage(`<script>
 import { reactive } from '@abide/abide'
 
-const rows = reactive.derived(() => Promise.resolve(['north', 'south']))
+const rows = reactive(() => Promise.resolve(['north', 'south']))
 </script>
 
 <main><h1 id="static">Regions</h1><ul id="list">{#for row of rows key row}<li>{row}</li>{/for}</ul></main>`)
@@ -229,8 +229,8 @@ test('a render continues past an unlanded attribute and style — 41.4', async (
     const { html, mount } = await renderPage(`<script>
 import { reactive } from '@abide/abide'
 
-const tone = reactive.derived(() => Promise.resolve('warm'))
-const width = reactive.derived(() => Promise.resolve('40px'))
+const tone = reactive(() => Promise.resolve('warm'))
+const width = reactive(() => Promise.resolve('40px'))
 </script>
 
 <main><h1 id="static">Panel</h1><p id="attr" title={tone}>t</p><b id="styled" style:width={width}>w</b></main>`)
@@ -272,8 +272,8 @@ const SPREAD_PAGE = `<script>
 import { reactive } from '@abide/abide'
 import Tip from './Tip.abide'
 
-let detail = reactive.derived(() => Promise.resolve({ title: 'late' }))
-let Shown = reactive.derived(() => Tip)
+let detail = reactive(() => Promise.resolve({ title: 'late' }))
+let Shown = reactive(() => Tip)
 </script>
 
 <main><p id="plain"><Tip {...{ title: detail.title }} {...{ tone: 'warm' }}/></p><p id="chosen"><Shown {...detail} tone="cool"/></p><p id="after">after</p><button id="move" onclick={() => { detail = { title: 'moved' } }}>move</button></main>`
@@ -329,7 +329,7 @@ import { reactive } from '@abide/abide'
 
 let busy = reactive(false)
 let rows = reactive([{ id: 1, off: true }])
-const shown = reactive.derived(() => ({ hidden: busy(), 'aria-hidden': busy() }))
+const shown = reactive(() => ({ hidden: busy(), 'aria-hidden': busy() }))
 
 function flip() {
     busy = !busy
@@ -416,7 +416,7 @@ test('a render continues past an {#if} subject still in flight — 41.4, 32.12',
     const { html, mount } = await renderPage(`<script>
 import { reactive } from '@abide/abide'
 
-const shown = reactive.derived(() => Promise.resolve(true))
+const shown = reactive(() => Promise.resolve(true))
 </script>
 
 <main><h1 id="static">Panel</h1>{#if shown}<span id="arm">on</span>{:else}<span id="off">off</span>{/if}</main>`)
@@ -905,7 +905,7 @@ test('an await operand holds the Reactive — 31.3', async () => {
     const { mount } = await renderPage(`<script>
 import { reactive } from '@abide/abide'
 
-const total = reactive.derived(async () => {
+const total = reactive(async () => {
     await Bun.sleep(20)
     return 42
 })
@@ -1022,7 +1022,7 @@ test('a template position cannot await', async () => {
         await renderPage(`<script>
 import { reactive } from '@abide/abide'
 
-const rows = reactive.derived(async () => 1)
+const rows = reactive(async () => 1)
 </script>
 
 <p id="out">{await rows}</p>`)

@@ -5,7 +5,7 @@ const DEALS = ['Hopper & Co pilot', 'Langley Research audit']
 
 let looking = reactive<string | undefined>(undefined)
 const look = dialog({
-    open: reactive.derived(() => looking !== undefined),
+    open: reactive(() => looking !== undefined),
     onclose: () => (looking = undefined),
 })
 </script>

@@ -28,7 +28,7 @@ test('a pipe hands each step the answer before it — 57.1, 57.5', async () => {
 })
 
 // 57.5 — A CALL IS AN ASYNC FUNCTION: it resolves to its item's answer, and rejects with a step's
-// refusal, as a handler's call does (16.3). A value a page reads is a `reactive.derived` calling it, whose
+// refusal, as a handler's call does (16.3). A value a page reads is a derived `reactive` calling it, whose
 // error the refusal becomes (15.5). THE REVERT: return `walked.refusal` in `call`, and
 // `rejected: resolved`.
 test('a call resolves to its answer and rejects with a refusal, and a computed over it fails with it — 57.5, 15.5', async () => {
@@ -38,7 +38,7 @@ test('a call resolves to its answer and rejects with a refusal, and a computed o
         () => 'resolved',
         (refusal) => (isFailed(refusal) ? refusal.status : 'thrown'),
     )
-    const shown = reactive.derived(() => refusing(undefined))
+    const shown = reactive(() => refusing(undefined))
     shown.peek()
     await shown.then(
         () => undefined,
@@ -298,7 +298,7 @@ test('a pipe called in a memo body is told when the run is superseded — 57.13,
         { concurrency: 2 },
     )
     const q = reactive('a')
-    const found = reactive.derived(() => search(q()))
+    const found = reactive(() => search(q()))
     found.peek()
     await turn()
     q.set('ab')

@@ -40,8 +40,8 @@ import { reactive } from '@abide/abide'
 import getInvoice from '#src/invoices/getInvoice.server.ts'
 import getSlow from '#src/invoices/getSlow.server.ts'
 
-const invoice = reactive.derived(() => getInvoice({ id: '4021' }))
-const slow = reactive.derived(() => getSlow())
+const invoice = reactive(() => getInvoice({ id: '4021' }))
+const slow = reactive(() => getSlow())
 </script>
 
 <p id="invoice">{invoice().id} {invoice().setups}</p><p id="slow">{slow()}</p>`
@@ -87,12 +87,12 @@ const seen = ((globalThis as { overlap?: { firstDone: boolean; overlapped: boole
     firstDone: false,
     overlapped: false,
 })
-const first = reactive.derived(async () => {
+const first = reactive(async () => {
     await Bun.sleep(20)
     seen.firstDone = true
     return 'one'
 })
-const second = reactive.derived(async () => {
+const second = reactive(async () => {
     seen.overlapped = !seen.firstDone
     await Bun.sleep(20)
     return 'two'

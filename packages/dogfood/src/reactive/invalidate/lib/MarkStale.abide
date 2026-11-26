@@ -9,7 +9,7 @@ export const getForecast = async () => {
 import { reactive } from '@abide/abide'
 
 let open = reactive(true)
-const forecast = reactive.derived(() => getForecast())
+const forecast = reactive(() => getForecast())
 </script>
 
 <div class="row">

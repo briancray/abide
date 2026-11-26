@@ -4,7 +4,7 @@ import { outlet, reactive, route } from '@abide/abide'
 import getCompany from './getCompany.server.ts'
 import CompanyTabs from './lib/CompanyTabs.abide'
 
-const company = reactive.derived(() => getCompany({ id: route.params.id }))
+const company = reactive(() => getCompany({ id: route.params.id }))
 </script>
 
 <head><title>{company.name} — CRM</title></head>

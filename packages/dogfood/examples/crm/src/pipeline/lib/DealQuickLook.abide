@@ -3,11 +3,11 @@ import { dialog, format, reactive } from '@abide/abide'
 
 import listDeals from '../listDeals.server.ts'
 
-const deals = reactive.derived(() => listDeals())
+const deals = reactive(() => listDeals())
 // The deal looked at, written by every row's button; the dialog shows while one is.
 let looking = reactive<string | undefined>(undefined)
 const look = dialog({
-    open: reactive.derived(() => looking !== undefined),
+    open: reactive(() => looking !== undefined),
     onclose: () => (looking = undefined),
 })
 const deal = () => deals.find((each) => each.id === looking)

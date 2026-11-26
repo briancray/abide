@@ -59,7 +59,7 @@ import Section from '#src/lib/Section.abide'
             import { abortSignal, reactive } from '@abide/abide'
 
             let q = reactive('')
-            const found = reactive.derived(() =>
+            const found = reactive(() =>
                 fetch(\`/search?q=\${q}\`, { signal: abortSignal() }).then((r) => r.json()),
             )
             </script>
@@ -77,7 +77,7 @@ import Section from '#src/lib/Section.abide'
             import { abortSignal, reactive } from '@abide/abide'
 
             let q = reactive('')
-            const found = reactive.derived(async () => {
+            const found = reactive(async () => {
                 const signal = abortSignal()
                 const reply = await fetch(\`/search?q=\${q}\`, { signal })
                 return reply.json()
@@ -99,7 +99,7 @@ import Section from '#src/lib/Section.abide'
                 return !abortSignal().aborted
             }
 
-            export const leads = reactive.derived(async () => {
+            export const leads = reactive(async () => {
                 await Bun.sleep(1) // a look at the mail server
                 if (!stillWanted()) return []
                 return DEALS.filter((deal) => deal.stage === 'lead')

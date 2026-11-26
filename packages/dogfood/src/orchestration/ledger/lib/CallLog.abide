@@ -2,7 +2,7 @@
 import { ledger, reactive } from '@abide/abide'
 
 const calls = ledger<{ contact: string; minutes: number }>()
-const logged = reactive.derived(() => calls())
+const logged = reactive(() => calls())
 </script>
 
 <button onclick={() => calls.append({ contact: 'Ada', minutes: 12 })}>

@@ -7,7 +7,7 @@ let deals = reactive<Deal[]>([
     { company: 'Analytical Engines', amount: 8000, stage: 'proposal' },
     { company: 'Hopper & Co', amount: 4400, stage: 'qualified' },
 ])
-const expected = reactive.derived(() => forecast(deals))
+const expected = reactive(() => forecast(deals))
 </script>
 
 <ul class="fields">

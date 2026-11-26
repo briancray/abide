@@ -127,7 +127,7 @@ function constructDerived(): Case {
     }
     const abide = (): void => {
         const source = reactive(1)
-        sink = reactive.derived(() => {
+        sink = reactive(() => {
             abideRuns += 1
             return source() * 2
         })
@@ -390,7 +390,7 @@ function derived(): Case {
     }
 
     const source = reactive(1)
-    const doubled = reactive.derived(() => {
+    const doubled = reactive(() => {
         abideRecomputes += 1
         return source() * 2
     })
@@ -449,7 +449,7 @@ function derivedUnchanged(): Case {
     }
 
     const source = reactive(1)
-    const positive = reactive.derived(() => source() > 0)
+    const positive = reactive(() => source() > 0)
     // A downstream reader on both arms, so the wake each arm causes is a wake into
     // something — and the counter is in that reader on both, so it is priced alike.
     positive.watch(() => {
@@ -640,7 +640,7 @@ function fanOut(width: number): Case {
     const derivedValues: (() => number)[] = []
     for (let index = 0; index < width; index += 1)
         derivedValues.push(
-            reactive.derived(() => {
+            reactive(() => {
                 abideRuns += 1
                 return source() + index
             }) as unknown as () => number,
@@ -694,7 +694,7 @@ function fanIn(width: number): Case {
 
     const sources: ReturnType<typeof reactive<number>>[] = []
     for (let index = 0; index < width; index += 1) sources.push(reactive(index))
-    const summed = reactive.derived(() => {
+    const summed = reactive(() => {
         abideRuns += 1
         let total = 0
         for (let index = 0; index < width; index += 1)
@@ -783,7 +783,7 @@ function layeredDag(width: number, depth: number): Case {
             return made as unknown as () => number
         },
         (below, index) =>
-            reactive.derived(() => {
+            reactive(() => {
                 abideRuns += 1
                 let total = index
                 for (let at = 0; at < below.length; at += 1)
@@ -842,13 +842,13 @@ function chain(depth: number): Case {
     }
 
     const source = reactive(0)
-    let node = reactive.derived(() => {
+    let node = reactive(() => {
         abideRuns += 1
         return source() + 1
     }) as unknown as () => number
     for (let level = 1; level < depth; level += 1) {
         const below = node
-        node = reactive.derived(() => {
+        node = reactive(() => {
             abideRuns += 1
             return below() + 1
         }) as unknown as () => number
@@ -902,7 +902,7 @@ function alternatingSources(): Case {
     const flag = reactive(true)
     const one = reactive(1)
     const two = reactive(2)
-    const picked = reactive.derived(() => {
+    const picked = reactive(() => {
         abideRuns += 1
         return flag() ? one() : two()
     }) as unknown as () => number
@@ -1004,7 +1004,7 @@ function repeatedReads(times: number): Case {
     })
 
     const source = reactive(1)
-    const summed = reactive.derived(() => {
+    const summed = reactive(() => {
         abideRuns += 1
         let total = 0
         for (let index = 0; index < times; index += 1) total += source()
@@ -1081,7 +1081,7 @@ function probeSettledDag(width: number, depth: number): Case {
         const next: (() => number)[] = []
         for (let index = 0; index < width; index += 1)
             next.push(
-                reactive.derived(() => {
+                reactive(() => {
                     let total = index
                     for (let at = 0; at < below.length; at += 1)
                         total += (below[at] as () => number)()
@@ -1091,7 +1091,7 @@ function probeSettledDag(width: number, depth: number): Case {
         layer = next
     }
     const below = layer
-    const top = reactive.derived(() => {
+    const top = reactive(() => {
         let total = 0
         for (let at = 0; at < below.length; at += 1)
             total += (below[at] as () => number)()

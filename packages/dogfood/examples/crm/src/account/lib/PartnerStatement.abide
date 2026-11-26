@@ -14,7 +14,7 @@ import { reactive } from '@abide/abide'
 const ORIGINS = ['https://books.example', 'https://elsewhere.example']
 
 let origin = reactive(ORIGINS[0] ?? '')
-const allowed = reactive.derived(() => askAs({ origin }))
+const allowed = reactive(() => askAs({ origin }))
 </script>
 
 <div class="tabs">

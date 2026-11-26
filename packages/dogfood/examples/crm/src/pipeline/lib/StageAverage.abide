@@ -5,8 +5,8 @@ import getStage from '../getStage.server.ts'
 import { STAGES } from './STAGES.ts'
 
 let stage = reactive('lead')
-const totals = reactive.derived(() => getStage({ stage }))
-const average = reactive.derived(() =>
+const totals = reactive(() => getStage({ stage }))
+const average = reactive(() =>
     totals.ready() && totals.count > 0
         ? format.money(Math.round(totals.value / totals.count), {
               maximumFractionDigits: 0,

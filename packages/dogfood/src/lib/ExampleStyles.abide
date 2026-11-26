@@ -47,8 +47,8 @@ import Code from './Code.abide'
 
 const { code, hooks } = props<{ code: string; hooks: readonly string[] }>()
 
-const utilities = reactive.derived(() => utilitiesFor({ code }))
-const selectors = reactive.derived(() =>
+const utilities = reactive(() => utilitiesFor({ code }))
+const selectors = reactive(() =>
     hooks.length === 0
         ? '/* the selectors appear once the example runs */'
         : hooks.map((hook) => `${hook} { }`).join('\n'),

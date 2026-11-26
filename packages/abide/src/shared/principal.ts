@@ -9,7 +9,7 @@
 import { PRINCIPAL_ADDRESS } from './ADDRESSES.ts'
 import { type Failed, isFailed } from './Failed.ts'
 import { onPrincipalRotated } from './principalRotated.ts'
-import { ambientDerived } from './reactive/index.ts'
+import { ambient } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 import { seededDocument } from './seededDocument.ts'
 
@@ -88,25 +88,23 @@ let members: Members | undefined
 /** The principal's members, each its own `Reactive`, built on first access. */
 export function principalMembers(): Members {
     if (members !== undefined) return members
-    const document = ambientDerived(() =>
+    const document = ambient(() =>
         PRINCIPAL.document(),
     ) as unknown as Reactive<Principal>
     members = {
         document,
-        authenticated: ambientDerived(
+        authenticated: ambient(
             () => document().authenticated,
         ) as unknown as Reactive<boolean>,
-        expiresAt: ambientDerived(
-            () => document().expiresAt,
-        ) as unknown as Reactive<string | undefined>,
-        error: ambientDerived(() => document().error) as unknown as Reactive<
+        expiresAt: ambient(() => document().expiresAt) as unknown as Reactive<
+            string | undefined
+        >,
+        error: ambient(() => document().error) as unknown as Reactive<
             Failed<string, unknown> | undefined
         >,
-        resolved: ambientDerived(() =>
-            document(),
-        ) as unknown as Reactive<Principal>,
+        resolved: ambient(() => document()) as unknown as Reactive<Principal>,
         // 26.5 — NEEDS NO RESOLUTION: read off its own cookie, apart from the document.
-        caller: ambientDerived(() =>
+        caller: ambient(() =>
             PRINCIPAL.caller(),
         ) as unknown as Reactive<string>,
     }

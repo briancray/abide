@@ -32,7 +32,7 @@ const COLUMNS: Column<Deal>[] = [
     { key: 'closes', label: 'Closes', format: (date) => String(date ?? '—') },
 ]
 
-const deals = reactive.derived(() => listClosing())
+const deals = reactive(() => listClosing())
 let sort = reactive<Sort | undefined>({ key: 'closes', direction: 'ascending' })
 let picked = reactive<string | undefined>(undefined)
 const table = sortableTable({

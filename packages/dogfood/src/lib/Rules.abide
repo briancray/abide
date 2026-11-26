@@ -19,7 +19,7 @@ import Section from './Section.abide'
 
 const { ids } = props<{ ids: readonly string[] }>()
 const rulebook = url('/rulebook' as RouteLiteral)
-const clauses = reactive.derived(() => clauseTexts({ ids: [...ids] }))
+const clauses = reactive(() => clauseTexts({ ids: [...ids] }))
 </script>
 
 {#if ids.length > 0}

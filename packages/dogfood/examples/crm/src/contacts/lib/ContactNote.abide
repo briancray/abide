@@ -5,8 +5,8 @@ import listContacts from '../listContacts.server.ts'
 
 // Owned, derived, loaded, and waiting for its first write.
 let draft = reactive('')
-const words = reactive.derived(() => (draft ? draft.split(' ').length : 0))
-const contacts = reactive.derived(() => listContacts())
+const words = reactive(() => (draft ? draft.split(' ').length : 0))
+const contacts = reactive(() => listContacts())
 let saved = reactive<string>()
 </script>
 

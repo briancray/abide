@@ -45,7 +45,7 @@ import { type Work, workNow, workSince } from './work.ts'
 // `server` is the path below the docs app's `src` of the server file beside the example, where what
 // it calls takes options a <script server> export cannot (16.70): shown under the file importing it.
 const { code, server } = props<{ code: string; server?: string }>()
-const serverCode = reactive.derived(() =>
+const serverCode = reactive(() =>
     server === undefined ? '' : serverSource({ path: server }),
 )
 const form = groupOf(route.name())?.form
@@ -116,7 +116,7 @@ function watchWork(frame: Element): () => void {
 const QUIET = 1000
 const EVENTS = ['pointerdown', 'keydown', 'input', 'change'] as const
 
-const shownMarkup = reactive.derived(() => highlight(markup))
+const shownMarkup = reactive(() => highlight(markup))
 
 function counted(count: number, one: string, many: string): string {
     return `${count} ${count === 1 ? one : many}`

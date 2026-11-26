@@ -16,7 +16,7 @@ test('an await on a derived that drops a running stream resolves to what it hand
             await new Promise(() => {})
         })(),
     )
-    const shown = reactive.derived(() =>
+    const shown = reactive(() =>
         which() === 0 ? [] : streaming({ n: which() }),
     )
     const stop = watch(() => {

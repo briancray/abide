@@ -5,7 +5,7 @@ import getDeal from '../getDeal.server.ts'
 
 let id = reactive('d1')
 
-const deal = reactive.derived(() => getDeal({ id }))
+const deal = reactive(() => getDeal({ id }))
 </script>
 
 <div class="tabs">

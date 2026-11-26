@@ -11,7 +11,7 @@ onRefusal((refusal) => {
     if (refusal.status === 401) signedOut = true
 })
 
-const commission = reactive.derived(() => getCommission())
+const commission = reactive(() => getCommission())
 
 watch(principal.resolved, () => {
     signedOut = false

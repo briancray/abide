@@ -4,7 +4,7 @@ import { reactive } from '@abide/abide'
 import { topFive } from './topFive.ts'
 
 let by = reactive<'amount' | 'idle'>('amount')
-const top = reactive.derived(() => topFive(by))
+const top = reactive(() => topFive(by))
 
 const shown = (deal: { amount: number; idle: number }) =>
     by === 'amount' ? `$${deal.amount}` : `${deal.idle} days idle`

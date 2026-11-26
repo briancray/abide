@@ -51,10 +51,10 @@ import SiteTree from '#src/lib/SiteTree.abide'
             the document head. The deepest <code>&lt;title&gt;</code> wins over its layout's.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { route } from '@abide/abide'
+            import { reactive, route } from '@abide/abide'
             import getCompany from './getCompany.server.ts'
 
-            const company = reactive.derived(() => getCompany({ id: route.params.id }))
+            const company = reactive(() => getCompany({ id: route.params.id }))
             </script>
 
             <head><title>{company.name} — CRM</title></head>

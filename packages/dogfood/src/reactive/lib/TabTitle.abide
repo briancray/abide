@@ -2,7 +2,7 @@
 import { isServer, reactive, watch } from '@abide/abide'
 
 let seats = reactive(5)
-const total = reactive.derived(() => seats * 40)
+const total = reactive(() => seats * 40)
 
 watch(() => {
     if (isServer()) return

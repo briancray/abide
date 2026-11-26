@@ -30,7 +30,7 @@ import notSavedYet from './lib/NotSavedYet.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Flag a deal changed here and not yet reloaded">
-        <p>Read the deal inside a <code>reactive.derived</code>, and a write over it stands until the
+        <p>Read the deal inside a <code>reactive</code>, and a write over it stands until the
             handler answers again. Until then <code>synced</code> is false, so the page can say the
             change is only local. Reload, and the deal is the handler's again.</p>
         <Example code={notSavedYet}><NotSavedYet /></Example>

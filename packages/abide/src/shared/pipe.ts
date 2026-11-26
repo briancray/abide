@@ -56,7 +56,7 @@ export type PipeOptions<In = unknown> = {
 
 /**
  * A pipe: an async function from an item to its answer, rejected with a step's refusal, and a stream
- * pair an item stream is piped through. A value a page reads is a `reactive.derived` calling it.
+ * pair an item stream is piped through. A value a page reads is a derived `reactive` calling it.
  */
 export type Pipe<In, Out, Fanned extends boolean = false> = ((
     input: In,

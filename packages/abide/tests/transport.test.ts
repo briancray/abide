@@ -212,7 +212,7 @@ test('a streaming handler is framed as jsonl, a chunk per line, as it produces â
 async function elementsCopied(chunks: number): Promise<number> {
     const reverted = (globalThis as { REVERT_PEEK?: boolean | undefined })
         .REVERT_PEEK
-    const feed = reactive.derived(
+    const feed = reactive(
         async function* () {
             for (let index = 0; index < chunks; index += 1) {
                 await new Promise((resolve) => setImmediate(resolve))

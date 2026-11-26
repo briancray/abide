@@ -4,13 +4,13 @@ import { reactive } from '@abide/abide'
 let name = reactive('Ada Lovelace')
 let phone = reactive('')
 
-const initials = reactive.derived(() =>
+const initials = reactive(() =>
     name
         .split(' ')
         .map((word) => word.charAt(0))
         .join(''),
 )
-const filled = reactive.derived(() => [name, phone].filter(Boolean).length)
+const filled = reactive(() => [name, phone].filter(Boolean).length)
 </script>
 
 <div class="row">

@@ -9,7 +9,7 @@ const deals: Deal[] = [
 ]
 
 let largestFirst = reactive(false)
-const shown = reactive.derived(() =>
+const shown = reactive(() =>
     largestFirst ? sortBy(deals, (deal) => deal.amount, 'descending') : deals,
 )
 </script>

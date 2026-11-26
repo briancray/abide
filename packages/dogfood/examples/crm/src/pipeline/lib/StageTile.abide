@@ -4,7 +4,7 @@ import { props, reactive } from '@abide/abide'
 import getStage from '../getStage.server.ts'
 
 const { stage } = props<{ stage: string }>()
-const totals = reactive.derived(() => getStage({ stage }))
+const totals = reactive(() => getStage({ stage }))
 </script>
 
 <li class={totals.busy() ? 'opacity-40' : ''}>

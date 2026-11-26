@@ -11,7 +11,7 @@ const PAGE = `<script>
 import { reactive } from '@abide/abide'
 import getTotal from '#src/totals/getTotal.server.ts'
 
-const total = reactive.derived(() => getTotal())
+const total = reactive(() => getTotal())
 </script>
 
 <main><p id="total">{total()}</p></main>`

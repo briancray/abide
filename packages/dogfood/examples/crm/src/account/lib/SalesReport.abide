@@ -7,7 +7,7 @@ const REGIONS = ['north', 'south']
 
 let region = reactive('north')
 
-const rows = reactive.derived(() => salesReport({ region }))
+const rows = reactive(() => salesReport({ region }))
 
 function refusal() {
     const failed = rows.error()

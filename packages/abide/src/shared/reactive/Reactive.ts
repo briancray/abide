@@ -117,7 +117,7 @@ export type Store<Stored> = {
 export type Identity<Stored> = (next: Stored, previous: Stored) => unknown
 
 /**
- * What `reactive` and `reactive.derived` take: the gates on the way in, what makes a write a repeat, where the
+ * What `reactive` takes: the gates on the way in, what makes a write a repeat, where the
  * value is stored and what tells its elements apart — never a source's (11.81).
  *
  * `Failures` IS INFERRED FROM `transform`, which is what makes `s.error` and `s.isError`
@@ -191,7 +191,7 @@ export type ReactiveOptions<
 /**
  * What a cell is built with: a value's options, and the SOURCE's beside them — the life, the pace,
  * the tags and the filing a `memo` and a handler declare for each entry (5.24, 11.34, 11.43, 11.45).
- * Not app surface: `reactive` and `reactive.derived` refuse these at construction (11.81), and a `memo` hands
+ * Not app surface: `reactive` refuses these at construction (11.81), and a `memo` hands
  * them to its entries.
  */
 export type CellOptions<

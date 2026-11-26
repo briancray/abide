@@ -4,7 +4,7 @@ import { reactive } from '@abide/abide'
 let seats = reactive(5)
 let price = reactive(40)
 let note = reactive('')
-const total = reactive.derived(() => seats * price)
+const total = reactive(() => seats * price)
 </script>
 
 <p>{seats} seats at ${price} each: ${total}</p>

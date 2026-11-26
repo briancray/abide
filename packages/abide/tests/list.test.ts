@@ -1577,7 +1577,7 @@ test("a list over a Map's values shows a patch written through get — 32.33", a
 import { reactive } from '@abide/abide'
 
 const byId = reactive(new Map([['a', { id: 'a', n: 1 }], ['b', { id: 'b', n: 2 }]]))
-const rows = reactive.derived(() => [...byId.values()])
+const rows = reactive(() => [...byId.values()])
 </script>
 
 <ul id="list">{#for row of rows key row.id}<li data-id={row.id}>{row.n}</li>{/for}</ul>
@@ -1883,7 +1883,7 @@ const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
     const warn = console.warn
     console.warn = (...args: unknown[]) => void warned.push(args.join(' '))
     const call = wire('GET', address) as () => unknown
-    const copy = reactive.derived(() => call()) as unknown as {
+    const copy = reactive(() => call()) as unknown as {
         busy(): boolean
     }
     const settle = async (): Promise<void> => {

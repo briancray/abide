@@ -31,8 +31,8 @@ import Section from '#src/lib/Section.abide'
             import listContacts from './listContacts.server.ts'
             import listDeals from './listDeals.server.ts'
 
-            const contacts = reactive.derived(() => listContacts())
-            const deals = reactive.derived(() => listDeals())
+            const contacts = reactive(() => listContacts())
+            const deals = reactive(() => listDeals())
             </script>
 
             <p>{contacts.length} contacts, {deals.length} deals</p>
@@ -42,14 +42,14 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Ask the derived value that reads a handler, not the handler">
         <p>A handler's call answers a promise, which has no status to ask. Read the stage inside
-            a <code>reactive.derived</code>, and <code>ready</code> over it is true once that stage has a
+            a <code>reactive</code>, and <code>ready</code> over it is true once that stage has a
             figure to show.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { ready } from '@abide/abide'
+            import { reactive, ready } from '@abide/abide'
             import getStage from './getStage.server.ts'
 
-            const won = reactive.derived(() => getStage({ stage: 'won' }))
+            const won = reactive(() => getStage({ stage: 'won' }))
             </script>
 
             <p>{ready(won) ? \`\${won.count} won\` : 'loading…'}</p>

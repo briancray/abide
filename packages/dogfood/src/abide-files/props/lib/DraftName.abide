@@ -2,7 +2,7 @@
 import { props, reactive } from '@abide/abide'
 
 const { name } = props<{ name: string }>()
-let draft = reactive.derived(() => name)
+let draft = reactive(() => name)
 </script>
 
 <input bind:value={draft}>

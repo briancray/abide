@@ -1,7 +1,7 @@
 // 11.2, 11.4 — A MEMO: a function's value kept per `Args` key, and the one keyed mechanism a handler is
-// built on too (16.6). Only `reactive` and `reactive.derived` hand an app a `Reactive`: a memo's entries are
+// built on too (16.6). Only `reactive` hands an app a `Reactive`: a memo's entries are
 // cells it never hands out, and a call answers the promise of the entry's value — or the stream of its
-// chunks — carrying the entry for a `reactive.derived` handing it back whole to adopt (16.107).
+// chunks — carrying the entry for a derived `reactive` handing it back whole to adopt (16.107).
 //
 // A FACE OVER THE KEYED VALUE. The entries, their filing per request (11.32), the canonical key
 // (11.24), the args gate (11.27), `ttl` (11.45), tags and the pattern triggers are the keyed value's,
@@ -70,7 +70,7 @@ export type Memo<Args, Result, Value = MemoValue<Result>> = ((
     ? AsyncIterable<Chunk>
     : Promise<Value>) & {
     // Typed only, as a handler call's is: the refusals `fn`'s answer carries, which a
-    // `reactive.derived` adopting the call serves as its own (11.12).
+    // a derived `reactive` adopting the call serves as its own (11.12).
     readonly [CALL_ENTRY]?:
         | { readonly value: Value; readonly failures: AdoptedFailures<Result> }
         | undefined

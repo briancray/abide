@@ -18,16 +18,16 @@ import { slice } from './slice.ts'
 
 const { show } = props<{ show: Show }>()
 
-const code = reactive.derived(() =>
+const code = reactive(() =>
     show.kind === 'code' ? source({ path: show.value }) : '',
 )
-const rows = reactive.derived(() =>
+const rows = reactive(() =>
     show.kind === 'name' ? name({ name: show.value }) : [],
 )
-const quoted = reactive.derived(() =>
+const quoted = reactive(() =>
     show.kind === 'clause' ? clause({ number: show.value }) : undefined,
 )
-const reported = reactive.derived(() =>
+const reported = reactive(() =>
     show.kind === 'results' ? results({ path: show.value }) : null,
 )
 const page =

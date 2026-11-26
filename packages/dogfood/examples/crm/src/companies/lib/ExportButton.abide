@@ -5,7 +5,7 @@ import exportCompanies from '../exportCompanies.server.ts'
 import reportedErrors from '../reportedErrors.server.ts'
 
 let told = reactive('—')
-const reported = reactive.derived(() => reportedErrors())
+const reported = reactive(() => reportedErrors())
 
 async function runExport() {
     try {

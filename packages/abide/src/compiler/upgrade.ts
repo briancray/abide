@@ -8,10 +8,12 @@ import { toComputed } from './toComputed.ts'
 import { toComputedCall } from './toComputedCall.ts'
 import { toDerived } from './toDerived.ts'
 import { type Note, toFetchAndHandle } from './toFetchAndHandle.ts'
+import { toHeldFunction } from './toHeldFunction.ts'
 import { toJob } from './toJob.ts'
 import { toKey } from './toKey.ts'
 import { toMemo } from './toMemo.ts'
 import { toNamedParts } from './toNamedParts.ts'
+import { toReactive } from './toReactive.ts'
 import { toRefuseNamed } from './toRefuseNamed.ts'
 import { toRpc } from './toRpc.ts'
 import { toServedValues } from './toServedValues.ts'
@@ -106,6 +108,11 @@ const MIGRATIONS: Migration[] = [
     { version: '0.144.0', migrate: toServedValues },
     // 38.231 — the five verbs are one `rpc`, and a handler file is a server file.
     { version: '0.145.0', migrate: toRpc },
+    // 38.232 — a function `reactive` held is handed back by a body: ahead of 38.233, while every
+    // `reactive` call is still the value form.
+    { version: '0.145.0', migrate: eachSource(toHeldFunction) },
+    // 38.233 — `reactive.derived` is `reactive`.
+    { version: '0.145.0', migrate: eachSource(toReactive) },
 ]
 
 /**

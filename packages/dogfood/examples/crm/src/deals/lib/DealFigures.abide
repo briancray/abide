@@ -8,7 +8,7 @@ let deals = reactive<Deal[]>([
     { name: 'Langley Research seats', amount: 15_000, probability: 0.35 },
 ])
 
-const weighted = reactive.derived(() =>
+const weighted = reactive(() =>
     deals.reduce((sum, deal) => sum + (deal.amount ?? 0) * deal.probability, 0),
 )
 

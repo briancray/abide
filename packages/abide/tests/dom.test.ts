@@ -67,7 +67,7 @@ test('a write that changes nothing touches no node', () => {
 // per fifty rows, and not one test that counts wakes moves.
 test('a load starting touches no node', async () => {
     const answer = 1
-    const value = reactive.derived(() => Promise.resolve(answer))
+    const value = reactive(() => Promise.resolve(answer))
     await value
     const stops = bind(value as unknown as () => number, 50)
 

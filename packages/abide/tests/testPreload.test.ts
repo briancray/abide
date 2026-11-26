@@ -354,7 +354,7 @@ import { reactive } from '@abide/abide'
 
 import listThings from '../listThings.server.ts'
 
-const things = reactive.derived(() => listThings())
+const things = reactive(() => listThings())
 </script>
 
 <ul>
@@ -473,7 +473,7 @@ import { reactive } from '@abide/abide'
 
 let out = reactive('none')
 let pressedTimes = 0
-const greeting = reactive.derived(() => greet())
+const greeting = reactive(() => greet())
 const press = async () => {
     pressedTimes += 1
     try {
@@ -685,7 +685,7 @@ test('a process that never loaded @abide/abide/test keeps no load — 38.206', a
 import { memo, reactive } from '${import.meta.dir}/../src/shared/reactive/index.ts'
 import { pendingWork } from '${import.meta.dir}/../src/shared/reactive/producer.ts'
 
-const waiting = reactive.derived(() => new Promise(() => {}))
+const waiting = reactive(() => new Promise(() => {}))
 waiting.busy()
 console.log(JSON.stringify(pendingWork().loading))
 `)

@@ -7,11 +7,11 @@ const COUNT = Math.ceil(DEALS.length / PER_PAGE)
 let page = reactive(1)
 const list = pagination({ count: COUNT, page })
 // Five pages around the one showing, slid in from the ends: no first, no last, no gaps.
-const nearby = reactive.derived(() => {
+const nearby = reactive(() => {
     const from = Math.max(1, Math.min(page - 2, COUNT - 4))
     return Array.from({ length: 5 }, (_, at) => from + at)
 })
-const shown = reactive.derived(() =>
+const shown = reactive(() =>
     DEALS.slice((page - 1) * PER_PAGE, page * PER_PAGE),
 )
 </script>

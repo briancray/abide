@@ -43,7 +43,7 @@ beforeAll(unfileProducers)
 // `runs before a read: 2`; and dropping the bare branch leaves the mark unmade — `runs after a read: 1`.
 test('a bare invalidate marks every load, starts none of them, and skips a value with no producer — 13.6, 7.3', async () => {
     let runs = 0
-    const loaded = reactive.derived(async () => {
+    const loaded = reactive(async () => {
         runs += 1
         return runs
     })
@@ -73,11 +73,11 @@ test('a bare invalidate marks every load, starts none of them, and skips a value
 test('a bare refresh reloads the subscribed loads and marks the rest — 13.7', async () => {
     let readRuns = 0
     let unreadRuns = 0
-    const read = reactive.derived(async () => {
+    const read = reactive(async () => {
         readRuns += 1
         return readRuns
     })
-    const unread = reactive.derived(async () => {
+    const unread = reactive(async () => {
         unreadRuns += 1
         return unreadRuns
     })
@@ -104,11 +104,11 @@ test('a bare refresh reloads the subscribed loads and marks the rest — 13.7', 
 test('a bare refresh reruns no synchronous derivation — 13.6', async () => {
     let loads = 0
     let derivationRuns = 0
-    const source = reactive.derived(async () => {
+    const source = reactive(async () => {
         loads += 1
         return 2
     })
-    const doubled = reactive.derived(() => {
+    const doubled = reactive(() => {
         derivationRuns += 1
         return source() * 2
     })
@@ -142,7 +142,7 @@ test('a guard over the bare selection subscribes once and wakes twice for n relo
     const loads = deferredLoads()
     const values = []
     for (let index = 0; index < 10; index += 1)
-        values.push(reactive.derived(() => loads.load()))
+        values.push(reactive(() => loads.load()))
     // The ten are in flight from construction; land them so the guards open on a settled scope.
     loads.settleAll(1)
     await Bun.sleep(1)
@@ -189,11 +189,11 @@ test('a guard over the bare selection subscribes once and wakes twice for n relo
 test('refreshing on reconnect reloads what is read and marks the rest', async () => {
     let ordersRuns = 0
     let unreadRuns = 0
-    const orders = reactive.derived(async () => {
+    const orders = reactive(async () => {
         ordersRuns += 1
         return ordersRuns
     })
-    const archive = reactive.derived(async () => {
+    const archive = reactive(async () => {
         unreadRuns += 1
         return unreadRuns
     })

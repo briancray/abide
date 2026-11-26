@@ -28,7 +28,7 @@ import { memo, reactive } from '@abide/abide'
 import call from '#src/totals/${call}.server.ts'
 import Grand from './Grand.abide'
 
-const total = reactive.derived(() => call({ id: '${call}' }))
+const total = reactive(() => call({ id: '${call}' }))
 </script>
 
 <head><title>${title}</title></head>
@@ -38,7 +38,7 @@ const GRAND = `<script>
 import { reactive } from '@abide/abide'
 import getTick from '#src/totals/getTick.server.ts'
 
-const total = reactive.derived(() => getTick({ id: 'grand' }))
+const total = reactive(() => getTick({ id: 'grand' }))
 </script>
 
 <b>{total.busy() ? 'loading' : total().total}</b>`
@@ -58,7 +58,7 @@ import { reactive } from '@abide/abide'
 import getTick from '#src/totals/getTick.server.ts'
 </script>
 
-<main><p>{reactive.derived(() => getTick({ id: 'inline' })).busy() ? 'loading' : 'done'}</p></main>`
+<main><p>{reactive(() => getTick({ id: 'inline' })).busy() ? 'loading' : 'done'}</p></main>`
 
 // A BARE PROBE IN MARKUP reads every load in its scope, so it is built once the siblings after it
 // have been set up — as the browser's is, where every setup has run before a region chooses.

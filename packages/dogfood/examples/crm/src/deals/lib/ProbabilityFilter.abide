@@ -8,7 +8,7 @@ const DEALS = [
 ]
 
 let likely = reactive<readonly [number, number]>([50, 100])
-const shown = reactive.derived(() =>
+const shown = reactive(() =>
     DEALS.filter(
         (deal) =>
             deal.probability >= likely[0] && deal.probability <= likely[1],

@@ -6,7 +6,7 @@ import { checkParts } from './checkParts.ts'
 import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import { derived, type Reactive, reactive } from './reactive/index.ts'
+import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving } from './roving.ts'
 
@@ -45,14 +45,14 @@ export type Tabs<Item> = {
 /** WAI-ARIA's tabs: a list of tabs and the panels they show, as parts to spread. */
 export function tabs<Item>(options: TabsOptions<Item>): Tabs<Item> {
     const keyOf = (item: Item) => keyOfItem(options.key, item)
-    const keysOf = derived((): readonly string[] => {
+    const keysOf = reactive((): readonly string[] => {
         const written: string[] = []
         for (const item of live(options.items)) written.push(keyOf(item))
         return written
     })
     const picked = options.selected ?? reactive<string | undefined>(undefined)
     // 51.34 — a key no tab has selects the first.
-    const current = derived((): string | undefined => {
+    const current = reactive((): string | undefined => {
         const listed = keysOf()
         const wanted = picked()
         for (const each of listed) if (each === wanted) return wanted

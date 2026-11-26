@@ -10,7 +10,7 @@ export const getNotes = ({ id }: { id: string }) => NOTES[id] ?? []
 <script>
 import { reactive } from '@abide/abide'
 
-const notes = reactive.derived(() => getNotes({ id: 'd1' }))
+const notes = reactive(() => getNotes({ id: 'd1' }))
 </script>
 
 <ul class="fields stacked">

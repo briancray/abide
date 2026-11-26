@@ -6,7 +6,7 @@
 import { keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
-import { derived, type Reactive } from './reactive/index.ts'
+import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving } from './roving.ts'
 import { type Picked, Selection } from './Selection.ts'
@@ -49,7 +49,7 @@ export function toggleGroup<Item, Multiple extends boolean = false>(
         many,
     )
     const keyOf = (item: Item) => keyOfItem(options.key, item)
-    const keysOf = derived((): readonly string[] => {
+    const keysOf = reactive((): readonly string[] => {
         const written: string[] = []
         for (const item of live(options.items)) written.push(keyOf(item))
         return written
@@ -60,7 +60,7 @@ export function toggleGroup<Item, Multiple extends boolean = false>(
 
     // 51.114 — picking one, the key in the tab order: the one picked, the first where none is listed.
     // A computed, as `tabs`' is: every radio's `tabindex` reads it, so a pick walks the keys once.
-    const current = derived((): string | undefined => {
+    const current = reactive((): string | undefined => {
         const listed = keysOf()
         const now = picks.selected() as string | undefined
         return now !== undefined && listed.includes(now) ? now : listed[0]

@@ -6,7 +6,7 @@ import askAssistant from '../askAssistant.server.ts'
 const QUESTION = 'Which company is Ada at?'
 
 let asked = reactive(false)
-const events = reactive.derived(() =>
+const events = reactive(() =>
     asked
         ? askAssistant({ messages: [{ role: 'user', content: QUESTION }] })
         : [],

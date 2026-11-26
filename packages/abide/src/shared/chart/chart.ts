@@ -14,7 +14,7 @@ import { sizeBinding } from '../element/elementSize.ts'
 import { number, percent } from '../format/index.ts'
 import { type Live, live } from '../live.ts'
 import { randomToken } from '../randomToken.ts'
-import { derived, reactive, watch } from '../reactive/index.ts'
+import { reactive, watch } from '../reactive/index.ts'
 import type { Disposer } from '../reactive/watch.ts'
 import { scrub } from '../scrub.ts'
 import {
@@ -218,7 +218,7 @@ export function chart(options: ChartOptions): ChartParts {
     // The width the root was last measured at, read without following it.
     const measuredWidth = () => size.peek()?.width ?? 0
 
-    const plot = derived(() => {
+    const plot = reactive(() => {
         const series = live(options.series)
         const normalize = live(options.normalize) === true
         const zero = live(options.zero) === true
@@ -578,7 +578,7 @@ export function chart(options: ChartOptions): ChartParts {
     }
 
     // What the readout reads at the x the crosshair is on.
-    const readout = derived((): ChartReadout | undefined => {
+    const readout = reactive((): ChartReadout | undefined => {
         const index = hovered()
         const drawn = plot()
         if (index < 0 || index >= drawn.xs.length) return undefined

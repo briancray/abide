@@ -3,7 +3,7 @@ import { reactive, scrollEdges } from '@abide/abide'
 
 import listDeals from '../listDeals.server.ts'
 
-const deals = reactive.derived(() => listDeals())
+const deals = reactive(() => listDeals())
 </script>
 
 <ol

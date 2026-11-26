@@ -3,10 +3,8 @@ import { listbox, reactive } from '@abide/abide'
 
 import listDeals from '../listDeals.server.ts'
 
-const deals = reactive.derived(() => listDeals())
-const leads = reactive.derived(() =>
-    deals.filter((deal) => deal.stage === 'lead'),
-)
+const deals = reactive(() => listDeals())
+const leads = reactive(() => deals.filter((deal) => deal.stage === 'lead'))
 let calling = reactive('')
 
 const queue = listbox({

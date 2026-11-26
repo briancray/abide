@@ -5,7 +5,7 @@ import listContacts from '../listContacts.server.ts'
 
 type Contact = { id: string; name: string; company: string }
 
-const contacts = reactive.derived(() => listContacts())
+const contacts = reactive(() => listContacts())
 let contact = reactive<Contact | undefined>(undefined)
 const box = combobox({
     id: 'deal-contact',

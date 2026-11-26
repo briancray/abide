@@ -5,7 +5,7 @@ import feed from '../feed.server.ts'
 import logToFeed from '../logToFeed.server.ts'
 
 const account = 'hopper-co'
-const entries = reactive.derived(() => feed({ account }))
+const entries = reactive(() => feed({ account }))
 </script>
 
 <ul class="fields stacked">

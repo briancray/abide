@@ -12,7 +12,7 @@ import { reactive } from '@abide/abide'
 
 import DealItem from './DealItem.abide'
 
-const deals = reactive.derived(() => listDeals())
+const deals = reactive(() => listDeals())
 let showWon = reactive(false)
 </script>
 

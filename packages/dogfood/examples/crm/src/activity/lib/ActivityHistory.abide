@@ -3,7 +3,7 @@ import { reactive } from '@abide/abide'
 
 import olderActivity from '../olderActivity.server.ts'
 
-const entries = reactive.derived(() => olderActivity())
+const entries = reactive(() => olderActivity())
 </script>
 
 <ul class="fields stacked">

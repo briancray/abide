@@ -19,7 +19,7 @@ import { IMAGE_TYPES } from '#shared/IMAGE_TYPES.ts'
 import { namedLogger } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
 import { gateOf } from '#shared/reactive/argsContract.ts'
-import { processWideDerived, type Reactive } from '#shared/reactive/index.ts'
+import { processWide, type Reactive } from '#shared/reactive/index.ts'
 import { parseRoutePattern } from '#shared/routePattern.ts'
 import { argsInURL, rpcRequest } from '#shared/rpcRequest.ts'
 
@@ -221,7 +221,7 @@ function overTable<Built>(
 ): Reactive<Built> {
     let found = built.get(handlers)
     if (found === undefined) {
-        found = processWideDerived(() => build(handlers))
+        found = processWide(() => build(handlers))
         built.set(handlers, found)
     }
     return found

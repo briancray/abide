@@ -52,7 +52,7 @@ import Section from './Section.abide'
 const { tests } = props<{
     tests: readonly { path: string; from: readonly string[] }[]
 }>()
-const cases = reactive.derived(() =>
+const cases = reactive(() =>
     testCases({
         tests: tests.map((one) => JSON.stringify(one)),
     }),

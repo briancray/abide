@@ -15,9 +15,7 @@ const threshold = slider({
     name: 'probability',
     format: (each) => `${each}%`,
 })
-const shown = reactive.derived(() =>
-    DEALS.filter((deal) => deal.probability >= least),
-)
+const shown = reactive(() => DEALS.filter((deal) => deal.probability >= least))
 </script>
 
 <form class="fields stacked">

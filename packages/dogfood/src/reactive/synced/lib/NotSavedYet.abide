@@ -9,7 +9,7 @@ export const getDeal = ({ id }: { id: string }) => ({
 <script>
 import { reactive, synced } from '@abide/abide'
 
-let deal = reactive.derived(() => getDeal({ id: 'd2' }))
+let deal = reactive(() => getDeal({ id: 'd2' }))
 </script>
 
 <p>{deal.name}: {deal.stage}</p>

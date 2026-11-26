@@ -1,7 +1,7 @@
 <script>
 import { reactive } from '@abide/abide'
 
-let price = reactive((amount: number) => `$${amount}`)
+let price = reactive(() => (amount: number) => `$${amount}`)
 
 function shown(amount: number): string {
     const format = price

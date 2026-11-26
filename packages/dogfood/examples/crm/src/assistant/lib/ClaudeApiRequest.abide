@@ -6,7 +6,7 @@ import askClaude from '../askClaude.server.ts'
 const QUESTION = 'Which company is Ada at?'
 
 let asked = reactive(false)
-const events = reactive.derived(() =>
+const events = reactive(() =>
     asked ? askClaude({ messages: [{ role: 'user', content: QUESTION }] }) : [],
 )
 </script>

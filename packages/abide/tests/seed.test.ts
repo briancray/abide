@@ -30,7 +30,7 @@ const PAGE = `<script>
 import { reactive } from '@abide/abide'
 import getInvoice from '#src/invoices/getInvoice.server.ts'
 
-const invoice = reactive.derived(() => getInvoice({ id: '4021' }))
+const invoice = reactive(() => getInvoice({ id: '4021' }))
 </script>
 
 <main><p id="total">{invoice().id}</p></main>`
@@ -63,9 +63,9 @@ import getLines from '#src/totals/getLines.server.ts'
 import getMissing from '#src/totals/getMissing.server.ts'
 import getTotal from '#src/totals/getTotal.server.ts'
 
-const total = reactive.derived(() => getTotal({ id: 't' }))
-const missing = reactive.derived(() => getMissing({ id: 'm' }))
-const lines = reactive.derived(() => getLines({ id: 'l' }))
+const total = reactive(() => getTotal({ id: 't' }))
+const missing = reactive(() => getMissing({ id: 'm' }))
+const lines = reactive(() => getLines({ id: 'l' }))
 </script>
 
 <main><p>{total.busy()}</p><p>{missing.error()}</p><p>{lines.busy()}</p></main>`
@@ -95,7 +95,7 @@ const FEED_PAGE = `<script>
 import { reactive } from '@abide/abide'
 import getFeed from '#src/feed/getFeed.server.ts'
 
-const lines = reactive.derived(() => getFeed())
+const lines = reactive(() => getFeed())
 </script>
 
 <main><p>{lines.busy()}</p></main>`
@@ -110,7 +110,7 @@ const SHELF_PAGE = `<script>
 import { reactive } from '@abide/abide'
 import books from '#src/shelf/books.server.ts'
 
-const shelved = reactive.derived(() => books())
+const shelved = reactive(() => books())
 </script>
 
 <main><p>{shelved()}</p></main>`
@@ -132,7 +132,7 @@ const ACCOUNT_PAGE = `<script>
 import { reactive } from '@abide/abide'
 import getAccount from '#src/account/getAccount.server.ts'
 
-const account = reactive.derived(() => getAccount())
+const account = reactive(() => getAccount())
 </script>
 
 <main><p>{account.busy()}</p></main>`
@@ -447,7 +447,7 @@ test('a seeded stream whose transcript passes ABIDE_MAX_STREAM_BUFFER_SIZE is no
     try {
         const handler = { address: '/reports/rows' }
         const streamOf = (count: number) =>
-            reactive.derived(async function* () {
+            reactive(async function* () {
                 for (let at = 0; at < count; at += 1) yield 'aaaa'
             })
         const over = streamOf(2)

@@ -48,7 +48,7 @@ test('a filed value whose first run in a render reads itself fails that run â€” 
         await hosted(`let stop = false
 let runs = 0
 let failed = ''
-const self = reactive.derived(async () => {
+const self = reactive(async () => {
     runs += 1
     if (stop) {
         try {
@@ -76,7 +76,7 @@ test("a value a setup builds outside every request is no module's declaration â€
 const outer = collectWatches([])
 let copy
 try {
-    copy = reactive.derived(async () => {
+    copy = reactive(async () => {
         runs += 1
         await Bun.sleep(50)
         return 1
@@ -97,7 +97,7 @@ test('a value built outside every request that nothing reaches is not built by a
     const runs = (await hosted(`let runs = 0
 const built = () => {
     for (let one = 0; one < 100; one += 1)
-        void reactive.derived(async () => {
+        void reactive(async () => {
             runs += 1
             await Bun.sleep(50)
             return 1

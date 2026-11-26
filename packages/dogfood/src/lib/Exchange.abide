@@ -131,7 +131,7 @@ const {
     pick?: readonly string[]
 }>()
 
-const answer = reactive.derived(() =>
+const answer = reactive(() =>
     exchange({
         method,
         path,
@@ -145,7 +145,7 @@ const requested = [
     ...headers,
     ...(body === undefined ? [] : ['', body]),
 ].join('\n')
-const answered = reactive.derived(() =>
+const answered = reactive(() =>
     answer
         ? [
               `HTTP/1.1 ${answer.status}`,

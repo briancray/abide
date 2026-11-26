@@ -4,7 +4,7 @@ import { reactive } from '@abide/abide'
 import searchDeals from '../searchDeals.server.ts'
 
 let q = reactive('')
-const found = reactive.derived(() => searchDeals({ q }))
+const found = reactive(() => searchDeals({ q }))
 </script>
 
 <label>search deals

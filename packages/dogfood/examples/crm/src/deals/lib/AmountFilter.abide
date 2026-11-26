@@ -18,7 +18,7 @@ const band = slider({
     name: 'amount',
     format: (each) => format.money(each, { notation: 'compact' }),
 })
-const shown = reactive.derived(() =>
+const shown = reactive(() =>
     DEALS.filter(
         (deal) => deal.amount >= amount[0] && deal.amount <= amount[1],
     ),

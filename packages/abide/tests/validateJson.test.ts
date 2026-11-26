@@ -642,7 +642,7 @@ test('a body is typed from the body, whatever schema gates it — 19.23, 19.24',
     const total: number = (await invoice({ id: 2 })).total
     expect(total).toBe(20)
 
-    const label = reactive.derived(() => 'seats', {
+    const label = reactive(() => 'seats', {
         schema: jsonSchema({ type: 'string' }),
     })
     const read: string = label()
@@ -655,7 +655,7 @@ test('a body is typed from the body, whatever schema gates it — 19.23, 19.24',
             validate: (value) => ({ value: value as { id: number } }),
         },
     }
-    const loaded = reactive.derived(async () => ({ id: 7 }), {
+    const loaded = reactive(async () => ({ id: 7 }), {
         schema: standard,
     })
     const id: number = (await loaded).id

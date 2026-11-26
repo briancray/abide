@@ -6,7 +6,7 @@ import Markdown from '#src/lib/Markdown.abide'
 import summarizeDeal from '../summarizeDeal.server.ts'
 
 let asked = reactive(false)
-const summary = reactive.derived(() => (asked ? summarizeDeal() : []))
+const summary = reactive(() => (asked ? summarizeDeal() : []))
 </script>
 
 <div class="row">

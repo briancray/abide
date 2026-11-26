@@ -9,7 +9,7 @@ const DEALS = [
 
 let stage = reactive('lead')
 let note = reactive('')
-const total = reactive.derived(() => {
+const total = reactive(() => {
     let sum = 0
     for (const deal of DEALS) if (deal.stage === stage) sum += deal.amount
     return sum

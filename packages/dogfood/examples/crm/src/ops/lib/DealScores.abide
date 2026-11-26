@@ -3,7 +3,7 @@ import { reactive } from '@abide/abide'
 
 import getDealScores from '../getDealScores.server.ts'
 
-const scores = reactive.derived(() => getDealScores())
+const scores = reactive(() => getDealScores())
 </script>
 
 <ul class="fields stacked">

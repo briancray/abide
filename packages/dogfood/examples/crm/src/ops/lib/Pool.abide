@@ -3,7 +3,7 @@ import { reactive } from '@abide/abide'
 
 import getPool from '../getPool.server.ts'
 
-const times = reactive.derived(() => getPool())
+const times = reactive(() => getPool())
 </script>
 
 <ul class="fields stacked">
