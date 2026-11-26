@@ -6,7 +6,7 @@ import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
 
 import { GET, store } from '#server'
-import { flushSync, isFailed, memo, reactive, watch } from '#shared'
+import { flushSync, isFailed, memo, reactive, refuse, watch } from '#shared'
 import { KEYED_OF } from '#shared/reactive/createMemo.ts'
 import type { Reactive } from '#shared/reactive/Reactive.ts'
 
@@ -184,4 +184,29 @@ test('a write takes the value alone only where the memo takes no args — 11.80'
         })
     }
     expect(typeof typed).toBe('function')
+})
+
+// 5.20 — THE BUSY A WINDOW HOLDS AN ENTRY UNDER ENDS WHEN IT STARTS IT: an entry that then adopts a call
+// refused at once has no load of its own to end, and an await on it resolves to the refusal.
+//
+// THE REVERT: drop the `loading = false` `startDeferred` makes before it starts the producer; the
+// await reads `hang`, and the entry reports busy over a refusal it has already landed.
+test('an entry a window starts onto a refused call settles its awaits — 5.20', async () => {
+    const tooBig = refuse.named('TooBig', {
+        status: 413,
+        schema: (value: unknown) => value as { n: number },
+    })
+    const bounded = GET(({ n }: { n: number }) => (n > 10 ? tooBig({ n }) : n))
+    const paced = memo(bounded, { debounce: 10 })
+    const shown = reactive.derived(() => paced({ n: 99 }))
+    const answered = await Promise.race([
+        Promise.resolve(shown).then(
+            (value) => `resolved ${String(value)}`,
+            (failed: Error) => `refused ${failed.name}`,
+        ),
+        Bun.sleep(300).then(() => 'hang'),
+    ])
+    expect(`${answered}, busy ${shown.busy()}`).toBe(
+        'refused TooBig, busy false',
+    )
 })

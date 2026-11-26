@@ -3357,7 +3357,12 @@ function open(cell: Cell, opening: unknown): void {
 export function startDeferred(value: unknown): void {
     const cell = cellOf(value)
     cell.held = false
+    // 5.20: THE BUSY WAS THE WINDOW'S, and it ends with the hold. The run sets its own where it
+    // loads; one that adopts a call — settled, or refused at once — has nothing else to clear it,
+    // and an await on the entry waited on a busy no load owned.
+    cell.loading = false
     startProducer(cell)
+    if (!cell.loading) probesMoved(cell)
     // 5.25: an adopter left serving the key it stood on hears the start, and 11.16 clears it.
     if (!cell.servable) cascade(cell)
 }
