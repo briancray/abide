@@ -921,6 +921,9 @@ running its function, and MUST keep there what the entry produces and what its o
 11.80 A `memo` given a `schema`, a `transform` or an `identity` MUST apply each to every entry's value
 as 4.3, 4.6 and 5.3 apply them to a `reactive`'s.
 
+11.81 `m.set` and `m.patch` MUST take the write alone only where the `memo` takes no `Args` at all,
+and MUST take `args` before it where its `Args` are optional.
+
 # 12. Effects
 
 12.1 A `Disposer` MUST run before each rerun of its `Effect`, and once more at teardown.

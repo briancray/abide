@@ -89,3 +89,27 @@ test("a handler's store is any store, as a memo's is — 16.110", () => {
     }
     expect(typeof typed).toBe('function')
 })
+
+// 11.81 — A LONE ARGUMENT TO A WRITE IS THE VALUE only where the memo takes no args at all: with args
+// that are optional, `m.set({ page: 2 })` could name the entry or be its value, so the args are
+// named. Typed, never run; the `@ts-expect-error` lines are the assertion. THE REVERT: type `Written`
+// by `undefined extends Args` again; the two directives go unused.
+test('a write takes the value alone only where the memo takes no args — 11.81', () => {
+    const shelf = memo(() => ['dune'])
+    const paged = memo((query?: { page: number }) => [query?.page ?? 1])
+    const typed = (): void => {
+        shelf.set(['emma'])
+        shelf.patch((titles) => {
+            titles.push('emma')
+        })
+        paged.set(undefined, [1])
+        paged.set({ page: 2 }, [2])
+        // @ts-expect-error the args are optional, so the entry is named
+        paged.set([2])
+        // @ts-expect-error
+        paged.patch((pages) => {
+            pages.push(3)
+        })
+    }
+    expect(typeof typed).toBe('function')
+})

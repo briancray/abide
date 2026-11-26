@@ -50,25 +50,24 @@ export type Memo<Args, Result, Value = MemoValue<Result>> = ((
     : Promise<Value>) & {
     invalidate(pattern?: Partial<Args>): void
     refresh(pattern?: Partial<Args>): void
-    set(
-        ...given: undefined extends Args
-            ? [value: Value] | [args: Args, value: Value]
-            : [args: Args, value: Value]
-    ): void
-    patch(
-        ...given: undefined extends Args
-            ? | [mutate: (value: Value) => void]
-              | [args: Args, mutate: (value: Value) => void]
-            : [args: Args, mutate: (value: Value) => void]
-    ): void
+    set(...given: Written<Args, Value>): void
+    patch(...given: Written<Args, (value: Value) => void>): void
     readable(
         ...args: undefined extends Args ? [args?: Args] : [args: Args]
     ): ReadableStream<Value>
 }
 
 /**
+ * 11.81 — what an owner's write is handed: `(args, written)`, or `(written)` alone where the value takes
+ * no args at all. Where its args are optional a lone argument could be either, so the args are named.
+ */
+export type Written<Args, What> = [Args] extends [undefined]
+    ? [written: What] | [args: Args, written: What]
+    : [args: Args, written: What]
+
+/**
  * A write's args and what it writes: `(args, written)`, or `(written)` alone for a memo whose args are
- * absent — the one-argument spelling a call without args has (11.77).
+ * absent — the one-argument spelling a call without args has (11.77, 11.81).
  */
 export function writeOf(given: unknown[]): [args: unknown, written: unknown] {
     return given.length === 1 ? [undefined, given[0]] : [given[0], given[1]]

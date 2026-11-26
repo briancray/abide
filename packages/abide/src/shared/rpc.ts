@@ -43,6 +43,7 @@ import {
     type MemoValue,
     readableOf,
     writeOf,
+    type Written,
 } from './reactive/createMemo.ts'
 import { DECLARED_TAGS } from './reactive/DECLARED_TAGS.ts'
 import {
@@ -117,19 +118,10 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ((
 >) & {
     method: Method
     description: string | undefined
-    /** 11.77 — the owner's write of the value for `args`, past every rung; `set(value)` where it takes none. */
-    set(
-        ...given: undefined extends Args
-            ? [value: Value] | [args: Args, value: Value]
-            : [args: Args, value: Value]
-    ): void
-    /** 11.77 — the owner's mutation of the value for `args` in place, past every rung; `patch(mutate)` where it takes none. */
-    patch(
-        ...given: undefined extends Args
-            ? | [mutate: (value: Value) => void]
-              | [args: Args, mutate: (value: Value) => void]
-            : [args: Args, mutate: (value: Value) => void]
-    ): void
+    /** 11.77 — the owner's write of the value for `args`, past every rung; `set(value)` where it takes no args at all (11.81). */
+    set(...given: Written<Args, Value>): void
+    /** 11.77 — the owner's mutation of the value for `args` in place, past every rung; `patch(mutate)` where it takes no args at all (11.81). */
+    patch(...given: Written<Args, (value: Value) => void>): void
     /** 11.78 — the value for `args` now, then after each change. */
     readable(
         ...args: undefined extends Args ? [args?: Args] : [args: Args]
