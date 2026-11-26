@@ -19,27 +19,63 @@ import Section from '#src/lib/Section.abide'
             ],
         },
         {
-            path: 'packages/abide/tests/table.test.ts',
+            path: 'packages/abide/tests/sql.test.ts',
             from: [
-                "test('a change refreshes every value tagged with the table — 47.29'",
+                "test('a table called answers its rows by equality, and refreshes its reader — 47.35'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/sql.test.ts',
+            from: [
+                "test('a table called matches a list, comparisons and null as JSON reads them — 47.36'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/sql.test.ts',
+            from: [
+                'test("a memo\'s owner writes the rows a table call answered back to the table — 47.40"',
             ],
         },
     ]}
 >
-    <Section level={3} title="Refresh the team's target whenever a row changes">
-        <p>Name the table once, and every <code>memo</code> tagged with its name loads again after a write —
-            whichever code made it, and whatever connection.</p>
+    <Section level={3} title="Read the targets by calling the table">
+        <p>A table called answers its rows. The value that read them loads again after any write
+            to the table — whichever code made it, and whatever connection.</p>
         <Code language="ts" caption="server" code={`
             import { memo } from '@abide/abide'
-            import { table } from '@abide/abide/server'
-            import { crmDatabase } from '../pipeline/lib/crmDatabase.server.ts'
+            import { targets } from '../pipeline/lib/targets.server.ts'
 
-            const latest = 'SELECT target FROM targets ORDER BY id DESC'
-
-            table(crmDatabase, 'targets')
-            export const target = memo(() => crmDatabase().query(latest).get(), {
+            export const target = memo(() => targets().at(-1)?.target, {
                 global: true,
-                tags: ['targets'],
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Match the rows with JSON">
+        <p>A value is equality, <code>null</code> is NULL, an array is any of its values, and an
+            object of <code>gt</code>, <code>gte</code>, <code>lt</code>, <code>lte</code> and
+            <code>ne</code> is every comparison it names.</p>
+        <Code language="ts" caption="server" code={`
+            import { targets } from '../pipeline/lib/targets.server.ts'
+
+            const ambitious = targets({ target: { gte: 500_000 } })
+            const picked = targets({ id: [3, 5, 8] })
+        `} />
+    </Section>
+
+    <Section level={3} title="Write a memo's rows back to the table">
+        <p>Where a memo holds the rows a table call answered, its <code>set</code> and
+            <code>patch</code> write the table: rows added or changed are upserted by
+            <code>key</code>, and rows taken out are deleted. The memo then reads them back.</p>
+        <Code language="ts" caption="server" code={`
+            import { memo } from '@abide/abide'
+            import { targets } from '../pipeline/lib/targets.server.ts'
+
+            export const log = memo(() => targets(), { global: true })
+
+            // Takes back the last target set: its row leaves the table.
+            log.patch((rows) => {
+                rows.pop()
             })
         `} />
     </Section>

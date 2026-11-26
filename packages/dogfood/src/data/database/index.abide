@@ -23,6 +23,24 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/TargetLog.test.ts',
             from: ["test('a target set is a row in the file, listed newest first'"],
         },
+        {
+            path: 'packages/abide/tests/sql.test.ts',
+            from: [
+                "test('sql binds every interpolated value as a parameter — 47.32'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/sqlFollow.test.ts',
+            from: [
+                'test("a write through the app\'s sql reaches a follower of a GET whose body read the table — 47.33"',
+            ],
+        },
+        {
+            path: 'packages/abide/tests/sql.test.ts',
+            from: [
+                "test('sql binds a list interpolated as one, a statement per length — 47.37'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Keep the team's targets through a restart">
@@ -43,6 +61,44 @@ import Section from '#src/lib/Section.abide'
             })
 
             crmDatabase().query('INSERT INTO targets (target) VALUES (?)').run(250_000)
+        `} />
+    </Section>
+
+    <Section level={3} title="List the latest targets, and send each new one to the browser">
+        <p><code>sql</code> answers the rows at once. The tables a statement reads are the ones
+            SQLite compiles it to read, so a browser showing this list is sent the new rows when
+            anyone sets a target — no tag names the table.</p>
+        <Code language="ts" caption="server" code={`
+            import { GET } from '@abide/abide/server'
+            import { crmDatabase } from './lib/crmDatabase.server.ts'
+
+            export default GET(
+                () => crmDatabase.sql\`SELECT id, target, setAt FROM targets
+                    ORDER BY id DESC LIMIT 5\`,
+            )
+        `} />
+    </Section>
+
+    <Section level={3} title="Set a target with its value bound">
+        <p>Every value written into the template is a bound parameter, never text, so a value
+            from a request cannot change the statement. Each call site prepares its statement once.</p>
+        <Code language="ts" caption="server" code={`
+            import { POST } from '@abide/abide/server'
+            import { crmDatabase } from './lib/crmDatabase.server.ts'
+
+            export default POST(({ target }: { target: number }) => {
+                crmDatabase.sql\`INSERT INTO targets (target) VALUES (\${target})\`
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Read several targets at once with IN">
+        <p>An array is bound as a list of its values. An empty one matches no row.</p>
+        <Code language="ts" caption="server" code={`
+            import { crmDatabase } from './lib/crmDatabase.server.ts'
+
+            const ids = [3, 5, 8]
+            const picked = crmDatabase.sql\`SELECT * FROM targets WHERE id IN \${ids}\`
         `} />
     </Section>
 
