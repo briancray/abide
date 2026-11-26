@@ -9,7 +9,7 @@ const tour = carousel({ items: STAGES, loop: true, autoplay: 5000 })
 </script>
 
 <div class="row">
-    <button {...tour.play}>{tour.playing() ? 'Pause' : 'Play'}</button>
+    <button {...tour.play}>{tour.playing ? 'Pause' : 'Play'}</button>
     <ul {...tour.host} aria-label="Stage tour"
         class="flex snap-x snap-mandatory gap-snug overflow-x-auto px-[12.5%]">
         {#for name of STAGES key name}

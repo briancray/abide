@@ -21,7 +21,7 @@ onRefusal((_refusal, call) => {
 // The assistant reads the draft as the person sees it, and nothing more.
 const talk = chat({
     ask: (_conversation, options) =>
-        askReport({ draft: draft?.markdown() ?? '' }, options),
+        askReport({ draft: draft?.markdown ?? '' }, options),
 })
 
 // What the assistant wrote through draftReport goes into the draft as it lands.
@@ -29,8 +29,8 @@ watch(() => {
     const current = draft
     for (const written of talk.calls(draftReport))
         if (current !== undefined && written.value !== undefined) {
-            current.summary.set(written.value.summary)
-            current.description.set(written.value.description)
+            current.summary = written.value.summary
+            current.description = written.value.description
         }
 })
 
@@ -51,5 +51,5 @@ function ask() {
 
 <ul class="fields stacked">
     <li><span>summary</span>
-        <strong>{draft?.summary() || '—'}</strong></li>
+        <strong>{draft?.summary || '—'}</strong></li>
 </ul>

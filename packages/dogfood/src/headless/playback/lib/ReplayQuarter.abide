@@ -7,7 +7,7 @@ const replay = playback({ duration: WEEKS * 1000 })
 
 <div class="flex flex-col gap-snug" tabindex="0" {...replay.root}>
     <div class="row">
-        <button {...replay.play}>{replay.playing() ? '❚❚' : '▶'}</button>
+        <button {...replay.play}>{replay.playing ? '❚❚' : '▶'}</button>
         <input {...replay.scrubber} />
         <div {...replay.toggleGroup.group}>
             {#for rate of [0.5, 1, 2] key rate}
@@ -15,5 +15,5 @@ const replay = playback({ duration: WEEKS * 1000 })
             {/for}
         </div>
     </div>
-    <p>Week {Math.min(WEEKS, Math.floor(replay.at() / 1000) + 1)} of {WEEKS}</p>
+    <p>Week {Math.min(WEEKS, Math.floor(replay.at / 1000) + 1)} of {WEEKS}</p>
 </div>

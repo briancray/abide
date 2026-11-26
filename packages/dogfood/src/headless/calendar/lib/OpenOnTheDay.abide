@@ -6,10 +6,11 @@ const picker = popover({ align: 'start' })
 const dates = calendar({ selected: closes })
 // Opening puts focus on the day the keys move from; a pick closes it.
 watch(picker.open, () => {
-    if (picker.open())
-        document.getElementById(dates.idOf(dates.active))?.focus()
+    if (picker.open) document.getElementById(dates.idOf(dates.active))?.focus()
 })
-watch(dates.selected, () => picker.open.set(false))
+watch(dates.selected, () => {
+    picker.open = false
+})
 </script>
 
 <button {...picker.trigger}>Closes {closes ?? 'on no day yet'}</button>

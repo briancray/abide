@@ -15,9 +15,9 @@ const setup = wizard({
 <ol class="row capitalize">
     {#for step of STEPS key step}<li {...setup.step(step)}>{step}</li>{/for}
 </ol>
-{#if setup.current() === 'name'}
+{#if setup.current === 'name'}
     <input aria-label="Deal name" bind:value={name} />
-{:else if setup.current() === 'stage'}
+{:else if setup.current === 'stage'}
     <select aria-label="Stage" bind:value={stage}>
         {#for each of STAGES key each}<option>{each}</option>{/for}
     </select>

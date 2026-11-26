@@ -28,7 +28,7 @@ const accounts = tree({
 })
 </script>
 
-<p>{accounts.selected().join(', ') || 'No account in the campaign.'}</p>
+<p>{accounts.selected.join(', ') || 'No account in the campaign.'}</p>
 <ul {...accounts.tree} aria-label="Campaign accounts" class="tree">
     {#for region of REGIONS key region.id}
         <li {...accounts.node(region).item}>

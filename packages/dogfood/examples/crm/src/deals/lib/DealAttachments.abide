@@ -17,4 +17,4 @@ const drop = dropzone({
 <ul>
     {#for file, at of attached key at}<li>{file.name}</li>{/for}
 </ul>
-<p class="status">{drop.files().length} in the last drop</p>
+<p class="status">{drop.files.length} in the last drop</p>

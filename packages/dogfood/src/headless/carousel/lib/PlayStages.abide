@@ -6,7 +6,7 @@ const stages = carousel({ items: STAGES, loop: true, autoplay: 3000 })
 </script>
 
 <div class="row">
-    <button {...stages.play}>{stages.playing() ? 'Pause' : 'Play'}</button>
+    <button {...stages.play}>{stages.playing ? 'Pause' : 'Play'}</button>
     <ul {...stages.host} aria-label="Stages"
         class="flex snap-x snap-mandatory gap-snug overflow-x-auto px-[12.5%]">
         {#for name of STAGES key name}

@@ -4,7 +4,9 @@ import { popover, reactive, watch } from '@abide/abide'
 let typed = reactive('')
 const suggest = popover({ align: 'start', offset: 4 })
 
-watch(() => suggest.open.set(typed !== ''))
+watch(() => {
+    suggest.open = typed !== ''
+})
 </script>
 
 <input

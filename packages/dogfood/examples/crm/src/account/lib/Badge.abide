@@ -8,7 +8,7 @@ import SignInAs from './SignInAs.abide'
 
 <ul class="fields">
     <li><span>name</span>
-        <strong>{principal.resolved().name ?? '—'}</strong></li>
+        <strong>{principal.resolved.name ?? '—'}</strong></li>
     <li><span>role</span>
-        <strong>{principal.resolved().role ?? '—'}</strong></li>
+        <strong>{principal.resolved.role ?? '—'}</strong></li>
 </ul>

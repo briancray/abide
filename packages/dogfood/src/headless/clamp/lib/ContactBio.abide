@@ -9,6 +9,6 @@ const bio = clamp({ lines: 2 })
     every engine contract since the first pilot. She wants a written proposal
     before any call, reads every clause, and answers within a day.
 </p>
-{#if bio.overflowing || bio.open()}
-    <button {...bio.button}>{bio.open() ? 'Show less' : 'Show more'}</button>
+{#if bio.overflowing || bio.open}
+    <button {...bio.button}>{bio.open ? 'Show less' : 'Show more'}</button>
 {/if}

@@ -82,9 +82,9 @@ import Section from '#src/lib/Section.abide'
             import { report } from '@abide/abide'
 
             const draft = report()
-            draft.summary.set('Statement email fails')
-            draft.description.set('Clicked Email Grace her statement.')
-            const preview = draft.markdown()
+            draft.summary = 'Statement email fails'
+            draft.description = 'Clicked Email Grace her statement.'
+            const preview = draft.markdown
             const id = await draft.send()
         `} />
     </Section>

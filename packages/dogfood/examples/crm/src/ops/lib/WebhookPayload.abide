@@ -8,7 +8,7 @@ const payload = jsonInspector({ id: 'webhook', value: WEBHOOK })
 
 <input {...payload.search} aria-label="Search the payload"
     placeholder="Search keys and values">
-<p class="status">{payload.query()
+<p class="status">{payload.query
     ? `${payload.matches.length} found`
     : (payload.inspected?.pointer ?? 'no value picked')}</p>
 <ul {...payload.tree} aria-label="Payload" class="tree">

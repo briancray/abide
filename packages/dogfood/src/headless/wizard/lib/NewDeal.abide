@@ -15,8 +15,8 @@ const setup = wizard({
 <div class="h-1 rounded-full bg-rule" {...setup.meter.meter}>
     <div class="h-full rounded-full bg-signal" {...setup.meter.fill}></div>
 </div>
-{#if setup.current() === 'name'}
+{#if setup.current === 'name'}
     <input aria-label="Deal name" bind:value={name} />
-{:else}<p>{setup.current()} — {name}</p>{/if}
+{:else}<p>{setup.current} — {name}</p>{/if}
 <button {...setup.previous}>Back</button>
 <button {...setup.next}>Next</button>

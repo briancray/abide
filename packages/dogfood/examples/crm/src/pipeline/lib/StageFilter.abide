@@ -8,7 +8,7 @@ const filter = popover({ align: 'start', offset: 4 })
 
 function choose(chosen: string) {
     stage = chosen
-    filter.open.set(false)
+    filter.open = false
 }
 </script>
 

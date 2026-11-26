@@ -217,14 +217,14 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
             const { draft } = props<{ draft: ReportDraft }>()
             const talk = chat({
                 ask: (_conversation, options) =>
-                    askReport({ draft: draft.markdown() }, options),
+                    askReport({ draft: draft.markdown }, options),
             })
 
             watch(() => {
                 for (const written of talk.calls(draftReport))
                     if (written.value !== undefined) {
-                        draft.summary.set(written.value.summary)
-                        draft.description.set(written.value.description)
+                        draft.summary = written.value.summary
+                        draft.description = written.value.description
                     }
             })
             </script>

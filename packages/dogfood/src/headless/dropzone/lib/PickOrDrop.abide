@@ -9,5 +9,5 @@ const names = (files: readonly File[]) =>
 <label class="block border border-dashed p-4" {...drop.host}>
     Drop the contract here, or choose it: <input {...drop.input} />
 </label>
-<p>Attached: {names(drop.files()) || 'none'}</p>
+<p>Attached: {names(drop.files) || 'none'}</p>
 <p>Turned away: {names(drop.rejected) || 'none'}</p>

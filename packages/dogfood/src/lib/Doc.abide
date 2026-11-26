@@ -46,7 +46,7 @@ const {
     /** The test cases that exercise what the page documents, each a file and its anchors (40.15). */
     tests?: readonly { path: string; from: readonly string[] }[]
 }>()
-const page = documentPage ?? pageAt(route.name())
+const page = documentPage ?? pageAt(route.name)
 // Where the name is reached for (40.36): a page of a group says it, the home page and a document do not.
 const where =
     documentPage === undefined &&

@@ -10,12 +10,12 @@ const WON = [
 let playing = reactive(false)
 const weeks = playback({ duration: WON.length * 1000, playing })
 const beat = playback({ duration: 1000, loop: true, playing })
-const week = () => Math.min(WON.length - 1, Math.floor(weeks.at() / 1000))
+const week = () => Math.min(WON.length - 1, Math.floor(weeks.at / 1000))
 </script>
 
 <div class="row">
     <button {...weeks.play}>{playing ? 'Pause' : 'Play'}</button>
     <!-- the marker's opacity, from where the beat is in its second -->
-    <span data-beat style="opacity: {1 - beat.at() / 1000}">●</span>
+    <span data-beat style="opacity: {1 - beat.at / 1000}">●</span>
     <p class="status">Week {week() + 1}: {format.money(WON[week()] ?? 0, { maximumFractionDigits: 0 })} won</p>
 </div>

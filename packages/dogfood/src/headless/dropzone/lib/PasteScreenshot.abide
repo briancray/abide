@@ -6,4 +6,4 @@ const drop = dropzone({ accept: 'image/*', paste: true, multiple: false })
 </script>
 
 <textarea bind:value={note} {...drop.host}></textarea>
-<p>Image: {drop.files()[0]?.name ?? 'paste a screenshot into the note'}</p>
+<p>Image: {drop.files[0]?.name ?? 'paste a screenshot into the note'}</p>

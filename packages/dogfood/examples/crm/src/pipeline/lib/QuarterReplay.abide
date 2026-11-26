@@ -7,12 +7,12 @@ const WON = [
     74_000, 98_000,
 ]
 const replay = playback({ duration: WON.length * 1000, step: 1000 })
-const week = () => Math.min(WON.length - 1, Math.floor(replay.at() / 1000))
+const week = () => Math.min(WON.length - 1, Math.floor(replay.at / 1000))
 </script>
 
 <div class="flex flex-col gap-snug" tabindex="0" {...replay.root}>
     <div class="row">
-        <button {...replay.play}>{replay.playing() ? 'Pause' : 'Play'}</button>
+        <button {...replay.play}>{replay.playing ? 'Pause' : 'Play'}</button>
         <input {...replay.scrubber} />
         <div {...replay.toggleGroup.group}>
             {#for rate of [0.5, 1, 2] key rate}

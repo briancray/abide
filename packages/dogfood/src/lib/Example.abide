@@ -48,7 +48,7 @@ const { code, server } = props<{ code: string; server?: string }>()
 const serverCode = reactive(() =>
     server === undefined ? '' : serverSource({ path: server }),
 )
-const form = groupOf(route.name())?.form
+const form = groupOf(route.name)?.form
 
 const view = tabs({ items: ['result', 'html', 'css'] })
 let markup = reactive('')

@@ -13,4 +13,4 @@ const list = pagination({ count: 12 })
     {/for}
     <button {...list.next}>Next</button>
 </nav>
-<p>Page {list.page()}</p>
+<p>Page {list.page}</p>

@@ -7,4 +7,4 @@ const names = (files: readonly File[]) =>
 </script>
 
 <div {...drop.host}>Drop the signed contract here, as a PDF.</div>
-<p>Attached: {names(drop.files()) || 'none'}</p>
+<p>Attached: {names(drop.files) || 'none'}</p>

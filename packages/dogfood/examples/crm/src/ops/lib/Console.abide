@@ -4,7 +4,7 @@ import { isServer, log } from '@abide/abide'
 const billing = log.named('billing')
 const sync = log.named('sync')
 // This page's own lines: a server's are its process's, which the browser never had to adopt.
-const lines = () => (isServer() ? [] : log.records().slice(-20))
+const lines = () => (isServer() ? [] : log.records.slice(-20))
 </script>
 
 <div class="row">

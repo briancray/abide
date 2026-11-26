@@ -6,8 +6,8 @@
 // WHERE YOU ARE COMES FROM THE ROUTE. The nav is the layout's, and a layout outlives the page it
 // wraps (41.11), so a prop the page passed would be the FIRST page's for as long as the nav stands.
 //
-// THE LITERAL, NOT THE ADDRESS: `route.name()` is the route an item's `href` is spelled in, where
-// `route.url()` is where the app is served — below a mount, `/docs/reactive/watch` for
+// THE LITERAL, NOT THE ADDRESS: `route.name` is the route an item's `href` is spelled in, where
+// `route.url` is where the app is served — below a mount, `/docs/reactive/watch` for
 // `/reactive/watch` — and the link is written through `url` for the same reason (16.10).
 import {
     disclosure,
@@ -37,7 +37,7 @@ const narrow = media('(max-width: 63.999rem)')
 let open = reactive(true)
 const pages = disclosure({ open })
 watch(() => {
-    route.name()
+    route.name
     open = !narrow
 })
 
@@ -57,14 +57,14 @@ const MARK_CLASS: Readonly<Record<string, string>> = {
 }
 </script>
 
-{#if !isFramed(route.name())}
+{#if !isFramed(route.name)}
     <nav class="sidebar sticky top-bar flex h-[calc(100vh_-_var(--spacing-bar))] flex-col gap-section self-start overflow-y-auto border-r border-rule px-4 pt-7 pb-16 max-lg:static max-lg:h-auto max-lg:border-r-0 max-lg:border-b">
         <button class="group flex items-center justify-between rounded-sm border border-rule bg-raised px-3 py-2 font-mono text-chrome font-medium text-ink lg:hidden" {...pages.button}>Pages<span class="transition-transform duration-120 group-data-open:rotate-180" aria-hidden="true">▾</span></button>
         <div class="flex flex-col gap-section" {...pages.region}>
             {#for group of SITE}
                 <section class="flex flex-col gap-snug">
                     {#if guideOf(group)}
-                        <h2 class="font-mono text-micro/2 font-medium tracking-caps uppercase"><a class="no-underline {guideOf(group)?.route === route.name() ? 'text-signal' : 'text-muted hover:text-signal'}" href={url(guideOf(group)?.route as RouteLiteral)} aria-current={guideOf(group)?.route === route.name() ? 'page' : undefined}>{raw(inline(group.group))}</a></h2>
+                        <h2 class="font-mono text-micro/2 font-medium tracking-caps uppercase"><a class="no-underline {guideOf(group)?.route === route.name ? 'text-signal' : 'text-muted hover:text-signal'}" href={url(guideOf(group)?.route as RouteLiteral)} aria-current={guideOf(group)?.route === route.name ? 'page' : undefined}>{raw(inline(group.group))}</a></h2>
                     {:else}
                         <h2 class="font-mono text-micro/2 font-medium tracking-caps text-muted uppercase">{raw(inline(group.group))}</h2>
                     {/if}
@@ -74,7 +74,7 @@ const MARK_CLASS: Readonly<Record<string, string>> = {
                         {/if}
                         <ul class="flex list-none flex-col gap-hair p-0">
                             {#for item of run.pages}
-                                <li class="flex items-baseline gap-tight"><a class={linkClass(item.route === route.name())} href={url(item.route as RouteLiteral)} aria-current={item.route === route.name() ? 'page' : undefined}>{raw(inline(item.nav))}</a>{#if WHERE[item.where].mark}<span class="font-mono text-micro/2 {MARK_CLASS[WHERE[item.where].mark ?? '']}">{WHERE[item.where].mark}</span>{/if}</li>
+                                <li class="flex items-baseline gap-tight"><a class={linkClass(item.route === route.name)} href={url(item.route as RouteLiteral)} aria-current={item.route === route.name ? 'page' : undefined}>{raw(inline(item.nav))}</a>{#if WHERE[item.where].mark}<span class="font-mono text-micro/2 {MARK_CLASS[WHERE[item.where].mark ?? '']}">{WHERE[item.where].mark}</span>{/if}</li>
                             {/for}
                         </ul>
                     {/for}
@@ -83,7 +83,7 @@ const MARK_CLASS: Readonly<Record<string, string>> = {
             <section class="flex flex-col gap-snug">
                 <h2 class="font-mono text-micro/2 font-medium tracking-caps text-muted uppercase">Documents</h2>
                 <ul class="flex list-none flex-col gap-hair p-0">
-                    <li class="flex items-baseline gap-tight"><a class={linkClass(route.name() === '/rulebook')} href={url('/rulebook' as RouteLiteral)} aria-current={route.name() === '/rulebook' ? 'page' : undefined}>Rulebook</a></li>
+                    <li class="flex items-baseline gap-tight"><a class={linkClass(route.name === '/rulebook')} href={url('/rulebook' as RouteLiteral)} aria-current={route.name === '/rulebook' ? 'page' : undefined}>Rulebook</a></li>
                 </ul>
             </section>
         </div>

@@ -9,6 +9,6 @@ const beat = playback({ duration: 1000, loop: true, playing })
 <div class="row">
     <button {...weeks.play}>{playing ? '❚❚' : '▶'}</button>
     <!-- the marker's opacity, from where the beat is in its second -->
-    <span style="opacity: {1 - beat.at() / 1000}">●</span>
-    <p>Week {Math.min(12, Math.floor(weeks.at() / 1000) + 1)} of 12</p>
+    <span style="opacity: {1 - beat.at / 1000}">●</span>
+    <p>Week {Math.min(12, Math.floor(weeks.at / 1000) + 1)} of 12</p>
 </div>

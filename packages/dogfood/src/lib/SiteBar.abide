@@ -23,7 +23,7 @@ import Ask from './Ask.abide'
 import { isFramed } from './sitePages.ts'
 </script>
 
-{#if !isFramed(route.name())}
+{#if !isFramed(route.name)}
     <header
         class="site sticky top-0 z-2 col-span-full grid h-bar grid-cols-[15.5rem_minmax(0,1fr)_auto] items-center border-b border-rule bg-paper/92 backdrop-blur-sm max-lg:grid-cols-[auto_minmax(0,1fr)_auto]"
         data-abide-titlebar

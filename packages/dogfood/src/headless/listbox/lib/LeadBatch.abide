@@ -22,4 +22,4 @@ const batch = listbox({
         <li {...batch.option(deal)}>{deal.name}</li>
     {/for}
 </ul>
-<p>Handing over: {batch.selected().length} of {leads.length}</p>
+<p>Handing over: {batch.selected.length} of {leads.length}</p>

@@ -53,7 +53,7 @@ const { types = false } = props<{
     /** Render the page's Types — every signature in full — rather than its Syntax and headings. */
     types?: boolean
 }>()
-const page = pageAt(route.name())
+const page = pageAt(route.name)
 const SYNTAX = 'Syntax'
 const TYPES = 'Types'
 const sections = sectionsOf(ROWS, page.registry)
