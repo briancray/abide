@@ -285,19 +285,16 @@ test('a fence under another, a page under one, an __abide route, a stray file an
     expect(module).toContain('23.22')
     expect(module).toContain('media/format.ts')
     expect(module).toContain('<name>.server.ts')
-    // 23.23 — under `public`, where it would be answered as authored; and 16.73 — beside a page,
-    // where it is there to answer at its route, with no `rpc` to answer with.
-    const answering = await refusal(
-        compileApp(
-            appFixture({
-                'index.abide': '<p>home</p>',
-                'media/db.server.ts': 'export const db = 1\n',
-            }),
-        ),
+    // 16.73 — beside a page, a server file exporting no `rpc` is a module, answering nothing. THE
+    // REVERT: put back the refusal of a server file in an address directory that exports no `rpc`;
+    // the build refuses it.
+    await compileApp(
+        appFixture({
+            'index.abide': '<p>home</p>',
+            'media/db.server.ts': 'export const db = 1\n',
+        }),
     )
-    expect(answering).toContain('16.73')
-    expect(answering).toContain('media/db.server.ts')
-    expect(answering).toContain('lib directory')
+    // 23.23 — under `public`, where it would be answered as authored.
     for (const file of ['public/key.server.pem']) {
         const server = await refusal(
             compileApp(
@@ -782,11 +779,32 @@ export const draw = rpc(() => 'drawn', { methods: ['POST'] })
 </script>
 
 <button onclick={() => draw()}>draw</button>`,
+        'media/lib/catalog.server.ts': `import { rpc } from '@abide/abide/server'
+
+export const CATALOG_SECRET = 'hunter2'
+
+export default rpc(() => 'shelf')
+
+export const stages = rpc(() => ['lead', 'won'])
+`,
+        'media/lib/db.server.ts': 'export const db = 1\n',
     })
     const built = await buildApp(fixture)
     if (built.exitCode !== 0) throw new Error(built.stderr)
     ;({ base, stop } = await startApp(fixture))
 }, 60_000)
+
+// 16.73 — A SERVER FILE ANSWERS AT ITS OWN PATH WHEREVER IT STANDS, a lib directory's among them: its
+// default at the path, a named `rpc` below it by its name. THE REVERT: stop `walkApp` handing a lib
+// directory's server file to `handlersUnder`; both answer 404.
+test("a lib directory's server file answers its rpcs at its own path — 16.73", async () => {
+    const shelf = await Bun.fetch(`${base}/media/lib/catalog`)
+    const stages = await Bun.fetch(`${base}/media/lib/catalog/stages`)
+    expect([
+        `${shelf.status} ${await shelf.text()}`,
+        `${stages.status} ${await stages.text()}`,
+    ]).toEqual(['200 "shelf"', '200 ["lead","won"]'])
+})
 
 afterAll(() => stop())
 

@@ -1,6 +1,6 @@
-// 16.2 AND 16.70 — EVERY `rpc` AN APP DECLARES, AND WHERE IT IS ANSWERED. A server file directly in
-// an address directory answers at that file's route (23.14): its default there, each named `rpc`
-// below it by its name, or wherever its `address` says — the app's public surface. A value a
+// 16.2 AND 16.70 — EVERY `rpc` AN APP DECLARES, AND WHERE IT IS ANSWERED. A server file answers at its
+// own path, wherever it stands (16.73): its default there, each named `rpc` below it by its name, or
+// wherever its `address` says — the app's public surface. A server file exporting none is a module. A value a
 // `<script server>` exports is its file's alone, answered below `/__abide/handlers/` at the file's
 // path and its name, and listed nowhere (16.71). One row per verb each answers (16.111).
 //
@@ -71,10 +71,8 @@ export async function handlersUnder(
         const exported = declared.get(path)
         if (exported === undefined) continue
         try {
-            let answering = 0
             for (const each of exported) {
                 if (each.method === undefined) continue
-                answering += 1
                 // 16.73, 16.113 — the default at the file's route, a named one below it by its name,
                 // or wherever its `address` says.
                 const address =
@@ -121,11 +119,6 @@ export async function handlersUnder(
                 }
                 diagnostics.warn(each.unread)
             }
-            // 16.73 — a server file in an address directory is there to answer at its route.
-            if (answering === 0)
-                throw new Error(
-                    `abide: ${relative} is a server file directly in an address directory, and exports no \`rpc\`. Export one (\`export default rpc(…)\`), or move the file into a lib directory. RULEBOOK 16.73, 23.23.`,
-                )
         } catch (thrown) {
             diagnostics.at(relative, thrown)
         }

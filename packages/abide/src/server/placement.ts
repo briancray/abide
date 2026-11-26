@@ -126,8 +126,8 @@ export function isWorkerFile(path: string): boolean {
 }
 
 /**
- * 16.2 — whether `path` names a server file whose `rpc`s answer at its route, `<name>.server.ts`, where
- * it stands directly in an address directory (23.14).
+ * 16.2, 16.73 — whether `path` names a server file whose `rpc`s answer at its own path,
+ * `<name>.server.ts`, wherever it stands.
  */
 export function isHandlerFile(path: string): boolean {
     return path.endsWith('.server.ts')

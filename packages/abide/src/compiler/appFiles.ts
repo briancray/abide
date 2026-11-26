@@ -173,8 +173,13 @@ function walk(
             )
         else if (place === 'public')
             files.published.set(path, publicAddress(path, fence.path))
-        else if ((place === 'lib' || place === 'native') && isModule(path))
+        else if ((place === 'lib' || place === 'native') && isModule(path)) {
             files.modules.push(path)
+            // 16.73 — a server file anywhere is read for the `rpc`s it exports, each of which answers
+            // at the file's own path.
+            if (place === 'lib' && isHandlerFile(path))
+                files.handlers.push(path)
+        }
     }
 }
 
