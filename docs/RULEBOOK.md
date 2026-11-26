@@ -1501,7 +1501,8 @@ one, MUST adopt the handler's value for those `Args` (11.12), as it would the va
 16.108 An `Rpc` called in a `computed` body MUST subscribe the body to the handler's value for those
 `Args`, so a body that awaits the answer runs again where that value moves.
 
-16.109 A handler declared over a `Reactive` MUST throw at construction, naming a `memo`'s value, written
+16.109 A handler declared over a `Reactive` MUST throw at construction, and a handler whose body
+answers a `Reactive` MUST throw on the run that answers it, each naming a `memo`'s value, written
 with `rpc.set` and `rpc.patch`, as the way to serve a value the server writes.
 
 16.110 A handler MUST take a `memo`'s value options, and MUST NOT take `throttle` or `debounce`, which

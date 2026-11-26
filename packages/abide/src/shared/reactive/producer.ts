@@ -120,13 +120,12 @@ export function isStreaming(value: unknown): boolean {
 }
 
 /**
- * Whether what `value` serves is a stream's run that has closed — read on the stream it forwards,
- * where it forwards one. False for a run in flight, and for a stream whose first run has not begun.
+ * Whether `value`'s own stream is a run that has closed. False for a run in flight, and for a stream
+ * whose first run has not begun. A handler's entry forwards no other stream: it answers no `Reactive`
+ * to adopt (16.109).
  */
 export function runClosed(value: unknown): boolean {
-    let stream = cellOf(value).stream
-    while (stream?.source != null) stream = stream.source.stream
-    return stream?.closed === true
+    return cellOf(value).stream?.closed === true
 }
 
 function adoptedCellOf(value: unknown): Cell {

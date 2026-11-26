@@ -24,6 +24,7 @@ import {
     refuseBothCaps,
 } from './cellShape.ts'
 import { armTimer, armWindow } from './Expiry.ts'
+import { isReactive } from './isReactive.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
 import { NotLanded } from './NotLanded.ts'
@@ -41,6 +42,7 @@ import {
     unwatchStore,
 } from './Reactive.ts'
 import { leaveSelections } from './selections.ts'
+import { SERVED_BODIES, SERVES_NO_REACTIVE } from './SERVED_BODIES.ts'
 import {
     detach,
     detachProbes,
@@ -318,6 +320,8 @@ function handed<Args>(
 function heldOnce<Args>(
     body: (args: Args) => unknown,
 ): (args: Args) => unknown {
+    // 16.109 — a handler's body answering a `Reactive` refuses, rather than the entry adopting it.
+    const servesNoReactive = SERVED_BODIES.has(body)
     // A stream's body runs untracked already (14.13), so there is nothing for it to keep.
     if (isStreamBody(body)) return body
     return (args: Args): unknown => {
@@ -330,6 +334,8 @@ function heldOnce<Args>(
             throw thrown
         }
         if (entry !== null) detach(entry)
+        if (servesNoReactive && isReactive(produced))
+            throw new TypeError(SERVES_NO_REACTIVE)
         return produced
     }
 }

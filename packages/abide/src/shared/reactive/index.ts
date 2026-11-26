@@ -42,6 +42,7 @@ import {
 } from './Reactive.ts'
 import { outsideScope, scoped } from './scoped.ts'
 import { SCOPING } from './scoping.ts'
+import { SERVED_BODIES, SERVES_NO_REACTIVE } from './SERVED_BODIES.ts'
 import { share } from './share.ts'
 
 export { isReactive } from './isReactive.ts'
@@ -458,15 +459,15 @@ export const ambientComputed = ((body: unknown, options?: unknown) =>
  */
 export function handlerValue(body: unknown, options: unknown): unknown {
     // 16.109 — at construction: the server owns no `Reactive`; a value it writes is a memo's entry.
-    if (isReactive(body))
-        throw new TypeError(
-            'abide: a handler serves a function or a memo, not a reactive value. Serve the value a memo keeps, and write it with handler.set or handler.patch. RULEBOOK 16.109.',
-        )
+    if (isReactive(body)) throw new TypeError(SERVES_NO_REACTIVE)
     if (isKeyed(body)) return body
     // 16.6 — a memo handed in is served as the keyed value it is a face over.
     const memoed = (body as { [KEYED_OF]?: unknown } | null)?.[KEYED_OF]
     if (memoed !== undefined) return memoed
     if (typeof body !== 'function') return reactive(body, options as undefined)
+    // 16.109 — and on the run that answers one: the entry would adopt it (11.12), which is the
+    // server serving a `Reactive` by one more call.
+    SERVED_BODIES.add(body)
     return keyedValue(body as (args: unknown) => unknown, options as undefined)
 }
 

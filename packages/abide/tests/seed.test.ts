@@ -46,7 +46,7 @@ middleware((next, { request }) => {
 
 // 41.25, 41.26 — ONE CALL OF EACH KIND A PAGE IS PAINTED FROM: answered within the render's turn,
 // refused within it, and a stream that has closed within it.
-const TOTALS = `import { computed, GET, refuse } from '@abide/abide/server'
+const TOTALS = `import { GET, refuse } from '@abide/abide/server'
 
 export const getTotal = GET(({ id }: { id: string }) => ({ id, total: 12 }))
 
@@ -55,33 +55,20 @@ export const getMissing = GET(({ id }: { id: string }) => refuse(404, id))
 export const getLines = GET(async function* ({ id }: { id: string }) {
     yield id
 })
-
-// FORWARDED AND STILL RUNNING: the call's value adopts the global one, and is no load of its own.
-const scoring = computed(
-    async function* () {
-        await new Promise(() => {})
-        yield 1
-    },
-    { global: true },
-)
-
-export const getScores = GET(() => scoring)
 `
 
 const PAINTED = `<script>
 import { computed } from '@abide/abide'
 import getLines from '#src/totals/getLines.handler.ts'
-import getScores from '#src/totals/getScores.handler.ts'
 import getMissing from '#src/totals/getMissing.handler.ts'
 import getTotal from '#src/totals/getTotal.handler.ts'
 
 const total = computed(() => getTotal({ id: 't' }))
 const missing = computed(() => getMissing({ id: 'm' }))
 const lines = computed(() => getLines({ id: 'l' }))
-const scores = computed(() => getScores())
 </script>
 
-<main><p>{total.busy()}</p><p>{missing.error()}</p><p>{lines.busy()}</p><p>{scores.busy()}</p></main>`
+<main><p>{total.busy()}</p><p>{missing.error()}</p><p>{lines.busy()}</p></main>`
 
 // 18.5, 41.13 — A `global` VALUE A RENDER READ, and a write that moves it before the browser's call.
 const SHELF = `import { GET, POST } from '@abide/abide/server'
@@ -360,9 +347,7 @@ test('the head starts every call the page made, before its markup — 41.20', as
 // run closed before the markup was built is settled (41.33), and is marked as one. THE REVERTS: write
 // every row unmarked, and `getTotal`, `getMissing` and `getLines` read `false`; mark every stream
 // unmarked again (`!isStreaming` in `paintedSettled`), and `getLines` reads `false`; drop the load
-// test, and `getFeed` and `getInvoice` read `true`. A call whose value FORWARDS a `global` stream
-// still running is no load of its own (`getScores`): drop `runClosed`, and it reads `true` — and
-// hydration waits on a run that has not closed.
+// test, and `getFeed` and `getInvoice` read `true`.
 test('the head marks the calls the markup was built from settled — 41.25, 41.26, 41.33', async () => {
     const rowsOf = async (address: string) =>
         JSON.parse(
@@ -382,7 +367,6 @@ test('the head marks the calls the markup was built from settled — 41.25, 41.2
         getTotal: true,
         getMissing: true,
         getLines: true,
-        getScores: false,
         getInvoice: false,
         getFeed: false,
     })

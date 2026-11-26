@@ -130,10 +130,10 @@ import Section from '#src/lib/Section.abide'
         <p>A job on a clock can run for a while. Read <code>abortSignal()</code> in its run and
             stop early, rather than holding the shutdown until the sweep ends.</p>
         <Code language="ts" caption="server" code={`
-            import { abortSignal, computed } from '@abide/abide'
+            import { abortSignal, memo } from '@abide/abide'
             import { DEALS } from '../../pipeline/lib/DEALS.server.ts'
 
-            export const followUps = computed(
+            export const followUps = memo(
                 async function* () {
                     const stopping = abortSignal()
                     for (const deal of DEALS) {
@@ -142,7 +142,7 @@ import Section from '#src/lib/Section.abide'
                         if (deal.stage === 'lead') yield deal.name
                     }
                 },
-                { global: true, poll: 300_000 },
+                { global: true, tags: ['follow-ups'], poll: 300_000 },
             )
         `} />
     </Section>

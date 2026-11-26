@@ -1,6 +1,6 @@
 // 9.17 — A RUN'S END NEVER OVERTAKES ITS LAST CHUNK. A generator returning in the turn of its last
 // yield lands that chunk and its close together, and a reader that joined the run mid-way — through a
-// value forwarding it (11.15), which is what a handler handing back a `global` value is — read the
+// value forwarding it (11.15), which is what a handler streaming a `global` value's chunks reads — read the
 // close first and ended a chunk short. Every lane a streamed `GET` is read over is driven here, and
 // the WHOLE received sequence is compared, never its ends.
 //
@@ -26,9 +26,12 @@ const COOKIE = 'abide-caller=ada'
 // How many early calls the http leg handed to the mux, so that lane is shown to have crossed over.
 let handoffs = 0
 
-// The run the handler answers with; each case swaps in its own.
+// The run the handler streams; each case swaps in its own. Its chunks, never the value itself: a
+// handler answers no `Reactive` (16.109).
 let current: unknown
-const ticks = GET(() => current)
+const chunksOfCurrent = (): AsyncIterable<unknown> =>
+    chunksOfStream(computed(() => current as never))
+const ticks = GET(chunksOfCurrent)
 
 /** A `global` stream of `count` chunks, each released by the test, returning as it yields its last. */
 function gatedStream(count: number): {
@@ -275,7 +278,7 @@ test('an early call whose handler wrote a cookie is answered whole over http —
         'feed/flavor.handler.ts': {
             default: GET(() => {
                 cookies().set('flavor', 'mint')
-                return current
+                return chunksOfCurrent()
             }),
         },
     })
