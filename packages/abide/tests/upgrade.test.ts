@@ -331,7 +331,7 @@ const named = memo(() => rows, { key: by, tags: ['rows'] })
         .toBe(`import { reactive, rpc } from '@abide/abide'
 
 const OPTIONS = { by: 'id' }
-export const books = rpc(reactive.derived(() => [{ isbn: '1' }], { key: 'isbn' }), { methods: ['GET'] })
+export const books = rpc(reactive.derived(() => [{ isbn: '1' }], { key: 'isbn' }))
 export const kept = reactive<{ id: string }[]>([], {
     key(row) {
         return row.id
@@ -1088,25 +1088,34 @@ export const listNotes = ({ id }: { id: string }) => [id]
     expect(await upgrade(app, '0.144.0')).toEqual([])
 })
 
-// 38.231 — A `GET` KEEPS ITS ONE VERB: over a function an `rpc` answers `GET` alone (16.111), but over a
-// memo, a value or a name the module does not declare a function, a bare `rpc` would also answer the
-// writes that value derives (16.117) — a read-only address turned writable by anyone. So only a
-// function the migration can see keeps the bare form, and every other `GET` names `methods: ['GET']`,
-// which narrows and never widens. THE REVERT: skip `methodsOption` for every `GET` again; the memo,
-// the value and the imported name lose their `methods: ['GET']`, three of the expectations below.
-test('abide upgrade keeps a GET over anything but a function at GET alone — 38.231', () => {
+// 38.231 — A `GET` KEEPS ITS ONE VERB: over a function, a memo or a plain value an `rpc` answers `GET`
+// alone (16.111), but over a table, a job, a pipe or a ledger — or a name the module does not show to
+// be one of the first three — a bare `rpc` could also answer the writes that value derives (16.117), a
+// read-only address turned writable by anyone. So what the migration can see answers `GET` alone keeps
+// the bare form, and every other `GET` names `methods: ['GET']`, which narrows and never widens. THE
+// REVERTS: skip `methodsOption` for every `GET` again; the table and the imported name lose their
+// `methods: ['GET']`. Answer `false` from `startsReadAlone` for a `memo(`; the board and the described
+// board gain one.
+test('abide upgrade keeps a GET over anything that may answer writes at GET alone — 38.231', () => {
     const migrated = toRpcText(
-        `import { GET } from '@abide/abide/server'
+        `import { GET, table } from '@abide/abide/server'
 import { memo } from '@abide/abide'
-import { listed } from './listed.ts'
+import { db, listed } from './listed.ts'
 
 function named() {
     return 1
 }
 const SEATS = { seats: 40 }
+const scores = memo(() => [1])
+const pick = (id: string) => id
+const deals = table(db, 'deals')
 
 export const board = GET(memo(() => 1, { global: true }))
 export const seats = GET(SEATS)
+export const scored = GET(scores)
+export const picked = GET(pick)
+export const literal = GET({ theme: 'dark' })
+export const rows = GET(deals)
 export const imported = GET(listed)
 export const declared = GET(named)
 export const arrow = GET(({ id }: { id: string }) => id)
@@ -1119,10 +1128,16 @@ export const described = GET(memo(() => 1, { global: true }), { description: 'A 
         'src/x.server.ts',
     )
     expect(migrated).toContain(
-        "export const board = rpc(memo(() => 1, { global: true }), { methods: ['GET'] })",
+        'export const board = rpc(memo(() => 1, { global: true }))\n',
+    )
+    expect(migrated).toContain('export const seats = rpc(SEATS)\n')
+    expect(migrated).toContain('export const scored = rpc(scores)\n')
+    expect(migrated).toContain('export const picked = rpc(pick)\n')
+    expect(migrated).toContain(
+        "export const literal = rpc({ theme: 'dark' })\n",
     )
     expect(migrated).toContain(
-        "export const seats = rpc(SEATS, { methods: ['GET'] })",
+        "export const rows = rpc(deals, { methods: ['GET'] })",
     )
     expect(migrated).toContain(
         "export const imported = rpc(listed, { methods: ['GET'] })",
@@ -1136,7 +1151,7 @@ export const described = GET(memo(() => 1, { global: true }), { description: 'A 
     )
     expect(migrated).toContain('export const written = rpc(function () {')
     expect(migrated).toContain(
-        "export const described = rpc(memo(() => 1, { global: true }), { methods: ['GET'], description: 'A board.' })",
+        "export const described = rpc(memo(() => 1, { global: true }), { description: 'A board.' })",
     )
 })
 
@@ -1165,20 +1180,23 @@ export const replace = PUT(({ id }: { id: string }) => id, {})
     )
 })
 
-// 38.231 — A SERVER BLOCK'S `GET` OVER A VALUE IS NOT EXPORTED BARE: bare, a memo would also answer the
-// writes it derives (16.117), and a `<script server>` takes no `methods` (16.119). So it is left with
-// its narrowed verb and noted — moved by hand to a server file beside the component, read-only and
-// unlisted — while a `GET` over a function is still exported bare, a function answering `GET` alone.
-// THE REVERT: drop the narrowing for `GET` (`verb === 'GET' ||` in `declaredByRpc`); the board is
-// exported bare as `export const board = memo(` and no note is given.
-test("abide upgrade notes a server block's GET over a value rather than export it bare — 38.231", () => {
+// 38.231 — A SERVER BLOCK'S `GET` OVER WHAT MAY ANSWER WRITES IS NOT EXPORTED BARE: bare, a table or a
+// name the migration cannot see answers `GET` alone would answer the writes it derives (16.117), and a
+// `<script server>` takes no `methods` (16.119). So it is left with its narrowed verb and noted — moved
+// by hand to a server file beside the component, read-only and unlisted — while a `GET` over a
+// function or a memo is exported bare, each answering `GET` alone. THE REVERT: drop the narrowing for
+// `GET` (`verb === 'GET' ||` in `declaredByRpc`); the imported name is exported bare as
+// `export const listed = listedDeals` and no note is given.
+test("abide upgrade notes a server block's GET over what may answer writes rather than export it bare — 38.231", () => {
     const notes: string[] = []
     const migrated = toRpcText(
         `<script server>
 import { GET } from '@abide/abide/server'
 import { memo } from '@abide/abide'
+import { listedDeals } from './listedDeals.server.ts'
 
 const board = GET(memo(() => 1, { global: true }))
+const listed = GET(listedDeals)
 const listNotes = GET(({ id }: { id: string }) => [id])
 </script>
 `,
@@ -1187,12 +1205,15 @@ const listNotes = GET(({ id }: { id: string }) => [id])
         (_line, message) => notes.push(message.split(':')[0] as string),
     )
     expect(migrated).toContain(
-        "export const board = rpc(memo(() => 1, { global: true }), { methods: ['GET'] })",
+        'export const board = memo(() => 1, { global: true })',
+    )
+    expect(migrated).toContain(
+        "export const listed = rpc(listedDeals, { methods: ['GET'] })",
     )
     expect(migrated).toContain(
         'export const listNotes = ({ id }: { id: string }) => [id]',
     )
     expect(notes).toEqual([
-        'this board answered GET alone, and exported bare from a <script server> it would also answer the writes its value derives',
+        'this listed answered GET alone, and exported bare from a <script server> it would also answer the writes its value derives where that is a table, a job, a pipe or a ledger',
     ])
 })

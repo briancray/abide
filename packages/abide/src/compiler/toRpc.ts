@@ -1,7 +1,8 @@
 // 38.231 — THE MIGRATION TO `rpc`: `GET`, `POST`, `PUT`, `PATCH` and `DELETE` are one `rpc`, its verb
-// read off the value — a function's `GET` — or named by `methods`. So `GET(f, o)` over a function is
-// `rpc(f, o)`, `GET(x, o)` over anything else keeps `GET` as its one verb — bare, a memo or a value
-// would answer its writes too (16.117) — and a mutation keeps its verb in its options:
+// read off the value — a function's, a memo's and a plain value's `GET` — or named by `methods`. So
+// `GET(f, o)` over a function, a memo or a value the module shows it to be is `rpc(f, o)`, `GET(x, o)`
+// over anything else keeps `GET` as its one verb — bare, a table, a job, a pipe or a ledger would
+// answer its writes too (16.117) — and a mutation keeps its verb in its options:
 // `POST(f, o)` is `rpc(f, { methods: ['POST'], ...o })`. A
 // handler file is a server file (16.73): `<name>.handler.ts` is `<name>.server.ts`, answering at the
 // same route, and every import naming it is moved with it. A handler a `<script server>` declares is
@@ -30,9 +31,9 @@ const TAKEN =
 
 const SCRIPT = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g
 
-/** 38.231 — a server block's `GET` over a value that would answer writes bare, by its export's name. */
+/** 38.231 — a server block's `GET` over a value that may answer writes bare, by its export's name. */
 const READ_ONLY = (name: string): string =>
-    `this ${name} answered GET alone, and exported bare from a <script server> it would also answer the writes its value derives: move it to a <Component>.server.ts beside the component as \`export const ${name} = rpc(…, { methods: ['GET'], clients: { mcp: false, cli: false, openapi: false } })\`, and import it where it is called. RULEBOOK 16.117, 16.119, 38.231.`
+    `this ${name} answered GET alone, and exported bare from a <script server> it would also answer the writes its value derives where that is a table, a job, a pipe or a ledger: move it to a <Component>.server.ts beside the component as \`export const ${name} = rpc(…, { methods: ['GET'], clients: { mcp: false, cli: false, openapi: false } })\`, and import it where it is called. RULEBOOK 16.117, 16.119, 38.231.`
 
 const OPTIONED =
     "a <script server> exports bare values, and `rpc` with options is a server file's: move this one to a <name>.server.ts beside the component, and import it where it is called. RULEBOOK 16.119, 38.231."
@@ -139,7 +140,7 @@ function declaredByRpc(
     }
     if (verbs.size === 0) return code
     const tokens = tokenize(code)
-    const functions = declaredFunctions(tokens)
+    const declared = readAloneNames(tokens)
     for (let at = 0; at < tokens.length; at += 1) {
         const token = tokens[at] as Token
         const verb =
@@ -160,11 +161,11 @@ function declaredByRpc(
         if (tokens[open]?.kind !== SyntaxKind.OpenParenToken) continue
         const close = closerOf(tokens, open)
         if (close === -1) continue
-        // A `GET` over a function is a function's `rpc`, which answers `GET` alone (16.111). Over
-        // anything else — a memo, a value, a name it cannot see is a function — `rpc` would also
-        // answer the writes that value derives (16.117), so the `GET` is kept as its one verb.
-        if (verb === 'GET' && isFunctionArgument(tokens, open, functions))
-            continue
+        // A `GET` over a function, a memo or a plain value is their `rpc`, which answers `GET` alone
+        // (16.111). Over anything else — a table, a job, a pipe, a ledger, a name it cannot see is
+        // one of the three — `rpc` could also answer the writes that value derives (16.117), so the
+        // `GET` is kept as its one verb.
+        if (verb === 'GET' && isReadAlone(tokens, open, declared)) continue
         edits.push(methodsOption(code, tokens, open, close, verb))
     }
     edits.sort((left, right) => left.start - right.start)
@@ -225,30 +226,26 @@ function methodsOption(
 }
 
 /**
- * Whether the first argument of the call opened at `open` is a function: written as one — `function`,
- * or an arrow, its `=>` outside every bracket of the argument — or a name `functions` holds.
+ * 16.111 — whether the first argument of the call opened at `open` answers `GET` alone under `rpc`: a
+ * function, a memo or a plain value written there (`startsReadAlone`), an arrow whose `=>` stands
+ * outside every bracket of the argument, or a name `names` holds.
  */
-function isFunctionArgument(
+function isReadAlone(
     tokens: readonly Token[],
     open: number,
-    functions: ReadonlySet<string>,
+    names: ReadonlySet<string>,
 ): boolean {
     const first = tokens[open + 1]
     if (first === undefined) return false
-    if (first.kind === SyntaxKind.FunctionKeyword) return true
-    if (
-        first.kind === SyntaxKind.AsyncKeyword &&
-        tokens[open + 2]?.kind === SyntaxKind.FunctionKeyword
-    )
-        return true
-    // A lone name: a function only where this module declares it one.
+    // A lone name: read alone only where this module declares it so.
     const after = tokens[open + 2]?.kind
     if (
         first.kind === SyntaxKind.Identifier &&
         (after === SyntaxKind.CommaToken ||
             after === SyntaxKind.CloseParenToken)
     )
-        return functions.has(first.text)
+        return names.has(first.text)
+    if (startsReadAlone(tokens, open + 1)) return true
     let depth = 0
     for (let at = open + 1; at < tokens.length; at += 1) {
         const kind = (tokens[at] as Token).kind
@@ -261,16 +258,79 @@ function isFunctionArgument(
     return false
 }
 
-/** The names a module declares as functions: `function name`, at any depth. */
-function declaredFunctions(tokens: readonly Token[]): Set<string> {
+/** The tokens that open a literal, a plain value `rpc` answers `GET` alone over. */
+const LITERAL_STARTS: ReadonlySet<SyntaxKind> = new Set([
+    SyntaxKind.OpenBraceToken,
+    SyntaxKind.OpenBracketToken,
+    SyntaxKind.StringLiteral,
+    SyntaxKind.NumericLiteral,
+    SyntaxKind.NoSubstitutionTemplateLiteral,
+    SyntaxKind.TemplateHead,
+    SyntaxKind.TrueKeyword,
+    SyntaxKind.FalseKeyword,
+    SyntaxKind.NullKeyword,
+])
+
+/**
+ * Whether the expression at `at` is, as written, a function — `function`, `async function`, or an
+ * arrow of one bare parameter — a `memo(…)`, a `reactive(…)` or `reactive.derived(…)`, or a literal.
+ */
+function startsReadAlone(tokens: readonly Token[], at: number): boolean {
+    const first = tokens[at]
+    if (first === undefined) return false
+    if (LITERAL_STARTS.has(first.kind)) return true
+    if (first.kind === SyntaxKind.FunctionKeyword) return true
+    const next = tokens[at + 1]
+    if (
+        first.kind === SyntaxKind.AsyncKeyword &&
+        next?.kind === SyntaxKind.FunctionKeyword
+    )
+        return true
+    if (first.kind !== SyntaxKind.Identifier) return false
+    if (next?.kind === SyntaxKind.EqualsGreaterThanToken) return true
+    if (next?.kind === SyntaxKind.OpenParenToken)
+        return first.text === 'memo' || first.text === 'reactive'
+    return (
+        first.text === 'reactive' &&
+        next?.kind === SyntaxKind.DotToken &&
+        tokens[at + 2]?.text === 'derived'
+    )
+}
+
+/**
+ * The names a module declares as what `rpc` answers `GET` alone over: `function name`, and a
+ * `const`, `let` or `var` whose initializer `startsReadAlone` — or an arrow, its parameters
+ * parenthesized — at any depth.
+ */
+function readAloneNames(tokens: readonly Token[]): Set<string> {
     const names = new Set<string>()
-    for (let at = 0; at < tokens.length - 1; at += 1)
-        if (
-            (tokens[at] as Token).kind === SyntaxKind.FunctionKeyword &&
-            (tokens[at + 1] as Token).kind === SyntaxKind.Identifier
+    for (let at = 0; at < tokens.length - 1; at += 1) {
+        const token = tokens[at] as Token
+        const name = tokens[at + 1] as Token
+        if (name.kind !== SyntaxKind.Identifier) continue
+        if (token.kind === SyntaxKind.FunctionKeyword) names.add(name.text)
+        else if (
+            (token.text === 'const' ||
+                token.text === 'let' ||
+                token.text === 'var') &&
+            tokens[at + 2]?.kind === SyntaxKind.EqualsToken &&
+            (startsReadAlone(tokens, at + 3) || isArrowAt(tokens, at + 3))
         )
-            names.add((tokens[at + 1] as Token).text)
+            names.add(name.text)
+    }
     return names
+}
+
+/** Whether `(…) =>` or `async (…) =>` begins at `at`. */
+function isArrowAt(tokens: readonly Token[], at: number): boolean {
+    const open =
+        tokens[at]?.kind === SyntaxKind.AsyncKeyword ? at + 1 : at
+    if (tokens[open]?.kind !== SyntaxKind.OpenParenToken) return false
+    const close = closerOf(tokens, open)
+    return (
+        close !== -1 &&
+        tokens[close + 1]?.kind === SyntaxKind.EqualsGreaterThanToken
+    )
 }
 
 /** A server block with each top-level `const x = rpc(` exported. */
@@ -356,7 +416,7 @@ function bareExports(
         if (optioned) {
             const lineStart = body.lastIndexOf('\n', token.start) + 1
             const lineEnd = body.indexOf('\n', token.start)
-            // The `GET` this migration narrowed (see `isFunctionArgument`): its options are the verb.
+            // The `GET` this migration narrowed (see `isReadAlone`): its options are the verb.
             const options = body
                 .slice(
                     (tokens[(commas[0] as number) + 1] as Token).start,

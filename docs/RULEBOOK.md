@@ -1431,12 +1431,15 @@ with `rpc.set` and `rpc.patch`, as the way to serve a value the server writes.
 16.110 A handler MUST take a `memo`'s value options, `throttle` and `debounce` among them, and a
 `GET`'s browser copy MUST keep the pace they declare as a `memo` does (5.18-5.25).
 
-16.111 `rpc` MUST answer the verbs its value answers by — a function `GET`, any other value `GET`,
-`PUT` and `PATCH` — or, where its options declare `methods`, the verbs `methods` names, and a call
-of it MUST be sent as the first of them.
+16.111 `rpc` MUST answer the verbs its value answers by — a function, a plain value and a `memo`
+`GET` alone, and a `table`, a `job`, a `pipe` and a `ledger` `GET` and each verb 16.117 gives its
+members — or, where its options declare `methods`, the verbs `methods` names, and a call of it MUST
+be sent as the first of them; and its type MUST carry a member writing by a verb only where it
+answers that verb.
 
-16.112 `methods` naming a verb its value cannot answer by — a function more than one verb, a value
-any verb but `GET`, `PUT` and `PATCH`, or none of them `GET` — MUST be refused as it is declared.
+16.112 `methods` naming a verb its value cannot answer by — a function more than one verb, a plain
+value any verb but `GET`, `PUT` and `PATCH`, a source any verb but `GET` and its members' (16.117),
+or none of them `GET` — MUST be refused as it is declared.
 
 16.113 `address` MUST put an `rpc` at that address in place of the one 16.2 gives it.
 
@@ -1454,7 +1457,7 @@ or load the value again where the answer is a refusal.
 
 16.117 `rpc` over a `memo`, a `table`, a `job`, a `pipe` or a `ledger` MUST answer `GET` by its read —
 the memo's value, the table's rows for a `match`, the job's or the pipe's `status`, the ledger's
-entries from a position or a cursor — and each other verb by one member, the same member on the
+entries from a position or a cursor — and each other verb it answers (16.111) by one member, the same member on the
 server and on a browser's copy: a memo's `set` by `PUT`, `patch` by `PATCH` and `refresh` by `POST`; a
 table's `set` by `PUT`, `patch` by `PATCH` and `delete` by `DELETE`; a job's `run`, a pipe's `push`
 and a ledger's `append` by `POST`; and a memo whose entries live a request MUST answer `GET` alone.
@@ -4010,7 +4013,8 @@ declares as a `reactive` or a `reactive.derived`, in the file of the handler or 
 imports the name from.
 
 38.231 The migration keyed to 0.145.0 MUST rewrite each call of abide's `GET` as `rpc`, naming `GET`
-in its options' `methods` where its first argument is not a function the module shows it to be, and
+in its options' `methods` where its first argument is not a function, a `memo` or a plain value the
+module shows it to be, and
 each of `POST`, `PUT`, `PATCH` and `DELETE` as `rpc` whose options' `methods` names that verb, so no
 address answers a verb it did not; MUST write that `methods` as a formatter would; MUST move each
 `<name>.handler.ts` to `<name>.server.ts`, and every import specifier naming it with it, noting by
