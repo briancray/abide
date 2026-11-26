@@ -52,6 +52,8 @@ export type JobOptions<Input = undefined> = {
     run: (input: Input | undefined) => unknown
     /** 54.17 — where the status is kept, so a restart resumes the schedule and keeps the last run's result. */
     store?: Store<JobStatus> | undefined
+    /** 54.44 — the milliseconds after the app opens that the first look waits, rather than looking at once. */
+    delay?: number | undefined
     /** 54.34 — what holds the schedule: while it reads true, a look starts no run. */
     paused?:
         Reactive<boolean, never, never, boolean> | (() => boolean) | undefined
@@ -322,7 +324,14 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         start: () => {
             if (clock.running) return
             clock.running = true
-            lookThenArm()
+            // 54.44 — the first look waits out `delay`; a halt before it clears the timer.
+            const delay = options.delay ?? 0
+            if (delay > 0)
+                armTimer(clock, delay, () => {
+                    clock.timer = null
+                    lookThenArm()
+                })
+            else lookThenArm()
         },
         halt: () => {
             clock.running = false

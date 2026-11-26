@@ -7060,6 +7060,9 @@ was; a run told to stop MUST record neither.
 54.43 `App.stop` MUST wait on the run each `job` has in flight, once the requests in flight have
 drained, before `onStop` runs and within 42.17's deadline.
 
+54.44 A `job` given `delay` MUST make its first look `delay` milliseconds after the app opens, rather
+than as it opens.
+
 # 55. Worker files
 
 55.1 An import of a worker file MUST answer each export with a function running that export in the

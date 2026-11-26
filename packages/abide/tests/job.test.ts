@@ -599,3 +599,27 @@ test('App.stop aborts the run a job has in flight and waits on it — 7.20, 54.4
     expect(`ended at the stop: ${ended}`).toBe('ended at the stop: true')
     await digest.stop()
 })
+
+// 54.44 — THE FIRST LOOK WAITS OUT `delay`: a job never run starts nothing as the app opens, and runs
+// once the delay has passed. THE REVERT: call `lookThenArm()` at once in `start`; this reads
+// `runs before the delay: 1`.
+test('a job given delay makes its first look that long after the app opens — 54.44', async () => {
+    let runs = 0
+    const delayed = job({
+        name: 'delayed',
+        every: 3_600_000,
+        delay: 60,
+        run: () => {
+            runs += 1
+        },
+    })
+    await serving(async () => {
+        await Bun.sleep(20)
+        expect(`runs before the delay: ${runs}`).toBe(
+            'runs before the delay: 0',
+        )
+        await until(delayed.status, (status) => status.lastRun !== null)
+        expect(`runs after it: ${runs}`).toBe('runs after it: 1')
+    })
+    await delayed.stop()
+})
