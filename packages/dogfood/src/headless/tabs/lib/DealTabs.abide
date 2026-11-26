@@ -5,7 +5,7 @@ let tab = reactive<string | undefined>('details')
 const view = tabs({ items: ['details', 'stage'], selected: tab })
 </script>
 
-<div {...view.list}>
+<div class="tabs" {...view.list}>
     <button {...view.tab('details').button}>Details</button>
     <button {...view.tab('stage').button}>Stage</button>
 </div>

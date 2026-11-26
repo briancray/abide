@@ -23,7 +23,7 @@ const table = sortableTable({
 </script>
 
 <p>Sorted by {sort ? `${sort.key}, ${sort.direction}` : 'nothing'}</p>
-<table>
+<table {...table.table}>
     <thead>
         <tr>
             {#for column of COLUMNS key column.key}

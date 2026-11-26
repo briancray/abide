@@ -5,7 +5,7 @@ const notes = ['Called Ada', 'Sent the quote']
 const view = tabs({ items: ['details', 'notes'] })
 </script>
 
-<div {...view.list}>
+<div class="tabs" {...view.list}>
     <button {...view.tab('details').button}>Details</button>
     <button {...view.tab('notes').button}>
         Notes <span>{notes.length}</span>

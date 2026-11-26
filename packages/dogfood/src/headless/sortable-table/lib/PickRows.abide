@@ -8,7 +8,8 @@ const DEALS: Deal[] = [
     { id: 'turing', name: 'Turing seats' },
     { id: 'noether', name: 'Noether pilot' },
 ]
-const COLUMNS: Column<Deal>[] = [{ key: 'name', label: 'Deal' }]
+const NAME: Column<Deal> = { key: 'name', label: 'Deal' }
+const COLUMNS = [NAME]
 let selected = reactive<readonly string[]>([])
 const table = sortableTable({
     rows: DEALS,
@@ -18,13 +19,13 @@ const table = sortableTable({
 </script>
 
 <p>{selected.length} picked</p>
-<table>
+<table {...table.table}>
     <thead>
         <tr>
             <th {...table.selectAll.select}>
                 <input {...table.selectAll.checkbox}>
             </th>
-            <th>Deal</th>
+            <th {...table.column(NAME).header}>Deal</th>
         </tr>
     </thead>
     <tbody>
@@ -33,7 +34,7 @@ const table = sortableTable({
                 <td {...table.row(deal).select}>
                     <input {...table.row(deal).checkbox}>
                 </td>
-                <td>{deal.name}</td>
+                <td {...table.column(NAME).cell}>{deal.name}</td>
             </tr>
         {/for}
     </tbody>

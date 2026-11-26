@@ -14,7 +14,7 @@ const table = sortableTable({
 })
 </script>
 
-<table>
+<table {...table.table}>
     <thead>
         <tr>
             {#for column of COLUMNS key column.key}

@@ -7,6 +7,7 @@ const preview = dialog()
 <button onclick={() => (preview.open = true)}>Preview the contract</button>
 <dialog
     {...preview.dialog}
+    aria-label="Contract preview"
     class="m-0 h-dvh max-h-none w-dvw max-w-none bg-transparent p-0"
 >
     <div {...preview.backdrop} class="grid h-full place-items-center bg-ink/40">

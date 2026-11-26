@@ -13,7 +13,7 @@ const look = dialog({
 {#for deal of DEALS}
     <button onclick={() => (looking = deal)}>{deal}</button>
 {/for}
-<dialog {...look.dialog}>
-    <h2>{looking}</h2>
+<dialog {...look.dialog} aria-labelledby="look-title">
+    <h2 id="look-title">{looking}</h2>
     <form method="dialog"><button>Close</button></form>
 </dialog>

@@ -7,7 +7,7 @@ let tab = reactive<string | undefined>('open')
 const view = tabs({ items: ['open', 'won'], selected: tab })
 </script>
 
-<div {...view.list}>
+<div class="tabs" {...view.list}>
     <button {...view.tab('open').button}>Open</button>
     <button {...view.tab('won').button}>Won</button>
 </div>

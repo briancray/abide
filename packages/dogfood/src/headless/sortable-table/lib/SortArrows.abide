@@ -23,6 +23,7 @@ const table = sortableTable({
 </script>
 
 <table
+    {...table.table}
     class="[&_[data-align=end]]:text-right
     [&_[data-sort=ascending]_button]:after:content-['_↑']
     [&_[data-sort=descending]_button]:after:content-['_↓']"

@@ -5,7 +5,11 @@ const filters = drawer({ side: 'start', min: 200, max: 480 })
 </script>
 
 <button onclick={() => (filters.open = true)}>Filters</button>
-<dialog class="m-0 h-dvh max-h-none p-4" {...filters.drawer}>
+<dialog
+    class="m-0 h-dvh max-h-none p-4"
+    {...filters.drawer}
+    aria-label="Filters"
+>
     <p>Only my deals</p>
     <button onclick={() => (filters.open = false)}>Done</button>
     <div

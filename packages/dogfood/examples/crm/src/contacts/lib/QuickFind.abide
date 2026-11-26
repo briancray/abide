@@ -1,16 +1,13 @@
 <script>
-import { reactive } from '@abide/abide'
+import { hotkeys, reactive } from '@abide/abide'
 
 const search = reactive<HTMLInputElement | undefined>(undefined)
 
-function shortcut(event: KeyboardEvent) {
-    if (event.key !== '/' || event.target === search) return
-    event.preventDefault()
-    search?.focus()
-}
+// 53.7 — a `/` typed into a field, this one or any other, is left to the field.
+const keys = hotkeys({ '/': () => search?.focus() })
 </script>
 
-<window onkeydown={shortcut} />
+<window onkeydown={keys} />
 
 <label>
     Find a contact

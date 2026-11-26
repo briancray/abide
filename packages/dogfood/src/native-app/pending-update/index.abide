@@ -1,4 +1,6 @@
 <script>
+import { url } from '@abide/abide'
+
 import Code from '#src/lib/Code.abide'
 import Doc from '#src/lib/Doc.abide'
 import Section from '#src/lib/Section.abide'
@@ -38,19 +40,24 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Block the CRM until a required update is installed">
         <p>An update bundled with <code>--required</code> reads <code>required: true</code>.
-            Prevent the dialog's <code>cancel</code> event so Escape cannot close it.</p>
+            Spread a <a href={url('/headless/dialog')}><code>dialog</code></a> that is not
+            <code>dismissible</code>: it opens modal, so the CRM behind it takes no press, and
+            Escape cannot close it.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { pendingUpdate } from '@abide/abide'
+            import { dialog, pendingUpdate, reactive } from '@abide/abide'
+
+            const required = dialog({
+                open: reactive(() => pendingUpdate?.required === true),
+                dismissible: false,
+            })
             </script>
 
-            {#if pendingUpdate?.required}
-                <dialog open oncancel={(event) => event.preventDefault()}>
-                    <p>CRM {pendingUpdate.version} has to be installed to go on.</p>
-                    <p>{pendingUpdate.notes}</p>
-                    <button onclick={() => pendingUpdate?.install()}>Restart now</button>
-                </dialog>
-            {/if}
+            <dialog {...required.dialog}>
+                <p>CRM {pendingUpdate?.version} has to be installed to go on.</p>
+                <p>{pendingUpdate?.notes}</p>
+                <button onclick={() => pendingUpdate?.install()}>Restart now</button>
+            </dialog>
         `} />
     </Section>
 </Doc>

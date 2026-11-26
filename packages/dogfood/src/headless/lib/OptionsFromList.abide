@@ -7,9 +7,13 @@ const batch = listbox({ options: leads, multiple: true })
 
 <ul
     class="m-0 list-none p-0 select-none [&_[data-listbox=option]]:px-3
-    [&_[data-listbox=option]]:py-1 [&_[data-selected]]:bg-signal/10"
+    [&_[data-listbox=option]]:py-1 [&_[data-selected]]:bg-signal/10
+    [&_[data-active]]:outline"
     aria-label="Leads to hand over"
     {...batch.listbox}
+    tabindex="0"
+    onkeydown={batch.onkeydown}
+    aria-activedescendant={batch.activeId}
 >
     {#for lead of leads}
         <li {...batch.option(lead)}>{lead}</li>

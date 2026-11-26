@@ -9,7 +9,8 @@ const deals = drawer({
 </script>
 
 <button onclick={() => (deals.open = true)}>Show deals</button>
-<dialog class="fixed inset-x-0 bottom-0 m-0 mt-auto w-full" {...deals.drawer}>
+<dialog class="fixed inset-x-0 bottom-0 m-0 mt-auto w-full" {...deals.drawer}
+    aria-label="Deals">
     <div
         class="mx-auto my-2 h-1 w-10 rounded-full bg-rule"
         {...deals.handle}

@@ -18,7 +18,7 @@ const table = sortableTable({
 })
 </script>
 
-<table class="w-full [&_[data-align=end]]:text-right">
+<table {...table.table} class="w-full [&_[data-align=end]]:text-right">
     <thead>
         <tr>
             {#for column of COLUMNS key column.key}
