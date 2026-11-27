@@ -3,7 +3,7 @@
 // its own. Going on waits on `valid`; going back is always open, to any step done.
 
 import { handFocus, nearest } from './handFocus.ts'
-import { keyOfItem, type KeyOption } from './itemKey.ts'
+import { keyOfItem, type KeyOption, listedKeys } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { type Meter, meter } from './meter.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
@@ -39,11 +39,7 @@ export type Wizard<Step> = {
 export function wizard<Step>(options: WizardOptions<Step>): Wizard<Step> {
     const picked = options.current ?? reactive<string | undefined>(undefined)
     const keyOf = (step: Step) => keyOfItem(options.key, step)
-    const steps = reactive((): readonly string[] => {
-        const written: string[] = []
-        for (const step of live(options.steps)) written.push(keyOf(step))
-        return written
-    })
+    const steps = listedKeys(options.steps, keyOf)
     // 51.141 — a key no step has is the first.
     const at = (): number => Math.max(0, steps().indexOf(picked() as string))
     const key = (index: number) => steps()[index]

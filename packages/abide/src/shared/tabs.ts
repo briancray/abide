@@ -3,8 +3,13 @@
 // server writes every attribute, so the page is the selected tab's before it hydrates.
 
 import { checkParts } from './checkParts.ts'
-import { keyOfItem, type KeyOption } from './itemKey.ts'
-import { type Live, live } from './live.ts'
+import {
+    keyOfItem,
+    type KeyOption,
+    listedKeys,
+    listedOrFirst,
+} from './itemKey.ts'
+import type { Live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
@@ -45,19 +50,12 @@ export type Tabs<Item> = {
 /** WAI-ARIA's tabs: a list of tabs and the panels they show, as parts to spread. */
 export function tabs<Item>(options: TabsOptions<Item>): Tabs<Item> {
     const keyOf = (item: Item) => keyOfItem(options.key, item)
-    const keysOf = reactive((): readonly string[] => {
-        const written: string[] = []
-        for (const item of live(options.items)) written.push(keyOf(item))
-        return written
-    })
+    const keysOf = listedKeys(options.items, keyOf)
     const picked = options.selected ?? reactive<string | undefined>(undefined)
     // 51.34 — a key no tab has selects the first.
-    const current = reactive((): string | undefined => {
-        const listed = keysOf()
-        const wanted = picked()
-        for (const each of listed) if (each === wanted) return wanted
-        return listed[0]
-    })
+    const current = reactive((): string | undefined =>
+        listedOrFirst(keysOf(), picked()),
+    )
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the ids
     // are rewritten together.
     const base = options.id ?? `tabs-${randomToken(4, 'hex')}`

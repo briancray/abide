@@ -155,9 +155,7 @@ export function popoverLayer(options: PopoverOptions): PopoverParts & {
                     const at = open() ? document.getElementById(anchorId) : null
                     if (at === null) return
                     const floating = element as HTMLElement
-                    const stop = anchored(at, floating, options, (placement) =>
-                        floating.setAttribute('data-side', placement.side),
-                    )
+                    const stop = anchored(at, floating, options)
                     // 50.60 — the trigger or the anchor is inside: pressing it again is its to answer.
                     const unstack = dismissing(() => open.set(false), {
                         escape: options.escape ?? true,
@@ -188,8 +186,6 @@ export function popoverOn(
         // and closes it is the binding.
         if (!floating.hasAttribute('popover'))
             floating.setAttribute('popover', 'manual')
-        return anchored(anchor, floating, options, (placement) =>
-            floating.setAttribute('data-side', placement.side),
-        )
+        return anchored(anchor, floating, options)
     }
 }

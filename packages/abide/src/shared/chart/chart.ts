@@ -696,22 +696,16 @@ export function chart(options: ChartOptions): ChartParts {
             // Read tracked, so a crosshair kept as one element is placed again at each x.
             const read = readout()
             if (anchor === undefined) return
-            const stop = anchored(
-                anchor,
-                element,
-                {
-                    // 52.27 — the side with more of the plot.
-                    side:
-                        read !== undefined && read.x >= measuredWidth() / 2
-                            ? 'left'
-                            : 'right',
-                    offset: 8,
-                    // 50.47 — a readout is never the pointer's target.
-                    interactive: false,
-                },
-                (placement) =>
-                    element.setAttribute('data-side', placement.side),
-            )
+            const stop = anchored(anchor, element, {
+                // 52.27 — the side with more of the plot.
+                side:
+                    read !== undefined && read.x >= measuredWidth() / 2
+                        ? 'left'
+                        : 'right',
+                offset: 8,
+                // 50.47 — a readout is never the pointer's target.
+                interactive: false,
+            })
             // 50.25 — an Escape no one prevented takes the crosshair down, as it does a hint.
             const unstack = dismissing(scrubbing.leave, { outside: false })(
                 anchor,

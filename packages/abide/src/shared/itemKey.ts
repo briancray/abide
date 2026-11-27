@@ -3,6 +3,9 @@
 // `label` as options it may leave out; over any other item the type asks for them, since `String` of an
 // object is `[object Object]` for every one. 49.8.
 
+import { type Live, live } from './live.ts'
+import { type Reactive, reactive } from './reactive/index.ts'
+
 /** `key`, optional where the item is a string or a number, its own key, or carries an `id`, which is. */
 export type KeyOption<Item> = [Item] extends [
     string | number | { id: string | number },
@@ -44,4 +47,24 @@ export function keyOfItem<Item>(
     return typeof item === 'object' && item !== null
         ? String((item as unknown as { id: unknown }).id)
         : String(item)
+}
+
+/** The keys of `items` in order, as `keyOf` tells each apart: one computed every part reads (49.16). */
+export function listedKeys<Item>(
+    items: Live<readonly Item[]>,
+    keyOf: (item: Item) => string,
+): Reactive<readonly string[]> {
+    return reactive((): readonly string[] => {
+        const written: string[] = []
+        for (const item of live(items)) written.push(keyOf(item))
+        return written
+    })
+}
+
+/** `wanted` where `listed` holds it, else the first listed: what a key no item has stands for. */
+export function listedOrFirst(
+    listed: readonly string[],
+    wanted: string | undefined,
+): string | undefined {
+    return wanted !== undefined && listed.includes(wanted) ? wanted : listed[0]
 }

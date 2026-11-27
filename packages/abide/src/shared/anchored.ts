@@ -16,13 +16,14 @@ export type AnchoredOptions = PlaceOptions & {
 /**
  * Shows `floating` — a `popover` — and places it against `anchor` now, and again in the frame after
  * anything scrolls, the window resizes, or either of the two changes size, until the stop it hands
- * back is called, which hides it if it is still open. `placed` is told each placement.
+ * back is called, which hides it if it is still open. 50.27 — the side each placement takes is written
+ * as `data-side` on `floating`, or handed to `placed` where the caller writes it itself.
  */
 export function anchored(
     anchor: Element,
     floating: HTMLElement,
     options: AnchoredOptions,
-    placed: (placement: Placement) => void,
+    placed?: (placement: Placement) => void,
 ): () => void {
     let frame = 0
     const box = options.box
@@ -41,7 +42,9 @@ export function anchored(
         floating.style.inset = `${placement.y}px auto auto ${placement.x}px`
         floating.style.setProperty('--arrow-offset', `${placement.arrow}px`)
         floating.style.setProperty('--anchor-width', `${width}px`)
-        placed(placement)
+        if (placed === undefined)
+            floating.setAttribute('data-side', placement.side)
+        else placed(placement)
     }
     // A scroll fires many times a frame; one placement per frame reads the layout once.
     const scheduled = (): void => {

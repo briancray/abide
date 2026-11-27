@@ -11,6 +11,8 @@ import {
     keyOfItem,
     type KeyOption,
     type LabelOption,
+    listedKeys,
+    listedOrFirst,
     writtenBy,
 } from './itemKey.ts'
 import { type Live, live } from './live.ts'
@@ -165,21 +167,12 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     const labelOf = (item: Item) => writtenBy(options.label, item)
     const behavior = () => live(options.behavior) ?? 'smooth'
     const align = () => live(options.align) ?? 'center'
-    const keys = reactive((): readonly string[] => {
-        const items = live(options.items)
-        const written: string[] = []
-        for (const item of items) written.push(keyOf(item))
-        return written
-    })
+    const keys = listedKeys(options.items, keyOf)
     const selected = options.selected ?? reactive<string | undefined>(undefined)
     // 53.61 — a key no item has rests on the first.
-    const resting = reactive((): string | undefined => {
-        const listed = keys()
-        const wanted = selected()
-        return wanted !== undefined && listed.includes(wanted)
-            ? wanted
-            : listed[0]
-    })
+    const resting = reactive((): string | undefined =>
+        listedOrFirst(keys(), selected()),
+    )
     // 53.63 — what a scroll writes, and replaced by the resting item whenever that moves.
     const current = reactive((): string | undefined => resting())
     const base = options.id ?? `carousel-${randomToken(4, 'hex')}`

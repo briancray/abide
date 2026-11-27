@@ -3,7 +3,12 @@
 // its key: filter chips. Picking one, it is WAI-ARIA's radio group, the arrow keys moving the pick and
 // focus together: a segmented control. What it picks is a `Selection`, as a `listbox`'s is.
 
-import { keyOfItem, type KeyOption } from './itemKey.ts'
+import {
+    keyOfItem,
+    type KeyOption,
+    listedKeys,
+    listedOrFirst,
+} from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
@@ -49,22 +54,16 @@ export function toggleGroup<Item, Multiple extends boolean = false>(
         many,
     )
     const keyOf = (item: Item) => keyOfItem(options.key, item)
-    const keysOf = reactive((): readonly string[] => {
-        const written: string[] = []
-        for (const item of live(options.items)) written.push(keyOf(item))
-        return written
-    })
+    const keysOf = listedKeys(options.items, keyOf)
     // Hydration runs setup again (41.6), and the focus a key moves is found by these ids.
     const base = options.id ?? `toggle-group-${randomToken(4, 'hex')}`
     const itemId = (key: string) => `${base}-${encodeURIComponent(key)}`
 
     // 51.114 — picking one, the key in the tab order: the one picked, the first where none is listed.
     // A computed, as `tabs`' is: every radio's `tabindex` reads it, so a pick walks the keys once.
-    const current = reactive((): string | undefined => {
-        const listed = keysOf()
-        const now = picks.selected() as string | undefined
-        return now !== undefined && listed.includes(now) ? now : listed[0]
-    })
+    const current = reactive((): string | undefined =>
+        listedOrFirst(keysOf(), picks.selected() as string | undefined),
+    )
 
     // 51.110 — picking many, a key's button is a `toggle`, pressed while the key is picked.
     const toggled = (key: string): Record<string, unknown> =>
