@@ -4082,9 +4082,11 @@ the options name no `signal`, remove a `retries` of 0, and note by 38.226 each `
 and `timeout` it leaves.
 
 38.235 Under `mount`, `route`'s `url`, `params`, `name` and `index` MUST be the document's address —
-its `url` without the fragment, `params` empty, `name` its pathname and `index` 0 for the server
-pass, per 23.29, and for the hydration its whole `url` and the `index` the standing `history` entry
-was written with, per 23.28. Where the document has no router, a router MUST stand from the first
+its `url` without the fragment and `index` 0 for the server pass, per 23.29, and for the hydration
+its whole `url` and the `index` the standing `history` entry was written with, per 23.28; where the
+component mounted last is a page, `name` its route and `params` what that route matches in the
+address, none where it matches nothing, and for any other component `name` the pathname and
+`params` empty. Where the document has no router, a router MUST stand from the first
 mount to the last one's stop that writes a `navigate` to a URL into `history` — a new entry, or the
 standing one where `replace` is set — and steps `history` for a number, per 30.38, and `route` MUST
 arrive at each entry it reaches before the `navigate` settles.

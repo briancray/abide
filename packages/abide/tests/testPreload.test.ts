@@ -338,6 +338,43 @@ test('route is the address, and a navigation is the history', async () => {
     )
 }, 90_000)
 
+// 38.235 — A MOUNTED PAGE RESOLVES THE ADDRESS AGAINST ITS OWN ROUTE: its params, and its route as
+// the name. THE REVERT: drop `held.pages.set` from `addCompilation`; the page is read as a component
+// — "invoice  at /invoices/7" where "invoice 7 at /invoices/[id]" is due.
+test('a mounted page reads the params its route matches in the address — 38.235', async () => {
+    const cwd = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'params-fixture',
+            type: 'module',
+            imports: { '#src/*': './src/*' },
+        }),
+        'bunfig.toml': BUNFIG,
+        'src/index.abide': '<main>home</main>',
+        'src/invoices/[id].abide': `<script>
+import { route } from '@abide/abide'
+</script>
+
+<p id="invoice">invoice {route.params.id} at {route.name}</p>`,
+        'src/invoices/tests/Invoice.test.ts': `import { expect, test } from 'bun:test'
+import { mount } from '@abide/harness/abide'
+import Invoice from '../[id].abide'
+
+test('the params are the address', async () => {
+    history.replaceState(null, '', '/invoices/7')
+    using _invoice = await mount(Invoice({}))
+    expect(document.querySelector('#invoice')?.textContent).toBe('invoice 7 at /invoices/[id]')
+})
+`,
+    })
+    const ran = await spawned(
+        ['bun', 'test', './src/invoices/tests/Invoice.test.ts'],
+        { cwd },
+    )
+    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)
+
 // 38.236 — A TEST'S CALLS ARE ONE BROWSER'S SESSION: a sign-in one call makes is who the next call
 // is, through a rung that reads the request. THE REVERT: have `within` read `STORAGE` alone again;
 // the sign-in's `principal.set` throws "called outside a request" and the page reads `who: ` where

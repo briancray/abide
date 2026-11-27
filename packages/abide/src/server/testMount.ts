@@ -14,8 +14,10 @@
 
 import { CURRENT_ROUTER, type Navigable } from '#shared/CURRENT_ROUTER.ts'
 import { startMadeIds } from '#shared/madeId.ts'
+import { matchOf, type Params, partsOf } from '#shared/matchRoute.ts'
 import { flushSync } from '#shared/reactive/Reactive.ts'
 import { arrive } from '#shared/route.ts'
+import { parseRoutePattern } from '#shared/routePattern.ts'
 
 import { MOUNTABLE } from './MOUNTABLE.ts'
 import { type Component, render } from './render.ts'
@@ -28,6 +30,8 @@ type Mountable = {
             props: Record<string, () => unknown>,
         ) => { stop(): void } | undefined
     }>
+    /** 38.235 — the route of a page, or `null` for any other component. */
+    route: string | null
 }
 
 /** A mounted component: `stop` ends every watch its hydration opened, and removes its markup. */
@@ -63,10 +67,11 @@ async function mounted(
     component: Component,
     mountable: Mountable,
 ): Promise<Mounted> {
+    standingRoute = mountable.route ?? undefined
     // 23.29 — a server's own index, at the address a request would have carried.
     const served = new URL(location.href)
     served.hash = ''
-    arrive(served.href, served.pathname, {}, 0)
+    arrive(served.href, nameOf(served.pathname), paramsOf(served.pathname), 0)
     // 12.5 — the server pass's watches stop once its document is written, as any render's do.
     const html = new TextDecoder().decode(await render(component))
     // After the `<body …>` open tag, whatever attributes the component wrote onto it (35.15).
@@ -110,14 +115,28 @@ function indexOfEntry(): number {
     return typeof state?.index === 'number' ? state.index : 0
 }
 
+// 38.235 — the route of the page mounted last, which the address is resolved against.
+let standingRoute: string | undefined
+
 /**
- * `route` at the document's address, and every effect that woke for it run.
- *
- * NO ROUTE TABLE IS READ: a mounted component is no page, so the address resolves to itself — a
- * static route's literal is its pathname, and it matched no params.
+ * The resolution path: the page's route, or the address itself for a component — no route table
+ * is read, and a static route's literal is its pathname.
  */
+function nameOf(pathname: string): string {
+    return standingRoute ?? pathname
+}
+
+/** What the page's route matches in `pathname`: nothing for a component, or an address it misses. */
+function paramsOf(pathname: string): Params {
+    if (standingRoute === undefined) return {}
+    const parts = partsOf(pathname)
+    return (parts && matchOf(parseRoutePattern(standingRoute), parts)) ?? {}
+}
+
+/** `route` at the document's address, and every effect that woke for it run. */
 function arrived(): void {
-    arrive(location.href, location.pathname, {}, indexOfEntry())
+    const pathname = location.pathname
+    arrive(location.href, nameOf(pathname), paramsOf(pathname), indexOfEntry())
     flushSync()
 }
 

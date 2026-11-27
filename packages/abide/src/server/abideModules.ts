@@ -51,6 +51,7 @@ import {
 } from './MODULE_QUERIES.ts'
 import { MOUNTABLE } from './MOUNTABLE.ts'
 import type { MountRow } from './mountHandlers.ts'
+import { placement } from './placement.ts'
 import { PRIVATE_EXPORT } from './PRIVATE_EXPORT.ts'
 import { realOrAsGiven } from './realOrAsGiven.ts'
 import { SERVER_TABLE } from './TABLES.ts'
@@ -98,6 +99,7 @@ export function abideModules(
         files: new Map(),
         handlers: new Map(),
         tables: new Map(),
+        pages: new Map(),
     }
     addCompilation(realOrAsGiven(root), compilation, held)
     return modulesPlugin(held)
@@ -111,12 +113,15 @@ type Held = {
     files: Map<string, CompiledFile>
     handlers: Map<string, HandlerFace>
     tables: Map<string, string>
+    /** 38.235 — each page's route, by its path: what `mount` resolves the address against. */
+    pages: Map<string, string>
 }
 
 const RUNTIME: Held = {
     files: new Map(),
     handlers: new Map(),
     tables: new Map(),
+    pages: new Map(),
 }
 let registered = false
 // The handler files a registered `handlerFilesPlugin` already answers, by path: its filter is fixed,
@@ -330,8 +335,13 @@ function addCompilation(
     held: Held,
 ): string[] {
     // RESOLVED, not joined: a dependency's file is keyed above the root (`../node_modules/…`).
-    for (const [relative, compiled] of Object.entries(compilation.files))
-        held.files.set(resolve(root, relative), compiled)
+    for (const [relative, compiled] of Object.entries(compilation.files)) {
+        const path = resolve(root, relative)
+        held.files.set(path, compiled)
+        const placed = placement(relative)
+        if (placed.kind === 'page' && !placed.dependency)
+            held.pages.set(path, placed.route as string)
+    }
     const handlerFiles: string[] = []
     for (const [relative, face] of Object.entries(compilation.handlers)) {
         const path = resolve(root, relative)
@@ -539,7 +549,7 @@ function modulesPlugin(served: Held): Bun.BunPlugin {
                 (args) => {
                     const path = realFileOf(args.path)
                     return {
-                        contents: boundModule(path),
+                        contents: boundModule(path, served.pages.get(path)),
                         loader: 'js',
                     }
                 },
@@ -615,7 +625,8 @@ function compiledAt(served: Held, path: string): CompiledFile {
 // 38.119 — and it carries what `mount` hydrates it with: the same accessors, and its browser module.
 // 38.134 — a prop written as a getter is read through it on every read, as a parent's would be.
 // 38.207 — and one handed as a `Reactive` is bound to it, as a tag's `bind:` would be.
-function boundModule(path: string): string {
+// 38.235 — and a page carries its route, which `mount` resolves the document's address against.
+function boundModule(path: string, route: string | undefined): string {
     return `import component from ${JSON.stringify(path)}
 export * from ${JSON.stringify(path)}
 import { passedProp } from '${SERVER_RUNTIME_SPECIFIER}'
@@ -633,6 +644,7 @@ export default (props = {}) => {
     bound[Symbol.for(${JSON.stringify(MOUNTABLE.description)})] = {
         accessors,
         client: () => import(${JSON.stringify(`${path}${CLIENT_QUERY}`)}),
+        route: ${JSON.stringify(route ?? null)},
     }
     return bound
 }
