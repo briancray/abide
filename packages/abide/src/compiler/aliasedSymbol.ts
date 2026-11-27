@@ -1,9 +1,17 @@
-import type { Node } from 'typescript/unstable/ast'
+import type { CallExpression, Node } from 'typescript/unstable/ast'
+import { isPropertyAccessExpression } from 'typescript/unstable/ast/is'
 import {
     type Checker,
     type Symbol as CheckedSymbol,
     SymbolFlags,
 } from 'typescript/unstable/async'
+
+/** The node naming what `call` calls: `f` in `f(…)` and in `ns.f(…)`, for the checker to name. */
+export function calleeNameOf(call: CallExpression): Node {
+    return isPropertyAccessExpression(call.expression)
+        ? call.expression.name
+        : call.expression
+}
 
 /** The symbol an import or a re-export names, or the symbol itself where it is not an alias. */
 export function aliasedSymbol(

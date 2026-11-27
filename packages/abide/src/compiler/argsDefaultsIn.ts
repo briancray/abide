@@ -12,13 +12,12 @@ import {
     isIdentifier,
     isObjectBindingPattern,
     isObjectLiteralExpression,
-    isPropertyAccessExpression,
     isPropertyAssignment,
     isStringLiteral,
 } from 'typescript/unstable/ast/is'
 import { type Checker, SymbolFlags, type Type } from 'typescript/unstable/async'
 
-import { namesAbide } from './aliasedSymbol.ts'
+import { calleeNameOf, namesAbide } from './aliasedSymbol.ts'
 import type { Finding } from './Diagnostics.ts'
 import { optionNamed, reactiveOptions } from './reactiveOptions.ts'
 
@@ -123,9 +122,7 @@ async function schemaDefaults(
         isCallExpression(schema) &&
         (await namesAbide(
             checker,
-            isPropertyAccessExpression(schema.expression)
-                ? schema.expression.name
-                : schema.expression,
+            calleeNameOf(schema),
             'jsonSchema',
             jsonSchemaPath,
         ))

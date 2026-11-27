@@ -238,13 +238,15 @@ export async function serveLanguage(
             const document = documents.get(uri)
             const at = placed(uri)
             if (document === undefined || at === undefined) return undefined
-            const checker = await checkerOf(at.app).live()
-            if (everyPage) await lowerApp(checker, held)
-            return question(
-                checker.session.lowered(at.path),
-                document.text,
-                offsetOf(document.text, position),
-            )
+            // Through `run`, as a check is: a checker that threw — its process gone — is dropped.
+            return checkerOf(at.app).run(async (checker) => {
+                if (everyPage) await lowerApp(checker, held)
+                return question(
+                    checker.session.lowered(at.path),
+                    document.text,
+                    offsetOf(document.text, position),
+                )
+            })
         })
         queue = answered.then(
             () => {},

@@ -38,7 +38,7 @@ import {
 import type { Method } from '#shared/rpc.ts'
 import { SOURCE_MEMBERS } from '#shared/SOURCE_MEMBERS.ts'
 
-import { aliasedSymbol, namesAbide } from './aliasedSymbol.ts'
+import { aliasedSymbol, calleeNameOf, namesAbide } from './aliasedSymbol.ts'
 import { defaultedMembers, parameterPattern } from './argsDefaultsIn.ts'
 import {
     argsSchemaOf,
@@ -311,9 +311,7 @@ async function declaredBy(
     call: CallExpression,
     abide: Abide,
 ): ReturnType<typeof declaringMethod> {
-    const callee = isPropertyAccessExpression(call.expression)
-        ? call.expression.name
-        : call.expression
+    const callee = calleeNameOf(call)
     const named = await checker.getSymbolAtLocation(callee)
     if (named === undefined) return undefined
     const declarer = await aliasedSymbol(checker, named)
@@ -325,9 +323,7 @@ async function declaredBy(
         isCallExpression(inner) &&
         inner !== call
     ) {
-        const innerCallee = isPropertyAccessExpression(inner.expression)
-            ? inner.expression.name
-            : inner.expression
+        const innerCallee = calleeNameOf(inner)
         const innerNamed = await checker.getSymbolAtLocation(innerCallee)
         if (
             innerNamed !== undefined &&
@@ -409,9 +405,7 @@ async function declaredDocument(
         return undefined
     const gate = await declarationOf(checker, optionNamed(options, 'args'))
     if (gate === undefined || !isCallExpression(gate)) return undefined
-    const callee = isPropertyAccessExpression(gate.expression)
-        ? gate.expression.name
-        : gate.expression
+    const callee = calleeNameOf(gate)
     if (!(await namesAbide(checker, callee, 'jsonSchema', abide.jsonSchema)))
         return undefined
     const document = await declarationOf(checker, gate.arguments[0])

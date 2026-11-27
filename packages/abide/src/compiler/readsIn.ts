@@ -13,10 +13,8 @@ import {
     isExpressionStatement,
     isForOfStatement,
     isFunctionDeclaration,
-    isFunctionExpression,
     isIdentifier,
     isImportDeclaration,
-    isMethodDeclaration,
     isNamedImports,
     isNewExpression,
     isObjectBindingPattern,
@@ -48,6 +46,7 @@ import {
     classifyPropRead,
     classifyRead,
     expressionFacts,
+    FUNCTIONS,
     isAssigned,
     isIncrement,
     newRead,
@@ -695,13 +694,7 @@ async function declaredType(
         return annotated(checker, parent.type)
     if (isReturnStatement(parent)) {
         let holder: Node = parent.parent
-        while (
-            holder !== undefined &&
-            !isFunctionDeclaration(holder) &&
-            !isFunctionExpression(holder) &&
-            !isArrowFunction(holder) &&
-            !isMethodDeclaration(holder)
-        )
+        while (holder !== undefined && !FUNCTIONS.has(holder.kind))
             holder = holder.parent
         return holder === undefined
             ? undefined
