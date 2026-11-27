@@ -18,6 +18,7 @@ import {
     splicedOffset,
 } from './rewriteCode.ts'
 import {
+    droppedImport,
     type ImportStatement,
     importStatements,
     namedImports,
@@ -239,13 +240,9 @@ function withoutReactive(code: string): string {
         .filter((binding) => binding.imported !== 'reactive')
         .map((binding) => binding.written)
     if (kept.length === statement.bindings.length) return code
-    if (kept.length === 0) {
-        const end =
-            code[statement.end] === '\n' ? statement.end + 1 : statement.end
-        // And the blank line that set it apart from what follows.
-        const after = code[end] === '\n' ? end + 1 : end
-        return `${code.slice(0, statement.start)}${code.slice(after)}`
-    }
-    const list = namedImports(code, statement, kept)
-    return `${code.slice(0, list.start)}${list.text}${code.slice(list.end)}`
+    return spliced(code, [
+        kept.length === 0
+            ? droppedImport(code, statement)
+            : namedImports(code, statement, kept),
+    ])
 }

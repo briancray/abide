@@ -1305,3 +1305,13 @@ export const busy = () => fetchAndHandle('https://a.example', { retries: 3, back
         "const fetchAndHandle = (url: string, options: object) => url\nfetchAndHandle('a', { retries: 0 })"
     expect(toFetchOptions(own, 'src/own.ts')).toBe(own)
 })
+
+// 38.228 — AN IMPORT THE MIGRATION EMPTIES LEAVES NO GAP: dropped with its line break and the blank
+// line under it, as every migration drops one. THE REVERT: drop the statement and its line break
+// alone in `toDerived`; the module opens on a blank line.
+test('abide upgrade drops an emptied import with the blank line under it — 38.228', () => {
+    const module = `import { computed } from '@abide/abide'\n\nimport { reactive } from '@abide/abide/runtime'\nimport { memo } from '@abide/abide'\n\nexport const a = computed(() => memo)\n`
+    const after = toDerived(module, 'src/a.ts')
+    expect(after.startsWith('\n')).toBe(false)
+    expect(after).toContain('reactive.derived(() => memo)')
+})

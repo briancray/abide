@@ -11,6 +11,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import { abideBindings, isAbideSpecifier, localOf } from './hookCalls.ts'
 import { rewriteCode, type Splice, spliced } from './rewriteCode.ts'
 import {
+    droppedImport,
     type ImportStatement,
     importStatements,
     namedImports,
@@ -107,10 +108,7 @@ function rewrittenImport(
         .filter((binding) => !isComputed(binding))
         .map((binding) => binding.written)
     if (adding) kept.push('reactive')
-    if (kept.length === 0 && named.length === statement.bindings.length) {
-        const end =
-            block[statement.end] === '\n' ? statement.end + 1 : statement.end
-        return { start: statement.start, end, text: '' }
-    }
+    if (kept.length === 0 && named.length === statement.bindings.length)
+        return droppedImport(block, statement)
     return namedImports(block, statement, kept)
 }

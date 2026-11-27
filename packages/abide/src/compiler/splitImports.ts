@@ -555,6 +555,22 @@ export function withoutProps(imports: string): string {
 }
 
 /**
+ * The splice dropping `statement` whole: from its line's indent, through its line break and the blank
+ * line that set it apart from the code after it.
+ */
+export function droppedImport(
+    text: string,
+    statement: ImportStatement,
+): Splice {
+    let start = statement.start
+    while (text[start - 1] === ' ' || text[start - 1] === '\t') start -= 1
+    let end = statement.end
+    if (text[end] === '\n') end += 1
+    if (text[end] === '\n') end += 1
+    return { start, end, text: '' }
+}
+
+/**
  * The braces of `statement`'s named imports rewritten to hold `names`, sorted as a formatter sorts
  * them and laid out as the braces were — one line, or one name a line.
  */

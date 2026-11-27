@@ -19,7 +19,11 @@ import {
     type Splice,
     spliced,
 } from './rewriteCode.ts'
-import { importStatements, namedImports } from './splitImports.ts'
+import {
+    droppedImport,
+    importStatements,
+    namedImports,
+} from './splitImports.ts'
 import {
     argumentCommas,
     closerOf,
@@ -448,19 +452,11 @@ function withoutUnusedRpc(body: string): string {
         const kept: string[] = []
         for (const each of statement.bindings)
             if (each !== binding) kept.push(each.written)
-        if (kept.length === 0) {
-            // The statement, its line break, and the blank line that set it apart from the code.
-            let end = statement.end
-            if (body[end] === '\n') end += 1
-            if (body[end] === '\n') end += 1
-            // From its line's start, so the indent before it goes with it.
-            let start = statement.start
-            while (body[start - 1] === ' ' || body[start - 1] === '\t')
-                start -= 1
-            return `${body.slice(0, start)}${body.slice(end)}`
-        }
-        const edit = namedImports(body, statement, kept)
-        return `${body.slice(0, edit.start)}${edit.text}${body.slice(edit.end)}`
+        return spliced(body, [
+            kept.length === 0
+                ? droppedImport(body, statement)
+                : namedImports(body, statement, kept),
+        ])
     }
     return body
 }
