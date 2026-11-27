@@ -510,10 +510,27 @@ export function pendingWork(): { loading: string[]; effects: number } {
         for (const cell of LOADS) {
             // 12.14 — a released value is one nothing reads, and what it lands is seen by no one.
             if (!cell.loading) LOADS.delete(cell)
-            else if (cell.alive)
+            else if (cell.alive && !stalledUnread(cell))
                 loading.push(LOAD_NAMES?.get(cell) ?? cell.label)
         }
     return { loading, effects: pendingCount + WAKING.length }
+}
+
+/**
+ * Whether `cell` is loading only until a read pulls it: no run of its own in flight, a source moved
+ * since the run that left it loading, and nothing reading it — so nothing will ever finish the load.
+ *
+ * 38.204 — the derived values over a principal a sign-in sets (26.24) are the case: built once while
+ * it resolved, they wait on a document that has since landed, and nothing reads them until a page
+ * does.
+ */
+function stalledUnread(cell: Cell): boolean {
+    return (
+        cell.runStop === null &&
+        cell.state !== CLEAN &&
+        cell.readers.length === cell.deadReaders &&
+        cell.probeReaders.length === cell.deadProbeReaders
+    )
 }
 
 /**

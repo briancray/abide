@@ -11,13 +11,19 @@
 // the document has no router, the mount installs one for as long as any mount stands — written to
 // `history`, so where a component navigated is `location`, `history.state` and `route`, read after
 // the navigation, and no spy records it a second time.
+//
+// 38.236 — AND ITS CALLS ARE ONE BROWSER'S: what a handler reads of the request — `principal`, its
+// cookies, the request a rung is handed — is a session the first mount opens and the last one's stop
+// ends, so a sign-in a call makes is who the next call is.
 
 import { CURRENT_ROUTER, type Navigable } from '#shared/CURRENT_ROUTER.ts'
+import { forgetPrincipalMembers } from '#shared/principal.ts'
 import { flushSync } from '#shared/reactive/Reactive.ts'
 import { arrive } from '#shared/route.ts'
 
 import { MOUNTABLE } from './MOUNTABLE.ts'
 import { type Component, render } from './render.ts'
+import { closeMountSession, openMountSession } from './requestScope.ts'
 
 type Mountable = {
     accessors: Record<string, () => unknown>
@@ -48,6 +54,20 @@ export async function mount(component: Component): Promise<Mounted> {
         throw new Error(
             'abide: mount renders into a DOM, and this process has none. Preload `@abide/harness/preload` ahead of `@abide/abide/test` in bunfig.toml. RULEBOOK 38.119.',
         )
+    // 38.236 — the session and the router stand for the server pass too, which reads the request.
+    stand()
+    try {
+        return await mounted(component, mountable)
+    } catch (thrown) {
+        leave()
+        throw thrown
+    }
+}
+
+async function mounted(
+    component: Component,
+    mountable: Mountable,
+): Promise<Mounted> {
     // 23.29 — a server's own index, at the address a request would have carried.
     const served = new URL(location.href)
     served.hash = ''
@@ -66,7 +86,6 @@ export async function mount(component: Component): Promise<Mounted> {
     const [{ default: hydrate }, { pageRegion, removeUntil }] =
         await Promise.all([mountable.client(), import('#ui/regions.ts')])
     const region = pageRegion(document.body, added[0] ?? null)
-    const held = holdRouter()
     arrived()
     const scope = hydrate(region, mountable.accessors)
     flushSync()
@@ -75,7 +94,7 @@ export async function mount(component: Component): Promise<Mounted> {
         if (stopped) return
         stopped = true
         scope?.stop()
-        if (held) releaseRouter()
+        leave()
         // What hydration put between the anchors is not what was added, so the region goes by them.
         removeUntil(region.open, region.close.nextSibling)
         for (const node of added) node.parentNode?.removeChild(node)
@@ -143,26 +162,29 @@ const MOUNT_ROUTER: Navigable = {
     },
 }
 
-// The mounts standing on `MOUNT_ROUTER`: two mounted together share it, and the last stop removes it.
-let holders = 0
+// How many mounts stand. The first opens the session their calls read as the request (38.236) and,
+// where the document has no router, installs `MOUNT_ROUTER`; the last one's stop ends both.
+let standing = 0
+let routerInstalled = false
 
-/**
- * Installs `MOUNT_ROUTER` where the document has no router, or counts one more mount on it; answers
- * whether this mount holds it.
- */
-function holdRouter(): boolean {
-    if (holders === 0) {
-        if (CURRENT_ROUTER.current !== null) return false
-        CURRENT_ROUTER.current = MOUNT_ROUTER
-        addEventListener('popstate', popped)
-    }
-    holders += 1
-    return true
+function stand(): void {
+    standing += 1
+    if (standing > 1) return
+    openMountSession(location.href)
+    forgetPrincipalMembers()
+    routerInstalled = CURRENT_ROUTER.current === null
+    if (!routerInstalled) return
+    CURRENT_ROUTER.current = MOUNT_ROUTER
+    addEventListener('popstate', popped)
 }
 
-function releaseRouter(): void {
-    holders -= 1
-    if (holders > 0) return
+function leave(): void {
+    standing -= 1
+    if (standing > 0) return
+    closeMountSession()
+    forgetPrincipalMembers()
+    if (!routerInstalled) return
+    routerInstalled = false
     removeEventListener('popstate', popped)
     if (CURRENT_ROUTER.current === MOUNT_ROUTER) CURRENT_ROUTER.current = null
 }

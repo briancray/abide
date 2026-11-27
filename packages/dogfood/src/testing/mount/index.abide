@@ -29,6 +29,12 @@ import Section from '#src/lib/Section.abide'
             ],
         },
         {
+            path: 'packages/dogfood/examples/crm/src/account/lib/SignIn.test.ts',
+            from: [
+                "test('a click signs the mounted page in, and another signs it out'",
+            ],
+        },
+        {
             path: 'packages/dogfood/examples/crm/src/lib/JumpTo.test.ts',
             from: [
                 "test('an arrow and Enter run the command, and the palette shuts'",
@@ -87,6 +93,25 @@ import Section from '#src/lib/Section.abide'
                 document.querySelectorAll<HTMLElement>('[role=option]')[1]?.click()
                 flushSync()
                 expect(location.pathname).toBe('/companies')
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Sign in through a mounted component">
+        <p>A mounted component's calls share one browser session, so a handler that signs the
+            caller in is who the next call is, and the page reads <code>principal</code> as
+            signed in.</p>
+        <Code language="ts" caption="browser" code={`
+            import { expect, test } from 'bun:test'
+            import { mount, settled } from '@abide/abide/test'
+            import SignIn from './SignIn.abide'
+
+            test('a click signs the page in', async () => {
+                using _signIn = await mount(SignIn({}))
+                document.querySelector('button')?.click()
+                await settled()
+                const button = document.querySelector('button')
+                expect(button?.textContent).toBe('Sign out')
             })
         `} />
     </Section>

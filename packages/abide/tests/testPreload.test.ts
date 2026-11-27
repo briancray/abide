@@ -338,6 +338,75 @@ test('route is the address, and a navigation is the history', async () => {
     )
 }, 90_000)
 
+// 38.236 — A MOUNTED COMPONENT'S CALLS ARE ONE BROWSER'S SESSION: a sign-in one call makes is who
+// the next call is, through a rung that reads the request, and the session ends with the mount.
+// THE REVERT: have `within` read `STORAGE` alone again; the sign-in's `principal.set` throws "called
+// outside a request" and the page reads `who: ` where `who: ada` is due — exit 1, `0 pass`.
+//
+// 38.204 — AND `settled` STILL SETTLES after the sign-in, though the derived values over the
+// principal it set were left loading and nothing reads them. THE REVERT: drop `stalledUnread` from
+// `pendingWork`; `settled` throws "4 still loading (derived, derived, derived, derived)".
+test("a mounted component's calls share one session, and a sign-in is the next call's — 38.236, 38.204", async () => {
+    const cwd = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'session-fixture',
+            type: 'module',
+            imports: { '#src/*': './src/*' },
+        }),
+        'bunfig.toml': BUNFIG,
+        'src/index.abide': '<main>home</main>',
+        'src/account/signIn.server.ts': `import { principal } from '@abide/abide'
+import { rpc } from '@abide/abide/server'
+
+export default rpc(async () => {
+    await principal.set({ id: 'ada' })
+}, { methods: ['POST'] })
+`,
+        'src/account/whoAmI.server.ts': `import { principal } from '@abide/abide'
+import { rpc, signedIn } from '@abide/abide/server'
+
+export default rpc(async () => String((await principal.resolved).id), {
+    methods: ['POST'],
+    middleware: [signedIn],
+})
+`,
+        'src/account/lib/Account.abide': `<script>
+import { reactive } from '@abide/abide'
+
+import signIn from '../signIn.server.ts'
+import whoAmI from '../whoAmI.server.ts'
+
+let who = reactive('')
+</script>
+
+<button id="in" onclick={() => signIn()}>sign in</button>
+<button id="who" onclick={async () => (who = await whoAmI())}>who</button>
+<p id="out">who: {who}</p>`,
+        'src/account/tests/Account.test.ts': `import { expect, test } from 'bun:test'
+import { mount, settled } from '@abide/harness/abide'
+import Account from '../lib/Account.abide'
+
+const click = (id: string) => document.querySelector<HTMLButtonElement>(id)?.click()
+
+test('signed in by one call, the next is the member', async () => {
+    using _account = await mount(Account({}))
+    click('#in')
+    await settled()
+    click('#who')
+    await settled()
+    expect(document.querySelector('#out')?.textContent).toBe('who: ada')
+})
+`,
+    })
+    const ran = await spawned(
+        ['bun', 'test', './src/account/tests/Account.test.ts'],
+        { cwd },
+    )
+    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)
+
 // 12.5, 38.119 — THE SERVER PASS'S WATCH STOPS WITH IT. `mount` renders as a request does, and a
 // request's scope is torn down once its document is written: the watch the render opened runs its
 // disposer, and the one the hydration opened is the only one left live — until `stop` ends it too.
