@@ -122,6 +122,39 @@ test('a member typed as a Reactive is read and written by name — 31.15', async
     ).toBe('ask.open.set(false); ask.open(); ask.open.peek()')
 })
 
+// 31.8, 31.15 — A WRITE THROUGH A MEMBER TYPED AS A `Reactive` IS THAT MEMBER'S: the name's own
+// member path stops beneath it, so the name is a read of its receiver — a prop's accessor, a
+// `Reactive`'s value — and the member copies down the rest of the path. THE REVERT: drop the
+// `reactiveAccesses` stop in `classifyRead`'s walk; the name is then written through the whole path
+// AND the member writes, two edits over one span — `buffer().set(__writePath(buffer()(), ["values",
+// kind()], 'x')).set(…)` for the prop and `box.set(…).set(…)` for the name, each of which throws.
+test('a write through a member typed as a Reactive is the member’s — 31.8, 31.15', async () => {
+    const PROPS =
+        "import { props, reactive, type Reactive } from '@abide/abide'\ntype Buffer = { values: Reactive<Record<string, string>>; inner: { v: Reactive<{ a: string }> } }\nconst { buffer, kind } = props<{ buffer: Buffer; kind: string }>()\n"
+    const ofProps = async (line: string): Promise<string> =>
+        (await lower(`${PROPS}${line}`)).slice(PROPS.length).trimStart()
+    expect(await ofProps("buffer.values[kind] = 'x'")).toEndWith(
+        "buffer().values.set(__writePath(buffer().values(), [kind()], 'x'))",
+    )
+    expect(await ofProps("buffer.inner.v.a += 'x'")).toEndWith(
+        "buffer().inner.v.set(__writePath(buffer().inner.v(), [\"a\"], buffer().inner.v()[\"a\"] + ('x')))",
+    )
+    expect(await ofProps('buffer.values = {}')).toEndWith(
+        'buffer().values.set({})',
+    )
+    const BOX =
+        "import { reactive } from '@abide/abide'\nlet box = reactive({ values: reactive<Record<string, string>>({}) })\n"
+    const ofBox = async (line: string): Promise<string> =>
+        (await lower(`${BOX}${line}`)).slice(BOX.length)
+    expect(await ofBox("box.values.a = 'x'")).toBe(
+        "box().values.set(__writePath(box().values(), [\"a\"], 'x'))",
+    )
+    // A member that is plain data is still the name's path (31.8).
+    expect(await ofBox('box.other = 1')).toBe(
+        'box.set(__writePath(box(), ["other"], 1))',
+    )
+})
+
 // 31.15 — AN ACCESS THE PROJECTION CANNOT TYPE IS STEPPED DOWN FROM ITS RECEIVER: in the shadow a read
 // is still its `Reactive`, so `rows[at]` indexes by one and `box.lid` asks a `Reactive` for a member
 // only its value declares. The receiver lowers too, so the key is read. THE REVERT: have

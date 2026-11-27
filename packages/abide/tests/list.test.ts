@@ -670,6 +670,31 @@ test('a destructured row takes a new value in place — 32.67', async () => {
     expect(work.nodesCreated).toBe(0)
 })
 
+// 32.116 — A ROW'S ITEM IS BOUND AS A `for…of` BINDS ONE: an object pattern renamed, defaulted and
+// nested, and an array pattern, each name in scope in the body and the key — rendered by the server
+// and then mounted over by the client. THE REVERT: take the head's first comma at any depth in
+// `forSeparators`; the item is then `{ row: { label }`, which the emitters write into a parameter
+// list, and the module fails to parse — `Expected ")" but found "for"`.
+test('a row item is a destructuring pattern, as a for…of binds one — 32.116', async () => {
+    const { html, mount } = await renderPage(`<script>
+import { reactive } from '@abide/abide'
+
+let bars = reactive([{ row: { label: 'a' }, gauge: 1 }, { row: { label: 'b' } }])
+let pairs = reactive([['x', 2]])
+</script>
+<ul id="bars">{#for { row: { label }, gauge = 0 }, at of bars key label}<li data-key={label}>{at}:{label}={gauge}</li>{/for}</ul>
+<ul id="pairs">{#for [name, count] of pairs key name}<li>{name}*{count}</li>{/for}</ul>`)
+    expect(html).toContain('>0:a=1</li>')
+    expect(html).toContain('>1:b=0</li>')
+    expect(html).toContain('>x*2</li>')
+    mount()
+    expect(
+        [...document.querySelectorAll('#bars li, #pairs li')].map(
+            (row) => row.textContent,
+        ),
+    ).toEqual(['0:a=1', '1:b=0', 'x*2'])
+})
+
 // THE WORK, against the hand-written arm: the same edit by hand writes one text node's `data` and
 // touches nothing else. THE REVERT above reports 3 nodes created and 3 moved where the vanilla arm creates and moves 0.
 test('a kept key over a new object creates and moves no node, as the vanilla arm does — 32.67', async () => {

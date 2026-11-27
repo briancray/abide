@@ -185,6 +185,14 @@ export async function readsIn(
             for (const declaration of node.declarationList.declarations)
                 declaredNames(declaration, (name) => names.push(name))
     refuseDeclared(sourceFile.statements, scriptsEnd, file)
+    const members = memberAccesses(checker, abide, sourceFile)
+    // 31.15 — the accesses read as a `Reactive` of their own, where a name's member path stops.
+    const reactiveAccesses = members.then((accessed) => {
+        const kept = new Set<Node>()
+        for (const node of accessed)
+            if (!settled.released.has(node.end)) kept.add(node)
+        return kept
+    })
     // 33's pass runs whatever 31.3's found: a `props` pattern binds no name the walk
     // above collects — `const { amount } = props()` declares a PATTERN — so a file
     // whose only declaration is one would have returned with its props unread.
@@ -195,11 +203,11 @@ export async function readsIn(
         shadowPath,
         scriptsEnd,
         positions,
+        reactiveAccesses,
     )
     // Awaited after the round trips below, so a 33.14 refusal would reject with nothing
     // listening and be reported unhandled; `await props` still throws it.
     props.catch(() => {})
-    const members = memberAccesses(checker, abide, sourceFile)
     const rows = rowReads(
         checker,
         sourceFile,
@@ -225,10 +233,8 @@ export async function readsIn(
     // 31.15 read does — it is the value there (`dropValueHolders`).
     const memberSpans = new Set<string>()
     for (const node of accessed) memberSpans.add(spanKey(node))
-    const memberNodes =
-        settled.released.size === 0
-            ? accessed
-            : accessed.filter((node) => !settled.released.has(node.end))
+    const stops = await reactiveAccesses
+    const memberNodes = [...stops]
     await dropValueHolders(checker, names, reactive, memberSpans)
     for (let at = 0; at < names.length; at += 1)
         if (
@@ -270,6 +276,7 @@ export async function readsIn(
                 node,
                 reaching.has(node),
                 lifted.has(node),
+                stops,
             )
             if (read === undefined) continue
             read.byValue = byValue[index] as boolean
@@ -281,7 +288,12 @@ export async function readsIn(
                 holding.push(holdIn(checker, abide, node, read))
         }
     for (const node of memberNodes) {
-        const read = classifyRead(node, reaching.has(node), lifted.has(node))
+        const read = classifyRead(
+            node,
+            reaching.has(node),
+            lifted.has(node),
+            stops,
+        )
         if (read === undefined) continue
         read.member = true
         read.local = true
@@ -1481,6 +1493,7 @@ async function propsReads(
     shadowPath: string,
     scriptsEnd: number,
     positions: PositionTable,
+    reactiveAccesses: Promise<ReadonlySet<Node>>,
 ): Promise<Read[]> {
     const reads: Read[] = []
     // The spelling only says which calls are worth asking about; the callee says which are abide's.
@@ -1590,6 +1603,7 @@ async function propsReads(
     const lifted = await liftedMutators(checker, found.flat(), (node) =>
         checker.getTypeAtLocation(node),
     )
+    const stops = await reactiveAccesses
     // 33.27 — each prop asked whether its position holds the `Reactive`, all at once.
     const holding: Promise<void>[] = []
     for (let at = 0; at < found.length; at += 1) {
@@ -1611,6 +1625,7 @@ async function propsReads(
                 node,
                 reaching.has(node),
                 lifted.has(node),
+                stops,
             )
             if (read === undefined) continue
             if (

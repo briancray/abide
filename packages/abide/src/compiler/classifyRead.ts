@@ -302,6 +302,7 @@ export function classifyRead(
     node: Node,
     reachesReactive?: boolean,
     mutator = false,
+    reactiveAccesses?: ReadonlySet<Node>,
 ): Read | undefined {
     const parent = node.parent
     if (isNotARead(parent)) return undefined
@@ -341,7 +342,9 @@ export function classifyRead(
         return read
     }
 
-    // The member path, walked up while the name stands on the LEFT of each access.
+    // The member path, walked up while the name stands on the LEFT of each access — and only to
+    // an access 31.15 reads as a `Reactive` of its own, which takes the write from there: the name
+    // beneath it is a read of its receiver.
     let top: Node = node
     while (true) {
         const up = top.parent
@@ -374,12 +377,17 @@ export function classifyRead(
                 })
                 return read
             }
+            if (reactiveAccesses?.has(up) === true) break
             read.path.push({
                 name: up.name.text,
                 start: up.name.getStart(),
                 end: up.name.end,
             })
-        } else if (isElementAccessExpression(up) && up.expression === top)
+        } else if (
+            isElementAccessExpression(up) &&
+            up.expression === top &&
+            reactiveAccesses?.has(up) !== true
+        )
             read.path.push({
                 name: undefined,
                 start: up.argumentExpression.getStart(),
