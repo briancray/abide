@@ -5566,8 +5566,8 @@ start edge kept where it does not fit.
 50.22 Placing an anchored layer MUST read every box it is placed by before it writes the layer's
 place.
 
-50.23 `tooltip.tip` MUST describe the element it is spread on by its text, through an
-`aria-description` among its part's attributes.
+50.23 `tooltip.tip` MUST describe the element it is spread on by the plain text of its text (50.87),
+through an `aria-description` among its part's attributes.
 
 50.24 `tooltip.tip` MUST open its hint as a `popover` given an `openOnHover` of `delay` milliseconds
 and `openOnFocus` opens (50.55, 50.75).
@@ -5676,8 +5676,8 @@ message of its own.
 50.53 `tooltip.host`'s `hint` part MUST carry every attribute its element needs as the server writes
 it: `role="tooltip"` and `popover="manual"`, with `data-open` present while a hint shows there.
 
-50.54 `tooltip.host`'s `text` MUST be the text of the hint showing in that host, and absent while none
-does.
+50.54 `tooltip.host`'s `text` MUST be the plain text (50.87) of the hint showing in that host, and
+absent while none does.
 
 50.55 A `popover` given `openOnHover` MUST open once a mouse or a pen has rested on its trigger or its
 anchor that many milliseconds, and MUST NOT open from a touch's resting.
@@ -5781,6 +5781,14 @@ last, and MUST NOT move it as a drag.
 settles at stands, or off its edge where it closes, and MUST set `size` and `open` and drop the
 `transform` once a transition the app's CSS runs on that `transform` ends, and at once where it runs
 none.
+
+50.86 `tooltip.host`'s `html` MUST be the text of the hint showing in that host rendered as `markdown`
+renders it, with every link written as its text and a `#` heading at level 6, and absent while none
+does.
+
+50.87 The plain text of a `tooltip.tip`'s text MUST be its rendering as 50.86 states with every tag
+gone, a new line where a line break or a rule stands or a block, a list item or a table row ends, a
+space where a table cell ends, and each character reference read as its character.
 
 # 51. Lists and tables
 

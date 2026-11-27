@@ -4,6 +4,8 @@ import Doc from '#src/lib/Doc.abide'
 import Example from '#src/lib/Example.abide'
 import Section from '#src/lib/Section.abide'
 
+import MarkdownHint from './lib/MarkdownHint.abide'
+import markdownHint from './lib/MarkdownHint.abide' with { type: 'text' }
 import MarkHinted from './lib/MarkHinted.abide'
 import markHinted from './lib/MarkHinted.abide' with { type: 'text' }
 import StageHint from './lib/StageHint.abide'
@@ -30,6 +32,12 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
             from: ["test('a pointer resting on a stage opens its hint'"],
         },
         {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageHints.test.ts',
+            from: [
+                "test('a hint is markdown, shown with its heading and read without its marks'",
+            ],
+        },
+        {
             path: 'packages/dogfood/e2e/chart.spec.ts',
             from: [
                 'test("a pointer moving under a chart\'s readout keeps it open — 50.47"',
@@ -47,6 +55,14 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
         <Example code={stageHint}><StageHint /></Example>
     </Section>
 
+    <Section level={3} title="Write a hint in markdown">
+        <p>A hint's text is markdown: a heading over a few lines, emphasis, a list. A link is
+            written as its text, since a pointer never reaches a hint, and a heading sits at the
+            deepest level, under the page's own. The element is described by the plain text, so
+            a screen reader hears no <code>#</code> or <code>**</code>.</p>
+        <Example code={markdownHint}><MarkdownHint /></Example>
+    </Section>
+
     <Section level={3} title="Open a hint under its anchor, with no wait">
         <p><code>side</code> is where the hint goes; with no room there, it takes another side.
             <code>delay</code> is how long a pointer rests before it opens. A click does not
@@ -56,12 +72,13 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
 
     <Section level={3} title="Show every hint of the app in one popover">
         <p>Call <code>tooltip.host</code> from your root layout's script, spread its
-            <code>hint</code> part onto an element there, and write its <code>text</code> inside.
-            Every <code>tooltip.tip</code> on every page opens in it, one at a time, in the top
-            layer, so no scroller clips it. The element and its classes are yours.</p>
+            <code>hint</code> part onto an element there, and write its <code>html</code> inside
+            with <code>raw</code>. Every <code>tooltip.tip</code> on every page opens in it, one
+            at a time, in the top layer, so no scroller clips it. The element and its classes are
+            yours. Write <code>text</code> instead for the hint as plain text.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import { tooltip } from '@abide/abide'
+            import { raw, tooltip } from '@abide/abide'
 
             const hints = tooltip.host()
             </script>
@@ -69,9 +86,9 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
             <html lang="en">
                 <body>
                     <slot />
-                    <span {...hints.hint} class="m-0 w-max max-w-60 rounded-md px-3 py-2">
-                        {hints.text}
-                    </span>
+                    <div {...hints.hint} class="m-0 w-max max-w-60 rounded-md px-3 py-2">
+                        {raw(hints.html)}
+                    </div>
                 </body>
             </html>
         `} />
@@ -83,14 +100,20 @@ import starHint from './lib/StarHint.abide' with { type: 'text' }
             <code>arrowInset</code> on a <code>tooltip.tip</code> keeps the arrow off the rounded
             corners.</p>
         <Code language="abide" caption="abide" code={`
-            <span
+            <script>
+            import { raw, tooltip } from '@abide/abide'
+
+            const hints = tooltip.host()
+            </script>
+
+            <div
                 {...hints.hint}
                 class="m-0 overflow-visible rounded-md px-3 py-2
                 before:absolute before:left-(--arrow-offset) before:size-2
                 before:-translate-x-1/2 before:rotate-45 before:bg-raised
                 data-[side=top]:before:-bottom-1
                 data-[side=bottom]:before:-top-1"
-            >{hints.text}</span>
+            >{raw(hints.html)}</div>
         `} />
     </Section>
 

@@ -15,7 +15,7 @@ test('a stage is described by its hint, with nothing written beside it', async (
     using _hints = await mount(StageHints({}))
     const proposal = stage('proposal')
     expect(proposal.getAttribute('aria-description')).toBe(
-        'A quote is out, waiting on an answer.',
+        'proposal\nA quote is out, waiting on an answer.',
     )
     expect(proposal.parentElement?.children).toHaveLength(1)
     expect(document.querySelectorAll('[role=tooltip]')).toHaveLength(1)
@@ -32,7 +32,9 @@ test('focus opens the hint at once and Escape closes it', async () => {
     flushSync()
     expect(tip().matches(':popover-open')).toBe(true)
     expect(tip().hasAttribute('data-open')).toBe(true)
-    expect(tip().textContent).toBe('A quote is out, waiting on an answer.')
+    expect(tip().textContent).toBe(
+        'proposalA quote is out, waiting on an answer.',
+    )
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     flushSync()
     expect(tip().matches(':popover-open')).toBe(false)
@@ -59,10 +61,26 @@ test('a pointer resting on a stage opens its hint', async () => {
     await Bun.sleep(400)
     flushSync()
     expect(tip().matches(':popover-open')).toBe(true)
-    expect(tip().textContent).toBe('Signed. It counts toward the target.')
+    expect(tip().textContent).toBe('wonSigned. It counts toward the target.')
     won.dispatchEvent(
         new PointerEvent('pointerleave', { pointerType: 'mouse' }),
     )
     flushSync()
     expect(tip().matches(':popover-open')).toBe(false)
+})
+
+// 50.86, 50.87 — THE REVERT: write the host's `text` rather than its `html`, and the hint holds no
+// heading — `undefined` where `won` is due.
+test('a hint is markdown, shown with its heading and read without its marks', async () => {
+    using _hints = await mount(StageHints({}))
+    const won = stage('won')
+    expect(won.getAttribute('aria-description')).toBe(
+        'won\nSigned. It counts toward the target.',
+    )
+    won.focus()
+    flushSync()
+    expect(tip().querySelector('h6')?.textContent).toBe('won')
+    expect(tip().querySelector('p')?.textContent).toBe(
+        'Signed. It counts toward the target.',
+    )
 })

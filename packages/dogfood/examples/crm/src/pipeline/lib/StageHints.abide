@@ -10,7 +10,7 @@ import { STAGES } from './STAGES.ts'
 <ul class="row list-none p-0">
     {#for stage of STAGES}
         <li>
-            <span tabindex="0" class="font-mono uppercase" {...tooltip.tip(STAGE_MEANINGS[stage] ?? '')}>{stage}</span>
+            <span tabindex="0" class="font-mono uppercase" {...tooltip.tip(`### ${stage}\n${STAGE_MEANINGS[stage] ?? ''}`)}>{stage}</span>
         </li>
     {/for}
 </ul>

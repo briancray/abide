@@ -17,7 +17,7 @@ export type TooltipOptions = Omit<PlaceOptions, 'side'> & {
     delay?: Live<number> | undefined
 }
 
-/** The hint open: its text, the anchor it is open against, and where it opens. */
+/** The hint open: its text, as markdown (50.86), the anchor it is open against, and where it opens. */
 export type OpenTip = {
     anchor: Element
     text: string

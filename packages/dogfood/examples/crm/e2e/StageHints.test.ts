@@ -24,5 +24,7 @@ test('a click on a stage leaves its hint to the hover delay, and a key into it o
     await page.keyboard.press('Tab')
     await expect(proposal).toBeFocused()
     // 50.36 — one popover, however many `Tooltips` the page stands: the docs' and the example's.
-    expect(await opened()).toEqual(['A quote is out, waiting on an answer.'])
+    expect(await opened()).toEqual([
+        'proposalA quote is out, waiting on an answer.',
+    ])
 })

@@ -1,10 +1,11 @@
-// 50.23-50.25 — A TEXT HINT FOR THE ELEMENT IT IS BOUND TO, shown by the `tooltip.host` standing in
-// the page: nothing is added beside the anchor, and one popover serves every hint on the page.
+// 50.23-50.25 — A MARKDOWN HINT FOR THE ELEMENT IT IS BOUND TO, shown by the `tooltip.host` standing
+// in the page: nothing is added beside the anchor, and one popover serves every hint on the page.
 
 import { dismissing } from '../dismissible.ts'
 import { hoverAndFocus, type OpenedBy } from '../hoverAndFocus.ts'
 import { live } from '../live.ts'
 import type { Disposer } from '../reactive/watch.ts'
+import { hintHtml, hintText } from './hint.ts'
 import { hints, type OpenTip, shown, type TooltipOptions } from './tips.ts'
 
 // 50.25 — THE OPEN HINT'S LAYER on `dismissible`'s stack: one, since one hint shows at a time, so a
@@ -14,9 +15,10 @@ let unstack: Disposer | undefined
 /**
  * The part opening `text` against the element it is spread on once a mouse or a pen has rested on it
  * for `delay` milliseconds, and at once when it takes focus the browser shows (`:focus-visible`). The
- * text describes the element from the server's markup on (50.23).
+ * text is markdown (50.86), and its plain text describes the element from the server's markup on
+ * (50.23, 50.87).
  *
- * @param text what the hint says, and what describes the element
+ * @param text what the hint says, as markdown, and what describes the element
  * @param options where it opens, and how long a pointer rests first
  */
 export function tip(
@@ -25,7 +27,7 @@ export function tip(
 ): Record<string, unknown> {
     // 50.23 — the text describes its anchor with no element to point at.
     return {
-        'aria-description': text,
+        'aria-description': hintText(hintHtml(text)),
         'data-tooltip': 'anchor',
         'bind:element': tipAgainst(text, options, undefined),
     }

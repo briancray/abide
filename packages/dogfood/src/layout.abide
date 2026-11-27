@@ -135,10 +135,10 @@ const hints = tooltip.host()
 <SiteBar />
 <DocsNav />
 <slot />
-<span
+<div
             {...hints.hint}
             class="m-0 w-max max-w-60 rounded-md border border-rule bg-raised px-3 py-2 text-chrome
     text-ink shadow-sm"
-        >{hints.text}</span>
+        >{raw(hints.html)}</div>
     </body>
 </html>

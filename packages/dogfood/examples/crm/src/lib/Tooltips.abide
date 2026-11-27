@@ -1,10 +1,11 @@
 <script>
-// The one popover every `tooltip.tip` on a CRM page opens in; each page styles it with `class`.
+// The one popover every `tooltip.tip` on a CRM page opens in, its markdown rendered; each page styles
+// it with `class`.
 import { type Attributes, props, tooltip } from '@abide/abide'
 
-const { ...rest } = props<Omit<Attributes<'span'>, 'popover' | 'role'>>()
+const { ...rest } = props<Omit<Attributes<'div'>, 'popover' | 'role'>>()
 
 const shown = tooltip.host()
 </script>
 
-<span {...rest} {...shown.hint}>{shown.text}</span>
+<div {...rest} {...shown.hint}>{raw(shown.html)}</div>

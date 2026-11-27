@@ -438,9 +438,9 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `tooltip.tip` | `(text: string, options?: TooltipOptions) => Record<string, unknown>` | The part opening a text hint for the element it is spread on, shown by the page's `tooltip.host`. | 32.99, 50.23, 50.24, 50.25, 50.36, 53.15, 49.3, 49.12 |
+| `tooltip.tip` | `(text: string, options?: TooltipOptions) => Record<string, unknown>` | The part opening a markdown hint for the element it is spread on, shown by the page's `tooltip.host`. | 32.99, 50.23, 50.24, 50.25, 50.36, 50.87, 53.15, 49.3, 49.12 |
 | `tooltip.host` | `() => TooltipHost` | The popover every hint shows in, as parts an app spreads onto markup of its own, from the script of the one component that shows them. | 50.19, 50.20, 50.21, 50.22, 50.26, 50.27, 50.35, 50.36, 50.47, 50.53, 49.14, 49.2, 49.4, 49.5, 49.6 |
-| `TooltipHost` | `{ readonly hint: Record<string, unknown>; get text(): string \| undefined }` | The popover's part, and the text of the hint showing in it. | 32.11, 50.53, 50.54, 49.3, 49.9 |
+| `TooltipHost` | `{ readonly hint: Record<string, unknown>; get html(): string \| undefined; get text(): string \| undefined }` | The popover's part, and the hint showing in it rendered as HTML and as plain text. | 32.11, 50.53, 50.54, 50.86, 50.87, 49.3, 49.9 |
 | `TooltipOptions` | `{ align?: 'start' \| 'center' \| 'end' \| (() => 'start' \| 'center' \| 'end'); offset?: number \| (() => number); margin?: number \| (() => number); arrowInset?: number \| (() => number); side?: Side \| (() => Side); delay?: number \| (() => number) }` | Where a hint opens against its anchor, placed as a `popover` is, and how long a pointer rests first. | 50.19, 50.20, 50.21, 50.24, 50.26, 50.35, 49.10, 49.11 |
 
 ## `menu`

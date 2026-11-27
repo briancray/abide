@@ -1,4 +1,4 @@
-// 50.36, 50.53, 50.54 — `tooltip.host`'s parts: what its popover carries as the server writes it, and the
+// 50.36, 50.53, 50.54, 50.86, 50.87 — `tooltip.host`'s parts: what its popover carries as the server writes it, and the
 // text of the hint showing in the last host standing. Its part is read by hand here; what a template
 // does with it is the CRM's tests'.
 
@@ -60,6 +60,27 @@ test('the hint shows in the last host standing alone, until it closes — 50.36,
     expect(last.parts.text).toBeUndefined()
     last.leave()
     first.leave()
+})
+
+// 50.86, 50.87 — A HINT'S TEXT IS MARKDOWN: the host hands it back rendered, its link as its text and
+// its heading the deepest, and as plain text; the anchor is described by the plain text. THE REVERT: hand
+// `text` back as it was given, as the host once did, and it reads `### Rare\n**Seen** on [2 days](/days).`
+// where `Rare\nSeen on 2 days.` is due; describe the anchor by it, and so does the anchor; render
+// with `markdown`'s own links, and the html carries `<a href="/days">2 days</a>` (50.47).
+test('a hint is markdown, shown rendered and described as plain text — 50.23, 50.86, 50.87', async () => {
+    const shown = standing()
+    const source = '### Rare\n**Seen** on [2 days](/days).\n\n- 1 < 2 & 3'
+    const unbind = await opened(source)
+    expect(shown.parts.html).toBe(
+        '<h6>Rare</h6><p><strong>Seen</strong> on 2 days.</p><ul><li>1 &lt; 2 &amp; 3</li></ul>',
+    )
+    expect(shown.parts.text).toBe('Rare\nSeen on 2 days.\n1 < 2 & 3')
+    expect(tip(source)['aria-description']).toBe(
+        'Rare\nSeen on 2 days.\n1 < 2 & 3',
+    )
+    unbind()
+    expect(shown.parts.html).toBeUndefined()
+    shown.leave()
 })
 
 // 50.21 — A HINT TAKES EVERY PLACEMENT OPTION `popover` DOES: one at the viewport's left edge given a
@@ -145,4 +166,18 @@ test("a pie slice's hint opens against its own arc, not the ring — 52.67", asy
     unbind()
     release()
     shown.leave()
+})
+
+// 50.23, 50.87, 52.67 — A SLICE IS DESCRIBED AS A TIP'S ANCHOR IS: by its hint's plain text. THE
+// REVERT: describe the slice by its hint as written, as `pie` once did, and it reads `**Won**: 3 (75%)`
+// where `Won: 3 (75%)` is due.
+test("a pie slice is described by its hint's plain text — 50.87, 52.67", () => {
+    const ring = pie({
+        slices: [
+            { label: '**Won**', value: 3 },
+            { label: 'Lost', value: 1 },
+        ],
+        label: 'Outcomes',
+    })
+    expect(ring.slices[0]?.circle['aria-description']).toBe('Won: 3 (75%)')
 })

@@ -7,6 +7,7 @@ import { number, percent } from '../format/index.ts'
 import { type Live, live } from '../live.ts'
 import { reactive } from '../reactive/index.ts'
 import type { Disposer } from '../reactive/watch.ts'
+import { hintHtml, hintText } from '../tooltip/hint.ts'
 import { tipAgainst } from '../tooltip/tip.ts'
 
 /** What `pie` draws and how. A value is read live where a function is given. */
@@ -63,7 +64,7 @@ export function pie(options: PieOptions): PieParts {
     const hinted = (text: string, from: number, to: number, hole: number) => {
         let kept = hints.get(text)
         if (kept === undefined) {
-            const arc = new Hinted(from, to, hole)
+            const arc = new Hinted(from, to, hole, hintText(hintHtml(text)))
             arc.bind = tipAgainst(text, {}, (element) =>
                 arcBox(element, arc.from, arc.to, arc.hole),
             )
@@ -73,7 +74,7 @@ export function pie(options: PieOptions): PieParts {
         kept.to = to
         kept.hole = hole
         drawing.set(text, kept)
-        return kept.bind
+        return kept
     }
 
     const ring = reactive(() => {
@@ -93,6 +94,7 @@ export function pie(options: PieOptions): PieParts {
             if (value === 0) continue
             const share = value / total
             const hint = `${slice.label}: ${valueFormat(value)} (${percent(share)})`
+            const kept = hinted(hint, before, before + share, hole)
             drawn.push({
                 index,
                 label: slice.label,
@@ -114,8 +116,8 @@ export function pie(options: PieOptions): PieParts {
                     // 52.63 — the sweep as `style` properties, which a CSS transition eases.
                     style: `stroke-dasharray: ${share * circumference} ${circumference}; stroke-dashoffset: ${-before * circumference}`,
                     // 50.23 — the hint describes the slice, as `tooltip.tip`'s describes its anchor.
-                    'aria-description': hint,
-                    'bind:element': hinted(hint, before, before + share, hole),
+                    'aria-description': kept.description,
+                    'bind:element': kept.bind,
                     onclick: () => pick(index),
                 },
             })
@@ -153,10 +155,13 @@ class Hinted {
     from: number
     to: number
     hole: number
-    constructor(from: number, to: number, hole: number) {
+    /** 50.87 — the plain text of the hint, which describes the slice. */
+    description: string
+    constructor(from: number, to: number, hole: number, description: string) {
         this.from = from
         this.to = to
         this.hole = hole
+        this.description = description
     }
 }
 

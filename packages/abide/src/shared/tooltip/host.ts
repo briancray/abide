@@ -7,13 +7,16 @@ import { anchored } from '../anchored.ts'
 import { checkPopover } from '../checkParts.ts'
 import type { Side } from '../place.ts'
 import { reactive, watch } from '../reactive/index.ts'
+import { hintHtml, hintText } from './hint.ts'
 import { hints, shown } from './tips.ts'
 
-/** The parts `tooltip.host` hands back: `<span {...shown.hint}>{shown.text}</span>`. */
+/** The parts `tooltip.host` hands back: `<span {...shown.hint}>{raw(shown.html)}</span>`. */
 export type TooltipHost = {
     /** The popover: its role, a manual popover, `data-open` while a hint shows, and the side it took. */
     readonly hint: Record<string, unknown>
-    /** The text of the hint showing here, or none. */
+    /** The hint showing here, its markdown rendered as HTML to hand to `raw`, or none. */
+    get html(): string | undefined
+    /** The hint showing here as plain text, its marks gone, or none. */
     get text(): string | undefined
 }
 
@@ -22,6 +25,15 @@ export function host(): TooltipHost {
     // 50.36 — this host, among the ones standing; the last shows the hint.
     const shows = hints.stand()
     const open = reactive(() => (shows() ? shown() : undefined))
+    // 50.86, 50.87 — rendered once per hint shown, however often the parts are read.
+    const html = reactive(() => {
+        const tip = open()
+        return tip === undefined ? undefined : hintHtml(tip.text)
+    })
+    const text = reactive(() => {
+        const rendered = html()
+        return rendered === undefined ? undefined : hintText(rendered)
+    })
     const element = reactive<HTMLElement | undefined>(undefined)
     // The side taken, which a flip can change from the one asked for.
     const placed = reactive<Side>('top')
@@ -66,8 +78,11 @@ export function host(): TooltipHost {
                 return () => element.set(undefined)
             },
         },
+        get html() {
+            return html()
+        },
         get text() {
-            return open()?.text
+            return text()
         },
     }
 }
