@@ -63,7 +63,7 @@ const labels = (): string[] =>
 
 // THE REVERT: lift the script into component setup in `parseAbide` (drop the 14.8 arm); `row` is out
 // of scope there, and the page does not compile.
-test("a row's script is set up for that row, on the server and after hydration", async () => {
+test("a row's script is set up for that row, on the server and after hydration — 34.8", async () => {
     const html = await mountSource(ROWS)
     expect(html).toContain('>ADA!<')
     expect(html).toContain('>GRACE!<')

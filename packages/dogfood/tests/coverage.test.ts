@@ -92,6 +92,21 @@ test('a restated capability is restated identically', async () => {
     expect(drifted).toEqual([])
 })
 
+// 40.20 — A DESCRIPTION READS STANDALONE: it is listed under its page on the home page's index, where
+// a relative link names somewhere the reader is not. THE REVERT: write `[rpc](./rpc)` into any
+// description; its page is named here where `[]` is due.
+test("no page's description carries a relative link — 40.20", () => {
+    const relative: string[] = []
+    for (const group of SITE)
+        for (const page of group.pages)
+            if (
+                /\]\((?!https?:|\/)/.test(page.description) ||
+                /href="(?!https?:|\/)/.test(page.description)
+            )
+                relative.push(page.route)
+    expect(relative).toEqual([])
+})
+
 // A page nobody can reach is a page nobody reads, and a `SITE` entry with no page renders nothing.
 test('every docs page is in SITE, and every SITE entry has its page — 40.7', async () => {
     const listed = new Set<string>()

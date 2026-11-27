@@ -12,7 +12,7 @@ function type(text: string): void {
     input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-test('typing a word is one search, not one per keystroke', async () => {
+test('typing a word is one search, not one per keystroke — 11.31', async () => {
     using _search = await mount(DealSearch({}))
     await Bun.sleep(800)
     const before = LOADS.search ?? 0
