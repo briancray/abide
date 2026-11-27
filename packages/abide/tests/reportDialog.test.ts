@@ -136,3 +136,27 @@ test('a refused send leaves the dialog open on its draft, saying why, and Cancel
     expect(dialog.isConnected).toBe(false)
     sendStatus = 200
 })
+
+// 48.14 — THE DIALOG IS STYLED BY THE APP, through the pieces it names, and by nothing of its own.
+// THE REVERT: give the dialog a `className` again, or rename a piece; this reads it.
+test('the dialog names its pieces by data-report and carries no class or stylesheet — 48.14', async () => {
+    const styles = document.querySelectorAll('style').length
+    const draft = report()
+    const opened = reportDialog(draft)
+    await settle()
+    const dialog = document.querySelector('dialog') as HTMLDialogElement
+    const named: string[] = []
+    for (const piece of dialog.querySelectorAll('[data-report]'))
+        named.push(piece.getAttribute('data-report') as string)
+    named.unshift(dialog.getAttribute('data-report') as string)
+    expect(named).toEqual(['dialog', 'preview', 'status', 'actions'])
+    expect(
+        dialog.querySelectorAll('[class]').length +
+            (dialog.className === '' ? 0 : 1),
+    ).toBe(0)
+    expect(document.querySelectorAll('style').length).toBe(styles)
+    ;(
+        dialog.querySelector('button[type="button"]') as HTMLButtonElement
+    ).click()
+    expect(await opened).toBe(false)
+})

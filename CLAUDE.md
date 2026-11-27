@@ -72,7 +72,7 @@ not a clause
 * abide ships NO markup: every widget is a HEADLESS COMPONENT in the `@abide/abide` barrel, spread on
 markup the app writes. The one element abide draws itself is the report dialog `ReportDraft.open`
 shows where an app draws none (RULEBOOK 48.9), and it carries no stylesheet and no `class` either —
-its pieces are named by `data-report`. RULEBOOK 49 is their contract: no stylesheet, no `class`, state as `data-`
+its pieces are named by `data-report` (RULEBOOK 48.14). RULEBOOK 49 is their contract: no stylesheet, no `class`, state as `data-`
 attributes, inner pieces under a `data-` attribute named for the headless component
 (`data-sortable-table="row"`). a headless component is mounted and tested in the CRM, which writes the
 markup, since abide's own test preload compiles no `.abide`. when the docs app hand-rolls what one of

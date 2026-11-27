@@ -1612,7 +1612,7 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `report` | `(options?: { trace?: string; failure?: unknown }) => ReportDraft` | A problem report a person can read, write and send. | 37.24, 48.1, 48.2, 48.3, 48.4, 48.5 |
-| `ReportDraft` | `class ReportDraft { id: string; summary: Reactive<string>; description: Reactive<string>; traces: string[]; lines: Reactive<LogRecord[]>; markdown: Reactive<string>; open(): Promise<boolean>; send(): Promise<string> }` | A report not yet sent. | 48.6, 48.7, 48.8, 48.9, 48.12, 48.13 |
+| `ReportDraft` | `class ReportDraft { id: string; summary: Reactive<string>; description: Reactive<string>; traces: string[]; lines: Reactive<LogRecord[]>; markdown: Reactive<string>; open(): Promise<boolean>; send(): Promise<string> }` | A report not yet sent. | 48.6, 48.7, 48.8, 48.9, 48.12, 48.13, 48.14 |
 | `Report` | `{ id: string; summary: string; description: string; version: string; platform: string; route: string; traces: string[]; lines: LogRecord[]; markdown: string }` | What `onReport` is handed. | 48.7, 48.10, 48.11, 48.12 |
 
 ## `trace`

@@ -5329,6 +5329,10 @@ server mints.
 48.13 `ReportDraft.send` MUST settle the draft's `id`, and where a send of the draft is in flight or
 has settled it MUST settle that same `id` without handing the `Report` to any `onReport` again.
 
+48.14 The dialog `ReportDraft.open` shows MUST carry no stylesheet and no `class`, and MUST name the
+dialog, the preview of its `markdown`, its status and its actions by `data-report` — `dialog`,
+`preview`, `status` and `actions`.
+
 # 49. Headless components
 
 49.1 A headless component MUST write each state a caller can style an element by as a `data-` attribute on
