@@ -7,6 +7,8 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { spawned } from '@abide/harness/gate'
 
+import { onStart } from '#server'
+
 import abidePackage from '../package.json' with { type: 'json' }
 import {
     appFixture,
@@ -664,4 +666,17 @@ test('/__abide/health answers the account, the app winning collisions — 25.1, 
     expect(account.db).toBe('up')
     expect(account.abide).toBe(abidePackage.version)
     expect(Number.isNaN(Date.parse(account.startedAt as string))).toBe(false)
+})
+
+// 42.4 — A HOOK `onStart` WRAPS OBSERVES NO PORT: what it is handed boots the app and answers nothing,
+// since the boot binds no socket (42.3). THE REVERT: type `start` as `() => Promise<{ port: number }>`;
+// the read below type-checks, and `bun run typecheck` reports the directive unused.
+test('the boot onStart wraps answers no port — 42.4', () => {
+    const unfile = onStart(async (start) => {
+        const booted = await start()
+        // @ts-expect-error — the boot answers nothing, so there is no port to read.
+        void booted.port
+    })
+    unfile()
+    expect(typeof unfile).toBe('function')
 })
