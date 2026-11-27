@@ -476,9 +476,11 @@ test("a refusal with no issues shows as the form's own message — 56.13", async
         status: 409,
         message: 'That name is taken.',
     })
-    const name = rpc((_args: { company: string }) => taken(), {
-        methods: ['POST'],
-    })
+    const name = rpc(
+        (args: { company: string }) =>
+            args.company === 'free' ? args : taken(),
+        { methods: ['POST'] },
+    )
     addressed(name, '/deals/taken')
     const deal = form(name)
     await submitted(rendered(deal, { company: 'Hopper & Co' }))

@@ -341,3 +341,18 @@ test("a browser's copy of a source sends each member by its verb — 16.117", as
         'DELETE /crm/deals?given=%5B%7B%22id%22%3A%22d3%22%7D%5D undefined',
     ])
 })
+
+// 16.6 — AN `rpc` OVER A MEMO WHOSE ARGS ARE OPTIONAL IS CALLED WITHOUT THEM, as the memo is. A type
+// test: `Args` inferred from the memo's `invalidate` dropped the `undefined`, and `rpc(tags)()` was
+// refused as "expected 1-2 arguments". THE REVERT: infer the memo overload's four parameters off the
+// argument rather than reading it whole through `MemoOf` — the `typecheck` fails on the calls below.
+test('an rpc over a memo with optional args is called without them — 16.6', async () => {
+    const tags = memo(async (args?: { type?: string }) => [args?.type ?? 'all'])
+    const byType = rpc(tags)
+    expect(await byType()).toEqual(['all'])
+    expect(await byType({ type: 'genre' })).toEqual(['genre'])
+    const deal = rpc(memo(async (args: { id: string }) => args.id))
+    // @ts-expect-error a memo whose args are required still asks for them
+    void (() => deal())
+    expect(await deal({ id: 'd1' })).toBe('d1')
+})

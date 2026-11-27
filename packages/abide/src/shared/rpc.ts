@@ -387,23 +387,28 @@ type Declare<Writes extends boolean> = {
     >
     // 16.6 — a memo, served as the keyed value it is: `rpc(digest.status)`. 16.111 — read alone, its
     // writes typed where `methods` names their verbs, and its failures the call's own.
+    //
+    // THE MEMO IS TAKEN WHOLE AND READ BY `MemoOf`, rather than its four parameters inferred from the
+    // argument: an argument's `Args` is inferred from `invalidate`'s `Partial<Args>` as well as from
+    // the call, and that candidate drops the `undefined` an optional parameter admits — so `rpc(tags)`
+    // over `memo((args?: …) => …)` required its args.
     <
-        Value,
-        Args,
-        Failures,
-        Produced,
+        Over extends Memo<any, any, any, any> & { method?: never | undefined },
         Answers extends readonly unknown[] = unknown[],
         const Methods extends readonly Method[] = ['GET'],
     >(
         // 16.119 — an `Rpc` is a `Memo` by its shape, and its `method` is what turns it away.
-        handler: Memo<Value, Args, Failures, Produced> & {
-            method?: never | undefined
-        },
-        options?: OptionsOf<Writes, Args, Answers> & {
+        handler: Over,
+        options?: OptionsOf<Writes, MemoOf<Over>['args'], Answers> & {
             methods?: Methods | undefined
         },
-    ): ReadRpc<Value, Args, Failures | RungRefusals<Answers>, Produced> &
-        HeldWrites<Methods, Args, Value>
+    ): ReadRpc<
+        MemoOf<Over>['value'],
+        MemoOf<Over>['args'],
+        MemoOf<Over>['failures'] | RungRefusals<Answers>,
+        MemoOf<Over>['produced']
+    > &
+        HeldWrites<Methods, MemoOf<Over>['args'], MemoOf<Over>['value']>
     // 16.117 — a table: its rows read by a JSON match, written by key and deleted by a match.
     <
         Row extends Record<string, unknown>,
@@ -518,6 +523,12 @@ type Answering<
 > = Verb extends Methods[number] ? Member : unknown
 
 /** 16.115-16.117 — a memo's or a value's `set` by `PUT` and `patch` by `PATCH`, its owner's writes (11.76). */
+/** A memo's four parameters, read off it whole (16.6). */
+type MemoOf<Over> =
+    Over extends Memo<infer Value, infer Args, infer Failures, infer Produced>
+        ? { value: Value; args: Args; failures: Failures; produced: Produced }
+        : never
+
 type HeldWrites<Methods extends readonly Method[], Args, Value> = Answering<
     Methods,
     'PUT',
