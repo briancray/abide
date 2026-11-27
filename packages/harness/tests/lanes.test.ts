@@ -28,6 +28,26 @@ test('every entry the exports map names resolves', async () => {
     expect(unresolved).toEqual([])
 })
 
+// 43.15 — NO COUNTER OF CALLS: `bun:test`'s `spyOn` is one already, with its own restore, and a second
+// spelling here would be a rename with a worse one. THE REVERT: export a `calls` from any entry; it
+// is named here.
+test('no entry the harness ships exports a counter of calls — 43.15', async () => {
+    const manifest = (await Bun.file(
+        new URL('../package.json', import.meta.url),
+    ).json()) as { exports: Record<string, string> }
+    const counters: string[] = []
+    for (const entry of Object.keys(manifest.exports)) {
+        if (entry === './package.json' || entry === './abide/preload') continue
+        const module = (await import(
+            `@abide/harness${entry.slice(1)}`
+        )) as Record<string, unknown>
+        for (const name of Object.keys(module))
+            if (/^calls?$|^countCalls$|^callCount$/i.test(name))
+                counters.push(`${entry}: ${name}`)
+    }
+    expect(counters).toEqual([])
+})
+
 // THE HARNESS MEASURES ANYTHING, so nothing it ships may reach the thing it is measuring here. An
 // edge into abide would not break a test: every number would still be produced, and every ratio
 // would be measuring one arm against itself — and an edge into the docs app or the bridge is the

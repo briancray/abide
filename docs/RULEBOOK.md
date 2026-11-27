@@ -4498,7 +4498,8 @@ where the layer runs outside the denominator.
 
 43.14 `shares` MUST report an observed ceiling of zero for an op under one frame.
 
-43.15 A count of calls MUST be taken with `spyOn`.
+43.15 `@abide/harness` MUST ship no counter of calls: a count of calls to a function a test did not
+write MUST be taken with `bun:test`'s `spyOn`.
 
 43.16 `retained` MUST throw in a process with a DOM.
 
