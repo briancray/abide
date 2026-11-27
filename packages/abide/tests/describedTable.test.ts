@@ -324,3 +324,26 @@ test('declaring a table opens nothing until the table is used — 47.53', () => 
     deals.peek()
     expect(`before: ${before}, after: ${opens}`).toBe('before: 0, after: 1')
 })
+
+// 47.55 — A TABLE FIRST REACHED IN A TRANSACTION THAT ROLLS BACK still logs its changes after: the
+// triggers the rollback unmade are made again. THE REVERT: record the table prepared inside the
+// transaction in `prepare`; the insert after logs nothing, and the reader waits out its deadline.
+test('a table first reached in a transaction that rolls back still logs its changes after — 47.55', async () => {
+    const db = opener(
+        'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER)',
+    )
+    const deals = table(db, 'deals')
+    try {
+        db().transaction(() => {
+            deals.set({ id: 1, amount: 1 })
+            throw new Error('rolled back')
+        })()
+    } catch {}
+    const reading = taken(deals.readable, 1)
+    deals.insert({ amount: 2 })
+    const changes = await Promise.race([
+        reading,
+        Bun.sleep(1_000).then(() => [] as Change<{ amount: number }>[]),
+    ])
+    expect(changes.map((change) => change.row?.amount)).toEqual([2])
+})

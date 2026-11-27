@@ -5421,6 +5421,9 @@ its `readable` or `writable` reached.
 argument names as that argument types it, in the row read, written and inserted, refusing a type the
 column's own does not admit.
 
+47.55 A `table` whose change log and triggers 47.26 made inside a transaction that rolled back MUST
+make them again at its next reach.
+
 # 48. Problem reports
 
 48.1 `report` MUST answer a `ReportDraft` holding among its `traces` the trace it was given, and the

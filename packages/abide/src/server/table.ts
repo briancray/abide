@@ -579,6 +579,9 @@ const PREPARED = new WeakMap<Database, Map<string, string>>()
  * column a migration added is captured, and again where this process asks to log more.
  */
 function prepare(db: Database, name: string, key: string | undefined): void {
+    // 47.55 — WHAT A TRANSACTION MAKES, ITS ROLLBACK UNMAKES: the change log and the triggers made
+    // inside one are made again at every reach until a reach outside one makes them for good.
+    const lasting = !db.inTransaction
     let tables = PREPARED.get(db)
     if (tables === undefined) {
         db.run(
@@ -593,7 +596,7 @@ function prepare(db: Database, name: string, key: string | undefined): void {
             'CREATE TABLE IF NOT EXISTS abide_changes_removed (tbl TEXT PRIMARY KEY, through INTEGER NOT NULL)',
         )
         tables = new Map()
-        PREPARED.set(db, tables)
+        if (lasting) PREPARED.set(db, tables)
     }
     const description = describe(db, name)
     const logged = LOGGED.get(name)
@@ -631,7 +634,7 @@ function prepare(db: Database, name: string, key: string | undefined): void {
             )
         }
     })()
-    tables.set(name, signature)
+    if (lasting) tables.set(name, signature)
 }
 
 function lastChange(db: Database, name: string): number {
