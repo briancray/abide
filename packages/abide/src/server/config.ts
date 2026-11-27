@@ -248,12 +248,48 @@ function appUrl(): URL | undefined {
     return appUrlIs
 }
 
+// 36.24 — `APP_ORIGINS`, parsed once per text it and `APP_URL` hold: `APP_URL`'s origin, then each
+// entry, a bare host taking `APP_URL`'s scheme, or `https:` where there is none.
+let listedFor: string | undefined
+let listedAre: ReadonlySet<string> = new Set()
+function listedOrigins(): ReadonlySet<string> {
+    const base = appUrl()
+    const declared = config.peek()?.APP_ORIGINS
+    const text = typeof declared === 'string' ? declared : ''
+    const key = `${base?.origin ?? ''} ${text}`
+    if (key !== listedFor) {
+        listedFor = key
+        const scheme = base?.protocol ?? 'https:'
+        const origins = new Set<string>()
+        if (base !== undefined) origins.add(base.origin)
+        for (const entry of text.split(',')) {
+            const trimmed = entry.trim()
+            if (trimmed === '') continue
+            const parsed = URL.parse(
+                trimmed.includes('://') ? trimmed : `${scheme}//${trimmed}`,
+            )
+            if (parsed !== null) origins.add(parsed.origin)
+        }
+        listedAre = origins
+    }
+    return listedAre
+}
+
 /**
- * The app's own origin: `APP_URL`'s where the app declares one, and that of `url` — the request's —
- * where not. 36.2.
+ * The app's own origin for the request at `url`: the request's where `APP_URL` or `APP_ORIGINS`
+ * lists it or no `APP_URL` is declared, and `APP_URL`'s where not. 36.2, 36.25.
  */
 export function ownOrigin(url: URL | string): string {
-    return (appUrl() ?? (typeof url === 'string' ? new URL(url) : url)).origin
+    const requested = (typeof url === 'string' ? new URL(url) : url).origin
+    const base = appUrl()
+    return base === undefined || listedOrigins().has(requested)
+        ? requested
+        : base.origin
+}
+
+/** Whether `origin` is one of the app's own for the request at `url`. 36.2, 36.25. */
+export function isOwnOrigin(origin: string, url: URL | string): boolean {
+    return origin === ownOrigin(url) || listedOrigins().has(origin)
 }
 
 // 36.2, 16.10 — THE MOUNT IS `APP_URL`'s PATH, trailing slash dropped, and the root where there is

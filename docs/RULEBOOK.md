@@ -1264,7 +1264,7 @@ does.
 `response.redirect` included — MUST NOT carry `content-type`.
 
 16.53 The 303 16.38 answers MUST go to the mount's root where the referrer is absent or is not of
-`APP_URL`'s origin, per 36.2.
+`APP_URL`'s origin or one `APP_ORIGINS` lists, per 36.2.
 
 ## Ceilings and timeouts
 
@@ -3122,7 +3122,8 @@ once, on `abide:outlet`.
 
 36.1 `PORT` MUST default to 3000, and a command's own port flag MUST override it by declaring it.
 
-36.2 `APP_URL`'s origin MUST be what both origin gates compare against.
+36.2 `APP_URL`'s origin and each `APP_ORIGINS` lists MUST be what both origin gates compare
+against, and the request's own origin where no `APP_URL` is declared.
 
 36.3 `NODE_ENV` MUST be read verbatim, and MUST be defaulted from the command where unset.
 
@@ -3189,6 +3190,12 @@ and `APP_VERSION` as `service.version`.
 send the collector has not answered within OTLP's default 10 seconds, MUST keep no more than 4096
 records waiting, dropping the oldest — counting those a collector has not yet taken while one send is
 out — and MUST report a failed send on stderr once until a send succeeds, and never through `log`.
+
+36.24 `APP_ORIGINS` MUST accept a comma-separated list of origins, an entry with no scheme taking
+`APP_URL`'s, and `https` where no `APP_URL` is declared.
+
+36.25 The app's own origin for a request MUST be the request's where 36.2 admits it, and `APP_URL`'s
+where not.
 
 # 37. Lifecycle hooks
 

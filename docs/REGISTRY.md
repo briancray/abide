@@ -1295,6 +1295,7 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `PORT` | `number` | The listen port. | 36.1, 38.63, 38.64 |
 | `APP_URL` | `string \| null` | The app's public URL. | 36.2, 19.17 |
+| `APP_ORIGINS` | `string \| null` | The other origins the app answers at, separated by commas. | 36.2, 36.24, 36.25 |
 | `NODE_ENV` | `string` | The environment name, verbatim. | 36.3, 36.16 |
 | `APP_NAME` | `string` | The app's name, and `log`'s default namespace. | 27.3, 28.4, 38.87 |
 | `APP_VERSION` | `string` | The version beside that name. | 27.3 |

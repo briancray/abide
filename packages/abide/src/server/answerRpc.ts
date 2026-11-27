@@ -27,7 +27,7 @@ import {
 } from './answerFailure.ts'
 import { answerValue, namesEtag, sseHeaders } from './answerValue.ts'
 import { callerCookieOf } from './callerOf.ts'
-import { ownOrigin, positiveSetting } from './config.ts'
+import { isOwnOrigin, positiveSetting } from './config.ts'
 import { CONTINUE_HEADER } from './CONTINUE_HEADER.ts'
 import { allows, crossingOrigin } from './crossingOrigin.ts'
 import { handedOff } from './handedOff.ts'
@@ -376,7 +376,7 @@ async function navigated(
     const from = referer === null ? null : URL.parse(referer)
     headers.set(
         'location',
-        from !== null && from.origin === ownOrigin(request.url)
+        from !== null && isOwnOrigin(from.origin, request.url)
             ? from.href
             : underMount('/'),
     )
