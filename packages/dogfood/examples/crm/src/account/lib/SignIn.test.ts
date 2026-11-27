@@ -43,8 +43,8 @@ test('a request carrying the cookie is signed in', async () => {
     expect(signedIn).toBe(true)
 })
 
-// 38.236 — A MOUNTED SIGN-IN SIGNS THE MOUNT IN: the call reads the session the mount opened, and
-// the page reads who it signed in as. THE REVERT: have `within` read the request scope alone — the
+// 38.236 — A MOUNTED SIGN-IN SIGNS THE TEST IN: the call reads the test's session, and the page
+// reads who it signed in as. THE REVERT: have `within` read the request scope alone — the
 // test above built the principal outside every request, and the mount throws "principal() was
 // called outside a request".
 test('a click signs the mounted page in, and another signs it out', async () => {
@@ -54,20 +54,5 @@ test('a click signs the mounted page in, and another signs it out', async () => 
     expect(button().textContent).toBe('Sign out')
     button().click()
     await settled()
-    expect(button().textContent).toBe('Sign in')
-})
-
-// 38.236 — A MOUNT AFTER THE LAST ONE STOPPED IS A FRESH BROWSER, signed out. THE REVERT: drop
-// `forgetPrincipalMembers` from `testMount.ts`; run alone, the principal the first session signed in
-// is still served — "Sign out" where "Sign in" is due — and after the tests above, the mount throws
-// the "principal() was called outside a request" they left.
-test('the next mount starts signed out', async () => {
-    {
-        using _first = await mount(SignIn({}))
-        button().click()
-        await settled()
-        expect(button().textContent).toBe('Sign out')
-    }
-    using _second = await mount(SignIn({}))
     expect(button().textContent).toBe('Sign in')
 })

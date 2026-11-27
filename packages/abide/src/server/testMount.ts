@@ -11,20 +11,14 @@
 // the document has no router, the mount installs one for as long as any mount stands — written to
 // `history`, so where a component navigated is `location`, `history.state` and `route`, read after
 // the navigation, and no spy records it a second time.
-//
-// 38.236 — AND ITS CALLS ARE ONE BROWSER'S: what a handler reads of the request — `principal`, its
-// cookies, the request a rung is handed — is a session the first mount opens and the last one's stop
-// ends, so a sign-in a call makes is who the next call is.
 
 import { CURRENT_ROUTER, type Navigable } from '#shared/CURRENT_ROUTER.ts'
 import { startMadeIds } from '#shared/madeId.ts'
-import { forgetPrincipalMembers } from '#shared/principal.ts'
 import { flushSync } from '#shared/reactive/Reactive.ts'
 import { arrive } from '#shared/route.ts'
 
 import { MOUNTABLE } from './MOUNTABLE.ts'
 import { type Component, render } from './render.ts'
-import { closeMountSession, openMountSession } from './requestScope.ts'
 
 type Mountable = {
     accessors: Record<string, () => unknown>
@@ -55,7 +49,7 @@ export async function mount(component: Component): Promise<Mounted> {
         throw new Error(
             'abide: mount renders into a DOM, and this process has none. Preload `@abide/harness/preload` ahead of `@abide/abide/test` in bunfig.toml. RULEBOOK 38.119.',
         )
-    // 38.236 — the session and the router stand for the server pass too, which reads the request.
+    // The router stands for the server pass too.
     stand()
     try {
         return await mounted(component, mountable)
@@ -165,16 +159,14 @@ const MOUNT_ROUTER: Navigable = {
     },
 }
 
-// How many mounts stand. The first opens the session their calls read as the request (38.236) and,
-// where the document has no router, installs `MOUNT_ROUTER`; the last one's stop ends both.
+// How many mounts stand: the first installs `MOUNT_ROUTER` where the document has no router, and
+// the last one's stop removes it.
 let standing = 0
 let routerInstalled = false
 
 function stand(): void {
     standing += 1
     if (standing > 1) return
-    openMountSession(location.href)
-    forgetPrincipalMembers()
     routerInstalled = CURRENT_ROUTER.current === null
     if (!routerInstalled) return
     CURRENT_ROUTER.current = MOUNT_ROUTER
@@ -183,10 +175,7 @@ function stand(): void {
 
 function leave(): void {
     standing -= 1
-    if (standing > 0) return
-    closeMountSession()
-    forgetPrincipalMembers()
-    if (!routerInstalled) return
+    if (standing > 0 || !routerInstalled) return
     routerInstalled = false
     removeEventListener('popstate', popped)
     if (CURRENT_ROUTER.current === MOUNT_ROUTER) CURRENT_ROUTER.current = null

@@ -433,29 +433,23 @@ export function currentRequestScope(): RequestScope | undefined {
     return STORAGE.getStore()
 }
 
-// 38.236 — WHAT A MOUNTED COMPONENT'S CALLS READ AS THE REQUEST, where they run outside every one:
-// one browser's session, its cookies kept from call to call, for as long as a mount stands. Read
-// only by the ambients 22.1 names, never by 11.32's filing, so a value a mount reaches is the one it
-// was — and in place of a scope that carries no request, `App.run`'s, whose values an earlier test
-// may have built. A `job`'s run is outside every request and session alike (54.32).
-let mountSession: RequestScope | undefined
+// 38.236 — WHAT A TEST'S WORK READS AS THE REQUEST, where it runs outside every one: one browser's
+// session, its cookies kept from call to call, for one test. Read only by the ambients 22.1 names,
+// never by 11.32's filing, so a value a test reaches is the one it was. `App.run`'s scope carries a
+// request of its own or none, and a `job`'s run is outside every request and session alike (54.32).
+let testSession: RequestScope | undefined
 
 /** Opens the session `within` answers outside every request, at `address`, holding no cookie. */
-export function openMountSession(address: string): void {
-    mountSession = scopeFor(new Request(address), undefined, undefined)
-}
-
-/** Ends the session `openMountSession` opened, stopping what was opened in it (12.5). */
-export function closeMountSession(): void {
-    if (mountSession !== undefined) releaseScope(mountSession)
-    mountSession = undefined
+export function openTestSession(address: string): void {
+    if (testSession !== undefined) releaseScope(testSession)
+    testSession = scopeFor(new Request(address), undefined, undefined)
 }
 
 /** The current request's scope; throws, naming `name()`, outside a request. 22.1. */
 export function within(name: string): RequestScope {
-    let scope = STORAGE.getStore()
-    if (scope?.request === undefined && OWNER.getStore() === undefined)
-        scope = mountSession
+    const scope =
+        STORAGE.getStore() ??
+        (OWNER.getStore() === undefined ? testSession : undefined)
     if (scope?.request === undefined)
         throw new Error(
             `abide: ${name}() was called outside a request, and it reads the request being served. RULEBOOK 22.1.`,

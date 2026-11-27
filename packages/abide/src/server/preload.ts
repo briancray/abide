@@ -7,12 +7,14 @@
 
 import { beforeEach } from 'bun:test'
 
+import { forgetPrincipalMembers } from '#shared/principal.ts'
 import { invalidate } from '#shared/reactive/index.ts'
 import { keepLoads } from '#shared/reactive/producer.ts'
 
 import { processBuild, servedBuild, spawnedBuild } from './appBuild.ts'
 import { addDerived } from './config.ts'
 import { appRoot } from './createApp.ts'
+import { openTestSession } from './requestScope.ts'
 
 // 38.206 — the loads `settled` waits on, kept from here on and in no process that did not load this.
 keepLoads()
@@ -36,10 +38,20 @@ if (root !== undefined && !(await isWorkspaceRoot(root)))
 //
 // 38.204 — AND EACH TEST WAITS ON ITS OWN LOADS: a value an earlier test left loading — a stream
 // still open, a call nothing answered — is that test's, and `settled` in this one does not wait on it.
+//
+// 38.236 — AND EACH TEST IS A FRESH BROWSER: a session of its own, signed out, that what it calls
+// outside every request reads as the request. The principal's members are built again from it:
+// built before, outside every request, they hold the last test's, or what 22.1 threw there.
 let fileUnderTest: string | undefined
 try {
     beforeEach(() => {
         keepLoads()
+        openTestSession(
+            typeof location === 'undefined'
+                ? 'http://localhost/'
+                : location.href,
+        )
+        forgetPrincipalMembers()
         if (Bun.main === fileUnderTest) return
         if (fileUnderTest !== undefined) invalidate()
         fileUnderTest = Bun.main

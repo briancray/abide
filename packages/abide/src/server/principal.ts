@@ -23,7 +23,12 @@ import { config, positiveSetting } from './config.ts'
 import { cookieOf } from './cookieOf.ts'
 import { HOOKS, inOrder } from './hooks.ts'
 import { mountedOwn } from './mountHandlers.ts'
-import { type RequestScope, type Sealed, within } from './requestScope.ts'
+import {
+    currentRequestScope,
+    type RequestScope,
+    type Sealed,
+    within,
+} from './requestScope.ts'
 import { signInChanged } from './signInChanged.ts'
 
 // 26.18.
@@ -337,8 +342,13 @@ export const PRINCIPAL_MOUNT = mountedOwn(
 // 21.3 — the answer is about this caller alone, and is never cached. 1.4 — the handler's value for
 // the call is thenable, and a promise of it is the document, a refusal rejecting it.
 export const SERVER_PRINCIPAL: typeof PRINCIPAL = {
+    // 38.236 — OUTSIDE EVERY REQUEST, NOT THROUGH THE HANDLER'S ENTRY: a request's is its own, and
+    // the one outside them all is the process's, which would keep what a test's session resolved
+    // before the sign-in one of its calls made.
     document: () =>
-        Promise.resolve(reachOf(principalDocument) as Promise<Principal>),
+        currentRequestScope()?.request === undefined
+            ? resolvePrincipal()
+            : Promise.resolve(reachOf(principalDocument) as Promise<Principal>),
     caller: callerOrMint,
     set,
     clear,

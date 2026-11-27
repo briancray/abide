@@ -114,7 +114,7 @@ export function principalMembers(): Members {
     // where it was. A REFRESH, not an invalidate: 7.4 keeps the document a click handler reads
     // served until the new one lands. Another tab's is heard too (`principalRotated.ts`); a
     // browser's alone: a server, which replaced these slots, answers no `abide-principal` to itself.
-    // ONCE, and through whichever members stand: a mount's session builds them again.
+    // ONCE, and through whichever members stand: a test's session builds them again.
     if (!heardRotation) {
         heardRotation = true
         onPrincipalRotated((everything) => {
@@ -125,9 +125,9 @@ export function principalMembers(): Members {
 }
 
 /**
- * Drops the members for the next access to build again — 38.236, as a mount's session opens or
- * closes: built before it, outside every request, they hold what 22.1 threw there, and a value that
- * failed is served while it reloads.
+ * Drops the members for the next access to build again — 38.236, as a test's session opens: built
+ * before it, outside every request, they hold the last test's principal or what 22.1 threw there,
+ * and a value that failed is served while it reloads.
  */
 export function forgetPrincipalMembers(): void {
     members = undefined

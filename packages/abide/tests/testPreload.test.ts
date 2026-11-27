@@ -338,15 +338,22 @@ test('route is the address, and a navigation is the history', async () => {
     )
 }, 90_000)
 
-// 38.236 — A MOUNTED COMPONENT'S CALLS ARE ONE BROWSER'S SESSION: a sign-in one call makes is who
-// the next call is, through a rung that reads the request, and the session ends with the mount.
-// THE REVERT: have `within` read `STORAGE` alone again; the sign-in's `principal.set` throws "called
-// outside a request" and the page reads `who: ` where `who: ada` is due — exit 1, `0 pass`.
+// 38.236 — A TEST'S CALLS ARE ONE BROWSER'S SESSION: a sign-in one call makes is who the next call
+// is, through a rung that reads the request. THE REVERT: have `within` read `STORAGE` alone again;
+// the sign-in's `principal.set` throws "called outside a request" and the page reads `who: ` where
+// `who: ada` is due — exit 1, `0 pass`.
+//
+// AND THE TEST SIGNS ITS SESSION IN as a call would, though the server pass resolved it through a
+// rung. THE REVERT: have `SERVER_PRINCIPAL.document` reach the handler's entry outside every request
+// too; that entry is one for the process, and keeps the test before's — "ada" where "grace" is due.
+//
+// AND THE NEXT TEST IS A FRESH BROWSER, signed out. THE REVERT: drop `forgetPrincipalMembers` from
+// the preload's `beforeEach`; the members still hold the test before's — `true` where `false` is due.
 //
 // 38.204 — AND `settled` STILL SETTLES after the sign-in, though the derived values over the
 // principal it set were left loading and nothing reads them. THE REVERT: drop `stalledUnread` from
 // `pendingWork`; `settled` throws "4 still loading (derived, derived, derived, derived)".
-test("a mounted component's calls share one session, and a sign-in is the next call's — 38.236, 38.204", async () => {
+test("a test's calls share one session, and a sign-in is the next call's — 38.236, 38.204", async () => {
     const cwd = temporaryModule({
         'package.json': JSON.stringify({
             name: 'session-fixture',
@@ -382,13 +389,37 @@ let who = reactive('')
 <button id="in" onclick={() => signIn()}>sign in</button>
 <button id="who" onclick={async () => (who = await whoAmI())}>who</button>
 <p id="out">who: {who}</p>`,
+        'src/layout.abide': `<script server>
+import { onPrincipal } from '@abide/abide/server'
+
+onPrincipal(async (claims) => ({ id: (claims as { id: string }).id }))
+</script>
+
+<slot />`,
+        'src/account/mine.server.ts': `import { authorize, rpc } from '@abide/abide/server'
+
+export default rpc(() => 'mine', { middleware: [authorize((who) => who.authenticated)] })
+`,
+        'src/account/lib/Mine.abide': `<script>
+import { reactive } from '@abide/abide'
+
+import mine from '../mine.server.ts'
+
+const answer = reactive(() => mine())
+</script>
+
+{#try}<p>{answer}</p>{:catch}<p>refused</p>{/try}`,
         'src/account/tests/Account.test.ts': `import { expect, test } from 'bun:test'
+import { principal } from '@abide/abide'
+import { createApp } from '@abide/abide/server'
 import { mount, settled } from '@abide/harness/abide'
 import Account from '../lib/Account.abide'
+import Mine from '../lib/Mine.abide'
 
 const click = (id: string) => document.querySelector<HTMLButtonElement>(id)?.click()
 
 test('signed in by one call, the next is the member', async () => {
+    await using _app = await createApp()
     using _account = await mount(Account({}))
     click('#in')
     await settled()
@@ -396,13 +427,23 @@ test('signed in by one call, the next is the member', async () => {
     await settled()
     expect(document.querySelector('#out')?.textContent).toBe('who: ada')
 })
+
+test('the test signs the session in as a call would', async () => {
+    using _mine = await mount(Mine({}))
+    await principal.set({ id: 'grace' })
+    expect(String((await principal.resolved).id)).toBe('grace')
+})
+
+test('the next test is a fresh browser, signed out', async () => {
+    expect(await principal.authenticated).toBe(false)
+})
 `,
     })
     const ran = await spawned(
         ['bun', 'test', './src/account/tests/Account.test.ts'],
         { cwd },
     )
-    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
+    expect(`${ran.exitCode} ${ran.stderr.includes('3 pass')}`, ran.stderr).toBe(
         '0 true',
     )
 }, 90_000)
