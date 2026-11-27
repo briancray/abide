@@ -26,6 +26,7 @@ import {
     cellOf,
     refuseBothCaps,
 } from './cellShape.ts'
+import type { ArgsTuple } from './createMemo.ts'
 import { isReactive } from './isReactive.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { matchesPattern } from './matchesPattern.ts'
@@ -70,7 +71,7 @@ export type Keyed<
     Failures = never,
     Produced = Stored,
 > = ((
-    ...args: undefined extends Args ? [args?: Args] : [args: Args]
+    ...args: ArgsTuple<Args>
 ) => Reactive<Stored, Accepted, Failures, Produced>) & {
     busy(pattern?: Partial<Args>): boolean
     ready(pattern?: Partial<Args>): boolean

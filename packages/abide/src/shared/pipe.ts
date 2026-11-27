@@ -63,7 +63,7 @@ export type Pipe<In, Out, Fanned extends boolean = false> = ((
 ) => Promise<Fanned extends true ? Out[] : Out>) & {
     readonly readable: ReadableStream<Out | Failed<string, unknown>>
     readonly writable: WritableStream<In>
-    readonly status: Memo<undefined, PipeStatus>
+    readonly status: Memo<PipeStatus>
     stop(): Promise<void>
 }
 
@@ -177,7 +177,7 @@ class Runner {
     stopping: AbortController
     inFlight: Set<Promise<unknown>>
     counts: PipeStatus
-    status: Memo<undefined, PipeStatus>
+    status: Memo<PipeStatus>
     pair:
         | {
               readable: ReadableStream<unknown>

@@ -23,7 +23,6 @@ import {
     type Memo,
     type MemoOptions,
     memoOver,
-    type MemoValue,
 } from './createMemo.ts'
 import { DECLARED_TAGS } from './DECLARED_TAGS.ts'
 import { isReactive } from './isReactive.ts'
@@ -32,7 +31,6 @@ import { MEMO_BRAND } from './MEMO_BRAND.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import {
     busyOver,
-    type CellOptions,
     createReactive,
     invalidateOver,
     isStreamBody,
@@ -133,21 +131,12 @@ export type Refused<Shaped> = Extract<Shaped, Refusal>
 // `schema` IS READ FOR `Gate` THE SAME WAY, and only for whether one was given: the intersection
 // leaves `Accepted` inferred from `Schema<Accepted>` exactly as before, and `Gate` stays `never`
 // at its default where no schema is passed — which is what `Gated` turns into the refusal 1.3 adds.
-// `args` is read for `ArgsGate` the same way: its refusal is a `ValidationError` too (15.8).
-export type Shaping<
-    Accepted,
-    Shaped,
-    Args = never,
-    Gate = Schema<Accepted>,
-    ArgsGate = Schema<Args>,
-> = Omit<
-    ReactiveOptions<Accepted, Kept<NoInfer<Shaped>>, never, Args>,
-    'transform' | 'schema' | 'args'
+export type Shaping<Accepted, Shaped, Gate = Schema<Accepted>> = Omit<
+    ReactiveOptions<Accepted, Kept<NoInfer<Shaped>>>,
+    'transform' | 'schema'
 > & {
     transform?: ((value: Accepted) => Shaped) | undefined
     schema?: (Gate & Schema<Accepted>) | undefined
-    args?:
-        ([Args] extends [never] ? never : ArgsGate & Schema<Args>) | undefined
 }
 /**
  * The validation refusal a declared `schema` adds to `Failures`, and `never` where none is.
@@ -173,14 +162,6 @@ export type Refusals<
     ArgsGate = Schema<never>,
     Args = never,
 > = Refused<Shaped> | Gated<Gate, Stored> | Gated<ArgsGate, Args>
-/**
- * What a source declares for each entry beside a value's options: its life, its pace, its tags and
- * whether it is one for the whole process — a `memo`'s and a handler's, never a `reactive`'s (11.81).
- */
-export type Sourced<Args> = Pick<
-    CellOptions<unknown, unknown, never, Args>,
-    'ttl' | 'throttle' | 'debounce' | 'tags' | 'global'
->
 /** The failures a body handing back a `Reactive` adopts from it (11.12). */
 export type AdoptedFailures<Computed> =
     Computed extends Reactive<unknown, never, infer Failures, unknown>
@@ -253,25 +234,6 @@ export type BodyProduced<Result, Otherwise> =
     Awaited<Result> extends AsyncIterable<infer Chunk>
         ? Chunk
         : AdoptedProduced<Result, Otherwise>
-/** What `memo` builds from a body: a `Keyed` where it takes `Args`, a `Reactive` where it takes none. */
-export type ReactiveOf<Args, Result, Shaped, Gate, ArgsGate> = [Args] extends [
-    never,
-]
-    ? Reactive<
-          Kept<Shaped>,
-          BodyValue<Result>,
-          AdoptedFailures<Result> | Refusals<Shaped, Gate, BodyValue<Result>>,
-          BodyProduced<Result, Kept<Shaped>>
-      >
-    : Keyed<
-          Kept<Shaped>,
-          Args,
-          BodyValue<Result>,
-          | AdoptedFailures<Result>
-          | Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args>,
-          BodyProduced<Result, Kept<Shaped>>
-      >
-
 /**
  * A value `body` produces, run again when a value it read changes (11.1), and a stream where it hands
  * back an async iterable (9.6). FIRST, so a function is never tried as a value the scope owns.
@@ -291,8 +253,16 @@ export function reactive<
     Gate = Schema<BodyValue<Result>>,
 >(
     body: Body<Result>,
-    options?: Shaping<BodyValue<NoInfer<Result>>, Shaped, never, Gate>,
-): ReactiveOf<never, Result, Shaped, Gate, never>
+    options?: Shaping<BodyValue<NoInfer<Result>>, Shaped, Gate>,
+    // SPELLED OUT RATHER THAN ALIASED, as `watch`'s sources are: a value read through an alias of its
+    // own is compared structurally where a `Reactive` is compared by its parameters, and a source
+    // typed `Reactive<unknown, never, unknown, unknown>` then refused it on `set`'s failures.
+): Reactive<
+    Kept<Shaped>,
+    BodyValue<Result>,
+    AdoptedFailures<Result> | Refusals<Shaped, Gate, BodyValue<Result>>,
+    BodyProduced<Result, Kept<Shaped>>
+>
 /**
  * A value the scope owns outright, opening at `initial`, or at what a promise of it settles to.
  *
@@ -305,7 +275,7 @@ export function reactive<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(
     // an argument's against and take out of `Accepted` — which `NoInfer<undefined>` did not stop.
     initial:
         Held<Accepted> | ([Accepted] extends [unknown] ? undefined : never),
-    options?: Shaping<Accepted, Shaped, never, Gate>,
+    options?: Shaping<Accepted, Shaped, Gate>,
 ): Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>
 /**
  * A value nothing has written yet: `reactive<User>()`, not ready until the first `set` (2.9).
@@ -357,13 +327,27 @@ export function reactive(
  * NO PARAMETER IS SNIFFED: a function declaring none is kept on `undefined`, called as `m()`.
  */
 export function memo<
-    Args = undefined,
     Result = unknown,
-    Shaped = MemoValue<Result>,
+    Args = undefined,
+    Shaped = BodyValue<Result>,
+    Gate = Schema<BodyValue<Result>>,
+    ArgsGate = Schema<Args>,
 >(
     fn: (args: Args) => Result,
-    options?: MemoOptions<Args, MemoValue<NoInfer<Result>>, Shaped>,
-): Memo<Args, Result, Kept<Shaped>>
+    options?: MemoOptions<
+        Args,
+        BodyValue<NoInfer<Result>>,
+        Shaped,
+        Gate,
+        ArgsGate
+    >,
+): Memo<
+    Kept<Shaped>,
+    Args,
+    | AdoptedFailures<Result>
+    | Refusals<Shaped, Gate, BodyValue<Result>, ArgsGate, Args>,
+    BodyProduced<Result, Kept<Shaped>>
+>
 export function memo(fn: unknown, options?: unknown): unknown {
     refuseValue(fn, 'memo')
     return memoOver(
@@ -377,22 +361,20 @@ export function memo(fn: unknown, options?: unknown): unknown {
  * surface — only `reactive` hands an app a `Reactive`.
  */
 export function keyedValue<
-    Value = never,
+    Result = unknown,
     Args = undefined,
-    Result = Value,
     Shaped = BodyValue<Result>,
     Gate = Schema<BodyValue<Result>>,
     ArgsGate = Schema<Args>,
 >(
     body: (args: Args) => Result,
-    options?: Shaping<
+    options?: MemoOptions<
+        Args,
         BodyValue<NoInfer<Result>>,
         Shaped,
-        Args,
         Gate,
         ArgsGate
-    > &
-        Sourced<Args>,
+    >,
 ): Keyed<
     Kept<Shaped>,
     Args,

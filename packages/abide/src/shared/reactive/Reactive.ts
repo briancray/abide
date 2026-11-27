@@ -134,17 +134,7 @@ export type ReactiveOptions<
     // `number | Failed<…>` and `.data` did not exist on it. The bound is what tells the
     // two halves of that union apart.
     Failures extends Failed<string, unknown> = never,
-    // `never` wherever the body declares no parameter, which is what makes `args` unspellable
-    // there (11.41): its field type collapses to `never`.
-    Args = never,
 > = {
-    /**
-     * The schema gating a keyed value's args.
-     *
-     * RULEBOOK 11.40, 11.28, 11.67: the gate on a keyed value's args — what it returns is what the
-     * body is handed, and the key was taken before it ran (11.26).
-     */
-    args?: ([Args] extends [never] ? never : Schema<Args>) | undefined
     /**
      * What makes a gated write a repeat: a projection or a comparator.
      *
@@ -169,13 +159,8 @@ export type ReactiveOptions<
      * nothing where a failed producer (2.3) may still have something to say.
      */
     transform?: Transformer<Accepted, Stored, Failures> | undefined
-    /**
-     * Where the value lives when the process does not.
-     *
-     * RULEBOOK 8, 9.5, 11.42: where the value lives when the process does not. The function form
-     * is handed the entry's args, so each key of a `Keyed` has a store of its own.
-     */
-    store?: Store<Stored> | ((args: ArgsOf<Args>) => Store<Stored>) | undefined
+    /** RULEBOOK 8, 9.5: where the value lives when the process does not. */
+    store?: Store<Stored> | undefined
     /**
      * What tells one array element from another.
      *
@@ -189,17 +174,10 @@ export type ReactiveOptions<
 }
 
 /**
- * What a cell is built with: a value's options, and the SOURCE's beside them — the life, the pace,
- * the tags and the filing a `memo` and a handler declare for each entry (5.24, 11.34, 11.43, 11.45).
- * Not app surface: `reactive` refuses these at construction (11.81), and a `memo` hands
- * them to its entries.
+ * What a source declares for each entry beside a value's options: its life, its pace, its tags and
+ * whether it is one for the whole process — a `memo`'s and a handler's, never a `reactive`'s (11.81).
  */
-export type CellOptions<
-    Accepted,
-    Stored,
-    Failures extends Failed<string, unknown> = never,
-    Args = never,
-> = ReactiveOptions<Accepted, Stored, Failures, Args> & {
+export type Sourced<Args> = {
     /** RULEBOOK 11.45, 6.1 through 6.5: the life of a keyed entry. */
     ttl?: number | undefined
     /** RULEBOOK 5.8, 5.12: a change reaches a reader immediately and then at most once per window. */
@@ -207,16 +185,29 @@ export type CellOptions<
     /** RULEBOOK 5.8, 5.13: a change reaches a reader once the changes stop. */
     debounce?: number | undefined
     /** RULEBOOK 11.43, 11.44: what a `Selection` matches on; the function form is handed the args. */
-    tags?: string[] | ((args: ArgsOf<Args>) => string[]) | undefined
+    tags?: string[] | ((args: Args) => string[]) | undefined
     /** RULEBOOK 11.32, 11.34: one value for the whole process rather than one per request. */
     global?: boolean | undefined
 }
 
 /**
- * What a function-form option is handed: the entry's args, or `undefined` on a value whose body
- * takes none (11.44).
+ * What a cell is built with: a value's options, and the SOURCE's beside them — the args gate and the
+ * per-entry store a keyed value declares, with its life, pace, tags and filing (11.40, 11.42).
+ * Not app surface: `reactive` refuses the source's at construction (11.81), and a `memo` hands
+ * them to its entries.
  */
-type ArgsOf<Args> = [Args] extends [never] ? undefined : Args
+export type CellOptions<
+    Accepted,
+    Stored,
+    Failures extends Failed<string, unknown> = never,
+    Args = undefined,
+> = Omit<ReactiveOptions<Accepted, Stored, Failures>, 'store'> &
+    Sourced<Args> & {
+        /** RULEBOOK 11.40, 11.28, 11.67: the gate on a keyed value's args, taken after the key (11.26). */
+        args?: Schema<Args> | undefined
+        /** RULEBOOK 8, 9.5, 11.42: the function form is handed the entry's args, a store per key. */
+        store?: Store<Stored> | ((args: Args) => Store<Stored>) | undefined
+    }
 
 /**
  * `unknown` on a value that is not an array, where `key` has no element to key and names no property.

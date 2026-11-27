@@ -41,16 +41,16 @@ import {
     type HeldToAnnotation,
     keyOf,
 } from './reactive/argsContract.ts'
-import type { CALL_ENTRY } from './reactive/CALL_ENTRY.ts'
 import { callLoad } from './reactive/callLoad.ts'
 import {
+    type ArgsTuple,
+    type CallAnswer,
     type KeptIn,
     KEYED_OF,
     type Memo,
-    type MemoValue,
+    type MemoOptions,
     readableOf,
     writeOf,
-    type Written,
 } from './reactive/createMemo.ts'
 import { DECLARED_TAGS } from './reactive/DECLARED_TAGS.ts'
 import {
@@ -68,7 +68,6 @@ import {
     type Refusals,
     type Selection,
     type Shaping,
-    type Sourced,
     STREAMING,
 } from './reactive/index.ts'
 import { isReactive } from './reactive/isReactive.ts'
@@ -122,12 +121,9 @@ export type Rpc<Value, Args, Failures = never, Produced = Value> = ReadRpc<
     Args,
     Failures,
     Produced
-> & {
-    /** 11.76 — the owner's write of the value for `args`, past every rung; `set(value)` where it takes no args at all (11.80). */
-    set(...given: Written<Args, Value>): void
-    /** 11.76 — the owner's mutation of the value for `args` in place, past every rung; `patch(mutate)` where it takes no args at all (11.80). */
-    patch(...given: Written<Args, (value: Value) => void>): void
-}
+> &
+    // 11.76, 11.80 — the owner's write and mutation of the value for `args`, past every rung.
+    Pick<Memo<Value, Args>, 'set' | 'patch'>
 
 /**
  * 16.111, 16.117 — an `Rpc` less the owner's writes: what an `rpc` over a source or a value is, its
@@ -148,9 +144,7 @@ export type ReadRpc<Value, Args, Failures = never, Produced = Value> = ((
     methods: readonly Method[]
     description: string | undefined
     /** 11.77 — the value for `args` now, then after each change. */
-    readable(
-        ...args: undefined extends Args ? [args?: Args] : [args: Args]
-    ): ReadableStream<Value>
+    readable(...args: ArgsTuple<Args>): ReadableStream<Value>
     /** 46.1 — the calls the outbox holds for this handler, narrowed by a pattern. */
     outbox(pattern?: Partial<Args>): QueuedCall<Value>[]
     refresh(pattern?: Partial<Args>, options?: TriggerOptions): void
@@ -167,7 +161,7 @@ export type ReadRpc<Value, Args, Failures = never, Produced = Value> = ((
      *
      * 16.9, 16.10 — a mutation's takes no args.
      */
-    url(...args: undefined extends Args ? [args?: Args] : [args: Args]): string
+    url(...args: ArgsTuple<Args>): string
     /** The same call, handed back as the `Response` (16.42). */
     raw(args?: Args, init?: RequestInit): Promise<Response>
     /** Where the handler answers: its route under the mount, once its file has loaded (16.88). */
@@ -186,25 +180,7 @@ export type ReadRpc<Value, Args, Failures = never, Produced = Value> = ((
     guarded: boolean
 }
 
-/**
- * 16.3 — what one call of an `Rpc` answers, as the handler's body answers: the stream of its chunks
- * where it streams — `Produced` is a chunk where `Value` is the chunks — and otherwise the promise of
- * its value, rejected with its refusal (16.3).
- */
-export type CallAnswer<Value, Failures, Produced> = ([Value] extends [Produced]
-    ? [Produced] extends [Value]
-        ? Promise<Value>
-        : AsyncIterable<Produced>
-    : AsyncIterable<Produced>) & {
-    // Typed only: the value and the refusals a derived `reactive` adopting the answer serves as its own
-    // (11.12), and what the build reads a handler's value off (19.21).
-    readonly [CALL_ENTRY]?:
-        | {
-              readonly value: Value
-              readonly failures: Failures
-          }
-        | undefined
-}
+export type { CallAnswer } from './reactive/createMemo.ts'
 
 /**
  * The `ValidationError` the wire answers args that do not hold to the schema 19.9 derives from
@@ -364,14 +340,6 @@ type OptionsOf<
     : Omit<RpcOptions<Args, Answers>, 'refreshes'>
 
 /**
- * 16.110 — A HANDLER'S VALUE OPTIONS ARE A `memo`'S, its pace among them: `throttle` and `debounce`
- * hold back what every follower is sent, which a reader's own pacing could not. And its `store` is a
- * memo's, `KeptIn`: a store of the value, or one inferring nothing as `store.sqlite(db, 'calls')` does.
- */
-type HandlerShaping<Shaping> = Omit<Shaping, 'store'>
-type HandlerStore<Args, Value> = { store?: KeptIn<Args, Value> | undefined }
-
-/**
  * What `rpc` and each verb's `declare` are: a handler in, its `Rpc` out — a body, a `memo`, each
  * source and a plain value, one overload apiece.
  *
@@ -390,20 +358,24 @@ type Declare<Writes extends boolean> = {
     // `Args` RAW in the options, never behind a conditional: a generic rung helper listed there
     // (16.86) infers its own `Args` from them while this one is unfixed, and a conditional is
     // evaluated then rather than carried — every such rung was typed for `undefined`.
+    //
+    // 16.110 — A HANDLER'S VALUE OPTIONS ARE A `memo`'S, its pace and its `store` among them.
     <
-        Args = undefined,
         Result = unknown,
+        Args = undefined,
         Shaped = BodyValue<Result>,
         Gate = Schema<BodyValue<Result>>,
         ArgsGate = Schema<Args>,
         Answers extends readonly unknown[] = unknown[],
     >(
         handler: ((args: Args) => Result) & Plain,
-        options?: HandlerShaping<
-            Shaping<BodyValue<NoInfer<Result>>, Shaped, Args, Gate, ArgsGate>
+        options?: MemoOptions<
+            Args,
+            BodyValue<NoInfer<Result>>,
+            Shaped,
+            Gate,
+            ArgsGate
         > &
-            Sourced<NoInfer<Args>> &
-            HandlerStore<NoInfer<Args>, NoInfer<Kept<Shaped>>> &
             OptionsOf<Writes, Args, Answers>,
     ): Rpc<
         Kept<Shaped>,
@@ -414,24 +386,24 @@ type Declare<Writes extends boolean> = {
         BodyProduced<Result, Kept<Shaped>>
     >
     // 16.6 — a memo, served as the keyed value it is: `rpc(digest.status)`. 16.111 — read alone, its
-    // writes typed where `methods` names their verbs.
+    // writes typed where `methods` names their verbs, and its failures the call's own.
     <
+        Value,
         Args,
-        Result,
+        Failures,
+        Produced,
         Answers extends readonly unknown[] = unknown[],
         const Methods extends readonly Method[] = ['GET'],
     >(
-        handler: Memo<Args, Result>,
+        // 16.119 — an `Rpc` is a `Memo` by its shape, and its `method` is what turns it away.
+        handler: Memo<Value, Args, Failures, Produced> & {
+            method?: never | undefined
+        },
         options?: OptionsOf<Writes, Args, Answers> & {
             methods?: Methods | undefined
         },
-    ): ReadRpc<
-        MemoValue<Result>,
-        Args,
-        RungRefusals<Answers>,
-        BodyProduced<Result, MemoValue<Result>>
-    > &
-        HeldWrites<Methods, Args, MemoValue<Result>>
+    ): ReadRpc<Value, Args, Failures | RungRefusals<Answers>, Produced> &
+        HeldWrites<Methods, Args, Value>
     // 16.117 — a table: its rows read by a JSON match, written by key and deleted by a match.
     <
         Row extends Record<string, unknown>,
@@ -518,9 +490,13 @@ type Declare<Writes extends boolean> = {
         handler: [Accepted] extends [(...given: never[]) => unknown]
             ? never
             : Held<Accepted>,
-        options?: HandlerShaping<Shaping<Accepted, Shaped, never, Gate>> &
-            HandlerStore<undefined, NoInfer<Kept<Shaped>>> &
-            OptionsOf<Writes, undefined, Answers> & {
+        options?: Omit<Shaping<Accepted, Shaped, Gate>, 'store'> & {
+            // NAMED, AND `never`: without it the body form's `args` stopped typing an unannotated
+            // body's parameter where `methods` sat beside it (16.87) — `({ n }) => …` read `n` as
+            // `any`, the body form still the overload chosen.
+            args?: never | undefined
+            store?: KeptIn<undefined, NoInfer<Kept<Shaped>>> | undefined
+        } & OptionsOf<Writes, undefined, Answers> & {
                 methods?: Methods | undefined
             },
     ): ReadRpc<
@@ -545,13 +521,9 @@ type Answering<
 type HeldWrites<Methods extends readonly Method[], Args, Value> = Answering<
     Methods,
     'PUT',
-    { set(...given: Written<Args, Value>): void }
+    Pick<Memo<Value, Args>, 'set'>
 > &
-    Answering<
-        Methods,
-        'PATCH',
-        { patch(...given: Written<Args, (value: Value) => void>): void }
-    >
+    Answering<Methods, 'PATCH', Pick<Memo<Value, Args>, 'patch'>>
 /** 16.117 — a table as `rpc` reads it: called for rows, and written by key. */
 type TableFace<Row> = ((match?: Match<Row>) => Row[]) & {
     set(rows: Row | readonly Row[]): void
@@ -562,7 +534,7 @@ type TableFace<Row> = ((match?: Match<Row>) => Row[]) & {
 
 /** 16.117 — a job as `rpc` reads it: a status memo and a run. */
 type JobFace<Status, Input> = {
-    status: Memo<undefined, Status>
+    status: Memo<Status>
     run: (input?: Input) => Promise<Status>
     stop: () => Promise<Status>
 }
@@ -582,7 +554,7 @@ type LedgerFrom = { from?: number | undefined; cursor?: string | undefined }
 
 /** 16.117 — a pipe as `rpc` reads it: a call for an item's answer, and its status. */
 type PipeFace<In, Out> = ((input: In, signal?: AbortSignal) => Promise<Out>) & {
-    readonly status: Memo<undefined, PipeStatus>
+    readonly status: Memo<PipeStatus>
     readonly readable: ReadableStream<unknown>
     stop(): Promise<void>
 }

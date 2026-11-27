@@ -16,7 +16,7 @@
  * WHICH IS WHY A NAME THE `Reactive` DOES NOT DECLARE MUST NOT BE HERE: it takes a member the
  * value really has and resolves it to nothing. This list is exactly `MEMBERS` in
  * `shared/reactive/Reactive.ts`, which already declares `then`, `catch` and `finally` — `value`
- * and `args` are fields of `Cell` and of `ReactiveOptions`, neither of which the `Reactive`
+ * and `args` are fields of `Cell` and of `CellOptions`, neither of which the `Reactive`
  * exposes.
  */
 export const REACTIVE_MEMBERS: ReadonlySet<string> = new Set([

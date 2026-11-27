@@ -11,38 +11,35 @@ import type { Schema } from '../Schema.ts'
 import { answerOfCall } from './answerOfCall.ts'
 import { ARGS_GATE, type Gated, PARAMETER_DEFAULTS } from './argsContract.ts'
 import type { CALL_ENTRY } from './CALL_ENTRY.ts'
-import type { AdoptedFailures, Kept } from './index.ts'
+import type { Kept, Shaping } from './index.ts'
 import type { Keyed } from './Keyed.ts'
 import { MEMO_BRAND } from './MEMO_BRAND.ts'
 import { isStreaming, patchInto, produceInto } from './producer.ts'
-import type { Identity, Reactive, Store } from './Reactive.ts'
+import type { Reactive, Sourced, Store } from './Reactive.ts'
 
 /**
- * What `memo` takes: how long an entry lives, what selects it, where it is kept, what its args and its
- * value must be, what it is shaped into, what makes a write a repeat, how its elements are told apart,
- * and the pace it produces at. `Accepted` is what `fn` settles to; `Shaped` is read from
- * `transform` alone, the rest naming the value it keeps without inferring it.
+ * What `memo` takes, and a handler declared over a body (16.110): a value's gates, shaping, identity
+ * and key, a source's life, pace, tags and filing, the gate on its args and where each entry is kept.
+ * `Accepted` is what `fn` settles to; `Shaped` is read from `transform` alone, the rest naming the
+ * value it keeps without inferring it.
+ *
+ * `schema` IS READ FOR `Gate`, AND `args` FOR `ArgsGate`, only for whether one was given — which is
+ * what `Gated` turns into the `ValidationError` a call rejects with (1.3, 15.8). `Args` RAW in `args`,
+ * never behind a conditional: a body declaring no annotation reads its `Args` off it (16.87).
  */
-export type MemoOptions<Args, Accepted = unknown, Shaped = Accepted> = {
-    // 6.1, 6.2, 11.45 — how long an entry lives: refreshed where something follows it, else released.
-    ttl?: number | undefined
-    tags?: string[] | ((args: Args) => string[]) | undefined
-    global?: boolean | undefined
-    args?: Schema<Args> | undefined
-    key?: string | ((element: never) => unknown) | undefined
-    // 5.18, 5.24, 16.110 — the pace a memo produces at: a key reached anew, and an entry's new value,
-    // each held to the window, for every reader and follower of it.
-    throttle?: number | undefined
-    debounce?: number | undefined
-    // 11.78 — where each entry's value is kept, so a restart opens on it rather than running `fn`:
-    // one typed by the value, or one inferring nothing, as `store.sqlite(db, 'calls')` does.
-    store?: KeptIn<Args, NoInfer<Kept<Shaped>>> | undefined
-    // 4.3, 4.6 — the gate on what `fn` settles to, then the shaping of it, as a `reactive`'s are.
-    schema?: Schema<Accepted> | undefined
-    transform?: ((value: Accepted) => Shaped) | undefined
-    // 5.3 — what makes a write or a production a repeat, which reaches no reader and no follower.
-    identity?: Identity<NoInfer<Kept<Shaped>>> | undefined
-}
+export type MemoOptions<
+    Args,
+    Accepted = unknown,
+    Shaped = Accepted,
+    Gate = Schema<Accepted>,
+    ArgsGate = Schema<Args>,
+> = Omit<Shaping<Accepted, Shaped, Gate>, 'store'> &
+    Sourced<NoInfer<Args>> & {
+        args?: (ArgsGate & Schema<Args>) | undefined
+        // 11.78 — where each entry's value is kept, so a restart opens on it rather than running `fn`:
+        // one typed by the value, or one inferring nothing, as `store.sqlite(db, 'calls')` does.
+        store?: KeptIn<NoInfer<Args>, NoInfer<Kept<Shaped>>> | undefined
+    }
 
 /**
  * A store a memo or a handler keeps each entry in, per entry where it is a function of the args.
@@ -60,28 +57,46 @@ type EntryStore<Value> = {
     watch?: Store<Value>['watch'] | undefined
 }
 
+/** What a call takes: its args, optional where `Args` admits `undefined`. */
+export type ArgsTuple<Args> = undefined extends Args
+    ? [args?: Args]
+    : [args: Args]
+
+/**
+ * What one call of a `memo` or an `Rpc` answers: the stream of its chunks where it streams —
+ * `Produced` is a chunk where `Value` is the chunks — and otherwise the promise of its value, rejected
+ * with its refusal (16.3).
+ */
+export type CallAnswer<Value, Failures, Produced> = ([Value] extends [Produced]
+    ? [Produced] extends [Value]
+        ? Promise<Value>
+        : AsyncIterable<Produced>
+    : AsyncIterable<Produced>) & {
+    // Typed only: the value and the refusals a derived `reactive` adopting the answer serves as its own
+    // (11.12), and what the build reads a handler's value off (19.21).
+    readonly [CALL_ENTRY]?:
+        | {
+              readonly value: Value
+              readonly failures: Failures
+          }
+        | undefined
+}
+
 /**
  * A memo: the function's value per `Args` key — answered as a promise, or as the stream of its chunks
  * where the function answers an async iterable — written and followed per key.
  */
-export type Memo<Args, Result, Value = MemoValue<Result>> = ((
-    ...args: undefined extends Args ? [args?: Args] : [args: Args]
-) => (Awaited<Result> extends AsyncIterable<infer Chunk>
-    ? AsyncIterable<Chunk>
-    : Promise<Value>) & {
-    // Typed only, as a handler call's is: the refusals `fn`'s answer carries, which a
-    // a derived `reactive` adopting the call serves as its own (11.12).
-    readonly [CALL_ENTRY]?:
-        | { readonly value: Value; readonly failures: AdoptedFailures<Result> }
-        | undefined
-}) & {
+export type Memo<
+    Value,
+    Args = undefined,
+    Failures = never,
+    Produced = Value,
+> = ((...args: ArgsTuple<Args>) => CallAnswer<Value, Failures, Produced>) & {
     invalidate(pattern?: Partial<Args>): void
     refresh(pattern?: Partial<Args>): void
     set(...given: Written<Args, Value>): void
     patch(...given: Written<Args, (value: Value) => void>): void
-    readable(
-        ...args: undefined extends Args ? [args?: Args] : [args: Args]
-    ): ReadableStream<Value>
+    readable(...args: ArgsTuple<Args>): ReadableStream<Value>
 }
 
 /**
@@ -100,12 +115,6 @@ export function writeOf(given: unknown[]): [args: unknown, written: unknown] {
     return given.length === 1 ? [undefined, given[0]] : [given[0], given[1]]
 }
 
-/** What a memo's entry holds: a stream's chunks, else what its function settles to (9.1). */
-export type MemoValue<Result> =
-    Awaited<Result> extends AsyncIterable<infer Chunk>
-        ? Chunk[]
-        : Awaited<Result>
-
 /** The member a handler reads the keyed value a memo is a face over through (16.6). */
 export const KEYED_OF = Symbol('abide.keyedOf')
 
@@ -113,7 +122,7 @@ export const KEYED_OF = Symbol('abide.keyedOf')
 export function memoOver<Args, Value>(
     keyed: unknown,
     streams: boolean,
-): Memo<Args, unknown, Value> & Gated<Args> {
+): Memo<Value, Args> & Gated<Args> {
     const face = keyed as Keyed<Value, Args, Value, never> & Gated<Args>
     const entryOf = (args: Args): Reactive<Value> =>
         (keyed as (args: Args) => Reactive<Value>)(args)
@@ -146,7 +155,7 @@ export function memoOver<Args, Value>(
         },
         readable: (args?: Args): ReadableStream<Value> =>
             readableOf(entryOf(args as Args)),
-    }) as unknown as Memo<Args, unknown, Value> & Gated<Args>
+    }) as unknown as Memo<Value, Args> & Gated<Args>
 }
 
 /**

@@ -31,10 +31,11 @@ import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { CELL } from '#shared/reactive/CELL.ts'
 import { cellOf } from '#shared/reactive/cellShape.ts'
 import {
+    type AdoptedFailures,
+    type BodyProduced,
     type BodyValue,
     isKeyed,
     keyedValue,
-    type ReactiveOf,
 } from '#shared/reactive/index.ts'
 import { chunksOfStream, isStreaming } from '#shared/reactive/producer.ts'
 import { type CellOptions, createReactive } from '#shared/reactive/Reactive.ts'
@@ -43,7 +44,6 @@ import { enterShare, leaveShare } from '#shared/reactive/share.ts'
 import { CLEAN } from '#shared/reactive/tracking.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
 import { reactiveOver } from '#shared/reactiveOver.ts'
-import type { Schema } from '#shared/Schema.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
 import { WORK } from '#shared/WORK.ts'
 import { writePath } from '#shared/writePath.ts'
@@ -75,12 +75,11 @@ function pacedValue<Value>(
 function pacedBody<Result>(
     body: () => Result,
     options: CellOptions<unknown, unknown>,
-): ReactiveOf<
-    never,
-    Result,
+): Reactive<
     BodyValue<Result>,
-    Schema<BodyValue<Result>>,
-    never
+    BodyValue<Result>,
+    AdoptedFailures<Result>,
+    BodyProduced<Result, BodyValue<Result>>
 > {
     return createReactive(
         'memo',
@@ -88,12 +87,11 @@ function pacedBody<Result>(
         undefined,
         undefined,
         options as CellOptions<never, never>,
-    ) as unknown as ReactiveOf<
-        never,
-        Result,
+    ) as unknown as Reactive<
         BodyValue<Result>,
-        Schema<BodyValue<Result>>,
-        never
+        BodyValue<Result>,
+        AdoptedFailures<Result>,
+        BodyProduced<Result, BodyValue<Result>>
     >
 }
 

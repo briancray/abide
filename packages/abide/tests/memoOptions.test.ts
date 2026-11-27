@@ -7,6 +7,7 @@ import { expect, test } from 'bun:test'
 
 import { rpc, store } from '#server'
 import { flushSync, isFailed, memo, reactive, refuse, watch } from '#shared'
+import type { CALL_ENTRY } from '#shared/reactive/CALL_ENTRY.ts'
 import { KEYED_OF } from '#shared/reactive/createMemo.ts'
 import type { Reactive } from '#shared/reactive/Reactive.ts'
 
@@ -36,6 +37,43 @@ test('a memo gates and shapes what its function settles to — 11.79', async () 
     expect(`${length}, ${refused}, ${order.slice(0, 2).join(' ')}`).toBe(
         '4, refused, schema transform',
     )
+})
+
+// 1.3, 4.6 — A MEMO'S REFUSALS ARE IN ITS TYPE: what `schema` and `transform` refuse with is what a
+// call rejects with, so a derived `reactive` handing the call back is typed with them (11.12), and an
+// `rpc` over the memo is too (16.6) — its `ValidationError` is not asked of the `rpc`, which carries
+// one for its annotated args whatever the memo's gate (16.8). The type half is `Has`, and each read
+// only compiles where the name is in the failures. THE REVERT: write `AdoptedFailures<Result>` alone
+// as `memo`'s `Failures` in `reactive/index.ts` — all three reads fail typecheck, `false` assigned to
+// `true`.
+test("a memo's gate and transform type the failures its call rejects with — 1.3, 4.6", async () => {
+    type Has<Failures, Name> = [Extract<Failures, { name: Name }>] extends [
+        never,
+    ]
+        ? false
+        : true
+    const shelved = memo(({ title }: { title: string }) => title, {
+        schema: (value: unknown) => String(value),
+        transform: (value: string) =>
+            value === '' ? refuse.notFound() : value.length,
+    })
+    const length = reactive(() => shelved({ title: 'dune' }))
+    const served = rpc(shelved)
+    type Read = NonNullable<ReturnType<typeof length.error>>
+    type Served = NonNullable<
+        ReturnType<typeof served>[typeof CALL_ENTRY]
+    >['failures']
+    const reads: [
+        Has<Read, 'ValidationError'>,
+        Has<Read, 'NotFound'>,
+        Has<Served, 'NotFound'>,
+    ] = [true, true, true]
+    expect([...reads, await shelved({ title: 'dune' })]).toEqual([
+        true,
+        true,
+        true,
+        4,
+    ])
 })
 
 // THE REVERT: drop `identity` from what `memo` hands `keyedValue`; the equal write is a change, and the

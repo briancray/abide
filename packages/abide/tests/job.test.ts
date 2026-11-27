@@ -55,7 +55,7 @@ function kept(
 }
 
 async function until(
-    status: Memo<undefined, JobStatus>,
+    status: Memo<JobStatus>,
     holds: (status: JobStatus) => boolean,
 ): Promise<void> {
     const reader = status.readable().getReader()

@@ -40,7 +40,7 @@ type Ran = { status: JobStatus; failure: unknown }
 
 /** 54.11 — a job's status beside the ways to run it ahead of its schedule and to end it. */
 export type Job<Input = undefined> = {
-    status: Memo<undefined, JobStatus>
+    status: Memo<JobStatus>
     run: (input?: Input) => Promise<JobStatus>
     stop: () => Promise<JobStatus>
 }
