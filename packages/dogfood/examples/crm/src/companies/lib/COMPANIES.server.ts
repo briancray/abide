@@ -5,20 +5,20 @@ export const COMPANIES = [
         name: 'Analytical Engines',
         city: 'London',
         contact: 'Ada Lovelace',
-        pipeline: '$48,000',
+        pipeline: '$42,000',
     },
     {
         id: 'hopper-and-co',
         name: 'Hopper & Co',
         city: 'Arlington',
         contact: 'Grace Hopper',
-        pipeline: '$12,500',
+        pipeline: '$34,000',
     },
     {
         id: 'langley-research',
         name: 'Langley Research',
         city: 'Hampton',
         contact: 'Katherine Johnson',
-        pipeline: '$30,000',
+        pipeline: '$20,000',
     },
 ]

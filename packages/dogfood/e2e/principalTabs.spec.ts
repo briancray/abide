@@ -40,7 +40,7 @@ test('a sign-in in one tab reaches the other tabs of the browser — 26.24', asy
     await button(first).click()
     await expect(button(first)).toHaveText('Sign out')
     await expect(button(second)).toHaveText('Sign out')
-    await expect(dealValue).toHaveText('$48,000')
+    await expect(dealValue).toHaveText('$34,000')
     await button(first).click()
     await expect(button(second)).toHaveText('Sign in')
     await expect(dealValue).toHaveText('admins only')

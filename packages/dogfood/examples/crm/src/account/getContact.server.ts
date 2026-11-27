@@ -6,7 +6,7 @@ type Contact = { name: string; company: string; dealValue?: string }
 const CONTACT: Contact = {
     name: 'Grace Hopper',
     company: 'Hopper & Co',
-    dealValue: '$48,000',
+    dealValue: '$34,000',
 }
 
 /** The deal value is an admin's to read; everyone else gets the rest. */

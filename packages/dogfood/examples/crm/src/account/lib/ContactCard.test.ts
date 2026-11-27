@@ -9,7 +9,7 @@ test('an admin reads the deal value', async () => {
     const contact = await app.run(async () => await getContact(), {
         principal: { id: 'maya' },
     })
-    expect(contact.dealValue).toBe('$48,000')
+    expect(contact.dealValue).toBe('$34,000')
 })
 
 test('sales reads the rest of the contact', async () => {
