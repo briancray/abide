@@ -28,7 +28,7 @@ const service = Bun.serve({
         const { pathname } = new URL(request.url)
         const count = (asked.get(pathname) ?? 0) + 1
         asked.set(pathname, count)
-        if (pathname === '/flaky')
+        if (pathname === '/flaky' || pathname === '/flaky-again')
             return count < 3
                 ? new Response('busy', { status: 503 })
                 : Response.json({ name: 'Hopper & Co' })
@@ -89,6 +89,20 @@ const at = (path: string) => `${service.url.origin}${path}`
 test('a 503 is asked again, and the answer after it is the body — 54.8', async () => {
     expect(await settledFetch(at('/flaky'))).toEqual({ name: 'Hopper & Co' })
     expect(asked.get('/flaky')).toBe(3)
+})
+
+// 54.10 — THE WAIT BETWEEN ATTEMPTS IS A TIMER, on either side: a browser has no `Bun`, and a retry
+// there waited through `Bun.sleep`. Asked here with `Bun.sleep` gone. THE REVERT: wait with
+// `Bun.sleep` where no signal is given; the answer is a TypeError: `Bun.sleep is not a function`.
+test('a retry with no signal waits by a timer, as a browser has no Bun — 54.10', async () => {
+    const bunSleep = Bun.sleep
+    ;(Bun as { sleep: unknown }).sleep = undefined
+    try {
+        const answer = await settledFetch(at('/flaky-again'), { backoff: 1 })
+        expect(answer).toEqual({ name: 'Hopper & Co' })
+    } finally {
+        ;(Bun as { sleep: unknown }).sleep = bunSleep
+    }
 })
 
 // THE REVERT: count every status transient in `asked`, and `/missing` is asked 3 times.

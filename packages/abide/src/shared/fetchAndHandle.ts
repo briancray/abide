@@ -87,7 +87,7 @@ async function answeredFor<T>(
         if (!headers.has('accept')) headers.set('accept', 'application/json')
         asking = { ...options, headers }
     }
-    const body = await asked(url, asking, asking.signal)
+    const body = await asked(url, asking)
     if (isFailed(body)) return body as FetchFailed
     if (options.schema === undefined) return body as T
     const result = runSchema(options.schema, body)
@@ -99,7 +99,6 @@ async function answeredFor<T>(
 async function asked<T>(
     url: string | URL,
     options: FetchOptions<T>,
-    signal: AbortSignal | null | undefined,
 ): Promise<unknown> {
     const {
         as,
@@ -109,6 +108,7 @@ async function asked<T>(
         schema: _schema,
         ...init
     } = options
+    const signal = init.signal
     const method = (init.method ?? 'GET').toUpperCase()
     const retries =
         retriesGiven ?? (IDEMPOTENT.has(method) ? DEFAULT_RETRIES : 0)
@@ -147,21 +147,13 @@ async function asked<T>(
             failure.message,
             `in ${wait} ms`,
         )
-        await paused(wait, signal)
+        await sleep(wait, signal)
     }
 }
 
-// A logged address without its query, which is where a key rides.
+// A logged address without its query, which is where a key rides: a relative one, as a browser
+// asks, against the page's.
 function redacted(url: string | URL): string {
-    const parsed = new URL(url)
+    const parsed = new URL(url, globalThis.location?.href)
     return `${parsed.origin}${parsed.pathname}`
-}
-
-function paused(
-    milliseconds: number,
-    signal: AbortSignal | null | undefined,
-): Promise<void> {
-    return signal == null
-        ? Bun.sleep(milliseconds)
-        : sleep(milliseconds, signal)
 }
