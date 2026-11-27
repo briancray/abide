@@ -18,7 +18,14 @@ import { track, TRACKING } from './tracking.ts'
  */
 export function answerOfCall(entry: unknown, streams: boolean): object {
     const reader = TRACKING.reader
-    if (reader !== null) track(cellOf(entry), reader)
+    if (reader !== null) {
+        // The stable arm `Reactive`'s reads inline: a rerun calling at the same spot keeps its
+        // subscription, where `track` would drop the tail from here on and push it back.
+        const cell = cellOf(entry)
+        const at = reader.cursor
+        if (reader.sources[at] === cell) reader.cursor = at + 1
+        else track(cell, reader)
+    }
     let answer: object
     if (streams)
         answer = {

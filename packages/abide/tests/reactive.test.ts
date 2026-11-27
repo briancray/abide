@@ -365,6 +365,38 @@ test('reactive given a body is unkeyed and memo keyed, whatever the body declare
     expect(`runs: ${runs}`).toBe('runs: 2')
 })
 
+// 11.74 — A RERUN CALLING A MEMO AT THE SAME SPOT KEEPS EVERY SUBSCRIPTION IT HELD: the call is a read
+// like any other, so the value read after it is not dropped and subscribed again. Counted as pushes
+// onto that value's readers, which the values cannot show. THE REVERT: call `track` unconditionally
+// in `answerOfCall`; 10 reruns push 10 times, against 0.
+test('a rerun calling a memo at the same spot subscribes nothing again — 11.74', () => {
+    const score = memo((args: { id: number }) => args.id)
+    const trigger = reactive(0)
+    const after = reactive(1)
+    const body = reactive(() => {
+        trigger()
+        score({ id: 2 })
+        return after()
+    })
+    const stop = watch(() => {
+        body()
+    })
+    flushSync()
+    const readers = cellOf(after).readers
+    let pushes = 0
+    const push = readers.push
+    readers.push = (...items) => {
+        pushes += 1
+        return push.apply(readers, items)
+    }
+    for (let at = 1; at <= 10; at += 1) {
+        trigger.set(at)
+        flushSync()
+    }
+    stop()
+    expect(pushes).toBe(0)
+})
+
 // 11.74, 16.107 — A derived `reactive` CALLING A MEMO FOLLOWS THE KEY IT CALLED, and no other: one handing the
 // call back whole adopts the entry, so a refresh reaches its value with no run of its body; one that
 // awaits the call runs again. Counted as body runs, which the values cannot show. THE REVERT: drop the
