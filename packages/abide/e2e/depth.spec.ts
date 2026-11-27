@@ -2,9 +2,9 @@
 // O(nodes) once, so the grid — which is two levels deep — could not have told. This is the case
 // that distinguishes them, and it is the only reason markers might still be right somewhere.
 
-import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
+import type { ArmsRow } from '../bench/armsRun.ts'
 import { buildBench, type Report } from '../bench/buildBench.ts'
 import { loadCompiledPage } from '../bench/buildCompiledPage.ts'
 import { type Scheme, type Tree, tree, wide } from '../bench/depthTree.ts'
@@ -78,7 +78,7 @@ test('the walk against tree depth, in this engine', async ({
         })
         const measured = await page.evaluate(
             ({ schemes, sizing }) => {
-                const { batch, claimOf, emulatedDom, ratio } = (
+                const { runArms } = (
                     globalThis as unknown as { __REPORT__: Report }
                 ).__REPORT__
                 const walks: Record<string, () => void> = {}
@@ -104,31 +104,30 @@ test('the walk against tree depth, in this engine', async ({
                 for (const scheme in found)
                     work[scheme] = { slotsFound: found[scheme] as number }
                 // `markers` FIRST: it is the denominator, and the first arm is the A/A control.
-                const timed = batch({
-                    case: 'the hydration walk',
-                    arms: {
-                        markers: walks.markers as () => void,
-                        cursor: walks.cursor as () => void,
-                        structural: walks.structural as () => void,
-                    },
-                    emulated: emulatedDom(),
-                    work,
-                    budgetNanoseconds: 20_000_000_000,
-                    ...sizing,
-                })
-                const markers = timed.samples.markers as Sample
-                const cursor = timed.samples.cursor as Sample
-                const structural = timed.samples.structural as Sample
-                const verdict = ratio(cursor, markers, { floor: timed.floor })
+                const [row] = runArms(
+                    [
+                        {
+                            name: 'the hydration walk',
+                            arms: {
+                                markers: walks.markers as () => void,
+                                cursor: walks.cursor as () => void,
+                                structural: walks.structural as () => void,
+                            },
+                            work: () => work,
+                        },
+                    ],
+                    20_000_000_000,
+                    sizing,
+                ) as [ArmsRow]
                 return {
-                    markers: markers.nanoseconds,
-                    cursor: cursor.nanoseconds,
-                    structural: structural.nanoseconds,
-                    claim: claimOf(verdict),
-                    workDisagreement: verdict.workDisagreement,
+                    markers: row.arms.markers as number,
+                    cursor: row.arms.cursor as number,
+                    structural: row.arms.structural as number,
+                    claim: row.claims.cursor as string,
+                    workDisagreement: row.workDisagreement,
                     found,
-                    n: timed.n,
-                    floor: timed.floor,
+                    n: row.n,
+                    floor: row.floor,
                 }
             },
             {

@@ -6,6 +6,7 @@
 import type { batch, claimOf, emulatedDom, ratio } from '@abide/harness/report'
 
 import { buildInjectable } from '../../harness/scripts/buildInjectable.ts'
+import type { runArms } from './armsRun.ts'
 
 /** Builds `bench/<name>Injectable.ts` into an IIFE and returns its source. */
 export function buildBench(name: string): Promise<string> {
@@ -20,4 +21,5 @@ export type Report = {
     claimOf: typeof claimOf
     emulatedDom: typeof emulatedDom
     ratio: typeof ratio
+    runArms: typeof runArms
 }

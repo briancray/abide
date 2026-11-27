@@ -2,10 +2,12 @@
 // arrive as a compiled page's script rather than as a bundled case list. `listInjectable.ts`
 // bundles its cases WITH the batcher; these specs build their pages with `buildCompiledPage` and
 // hand the arms over as source, so the page needs the batcher on its own. `harness/report` is the
-// leaf with no abide in its graph, so this bundles nothing a compiled page could collide with.
+// leaf with no abide in its graph, and `armsRun` imports it alone, so this bundles nothing a compiled
+// page could collide with.
 
 import { batch, claimOf, emulatedDom, ratio } from '@abide/harness/report'
 
+import { runArms } from './armsRun.ts'
 import type { Report } from './buildBench.ts'
 
 ;(globalThis as unknown as { __REPORT__: Report }).__REPORT__ = {
@@ -13,4 +15,5 @@ import type { Report } from './buildBench.ts'
     claimOf,
     emulatedDom,
     ratio,
+    runArms,
 }

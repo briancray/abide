@@ -9,9 +9,9 @@
 // sub-millisecond op timed once returns the clock rather than the code (43.11) — and because the
 // three schemes have to be INTERLEAVED, so all three are on one page, each under its own root.
 
-import type { Sample } from '@abide/harness/report'
 import { expect, test } from '@playwright/test'
 
+import type { ArmsRow } from '../bench/armsRun.ts'
 import { buildBench, type Report } from '../bench/buildBench.ts'
 import { loadCompiledPage } from '../bench/buildCompiledPage.ts'
 import { type Grid, grid } from '../bench/gridPage.ts'
@@ -63,7 +63,7 @@ test('the hydration walk, per scheme, in this engine', async ({
         })
         const measured = await page.evaluate(
             ({ variants, sizing }) => {
-                const { batch, claimOf, emulatedDom, ratio } = (
+                const { runArms } = (
                     globalThis as unknown as { __REPORT__: Report }
                 ).__REPORT__
                 const slotsOf = (): (Text | null)[] =>
@@ -109,48 +109,45 @@ test('the hydration walk, per scheme, in this engine', async ({
                 const work: Record<string, Record<string, number>> = {}
                 for (const variant in found)
                     work[variant] = { slotsFound: found[variant] as number }
-                const timed = batch({
-                    case: 'the hydration walk',
-                    // `no-markers` FIRST: it is the denominator, and the first arm is the A/A
-                    // control.
-                    arms: {
-                        'no-markers': walks['no-markers'] as () => void,
-                        'one-marker': walks['one-marker'] as () => void,
-                        'two-markers': walks['two-markers'] as () => void,
-                        bind,
-                    },
-                    emulated: emulatedDom(),
-                    work,
-                    budgetNanoseconds: 20_000_000_000,
-                    ...sizing,
-                })
-                const base = timed.samples['no-markers'] as Sample
+                // `no-markers` FIRST: it is the denominator, and the first arm is the A/A control.
+                const [row] = runArms(
+                    [
+                        {
+                            name: 'the hydration walk',
+                            arms: {
+                                'no-markers': walks['no-markers'] as () => void,
+                                'one-marker': walks['one-marker'] as () => void,
+                                'two-markers': walks[
+                                    'two-markers'
+                                ] as () => void,
+                                bind,
+                            },
+                            work: () => work,
+                        },
+                    ],
+                    20_000_000_000,
+                    sizing,
+                ) as [ArmsRow]
                 const out: {
                     variant: string
                     nanoseconds: number
                     claim: string
-                    workDisagreement: string[]
                 }[] = []
                 for (const { variant } of variants) {
-                    const sample = timed.samples[variant] as Sample
-                    const verdict =
-                        variant === 'no-markers'
-                            ? null
-                            : ratio(sample, base, { floor: timed.floor })
+                    const claim = row.claims[variant] as string
                     out.push({
                         variant,
-                        nanoseconds: sample.nanoseconds,
-                        claim:
-                            verdict === null ? '' : `${claimOf(verdict)} none`,
-                        workDisagreement: verdict?.workDisagreement ?? [],
+                        nanoseconds: row.arms[variant] as number,
+                        claim: claim === 'base' ? '' : `${claim} none`,
                     })
                 }
                 return {
                     rows: out,
-                    bind: (timed.samples.bind as Sample).nanoseconds,
+                    bind: row.arms.bind as number,
+                    workDisagreement: row.workDisagreement,
                     found,
-                    n: timed.n,
-                    floor: timed.floor,
+                    n: row.n,
+                    floor: row.floor,
                 }
             },
             {
@@ -171,11 +168,11 @@ test('the hydration walk, per scheme, in this engine', async ({
             lines.push(
                 `    ${row.variant.padEnd(12)} walk ${(row.nanoseconds / 1e6).toFixed(2)} ms  bind ${(measured.bind / 1e6).toFixed(2)} ms  total ${(total / 1e6).toFixed(2)} ms   walk is ${((row.nanoseconds / total) * 100).toFixed(0)}% of hydration   ${row.claim}`,
             )
-            if (row.workDisagreement.length > 0)
-                lines.push(
-                    `      WORK DISAGREES — ${row.workDisagreement.join('; ')}`,
-                )
         }
+        if (measured.workDisagreement.length > 0)
+            lines.push(
+                `      WORK DISAGREES — ${measured.workDisagreement.join('; ')}`,
+            )
         const worst = measured.rows.find((row) => row.variant === 'two-markers')
         const base = measured.rows.find((row) => row.variant === 'no-markers')
         if (worst !== undefined && base !== undefined) {
