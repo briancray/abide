@@ -4,20 +4,10 @@ import type { Defaults } from '../reactive/parameterDefaults.ts'
 
 /** What the stand-in posts to the thread. */
 export type ToWorker =
-    /**
-     * The call: the export, its arguments, which of them stood for an `AbortSignal`, and whether one
-     * had aborted already (55.6).
-     */
-    | {
-          name: string
-          args: unknown[]
-          signals: number[]
-          aborted: boolean
-      }
+    /** The call: the export, its arguments, and which of them stood for an `AbortSignal` (55.6). */
+    | { name: string; args: unknown[]; signals: number[] }
     /** 55.5 — the next chunk of a stream. */
     | { pull: true }
-    /** 55.6 — a signal among the arguments aborted. */
-    | { abort: true }
     /** 55.7 — the stream's consumer stopped reading. */
     | { stop: true }
 

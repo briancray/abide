@@ -7316,14 +7316,17 @@ MUST be a build error naming the file and the export.
 55.5 A call to an `async function*` export MUST answer an async generator running the export's
 generator one chunk for each chunk read, and returning what it returned.
 
-55.6 An `AbortSignal` among a call's arguments MUST reach the export as a signal aborted whenever, and
-from whenever, the one passed is.
+55.6 An abort of an `AbortSignal` among a call's arguments MUST end the call's thread at once,
+rejecting the call with that signal's reason, and a call made with one aborted already MUST start no
+thread; the export MUST be handed, in its place, a signal that never aborts.
 
 55.7 A consumer ending a stream before it is done MUST end the export's generator, its `finally`
 included.
 
 55.8 A thread MUST end where the signal `abortSignal` answers where its call was made aborts, 7.20's
-among them, rejecting its call with that abort.
+among them, rejecting its call with that abort, and a call made where that signal has aborted
+already MUST start no thread — save a call handed an `AbortSignal` among its arguments, which 55.6
+alone ends.
 
 55.9 A thread that fails outside its export MUST reject its call.
 

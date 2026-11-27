@@ -87,28 +87,36 @@ export class WorkerModule {
         }
     }
 
-    // Starts the call's thread and posts the call, carrying each `AbortSignal` among its arguments
-    // across as 55.6 states, and ending the thread where the app stops (55.8) or the thread fails
-    // (55.9). `answer` hears each message, and `fail` what ended the call otherwise.
+    // Starts the call's thread and posts the call, ending the thread where a signal among its
+    // arguments aborts (55.6) — or, given none, where the one `abortSignal` answers does (55.8) — or
+    // where the thread fails (55.9). A call whose signal had aborted already starts none. `answer` hears each message, and `fail` what
+    // ended the call otherwise.
     #started(
         name: string,
         args: unknown[],
         answer: (message: FromWorker) => void,
         fail: (error: unknown) => void,
     ): Thread {
-        const worker = this.#spawn()
         const signals: number[] = []
-        const listening: AbortSignal[] = []
+        const ending: AbortSignal[] = []
         const sent = args.slice()
-        let aborted = false
-        const abort = () =>
-            worker.postMessage({ abort: true } satisfies ToWorker)
-        // 55.8, 37.28 — rejected with the stop's own abort, which was asked for and is no failure.
-        const stopping = abortSignal()
-        const stop = () => {
-            thread.end()
-            fail(stopping.reason)
+        for (let at = 0; at < sent.length; at += 1) {
+            const signal = sent[at]
+            if (!(signal instanceof AbortSignal)) continue
+            signals.push(at)
+            sent[at] = undefined
+            ending.push(signal)
         }
+        // 55.8 — A SIGNAL HANDED IN IS WHAT THE CALL ENDS ON, as a pipe's item does (57.13): a draw
+        // many requests wait on is not the first requester's to end. Read only where none is given,
+        // and rejected then with the stop's own abort, which was asked for and is no failure (37.28).
+        if (ending.length === 0) ending.push(abortSignal())
+        for (const signal of ending)
+            if (signal.aborted) {
+                fail(signal.reason)
+                return ENDED
+            }
+        const worker = this.#spawn()
         let ended = false
         const thread: Thread = {
             post: (message) => {
@@ -117,24 +125,18 @@ export class WorkerModule {
             end: () => {
                 if (ended) return
                 ended = true
-                stopping.removeEventListener('abort', stop)
-                for (const signal of listening)
+                for (const signal of ending)
                     signal.removeEventListener('abort', abort)
                 worker.terminate()
             },
         }
-        for (let at = 0; at < sent.length; at += 1) {
-            const signal = sent[at]
-            if (!(signal instanceof AbortSignal)) continue
-            signals.push(at)
-            sent[at] = undefined
-            if (signal.aborted) aborted = true
-            else {
-                signal.addEventListener('abort', abort, { once: true })
-                listening.push(signal)
-            }
+        // Rejected with the reason of whichever signal aborted first.
+        function abort(this: AbortSignal) {
+            thread.end()
+            fail(this.reason)
         }
-        stopping.addEventListener('abort', stop, { once: true })
+        for (const signal of ending)
+            signal.addEventListener('abort', abort, { once: true })
         worker.onmessage = ({ data }: MessageEvent<FromWorker>) => answer(data)
         worker.onerror = (event) => {
             event.preventDefault()
@@ -146,12 +148,7 @@ export class WorkerModule {
             )
         }
         try {
-            worker.postMessage({
-                name,
-                args: sent,
-                signals,
-                aborted,
-            } satisfies ToWorker)
+            worker.postMessage({ name, args: sent, signals } satisfies ToWorker)
         } catch (thrown) {
             // 55.2 — an argument the thread cannot be handed rejects the call.
             thread.end()
@@ -160,3 +157,6 @@ export class WorkerModule {
         return thread
     }
 }
+
+/** A call that never started a thread: nothing to post to, nothing to end. */
+const ENDED: Thread = { post: () => {}, end: () => {} }

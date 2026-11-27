@@ -22,7 +22,11 @@ import Section from '#src/lib/Section.abide'
         },
         {
             path: 'packages/abide/tests/workerFiles.test.ts',
-            from: ["test('an AbortSignal argument aborts in the thread"],
+            from: ["test('an abort of a signal argument ends the thread at once"],
+        },
+        {
+            path: 'packages/abide/tests/workerFiles.test.ts',
+            from: ["test('a call handed a signal ends on it alone"],
         },
         {
             path: 'packages/abide/tests/workerBuild.test.ts',
@@ -105,19 +109,18 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Give up on a slow forecast after five seconds">
-        <p>An <code>AbortSignal</code> passed to a call reaches the export as a signal that aborts
-            when yours does. A call made while a request is being answered also ends when that
-            request's <code>abortSignal</code> aborts.</p>
+        <p>An <code>AbortSignal</code> passed to a call ends the call's thread the moment it
+            aborts, and the call rejects with the signal's reason — a loop that never yields stops
+            all the same. Passed no signal, a call made while a request is being answered ends
+            when that request's <code>abortSignal</code> aborts; a signal you pass replaces it, so
+            work many requests wait on is not the first one's to end.</p>
         <Code language="ts" caption="server" code={`
             export async function forecast(
                 amounts: number[],
-                signal: AbortSignal,
+                _signal?: AbortSignal,
             ): Promise<number> {
                 let total = 0
-                for (const amount of amounts) {
-                    signal.throwIfAborted()
-                    total += amount * 0.4
-                }
+                for (const amount of amounts) total += amount * 0.4
                 return total
             }
 
