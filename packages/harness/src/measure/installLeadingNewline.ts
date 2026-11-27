@@ -10,7 +10,8 @@
 const LEADING_NEWLINE_ELEMENTS = new Set(['TEXTAREA', 'PRE', 'LISTING'])
 
 type Parser = {
-    currentNode: { tagName?: string | undefined; firstChild: unknown } | undefined
+    currentNode:
+        { tagName?: string | undefined; firstChild: unknown } | undefined
     parsePlainText(text: string): void
 }
 
