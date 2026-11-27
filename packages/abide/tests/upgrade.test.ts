@@ -1079,7 +1079,8 @@ export const listed = GET(rows)
 // Run again, nothing is left to move (38.200). THE REVERT: drop `toRpc` from the migrations; nothing
 // moves, and the handler file is still `getDeal.handler.ts`. Dropping `bareExports` alone leaves
 // `export const listNotes = rpc(` in the server block. Dropping `namedHandlerImports` leaves
-// `import getDeal from` a file with no default (16.2).
+// `import getDeal from` a file with no default (16.2); dropping `declarable`'s reserved-word check
+// writes `export const delete`.
 test('abide upgrade moves the five verbs to rpc and a handler file to a server file — 38.231, 38.200', async () => {
     const app = temporaryModule({
         'src/deals/getDeal.handler.ts': `import { GET } from '@abide/abide/server'
@@ -1099,7 +1100,12 @@ const rename = PATCH(({ name }: { name: string }) => name)
 
 <script>
 import getDeal from './getDeal.handler.ts'
+import remove from './delete.handler.ts'
 </script>
+`,
+        'src/deals/delete.handler.ts': `import { DELETE } from '@abide/abide/server'
+
+export default DELETE(() => 1)
 `,
         'src/deals/lib/DealNotes.abide': `<script server>
 import { GET } from '@abide/abide/server'
@@ -1133,6 +1139,13 @@ export const getDeal = rpc(({ id }: { id: string }) => id, { description: 'One d
     )
     expect(after('src/deals/index.abide')).toContain(
         "import { getDeal } from './getDeal.server.ts'",
+    )
+    // `const delete` is no declaration: the file keeps its default, and its import with it.
+    expect(after('src/deals/delete.server.ts')).toContain(
+        "export default rpc(() => 1, { methods: ['DELETE'] })",
+    )
+    expect(after('src/deals/index.abide')).toContain(
+        "import remove from './delete.server.ts'",
     )
     expect(after('src/deals/lib/DealNotes.abide')).toBe(`<script server>
 export const listNotes = ({ id }: { id: string }) => [id]

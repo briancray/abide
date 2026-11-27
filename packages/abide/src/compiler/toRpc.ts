@@ -75,7 +75,7 @@ export async function toRpc(
         const text = await read(path)
         if (
             taken.has(path) ||
-            !IDENTIFIER.test(stem) ||
+            !declarable(stem) ||
             text === undefined ||
             declaresTopLevel(text, stem)
         )
@@ -131,7 +131,19 @@ export function toRpcText(
     )
 }
 
-const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
+/**
+ * Whether a module can declare `name` as a `const`: an identifier, and no word strict mode reserves
+ * — `delete.handler.ts` keeps its default, as `const delete` is no declaration.
+ */
+function declarable(name: string): boolean {
+    if (!/^[A-Za-z_$][\w$]*$/.test(name)) return false
+    try {
+        new Function(`'use strict'; const ${name} = 0`)
+        return true
+    } catch {
+        return false
+    }
+}
 
 /** The name a handler file at `path` is given: its file's, less `.handler.ts`. */
 function handlerStem(path: string): string {
