@@ -224,9 +224,10 @@ const part = {
     expect(held.getAttribute('title')).toBe('north')
     ;(document.getElementById('lose') as HTMLElement).click()
     flushSync()
-    expect([held.getAttribute('title'), held.getAttribute('data-count')]).toEqual(
-        ['north', '2'],
-    )
+    expect([
+        held.getAttribute('title'),
+        held.getAttribute('data-count'),
+    ]).toEqual(['north', '2'])
 })
 
 const SPREAD = `<script>
