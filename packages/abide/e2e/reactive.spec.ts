@@ -10,8 +10,8 @@
 import { test } from '@playwright/test'
 
 import { openInjected } from '../../harness/scripts/buildInjectable.ts'
+import type { ArmsBench } from '../bench/armsRun.ts'
 import { buildBench } from '../bench/buildBench.ts'
-import type { runReactive } from '../bench/reactiveRun.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
 import { skipWebkitClock } from './skipWebkitClock.ts'
 
@@ -34,12 +34,12 @@ test('the reactive core against the hand-written arm, in this engine', async ({
         (sizing) =>
             (
                 globalThis as unknown as {
-                    __REACTIVE_BENCH__: typeof runReactive
+                    __REACTIVE_BENCH__: ArmsBench
                 }
             ).__REACTIVE_BENCH__(20_000_000_000, sizing),
         BENCH_SIZING,
     )
     if (BENCH_SIZING) return
-    const { formatReactive } = await import('../bench/reactiveRun.ts')
-    console.log(`\n=== ${testInfo.project.name} ===\n${formatReactive(rows)}`)
+    const { formatArms } = await import('../bench/armsRun.ts')
+    console.log(`\n=== ${testInfo.project.name} ===\n${formatArms(rows)}`)
 })

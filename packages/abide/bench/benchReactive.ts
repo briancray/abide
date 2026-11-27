@@ -1,5 +1,5 @@
 // THE REACTIVE CORE, PRICED AGAINST THE HAND-WRITTEN ARM under bun's JSC. The run and its
-// report live in `reactiveRun.ts` so the browser injectable runs the same bytes; see
+// report live in `armsRun.ts` so the browser injectable runs the same bytes; see
 // `reactiveInjectable.ts` for why the substrate matters more than the numbers.
 
 import { reactive, watch } from '@abide/abide'
@@ -11,9 +11,10 @@ import {
     type Sample,
 } from '@abide/harness/report'
 
+import { formatArms, runArms } from './armsRun.ts'
 import { countExportedNames } from './countExportedNames.ts'
 import { countLines } from './countLines.ts'
-import { formatReactive, runReactive } from './reactiveRun.ts'
+import { reactiveArmCases } from './reactiveCases.ts'
 
 async function machinery(): Promise<void> {
     // GLOBBED, not listed: the hand-written list this replaced had fallen ten files behind the
@@ -43,7 +44,7 @@ console.log(
 )
 
 // The batcher's own two-second ceiling: bun's clock is fine enough to reach n inside it.
-console.log(formatReactive(runReactive(2_000_000_000)))
+console.log(formatArms(runArms(reactiveArmCases(), 2_000_000_000)))
 
 /**
  * Ceiling on the mount-112 / mount-16 ratio; above it the subscribe path is not linear.

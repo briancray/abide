@@ -8,8 +8,10 @@
 // carries the refusals that matter here: it measures the clock's resolution rather
 // than assuming it, and a browser's is ~100 µs against bun's 41 ns.
 
-import { runReactive } from './reactiveRun.ts'
+import { type ArmsBench, runArms } from './armsRun.ts'
+import { reactiveArmCases } from './reactiveCases.ts'
 
 ;(
-    globalThis as unknown as { __REACTIVE_BENCH__: typeof runReactive }
-).__REACTIVE_BENCH__ = runReactive
+    globalThis as unknown as { __REACTIVE_BENCH__: ArmsBench }
+).__REACTIVE_BENCH__ = (budget, sizing) =>
+    runArms(reactiveArmCases(), budget, sizing)

@@ -4,8 +4,8 @@
 import { test } from '@playwright/test'
 
 import { openInjected } from '../../harness/scripts/buildInjectable.ts'
+import type { ArmsBench } from '../bench/armsRun.ts'
 import { buildBench } from '../bench/buildBench.ts'
-import type { runShared } from '../bench/sharedRun.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
 
 const built = await buildBench('shared')
@@ -18,11 +18,11 @@ test('shared allocations, current against candidate, in this engine', async ({
     const rows = await page.evaluate(
         (sizing) =>
             (
-                globalThis as unknown as { __SHARED_BENCH__: typeof runShared }
+                globalThis as unknown as { __SHARED_BENCH__: ArmsBench }
             ).__SHARED_BENCH__(60_000_000_000, sizing),
         BENCH_SIZING,
     )
     if (BENCH_SIZING) return
-    const { formatShared } = await import('../bench/sharedRun.ts')
-    console.log(`\n=== ${testInfo.project.name} ===\n${formatShared(rows)}`)
+    const { formatArms } = await import('../bench/armsRun.ts')
+    console.log(`\n=== ${testInfo.project.name} ===\n${formatArms(rows)}`)
 })

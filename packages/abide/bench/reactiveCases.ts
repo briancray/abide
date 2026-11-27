@@ -13,6 +13,7 @@ import { deepEqual, flushSync, reactive, watch } from '@abide/abide'
 
 import { keyedValue } from '#shared/reactive/index.ts'
 
+import type { ArmsCase } from './armsRun.ts'
 import { carelessSignal } from './carelessSignal.ts'
 import { signal } from './signal.ts'
 
@@ -1429,6 +1430,19 @@ function probeKeyed(): Case {
             }
         },
     }
+}
+
+/** The reactive cases as the one runner takes them: the hand-written arm first, as the base. */
+export function reactiveArmCases(): ArmsCase[] {
+    const cases: ArmsCase[] = []
+    for (const kase of reactiveCases())
+        cases.push({
+            name: kase.name,
+            distinguishes: kase.distinguishes,
+            arms: { vanilla: kase.vanilla, abide: kase.abide },
+            work: kase.work,
+        })
+    return cases
 }
 
 export const reactiveCases = (): Case[] => [

@@ -1,4 +1,5 @@
 // `bun run bench:shared` — the JSC arm of `sharedCases`.
-import { formatShared, runShared } from './sharedRun.ts'
+import { formatArms, runArms } from './armsRun.ts'
+import { sharedCases } from './sharedCases.ts'
 
-console.log(formatShared(runShared(10_000_000_000)))
+console.log(formatArms(runArms(sharedCases(), 10_000_000_000)))
