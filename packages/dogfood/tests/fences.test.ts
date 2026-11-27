@@ -153,43 +153,71 @@ function exportsName(file: string, source: string, name: string): boolean {
 const RELATIVE_IMPORT =
     /\bimport\s+(?:type\s+)?([\w$]+)?\s*,?\s*(\{[^}]*\})?\s*from\s*'(\.{1,2}\/[^']+)'/g
 
+/**
+ * 40.35 — each relative import in `code` that names no file of the example app, or a name none of
+ * those files exports, as `<where>: <name> from <path>`. `skip` passes over an import the caller
+ * answers itself.
+ */
+async function inventedImports(
+    code: string,
+    where: string,
+    byName: Map<string, string[]>,
+    sources: Map<string, string>,
+    skip: (path: string) => boolean = () => false,
+): Promise<string[]> {
+    const invented: string[] = []
+    for (const match of code.matchAll(RELATIVE_IMPORT)) {
+        const path = match[3] as string
+        if (skip(path)) continue
+        const names: string[] = []
+        if (match[1] !== undefined) names.push('default')
+        const local = match[1] ?? ''
+        if (match[2] !== undefined)
+            for (const part of match[2].slice(1, -1).split(',')) {
+                const name = part
+                    .trim()
+                    .replace(/^type\s+/, '')
+                    .split(/\s+as\s+/)[0] as string
+                if (name !== '') names.push(name)
+            }
+        const files = byName.get(path.slice(path.lastIndexOf('/') + 1)) ?? []
+        if (files.length === 0) {
+            invented.push(`${where}: ${path}`)
+            continue
+        }
+        for (const name of names) {
+            let found = false
+            for (const file of files) {
+                let source = sources.get(file)
+                if (source === undefined) {
+                    source = await Bun.file(`${CRM}${file}`).text()
+                    sources.set(file, source)
+                }
+                if (exportsName(file, source, name)) found = true
+            }
+            if (!found)
+                invented.push(
+                    `${where}: ${name === 'default' ? `${local} (default)` : name} from ${path}`,
+                )
+        }
+    }
+    return invented
+}
+
 test("every example's relative import names a file of the example app and a name it exports", async () => {
     const byName = await appFilesByName()
     const sources = new Map<string, string>()
     const invented: string[] = []
     for (const page of await docsPages())
         for (const fence of fencesOf(page))
-            for (const match of fence.code.matchAll(RELATIVE_IMPORT)) {
-                const path = match[3] as string
-                const names: string[] = []
-                if (match[1] !== undefined) names.push('default')
-                const local = match[1] ?? ''
-                if (match[2] !== undefined)
-                    for (const part of match[2].slice(1, -1).split(',')) {
-                        const name = part
-                            .trim()
-                            .replace(/^type\s+/, '')
-                            .split(/\s+as\s+/)[0] as string
-                        if (name !== '') names.push(name)
-                    }
-                const files =
-                    byName.get(path.slice(path.lastIndexOf('/') + 1)) ?? []
-                for (const name of names) {
-                    let found = false
-                    for (const file of files) {
-                        let source = sources.get(file)
-                        if (source === undefined) {
-                            source = await Bun.file(`${CRM}${file}`).text()
-                            sources.set(file, source)
-                        }
-                        if (exportsName(file, source, name)) found = true
-                    }
-                    if (!found)
-                        invented.push(
-                            `${page.route}: ${name === 'default' ? `${local} (default)` : name} from ${path}`,
-                        )
-                }
-            }
+            invented.push(
+                ...(await inventedImports(
+                    fence.code,
+                    page.route,
+                    byName,
+                    sources,
+                )),
+            )
     expect(invented).toEqual([])
 })
 
@@ -197,11 +225,13 @@ const DOCS = new URL('../src/', import.meta.url).pathname
 
 // 40.35 — AND AN EXAMPLE KEPT AS A FILE UNDER ITS PAGE'S `lib` (40.14) is held to it too: each relative
 // import names a file of the example app and a name it exports, or a server file beside it that its
-// page shows as the example's `server` — the one stand-in an example may carry. THE REVERT: read
+// page shows as the example's `server` — the one stand-in an example may carry. THE REVERTS: read
 // only `<Code>` fences, as this file did before; a lib example importing a file the CRM never had
-// passes, `[]` where its line is due.
-test("every lib example's relative import names a file of the example app, or a server file its page shows", async () => {
+// passes, `[]` where its line is due. Check only that the file exists, as this test once did; an
+// import of `INVENTED_NAME` from `./WEBHOOK.ts` passes.
+test("every lib example's relative import names a file of the example app and a name it exports, or a server file its page shows", async () => {
     const byName = await appFilesByName()
+    const sources = new Map<string, string>()
     const invented: string[] = []
     for await (const file of new Glob('**/lib/*.abide').scan({ cwd: DOCS })) {
         // The docs app's own components, not examples.
@@ -212,19 +242,23 @@ test("every lib example's relative import names a file of the example app, or a 
             .text()
             .catch(() => '')
         const code = await Bun.file(`${DOCS}${file}`).text()
-        for (const match of code.matchAll(RELATIVE_IMPORT)) {
-            const path = match[3] as string
-            if (path.startsWith('./') && path.endsWith('.server.ts')) {
-                const beside = `${directory}/${path.slice(2)}`
-                if (pageSource.includes(`server="${beside}"`)) continue
-            }
-            const name = path.slice(path.lastIndexOf('/') + 1)
-            // `#src/…` and the docs app's own aliases are not relative, and a sibling `.abide` is
-            // another example of the same page.
-            if (name.endsWith('.abide') && path.startsWith('./')) continue
-            if ((byName.get(name) ?? []).length === 0)
-                invented.push(`${file}: ${path}`)
-        }
+        invented.push(
+            ...(await inventedImports(
+                code,
+                file,
+                byName,
+                sources,
+                (path) =>
+                    path.startsWith('./') &&
+                    // A sibling `.abide` is another example of the same page, and a server file beside
+                    // the example one its page shows as the example's `server`.
+                    (path.endsWith('.abide') ||
+                        (path.endsWith('.server.ts') &&
+                            pageSource.includes(
+                                `server="${directory}/${path.slice(2)}"`,
+                            ))),
+            )),
+        )
     }
     expect(invented).toEqual([])
 })
