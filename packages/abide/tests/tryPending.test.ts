@@ -92,6 +92,67 @@ const rate = reactive(new Promise<number>((resolve) => {
     scope.stop()
 })
 
+// 32.16 — A FIRST LOAD THAT FAILED BEFORE HYDRATION TAKES THE CATCH over the `{:pending}` arm the
+// server painted, rather than adopting the pending markup as the catch. THE REVERT: have
+// `TryRegion.paintedOther` answer false again; `loading` stands where `refused` is due.
+test('a {:pending} arm the server painted gives way to the catch where the value failed by hydration — 32.16', async () => {
+    const { scope } = await mountPage(`<script>
+import { isServer, reactive } from '@abide/abide'
+
+const rate = reactive((): Promise<number> => {
+    if (!isServer()) throw new Error('refused')
+    return new Promise<number>(() => {})
+})
+</script>
+
+{#try}
+    <p id="body">rate {rate}</p>
+{:pending}
+    <p id="pending">loading</p>
+{:catch error}
+    <p id="caught">{(error as Error).message}</p>
+{/try}`)
+    flushSync()
+    expect(
+        document.getElementById('caught')?.textContent ??
+            document.getElementById('pending')?.textContent,
+    ).toBe('refused')
+    scope.stop()
+})
+
+// 32.16 — AND A FIRST LOAD THAT FAILS AFTER HYDRATION takes the catch too. THE REVERT: have the
+// retry in `TryRegion.startRetry` set a failure only over none, as before; the `PENDING` the first
+// load holds stays — `loading` where `refused` is due.
+test('a first load that fails after hydration takes the catch — 32.16', async () => {
+    const { scope } = await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+const rate = reactive(new Promise<number>((_, reject) => {
+    ;(globalThis as { refuseRate?: (error: Error) => void }).refuseRate = reject
+}))
+</script>
+
+{#try}
+    <p id="body">rate {rate}</p>
+{:pending}
+    <p id="pending">loading</p>
+{:catch error}
+    <p id="caught">{(error as Error).message}</p>
+{/try}`)
+    expect(document.getElementById('pending')?.textContent).toBe('loading')
+    ;(globalThis as { refuseRate?: (error: Error) => void }).refuseRate?.(
+        new Error('refused'),
+    )
+    await Promise.resolve()
+    await Promise.resolve()
+    flushSync()
+    expect(
+        document.getElementById('caught')?.textContent ??
+            document.getElementById('pending')?.textContent,
+    ).toBe('refused')
+    scope.stop()
+})
+
 // 32.96 — A READ INSIDE A `{#try}` THE BODY HOLDS IS THAT ONE'S, so the outer body paints. THE
 // REVERT: drop the `finally` that puts the count back in `renderMarkup`; the inner abort counts for
 // the outer `{#try}` and it paints `loading`.

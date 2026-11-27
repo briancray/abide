@@ -199,8 +199,21 @@ export class TryRegion extends ArmRegion {
         )
     }
 
-    override paintedOther(): boolean {
-        return false
+    /**
+     * Whether the server painted the `{:pending}` arm and the client chose another, or the reverse.
+     *
+     * A BODY OR A CATCH THE SERVER PAINTED IS ADOPTED as `follow` decides it — a body mounted behind
+     * a catch stands in its place. But no arm is built over a `{:pending}` arm: 32.16 — a first load
+     * that refused before hydration takes the catch, and the pending markup adopted as one went on
+     * showing "loading" for a value that had already failed.
+     */
+    override paintedOther(next: unknown): boolean {
+        const painted = namedArm(this.region.open.data)
+        return (
+            painted !== undefined &&
+            painted !== next &&
+            (painted === 2 || next === 2)
+        )
     }
 
     private fail(error: unknown, again: () => unknown): void {
@@ -232,8 +245,11 @@ export class TryRegion extends ArmRegion {
                 again()
             } catch (thrown) {
                 if (thrown instanceof NotLanded) throw thrown
-                // A caught region's first run is the one that finds the failure (`follow`).
-                if (this.failure.peek() === undefined) this.failure.set(thrown)
+                // A caught region's first run is the one that finds the failure (`follow`), and so
+                // is a first load's: what it waited on refused rather than landed.
+                const failure = this.failure.peek()
+                if (failure === undefined || failure === PENDING)
+                    this.failure.set(thrown)
                 return
             }
             untracked(TryRegion.recover, this, undefined)
