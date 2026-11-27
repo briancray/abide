@@ -415,3 +415,32 @@ test("an edit of one field wakes no reader of another's changed — 56.23", () =
     stop()
     expect(`wakes: ${woken}`).toBe('wakes: 0')
 })
+
+// 19.30 — AN OPTIONAL NUMBER LEFT BLANK IS ABSENT, and one that may be `null` is `null`: a field the
+// visitor did not fill is not the text `''`, which the check would refuse as "must be number". THE
+// REVERT: drop the `blankIsAbsent` arm in `coerceArgs` — the call never lands and `miles` shows the
+// type's refusal.
+test('a blank optional number posts as absent, and as null where null is declared — 19.30', async () => {
+    const reached: unknown[] = []
+    const log = rpc(
+        (args: { company: string; amount?: number; miles: number | null }) => {
+            reached.push(args)
+            return args
+        },
+        { methods: ['POST'] },
+    )
+    ;(log as unknown as Record<symbol, unknown>)[ARGS_DOCUMENT] = {
+        type: 'object',
+        required: ['company', 'miles'],
+        properties: {
+            company: { type: 'string' },
+            amount: { type: 'number' },
+            miles: { type: ['number', 'null'] },
+        },
+    }
+    addressed(log, '/service/log')
+    const entry = form(log)
+    await submitted(rendered(entry, { company: '', amount: '', miles: '' }))
+    expect(entry.issues).toBeUndefined()
+    expect(reached).toEqual([{ company: '', miles: null }])
+})

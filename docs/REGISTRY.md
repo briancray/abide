@@ -995,7 +995,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `JsonValue` | `null \| boolean \| number \| string \| JsonValue[] \| { [k: string]: JsonValue }` | What an `Args` may hold. | — |
-| `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.7, 19.14 |
+| `JsonSchema` | `JsonValue` | A JSON Schema document, the native form. | 19.7, 19.30, 19.14 |
 | `jsonSchema` | `<T>(document: JsonSchema) => StandardSchemaV1<T>` | A JSON Schema document as a `Schema`, carrying its validator. | 19.13, 19.14, 19.23, 20.11, 19.28 |
 
 # Handlers

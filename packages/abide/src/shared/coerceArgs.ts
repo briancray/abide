@@ -53,9 +53,25 @@ export function coerceArgs(
             `&${query.slice(1)}&`.includes(`&${bareName(name)}&`)
         )
             coerced[name] = []
-        else coerced[name] = coerceMember(text, member)
+        else if (text === '' && blankIsAbsent(member)) {
+            // 19.30 — an optional number left blank is not the text `''`.
+            if (typesOf(member).includes('null')) coerced[name] = null
+        } else coerced[name] = coerceMember(text, member)
     }
     return coerced
+}
+
+/**
+ * Whether a blank text reads as no value: the member declares types, and neither `string` nor a list
+ * is one — `tags=` is the list `['']` (30.28).
+ */
+function blankIsAbsent(member: Document): boolean {
+    const types = typesOf(member)
+    return (
+        types.length > 0 &&
+        !types.includes('string') &&
+        !types.includes('array')
+    )
 }
 
 function typesOf(member: Document): string[] {

@@ -1737,6 +1737,10 @@ one 19.9 derives.
 19.29 A mutation's browser copy MUST hold the args document the build read for it, and a `GET`'s
 MUST NOT.
 
+19.30 A text arg 19.7 coerces that is blank, for a member the `JsonSchema` declares types for and
+neither `string` nor `array` among them, MUST be read as `null` where `null` is one of them and as
+absent where it is not.
+
 # 20. Generated surfaces
 
 20.1 Every surface `Clients` names MUST be derived from the route table, and MUST NOT be authored
