@@ -217,7 +217,7 @@ test('an answer the mux cannot carry is taken over http, its handler run once �
 // 18.30 — PUMPED AT THE SOCKET'S PACE: a frame bun buffered rather than sent holds the next read off
 // the body until the socket drains. THE REVERT: drop the `drained` wait in `streamOverMux`; the body
 // is pulled 3 times before the drain where 1 is due.
-test('a stream reads no further while the socket holds a frame unsent — 18.30, 16.93', async () => {
+test('a stream reads no further while the socket holds a frame unsent — 18.30, 16.93, 16.96', async () => {
     let pulls = 0
     let resume = (): void => {}
     const body = new ReadableStream<Uint8Array>(

@@ -442,7 +442,7 @@ test('a render that called with {} answers the call that arrives with no args, a
 // one the buffer cannot answer (41.12). Counted in jsonl bytes: `"aaaa"\n` is 7, so two chunks pass
 // 10 and one does not. THE REVERT: skip `boundTranscript` in `seedFor`; the entry over the bound
 // answers, and 0 warnings arrive where 1 is due.
-test('a seeded stream whose transcript passes ABIDE_MAX_STREAM_BUFFER_SIZE is not answered from the buffer — 16.33, 41.12', async () => {
+test('a seeded stream whose transcript passes ABIDE_MAX_STREAM_BUFFER_SIZE is not answered from the buffer — 16.33, 36.18, 41.12', async () => {
     const unfile = onConfig(() => ({ ABIDE_MAX_STREAM_BUFFER_SIZE: 10 }))
     try {
         const handler = { address: '/reports/rows' }

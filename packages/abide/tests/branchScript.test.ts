@@ -97,12 +97,12 @@ test("a row's script tracks nothing it reads", async () => {
     expect(labels()).toEqual(['ADA!', 'GRACE!'])
 })
 
-test('two scripts in one body are refused', () => {
+test('two scripts in one body are refused — 34.9', () => {
     expect(() =>
         parseAbide(
             '{#for x of [1]}<script>const a = 1</script><script>const b = 2</script><p>{a}</p>{/for}',
         ),
-    ).toThrow('14.8')
+    ).toThrow('34.9')
 })
 
 const ARMS = `<script>

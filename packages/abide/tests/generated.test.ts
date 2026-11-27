@@ -427,7 +427,7 @@ test('the OpenAPI document publishes what each handler answers — 19.21, 19.22,
 // 20.16 — A TOOL ANSWERING AN OBJECT DECLARES ITS SHAPE AND ANSWERS IT STRUCTURED, the text kept beside
 // it; one answering anything else declares none. THE REVERT: leave `structuredContent` out of
 // `tools/call`; the call reads `undefined`.
-test('a tool answering an object declares an output schema and answers structured content — 20.16', async () => {
+test('a tool answering an object declares an output schema and answers structured content — 20.16, 20.17', async () => {
     const tools = await listedTools()
     expect(tools.get('post_invoices_pay')?.outputSchema).toEqual({
         type: 'object',

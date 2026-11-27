@@ -129,7 +129,7 @@ test('a value form lands at construction and reads as ready', () => {
     expect(total.peek()).toBe(41)
 })
 
-// RULEBOOK 2.5, move 6. The throw is what lets move 7 type the read as `Stored`.
+// RULEBOOK 2.10, move 6. The throw is what lets move 7 type the read as `Stored`.
 test('a read throws NotLanded where nothing has landed, and peek does not', () => {
     const pending = reactive(new Promise<number>(() => {}))
     expect(pending.ready()).toBe(false)

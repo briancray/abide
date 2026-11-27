@@ -353,7 +353,7 @@ test("a refusal's schema runs untracked", () => {
 // THE REVERT: drop the `isFailed` arm in `run` and the `answered` test in `absorb`; the first
 // body reports `error: none, ready: true` where `NotFound` is due, and the recompute below serves
 // the refusal itself as its value.
-test('a body that returns a refusal refuses — 15.5', async () => {
+test('a body that returns a refusal refuses — 15.2, 15.5', async () => {
     const summary = (value: { error(): unknown; ready(): boolean }): string =>
         `error: ${isFailed(value.error()) ? (value.error() as Error).name : 'none'}, ready: ${value.ready()}`
 

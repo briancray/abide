@@ -168,7 +168,7 @@ test("a deferred child's head keeps its place in the tree's order — 39.4", asy
 // does at hydration (41.27), so the arm the server paints is the one the client chooses. THE
 // REVERT: drop `probes` from `emitComponent`; `Flag` builds where it is called, before `Slow` has
 // started its call, and paints `idle` where `busy` is due — the arm hydration then rebuilds (41.24).
-test('a bare busy in a child answers over the loads its later siblings start — 41.28', async () => {
+test('a bare busy in a child answers over the loads its later siblings start — 41.28, 41.31', async () => {
     expect(await page('/flagfirst')).toContain(
         '<p id="flag"><!--[0-->busy<!--]--></p>',
     )

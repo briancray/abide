@@ -435,7 +435,7 @@ export function parseAbide(source: string): AbideFile {
                         throw new Error(
                             holder.kind === 'component'
                                 ? `abide: {#component ${holder.name}} has two <script> blocks. A component is set up once, by one. RULEBOOK 32.48.`
-                                : 'abide: this block body has two <script> blocks. A body is set up once, by one. RULEBOOK 14.8.',
+                                : 'abide: this block body has two <script> blocks. A body is set up once, by one. RULEBOOK 34.9.',
                         )
                     owner.setup = { text: raw.body }
                     origins.holders.set(owner.setup, tag.end)

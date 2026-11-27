@@ -101,7 +101,7 @@ test('a bare refresh reloads the subscribed loads and marks the rest — 13.7', 
 //
 // THE REVERT: filing every value with a body where it is built — `derivation runs on the refresh: 1`,
 // a recompute of what its source still says.
-test('a bare refresh reruns no synchronous derivation — 13.6', async () => {
+test('a bare refresh reruns no synchronous derivation — 13.6, 13.14', async () => {
     let loads = 0
     let derivationRuns = 0
     const source = reactive(async () => {

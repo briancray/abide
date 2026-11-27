@@ -157,7 +157,7 @@ test('a pairing /__abide/pairing fails to answer fails its status with that fail
         `failed ${failure !== undefined}, status ${failure?.status}, read: ${read}`,
     ).toBe('failed true, status 503, read: undefined')
     pair.start()
-    // 53.41 — a pairing that cannot be read is unavailable, whatever was clicked.
+    // 53.42 — a pairing that cannot be read is unavailable, whatever was clicked.
     expect(pair.step()).toBe('unavailable')
     dispose()
 })
@@ -300,7 +300,7 @@ test('a click with a bridge already paired offers the click again — 44.71', as
     jest.useFakeTimers()
     pair.start()
     jest.advanceTimersByTime(2500)
-    // 53.41 — paired is the step, whatever the click offered.
+    // 53.42 — paired is the step, whatever the click offered.
     expect(pair.step()).toBe('paired')
     dispose()
 })
