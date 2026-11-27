@@ -90,8 +90,8 @@ test('a sparkline declaring curve draws its line and its area curved — 52.105'
 
 // 52.116 — EVERY PLACED MARK CARRIES ITS PLACE AS A SHARE OF THE BOX, so an element placed by
 // `left: var(--x)` stands where the SVG one does at whatever size the box is laid out.
-// THE REVERT: write the bar's vars in px of the box rather than percentages — `--x: 33.5%` reads
-// `--x: 201px`.
+// THE REVERTS: write the bar's vars in px of the box rather than percentages — `--x: 33.5%` reads
+// `--x: 201px`; and leave `--x` off an x gridline — its vars read `{}`.
 test('a placed mark carries where it stands as percentages of the box', () => {
     const plot = chart({
         label: 'Deals',
@@ -124,8 +124,10 @@ test('a placed mark carries where it stands as percentages of the box', () => {
         expect(vars(tick.grid)).toEqual({ y: share(tick.y, 240) })
         expect(vars(tick.text)).toEqual({ x: 0, y: share(tick.y, 240) })
     }
-    for (const tick of plot.xTicks)
+    for (const tick of plot.xTicks) {
+        expect(vars(tick.grid)).toEqual({ x: share(tick.x, 600) })
         expect(vars(tick.text).x).toBe(share(tick.x, 600))
+    }
     press(plot.root, 'ArrowRight')
     expect(vars(plot.crosshair?.line)).toEqual({
         x: share(plot.crosshair?.x ?? 0, 600),
@@ -214,4 +216,68 @@ test('pad widens the range of the values by a share of its span, before zero is 
     expect(String(trend.line.d)).toBe('M0,66.67L100,0')
     const flat = sparkline({ values: [4, 4], label: 'Won', pad: 0.2 })
     expect(String(flat.line.d)).toBe('M0,50L100,50')
+})
+
+// 52.120 — AN X AXIS BY VALUE: given `xAxis: 'values'`, the x ticks are the round values `chart.ticks`
+// answers inside the x range, each a gridline down the plot and a label at its bottom edge where `x`
+// places the value, labeling no position; by default they label the positions themselves.
+// THE REVERT: read `xAxis` nowhere — the ticks are the positions again, [3, 9, 30, 45, 90].
+test('an x axis by value stands its ticks at round values, each a gridline and a label', () => {
+    const DAYS = [3, 9, 14, 30, 45, 90]
+    const drawn = (xAxis?: 'values') =>
+        chart({
+            label: 'Close rate',
+            series: () => [
+                { label: 'Close rate', values: [62, 48, 41, 30, 22, 9] },
+            ],
+            x: DAYS,
+            xAxis,
+            xFormat: (days) => `${days}d`,
+        })
+    const plot = drawn('values')
+    expect(plot.xTicks.map((tick) => tick.value)).toEqual([20, 40, 60, 80])
+    for (const tick of plot.xTicks) {
+        expect(tick.index).toBeUndefined()
+        expect(tick.x).toBe(plot.x(tick.value))
+        expect(tick.label).toBe(`${tick.value}d`)
+        expect(tick.grid).toMatchObject({
+            'data-chart': 'grid',
+            'data-axis': 'x',
+            x1: tick.x,
+            x2: tick.x,
+            y1: 0,
+            y2: 240,
+        })
+        expect(tick.text).toMatchObject({ x: tick.x, y: 240 })
+    }
+    const byPosition = drawn().xTicks
+    expect(byPosition.map((tick) => tick.value)).toEqual([3, 9, 30, 45, 90])
+    expect(byPosition.map((tick) => tick.index)).toEqual([0, 1, 3, 4, 5])
+})
+
+// 52.121, 52.25 — `xZero` TAKES ZERO INTO THE X RANGE and draws a line down the plot there, as `zero`
+// does across it; a range `bounds` gives stays as given.
+// THE REVERT: leave zero out of the x range — `plot.x(0)` stands at -300, off the plot's left edge.
+test('xZero takes zero into the x range, with a line down the plot there', () => {
+    const drawn = (xZero: boolean, bounds?: { x: [number, number] }) =>
+        chart({
+            label: 'Won',
+            series: () => [{ label: 'Won', values: [10, 20, 30] }],
+            x: [2, 4, 6],
+            xZero,
+            bounds,
+        })
+    expect(drawn(false).xZero).toBeUndefined()
+    const plot = drawn(true)
+    expect(plot.x(0)).toBe(0)
+    expect(plot.xZero?.x).toBe(0)
+    expect(plot.xZero?.line).toMatchObject({
+        'data-chart': 'zero',
+        'data-axis': 'x',
+        x1: 0,
+        x2: 0,
+        y1: 0,
+        y2: 240,
+    })
+    expect(drawn(true, { x: [1, 6] }).x(1)).toBe(0)
 })

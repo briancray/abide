@@ -291,6 +291,7 @@ function elementParts(): Record<string, unknown> {
         'chart.yTicks.grid': plot.yTicks[0]?.grid,
         'chart.yTicks.text': plot.yTicks[0]?.text,
         'chart.xTicks.text': plot.xTicks[0]?.text,
+        'chart.xTicks.grid': plot.xTicks[0]?.grid,
         'chart.marks.columns': plot.marks[0]?.columns,
         'chart.bars.rect': plot.bars[0]?.rect,
         'chart.points.circle': plot.points[0]?.circle,

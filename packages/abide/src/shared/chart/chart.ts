@@ -1,4 +1,4 @@
-// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71, 52.116, 52.118, 52.119 — A CHART AS PARTS: series over
+// 52.24-52.30, 52.34, 52.37-52.39, 52.51-52.52, 52.58-52.63, 52.68-52.71, 52.116, 52.118-52.121 — A CHART AS PARTS: series over
 // one pair of axes, handed back as the geometry each mark is drawn at and as parts an app spreads onto
 // elements, SVG or HTML — `{#for point of plot.points}<circle {...point.circle} r="3" />` — with the
 // root's part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
@@ -42,12 +42,19 @@ export type ChartOptions = {
     xFormat?: ((x: number) => string) | undefined
     /** Writes a value for the y ticks, and the readout of a series with no `format` of its own: `format.money`, say. `format.number` by default. */
     yFormat?: ((y: number) => string) | undefined
-    /** The most x positions labeled along the bottom of the plot. 5 by default. */
+    /**
+     * Where the x ticks stand: at the x positions, every so many of them, or at round values across
+     * the x range, as the y ticks do (52.120). `'positions'` by default.
+     */
+    xAxis?: Live<'positions' | 'values'> | undefined
+    /** How many x ticks: the most positions labeled, or about how many intervals the round values divide the x range into. 5 by default. */
     xTicks?: Live<number> | undefined
     /** About how many intervals the y gridlines divide the range into. 4 by default. */
     yTicks?: Live<number> | undefined
     /** Whether the y range takes in zero, with a line drawn there. `false` by default. */
     zero?: Live<boolean> | undefined
+    /** Whether the x range takes in zero, with a line drawn there (52.121). `false` by default. */
+    xZero?: Live<boolean> | undefined
     /**
      * The room kept above and below the values, as a share of their span: `0.15`, or `[below, above]`
      * (52.119). None by default.
@@ -88,12 +95,17 @@ type ChartYTick = {
     text: Record<string, unknown>
 }
 
-/** An x position labeled at the plot's bottom edge. */
+/** An x gridline and its label. */
 type ChartXTick = {
-    index: number
+    /** Where it stands, in the units of the `x` option. */
+    value: number
+    /** The x position it labels, `undefined` for a tick at a round value (52.120). */
+    index: number | undefined
     x: number
     label: string
-    /** `<text {...tick.text}>{tick.label}</text>`. */
+    /** The gridline down the plot: `<line {...tick.grid} />`. */
+    grid: Record<string, unknown>
+    /** The label at the plot's bottom edge: `<text {...tick.text}>{tick.label}</text>`. */
     text: Record<string, unknown>
 }
 
@@ -173,10 +185,12 @@ export type ChartParts = {
     y(value: number): number
     /** The y gridlines and their labels. */
     get yTicks(): ChartYTick[]
-    /** The x positions labeled at the plot's bottom edge. */
+    /** The x gridlines and their labels (52.120). */
     get xTicks(): ChartXTick[]
-    /** The line at zero, where `zero` is set (52.25). */
+    /** The line across the plot at zero, where `zero` is set (52.25). */
     get zero(): { y: number; line: Record<string, unknown> } | undefined
+    /** The line down the plot at zero, where `xZero` is set (52.25). */
+    get xZero(): { x: number; line: Record<string, unknown> } | undefined
     /** Every series' mark in order, the first at the back (52.24). */
     get marks(): ChartMark[]
     /** The marks drawn as lines. */
@@ -222,6 +236,7 @@ export function chart(options: ChartOptions): ChartParts {
         const series = live(options.series)
         const normalize = live(options.normalize) === true
         const zero = live(options.zero) === true
+        const xZero = live(options.xZero) === true
         const bounds = live(options.bounds)
         const given = live(options.x)
         const { width, height } = size()
@@ -277,10 +292,15 @@ export function chart(options: ChartOptions): ChartParts {
         // Columns are centered on their x, so the first and last stand a half slot in from the edges.
         const slot = width / Math.max(1, length)
         const inset = columns ? slot / 2 : 0
-        const toX = scale(
-            bounds?.x ?? [positions[0] ?? 0, positions.at(-1) ?? 0],
-            [inset, width - inset],
-        )
+        let xLow = positions[0] ?? 0
+        let xHigh = positions.at(-1) ?? 0
+        // 52.121 — zero is in the x range where it is asked for.
+        if (xZero) {
+            xLow = Math.min(xLow, 0)
+            xHigh = Math.max(xHigh, 0)
+        }
+        const xRange = bounds?.x ?? [xLow, xHigh]
+        const toX = scale(xRange, [inset, width - inset])
         const toY = scale([floor, ceiling], [height, 0])
         const xs: number[] = []
         for (const position of positions) xs.push(toX(position))
@@ -416,6 +436,7 @@ export function chart(options: ChartOptions): ChartParts {
                 label: normalize ? percent(value) : yFormat(value),
                 grid: {
                     'data-chart': 'grid',
+                    'data-axis': 'y',
                     x1: 0,
                     x2: width,
                     y1: y,
@@ -439,23 +460,35 @@ export function chart(options: ChartOptions): ChartParts {
             })
         }
         const xTickList: ChartXTick[] = []
-        const shown = Math.min(length, Math.max(1, live(options.xTicks) ?? 5))
-        for (let step = 0; step < shown; step += 1) {
-            const index =
-                shown === 1
-                    ? 0
-                    : Math.round((step * (length - 1)) / (shown - 1))
-            const x = xs[index] ?? 0
-            xTickList.push({
-                index,
-                x,
-                label: xFormat(positions[index] ?? index),
-                text: {
-                    'data-chart': 'tick',
-                    'data-axis': 'x',
-                    x,
-                    y: height,
-                    'text-anchor':
+        const xCount = Math.max(1, live(options.xTicks) ?? 5)
+        if (live(options.xAxis) === 'values') {
+            // 52.120 — round values across the x range, as 52.61 keeps the y ticks inside `bounds`.
+            const [from, to] = xRange
+            for (const value of ticks(from, to, xCount))
+                if (value >= from && value <= to)
+                    xTickList.push(
+                        xTickOf(
+                            value,
+                            undefined,
+                            toX(value),
+                            'middle',
+                            width,
+                            height,
+                            vars,
+                        ),
+                    )
+        } else {
+            const shown = Math.min(length, xCount)
+            for (let step = 0; step < shown; step += 1) {
+                const index =
+                    shown === 1
+                        ? 0
+                        : Math.round((step * (length - 1)) / (shown - 1))
+                xTickList.push(
+                    xTickOf(
+                        positions[index] ?? index,
+                        index,
+                        xs[index] ?? 0,
                         shown === 1 || columns
                             ? 'middle'
                             : step === 0
@@ -463,13 +496,12 @@ export function chart(options: ChartOptions): ChartParts {
                               : step === shown - 1
                                 ? 'end'
                                 : 'middle',
-                    'dominant-baseline': 'hanging',
-                    fill: 'currentColor',
-                    style: vars
-                        ? `--x: ${percentOf(x, width)}%; --y: 100%`
-                        : undefined,
-                },
-            })
+                        width,
+                        height,
+                        vars,
+                    ),
+                )
+            }
         }
         const zeroY = toY(0)
         return {
@@ -492,6 +524,7 @@ export function chart(options: ChartOptions): ChartParts {
                       y: zeroY,
                       line: {
                           'data-chart': 'zero',
+                          'data-axis': 'y',
                           x1: 0,
                           x2: width,
                           y1: zeroY,
@@ -503,8 +536,65 @@ export function chart(options: ChartOptions): ChartParts {
                       },
                   }
                 : undefined,
+            xZero: xZero
+                ? lineDown(toX(0), 'zero', width, height, vars)
+                : undefined,
         }
     })
+
+    // A line down the plot at `x`: an x gridline, or the zero line, carrying the share of the box it stands at (52.116).
+    function lineDown(
+        x: number,
+        kind: 'grid' | 'zero',
+        boxWidth: number,
+        boxHeight: number,
+        vars: boolean,
+    ) {
+        return {
+            x,
+            line: {
+                'data-chart': kind,
+                'data-axis': 'x',
+                x1: x,
+                x2: x,
+                y1: 0,
+                y2: boxHeight,
+                stroke: 'currentColor',
+                'stroke-opacity': kind === 'grid' ? '0.2' : undefined,
+                style: vars ? `--x: ${percentOf(x, boxWidth)}%` : undefined,
+            } as Record<string, unknown>,
+        }
+    }
+
+    function xTickOf(
+        value: number,
+        index: number | undefined,
+        x: number,
+        anchor: 'start' | 'middle' | 'end',
+        boxWidth: number,
+        boxHeight: number,
+        vars: boolean,
+    ): ChartXTick {
+        return {
+            value,
+            index,
+            x,
+            label: xFormat(value),
+            grid: lineDown(x, 'grid', boxWidth, boxHeight, vars).line,
+            text: {
+                'data-chart': 'tick',
+                'data-axis': 'x',
+                x,
+                y: boxHeight,
+                'text-anchor': anchor,
+                'dominant-baseline': 'hanging',
+                fill: 'currentColor',
+                style: vars
+                    ? `--x: ${percentOf(x, boxWidth)}%; --y: 100%`
+                    : undefined,
+            },
+        }
+    }
 
     function pointOf(
         series: number,
@@ -761,6 +851,9 @@ export function chart(options: ChartOptions): ChartParts {
         },
         get zero() {
             return plot().zero
+        },
+        get xZero() {
+            return plot().xZero
         },
         get marks() {
             return plot().marks

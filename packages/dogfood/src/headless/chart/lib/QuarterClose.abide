@@ -1,0 +1,25 @@
+<script>
+import { chart } from '@abide/abide'
+
+const plot = chart({
+    label: 'Deals closed by days from the end of the quarter',
+    series: [{ label: 'Closed', values: [3, 4, 4, 6, 9, 14, 2, 1] }],
+    x: [-35, -28, -21, -14, -7, -1, 7, 14],
+    xAxis: 'values',
+    xZero: true,
+})
+</script>
+
+<div class="pb-6">
+    <svg {...plot.root} class="block h-48 w-full overflow-visible">
+        {#for tick of plot.xTicks key tick.value}
+            <text {...tick.text} dy="6">{tick.label}</text>
+        {/for}
+        {#if plot.xZero}
+            <line {...plot.xZero?.line} stroke-dasharray="4 4" />
+        {/if}
+        {#for line of plot.lines key line.series}
+            <path {...line.path} />
+        {/for}
+    </svg>
+</div>

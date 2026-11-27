@@ -64,7 +64,12 @@ test('each stage curves through its months, on the curve of the one under it', a
 // point above the plot.
 test('the target is drawn at its own values, on an axis fixed at $150K', async () => {
     using _trend = await mount(PipelineTrend({}))
-    expect(texts('[data-axis=y]')).toEqual(['$0', '$50K', '$100K', '$150K'])
+    expect(texts('[data-chart=tick][data-axis=y]')).toEqual([
+        '$0',
+        '$50K',
+        '$100K',
+        '$150K',
+    ])
     // $90K of $150K, up from the floor at 240 to the top at 0, at the plot's left edge (52.68).
     expect(points('[data-chart=line]')[0]).toEqual([0, 96])
 })

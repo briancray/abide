@@ -20,7 +20,7 @@ function press(key: string) {
 // THE REVERT: write every value by `yFormat` — 'Won: 100%' where '$42K' is due.
 test('each series reads its own units, though both are drawn as shares of their peaks', async () => {
     using _chart = await mount(WonAndClosed({}))
-    expect(texts('[data-axis=y]').at(-1)).toBe('100%')
+    expect(texts('[data-chart=tick][data-axis=y]').at(-1)).toBe('100%')
     press('End')
     expect(texts('[data-chart=readout-value]')).toEqual([
         'Won: $42K',

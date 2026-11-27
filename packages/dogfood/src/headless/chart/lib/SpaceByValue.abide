@@ -1,0 +1,29 @@
+<script>
+import { chart, format } from '@abide/abide'
+
+const plot = chart({
+    label: 'Close rate by days in the pipeline',
+    series: [
+        { label: 'Close rate', values: [0.62, 0.48, 0.41, 0.3, 0.22, 0.09] },
+    ],
+    x: [3, 9, 14, 30, 45, 90],
+    xAxis: 'values',
+    xFormat: (days) => `${days}d`,
+    yFormat: format.percent,
+})
+</script>
+
+<div class="pb-6 pl-10">
+    <svg {...plot.root} class="block h-48 w-full overflow-visible">
+        {#for tick of plot.xTicks key tick.value}
+            <line {...tick.grid} />
+            <text {...tick.text} dy="6">{tick.label}</text>
+        {/for}
+        {#for tick of plot.yTicks key tick.value}
+            <text {...tick.text} dx="-6">{tick.label}</text>
+        {/for}
+        {#for line of plot.lines key line.series}
+            <path {...line.path} />
+        {/for}
+    </svg>
+</div>

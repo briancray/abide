@@ -45,7 +45,9 @@ test('the gridlines span the chart, and its y labels end where it begins', async
         expect(grid.getAttribute('x1')).toBe('0')
         expect(grid.getAttribute('x2')).toBe('600')
     }
-    for (const label of chart().querySelectorAll('[data-axis=y]')) {
+    for (const label of chart().querySelectorAll(
+        '[data-chart=tick][data-axis=y]',
+    )) {
         expect(label.getAttribute('x')).toBe('0')
         expect(label.getAttribute('text-anchor')).toBe('end')
     }
@@ -70,7 +72,7 @@ test('won and lost stand side by side in each month', async () => {
         expect(left.y + left.height).toBe(240)
         expect(right.y + right.height).toBe(240)
     }
-    expect(texts('[data-axis=y]')[0]).toBe('0')
+    expect(texts('[data-chart=tick][data-axis=y]')[0]).toBe('0')
 })
 
 // 52.58 — STACKED, LOST STANDS ON WON. THE REVERT: draw each column from zero whatever its stack —
@@ -91,7 +93,7 @@ test('stacked, lost stands on top of won in one column', async () => {
 // reads each count and its share. THE REVERT: write the ticks with `yFormat` — '0.5' where '50%'.
 test('as shares, every month fills the column and reads its share', async () => {
     using _flow = await mount(DealFlow({ shares: true }))
-    expect(texts('[data-axis=y]')).toEqual([
+    expect(texts('[data-chart=tick][data-axis=y]')).toEqual([
         '0%',
         '20%',
         '40%',

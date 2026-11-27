@@ -1,0 +1,25 @@
+<script>
+import { chart } from '@abide/abide'
+
+const plot = chart({
+    label: 'Open pipeline against a $100K axis',
+    series: [
+        { label: 'Open', values: [64_000, 88_000, 131_000, 97_000, 72_000] },
+    ],
+    bounds: { y: [0, 100_000] },
+})
+</script>
+
+<div class="py-2 pl-10">
+    <svg {...plot.root} class="block h-48 w-full overflow-visible">
+        {#for tick of plot.yTicks key tick.value}
+            <line {...tick.grid} />
+            <text {...tick.text} dx="-6">{tick.label}</text>
+        {/for}
+        <svg>
+            {#for line of plot.lines key line.series}
+                <path {...line.path} />
+            {/for}
+        </svg>
+    </svg>
+</div>

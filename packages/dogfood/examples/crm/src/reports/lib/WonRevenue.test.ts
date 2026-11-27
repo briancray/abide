@@ -26,14 +26,14 @@ test('won revenue is a line broken where a month has no total', async () => {
     )
     const won = chart().querySelector("[data-chart=line][data-series='0']")
     expect(won?.getAttribute('d')?.match(/M/g)).toHaveLength(2)
-    expect(texts('[data-axis=x]')).toEqual([
+    expect(texts('[data-chart=tick][data-axis=x]')).toEqual([
         'Jun 2026',
         'Jul 2026',
         'Sep 2026',
         'Oct 2026',
         'Nov 2026',
     ])
-    expect(texts('[data-axis=y]')).toEqual([
+    expect(texts('[data-chart=tick][data-axis=y]')).toEqual([
         '$0',
         '$10K',
         '$20K',

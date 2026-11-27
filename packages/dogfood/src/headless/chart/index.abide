@@ -6,6 +6,8 @@ import Section from '#src/lib/Section.abide'
 
 import BarLabels from './lib/BarLabels.abide'
 import barLabels from './lib/BarLabels.abide' with { type: 'text' }
+import ClipToPlot from './lib/ClipToPlot.abide'
+import clipToPlot from './lib/ClipToPlot.abide' with { type: 'text' }
 import ColumnsUnderLine from './lib/ColumnsUnderLine.abide'
 import columnsUnderLine from './lib/ColumnsUnderLine.abide' with { type: 'text' }
 import CurvedAreas from './lib/CurvedAreas.abide'
@@ -38,8 +40,12 @@ import PickMonth from './lib/PickMonth.abide'
 import pickMonth from './lib/PickMonth.abide' with { type: 'text' }
 import PointsOverLines from './lib/PointsOverLines.abide'
 import pointsOverLines from './lib/PointsOverLines.abide' with { type: 'text' }
+import QuarterClose from './lib/QuarterClose.abide'
+import quarterClose from './lib/QuarterClose.abide' with { type: 'text' }
 import SideBySide from './lib/SideBySide.abide'
 import sideBySide from './lib/SideBySide.abide' with { type: 'text' }
+import SpaceByValue from './lib/SpaceByValue.abide'
+import spaceByValue from './lib/SpaceByValue.abide' with { type: 'text' }
 import StackedAreas from './lib/StackedAreas.abide'
 import stackedAreas from './lib/StackedAreas.abide' with { type: 'text' }
 import StackWonLost from './lib/StackWonLost.abide'
@@ -113,6 +119,18 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
             path: 'packages/abide/tests/chartParts.test.ts',
             from: [
                 "test('pad widens the range of the values by a share of its span, before zero is taken in'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/chartParts.test.ts',
+            from: [
+                "test('an x axis by value stands its ticks at round values, each a gridline and a label'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/chartParts.test.ts',
+            from: [
+                "test('xZero takes zero into the x range, with a line down the plot there'",
             ],
         },
         {
@@ -283,6 +301,19 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
         <Example code={markADate}><MarkADate /></Example>
     </Section>
 
+    <Section level={3} title="Space the x axis by value when the positions are uneven">
+        <p>By default the x ticks label the positions themselves. <code>xAxis: 'values'</code>
+            stands them at round values across the x range instead, as the y ticks are, and each
+            hands back a <code>grid</code> to draw down the plot.</p>
+        <Example code={spaceByValue}><SpaceByValue /></Example>
+    </Section>
+
+    <Section level={3} title="Draw a line at day zero, where the quarter closes">
+        <p><code>xZero</code> takes zero into the x range and hands back a line down the plot
+            there, as <code>zero</code> does across it.</p>
+        <Example code={quarterClose}><QuarterClose /></Example>
+    </Section>
+
     <Section level={3} title="Draw won revenue as columns under a target line">
         <p>Each series' <code>kind</code> is how it is drawn: a line, a column per value or an
             area. <code>marks</code> answers them all on one pair of axes, in the order given, the
@@ -351,6 +382,13 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
         <p><code>bounds</code> fixes an axis's range rather than fitting it to the values, so two
             teams' charts read on the same scale.</p>
         <Example code={fixedAxis}><FixedAxis /></Example>
+    </Section>
+
+    <Section level={3} title="Clip a line that runs past a fixed axis">
+        <p>The <code>root</code> lets its labels overflow, so a value past <code>bounds</code>
+            draws past the plot too. Wrap the marks in a nested <code>svg</code>: it fills the
+            plot and clips what it holds there, and the labels outside it still show.</p>
+        <Example code={clipToPlot}><ClipToPlot /></Example>
     </Section>
 
     <Section level={3} title="Keep the line off the top and bottom of the plot">
