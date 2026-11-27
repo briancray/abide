@@ -1571,7 +1571,8 @@ const k = Promise.resolve(1)
     ).toBe('')
 
     const client = await clientOf(RAW_EVERYWHERE)
-    expect(client).toContain('{ "body": () => (__raw(html)) }')
+    // Held for teardown (33.28), the read is still the `__raw` one.
+    expect(client).toContain('(hp0 = __raw(html))) }')
     expect(client).toContain('= (x, __at) => raw(String(x))')
     expect(client).toContain('addEventListener("click", () => raw(html))')
     // THE REVERT: drop `isFunctionLiteral`'s depth counter past a return type and this throws a

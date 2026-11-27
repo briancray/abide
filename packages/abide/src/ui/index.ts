@@ -56,6 +56,8 @@ export { fillEmpty, fillRegion, isEmptyRegion, type Region } from './regions.ts'
 export { rowKeyOf } from './rowKeyOf.ts'
 export { itemOf, noUpdate, replaceRow, rowCell, rowIndex } from './rows.ts'
 export { EMPTY_SCOPE, Scope } from './Scope.ts'
+// 33.28 — what a prop accessor an invocation hands over reads at teardown.
+export { teardown, UNREAD } from './teardown.ts'
 export {
     addAttribute,
     setAttribute,

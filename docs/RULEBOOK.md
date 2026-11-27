@@ -2880,7 +2880,8 @@ MUST be an error.
 33.4 `props` MUST hand back one accessor per key, and the accessor's shape MUST be what that key's
 type declares.
 
-33.5 A prop MUST be a live read of the caller's expression, and MUST NOT be a snapshot.
+33.5 A prop MUST be a live read of the caller's expression, and MUST NOT be a snapshot, save where
+33.28 holds it.
 
 33.6 A write by name to a prop the caller bound MUST reach the caller's `Reactive`.
 
@@ -2944,6 +2945,10 @@ element.
 33.27 A name `props` binds MUST hold a `Reactive` wherever 31.3 or 31.13 has a name hold its
 `Reactive` or 31.5 has it reach its `Reactive`'s member, and that `Reactive`'s probes MUST answer for
 every `Reactive` the caller's expression read.
+
+33.28 A prop read during its component's teardown MUST answer the value it last answered.
+
+33.29 A prop first read during its component's teardown MUST read the caller's expression.
 
 # 34. Script and style blocks
 

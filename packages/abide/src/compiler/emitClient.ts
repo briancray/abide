@@ -1373,7 +1373,16 @@ function emitInvocation(
     region: RegionEmission,
 ): void {
     const lowering = region.lowering
-    const props = invocationProps(node, lowering)
+    // 33.28 — EACH PROP KEEPS WHAT IT LAST ANSWERED, in a `let` declared on the invocation's line:
+    // the accessors already close over the mount's scope, so the slot is one more variable there
+    // rather than an allocation per prop.
+    const held: string[] = []
+    const props = invocationProps(node, lowering, (value) => {
+        const slot = region.claim('hp')
+        const unread = lowering.use('UNREAD')
+        held.push(`${slot} = ${unread}`)
+        return `${lowering.use('teardown')}.depth > 0 && ${slot} !== ${unread} ? ${slot} : (${slot} = ${value})`
+    })
     // 32.18 — THE CHILDREN ARE MARKUP AND A MOUNT, and they have to be both: the markup is what
     // fills a slot the server never painted, and the mount is the CALLER's bindings — which only
     // this module has, addressed from a region only the child knows where to put.
@@ -1415,12 +1424,13 @@ ${SCOPE}.watch(() => ${name}.show(${chosen}))`
     }
     // One line, so the region found and the call made from it share the block each line stands in.
     region.lines.push(
-        spread
-            ? `const ${spreadAt} = ${found}
+        (held.length === 0 ? '' : `let ${held.join(', ')}\n`) +
+            (spread
+                ? `const ${spreadAt} = ${found}
 ${lowering.use('invokeLanded')}(${SCOPE}, ${SHARE_AT}, () => (${record}), (${SPREAD_RECORD}) => {
 ${invocation}
 })`
-            : invocation,
+                : invocation),
     )
 }
 

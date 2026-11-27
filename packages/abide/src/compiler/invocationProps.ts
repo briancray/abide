@@ -15,10 +15,17 @@ import type { Lowering } from './Lowering.ts'
 import { holdsReactive } from './PositionTable.ts'
 import type { ElementNode, InlineComponent } from './TemplateNode.ts'
 
-/** The props-record entries a component tag hands its child: spreads first, then each prop. */
+/**
+ * The props-record entries a component tag hands its child: spreads first, then each prop.
+ *
+ * `hold` wraps each prop the caller wrote as an expression, a literal being one answer for life —
+ * the client lane's 33.28 (`emitInvocation`); the server's markup is one expression with nowhere to
+ * keep a value, and never stops a scope.
+ */
 export function invocationProps(
     node: ElementNode,
     lowering: Lowering,
+    hold: (value: string) => string = (value) => value,
 ): string[] {
     const spreads: string[] = []
     const explicit: string[] = []
@@ -43,7 +50,7 @@ export function invocationProps(
             continue
         }
         const value = attribute.expression
-            ? lowering.expression(attribute)
+            ? hold(lowering.expression(attribute))
             : JSON.stringify(attribute.value)
         explicit.push(`${JSON.stringify(key)}: () => (${value})`)
     }

@@ -5,6 +5,8 @@ import {
     watchTracked,
 } from '#shared/reactive/watch.ts'
 
+import { teardown } from './teardown.ts'
+
 /** What a scope built under a `{#try}` binds through — its `TryRegion` (32.16). */
 type Boundary = {
     guard<T>(run: () => T, again: () => unknown): T | undefined
@@ -137,15 +139,21 @@ export class Scope {
      * the setup ahead of it — whose watches are the first `from` stops — does not run again.
      */
     stop(from = 0): void {
-        const stops = this.stops
-        for (let index = from; index < stops.length; index += 1)
-            (stops[index] as Disposer)()
-        stops.length = from
-        if (from <= this.itemsAt) this.items = 0
-        const children = this.children
-        if (children === undefined) return
-        for (const child of children) child.stop()
-        children.length = 0
+        // 33.28 — counted in for the props the disposers below read.
+        teardown.depth += 1
+        try {
+            const stops = this.stops
+            for (let index = from; index < stops.length; index += 1)
+                (stops[index] as Disposer)()
+            stops.length = from
+            if (from <= this.itemsAt) this.items = 0
+            const children = this.children
+            if (children === undefined) return
+            for (const child of children) child.stop()
+            children.length = 0
+        } finally {
+            teardown.depth -= 1
+        }
     }
 }
 
