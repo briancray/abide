@@ -35,6 +35,30 @@ import Section from '#src/lib/Section.abide'
             from: ["test('a table is set, patched and deleted by key — 47.33'"],
         },
         {
+            path: 'packages/abide/tests/describedTable.test.ts',
+            from: [
+                'test("a write upserts by the table\'s own primary key, one column or several — 47.30, 47.33, 47.39"',
+            ],
+        },
+        {
+            path: 'packages/abide/tests/describedTable.test.ts',
+            from: [
+                "test('a BOOLEAN and a JSON column are read and written as what they declare — 47.40, 47.41'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/describedTable.test.ts',
+            from: [
+                "test('a table given logged records its key and those columns alone — 47.42'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/describedTable.test.ts',
+            from: [
+                "test('a write inside a transaction refreshes once it commits, and not at all where it rolls back — 47.43'",
+            ],
+        },
+        {
             path: 'packages/abide/tests/rpcSources.test.ts',
             from: [
                 'test("a table\'s rpc is read by a match and written by key over the wire — 16.117"',
@@ -57,6 +81,43 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
+    <Section level={3} title="Name the table, and its rows are typed by the migration">
+        <p>The opener carries the tables its migrations declare, so the table is named and
+            nothing else: its row is typed from the <code>CREATE TABLE</code>, its key is the
+            table's primary key, and a name no migration declared is a type error.</p>
+        <Code language="ts" caption="server" code={`
+            import { type Tables, table } from '@abide/abide/server'
+            import { crmDatabase } from './crmDatabase.server.ts'
+
+            export type Target = Tables<typeof crmDatabase>['targets']
+
+            export const targets = table(crmDatabase, 'targets')
+        `} />
+    </Section>
+
+    <Section level={3} title="Read a BOOLEAN column as true or false, and a JSON column as its value">
+        <p>A column's declared type is kept in the file, so <code>BOOLEAN</code> reads back
+            <code>true</code> or <code>false</code> and <code>JSON</code> reads back the value it
+            was written as — through the table, its changes and <code>sql</code> alike.</p>
+        <Code language="ts" caption="server" code={`
+            import { database, table } from '@abide/abide/server'
+
+            const crm = database('crm', {
+                migrations: [
+                    \`CREATE TABLE deals (
+                        id INTEGER PRIMARY KEY,
+                        won BOOLEAN NOT NULL,
+                        notes JSON
+                    )\`,
+                ],
+            })
+            const deals = table(crm, 'deals')
+
+            deals.set({ id: 1, won: true, notes: { calls: 2 } })
+            deals({ won: true })
+        `} />
+    </Section>
+
     <Section level={3} title="Match the rows with JSON">
         <p>A value is equality, <code>null</code> is NULL, an array is any of its values, and an
             object of <code>gt</code>, <code>gte</code>, <code>lt</code>, <code>lte</code> and
@@ -66,6 +127,20 @@ import Section from '#src/lib/Section.abide'
 
             const ambitious = targets({ target: { gte: 500_000 } })
             const picked = targets({ id: [3, 5, 8] })
+        `} />
+    </Section>
+
+    <Section level={3} title="Write inside a transaction, and refresh once it commits">
+        <p>A write made inside a transaction refreshes what called the table once the transaction
+            commits, and never where it rolls back.</p>
+        <Code language="ts" caption="server" code={`
+            import { crmDatabase } from './crmDatabase.server.ts'
+            import { targets } from './targets.server.ts'
+
+            crmDatabase().transaction(() => {
+                targets.patch({ id: 3, target: 450_000 })
+                targets.delete({ id: [7, 8] })
+            })()
         `} />
     </Section>
 
@@ -105,9 +180,25 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
+    <Section level={3} title="Carry only the columns a reader needs in each change">
+        <p><code>logged</code> names the columns each change records beside the table's key, so a
+            wide column is not copied into the change log on every write.</p>
+        <Code language="ts" caption="server" code={`
+            import { table } from '@abide/abide/server'
+            import { crmDatabase } from './crmDatabase.server.ts'
+
+            const targetChanges = table(crmDatabase, 'targets', {
+                logged: ['target'],
+            })
+
+            for await (const change of targetChanges.readable)
+                console.log(change.row?.id, change.row?.target)
+        `} />
+    </Section>
+
     <Section level={3} title="Write imported targets a batch at a time">
-        <p><code>writable</code> upserts by <code>key</code>, <code>id</code> where none is given,
-            and the rows written in one turn are one transaction.</p>
+        <p><code>writable</code> upserts by the table's primary key, or the <code>key</code>
+            given, and the rows written in one turn are one transaction.</p>
         <Code language="ts" caption="server" code={`
             import { targets } from '../pipeline/lib/targets.server.ts'
 

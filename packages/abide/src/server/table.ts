@@ -2,9 +2,14 @@
 //
 // THE CHANGES ARE CAPTURED IN THE WRITER'S TRANSACTION. Triggers on the table append each insert,
 // update and delete to `abide_changes` as part of the statement that made it, so whoever wrote the
-// row — this pair, an ORM, raw SQL, another process — a committed write is one change and a rolled
-// back one is none. bun:sqlite has no update hook, so the changes are read by a look at the log's
-// last number, which is an index read; a look that finds nothing new costs that alone.
+// row — this pair, an ORM, raw SQL, another process, a foreign key's cascade — a committed write is
+// one change and a rolled back one is none. bun:sqlite has no update hook, so the changes are read by
+// a look at the log's last number, which is an index read; a look that finds nothing new costs that
+// alone.
+//
+// A TABLE IS DESCRIBED BY ITS DATABASE (47.39): its columns, the type each declares and its primary
+// key are read from the file once per connection, so the key a write upserts by is the table's own and
+// a `BOOLEAN` or `JSON` column is read and written as one, with nothing said in code.
 //
 // A WRITE IS BUFFERED AND COMMITTED IN BATCHES: rows written in one turn of the event loop are one
 // transaction, so a stream written as fast as it reads pays one commit per batch, not per row.
@@ -21,6 +26,15 @@ import { SCOPING } from '#shared/reactive/scoping.ts'
 import { unrefTimer } from '#shared/reactive/unrefTimer.ts'
 import { SOURCE_KIND } from '#shared/SOURCE_KIND.ts'
 
+import { bindList, listText, slotsOf } from './boundList.ts'
+import {
+    codecOf,
+    type CodedColumn,
+    type ColumnCodec,
+    decodeRows,
+    encoded,
+} from './columnCodec.ts'
+import type { Typed, TYPED_TABLES } from './MigratedTables.ts'
 import { SQL_IDENTIFIER } from './SQL_IDENTIFIER.ts'
 
 const WATCH_LOG = namedLogger('abide:table')
@@ -41,47 +55,79 @@ export type Change<Row> = {
     previous: Row | undefined
 }
 
-/** Where each `Database` has had its change log made, and each table its triggers. */
-const PREPARED = new WeakMap<Database, Set<string>>()
-
 export type { ColumnMatch, Match } from '#shared/Match.ts'
 
 /**
  * A table of the app's database: its rows read by calling it, rows written by key, its changes read
  * out and rows streamed in.
  */
-export type Table<Row> = ((match?: Match<Row>) => Row[]) & {
+export type Table<Row, Written = Row> = ((match?: Match<Row>) => Row[]) & {
     /** 47.33 — rows upserted by key: inserted, or replacing the row with their key. */
-    set(rows: Row | readonly Row[]): void
+    set(rows: Written | readonly Written[]): void
     /** 47.33 — the columns each row names written onto the row with its key; the rest are left. */
     patch(rows: Partial<Row> | readonly Partial<Row>[]): void
     /** 47.33 — the rows `match` names deleted, and how many there were. */
     delete(match: Match<Row>): number
     readonly readable: ReadableStream<Change<Row>>
-    readonly writable: WritableStream<Row>
+    readonly writable: WritableStream<Written>
 }
+
+/** What a `table` is told beyond its name: the key it writes by, and the columns its changes carry. */
+type TableOptions<Row> = {
+    key?: (keyof Row & string) | undefined
+    logged?: readonly (keyof Row & string)[] | undefined
+}
+
+/** 47.47 — the row a typed opener's table reads, and the row it writes. */
+type RowIn<Found, Name extends keyof Found> = Found[Name] extends {
+    row: infer Row extends Record<string, unknown>
+}
+    ? Row
+    : never
+type WrittenIn<Found, Name extends keyof Found> = Found[Name] extends {
+    written: infer Written
+}
+    ? Written
+    : never
 
 /**
  * A table of `database`: called, its rows, or those `match` names (47.35), a read that refreshes the
  * run it is made in when the table changes (47.29); `readable` its changes from the moment it is first
- * read, `writable` the rows to upsert by `key` (47.25-47.31).
+ * read, `writable` the rows to upsert by its key (47.25-47.31).
  */
+export function table<Row extends Record<string, unknown> = never>(
+    database: Database | (() => Database),
+    name: [Row] extends [never] ? never : string,
+    options?: TableOptions<Row>,
+): Table<Row>
+export function table(
+    database:
+        Database | ((() => Database) & { readonly [TYPED_TABLES]?: undefined }),
+    name: string,
+    options?: TableOptions<Record<string, unknown>>,
+): Table<Record<string, unknown>>
+export function table<Found, Name extends keyof Found & string>(
+    database: (() => Database) & Typed<Found>,
+    name: Name,
+    options?: TableOptions<RowIn<Found, Name>>,
+): Table<RowIn<Found, Name>, WrittenIn<Found, Name>>
 export function table<Row extends Record<string, unknown>>(
     database: Database | (() => Database),
     name: string,
-    options?: { key?: (keyof Row & string) | undefined },
+    options?: TableOptions<Row>,
 ): Table<Row> {
     if (!SQL_IDENTIFIER.test(name))
         throw new Error(
             `abide: table ${JSON.stringify(name)} is not an SQL identifier.`,
         )
-    const key = options?.key ?? 'id'
-    if (!SQL_IDENTIFIER.test(key))
+    const key = options?.key
+    if (key !== undefined && !SQL_IDENTIFIER.test(key))
         throw new Error(
             `abide: table ${name}'s key ${JSON.stringify(key)} is not an SQL identifier.`,
         )
+    logging(name, options?.logged)
     const acquire = typeof database === 'function' ? database : () => database
-    const connection = preparedConnection(acquire, name)
+    const connection = preparedConnection(acquire, name, key)
     watchOf(database, connection, name)
     let readable: ReadableStream<Change<Row>> | undefined
     let writable: WritableStream<Row> | undefined
@@ -89,22 +135,32 @@ export function table<Row extends Record<string, unknown>>(
     const read = selects<Row>(acquire, name)
     const writes = rowWrites<Row>(name, key)
     // 47.29, 47.34 — a write made here is heard at once: what read the table is refreshed now, and
-    // the watch's next look does not hear it again.
-    const wrote = (count: number): number => {
-        if (count > 0) heard(watchOf(database, connection, name), connection)
+    // the watch's next look does not hear it again. 47.43 — save inside a transaction, whose commit
+    // the watch's next look hears, and whose rollback it never does.
+    const wrote = (db: Database, count: number): number => {
+        if (count === 0) return count
+        const watch = watchOf(database, connection, name)
+        if (!db.inTransaction || watch.broken) heard(watch, connection)
         return count
+    }
+    const keyed = (db: Database, rows: readonly Partial<Row>[]): void => {
+        const columns = keyColumns(describe(db, name), key)
+        for (const row of rows)
+            for (const column of columns) keyOf(name, column, row)
     }
     const set = (rows: Row | readonly Row[]): void => {
         const each = listOf(rows)
-        for (const row of each) keyOf(name, key, row)
-        writes.upsert(connection(), each)
-        wrote(each.length)
+        const db = connection()
+        keyed(db, each)
+        writes.upsert(db, each)
+        wrote(db, each.length)
     }
     const patch = (rows: Partial<Row> | readonly Partial<Row>[]): void => {
         const each = listOf(rows)
-        for (const row of each) keyOf(name, key, row)
-        writes.update(connection(), each)
-        wrote(each.length)
+        const db = connection()
+        keyed(db, each)
+        writes.update(db, each)
+        wrote(db, each.length)
     }
     const remove = (match: Match<Row>): number => {
         if (
@@ -115,7 +171,8 @@ export function table<Row extends Record<string, unknown>>(
             throw new Error(
                 `abide: a delete from table ${name} names no column, which would delete every row. RULEBOOK 47.33.`,
             )
-        return wrote(read.remove(connection(), match))
+        const db = connection()
+        return wrote(db, read.remove(db, match))
     }
     const called = (match?: Match<Row>): Row[] => {
         const rows = read.rows(match)
@@ -139,21 +196,114 @@ export function table<Row extends Record<string, unknown>>(
         writable: {
             get() {
                 connection()
-                writable ??= upserts<Row>(connection, name, key)
+                writable ??= upserts<Row>(connection, writes)
                 return writable
             },
         },
     }) as Table<Row>
 }
 
+/**
+ * 47.39 — a table as its database describes it: its columns, the codec each declared type names, and
+ * its primary key's columns in key order.
+ */
+type Description = {
+    columns: Set<string>
+    coded: CodedColumn[]
+    codecs: Map<string, ColumnCodec>
+    primaryKey: string[]
+}
+
+/** 47.39 — each `Database`'s tables, described the first time each is reached through it. */
+const DESCRIBED = new WeakMap<Database, Map<string, Description>>()
+
+/** 47.39 — `name` as `db` holds it; 47.25 — a table it does not hold is refused. */
+function describe(db: Database, name: string): Description {
+    let tables = DESCRIBED.get(db)
+    if (tables === undefined) {
+        tables = new Map()
+        DESCRIBED.set(db, tables)
+    }
+    const standing = tables.get(name)
+    if (standing !== undefined) return standing
+    const found = db.query(`PRAGMA table_info(${name})`).all() as {
+        name: string
+        type: string
+        pk: number
+    }[]
+    if (found.length === 0)
+        throw new Error(
+            `abide: table ${name} is not in the database. RULEBOOK 47.25.`,
+        )
+    const description: Description = {
+        columns: new Set(),
+        coded: [],
+        codecs: new Map(),
+        primaryKey: [],
+    }
+    const keyed: { column: string; at: number }[] = []
+    for (const column of found) {
+        if (!SQL_IDENTIFIER.test(column.name)) continue
+        description.columns.add(column.name)
+        const codec = codecOf(column.type)
+        if (codec !== undefined) {
+            description.coded.push({ column: column.name, codec })
+            description.codecs.set(column.name, codec)
+        }
+        if (column.pk > 0) keyed.push({ column: column.name, at: column.pk })
+    }
+    keyed.sort((one, other) => one.at - other.at)
+    for (const { column } of keyed) description.primaryKey.push(column)
+    tables.set(name, description)
+    return description
+}
+
+/**
+ * 47.30 — the columns a write names its row by: `key` where given, the table's primary key where it
+ * declares one, and `id` where it declares none.
+ */
+function keyColumns(
+    description: Description,
+    key: string | undefined,
+): string[] {
+    if (key !== undefined) return [key]
+    return description.primaryKey.length > 0 ? description.primaryKey : ['id']
+}
+
+/**
+ * 47.42 — per table name, the columns its changes carry: the union of every `logged` asked for in this
+ * process, or `undefined` once any `table` of it asked for every column.
+ */
+const LOGGED = new Map<string, Set<string> | undefined>()
+
+function logging(name: string, logged: readonly string[] | undefined): void {
+    if (logged === undefined) {
+        LOGGED.set(name, undefined)
+        return
+    }
+    for (const column of logged)
+        if (!SQL_IDENTIFIER.test(column))
+            throw new Error(
+                `abide: table ${name}'s logged column ${JSON.stringify(column)} is not an SQL identifier.`,
+            )
+    if (LOGGED.has(name) && LOGGED.get(name) === undefined) return
+    let columns = LOGGED.get(name)
+    if (columns === undefined) {
+        columns = new Set()
+        LOGGED.set(name, columns)
+    }
+    for (const column of logged) columns.add(column)
+}
+
 /** `acquire`'s `Database`, with `name`'s change log and triggers made on it (47.26). */
 function preparedConnection(
     acquire: () => Database,
     name: string,
+    key: string | undefined,
 ): () => Database {
     return () => {
         const db = acquire()
-        prepare(db, name)
+        prepare(db, name, key)
         return db
     }
 }
@@ -169,8 +319,9 @@ const COMPARISONS: Record<string, string> = {
 
 /**
  * 47.35, 47.36 — the rows of `name`, or those every column `match` names matches: one statement per
- * shape of match — its columns, the length of each list and the comparisons named — each column
+ * shape of match — its columns, the slots of each list and the comparisons named — each column
  * checked against the table's own; and 47.33 — the rows a match names deleted, by the same shapes.
+ * 47.40 — the rows read with their coded columns decoded.
  */
 function selects<Row>(
     acquire: () => Database,
@@ -181,27 +332,15 @@ function selects<Row>(
 } {
     const statements = new Map<string, ReturnType<Database['query']>>()
     let preparedOn: Database | undefined
-    let columns: Set<string> | undefined
     const shaped = (
         db: Database,
+        description: Description,
         match: Match<Row> | undefined,
         verb: 'SELECT *' | 'DELETE',
     ): [ReturnType<Database['query']>, unknown[]] => {
         if (db !== preparedOn) {
             statements.clear()
             preparedOn = db
-            columns = new Set()
-            const found = db.query(`PRAGMA table_info(${name})`).all() as {
-                name: string
-            }[]
-            if (found.length === 0) {
-                preparedOn = undefined
-                throw new Error(
-                    `abide: table ${name} is not in the database. RULEBOOK 47.25.`,
-                )
-            }
-            for (const column of found)
-                if (SQL_IDENTIFIER.test(column.name)) columns.add(column.name)
         }
         const values: unknown[] = []
         const conditions: string[] = []
@@ -209,11 +348,19 @@ function selects<Row>(
             for (const column in match) {
                 const value: unknown = match[column as keyof Row]
                 if (value === undefined) continue
-                if (!(columns as Set<string>).has(column))
+                if (!description.columns.has(column))
                     throw new Error(
                         `abide: table ${name} has no column ${JSON.stringify(column)}. RULEBOOK 47.35.`,
                     )
-                conditions.push(conditionOf(name, column, value, values))
+                conditions.push(
+                    conditionOf(
+                        name,
+                        column,
+                        description.codecs.get(column),
+                        value,
+                        values,
+                    ),
+                )
             }
         const shape = `${verb}|${conditions.join(' AND ')}`
         let statement = statements.get(shape)
@@ -229,11 +376,26 @@ function selects<Row>(
     }
     return {
         rows: (match) => {
-            const [statement, values] = shaped(acquire(), match, 'SELECT *')
-            return statement.all(...(values as never[])) as Row[]
+            const db = acquire()
+            const description = describe(db, name)
+            const [statement, values] = shaped(
+                db,
+                description,
+                match,
+                'SELECT *',
+            )
+            return decodeRows(
+                statement.all(...(values as never[])) as Row[],
+                description.coded,
+            )
         },
         remove: (db, match) => {
-            const [statement, values] = shaped(db, match, 'DELETE')
+            const [statement, values] = shaped(
+                db,
+                describe(db, name),
+                match,
+                'DELETE',
+            )
             return statement.run(...(values as never[])).changes
         },
     }
@@ -255,37 +417,47 @@ function keyOf(name: string, key: string, row: unknown): unknown {
 }
 
 /**
- * 47.35, 47.36 — the condition `value` puts on `column`, its values pushed onto `values`. NULL-SAFE as
- * JSON is: a list holding `null` matches a NULL, and `ne` is `IS NOT`, so a NULL is not a value
- * `ne: 'won'` refuses. An empty list is no value at all and matches no row.
+ * 47.35, 47.36 — the condition `value` puts on `column`, its values pushed onto `values`, encoded as
+ * the column's declared type says (47.41). NULL-SAFE as JSON is: a list holding `null` matches a
+ * NULL, and `ne` is `IS NOT`, so a NULL is not a value `ne: 'won'` refuses. An empty list is no
+ * value at all and matches no row.
  */
 function conditionOf(
     name: string,
     column: string,
+    codec: ColumnCodec | undefined,
     value: unknown,
     values: unknown[],
 ): string {
     const quoted = `"${column}"`
     if (value === null) return `${quoted} IS NULL`
     if (Array.isArray(value)) {
-        const slots: string[] = []
+        const listed: unknown[] = []
         let nullable = false
         for (const each of value as unknown[]) {
             if (each === null) nullable = true
-            else {
-                slots.push('?')
-                values.push(scalarOf(name, column, each))
-            }
+            else listed.push(scalarOf(name, column, codec, each))
         }
-        const listed =
-            slots.length === 0 ? '' : `${quoted} IN (${slots.join(', ')})`
+        const slots = slotsOf(listed.length)
+        const among = slots === 0 ? '' : `${quoted} IN ${listText(slots)}`
+        if (slots !== 0)
+            bindList(listed, slots, values as never[], (reason) => {
+                throw new Error(
+                    `abide: table ${name}'s match on ${column} holds ${reason}. RULEBOOK 47.36.`,
+                )
+            })
         if (nullable)
-            return listed === ''
+            return among === ''
                 ? `${quoted} IS NULL`
-                : `(${listed} OR ${quoted} IS NULL)`
-        return listed === '' ? '0' : listed
+                : `(${among} OR ${quoted} IS NULL)`
+        return among === '' ? '0' : among
     }
-    if (!isPlainObject(value)) return pushed(`${quoted} = ?`, values, value)
+    if (!isPlainObject(value))
+        return pushed(
+            `${quoted} = ?`,
+            values,
+            codec === undefined ? value : encoded(codec, value),
+        )
     const met: string[] = []
     for (const comparison in value) {
         const operator = COMPARISONS[comparison]
@@ -307,7 +479,7 @@ function conditionOf(
             pushed(
                 `${quoted} ${operator} ?`,
                 values,
-                scalarOf(name, column, bound),
+                scalarOf(name, column, codec, bound),
             ),
         )
     }
@@ -320,24 +492,36 @@ function pushed(condition: string, values: unknown[], value: unknown): string {
     return condition
 }
 
-/** A value a list or a comparison holds, which is one value: no list or object nested in it. */
-function scalarOf(name: string, column: string, value: unknown): unknown {
+/**
+ * A value a list or a comparison holds, which is one value: no list or object nested in it; encoded
+ * as its column's declared type says (47.41).
+ */
+function scalarOf(
+    name: string,
+    column: string,
+    codec: ColumnCodec | undefined,
+    value: unknown,
+): unknown {
     if (Array.isArray(value) || isPlainObject(value))
         throw new Error(
             `abide: table ${name}'s match on ${column} nests a list or an object where a value goes. RULEBOOK 47.36.`,
         )
-    return value
+    return codec === undefined ? value : encoded(codec, value)
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
     return !Array.isArray(value) && isPlainData(value)
 }
 
+/** Where each `Database` has had its change log made, and each table its triggers, as logged. */
+const PREPARED = new WeakMap<Database, Map<string, string>>()
+
 /**
- * 47.25, 47.26 — the change log, and the table's triggers naming every column it has now: made again
- * the first time each `Database` reaches the table, so a column a migration added is captured.
+ * 47.25, 47.26 — the change log, and the table's triggers naming every column it has now, or the
+ * columns 47.42 logs and its key: made again the first time each `Database` reaches the table, so a
+ * column a migration added is captured, and again where this process asks to log more.
  */
-function prepare(db: Database, name: string): void {
+function prepare(db: Database, name: string, key: string | undefined): void {
     let tables = PREPARED.get(db)
     if (tables === undefined) {
         db.run(
@@ -346,21 +530,35 @@ function prepare(db: Database, name: string): void {
         db.run(
             'CREATE INDEX IF NOT EXISTS abide_changes_tbl ON abide_changes (tbl, seq)',
         )
-        tables = new Set()
+        // 47.44 — how far another process has removed a table's changes, which a reader behind it
+        // cannot read past.
+        db.run(
+            'CREATE TABLE IF NOT EXISTS abide_changes_removed (tbl TEXT PRIMARY KEY, through INTEGER NOT NULL)',
+        )
+        tables = new Map()
         PREPARED.set(db, tables)
     }
-    if (tables.has(name)) return
-    const columns = db.query(`PRAGMA table_info(${name})`).all() as {
-        name: string
-    }[]
-    if (columns.length === 0)
-        throw new Error(
-            `abide: table ${name} is not in the database. RULEBOOK 47.25.`,
-        )
+    const description = describe(db, name)
+    const logged = LOGGED.get(name)
+    let columns: string[]
+    if (logged === undefined) columns = [...description.columns]
+    else {
+        const chosen = new Set(keyColumns(description, key))
+        for (const column of logged) {
+            if (!description.columns.has(column))
+                throw new Error(
+                    `abide: table ${name} has no column ${JSON.stringify(column)} to log. RULEBOOK 47.42.`,
+                )
+            chosen.add(column)
+        }
+        columns = [...chosen]
+    }
+    const signature = columns.join(',')
+    if (tables.get(name) === signature) return
     const objectOf = (side: 'NEW' | 'OLD'): string => {
         const pairs: string[] = []
         for (const column of columns)
-            pairs.push(`'${column.name}', ${side}."${column.name}"`)
+            pairs.push(`'${column}', ${side}."${column}"`)
         return `json_object(${pairs.join(', ')})`
     }
     const triggers: [string, string, string, string][] = [
@@ -376,7 +574,7 @@ function prepare(db: Database, name: string): void {
             )
         }
     })()
-    tables.add(name)
+    tables.set(name, signature)
 }
 
 function lastChange(db: Database, name: string): number {
@@ -405,11 +603,16 @@ function looking(
 }
 
 /**
- * 47.29 — one table's watch: its name, the last change it has passed, and the runs whose last run
- * called the table. A reader is held by its record, which holds its value weakly — a read is never a
- * reason to keep one.
+ * 47.29 — one table's watch: its name, the last change it has passed, the runs whose last run called
+ * the table, and whether it has stopped (47.38). A reader is held by its record, which holds its value
+ * weakly — a read is never a reason to keep one.
  */
-type Watch = { name: string; seen: number | undefined; readers: Set<Reader> }
+type Watch = {
+    name: string
+    seen: number | undefined
+    readers: Set<Reader>
+    broken: boolean
+}
 
 /** One run's calls of tables: the value whose run it is, which run, and the tables it called. */
 type Reader = { value: WeakRef<Cell>; epoch: number; tables: Set<Watch> }
@@ -422,6 +625,21 @@ const WATCHED = new WeakMap<object, Map<string, Watch>>()
 
 /** 47.38 — the databases whose stopped watch has been said. */
 const WARNED = new WeakSet<object>()
+
+/**
+ * 47.31 — per table name, how far each `readable` open in this process has read, which the watch
+ * keeps the log for.
+ */
+const READING = new Map<string, Set<{ position: number | undefined }>>()
+
+/** 47.31 — the change before the first one an open `readable` of `name` has still to read. */
+function keptFor(name: string): number {
+    let least = Number.POSITIVE_INFINITY
+    for (const reading of READING.get(name) ?? [])
+        if (reading.position !== undefined && reading.position < least)
+            least = reading.position
+    return least
+}
 
 function watchOf(
     owner: object,
@@ -436,13 +654,17 @@ function watchOf(
     const standing = watches.get(name)
     if (standing !== undefined) return standing
     // 47.29 — the baseline taken where the table is named, so a write before the first look is heard.
-    const watch: Watch = { name, seen: undefined, readers: new Set() }
+    const watch: Watch = {
+        name,
+        seen: undefined,
+        readers: new Set(),
+        broken: false,
+    }
     watches.set(name, watch)
     const watched = watches
     try {
         watch.seen = lastChange(connection(), name)
     } catch {}
-    let broken = false
     looking(
         () => {
             let db: Database
@@ -451,7 +673,7 @@ function watchOf(
             } catch (thrown) {
                 // 47.38 — a database refusing the change log, read-only among them: said once per
                 // database, and the writes made through its `table` are then all that refresh.
-                broken = true
+                watch.broken = true
                 if (!WARNED.has(owner)) {
                     WARNED.add(owner)
                     WATCH_LOG.warning(
@@ -469,12 +691,21 @@ function watchOf(
             if (last === watch.seen) return
             watch.seen = last
             changed(watch)
-            if (last > CHANGES_KEPT)
-                db.query(
-                    'DELETE FROM abide_changes WHERE tbl = ? AND seq <= ?',
-                ).run(name, last - CHANGES_KEPT)
+            // 47.31 — the last changes kept, and every one a reader here has still to read.
+            const through = Math.min(last - CHANGES_KEPT, keptFor(name))
+            if (through > 0) {
+                const removed = db
+                    .query(
+                        'DELETE FROM abide_changes WHERE tbl = ? AND seq <= ?',
+                    )
+                    .run(name, through)
+                if (removed.changes > 0)
+                    db.query(
+                        'INSERT INTO abide_changes_removed (tbl, through) VALUES (?1, ?2) ON CONFLICT (tbl) DO UPDATE SET through = MAX(through, ?2)',
+                    ).run(name, through)
+            }
         },
-        () => broken,
+        () => watch.broken,
         // The app stopped: the next `table` call for this name watches again.
         () => watched.delete(name),
     )
@@ -532,42 +763,68 @@ function heard(watch: Watch, connection: () => Database): void {
     changed(watch)
 }
 
-/** 47.27, 47.28 — the table's changes from the moment the stream is first read, in order. */
+/**
+ * 47.27, 47.28 — the table's changes from the moment the stream is first read, in order, their coded
+ * columns decoded (47.40); 47.44 — and an error where another process removed one it had still to
+ * read.
+ */
 function changesOf<Row>(
     connection: () => Database,
     name: string,
 ): ReadableStream<Change<Row>> {
-    let position: number | undefined
+    const reading: { position: number | undefined } = { position: undefined }
     let cancelled = false
     let wake: (() => void) | undefined
     const pending: Change<Row>[] = []
+    const rowOf = (
+        text: string | null,
+        coded: CodedColumn[],
+    ): Row | undefined =>
+        text === null
+            ? undefined
+            : (decodeRows([JSON.parse(text) as Row], coded)[0] as Row)
     const read = (): void => {
         const db = connection()
-        position ??= lastChange(db, name)
+        if (reading.position === undefined) {
+            reading.position = lastChange(db, name)
+            let readers = READING.get(name)
+            if (readers === undefined) {
+                readers = new Set()
+                READING.set(name, readers)
+            }
+            readers.add(reading)
+        }
+        const removed = db
+            .query('SELECT through FROM abide_changes_removed WHERE tbl = ?')
+            .get(name) as { through: number } | null
+        if (removed !== null && removed.through > reading.position)
+            throw new Error(
+                `abide: table ${name}'s changes up to ${removed.through} were removed before this reader, at ${reading.position}, read them; read the table again. RULEBOOK 47.44.`,
+            )
+        const { coded } = describe(db, name)
         const rows = db
             .query(
                 'SELECT seq, op, row, previous FROM abide_changes WHERE tbl = ? AND seq > ? ORDER BY seq LIMIT 256',
             )
-            .all(name, position) as {
+            .all(name, reading.position) as {
             seq: number
             op: Change<Row>['op']
             row: string | null
             previous: string | null
         }[]
         for (const change of rows) {
-            position = change.seq
+            reading.position = change.seq
             pending.push({
                 op: change.op,
-                row:
-                    change.row === null
-                        ? undefined
-                        : (JSON.parse(change.row) as Row),
-                previous:
-                    change.previous === null
-                        ? undefined
-                        : (JSON.parse(change.previous) as Row),
+                row: rowOf(change.row, coded),
+                previous: rowOf(change.previous, coded),
             })
         }
+    }
+    const done = (): void => {
+        cancelled = true
+        READING.get(name)?.delete(reading)
+        if (wake !== undefined) wake()
     }
     return new ReadableStream<Change<Row>>(
         {
@@ -583,7 +840,14 @@ function changesOf<Row>(
             pull: async (controller) => {
                 for (;;) {
                     if (cancelled) return
-                    if (pending.length === 0) read()
+                    if (pending.length === 0)
+                        try {
+                            read()
+                        } catch (thrown) {
+                            done()
+                            controller.error(thrown)
+                            return
+                        }
                     const next = pending.shift()
                     if (next !== undefined) {
                         controller.enqueue(next)
@@ -597,35 +861,35 @@ function changesOf<Row>(
                     })
                 }
             },
-            cancel: () => {
-                cancelled = true
-                if (wake !== undefined) wake()
-            },
+            cancel: done,
         },
         { highWaterMark: 0 },
     )
 }
 
 /**
- * 47.30, 47.33 — rows upserted by `key`, or the columns they name updated on the row with their key,
- * each batch one transaction. One statement per shape of row, its columns checked and its SQL written
- * once: a batch of rows with the same columns runs one prepared statement.
+ * 47.30, 47.33 — rows upserted by their key, or the columns they name updated on the row with their
+ * key, each batch one transaction. One statement per shape of row, its columns checked and its SQL
+ * written once: a batch of rows with the same columns runs one prepared statement. 47.41 — each value
+ * encoded as its column's declared type says.
  */
 function rowWrites<Row extends Record<string, unknown>>(
     name: string,
-    key: string,
-): {
-    upsert: (db: Database, rows: readonly Row[]) => void
-    update: (db: Database, rows: readonly Partial<Row>[]) => void
-} {
+    key: string | undefined,
+): RowWrites<Row> {
     const statements = new Map<
         string,
-        { columns: string[]; statement: ReturnType<Database['query']> }
+        {
+            columns: string[]
+            codecs: (ColumnCodec | undefined)[]
+            statement: ReturnType<Database['query']>
+        }
     >()
     // A statement is its database's: a `connection` handing back another starts the map over.
     let preparedOn: Database | undefined
     const statementFor = (
         db: Database,
+        description: Description,
         row: Partial<Row>,
         updating: boolean,
     ) => {
@@ -647,14 +911,17 @@ function rowWrites<Row extends Record<string, unknown>>(
                     throw new Error(
                         `abide: ${name}'s column ${JSON.stringify(column)} is not an SQL identifier.`,
                     )
+            const keys = keyColumns(description, key)
             const quoted: string[] = []
             const slots: string[] = []
             const updates: string[] = []
             const sets: string[] = []
+            const others: string[] = []
             for (const column of columns) {
                 quoted.push(`"${column}"`)
                 slots.push('?')
-                if (column === key) continue
+                if (keys.includes(column)) continue
+                others.push(column)
                 updates.push(`"${column}" = excluded."${column}"`)
                 sets.push(`"${column}" = ?`)
             }
@@ -662,16 +929,17 @@ function rowWrites<Row extends Record<string, unknown>>(
                 updates.length === 0
                     ? 'DO NOTHING'
                     : `DO UPDATE SET ${updates.join(', ')}`
+            const target = keys.map((column) => `"${column}"`).join(', ')
+            const where = keys.map((column) => `"${column}" = ?`).join(' AND ')
             // An update binds the columns it sets, then the key it names the row by.
-            const ordered = updating
-                ? [...columns.filter((column) => column !== key), key]
-                : columns
+            const ordered = updating ? [...others, ...keys] : columns
             prepared = {
                 columns: ordered,
+                codecs: ordered.map((column) => description.codecs.get(column)),
                 statement: db.query(
                     updating
-                        ? `UPDATE ${name} SET ${sets.join(', ')} WHERE "${key}" = ?`
-                        : `INSERT INTO ${name} (${quoted.join(', ')}) VALUES (${slots.join(', ')}) ON CONFLICT("${key}") ${conflict}`,
+                        ? `UPDATE ${name} SET ${sets.join(', ')} WHERE ${where}`
+                        : `INSERT INTO ${name} (${quoted.join(', ')}) VALUES (${slots.join(', ')}) ON CONFLICT(${target}) ${conflict}`,
                 ),
             }
             statements.set(shape, prepared)
@@ -681,18 +949,25 @@ function rowWrites<Row extends Record<string, unknown>>(
     const written =
         (updating: boolean) =>
         (db: Database, rows: readonly Partial<Row>[]): void => {
+            const description = describe(db, name)
+            const keys = keyColumns(description, key).length
             db.transaction(() => {
                 for (const row of rows) {
                     // An update naming no column but its key changes nothing.
-                    if (updating && Object.keys(row).length < 2) continue
-                    const { columns, statement } = statementFor(
+                    if (updating && Object.keys(row).length <= keys) continue
+                    const { columns, codecs, statement } = statementFor(
                         db,
+                        description,
                         row,
                         updating,
                     )
                     const values = new Array<unknown>(columns.length)
-                    for (let at = 0; at < columns.length; at += 1)
-                        values[at] = row[columns[at] as string]
+                    for (let at = 0; at < columns.length; at += 1) {
+                        const value = row[columns[at] as string]
+                        const codec = codecs[at]
+                        values[at] =
+                            codec === undefined ? value : encoded(codec, value)
+                    }
                     statement.run(...(values as never[]))
                 }
             })()
@@ -700,17 +975,20 @@ function rowWrites<Row extends Record<string, unknown>>(
     return { upsert: written(false), update: written(true) }
 }
 
-/** 47.30 — rows upserted by `key`, a turn's writes one transaction. */
+type RowWrites<Row> = {
+    upsert: (db: Database, rows: readonly Row[]) => void
+    update: (db: Database, rows: readonly Partial<Row>[]) => void
+}
+
+/** 47.30 — rows upserted by their key, a turn's writes one transaction. */
 function upserts<Row extends Record<string, unknown>>(
     connection: () => Database,
-    name: string,
-    key: string,
+    writes: RowWrites<Row>,
 ): WritableStream<Row> {
     let buffered: Row[] = []
     let flushing: Promise<void> | undefined
     let failed: unknown
     let timer: ReturnType<typeof setTimeout> | undefined
-    const writes = rowWrites<Row>(name, key)
     const commit = (rows: Row[]): void => writes.upsert(connection(), rows)
     const flush = (): Promise<void> => {
         if (timer !== undefined) clearTimeout(timer)

@@ -59,10 +59,12 @@ test('a database is a file named for it under APP_DATA_DIR, made where missing �
     expect(await Bun.file(`${directory}/garage.sqlite`).exists()).toBe(true)
     expect([
         db.query('PRAGMA journal_mode').get(),
+        db.query('PRAGMA synchronous').get(),
         db.query('PRAGMA foreign_keys').get(),
         db.query('PRAGMA busy_timeout').get(),
     ]).toEqual([
         { journal_mode: 'wal' },
+        { synchronous: 1 },
         { foreign_keys: 1 },
         { timeout: 5000 },
     ])
@@ -387,7 +389,7 @@ test('a file whose migrations have all run is not written as it opens — 47.18'
     reading.close()
 })
 
-// 47.15 — THE REVERT: drop the `open` call; `synchronous` reads FULL (2), and the hook saw nothing.
+// 47.15 — THE REVERT: drop the `open` call; `cache_size` reads its default, -2000, and the hook saw nothing.
 // Or call it after the migrations; it sees `user_version` 1, not 0.
 test('open runs at every open, after the pragmas and before the migrations — 47.15', () => {
     onDisk()
@@ -395,18 +397,18 @@ test('open runs at every open, after the pragmas and before the migrations — 4
     const garage = database('garage', {
         migrations: [CARS],
         open: (db) => {
-            db.run('PRAGMA synchronous = NORMAL')
+            db.run('PRAGMA cache_size = -4000')
             seen.push({
                 journal: db.query('PRAGMA journal_mode').get(),
                 version: versionOf(db),
             })
         },
     })
-    const synchronous = garage().query('PRAGMA synchronous').get()
+    const cache = garage().query('PRAGMA cache_size').get()
     garage.close()
     garage()
-    expect({ synchronous, seen }).toEqual({
-        synchronous: { synchronous: 1 },
+    expect({ cache, seen }).toEqual({
+        cache: { cache_size: -4000 },
         seen: [
             { journal: { journal_mode: 'wal' }, version: 0 },
             { journal: { journal_mode: 'wal' }, version: 1 },
@@ -720,4 +722,83 @@ test('following changed does not open the database — 47.24', async () => {
     await Bun.sleep(1_100)
     stop()
     expect(await Bun.file(`${directory}/unopened.sqlite`).exists()).toBe(false)
+})
+
+// 47.45 — A MIGRATION REBUILDS A TABLE OTHERS REFERENCE without the drop cascading into them, and a
+// reference left dangling once they have all run is refused. THE REVERT: drop the `foreign_keys = OFF`
+// around the migrations; dropping `makes` cascades, and the boot reads `models: 0` where 1 is due.
+test('a migration rebuilds a referenced table without cascading, and a dangling reference is refused — 47.45, 47.7', () => {
+    onDisk()
+    const MAKES = 'CREATE TABLE makes (id INTEGER PRIMARY KEY, name TEXT)'
+    const MODELS =
+        'CREATE TABLE models (id INTEGER PRIMARY KEY, makeId INTEGER NOT NULL REFERENCES makes(id) ON DELETE CASCADE)'
+    const SEED =
+        "INSERT INTO makes VALUES (1, 'Saab'); INSERT INTO models VALUES (10, 1)"
+    const REBUILD = `CREATE TABLE makes_new (id INTEGER PRIMARY KEY, name TEXT NOT NULL DEFAULT '');
+        INSERT INTO makes_new SELECT id, coalesce(name, '') FROM makes;
+        DROP TABLE makes;
+        ALTER TABLE makes_new RENAME TO makes`
+    const garage = database('garage', {
+        migrations: [MAKES, MODELS, SEED, REBUILD],
+    })
+    const db = garage()
+    const models = (
+        db.query('SELECT COUNT(*) AS count FROM models').get() as {
+            count: number
+        }
+    ).count
+    expect(
+        `models: ${models}, foreign keys: ${(db.query('PRAGMA foreign_keys').get() as { foreign_keys: number }).foreign_keys}`,
+    ).toBe('models: 1, foreign keys: 1')
+    garage.close()
+    const dangling = database('garage', {
+        migrations: [MAKES, MODELS, SEED, REBUILD, 'DELETE FROM makes'],
+    })
+    let said = ''
+    try {
+        dangling()
+    } catch (thrown) {
+        said = String((thrown as Error).cause)
+    }
+    expect(said).toContain('RULEBOOK 47.45')
+    const reopened = database('garage', {
+        migrations: [MAKES, MODELS, SEED, REBUILD],
+    })
+    expect(versionOf(reopened())).toBe(4)
+    reopened.close()
+})
+
+// 47.46 — WHAT A CONNECTION'S QUERIES TAUGHT THE PLANNER IS KEPT: a close after an indexed lookup
+// leaves the table's statistics in the file. THE REVERT: drop the `PRAGMA optimize` from `close`; the
+// file holds no `sqlite_stat1` row for `cars`.
+test('a close keeps the statistics the connection gathered — 47.46', () => {
+    onDisk()
+    const garage = database('garage', {
+        migrations: [CARS, 'CREATE INDEX cars_vin ON cars (vin)'],
+    })
+    const db = garage()
+    const insert = db.query('INSERT INTO cars (vin) VALUES (?)')
+    db.transaction(() => {
+        for (let at = 0; at < 2000; at += 1) insert.run(`vin-${at % 50}`)
+    })()
+    db.query('SELECT id FROM cars WHERE vin = ?').all('vin-7')
+    garage.close()
+    const file = new Database(`${directory}/garage.sqlite`, { readonly: true })
+    const stats = file
+        .query(
+            "SELECT COUNT(*) AS count FROM sqlite_master WHERE name = 'sqlite_stat1'",
+        )
+        .get() as { count: number }
+    const rows =
+        stats.count === 0
+            ? 0
+            : (
+                  file
+                      .query(
+                          "SELECT COUNT(*) AS count FROM sqlite_stat1 WHERE tbl = 'cars'",
+                      )
+                      .get() as { count: number }
+              ).count
+    file.close()
+    expect(`cars analysed: ${rows > 0}`).toBe('cars analysed: true')
 })

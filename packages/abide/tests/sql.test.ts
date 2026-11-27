@@ -263,11 +263,11 @@ test('a table called matches a list, comparisons and null as JSON reads them —
     expect(refusals).toEqual(['refused', 'refused', 'refused'])
 })
 
-// 47.37 — A LIST INTERPOLATED IS A LIST BOUND, one statement per call site per length: two lists of
-// two prepare once, and a list of three once more. An empty list is no row, so `IN` matches nothing
-// and `NOT IN` everything. THE REVERT: drop the lengths from the cache key in `sqlOver`; the list of
-// three meets the two-slot statement and throws `expected 2 values, received 3` where `d1,d2,d3` is due.
-test('sql binds a list interpolated as one, a statement per length — 47.37', () => {
+// 47.37 — A LIST INTERPOLATED IS A LIST BOUND: two lists of two share a statement, and a list of three
+// rounds to another. An empty list is no row, so `IN` matches nothing and `NOT IN` everything. THE
+// REVERT: drop the slots from the cache key in `sqlOver`; the list of three meets the two-slot
+// statement and throws `expected 2 values, received 4` where `d1,d2,d3` is due.
+test('sql binds a list interpolated as one, a statement per shape — 47.37', () => {
     const db = pipeline()
     const connection = db()
     const prepare = connection.prepare.bind(connection)

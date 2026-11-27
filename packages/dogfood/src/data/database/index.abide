@@ -36,9 +36,21 @@ import Section from '#src/lib/Section.abide'
             ],
         },
         {
-            path: 'packages/abide/tests/sql.test.ts',
+            path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                "test('sql binds a list interpolated as one, a statement per length — 47.37'",
+                "test('a list of any length is bound in one statement per shape — 47.37'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/migratedTables.test.ts',
+            from: [
+                "test('a table is typed by the migrations that declare it — 47.47, 47.48'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/database.test.ts',
+            from: [
+                "test('a migration rebuilds a referenced table without cascading, and a dangling reference is refused — 47.45, 47.7'",
             ],
         },
     ]}
@@ -97,7 +109,8 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Read several targets at once with IN">
-        <p>An array is bound as a list of its values. An empty one matches no row.</p>
+        <p>An array is bound as a list of its values, of any length. An empty one matches no
+            row.</p>
         <Code language="ts" caption="server" code={`
             import { crmDatabase } from './lib/crmDatabase.server.ts'
 
@@ -121,6 +134,32 @@ import Section from '#src/lib/Section.abide'
                     'CREATE TABLE digests (sentAt INTEGER NOT NULL)',
                     'ALTER TABLE targets ADD COLUMN quarter TEXT',
                     (db) => db.run('INSERT INTO targets (target) VALUES (100000)'),
+                ],
+            })
+        `} />
+    </Section>
+
+    <Section level={3} title="Rebuild a table in a migration">
+        <p>SQLite cannot change a column's type in place, so a migration makes the table anew,
+            copies the rows and renames it. Foreign keys are checked once the migrations have
+            run, so dropping the old table cascades into nothing.</p>
+        <Code language="ts" caption="server" code={`
+            import { database } from '@abide/abide/server'
+
+            export const crmDatabase = database('crm', {
+                migrations: [
+                    \`CREATE TABLE targets (
+                        id INTEGER PRIMARY KEY,
+                        target INTEGER NOT NULL
+                    )\`,
+                    \`CREATE TABLE targets_new (
+                        id INTEGER PRIMARY KEY,
+                        target INTEGER NOT NULL,
+                        stretch BOOLEAN NOT NULL DEFAULT false
+                    );
+                    INSERT INTO targets_new (id, target) SELECT id, target FROM targets;
+                    DROP TABLE targets;
+                    ALTER TABLE targets_new RENAME TO targets\`,
                 ],
             })
         `} />

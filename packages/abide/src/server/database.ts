@@ -8,6 +8,7 @@ import { isSubscribed } from '#shared/reactive/producer.ts'
 import { config, derived } from './config.ts'
 import { onStop } from './hooks.ts'
 import { isRunning } from './isRunning.ts'
+import type { TablesOf, Typed } from './MigratedTables.ts'
 import { type Sql, sqlOver } from './sql.ts'
 import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
@@ -30,7 +31,6 @@ const BESIDE = ['', '-wal', '-shm']
 type Migration = string | ((database: Database) => void)
 
 type Options = Pick<DatabaseOptions, 'readonly' | 'safeIntegers' | 'strict'> & {
-    migrations?: Migration[] | undefined
     openNewer?: boolean | undefined
     open?: ((database: Database) => void) | undefined
 }
@@ -59,14 +59,12 @@ const SCRATCH = /^abide-test-(\d+)-/
  * helpers. `open` runs at every open, for what a connection holds rather than the file: a pragma
  * like `synchronous`.
  */
-export function database(
+export function database<
+    const Migrations extends readonly Migration[] = readonly Migration[],
+>(
     file: string | (() => string),
-    options?: Options,
-): (() => Database) & {
-    close: (options?: { remove?: boolean | undefined }) => void
-    changed: Reactive<number>
-    sql: Sql
-} {
+    options?: Options & { migrations?: Migrations | undefined },
+): Opener & TypedBy<TablesOf<Migrations>> {
     if (typeof file === 'string') checked(file)
     let opened: Database | undefined
     // 47.17 — the file the opener last opened, kept past a close: 47.10's leaves it to a `remove` after.
@@ -75,6 +73,11 @@ export function database(
     let scratchFor: string | undefined
     // 47.16, 47.17.
     const close = (closing?: { remove?: boolean | undefined }): void => {
+        // 47.46 — what this connection's queries taught the planner, kept for the next open.
+        if (opened !== undefined && options?.readonly !== true)
+            try {
+                opened.run('PRAGMA optimize')
+            } catch {}
         opened?.close()
         opened = undefined
         if (
@@ -172,8 +175,18 @@ export function database(
         close,
         changed,
         sql: sqlOver(opener),
-    })
+    }) as Opener & TypedBy<TablesOf<Migrations>>
 }
+
+/** What `database` hands back: the opener, its `close`, its `changed` and its `sql`. */
+type Opener = (() => Database) & {
+    close: (options?: { remove?: boolean | undefined }) => void
+    changed: Reactive<number>
+    sql: Sql
+}
+
+/** 47.47 — an opener carries the tables its migrations leave, where the checker read any. */
+type TypedBy<Found> = keyof Found extends never ? unknown : Typed<Found>
 
 function checked(file: unknown): string {
     // 47.3 — a file function's `undefined` would pass `NAME` as its text, and open `undefined.sqlite`.
@@ -191,7 +204,9 @@ function checked(file: unknown): string {
 function open(
     file: string,
     scratch: boolean,
-    options: Options | undefined,
+    options:
+        | (Options & { migrations?: readonly Migration[] | undefined })
+        | undefined,
     migrationsBegin: (db: Database) => void,
 ): Database {
     const migrations = options?.migrations ?? []
@@ -204,8 +219,10 @@ function open(
         strict: options?.strict === true,
     })
     try {
-        // 47.5.
+        // 47.5 — `synchronous = NORMAL` is WAL's own safe setting: a commit is durable at the next
+        // checkpoint rather than each one waiting on its fsync, and the file is never corrupted.
         db.run('PRAGMA journal_mode = WAL')
+        db.run('PRAGMA synchronous = NORMAL')
         db.run('PRAGMA foreign_keys = ON')
         db.run(`PRAGMA busy_timeout = ${BUSY_TIMEOUT}`)
         // 47.15.
@@ -231,6 +248,10 @@ function open(
         // 47.7 — ONE TRANSACTION, so a throw leaves the file at the version it opened at.
         let running = applied
         migrationsBegin(db)
+        // 47.45 — FOREIGN KEYS ARE CHECKED ONCE, AT THE END. A migration rebuilding a table — made anew,
+        // copied, the old one dropped and the new renamed — would otherwise cascade the drop into every
+        // table referencing it. The pragma is a no-op inside a transaction, so it is set around it.
+        db.run('PRAGMA foreign_keys = OFF')
         try {
             db.transaction(() => {
                 for (; running < migrations.length; running += 1) {
@@ -238,6 +259,15 @@ function open(
                     if (typeof migration === 'string') db.run(migration)
                     else migration?.(db)
                 }
+                const broken = db.query('PRAGMA foreign_key_check').all() as {
+                    table: string
+                    parent: string
+                }[]
+                const first = broken[0]
+                if (first !== undefined)
+                    throw new Error(
+                        `${broken.length} row(s) reference rows that are not there, the first in ${first.table} referencing ${first.parent}. RULEBOOK 47.45.`,
+                    )
                 db.run(`PRAGMA user_version = ${migrations.length}`)
             })()
         } catch (error) {
@@ -245,12 +275,24 @@ function open(
                 `abide: database ${JSON.stringify(file)}'s migration ${running + 1} threw, and the database stays at migration ${applied}. RULEBOOK 47.7.`,
                 { cause: error },
             )
+        } finally {
+            db.run('PRAGMA foreign_keys = ON')
         }
-        return db
+        return optimized(db, readonly)
     } catch (error) {
         db.close()
         throw error
     }
+}
+
+/**
+ * 47.46 — the query planner's statistics brought up to date after a migration changed the schema:
+ * analysed where missing or stale, bounded so a large table is sampled rather than read. A file
+ * already current is not written as it opens (47.18), so its statistics wait for the `close`.
+ */
+function optimized(db: Database, readonly: boolean): Database {
+    if (!readonly) db.run('PRAGMA optimize = 0x10002')
+    return db
 }
 
 /**
