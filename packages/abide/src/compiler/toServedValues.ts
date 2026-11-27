@@ -8,6 +8,7 @@ import { posix } from 'node:path' // Bun has no path joiner of its own; `posix` 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { isAbideSpecifier } from './hookCalls.ts'
+import { lineAround } from './rewriteCode.ts'
 import { importStatements } from './splitImports.ts'
 import { type Token, tokenize } from './tokenize.ts'
 
@@ -77,7 +78,11 @@ export async function toServedValues(
                 declaredAs = source.name
             }
             if (!declaresValue(declaredIn, declaredAs)) continue
-            note(path, lineAt(text, token.start), SERVES_A_VALUE(served.text))
+            note(
+                path,
+                lineAround(text, token.start),
+                SERVES_A_VALUE(served.text),
+            )
         }
     }
     return {}
@@ -126,10 +131,4 @@ function resolve(
         if (specifier.startsWith(prefix))
             return posix.join(directory, specifier.slice(prefix.length))
     return undefined
-}
-
-function lineAt(text: string, at: number): string {
-    const start = text.lastIndexOf('\n', at - 1) + 1
-    const end = text.indexOf('\n', at)
-    return text.slice(start, end === -1 ? undefined : end)
 }

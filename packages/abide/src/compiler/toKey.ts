@@ -10,7 +10,12 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { forSeparators } from './parseAbide.ts'
-import { type CodeRewrite, rewriteCode } from './rewriteCode.ts'
+import {
+    type CodeRewrite,
+    rewriteCode,
+    type Splice,
+    spliced,
+} from './rewriteCode.ts'
 import {
     afterTypeArguments,
     argumentCommas,
@@ -60,7 +65,7 @@ const KEYED_CALLS = new Set(['reactive', 'memo'])
 function optionsKeyed(code: string): string {
     if (!code.includes('by')) return code
     const tokens = tokenize(code)
-    const edits: { start: number; end: number; text: string }[] = []
+    const edits: Splice[] = []
     for (let at = 0; at < tokens.length; at += 1) {
         const token = tokens[at] as Token
         if (
@@ -112,15 +117,5 @@ function optionsKeyed(code: string): string {
         }
     }
     // A call in an earlier call's arguments is reached after it, and its edits sit before.
-    edits.sort((first, second) => first.start - second.start)
-    let keyed = code
-    for (let index = edits.length - 1; index >= 0; index -= 1) {
-        const edit = edits[index] as {
-            start: number
-            end: number
-            text: string
-        }
-        keyed = keyed.slice(0, edit.start) + edit.text + keyed.slice(edit.end)
-    }
-    return keyed
+    return spliced(code, edits)
 }

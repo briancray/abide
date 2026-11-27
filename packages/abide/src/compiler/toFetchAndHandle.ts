@@ -11,9 +11,20 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { isAbideSpecifier } from './hookCalls.ts'
-import { rewriteCode } from './rewriteCode.ts'
+import {
+    lineAround,
+    rewriteCode,
+    type Splice,
+    spliced,
+    splicedOffset,
+} from './rewriteCode.ts'
 import { importStatements } from './splitImports.ts'
-import { type Token, tokenize } from './tokenize.ts'
+import {
+    afterTypeArguments,
+    closerOf,
+    type Token,
+    tokenize,
+} from './tokenize.ts'
 
 /** A line a migration changed what it does and could not rewrite, and what to do about it. */
 export type Note = (line: string, message: string) => void
@@ -37,8 +48,6 @@ export function toFetchAndHandle(
     })
 }
 
-type Edit = { start: number; end: number; text: string }
-
 function renamed(code: string, note: Note): string {
     let imported = false
     for (const statement of importStatements(code))
@@ -47,7 +56,7 @@ function renamed(code: string, note: Note): string {
                 if (binding.imported === 'fetchData') imported = true
     if (!imported) return code
     const checks = code.includes('isFailed(')
-    const edits: Edit[] = []
+    const edits: Splice[] = []
     const noted: { at: number; message: string }[] = []
     const tokens = tokenize(code)
     for (let at = 0; at < tokens.length; at += 1) {
@@ -60,8 +69,11 @@ function renamed(code: string, note: Note): string {
             end: token.start + 'fetchData'.length,
             text: 'fetchAndHandle',
         })
-        const open = pastTypeArguments(tokens, at + 1)
-        const close = closingParen(tokens, open)
+        const open = afterTypeArguments(tokens, at + 1)
+        const close =
+            tokens[open]?.kind === SyntaxKind.OpenParenToken
+                ? closerOf(tokens, open)
+                : -1
         // The import, or the name handed on uncalled: nothing is answered here.
         if (close === -1) continue
         if (takesTtl(tokens, open + 1, close))
@@ -78,56 +90,11 @@ function renamed(code: string, note: Note): string {
             })
         else if (checks) noted.push({ at: token.start, message: REJECTS })
     }
-    edits.sort((left, right) => left.start - right.start)
-    let out = code
-    for (let index = edits.length - 1; index >= 0; index -= 1) {
-        const edit = edits[index] as Edit
-        out = `${out.slice(0, edit.start)}${edit.text}${out.slice(edit.end)}`
-    }
+    const out = spliced(code, edits)
     // Where each noted call stands once every edit ahead of it has moved it.
-    for (const { at, message } of noted) {
-        let moved = at
-        for (const edit of edits)
-            if (edit.end <= at)
-                moved += edit.text.length - (edit.end - edit.start)
-        const lineStart = out.lastIndexOf('\n', moved - 1) + 1
-        const lineEnd = out.indexOf('\n', moved)
-        note(
-            out.slice(lineStart, lineEnd === -1 ? undefined : lineEnd),
-            message,
-        )
-    }
+    for (const { at, message } of noted)
+        note(lineAround(out, splicedOffset(at, edits)), message)
     return out
-}
-
-/** The index of the `)` closing the call whose `(` is at `open`, or -1 where `open` opens none. */
-function closingParen(tokens: Token[], open: number): number {
-    if (tokens[open]?.kind !== SyntaxKind.OpenParenToken) return -1
-    let depth = 0
-    for (let at = open; at < tokens.length; at += 1) {
-        const kind = (tokens[at] as Token).kind
-        if (kind === SyntaxKind.OpenParenToken) depth += 1
-        else if (kind === SyntaxKind.CloseParenToken) {
-            depth -= 1
-            if (depth === 0) return at
-        }
-    }
-    return -1
-}
-
-/** The index past `fetchData<T>`'s type arguments where `at` opens them, or `at`. */
-function pastTypeArguments(tokens: Token[], at: number): number {
-    if (tokens[at]?.kind !== SyntaxKind.LessThanToken) return at
-    let depth = 0
-    for (let index = at; index < tokens.length; index += 1) {
-        const kind = (tokens[index] as Token).kind
-        if (kind === SyntaxKind.LessThanToken) depth += 1
-        else if (kind === SyntaxKind.GreaterThanToken) {
-            depth -= 1
-            if (depth === 0) return index + 1
-        }
-    }
-    return at
 }
 
 /** Whether the arguments between `from` and `to` name a `ttl` member. */

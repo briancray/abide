@@ -12,7 +12,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { isAbideSpecifier } from './hookCalls.ts'
-import { rewriteCode } from './rewriteCode.ts'
+import { rewriteCode, SCRIPT, type Splice, spliced } from './rewriteCode.ts'
 import { importStatements, namedImports } from './splitImports.ts'
 import {
     argumentCommas,
@@ -29,8 +29,6 @@ const VERBS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 const TAKEN =
     'abide upgrade moves a handler file to <name>.server.ts, and that file is already there: merge the two — the handler as `export default rpc(…)` — so it answers where it did. RULEBOOK 16.73, 38.231.'
 
-const SCRIPT = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g
-
 /** 38.231 — a server block's `GET` over a value that may answer writes bare, by its export's name. */
 const READ_ONLY = (name: string): string =>
     `this ${name} answered GET alone, and exported bare from a <script server> it would also answer the writes its value derives where that is a table, a job, a pipe or a ledger: move it to a <Component>.server.ts beside the component as \`export const ${name} = rpc(…, { methods: ['GET'], clients: { mcp: false, cli: false, openapi: false } })\`, and import it where it is called. RULEBOOK 16.117, 16.119, 38.231.`
@@ -41,14 +39,13 @@ const OPTIONED =
 /**
  * 38.231 — every source the app holds with its handlers declared by `rpc`, and each handler file
  * moved to a server file: the text of each file it changes by path, `null` for a file it moves
- * away from. `isSpecifier` says which import specifiers are abide's.
+ * away from.
  */
 export async function toRpc(
     read: (path: string) => Promise<string | undefined>,
     sources: () => Promise<string[]>,
     note: Note,
     move: (from: string, to: string) => void = () => {},
-    isSpecifier: (specifier: string) => boolean = isAbideSpecifier,
 ): Promise<Record<string, string | null>> {
     const changed: Record<string, string | null> = {}
     const paths = await sources()
@@ -64,7 +61,7 @@ export async function toRpc(
     for (const path of paths) {
         const text = await read(path)
         if (text === undefined) continue
-        const migrated = toRpcText(text, path, isSpecifier, (line, message) =>
+        const migrated = toRpcText(text, path, (line, message) =>
             note(moved.get(path) ?? path, line, message),
         )
         if (taken.has(path)) note(path, migrated.split('\n')[0] ?? '', TAKEN)
@@ -82,7 +79,6 @@ export async function toRpc(
 export function toRpcText(
     text: string,
     path: string,
-    isSpecifier: (specifier: string) => boolean = isAbideSpecifier,
     note: (line: string, message: string) => void = () => {},
 ): string {
     let out = movedSpecifiers(text)
@@ -91,13 +87,13 @@ export function toRpcText(
         if (out.includes(verb))
             out = rewriteCode(out, path, {
                 word: verb,
-                module: (code) => declaredByRpc(code, isSpecifier),
+                module: (code) => declaredByRpc(code),
             })
     if (!path.endsWith('.abide')) return out
     // 16.70 — a server block's handler is a value it exports.
     return out.replace(SCRIPT, (whole, open: string, body: string, close) =>
         /\bserver\b/.test(open)
-            ? `${open}${bareExports(exportedHandlers(body), isSpecifier, note)}${close}`
+            ? `${open}${bareExports(exportedHandlers(body), note)}${close}`
             : whole,
     )
 }
@@ -112,17 +108,12 @@ function movedSpecifiers(text: string): string {
     )
 }
 
-type Edit = { start: number; end: number; text: string }
-
 /** A module with each call of abide's five verbs an `rpc`, and its import moved to `rpc`. */
-function declaredByRpc(
-    code: string,
-    isSpecifier: (specifier: string) => boolean,
-): string {
+function declaredByRpc(code: string): string {
     const verbs = new Map<string, string>()
-    const edits: Edit[] = []
+    const edits: Splice[] = []
     for (const statement of importStatements(code)) {
-        if (!isSpecifier(statement.specifier)) continue
+        if (!isAbideSpecifier(statement.specifier)) continue
         const kept: string[] = []
         let imported = false
         for (const binding of statement.bindings) {
@@ -168,12 +159,7 @@ function declaredByRpc(
         if (verb === 'GET' && isReadAlone(tokens, open, declared)) continue
         edits.push(methodsOption(code, tokens, open, close, verb))
     }
-    edits.sort((left, right) => left.start - right.start)
-    let out = code
-    for (let index = edits.length - 1; index >= 0; index -= 1) {
-        const edit = edits[index] as Edit
-        out = `${out.slice(0, edit.start)}${edit.text}${out.slice(edit.end)}`
-    }
+    const out = spliced(code, edits)
     return out
 }
 
@@ -184,7 +170,7 @@ function methodsOption(
     open: number,
     close: number,
     verb: string,
-): Edit {
+): Splice {
     const methods = `methods: [${JSON.stringify(verb).replaceAll('"', "'")}]`
     const commas = argumentCommas(tokens, open)
     const second = commas[0] === undefined ? undefined : commas[0] + 1
@@ -377,12 +363,11 @@ function exportedHandlers(body: string): string {
  */
 function bareExports(
     body: string,
-    isSpecifier: (specifier: string) => boolean,
     note: (line: string, message: string) => void,
 ): string {
     if (!body.includes('rpc(')) return body
     const tokens = tokenize(body)
-    const edits: Edit[] = []
+    const edits: Splice[] = []
     let depth = 0
     for (let index = 0; index < tokens.length; index += 1) {
         const token = tokens[index] as Token
@@ -441,19 +426,11 @@ function bareExports(
         })
     }
     if (edits.length === 0) return body
-    let out = body
-    for (let index = edits.length - 1; index >= 0; index -= 1) {
-        const edit = edits[index] as Edit
-        out = `${out.slice(0, edit.start)}${edit.text}${out.slice(edit.end)}`
-    }
-    return withoutUnusedRpc(out, isSpecifier)
+    return withoutUnusedRpc(spliced(body, edits))
 }
 
 /** `body` without abide's `rpc` in its imports, where no other token of it names `rpc`. */
-function withoutUnusedRpc(
-    body: string,
-    isSpecifier: (specifier: string) => boolean,
-): string {
+function withoutUnusedRpc(body: string): string {
     const statements = importStatements(body)
     let named = 0
     for (const token of tokenize(body))
@@ -461,7 +438,7 @@ function withoutUnusedRpc(
             named += 1
     for (let index = statements.length - 1; index >= 0; index -= 1) {
         const statement = statements[index] as (typeof statements)[number]
-        if (!isSpecifier(statement.specifier)) continue
+        if (!isAbideSpecifier(statement.specifier)) continue
         const binding = statement.bindings.find(
             (each) => each.imported === 'rpc' && each.local === 'rpc',
         )

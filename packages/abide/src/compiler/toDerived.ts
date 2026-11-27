@@ -9,7 +9,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { isAbideSpecifier } from './hookCalls.ts'
-import { rewriteCode } from './rewriteCode.ts'
+import { rewriteCode, type Splice, spliced } from './rewriteCode.ts'
 import {
     type ImportStatement,
     importStatements,
@@ -17,33 +17,21 @@ import {
 } from './splitImports.ts'
 import { type Token, tokenize } from './tokenize.ts'
 
-/**
- * 38.228 — `text`, a file at `path`, with abide's `computed` spelled `reactive.derived`. `isAbide`
- * says which specifiers are abide's, so abide's own tests can be moved by the same scan.
- */
-export function toDerived(
-    text: string,
-    path: string,
-    isAbide: (specifier: string) => boolean = isAbideSpecifier,
-): string {
+/** 38.228 — `text`, a file at `path`, with abide's `computed` spelled `reactive.derived`. */
+export function toDerived(text: string, path: string): string {
     return rewriteCode(text, path, {
         word: 'computed',
-        module: (code) => migrated([code], isAbide)[0] as string,
-        scripts: (blocks) => migrated(blocks, isAbide),
+        module: (code) => migrated([code])[0] as string,
+        scripts: (blocks) => migrated(blocks),
     })
 }
 
-type Edit = { start: number; end: number; text: string }
-
-function migrated(
-    blocks: string[],
-    isAbide: (specifier: string) => boolean,
-): string[] {
+function migrated(blocks: string[]): string[] {
     let computedAs: string | undefined
     let reactiveAs: string | undefined
     for (const block of blocks)
         for (const statement of importStatements(block))
-            if (!statement.typeOnly && isAbide(statement.specifier))
+            if (!statement.typeOnly && isAbideSpecifier(statement.specifier))
                 for (const binding of statement.bindings) {
                     if (binding.typeOnly) continue
                     if (binding.imported === 'computed')
@@ -55,10 +43,11 @@ function migrated(
     const spelled = `${reactiveAs ?? 'reactive'}.derived`
     let joined = reactiveAs !== undefined
     return blocks.map((block) => {
-        const edits: Edit[] = []
+        const edits: Splice[] = []
         const statements = importStatements(block)
         for (const statement of statements) {
-            if (statement.typeOnly || !isAbide(statement.specifier)) continue
+            if (statement.typeOnly || !isAbideSpecifier(statement.specifier))
+                continue
             if (!statement.bindings.some(isComputed)) continue
             edits.push(rewrittenImport(block, statement, !joined))
             joined = true
@@ -75,12 +64,7 @@ function migrated(
                 continue
             edits.push({ start: token.start, end: token.end, text: spelled })
         }
-        edits.sort((left, right) => left.start - right.start)
-        let out = block
-        for (let index = edits.length - 1; index >= 0; index -= 1) {
-            const edit = edits[index] as Edit
-            out = `${out.slice(0, edit.start)}${edit.text}${out.slice(edit.end)}`
-        }
+        const out = spliced(block, edits)
         return out
     })
 }
@@ -125,7 +109,7 @@ function rewrittenImport(
     block: string,
     statement: ImportStatement,
     adding: boolean,
-): Edit {
+): Splice {
     const named = statement.bindings.filter(
         (binding) => binding.imported !== 'default' && binding.imported !== '*',
     )

@@ -38,7 +38,38 @@ export function rewriteCode(
     return rewritten(text, kind, rewrite)
 }
 
-const SCRIPT = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g
+/** An `.abide` file's script block: its open tag, its code and its close tag. */
+export const SCRIPT = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g
+
+/** One replacement a migration makes in a piece of code: `start` to `end` becomes `text`. */
+export type Splice = { start: number; end: number; text: string }
+
+/** `code` with every one of `splices` made, none overlapping, in whatever order they were found. */
+export function spliced(code: string, splices: Splice[]): string {
+    splices.sort((left, right) => left.start - right.start)
+    let out = code
+    for (let index = splices.length - 1; index >= 0; index -= 1) {
+        const splice = splices[index] as Splice
+        out = `${out.slice(0, splice.start)}${splice.text}${out.slice(splice.end)}`
+    }
+    return out
+}
+
+/** Where `at`, an offset in the code `splices` were made over, stands in what they made of it. */
+export function splicedOffset(at: number, splices: readonly Splice[]): number {
+    let moved = at
+    for (const splice of splices)
+        if (splice.end <= at)
+            moved += splice.text.length - (splice.end - splice.start)
+    return moved
+}
+
+/** The whole line of `text` that `at` stands on. */
+export function lineAround(text: string, at: number): string {
+    const start = text.lastIndexOf('\n', at - 1) + 1
+    const end = text.indexOf('\n', at)
+    return text.slice(start, end === -1 ? undefined : end)
+}
 
 function rewritten(text: string, kind: Kind, rewrite: CodeRewrite): string {
     if (!text.includes(rewrite.word)) return text

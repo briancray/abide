@@ -1245,7 +1245,6 @@ const listNotes = GET(({ id }: { id: string }) => [id])
 </script>
 `,
         'src/deals/lib/Board.abide',
-        undefined,
         (_line, message) => notes.push(message.split(':')[0] as string),
     )
     expect(migrated).toContain(

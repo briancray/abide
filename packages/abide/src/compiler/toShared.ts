@@ -11,6 +11,13 @@ import { SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import { isAbideSpecifier } from './hookCalls.ts'
 import {
+    lineAround,
+    SCRIPT,
+    type Splice,
+    spliced,
+    splicedOffset,
+} from './rewriteCode.ts'
+import {
     type ImportStatement,
     importStatements,
     namedImports,
@@ -33,8 +40,6 @@ const NOT_LITERAL =
     'reactive.share is reactive.shared(create), a handle declared once and called as handle(): a key that is no literal names no one handle, so declare one per value. RULEBOOK 10.4, 38.229.'
 const OTHER_CREATE =
     "reactive.shared's create is the handle's, and this call's differed from the first: the value now opens as the handle's create makes it, so write this one's opening value where it is wanted. RULEBOOK 10.6, 38.229."
-
-const SCRIPT = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g
 
 /**
  * 38.229 — every source the app holds with its `reactive.share` calls moved to handles, as the files
@@ -64,7 +69,7 @@ export async function toShared(
     const changed: Record<string, string> = {}
     for (const [path, { text, calls }] of found) {
         const handles = new Map<string, { name: string; create: string }>()
-        const edits: { start: number; end: number; text: string }[] = []
+        const edits: Splice[] = []
         const noted: { at: number; message: string }[] = []
         for (const call of calls) {
             if (call.key === undefined) {
@@ -87,17 +92,10 @@ export async function toShared(
                 text: `${handle.name}()`,
             })
         }
-        let out = text
-        for (const edit of edits.sort((a, b) => b.start - a.start))
-            out = `${out.slice(0, edit.start)}${edit.text}${out.slice(edit.end)}`
+        let out = spliced(text, edits)
         // The noted lines are read off the calls as edited, ahead of the declarations moving them.
-        for (const { at, message } of noted) {
-            let shifted = at
-            for (const edit of edits)
-                if (edit.end <= at)
-                    shifted += edit.text.length - (edit.end - edit.start)
-            note(path, lineAt(out, shifted), message)
-        }
+        for (const { at, message } of noted)
+            note(path, lineAround(out, splicedOffset(at, edits)), message)
         if (handles.size > 0) out = declared(out, path, [...handles.values()])
         if (out !== text) changed[path] = out
     }
@@ -250,11 +248,4 @@ function withoutReactive(code: string): string {
     }
     const list = namedImports(code, statement, kept)
     return `${code.slice(0, list.start)}${list.text}${code.slice(list.end)}`
-}
-
-/** The whole line of `text` that `at` stands on. */
-function lineAt(text: string, at: number): string {
-    const start = text.lastIndexOf('\n', at - 1) + 1
-    const end = text.indexOf('\n', at)
-    return text.slice(start, end === -1 ? undefined : end)
 }

@@ -13,7 +13,7 @@ import {
 } from 'typescript/unstable/ast/is'
 
 /**
- * The options object literal a value is built with — `reactive(x, { … })`, or `GET(f, { … })` over
+ * The options object literal a value is built with — `reactive(x, { … })`, or `rpc(f, { … })` over
  * a function written in place (16.6) — or `undefined`.
  *
  * The WRITTEN object is what the build can read without running it (20.4). `undefined` where
@@ -50,14 +50,14 @@ export function isReactiveCall(call: Node & { expression: Node }): boolean {
     )
 }
 
-/** 16.111 — the one handler declarer, by the spelling `isReactiveCall` reads `reactive` by. */
-export const METHODS: ReadonlySet<string> = new Set(['rpc'])
-
-/** Whether a call is a declarer handed a function written in place, which it builds a value of. */
+/**
+ * Whether a call is `rpc` handed a function written in place, which it builds a value of — `rpc`
+ * read by the spelling `isReactiveCall` reads `reactive` by (16.111).
+ */
 function isDeclaredOverBody(call: CallExpression): boolean {
     return (
         isIdentifier(call.expression) &&
-        METHODS.has(call.expression.text) &&
+        call.expression.text === 'rpc' &&
         isWrittenInPlace(call.arguments[0])
     )
 }

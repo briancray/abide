@@ -13,7 +13,13 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { isAbideSpecifier } from './hookCalls.ts'
-import { rewriteCode } from './rewriteCode.ts'
+import {
+    lineAround,
+    rewriteCode,
+    type Splice,
+    spliced,
+    splicedOffset,
+} from './rewriteCode.ts'
 import { importStatements } from './splitImports.ts'
 import type { Note } from './toFetchAndHandle.ts'
 import {
@@ -59,8 +65,6 @@ export function toSourceOptions(
     })
 }
 
-type Edit = { start: number; end: number; text: string }
-
 /** One property of an options object written inline: its key's token and its value's span. */
 type Property = { key: Token; from: number; to: number }
 
@@ -77,7 +81,7 @@ function moved(code: string, note: Note): string {
                     named.set(binding.local, binding.imported)
     if (named.size === 0) return code
     const tokens = tokenize(code)
-    const edits: Edit[] = []
+    const edits: Splice[] = []
     const noted: { at: number; message: string }[] = []
     for (let at = 0; at < tokens.length; at += 1) {
         const token = tokens[at] as Token
@@ -125,25 +129,10 @@ function moved(code: string, note: Note): string {
         })
         noted.push({ at: poll.key.start, message: POLL_IS_TTL })
     }
-    edits.sort((left, right) => left.start - right.start)
-    let out = code
-    for (let index = edits.length - 1; index >= 0; index -= 1) {
-        const edit = edits[index] as Edit
-        out = `${out.slice(0, edit.start)}${edit.text}${out.slice(edit.end)}`
-    }
+    const out = spliced(code, edits)
     // Where each noted call stands once every edit ahead of it has moved it.
-    for (const { at, message } of noted) {
-        let shifted = at
-        for (const edit of edits)
-            if (edit.end <= at)
-                shifted += edit.text.length - (edit.end - edit.start)
-        const lineStart = out.lastIndexOf('\n', shifted - 1) + 1
-        const lineEnd = out.indexOf('\n', shifted)
-        note(
-            out.slice(lineStart, lineEnd === -1 ? undefined : lineEnd),
-            message,
-        )
-    }
+    for (const { at, message } of noted)
+        note(lineAround(out, splicedOffset(at, edits)), message)
     return out
 }
 

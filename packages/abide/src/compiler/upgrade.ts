@@ -97,7 +97,7 @@ const MIGRATIONS: Migration[] = [
     // ahead of 38.227, whose notes name the line as the migrations leave it.
     {
         version: '0.144.0',
-        migrate: eachSource((text, path) => toDerived(text, path)),
+        migrate: eachSource(toDerived),
     },
     // 38.227 — `poll` is a `ttl`, and a `reactive` or `reactive.derived` takes none of a source's options.
     { version: '0.144.0', migrate: eachSource(toSourceOptions) },

@@ -52,7 +52,6 @@ import { literalJson } from './literalJson.ts'
 import {
     inlineOptions,
     isReactiveCall,
-    METHODS,
     optionNamed,
 } from './reactiveOptions.ts'
 import {
@@ -231,7 +230,7 @@ async function exportsIn(
     )
 }
 
-/** What declared an export: one of the five methods. */
+/** The verb a declared export is mounted at. */
 type Declared = Mount['method']
 type DeclaredExport = Pick<
     Mount,
@@ -256,8 +255,8 @@ type DeclaredExport = Pick<
 }
 
 /**
- * The method of the abide call a value is declared by — `const x = GET(…)` or `export default
- * GET(…)` — or `undefined` where it is declared any other way.
+ * The method of the abide call a value is declared by — `const x = rpc(…)` or `export default
+ * rpc(…)` — or `undefined` where it is declared any other way.
  */
 async function declaringMethod(
     checker: Checker,
@@ -332,14 +331,14 @@ async function declaredBy(
         const innerNamed = await checker.getSymbolAtLocation(innerCallee)
         if (
             innerNamed !== undefined &&
-            METHODS.has((await aliasedSymbol(checker, innerNamed)).name)
+            (await aliasedSymbol(checker, innerNamed)).name === 'rpc'
         )
             return declaredBy(checker, inner, abide)
     }
     const ui = declaredFor(call, 'ui') ?? true
     const description = describedAs(call)
     if (
-        !METHODS.has(declarer.name) ||
+        declarer.name !== 'rpc' ||
         abide.methods === undefined ||
         declarer.valueDeclaration?.path !== abide.methods
     )
