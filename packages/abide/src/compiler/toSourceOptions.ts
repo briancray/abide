@@ -12,7 +12,7 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
-import { isAbideSpecifier } from './hookCalls.ts'
+import { abideBindings } from './hookCalls.ts'
 import {
     lineAround,
     rewriteCode,
@@ -20,7 +20,6 @@ import {
     spliced,
     splicedOffset,
 } from './rewriteCode.ts'
-import { importStatements } from './splitImports.ts'
 import type { Note } from './toFetchAndHandle.ts'
 import {
     afterTypeArguments,
@@ -70,15 +69,9 @@ type Property = { key: Token; from: number; to: number }
 
 function moved(code: string, note: Note): string {
     const named = new Map<string, string>()
-    for (const statement of importStatements(code))
-        if (isAbideSpecifier(statement.specifier))
-            for (const binding of statement.bindings)
-                if (
-                    !binding.typeOnly &&
-                    (SOURCES.has(binding.imported) ||
-                        binding.imported === VALUE)
-                )
-                    named.set(binding.local, binding.imported)
+    for (const [local, imported] of abideBindings([code]))
+        if (SOURCES.has(imported) || imported === VALUE)
+            named.set(local, imported)
     if (named.size === 0) return code
     const tokens = tokenize(code)
     const edits: Splice[] = []

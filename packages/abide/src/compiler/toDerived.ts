@@ -8,7 +8,7 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
-import { isAbideSpecifier } from './hookCalls.ts'
+import { abideBindings, isAbideSpecifier, localOf } from './hookCalls.ts'
 import { rewriteCode, type Splice, spliced } from './rewriteCode.ts'
 import {
     type ImportStatement,
@@ -27,18 +27,9 @@ export function toDerived(text: string, path: string): string {
 }
 
 function migrated(blocks: string[]): string[] {
-    let computedAs: string | undefined
-    let reactiveAs: string | undefined
-    for (const block of blocks)
-        for (const statement of importStatements(block))
-            if (!statement.typeOnly && isAbideSpecifier(statement.specifier))
-                for (const binding of statement.bindings) {
-                    if (binding.typeOnly) continue
-                    if (binding.imported === 'computed')
-                        computedAs = binding.local
-                    if (binding.imported === 'reactive')
-                        reactiveAs = binding.local
-                }
+    const bindings = abideBindings(blocks)
+    const computedAs = localOf(bindings, 'computed')
+    const reactiveAs = localOf(bindings, 'reactive')
     if (computedAs === undefined) return blocks
     const spelled = `${reactiveAs ?? 'reactive'}.derived`
     let joined = reactiveAs !== undefined

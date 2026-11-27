@@ -10,7 +10,7 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
-import { isAbideSpecifier } from './hookCalls.ts'
+import { abideBindings, localOf } from './hookCalls.ts'
 import {
     lineAround,
     rewriteCode,
@@ -18,7 +18,6 @@ import {
     spliced,
     splicedOffset,
 } from './rewriteCode.ts'
-import { importStatements } from './splitImports.ts'
 import {
     afterTypeArguments,
     closerOf,
@@ -49,12 +48,7 @@ export function toFetchAndHandle(
 }
 
 function renamed(code: string, note: Note): string {
-    let imported = false
-    for (const statement of importStatements(code))
-        if (isAbideSpecifier(statement.specifier))
-            for (const binding of statement.bindings)
-                if (binding.imported === 'fetchData') imported = true
-    if (!imported) return code
+    if (localOf(abideBindings([code]), 'fetchData') === undefined) return code
     const checks = code.includes('isFailed(')
     const edits: Splice[] = []
     const noted: { at: number; message: string }[] = []

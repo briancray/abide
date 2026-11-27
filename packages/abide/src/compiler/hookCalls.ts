@@ -55,6 +55,15 @@ export function abideBindings(
     return bound
 }
 
+/** The local name `bindings` (`abideBindings`) import abide's `imported` as, or `undefined`. */
+export function localOf(
+    bindings: ReadonlyMap<string, string>,
+    imported: string,
+): string | undefined {
+    for (const [local, name] of bindings) if (name === imported) return local
+    return undefined
+}
+
 /**
  * Each of abide's hooks `scripts` call — every script of one file — in the order written. Block by
  * block: one block's last token would decide how the next one's first reads.

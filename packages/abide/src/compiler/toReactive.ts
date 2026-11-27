@@ -5,9 +5,8 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
-import { isAbideSpecifier } from './hookCalls.ts'
+import { abideBindings, localOf } from './hookCalls.ts'
 import { rewriteCode } from './rewriteCode.ts'
-import { importStatements } from './splitImports.ts'
 import { type Token, tokenize } from './tokenize.ts'
 
 /** 38.233 — `text`, a file at `path`, with abide's `reactive.derived` spelled `reactive`. */
@@ -30,13 +29,7 @@ export function toReactive(text: string, path: string): string {
 
 /** The name `blocks` import abide's `reactive` as, or `undefined` where none does. */
 export function reactiveAs(blocks: string[]): string | undefined {
-    for (const block of blocks)
-        for (const statement of importStatements(block))
-            if (!statement.typeOnly && isAbideSpecifier(statement.specifier))
-                for (const binding of statement.bindings)
-                    if (!binding.typeOnly && binding.imported === 'reactive')
-                        return binding.local
-    return undefined
+    return localOf(abideBindings(blocks), 'reactive')
 }
 
 /** `code` with each `name.derived` that is not itself a member read as `name`. */

@@ -9,7 +9,7 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
-import { isAbideSpecifier } from './hookCalls.ts'
+import { abideBindings, isAbideSpecifier, localOf } from './hookCalls.ts'
 import type { CodeRewrite } from './rewriteCode.ts'
 import {
     type ImportStatement,
@@ -56,20 +56,15 @@ export function renameBodyCalls(
                 const imported = importedIn(code, true, others.join('\n'))
                 codes[index] = imported
                 // The first script importing `from` is the one `to` joins, even where it already has.
-                if (imported !== code || importsName(code, from)) break
+                if (
+                    imported !== code ||
+                    localOf(abideBindings([code]), from) !== undefined
+                )
+                    break
             }
             return codes
         },
     }
-}
-
-/** Whether `code` imports abide's `name`. */
-function importsName(code: string, name: string): boolean {
-    for (const statement of importStatements(code))
-        if (isAbideSpecifier(statement.specifier))
-            for (const binding of statement.bindings)
-                if (binding.imported === name) return true
-    return false
 }
 
 /** A module's `from` calls `accepts` renamed `to`, and how many were. */
