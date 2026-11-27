@@ -115,6 +115,13 @@ export class Lowering {
      */
     readonly values = new Map<string, boolean>()
     /**
+     * 38.138 — the same, for each branch-local `<script>` or inline component head a checked read
+     * went through, by where it starts: what `checkedShadow` declares ahead of it. Only a name read
+     * through the record is in it, so a body whose names are only ever handed on as their
+     * `Reactive` declares no record nothing reads.
+     */
+    readonly localValues = new Map<number, Map<string, boolean>>()
+    /**
      * What a checked lowering found that a build refuses, at the projection offset of the read.
      *
      * Collected rather than thrown, so one refusal is one finding and the rest of the file is
@@ -983,7 +990,7 @@ export class Lowering {
      * The record a checked lowering reads `read` through, or `undefined` where it is called.
      *
      * 38.138 — A BRANCH-LOCAL NAME HAS A RECORD OF ITS OWN, declared ahead of the setup or the
-     * inline component's head that declares it (`localRecords`): it is out of scope where the page's
+     * inline component's head that declares it (`localValues`): it is out of scope where the page's
      * is declared, and two bodies may each declare one of the same spelling. Read through a record,
      * a prop narrows under an `{#if}` as a page's own value does; called, it would not narrow at all.
      */
@@ -995,7 +1002,11 @@ export class Lowering {
             return CHECKED_VALUES
         }
         const setup = this.setupDeclaring(read)
-        return setup === undefined ? undefined : `${CHECKED_VALUES}${setup}`
+        if (setup === undefined) return undefined
+        const names = this.localValues.get(setup) ?? new Map<string, boolean>()
+        names.set(spelled, read.through)
+        this.localValues.set(setup, names)
+        return `${CHECKED_VALUES}${setup}`
     }
 
     /**
@@ -1008,28 +1019,6 @@ export class Lowering {
         return setup?.kind === 'setup' || setup?.kind === 'head'
             ? setup.start
             : undefined
-    }
-
-    /**
-     * 38.138 — each branch-local `<script>` or inline component head a checked read goes through,
-     * by where it starts, and the names read through its record — each with whether it is read
-     * through a props accessor (`Read.through`): what `checkedShadow` declares ahead of it.
-     */
-    localRecords(): Map<number, Map<string, boolean>> {
-        const records = new Map<number, Map<string, boolean>>()
-        if (!this.checking) return records
-        for (const read of this.answer.reads) {
-            if (!read.local) continue
-            const setup = this.setupDeclaring(read)
-            if (setup === undefined) continue
-            const names = records.get(setup) ?? new Map<string, boolean>()
-            names.set(
-                this.projection.text.slice(read.start, read.end),
-                read.through,
-            )
-            records.set(setup, names)
-        }
-        return records
     }
 
     /**
@@ -1107,7 +1096,7 @@ export const PROPS = '__props'
 
 /**
  * The record a checked lowering reads each value through (`Lowering.values`) — suffixed, for a
- * branch-local value, by where the setup declaring it starts (`Lowering.localRecords`).
+ * branch-local value, by where the setup declaring it starts (`Lowering.localValues`).
  */
 export const CHECKED_VALUES = '__values'
 
