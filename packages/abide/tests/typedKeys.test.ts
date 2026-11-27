@@ -59,11 +59,9 @@ test('every component picking by key is typed by its keys — 49.21', () => {
     const jobs: Job[] = ['Actor', 'Director']
     const job = reactive<Job | undefined>(undefined)
     toggleGroup({ items: jobs, value: job })
+    const text = reactive<string | undefined>(undefined)
     // @ts-expect-error — a key the items do not answer: numbers' value is no text.
-    toggleGroup({
-        items: [1, 2],
-        value: reactive<string | undefined>(undefined),
-    })
+    toggleGroup({ items: [1, 2], value: text })
     // @ts-expect-error — a record with no `id` names its key.
     toggleGroup({ items: [{ name: 'x' }] })
     const open: Reactive<number | undefined> = accordion({
