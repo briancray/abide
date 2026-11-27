@@ -10,7 +10,7 @@
 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
-import { isAbideSpecifier } from './hookCalls.ts'
+import { abideBindings } from './hookCalls.ts'
 import {
     lineAround,
     rewriteCode,
@@ -18,7 +18,6 @@ import {
     spliced,
     splicedOffset,
 } from './rewriteCode.ts'
-import { importStatements } from './splitImports.ts'
 import type { Note } from './toFetchAndHandle.ts'
 import {
     afterTypeArguments,
@@ -58,11 +57,8 @@ type Property = {
 
 function optionsMoved(code: string, note: Note): string {
     const names = new Set<string>()
-    for (const statement of importStatements(code))
-        if (isAbideSpecifier(statement.specifier))
-            for (const binding of statement.bindings)
-                if (binding.imported === 'fetchAndHandle')
-                    names.add(binding.local)
+    for (const [local, imported] of abideBindings([code]))
+        if (imported === 'fetchAndHandle') names.add(local)
     if (names.size === 0) return code
     const edits: Splice[] = []
     const noted: number[] = []
