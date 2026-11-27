@@ -10,6 +10,7 @@ import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { scrub, type ScrubPosition } from './scrub.ts'
+import { stepRounded } from './stepRounded.ts'
 
 /** 51.184 — what a slider picks: a value, or a range's low and high end where it picks a range. */
 export type SliderValue<Range extends boolean> = Range extends true
@@ -94,7 +95,8 @@ export function slider<Range extends boolean = false>(
     )
     const indexOf = (each: number) =>
         Math.min(last(), Math.max(0, Math.round((each - min()) / step())))
-    const valueOf = (index: number) => min() + index * step()
+    const valueOf = (index: number) =>
+        stepRounded(min() + index * step(), step(), min())
     // 51.90 — where a value stands along the track, as the share of its width from the left edge.
     const percent = (each: number) => {
         const span = max() - min()

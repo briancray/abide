@@ -83,3 +83,30 @@ test('a backdrop click `open` refuses never closes the dialog — 50.3, 49.19', 
         0,
     ])
 })
+
+// 50.3 — A DIALOG BESIDE THE PAGE HEARS ESCAPE ITSELF: `show` fires no `cancel`, so a `modal: false`
+// dialog (and every `drawer` that is one) never closed on Escape. THE REVERT: drop `onkeydown` from
+// the dialog part — Escape leaves it open.
+test('Escape from inside a dialog opened beside the page closes it — 50.3', () => {
+    const open = reactive(false)
+    const parts = dialog({ open, modal: false })
+    const element = document.createElement('dialog')
+    const field = document.createElement('input')
+    element.append(field)
+    document.body.append(element)
+    bound.push(bindPart(parts.dialog, element))
+    for (const [name, value] of Object.entries(parts.dialog))
+        if (name.startsWith('on'))
+            element.addEventListener(name.slice(2), value as EventListener)
+    open.set(true)
+    flushSync()
+    field.dispatchEvent(
+        new KeyboardEvent('keydown', {
+            key: 'Escape',
+            bubbles: true,
+            cancelable: true,
+        }),
+    )
+    flushSync()
+    expect([open.peek(), element.open]).toEqual([false, false])
+})

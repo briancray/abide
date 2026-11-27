@@ -7,6 +7,7 @@ import { handFocus } from './handFocus.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
+import { stepRounded } from './stepRounded.ts'
 
 /** The number, its bounds, how far a step moves it, and its accessible name. */
 export type SpinbuttonOptions = {
@@ -48,10 +49,10 @@ export function spinbutton(options: SpinbuttonOptions = {}): Spinbutton {
     const kept = (to: number): number => {
         const from = Number.isFinite(min()) ? min() : 0
         const snapped = from + Math.round((to - from) / step()) * step()
-        // Rounded to the step's own decimals, so three steps of a tenth read as three tenths, not as
-        // the float their sum makes.
-        const places = (String(step()).split('.')[1] ?? '').length
-        return Math.min(max(), Math.max(min(), Number(snapped.toFixed(places))))
+        return Math.min(
+            max(),
+            Math.max(min(), stepRounded(snapped, step(), from)),
+        )
     }
     const now = () => value.peek() ?? 0
     const by = (steps: number) => () => value.set(kept(now() + steps * step()))

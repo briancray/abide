@@ -90,6 +90,14 @@ export function dialog(options: DialogOptions = {}): DialogParts {
                 if (!dismissible() || open.set(false) !== undefined)
                     event.preventDefault()
             },
+            // 50.3 — `show` fires no `cancel`, so a dialog beside the page hears Escape itself, from
+            // focus inside it: the page around it is still the visitor's, and its Escape is theirs.
+            onkeydown: (event: KeyboardEvent) => {
+                if (event.key !== 'Escape' || modal() || event.defaultPrevented)
+                    return
+                event.preventDefault()
+                if (dismissible()) open.set(false)
+            },
             // A click on the dialog itself, outside its box, is a click on the backdrop (50.3).
             onclick: (event: MouseEvent) => {
                 const element = event.currentTarget as HTMLDialogElement
