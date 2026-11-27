@@ -14,6 +14,7 @@ import { assistantMessage, ATTACHABLE } from './assistantMessage.ts'
 import { type Autoscroll, autoscroll } from './autoscroll.ts'
 import { callsOf, type ChatCall } from './callsOf.ts'
 import { dropzone, type DropzoneParts } from './dropzone.ts'
+import type { Failed } from './Failed.ts'
 import { hotkeys } from './hotkeys.ts'
 import { isSendable } from './isSendable.ts'
 import { type Live, live } from './live.ts'
@@ -52,8 +53,18 @@ export type ChatOptions = {
      * it a prompt's buttons are disabled.
      */
     permit?: ((answer: { id: string; allow: boolean }) => unknown) | undefined
-    /** 49.8, 53.47 — the conversation: bind it to load one and to keep it as it grows. Held by the parts, empty, where none is given. */
-    messages?: Reactive<AssistantMessage[]> | undefined
+    /**
+     * 49.8, 53.47 — the conversation: bind it to load one and to keep it as it grows. Held by the
+     * parts, empty, where none is given. Its failures are any refusal — a load through a handler's
+     * call carries `HttpError` — and while it is failed the parts say so and send nothing.
+     */
+    messages?:
+        | Reactive<
+              AssistantMessage[],
+              AssistantMessage[],
+              Failed<string, unknown>
+          >
+        | undefined
     /** The input's accessible name. `'Message'` by default. */
     label?: Live<string | undefined> | undefined
     /** Whether the composer refuses to send: a provider not yet paired, say. */
@@ -93,12 +104,16 @@ export type ChatMessageParts = {
 /** The parts `chat` hands back: `<ol {...talk.transcript}>`, `<form {...talk.composer}>`. */
 export type ChatParts = {
     /** The conversation: the `messages` handed in, or one of the parts' own. */
-    readonly messages: Reactive<AssistantMessage[]>
+    readonly messages: Reactive<
+        AssistantMessage[],
+        AssistantMessage[],
+        Failed<string, unknown>
+    >
     /** Whether an answer is streaming. */
     get streaming(): boolean
     /** 53.35 — why the latest answer ended, as its last run said (`end_turn`), or `stopped`; `undefined` while it runs. */
     get stop_reason(): string | undefined
-    /** 53.36 — the message the latest answer failed with, or `undefined`. */
+    /** 53.36, 53.47 — the message `messages` failed with, else the one the latest answer failed with, or `undefined`. */
     get failed(): string | undefined
     /** The root's attributes: `data-chat="root"`, `data-streaming`, `data-stop` and `data-failed`. */
     readonly root: Record<string, unknown>
@@ -224,8 +239,15 @@ const converted = async (file: File) =>
 
 /** A conversation over an assistant handler, as parts: the transcript and the composer. */
 export function chat(options: ChatOptions): ChatParts {
-    const messages = options.messages ?? reactive<AssistantMessage[]>([])
-    const disabled = () => live(options.disabled) === true
+    const messages: Reactive<
+        AssistantMessage[],
+        AssistantMessage[],
+        Failed<string, unknown>
+    > = options.messages ?? reactive<AssistantMessage[]>([])
+    // 53.47 — a conversation that failed to load is not one to add to.
+    const disabled = () =>
+        live(options.disabled) === true || messages.error() !== undefined
+    const failed = () => messages.error()?.message ?? outcome().failed
     const draft = options.draft ?? reactive<AssistantMessage>(blank())
     // 53.105 — the text blocks `attach` made, which the input leaves alone. A block keeps its
     // identity into the transcript, so a question put back into `draft` keeps its files apart.
@@ -463,7 +485,7 @@ export function chat(options: ChatOptions): ChatParts {
             return outcome().stop_reason
         },
         get failed() {
-            return outcome().failed
+            return failed()
         },
         root: {
             'data-chat': 'root',
@@ -474,7 +496,7 @@ export function chat(options: ChatOptions): ChatParts {
                 return outcome().stop_reason
             },
             get 'data-failed'() {
-                return outcome().failed === undefined ? undefined : ''
+                return failed() === undefined ? undefined : ''
             },
         },
         transcript: {

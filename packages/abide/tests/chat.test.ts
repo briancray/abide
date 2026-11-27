@@ -2,7 +2,8 @@
 
 import { expect, test } from 'bun:test'
 
-import { reactive } from '#shared'
+import { rpc } from '#server'
+import { reactive, refuse } from '#shared'
 import type {
     AssistantContent,
     AssistantMessage,
@@ -88,4 +89,42 @@ test('a send whose clearing the draft refuses sends nothing — 53.107, 49.19', 
     expect(draft.peek()?.content).toEqual([
         { type: 'text', text: 'Quote for Hopper?' },
     ])
+})
+
+// 53.47 — `messages` ADOPTING A HANDLER'S CALL IS TAKEN AS IT IS, its `HttpError` and the handler's
+// refusals among its failures, and while it is failed `failed` says why and nothing is sent.
+// THE REVERT, of the type: type `messages` as `Reactive<AssistantMessage[]>` again, and `bun run
+// typecheck` refuses `messages: conversation` (TS2322, `Failed<"HttpError", undefined>` is not
+// assignable to type `never`). Of the behavior: drop `messages.error()` from `disabled` and `failed`,
+// and `submit` throws from `messages.patch` — `NotLanded: memo({"id":"missing"}) has not landed`.
+test('a conversation that failed to load says so in failed and sends nothing — 53.47', async () => {
+    const getConversation = rpc(
+        ({
+            id,
+        }: {
+            id: string
+        }): AssistantMessage[] | ReturnType<typeof refuse> =>
+            id === 'missing' ? refuse(404, 'No such conversation.') : [],
+    )
+    const conversation = reactive(() => getConversation({ id: 'missing' }))
+    let asked = 0
+    const talk = chat({
+        ask: async function* () {
+            asked += 1
+        },
+        messages: conversation,
+        draft: reactive<AssistantMessage>({
+            role: 'user',
+            content: [{ type: 'text', text: 'Quote for Hopper?' }],
+        }),
+    })
+    await Promise.resolve(conversation).then(
+        () => undefined,
+        () => undefined,
+    )
+    talk.submit()
+    await Bun.sleep(0)
+    expect(`asked ${asked}, failed ${talk.failed}`).toBe(
+        'asked 0, failed No such conversation.',
+    )
 })

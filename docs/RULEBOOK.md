@@ -6379,7 +6379,8 @@ near, and `-1` where there are no positions.
 52.24 `chart` MUST draw the series `series` answers, in that order with the first at the back, each
 mark carrying its series' index in that order as `data-series`.
 
-52.25 `chart` MUST draw a `data-chart="zero"` line at zero inside its plot, where `zero` is set.
+52.25 `chart` MUST draw a `data-chart="zero"` line at zero inside its plot: across it, carrying
+`data-axis="y"`, where `zero` is set, and down it, carrying `data-axis="x"`, where `xZero` is set.
 
 52.26 `chart` MUST draw a crosshair at the x position nearest the pointer while a pointer is over it,
 and MUST open a readout of every series' value wherever its crosshair stands (50.46).
@@ -6513,7 +6514,7 @@ the slices' values, clockwise from the top in the order given, its index as `dat
 share, placed against the box of that slice's own arc rather than the whole ring's.
 
 52.68 `chart` MUST draw its plot over the whole box its root part is drawn at — its x positions and
-its y range spanning it, and its gridlines, its zero line and its crosshair across it — and MUST hand
+its y range spanning it, and its gridlines, its zero lines and its crosshair across it — and MUST hand
 back its y ticks as `data-chart="tick"` labels ending at the plot's left edge and its x ticks as
 labels at its bottom edge, each at its value, keeping no room inside the box for either.
 
@@ -6683,7 +6684,7 @@ midnight; and a string with a `Z` or an offset as the instant it names.
 52.115 `format.date`'s `'dateTime'` style MUST hand the date it writes the options naming a part of a
 date, the time it writes those naming a part of a time, and both the rest.
 
-52.116 Each part `chart` hands back for a point, a column, a tick, a gridline, the zero line or the
+52.116 Each part `chart` hands back for a point, a column, a tick, a gridline, a zero line or the
 crosshair, and `sparkline`'s `dot`, MUST carry in its `style` where it is drawn as `--x` and `--y`,
 and a column its size as `--width` and `--height` besides, each a percentage of the box its root
 part is drawn at, a line across the plot carrying only the one of `--x` and `--y` it is drawn at; and
@@ -6699,6 +6700,13 @@ its index, where the series gives one, and by `yFormat` where it does not.
 span below it and above it — by a pair's first below and its second above — before taking zero into
 the range (52.34, 52.37) and before `chart.ticks` rounds it, and MUST NOT widen a range with no width
 or a range `bounds` gives.
+
+52.120 `chart` MUST hand back its x ticks, each a `data-chart="grid"` line down its plot carrying
+`data-axis="x"` and a label, at the values `chart.ticks` answers for its x range given `xTicks`, save
+those outside that range, where `xAxis` is `'values'`; and otherwise at most `xTicks` of its x
+positions, spread evenly from the first to the last.
+
+52.121 `chart` declaring `xZero` MUST take zero into the range of its x positions.
 
 # 53. Keys, element behaviors and chat
 
