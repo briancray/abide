@@ -328,9 +328,11 @@ function sendsMembers(
         body: Record<string, unknown>,
     ): Promise<unknown> => {
         const request = rpcRequest(verb, route, body, 'no-store')
-        return fetch(request.url, request.init)
-            .then((response) => answerFrom(response, undefined, false))
-            .then((answer) => answered(answer as Answer, request))
+        // Through `answerOf`, as every call is: a principal the member rotated reaches every tab
+        // (26.24), and no answer is a 503 (16.79).
+        return Promise.resolve(answerOf(request, false, undefined)).then(
+            (answer) => answered(answer, request),
+        )
     }
     for (const member in faces) {
         const verb = faces[member] as Method

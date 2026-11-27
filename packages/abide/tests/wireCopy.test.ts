@@ -317,6 +317,23 @@ test('a call that reaches no server refuses with HttpError at 503 — 16.79', as
     }
 })
 
+// 16.79, 16.117 — A FACE MEMBER IS A CALL, and answers no answer as one: the `HttpError` at 503 it
+// answers a server's refusal with, not the browser's `TypeError`. THE REVERT: send the member with
+// `fetch` itself in `sendsMembers` rather than through `answerOf`; this reads `threw TypeError undefined`.
+test('a face member that reaches no server answers HttpError at 503 — 16.79, 16.117', async () => {
+    const shelf = wire(['GET', 'POST'], '/library/shelf', {
+        faces: { archive: 'POST' },
+    }) as Copy & { archive(): Promise<unknown> }
+    unreachable = true
+    try {
+        expect(await outcome(shelf.archive())).toBe(
+            'served {"message":"Service Unavailable","name":"HttpError","status":503}',
+        )
+    } finally {
+        unreachable = false
+    }
+})
+
 // 7.19 — STALE AND UNREACHABLE, THE COPY GOES ON SERVING what it held, with the 503 on `s.error`. THE
 // REVERT: drop the `serveAgain` arm from `refused`; the read throws and this reads
 // `threw HttpError 503`.
