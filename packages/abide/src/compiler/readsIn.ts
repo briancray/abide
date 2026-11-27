@@ -5,12 +5,14 @@ import {
     isArrayLiteralExpression,
     isArrowFunction,
     isBinaryExpression,
+    isBindingElement,
     isCallExpression,
     isClassDeclaration,
     isConditionalExpression,
     isElementAccessExpression,
     isEnumDeclaration,
     isExpressionStatement,
+    isForInStatement,
     isForOfStatement,
     isFunctionDeclaration,
     isIdentifier,
@@ -109,15 +111,21 @@ const TEMPLATE_EXPRESSIONS: ReadonlySet<PositionKind> = new Set([
  * listener, a `bind:` operand or a key the value never renders, and `raw` is what the file binds.
  */
 const RAW_LOWERED: ReadonlySet<PositionKind> = new Set([...PROVABLE, 'prop'])
+/** Every span copied out of the template, where a function may declare a name of its own (31.1). */
+const EVERY_POSITION: ReadonlySet<PositionKind> = new Set<PositionKind>([
+    ...TEMPLATE_EXPRESSIONS,
+    'setup',
+    'head',
+    'tag',
+])
 
 /**
  * The classified reactive reads in one `.abide`'s shadow, and the warnings they earn.
  *
- * 31.3 — THE CHECKER'S OWN TREE ANSWERS BOTH QUESTIONS. Which names the file binds is its top-level
- * `const`/`let`/`var` statements and its imports — an inner block's name is not the page's — and
- * which occurrences reach one is the references to that symbol. A parameter, a row's item, a
- * key, a member, a label and a class field of the same spelling are other symbols, and are
- * absent. What each reference DOES — a read, a write, an update, a shorthand — is read off its
+ * 31.3 — THE CHECKER'S OWN TREE ANSWERS BOTH QUESTIONS. Which names the file binds is every
+ * `const`/`let`/`var` it declares, at any depth, and its imports, and which occurrences reach one
+ * is the references to that symbol. A parameter, a row's item, a key, a member, a label and a
+ * class field of the same spelling are other symbols, and are absent. What each reference DOES — a read, a write, an update, a shorthand — is read off its
  * parents by `classifyRead`, so no token walk re-derives the grammar.
  *
  * Asked of one snapshot (`reactiveReads`), and every offset — a read's and a warning's — is the
@@ -132,10 +140,15 @@ export async function readsIn(
     projection: Projection,
     file: AbideFile,
     /**
-     * What the lowered program has answered so far: where each name it proved a `Reactive` starts
-     * (`bindingsOfReads`), and where each 31.15 access it proved holds none ends (`membersOfReads`).
+     * What the lowered program has answered so far: where each name it proved a `Reactive` starts,
+     * and each it proved none (`bindingsOfReads`), and where each 31.15 access it proved holds none
+     * ends (`membersOfReads`).
      */
-    settled: { held: ReadonlySet<number>; released: ReadonlySet<number> },
+    settled: {
+        held: ReadonlySet<number>
+        plain: ReadonlySet<number>
+        released: ReadonlySet<number>
+    },
 ): Promise<{
     answer: CheckerAnswer
     warnings: Finding[]
@@ -184,6 +197,18 @@ export async function readsIn(
         if (isVariableStatement(node))
             for (const declaration of node.declarationList.declarations)
                 declaredNames(declaration, (name) => names.push(name))
+    // 31.1 HAS NO CARVE-OUT FOR DEPTH: `const inner = reactive(2)` inside an arrow, a function, a
+    // method or a block is read by name as the page's own are, a name per symbol whatever it
+    // shadows. Called rather than read through a record (`Read.declaredAt` -1), since no record
+    // ahead of a setup or at the module's foot has the function's scope.
+    const nestedFrom = names.length
+    const nested = (name: Node): number => names.push(name)
+    for (const statement of sourceFile.statements) {
+        if (statement.getStart() >= scriptsEnd) break
+        innerDeclarations(statement, nested)
+    }
+    for (const { node } of positions.nodesIn(sourceFile, EVERY_POSITION))
+        innerDeclarations(node, nested)
     refuseDeclared(sourceFile.statements, scriptsEnd, file)
     const members = memberAccesses(checker, abide, sourceFile)
     // 31.15 — the accesses read as a `Reactive` of their own, where a name's member path stops.
@@ -242,6 +267,8 @@ export async function readsIn(
             settled.held.has((names[at] as Node).getStart())
         )
             reactive[at] = symbols[at]
+        else if (settled.plain.has((names[at] as Node).getStart()))
+            reactive[at] = undefined
     // 32.32 — A VALUE WHOSE `reactive(…)` DECLARES `key` keys a `{#for}` over it,
     // wherever the value is declared.
     const byValue = await Promise.all(
@@ -281,7 +308,8 @@ export async function readsIn(
             if (read === undefined) continue
             read.byValue = byValue[index] as boolean
             read.local = index >= topLevel
-            if (read.local) read.declaredAt = (names[index] as Node).getStart()
+            if (read.local && index < nestedFrom)
+                read.declaredAt = (names[index] as Node).getStart()
             named.push(read)
             located.push({ node, read })
             if (read.shape === 'value' || read.shape === 'shorthand')
@@ -354,7 +382,15 @@ export async function readsIn(
         await sharesIn(checker, abide, sourceFile),
     )
     const [bindings, accesses] = await Promise.all([
-        bindingsOfReads(checker, abide, names, reactive, answer),
+        bindingsOfReads(
+            checker,
+            abide,
+            sourceFile,
+            names,
+            reactive,
+            answer,
+            settled,
+        ),
         membersOfReads(
             checker,
             abide,
@@ -370,74 +406,155 @@ export async function readsIn(
 
 /**
  * A position for the lowered program to answer: where a binding's name starts, asked whether it is
- * a `Reactive` there, or where a 31.15 access ends, asked whether it still is one.
+ * a `Reactive` there, or where a 31.15 access ends, asked whether it still is one — and whether the
+ * answer so far holds a `Reactive` there, which a different answer turns.
  */
-export type Suspect = { at: number; member: boolean }
+export type Suspect = { at: number; member: boolean; reactive: boolean }
 
 /**
  * Where each binding starts whose type the projection cannot vouch for, for the lowered program to
- * answer (`reactiveReads`).
+ * answer (`reactiveReads`) — in either direction.
  *
  * 31.1 — A BINDING TYPED FROM A READ IS TYPED FROM THE `Reactive` IN THE PROJECTION, and the read is
  * of its value. `reactive(route.url.pathname)` asks a `Reactive<URL>` for a `pathname` it does not
  * declare; the argument is the error type, which `reactive`'s overloads resolve to a `Keyed`, and
  * the binding then lowered as no `Reactive` at all — `bookId = 'y'` rebinding the name and nothing
  * waking. Lowered, the argument is `route.url().pathname` and the binding a `Reactive<string>`.
+ * AND THE OTHER WAY: `const [held, day] = [quest, today]` is two `Reactive`s as written and two
+ * values as it runs, and asked of the projection alone each use was lowered to `held()`, a call on
+ * a value. `dropValueHolders` settles a binding that IS a read without asking; any other shape —
+ * a pattern, a call, a loop's item, a name inferred from one of those — is asked.
  *
- * ONLY A CALL THAT CAN HAND BACK A `Reactive` IS ASKED: an un-annotated binding, not one already,
- * initialized by a call holding a read, to a callee one of whose signatures returns a `Reactive`.
- * Anything else is a value however its reads are typed, and asking would cost every page that
- * computes from one a second snapshot.
+ * ONLY A BINDING A READ COULD HAVE TYPED IS ASKED: an un-annotated one (an annotation is 31.3's own
+ * hold), not yet answered. Toward a `Reactive`, a call holding a read to a callee one of whose
+ * signatures returns one; anything else is a value however its reads are typed. Away from one, any
+ * source but a call to a callee declared outside this file whose arguments read nothing — or, bound
+ * whole, return a `Reactive` from every signature, as `reactive(() => count * 2)` does — since only
+ * this file reads by name. Asking either way would cost every page that computes from one a second
+ * snapshot.
  */
 async function bindingsOfReads(
     checker: Checker,
     abide: Abide,
+    sourceFile: SourceFile,
     names: readonly Node[],
     reactive: readonly (CheckedSymbol | undefined)[],
     answer: CheckerAnswer,
+    settled: { held: ReadonlySet<number>; plain: ReadonlySet<number> },
 ): Promise<Suspect[]> {
     const suspects: Suspect[] = []
     const asked: Promise<void>[] = []
+    const returnsReactive = async (
+        callee: Node,
+        every: boolean,
+    ): Promise<boolean> => {
+        const type = await checker.getTypeAtLocation(callee)
+        if (type === undefined) return false
+        const signatures = await checker.getSignaturesOfType(
+            type,
+            SignatureKind.Call,
+        )
+        if (signatures.length === 0) return false
+        for (const signature of signatures) {
+            const returned = await checker.getReturnTypeOfSignature(signature)
+            const one =
+                returned !== undefined &&
+                (await isReactiveType(checker, abide, returned, false))
+            if (one !== every) return one
+        }
+        return every
+    }
     for (let at = 0; at < names.length; at += 1) {
         const name = names[at] as Node
-        const declaration = name.parent
-        if (
-            reactive[at] !== undefined ||
-            !isVariableDeclaration(declaration) ||
-            declaration.type !== undefined ||
-            declaration.initializer === undefined
-        )
+        const start = name.getStart()
+        if (settled.held.has(start) || settled.plain.has(start)) continue
+        const declaration = bindingDeclaration(name)
+        if (declaration === undefined || declaration.type !== undefined)
             continue
-        const call = unwrapped(declaration.initializer)
-        if (
-            !isCallExpression(call) ||
-            !answer.holdsRead({ start: call.getStart(), end: call.end })
-        )
+        const source = bindingSource(declaration)
+        if (source === undefined) continue
+        const held = reactive[at] !== undefined
+        const ask = (): number =>
+            suspects.push({ at: start, member: false, reactive: held })
+        const call = unwrapped(source)
+        const reads =
+            isCallExpression(call) &&
+            answer.holdsRead({ start: call.getStart(), end: call.end })
+        if (!held) {
+            if (declaration.name !== name || !reads) continue
+            const callee = (call as Node & { expression: Node }).expression
+            asked.push(
+                (async () => {
+                    if (await returnsReactive(callee, false)) ask()
+                })(),
+            )
             continue
+        }
+        if (!isCallExpression(call) && !isNewExpression(call)) {
+            ask()
+            continue
+        }
         const callee = call.expression
         asked.push(
             (async () => {
-                const type = await checker.getTypeAtLocation(callee)
-                if (type === undefined) return
-                for (const signature of await checker.getSignaturesOfType(
-                    type,
-                    SignatureKind.Call,
-                )) {
-                    const returned =
-                        await checker.getReturnTypeOfSignature(signature)
-                    if (
-                        returned !== undefined &&
-                        (await isReactiveType(checker, abide, returned, false))
-                    ) {
-                        suspects.push({ at: name.getStart(), member: false })
-                        return
-                    }
-                }
+                const [symbol] = await checker.getSymbolAtLocation([
+                    isPropertyAccessExpression(callee) ? callee.name : callee,
+                ])
+                const declared =
+                    symbol === undefined
+                        ? undefined
+                        : await aliasedSymbol(checker, symbol)
+                const elsewhere =
+                    declared !== undefined &&
+                    declared.declarations.length > 0 &&
+                    declared.declarations.every(
+                        (one) => one.path !== sourceFile.path,
+                    )
+                if (
+                    elsewhere &&
+                    (!reads ||
+                        (declaration.name === name &&
+                            isCallExpression(call) &&
+                            (await returnsReactive(callee, true))))
+                )
+                    return
+                ask()
             })(),
         )
     }
     await Promise.all(asked)
     return suspects
+}
+
+/** The variable declaration binding `name`, through any pattern it stands in. */
+function bindingDeclaration(name: Node):
+    | (Node & {
+          name: Node
+          type?: Node | undefined
+          initializer?: Node | undefined
+      })
+    | undefined {
+    let node = name.parent
+    while (
+        node !== undefined &&
+        (isBindingElement(node) ||
+            isObjectBindingPattern(node) ||
+            isArrayBindingPattern(node))
+    )
+        node = node.parent
+    return node !== undefined && isVariableDeclaration(node) ? node : undefined
+}
+
+/** What a declaration binds from: its initializer, or the loop's operand a `for … of` binds each item of. */
+function bindingSource(
+    declaration: Node & { initializer?: Node | undefined },
+): Node | undefined {
+    if (declaration.initializer !== undefined) return declaration.initializer
+    const loop = declaration.parent?.parent
+    return loop !== undefined &&
+        (isForOfStatement(loop) || isForInStatement(loop))
+        ? loop.expression
+        : undefined
 }
 
 /**
@@ -504,7 +621,11 @@ async function membersOfReads(
         members.map(async (access, at) => {
             if (!isPropertyAccessExpression(access)) {
                 if (inferred.has(found[at]?.id ?? -1))
-                    suspects.push({ at: access.end, member: true })
+                    suspects.push({
+                        at: access.end,
+                        member: true,
+                        reactive: true,
+                    })
                 return
             }
             const member =
@@ -516,7 +637,11 @@ async function membersOfReads(
             )
             const declared = await declaration?.resolve()
             if (declared !== undefined && reads(declared))
-                suspects.push({ at: access.end, member: true })
+                suspects.push({
+                    at: access.end,
+                    member: true,
+                    reactive: true,
+                })
         }),
     )
     return suspects
@@ -1284,6 +1409,21 @@ function declaredNames(
     )
         return
     patternNames(name, visit)
+}
+
+/**
+ * Each name a declaration below `root` binds — inside a function, a method, a block or a loop's
+ * head — leaving out `root`'s own when it is a variable statement, which the caller has taken.
+ */
+function innerDeclarations(root: Node, visit: (name: Node) => void): void {
+    const walk = (node: Node): void => {
+        if (isVariableDeclaration(node)) declaredNames(node, visit)
+        node.forEachChild(walk)
+    }
+    if (isVariableStatement(root))
+        for (const declaration of root.declarationList.declarations)
+            declaration.forEachChild(walk)
+    else walk(root)
 }
 
 /** Each identifier `name` binds: itself, or every name an object or array pattern destructures. */

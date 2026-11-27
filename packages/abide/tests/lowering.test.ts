@@ -625,6 +625,91 @@ test('an imported Reactive is read and written by name — 31.1', async () => {
     )
 })
 
+// 31.1 — A NAME DECLARED INSIDE A FUNCTION IS A NAME BOUND TO A `Reactive` TOO: the clause has no
+// carve-out for depth, so an arrow's, a function's, a method's and a block's own `reactive(…)` is
+// read (31.1), written (31.4) and destructured (31.17) by name as the page's top-level one is. A
+// nested name shadowing the page's is its own symbol, read or left as ITS type says. THE REVERT,
+// run: drop the `innerDeclarations` walks in `readsIn`; the nested reads and writes are left as
+// written — `takes(inner)` hands the `Reactive` itself to a `number` parameter, `n = 4` rebinds the
+// name, and 6 of the 7 lowerings below are wrong.
+test('a Reactive declared inside a function is read and written by name — 31.1', async () => {
+    const takes =
+        "import { reactive } from '@abide/abide'\nconst takes = (v: number) => v\n"
+    const arrow = `${takes}const xs = [1].map(() => { const inner = reactive(2); return takes(inner) })`
+    expect(await lower(arrow)).toBe(
+        `${takes}const xs = [1].map(() => { const inner = reactive(2); return takes(inner()) })`,
+    )
+    const declared = `${takes}function f() { let n = reactive(3); n = 4; n += 1; return takes(n) }`
+    expect(await lower(declared)).toBe(
+        `${takes}function f() { let n = reactive(3); n.set(4); n.set(n() + (1)); return takes(n()) }`,
+    )
+    const method = `${takes}const o = { m() { const inner = reactive(2); return takes(inner) } }`
+    expect(await lower(method)).toBe(
+        `${takes}const o = { m() { const inner = reactive(2); return takes(inner()) } }`,
+    )
+    const block = `${takes}if (takes(1)) { const inner = reactive(2); takes(inner) }`
+    expect(await lower(block)).toBe(
+        `${takes}if (takes(1)) { const inner = reactive(2); takes(inner()) }`,
+    )
+    // 31.17 — a pattern's names, nested as deep.
+    const pattern = `${takes}const g = () => { const { a } = { a: reactive(1) }; return takes(a) }`
+    expect(await lower(pattern)).toBe(
+        `${takes}const g = () => { const { a } = { a: reactive(1) }; return takes(a()) }`,
+    )
+    // A nested name shadowing the page's: each is read as its own declaration types it — a
+    // nested `Reactive` over a plain one, and a nested plain one over a `Reactive`.
+    const shadowing = `${takes}const top = reactive(1)\nconst plain = 1\nconst h = () => { const top = 5; const plain = reactive(2); return takes(top) + takes(plain) }\ntakes(top)`
+    expect(await lower(shadowing)).toBe(
+        `${takes}const top = reactive(1)\nconst plain = 1\nconst h = () => { const top = 5; const plain = reactive(2); return takes(top) + takes(plain()) }\ntakes(top())`,
+    )
+    // A nested name bound to no `Reactive` is left as written.
+    const unbound = `${takes}const k = () => { let count = 1; count = 2; return takes(count) }`
+    expect(await lower(unbound)).toBe(unbound)
+})
+
+// 31.1 — A BINDING IS A `Reactive` WHERE IT IS ONE IN THE PROGRAM AS IT RUNS. The projection types
+// `const [held, day] = [quest, today]` as two `Reactive`s, and as it runs the initializer reads both
+// and the names hold values — so does a name a generic call, an object member or a mapped array
+// hands on from a read, at the top or inside a function, and a loop's item over any of them. One
+// annotated as a `Reactive` stays one, and its `peek`, `set` and call reach the `Reactive` (31.5,
+// 31.6, 31.7). THE REVERT, run: drop the `plain` direction from `bindingsOfReads` (ask only a name
+// the projection typed none); every value below is called as a `Reactive` — `held()`, `day()`,
+// `tq()`, `picked()`, `q()`, `p()`, `m()`, `value()` — and 3 of the 4 lowerings are wrong.
+test('a binding typed from a read holds the value it was handed — 31.1, 31.17', async () => {
+    const outer =
+        "import { reactive, type Reactive } from '@abide/abide'\nconst takes = (v: number) => v\nconst quest = reactive(1)\nconst today = reactive('d')\nconst pick = <T,>(v: T): T => v\n"
+    const nested = `${outer}const row = reactive((): number => {
+    const [held, day] = [quest, today]
+    const obj = { q: quest }
+    const { q } = obj
+    const p = pick(quest)
+    const [m] = [1].map(() => quest)
+    return takes(held) + day.length + takes(q) + takes(p) + takes(m)
+})`
+    expect(await lower(nested))
+        .toBe(`${outer}const row = reactive((): number => {
+    const [held, day] = [quest(), today()]
+    const obj = { q: quest() }
+    const { q } = obj
+    const p = pick(quest())
+    const [m] = [1].map(() => quest())
+    return takes(held) + day.length + takes(q) + takes(p) + takes(m)
+})`)
+    const top = `${outer}const [tq, td] = [quest, today]\nconst picked = pick(quest)\ntakes(tq) + td.length + takes(picked)`
+    expect(await lower(top)).toBe(
+        `${outer}const [tq, td] = [quest(), today()]\nconst picked = pick(quest())\ntakes(tq) + td.length + takes(picked)`,
+    )
+    // A shorthand in a returned literal with no declared type reads (31.3), so the item is a value.
+    const looped = `${outer}const controls = [1].map((v) => { const value = reactive(v); return { value } })\nfor (const { value } of controls) takes(value)`
+    expect(await lower(looped)).toBe(
+        `${outer}const controls = [1].map((v) => { const value = reactive(v); return { value: value() } })\nfor (const { value } of controls) takes(value)`,
+    )
+    const held = `${outer}const controls = [1].map((v): { value: Reactive<number> } => { const value = reactive(v); return { value } })\nfor (const { value } of controls) { value.peek(); value.set(2); value(); takes(value); value += 1 }`
+    expect(await lower(held)).toBe(
+        `${outer}const controls = [1].map((v): { value: Reactive<number> } => { const value = reactive(v); return { value } })\nfor (const { value } of controls) { value.peek(); value.set(2); value(); takes(value()); value.set(value() + (1)) }`,
+    )
+})
+
 // THE RIGHT OF A WRITE IS LOWERED AS A SPAN OF THE SAME TOKENS, because a substring does not carry
 // the scope it was cut from. THE REVERT: lower the value with `await lower(substring, reactive)` in
 // the assignment branch; the parameter below is lowered as a read inside the value — 1 wrong

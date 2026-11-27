@@ -131,6 +131,39 @@ status = 'nope'
 <p>{status} {deep} {sum}</p>
 <button onclick={() => { step++; deep = 'b' }}>next</button>`
 
+const NESTED = `<script>
+import { reactive } from '@abide/abide'
+
+const takes = (v: number) => v
+const top = reactive(1)
+const xs = [1].map(() => {
+    const inner = reactive(2)
+    return takes(inner)
+})
+function counted() {
+    let n = reactive(3)
+    n = 4
+    n += 1
+    return takes(n)
+}
+const shadowed = () => {
+    const top = reactive('a')
+    const wrong: number = top
+    return takes(top.length)
+}
+const today = reactive('d')
+const managed = reactive(() => {
+    const [held, day] = [top, today]
+    const { q } = { q: top }
+    return takes(held) + day.length + takes(q)
+})
+const [first, label] = [top, today]
+const sum: number = takes(first) + label.length
+</script>
+
+<p>{xs} {counted()} {shadowed()} {top} {managed} {sum}</p>
+<button onclick={() => { const local = reactive(1); local = takes(local) }}>go</button>`
+
 const LINKED = `<script>
 import { url } from '@abide/abide'
 
@@ -429,6 +462,7 @@ beforeAll(async () => {
         'queried/index.abide': QUERIED,
         'member-written/index.abide': MEMBER_WRITTEN,
         'destructured/index.abide': DESTRUCTURED,
+        'nested/index.abide': NESTED,
         'excess/index.abide': EXCESS,
         'lib/question.ts':
             "import { reactive } from '@abide/abide'\n\nexport const question = reactive<{ text: string }>({ text: '' })\n",
@@ -652,6 +686,26 @@ test('a name a pattern binds to a Reactive is read and written by name — 31.17
         { ...place(DESTRUCTURED, 'wrong'), code: 2322 },
         { ...place(DESTRUCTURED, "'nope'"), code: 1360 },
     ])
+})
+
+// 31.1 — A NAME DECLARED INSIDE A FUNCTION — an arrow's, a function's, a listener's — is read and
+// written by name as the page's own is, and one shadowing the page's is held to its own type. THE
+// REVERT, run: drop the `innerDeclarations` walks in `readsIn`; 7 findings land where 1 is due —
+// each nested `Reactive` handed to a `number` parameter, written as a rebinding, and read as a
+// `Reactive` where `wrong` is the one mismatch the author wrote.
+//
+// AND A BINDING TYPED FROM A READ IS THE VALUE THE READ HANDS IT, nested or not:
+// `const [held, day] = [top, today]` holds two values as it runs. THE REVERT, run: drop the `plain`
+// direction from `bindingsOfReads`; 5 findings more land on the patterns' names — a call on a value
+// (TS2349) inside the function, a record typed by a value (TS2344) at the top.
+test('a Reactive declared inside a function is read and written by name — 31.1', () => {
+    expect(
+        inFile('nested/index.abide').map(({ line, column, code }) => ({
+            line,
+            column,
+            code,
+        })),
+    ).toEqual([{ ...place(NESTED, 'wrong'), code: 2322 }])
 })
 
 // 31.18 — THE REVERT, run: drop the `satisfies` from `checkedWriteParts` and hold the value by
