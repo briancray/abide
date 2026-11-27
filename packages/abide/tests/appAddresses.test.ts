@@ -525,6 +525,32 @@ export const theme = rpc({ mode: 'dark' })
     expect(face).toContain('export const theme = __wire("GET"')
 })
 
+// 16.70, 34.17 — EVERY NAME A SERVER BLOCK DECLARES AND EXPORTS IS ANSWERED, a generator's as much as
+// a value's: the names the build mounts are the ones the block's export was wrapped as an `rpc` at.
+// THE REVERT: read the names off a second walk that resets on `function*`'s `*`; `ticks` and `more`
+// answer at no address, and the mounts are `[plain, value]`.
+test('a server block exporting a generator answers it at its private address — 16.70, 34.17', async () => {
+    const { mounts } = await compileApp(
+        appFixture({
+            'index.abide': `<script server>
+export const value = 1
+export async function plain() { return 1 }
+export async function* ticks() { yield 1 }
+export function* more() { yield 2 }
+</script>
+
+<p>home</p>`,
+        }),
+    )
+    const answered: string[] = []
+    for (const mount of mounts)
+        if (mount.address.startsWith('/__abide/handlers/'))
+            answered.push(
+                mount.address.slice(mount.address.lastIndexOf('/') + 1),
+            )
+    expect(answered.sort()).toEqual(['more', 'plain', 'ticks', 'value'])
+})
+
 // 34.22 — ONE FILE, ONE MODULE SCOPE ON THE SERVER: a server block importing a name its `<script>`
 // imports is the one binding, which the browser's module carries alone — binding by binding, so a
 // statement importing one name both blocks use and one only the server does keeps the second.

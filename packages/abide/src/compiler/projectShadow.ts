@@ -161,7 +161,8 @@ function project(file: AbideFile): Projection {
     ): void => {
         const edits: { start: number; end: number; written: string }[] = []
         // 16.70 — a server block's export is read as its component's browser receives it.
-        if (served) for (const edit of servedExports(body)) edits.push(edit)
+        if (served)
+            for (const edit of servedExports(body).edits) edits.push(edit)
         for (const one of attributedImports(body, 'text'))
             edits.push({
                 start: one.literalStart,
@@ -929,13 +930,16 @@ const REEXPORT_REFUSAL =
  * 16.70 — A SERVER BLOCK'S EXPORT IS ITS COMPONENT'S `rpc`: what the browser binds is `rpc` over the
  * value, so the checker reads the name through one — `export const x = v` as `rpc(v)`, and
  * `export function x(…) {…}` as a `const` holding `rpc(function x(…) {…})`. Insertions alone, so
- * every position the block's text maps to is where the file wrote it.
+ * every position the block's text maps to is where the file wrote it. The names it wrapped are the names the
+ * build mounts (`privateExports`), so the two cannot disagree on a spelling.
  */
-function servedExports(
-    body: string,
-): { start: number; end: number; written: string }[] {
+function servedExports(body: string): {
+    edits: { start: number; end: number; written: string }[]
+    names: string[]
+} {
     const edits: { start: number; end: number; written: string }[] = []
-    if (!body.includes(EXPORT)) return edits
+    const names: string[] = []
+    if (!body.includes(EXPORT)) return { edits, names }
     const tokens = tokenize(body)
     let depth = 0
     for (let index = 0; index < tokens.length; index += 1) {
@@ -953,10 +957,16 @@ function servedExports(
             head.text === 'let' ||
             head.text === 'var'
         ) {
-            if (tokens[index + 3]?.kind !== SyntaxKind.EqualsToken) continue
+            const name = tokens[index + 2]
+            if (
+                name?.kind !== SyntaxKind.Identifier ||
+                tokens[index + 3]?.kind !== SyntaxKind.EqualsToken
+            )
+                continue
             const first = index + 4
             const last = statementEnd(body, tokens, first)
             if (last < first) continue
+            names.push(name.text)
             edits.push({
                 start: (tokens[first] as Token).start,
                 end: (tokens[first] as Token).start,
@@ -981,6 +991,7 @@ function servedExports(
         )
         const close = open === -1 ? -1 : closerOf(tokens, open)
         if (close === -1) continue
+        names.push(name.text)
         edits.push({
             start: head.start,
             end: head.start,
@@ -989,7 +1000,7 @@ function servedExports(
         const end = (tokens[close] as Token).end
         edits.push({ start: end, end, written: ')' })
     }
-    return edits
+    return { edits, names }
 }
 
 /**
@@ -1050,7 +1061,7 @@ const STATEMENT_HEADS = new Set([
  * private value out of by this name. The import is the `rpc` those declarations call.
  */
 export function privateExports(servers: string, specifier: string): string {
-    const names = serverExports(servers)
+    const { names } = servedExports(servers)
     if (names.length === 0) return ''
     // Each binding holds its `rpc` already, wrapped where it was declared (`servedExports`).
     let out = `import { rpc as ${PRIVATE_RPC} } from ${JSON.stringify(specifier)}\n`
@@ -1061,46 +1072,6 @@ export function privateExports(servers: string, specifier: string): string {
 
 /** What a private value's `rpc` is imported as in a file's server module: a name no author writes. */
 const PRIVATE_RPC = '__abide_rpc'
-
-/**
- * 16.70 — the names a `<script server>` exports at its top level: `export const`, `let`, `var`,
- * `function` or `async function`, one name each — what its component reaches over the wire.
- */
-export function serverExports(source: string): string[] {
-    const names: string[] = []
-    if (source === '' || !source.includes(EXPORT)) return names
-    let depth = 0
-    let exporting = false
-    let declaring = false
-    for (const token of tokenize(source)) {
-        const text = token.text
-        const moved = nesting(token.kind)
-        if (moved !== 0) {
-            depth += moved
-            exporting = false
-            declaring = false
-        } else if (depth !== 0) continue
-        else if (text === EXPORT) exporting = true
-        else if (
-            exporting &&
-            (text === 'const' ||
-                text === 'let' ||
-                text === 'var' ||
-                text === 'function' ||
-                text === 'async')
-        )
-            declaring = text !== 'async'
-        else if (declaring && token.kind === SyntaxKind.Identifier) {
-            names.push(text)
-            exporting = false
-            declaring = false
-        } else {
-            exporting = false
-            declaring = false
-        }
-    }
-    return names
-}
 
 /**
  * 34.22 — throws where the binding both blocks import is a `.abide`'s default or namespace: the
