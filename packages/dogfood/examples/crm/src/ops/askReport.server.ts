@@ -1,6 +1,6 @@
 import { assistant, type Provider, rpc } from '@abide/abide/server'
 
-import { recordedRun } from '#src/lib/recordedRun.ts'
+import { recordedCall, recordedRun } from '#src/lib/recordedRun.ts'
 
 // A recorded model: it reads the draft and calls the real draftReport.
 const recorded: Provider = {
@@ -16,23 +16,7 @@ const recorded: Provider = {
             summary: 'Statements do not send',
             description: `Grace's statement was refused. Trace ${trace}.`,
         }
-        yield* recordedRun(
-            [{ type: 'tool_use', id: 'toolu_1', name, input }],
-            'tool_use',
-        )
-        const { content, isError } = await tools.call(name, input)
-        const [words] = content
-        yield {
-            type: 'tool_result',
-            tool_use_id: 'toolu_1',
-            content: [
-                {
-                    type: 'text',
-                    text: words?.type === 'text' ? words.text : '',
-                },
-            ],
-            is_error: isError,
-        }
+        yield* recordedCall(tools, name, input)
         yield* recordedRun(
             [
                 {

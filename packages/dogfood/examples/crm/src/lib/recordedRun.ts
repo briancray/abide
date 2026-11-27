@@ -1,4 +1,5 @@
 import type { AssistantContent, AssistantEvent } from '@abide/abide'
+import type { Provider } from '@abide/abide/server'
 
 /**
  * One run of a recorded model, as the Messages API streams it: its words and its tool calls in
@@ -65,4 +66,29 @@ export function recordedRun(
         { type: 'message_stop' },
     )
     return events
+}
+
+/**
+ * A recorded model calling the app's tool `name` with `input`, for real: the run asking for it, then
+ * its result, the first piece of its answer as words.
+ */
+export async function* recordedCall(
+    tools: Parameters<Provider['run']>[1],
+    name: string,
+    input: Record<string, unknown>,
+): AsyncGenerator<AssistantEvent> {
+    yield* recordedRun(
+        [{ type: 'tool_use', id: 'toolu_1', name, input }],
+        'tool_use',
+    )
+    const { content, isError } = await tools.call(name, input)
+    const [words] = content
+    yield {
+        type: 'tool_result',
+        tool_use_id: 'toolu_1',
+        content: [
+            { type: 'text', text: words?.type === 'text' ? words.text : '' },
+        ],
+        is_error: isError,
+    }
 }
