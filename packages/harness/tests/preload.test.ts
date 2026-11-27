@@ -160,6 +160,26 @@ test('a select built from markup lands on the option it marks — 43.47', () => 
     host.remove()
 })
 
+// 43.49 — THE NEWLINE AFTER A `<textarea>` OR `<pre>` START TAG IS THE PARSER'S, as the HTML parser
+// drops it: a writer leads the text with one so text opening with a newline keeps it. THE REVERT: drop
+// `installLeadingNewline()` from `measure/preload.ts`; each value keeps the newline it opened with.
+test('the parser drops the newline after a textarea or a pre start tag — 43.49', () => {
+    const template = document.createElement('template')
+    template.innerHTML =
+        '<textarea>\n</textarea><textarea>\n\nkept</textarea><pre>\n</pre>'
+    const [empty, kept] = [...template.content.querySelectorAll('textarea')]
+    const pre = template.content.querySelector('pre') as HTMLPreElement
+    expect([empty?.value, kept?.value, pre.textContent]).toEqual([
+        '',
+        '\nkept',
+        '',
+    ])
+    // Text a script writes is the script's, newline and all.
+    const written = document.createElement('textarea')
+    written.textContent = '\nwritten'
+    expect(written.value).toBe('\nwritten')
+})
+
 // 43.37 — A FILE A TEST BUILDS IS ONE THE DOM TAKES: a test picks files on an `<input type="file">`
 // through a `DataTransfer`, and the component reads them with a `FileReader` or hands them to the
 // wire. THE REVERT: drop `bridgeFiles()` from `measure/preload.ts`; `items.add` throws "parameter 1

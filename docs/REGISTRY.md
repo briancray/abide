@@ -1696,7 +1696,7 @@ rows a runner prints, and an adapter for an abide app.
 
 | Name | Meaning | Rules |
 | --- | --- | --- |
-| `preload = ["@abide/harness/preload"]` | The `[test]` preload that registers a DOM with the measure lane's patches installed. | 43.4, 43.28, 43.35, 43.36, 43.37, 43.38, 43.39, 43.47, 43.48 |
+| `preload = ["@abide/harness/preload"]` | The `[test]` preload that registers a DOM with the measure lane's patches installed. | 43.4, 43.28, 43.35, 43.36, 43.37, 43.38, 43.39, 43.47, 43.48, 43.49 |
 
 ## `traceOp` — `@abide/harness/engine`
 

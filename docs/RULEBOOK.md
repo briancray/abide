@@ -4663,6 +4663,9 @@ that attribute marks, or its first enabled option where none is marked.
 43.48 Under `@abide/harness/preload`, a `<form>`'s `reset()` MUST empty the files of every file input
 it holds, as the HTML reset algorithm does.
 
+43.49 Under `@abide/harness/preload`, markup parsed into a `<textarea>`, a `<pre>` or a `<listing>`
+MUST drop the one newline that immediately follows its start tag, as the HTML parser does.
+
 # 44. The assistant
 
 44.1 `assistant` MUST answer only through a handler that yields it, and MUST NOT mount an address
