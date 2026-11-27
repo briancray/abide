@@ -27,9 +27,10 @@ const UNBUILT: unique symbol = Symbol('abide.unbuilt')
  * What a forwarder resolves through: the home, and how to build the same value again in a scope.
  *
  * 11.70 AND 16.64 — A HANDLER'S HOME, AND AN UNKEYED VALUE'S WITH A `store`, IS BUILT WHERE IT IS
- * FIRST REACHED, and every other value's where it is declared. Building a value starts its body
- * (1.7) and reads its store (8.14), and at import that ran a handler for a request nobody had made,
- * and a store reading `cookies()` where there is no request.
+ * FIRST REACHED, and every other value's where it is declared — or, declared while the app is
+ * entered, once it has (11.82). Building a value starts its body (1.7) and reads its store (8.14),
+ * and at import that ran a handler for a request nobody had made, and a store reading `cookies()`
+ * where there is no request.
  *
  * A `global` handler (11.34) is filed only to be built late: every request reaches the home, built
  * outside each of them, so it is the one value its option says it is.
@@ -172,6 +173,44 @@ export function scoped(
     Object.setPrototypeOf(read, FORWARDING_PROTOTYPE)
     read[FILED] = filed
     return read
+}
+
+/**
+ * 11.82 — the forwarders declared while the app is entered, their homes unbuilt, or `null` where the
+ * app is not being entered. An app's server blocks import its modules ahead of their own bodies, so
+ * a home built at import ran its body (1.7) — a handler, in-process — before any `onConfig` was filed.
+ */
+let enteringHomes: unknown[] | null = null
+
+/** Whether a home declared now waits for `enteredHomes`. */
+export function entering(): boolean {
+    return enteringHomes !== null
+}
+
+/** Keeps `forwarder`, declared while the app is entered, for `enteredHomes` to build. */
+export function deferHome(forwarder: unknown): void {
+    enteringHomes?.push(forwarder)
+}
+
+/** Opens 11.82's window: every home declared from here waits for `enteredHomes`. */
+export function deferHomes(): void {
+    enteringHomes ??= []
+}
+
+/**
+ * Closes 11.82's window: builds each home it kept, in the order declared, and hands each to `filed`
+ * — or, with no `filed`, an entry that failed, leaves each unbuilt, built where it is first reached.
+ */
+export function enteredHomes(
+    filed: ((forwarder: unknown) => void) | undefined,
+): void {
+    const homes = enteringHomes ?? []
+    enteringHomes = null
+    if (filed === undefined) return
+    for (const forwarder of homes) {
+        instanceOf((forwarder as Forwarder)[FILED])
+        filed(forwarder)
+    }
 }
 
 /** 41.34 — builds the instance `value` forwards to in the scope that is current, as a first read does. */

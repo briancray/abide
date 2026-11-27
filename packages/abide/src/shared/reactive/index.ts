@@ -42,7 +42,7 @@ import {
     refreshOver,
     syncedOver,
 } from './Reactive.ts'
-import { outsideScope, scoped } from './scoped.ts'
+import { deferHome, entering, outsideScope, scoped } from './scoped.ts'
 import { SCOPING } from './scoping.ts'
 import { SERVED_BODIES, SERVES_NO_REACTIVE } from './SERVED_BODIES.ts'
 import { type Shared, shareOf } from './share.ts'
@@ -457,10 +457,13 @@ function filed(
     let built: unknown
     if (outsideScope(options?.global === true)) {
         const lazy = !keyed && options?.store !== undefined
-        built = scoped(() => build(given, keyed), lazy)
+        // 11.82 — declared while the app is entered, built once it has.
+        const deferred = !keyed && !lazy && entering()
+        built = scoped(() => build(given, keyed), lazy || deferred)
         // 41.34 — a declaration's, told to the server, which keeps it where its home has a load in
         // flight. Not an `ambient`'s: abide builds those where they are first reached, in a browser too.
-        if (!keyed && !lazy) SCOPING.provider?.filed(built)
+        if (deferred) deferHome(built)
+        else if (!keyed && !lazy) SCOPING.provider?.filed(built)
     } else built = build(given, keyed)
     // 13.15 — for a `GET` handed this value to read its followers' tags off.
     if (options?.tags !== undefined)

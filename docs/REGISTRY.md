@@ -255,7 +255,7 @@ type QueryOf<Defaults> = { [Name in keyof Defaults]: Defaults[Name] extends stri
 | `Produced` | `unknown` | What a production carries, where that differs from what is stored. | 1.2, 9.3 |
 | `Args` | `Record<string, JsonValue> \| undefined` | The key of a keyed value. | 9.4, 11.24, 11.25, 11.26, 11.27, 11.29, 11.31, 11.63, 19.15 |
 | `reactive` | `<Accepted, Shaped = Accepted, Gate = Schema<Accepted>>(initial: Held<Accepted> \| undefined, options?: Shaping<Accepted, Shaped, never, Gate>) => Reactive<Kept<Shaped>, Accepted, Refusals<Shaped, Gate, Accepted>>` | The value form, for what the scope owns outright, opening at `initial`, at what a promise of it settles to, or at `undefined`. | 4.1, 4.2, 4.14, 4.15, 4.16, 4.20, 11.81 |
-| `reactive` | `<Value = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>>(body: () => Result, options?: Shaping<BodyValue<Result>, Shaped, never, Gate>) => ReactiveOf<never, Result, Shaped, Gate, never>` | The derived form, for a value `body` produces, run again when a value it read changes, and a stream where it hands back an async iterable. | 4.20, 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.41, 11.49, 11.50, 11.51, 11.53, 11.56, 11.57, 11.59, 41.6, 11.61, 11.62, 11.64, 11.65, 12.14, 12.17, 19.24, 41.34, 41.35, 11.72, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 14.3, 7.22, 7.23, 11.73, 11.81 |
+| `reactive` | `<Value = never, Result = Value, Shaped = BodyValue<Result>, Gate = Schema<BodyValue<Result>>>(body: () => Result, options?: Shaping<BodyValue<Result>, Shaped, never, Gate>) => ReactiveOf<never, Result, Shaped, Gate, never>` | The derived form, for a value `body` produces, run again when a value it read changes, and a stream where it hands back an async iterable. | 4.20, 3.9, 11.1, 11.3, 11.5, 11.7, 11.8, 11.9, 11.10, 11.11, 11.12, 11.13, 11.14, 11.15, 11.16, 11.17, 11.18, 11.19, 11.20, 11.21, 11.22, 11.32, 11.33, 11.41, 11.49, 11.50, 11.51, 11.53, 11.56, 11.57, 11.59, 41.6, 11.61, 11.62, 11.64, 11.65, 12.14, 12.17, 19.24, 41.34, 41.35, 11.72, 3.7, 3.8, 4.8, 9.1, 9.2, 9.6, 9.7, 9.8, 9.9, 12.16, 14.3, 7.22, 7.23, 11.73, 11.81, 11.82 |
 | `reactive` | `<Accepted>() => [Accepted extends Rpc<infer Value, infer Args, infer Failures, infer Produced> ? true : false] extends [true] ? Reactive<StoredOf<CallOf<Accepted>>, StoredOf<CallOf<Accepted>>, AdoptedFailures<CallOf<Accepted>>, AdoptedProduced<CallOf<Accepted>, StoredOf<CallOf<Accepted>>>> : Reactive<Kept<Accepted>, Accepted, Refused<Accepted>>` | The empty form, for a value nothing has written yet. | 4.14, 4.19 |
 | `Transformer` | `<Accepted, Stored, Failures = never>(value: Accepted) => Stored \| Failures` | The shape of a `transform`. | 4.6, 4.7, 4.8 |
 | `reactive.shared` | `<Value>(create: () => Value \| Reactive<Value>) => Shared<Value>` | A handle on one value per component subtree, made where a component first calls it. | 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7 |
@@ -1350,7 +1350,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's config defaults and their schema. | 27.3, 27.4, 27.6, 27.10, 27.13, 37.7, 37.13 |
+| `onConfig` | `(fn: ConfigDefaults \| null, options?: ConfigOptions) => () => void` | The app's config defaults and their schema. | 27.3, 27.4, 27.6, 27.10, 27.13, 37.7, 37.13, 11.82 |
 
 ## `onHealth`
 

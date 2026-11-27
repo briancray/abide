@@ -18,6 +18,7 @@ import {
     abortStopSignal,
     renewStopSignal,
 } from '#shared/reactive/abortSignal.ts'
+import { deferHomes, enteredHomes } from '#shared/reactive/scoped.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
 import { laneFailure } from './answerFailure.ts'
@@ -39,6 +40,7 @@ import {
     packageUnder,
     positiveSetting,
 } from './config.ts'
+import { fileIfLoading } from './filedLoads.ts'
 import { Followers } from './Followers.ts'
 import { McpSurface } from './generatedSurfaces.ts'
 import {
@@ -234,8 +236,17 @@ export type BootedApp = App & { openMux(): Mux }
 export async function enterApp(origin: AppOrigin): Promise<void> {
     installServer()
     APP_PACKAGE.current = origin.package
-    if (origin.hooks !== undefined) await origin.hooks()
+    // 11.82 — A MODULE'S VALUE IS BUILT ONCE EVERY HOOK IS FILED. A server block's imports evaluate
+    // ahead of its own `onConfig`, so a home built there ran its handler against no defaults.
+    deferHomes()
+    try {
+        if (origin.hooks !== undefined) await origin.hooks()
+    } catch (thrown) {
+        enteredHomes(undefined)
+        throw thrown
+    }
     config.invalidate()
+    enteredHomes(fileIfLoading)
 }
 
 /** An `App` booted over the sources `load` supplies, inside the app's `onStart` hooks. */

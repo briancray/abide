@@ -845,6 +845,9 @@ and MUST take `args` before it where its `Args` are optional.
 11.81 `reactive` given a `ttl`, a `throttle`, a `debounce`, `tags` or `global` MUST throw
 a `TypeError` at construction naming the `memo` that declares it.
 
+11.82 A derived `reactive` a module declares on a server while the app's server blocks are imported
+MUST NOT run its body before every `onConfig` they call is filed.
+
 # 12. Effects
 
 12.1 A `Disposer` MUST run before each rerun of its `Effect`, and once more at teardown.
