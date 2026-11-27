@@ -9,7 +9,7 @@
 // runs on through the steps after it inside that item's slot, in order (57.4). A step that wants its
 // chunks run side by side is a pipe of its own with a `concurrency` of its own.
 
-import { type Failed, isFailed, isTransient, retryAt } from './Failed.ts'
+import { type Failed, isFailed, refusedTransiently, retryAt } from './Failed.ts'
 import { isAsyncIterable } from './isAsyncIterable.ts'
 import { messageOf } from './messageOf.ts'
 import { appStopSignal } from './reactive/abortSignal.ts'
@@ -478,7 +478,7 @@ class Runner {
                     failure = thrown
                 }
             }
-            if (!failed && !(isFailed(answer) && isTransient(answer.status)))
+            if (!failed && !(isFailed(answer) && refusedTransiently(answer)))
                 return answer
             if (attempt >= this.retries) {
                 if (failed) throw failure

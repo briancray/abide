@@ -396,7 +396,7 @@ export async function bootEntered(
         (currentRequestScope()?.app?.answer ?? fetch)(request)
     RPC_SERVER.raw = answerRaw
 
-    // 54.14 — OPENED TO THE NETWORK, the app's jobs start: `App.listen` and `abide dev` both open the
+    // 54.11 — OPENED TO THE NETWORK, the app's jobs start: `App.listen` and `abide dev` both open the
     // mux, after `onStart` has run, and an `App` a test only `fetch`es never runs one.
     const openMux = (): Mux => {
         startJobs()
@@ -430,7 +430,7 @@ export async function bootEntered(
         mux?.closeAll(1001, 'the app is stopping')
         endHeld()
         // 7.20 — the app's stop signal aborted first, so the run a job has is told to end before
-        // 54.43 waits it out; 54.14 — and no job starts another while the app stops.
+        // 54.40 waits it out; 54.11 — and no job starts another while the app stops.
         abortStopSignal()
         const settleJobs = stopJobs()
         const drain = (async () => {

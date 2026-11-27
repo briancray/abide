@@ -2,7 +2,7 @@
 // abide, at the import and at every use — a member access (`x.fetchData`) and a name an app declared
 // itself are left. A scan, as `toMemo` is.
 //
-// `fetchData` RESOLVED to its `FetchFailed` and `fetchAndHandle` REJECTS with it (54.16), so a rename
+// `fetchData` RESOLVED to its `FetchFailed` and `fetchAndHandle` REJECTS with it (54.13), so a rename
 // alone leaves an `isFailed` check on the answer that never fires. Where the answer is a name a file
 // then hands `isFailed`, the call catches its own failure back into the answer, which is the old
 // behaviour spelled out; every other call in a file that checks a failure, and every `ttl` the call no
@@ -31,7 +31,7 @@ export type Note = (line: string, message: string) => void
 const CAUGHT = `.catch((failed) => fetchAndHandle.isError(failed, 'FetchFailed') ? failed : Promise.reject(failed))`
 
 const REJECTS =
-    'fetchAndHandle rejects with its FetchFailed where fetchData answered it: an isFailed check on this answer never fires. Catch it, and narrow with fetchAndHandle.isError. RULEBOOK 54.16.'
+    'fetchAndHandle rejects with its FetchFailed where fetchData answered it: an isFailed check on this answer never fires. Catch it, and narrow with fetchAndHandle.isError. RULEBOOK 54.13.'
 const NO_TTL =
     'fetchAndHandle keeps no answer, so ttl does nothing: hold the answer in a memo with a ttl. RULEBOOK 38.225.'
 

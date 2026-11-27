@@ -7,7 +7,7 @@ export default rpc(
     ({ id }: { id: string }) =>
         fetchAndHandle<{ employees: number }>(
             `${registryOrigin()}/companies/${id}`,
-            { retries: 0, timeout: 500 },
+            { signal: AbortSignal.timeout(500) },
         ).then(
             (registration) => registration.employees,
             () => null,

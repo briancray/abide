@@ -16,7 +16,7 @@ import {
     type Failed,
     isFailed,
     isFailedNamed,
-    isTransient,
+    refusedTransiently,
     retryAt,
 } from '../Failed.ts'
 import { isAbort } from '../isAbort.ts'
@@ -3992,7 +3992,7 @@ export function failedTransiently(value: unknown): boolean {
     const failure = cell.failure
     if (cell.loading || failure === undefined) return false
     if (!isFailed(failure)) return true
-    if (!isTransient(failure.status)) return false
+    if (!refusedTransiently(failure)) return false
     const at = retryAt(failure)
     return at === undefined || Date.now() >= at
 }

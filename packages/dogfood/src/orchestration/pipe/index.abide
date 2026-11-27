@@ -137,12 +137,13 @@ import Section from '#src/lib/Section.abide'
     <Section level={3} title="Ask a rate-limited service again, later">
         <p>A step that throws, or answers a refusal worth asking again, is retried up to
             <code>retries</code>, waiting <code>backoff</code> doubled. A
-            <code>Retry-After</code> holds the step for every item until the time it names.</p>
+            <code>Retry-After</code> holds the step for every item until the time it names. A
+            step's signal aborts at its <code>timeout</code>; hand it to the fetch.</p>
         <Code language="ts" caption="server" code={`
             import { fetchAndHandle, pipe } from '@abide/abide/server'
 
-            const lookup = (domain: string) =>
-                fetchAndHandle(\`https://enrich.example/\${domain}\`, { retries: 0 })
+            const lookup = (domain: string, signal: AbortSignal) =>
+                fetchAndHandle(\`https://enrich.example/\${domain}\`, { signal })
 
             export const enrich = pipe([lookup], {
                 concurrency: 4,

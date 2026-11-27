@@ -1,5 +1,5 @@
-// 18.33, 46.8, 54.10 — HOW LONG A RETRY WAITS, the one rule every retry abide makes is timed by: the
-// browser's outbox and socket mux (`RetryTimer`), the server's `fetchAndHandle`, and a `pipe`'s steps (57.10).
+// 18.33, 46.8, 57.10 — HOW LONG A RETRY WAITS, the one rule every retry abide makes is timed by: the
+// browser's outbox and socket mux (`RetryTimer`), and a `pipe`'s steps.
 // Each passes its own floor and ceiling; what they share is that the wait doubles from the floor,
 // stops at the ceiling, and is never sooner than a `Retry-After` the last answer named (15.23) — that
 // is the server saying "not before", and a step of our own longer than that is still ours to wait.
@@ -24,7 +24,7 @@ export function retryWait(
 export type Backoff = number | ((retry: number) => number)
 
 /**
- * 54.10 — the milliseconds before retry `attempt + 1` under a `backoff` option: `retryWait` from the
+ * 57.10 — the milliseconds before retry `attempt + 1` under a `backoff` option: `retryWait` from the
  * number given, or from `floor` where none is, or what the function answers for that retry — and in
  * each case no sooner than `notBefore`.
  */

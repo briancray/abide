@@ -1,4 +1,4 @@
-// `handle` — A RESPONSE THE APP FETCHED ITSELF, read as its type says (54.26-54.29). Each response is
+// `handle` — A RESPONSE THE APP FETCHED ITSELF, read as its type says (54.23-54.26). Each response is
 // built here: what `handle` reads is a `Response`, wherever it came from.
 
 import { expect, test } from 'bun:test'
@@ -6,7 +6,7 @@ import { expect, test } from 'bun:test'
 import { handle } from '#shared/handle.ts'
 
 // THE REVERT: read every body as text, and a contact arrives as the string of its JSON.
-test('JSON is its value, text is a string, and anything else is a Blob — 54.26, 54.29', async () => {
+test('JSON is its value, text is a string, and anything else is a Blob — 54.23, 54.26', async () => {
     expect(await handle(Response.json({ name: 'Ada Lovelace' }))).toEqual({
         name: 'Ada Lovelace',
     })
@@ -35,7 +35,7 @@ test('JSON is its value, text is a string, and anything else is a Blob — 54.26
 })
 
 // THE REVERT: cancel a refused body unread — every `cause` below is `undefined`.
-test('a status outside 2xx, and JSON that does not parse, are a FetchFailed — 54.27', async () => {
+test('a status outside 2xx, and JSON that does not parse, are a FetchFailed — 54.24', async () => {
     const missing = await handle(new Response('no', { status: 404 }))
     expect(missing).toMatchObject({
         name: 'FetchFailed',
@@ -70,7 +70,7 @@ test('a status outside 2xx, and JSON that does not parse, are a FetchFailed — 
 
 // THE REVERT: read a stream to its end before handing it back, and the first chunk waits on the
 // last.
-test('a JSON Lines stream is its chunks, each as it arrives — 54.28', async () => {
+test('a JSON Lines stream is its chunks, each as it arrives — 54.25', async () => {
     let push: (line: string) => void = () => {}
     let end: () => void = () => {}
     const body = new ReadableStream<Uint8Array>({

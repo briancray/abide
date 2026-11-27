@@ -8,6 +8,7 @@ import { toComputed } from './toComputed.ts'
 import { toComputedCall } from './toComputedCall.ts'
 import { toDerived } from './toDerived.ts'
 import { type Note, toFetchAndHandle } from './toFetchAndHandle.ts'
+import { toFetchOptions } from './toFetchOptions.ts'
 import { toHeldFunction } from './toHeldFunction.ts'
 import { toJob } from './toJob.ts'
 import { toKey } from './toKey.ts'
@@ -113,6 +114,8 @@ const MIGRATIONS: Migration[] = [
     { version: '0.145.0', migrate: eachSource(toHeldFunction) },
     // 38.233 — `reactive.derived` is `reactive`.
     { version: '0.145.0', migrate: eachSource(toReactive) },
+    // 38.234 — `fetchAndHandle` asks once: a `timeout` is the `signal`'s, and asking again a `pipe`'s.
+    { version: '0.145.0', migrate: eachSource(toFetchOptions) },
 ]
 
 /**

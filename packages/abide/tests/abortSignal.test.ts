@@ -16,7 +16,7 @@ import { collectWatches } from '#shared/reactive/watch.ts'
 
 import { inMemoryApp } from './inMemoryApp.ts'
 
-/** What `App.listen` and `abide dev` open, with no socket to bind here (54.14). */
+/** What `App.listen` and `abide dev` open, with no socket to bind here (54.11). */
 function serving(app: App): void {
     ;(app as BootedApp).openMux()
 }

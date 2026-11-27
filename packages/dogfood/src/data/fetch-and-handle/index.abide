@@ -14,9 +14,17 @@ import Section from '#src/lib/Section.abide'
     tests={[
         {
             path: 'packages/abide/tests/fetchAndHandle.test.ts',
+            from: ["test('a 503 is asked once, and answered as its FetchFailed"],
+        },
+        {
+            path: 'packages/abide/tests/fetchAndHandle.test.ts',
             from: [
-                "test('a 503 is asked again, and the answer after it is the body",
+                'test("a pipe asks again after a service\'s 503 and not after its 404',
             ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/companies/lib/Registration.test.ts',
+            from: ["test('a registry failing twice is asked a third time'"],
         },
         {
             path: 'packages/abide/tests/fetchAndHandle.test.ts',
@@ -39,7 +47,7 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/fetchAndHandle.test.ts',
             from: [
-                "test('fetchAndHandle.isError narrows a caught failure to its FetchFailed — 54.40'",
+                "test('fetchAndHandle.isError narrows a caught failure to its FetchFailed — 54.37'",
             ],
         },
         {
@@ -74,12 +82,11 @@ import Section from '#src/lib/Section.abide'
         },
     ]}
 >
-    <Section level={3} title="Fill in a company from a registry that fails now and then">
-        <p>A thrown attempt, a timeout or a 408, 425, 429 or 5xx is asked again, twice by default.
-            The body is read as its <code>content-type</code> says: JSON as its value, text as a
-            string, JSON Lines or an event stream as its chunks, anything else as a
-            <code>Blob</code>. A service that gives up rejects with a <code>FetchFailed</code>
-            at 502, and a handler that lets it reject refuses with it.</p>
+    <Section level={3} title="Fill in a company from a registry">
+        <p>One call is one request. The body is read as its <code>content-type</code> says: JSON
+            as its value, text as a string, JSON Lines or an event stream as its chunks, anything
+            else as a <code>Blob</code>. A refusal rejects with a <code>FetchFailed</code> at
+            502, and a handler that lets it reject refuses with it.</p>
         <Code language="ts" caption="server" code={`
             import { fetchAndHandle } from '@abide/abide'
             import { rpc } from '@abide/abide/server'
@@ -90,6 +97,28 @@ import Section from '#src/lib/Section.abide'
                 fetchAndHandle<Registration>(
                     \`https://registry.example/companies/\${id}\`,
                 ),
+            )
+        `} />
+    </Section>
+
+    <Section level={3} title="Ask a busy registry again">
+        <p><code>fetchAndHandle</code> asks once. Asking again is a <code>pipe</code>'s: its
+            <code>retries</code>, their <code>backoff</code>, a <code>timeout</code> per attempt
+            and how many companies are asked at once. A 408, 425, 429 or 5xx the registry
+            answered, or no answer at all, is asked again; a 404 is the answer. A
+            <code>Retry-After</code> holds every company waiting, not just the one refused.</p>
+        <Code language="ts" caption="server" code={`
+            import { fetchAndHandle, pipe } from '@abide/abide'
+
+            export const askRegistry = pipe(
+                [
+                    (id: string, signal: AbortSignal) =>
+                        fetchAndHandle<Registration>(
+                            \`https://registry.example/companies/\${id}\`,
+                            { signal },
+                        ),
+                ],
+                { concurrency: 4, retries: 2 },
             )
         `} />
     </Section>
@@ -111,7 +140,7 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Hold a registry answer for a minute">
         <p>A fetch keeps nothing. Hold an answer in a <code>memo</code> with a <code>ttl</code>:
-            keyed by the company, so two asks at once are one request, and a failure is asked
+            keyed by the company, so two asks at once are one request, and a busy answer is asked
             again on the next call.</p>
         <Code language="ts" caption="server" code={`
             import { fetchAndHandle, memo } from '@abide/abide'
@@ -144,22 +173,20 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Find out why a fetch gave up">
-        <p>A <code>FetchFailed</code> carries the last status, or <code>null</code> where nothing
-            answered, and a reason: <code>timeout</code>, <code>network</code>,
-            <code>status</code> or <code>shape</code>. Where an attempt threw, its
+    <Section level={3} title="Find out why a fetch was refused">
+        <p>A <code>FetchFailed</code> carries the status the service answered, or
+            <code>null</code> where nothing answered, and a reason: <code>network</code>,
+            <code>status</code> or <code>shape</code>. Where the request threw, its
             <code>cause</code> is what <code>fetch</code> threw, a refused certificate's code
             and all; it never leaves the server.</p>
         <Code language="ts" caption="server" code={`
             import { fetchAndHandle, log } from '@abide/abide/server'
 
             try {
-                await fetchAndHandle('https://registry.example/filings/ada.txt', {
-                    timeout: 2_000,
-                })
+                await fetchAndHandle('https://registry.example/filings/ada.txt')
             } catch (failed) {
                 if (!fetchAndHandle.isError(failed, 'FetchFailed')) throw failed
-                log.warning('registry gave up', failed.data, failed.cause)
+                log.warning('registry refused', failed.data, failed.cause)
             }
         `} />
     </Section>
@@ -185,7 +212,7 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Answer 404 when the registry has never heard of the company">
-        <p>A service that gives up is refused 502 whatever it answered. Branch on
+        <p>A refused fetch is 502 whatever the service answered. Branch on
             <code>data.status</code>, or <code>data.reason</code>, to answer your caller in its
             own terms.</p>
         <Code language="ts" caption="server" code={`
@@ -207,15 +234,16 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Show a headcount only if the registry answers in time">
-        <p>Where an answer is nice to have, ask once and give up fast: <code>retries: 0</code>
-            and a short <code>timeout</code>, with a fallback for the <code>FetchFailed</code>.</p>
+        <p>Where an answer is nice to have, give the request a short deadline: the platform's
+            <code>AbortSignal.timeout</code> as its <code>signal</code>, with a fallback for
+            what it rejects with.</p>
         <Code language="ts" caption="server" code={`
             import { fetchAndHandle, rpc } from '@abide/abide/server'
 
             export default rpc(({ id }: { id: string }) =>
                 fetchAndHandle<{ employees: number }>(
                     \`https://registry.example/companies/\${id}\`,
-                    { retries: 0, timeout: 500 },
+                    { signal: AbortSignal.timeout(500) },
                 ).then(
                     (registration) => registration.employees,
                     () => null,
@@ -230,41 +258,25 @@ import Section from '#src/lib/Section.abide'
             that fails leaves the last answer served to every caller, with the failure in
             <code>error</code> beside it.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchAndHandle, memo } from '@abide/abide'
+            import { memo } from '@abide/abide'
+            import { askRegistry } from './askRegistry.server.ts'
 
             export const registrations = memo(
-                ({ id }: { id: string }) =>
-                    fetchAndHandle<Registration>(
-                        \`https://registry.example/companies/\${id}\`,
-                    ),
+                ({ id }: { id: string }) => askRegistry(id),
                 { global: true, ttl: 3_600_000 },
             )
         `} />
     </Section>
 
-    <Section level={3} title="Retry a write that is safe to repeat">
-        <p>A <code>POST</code> is asked once, since asking again may write twice. Set
-            <code>retries</code> where the service takes the same write twice safely.</p>
-        <Code language="ts" caption="server" code={`
-            import { fetchAndHandle } from '@abide/abide/server'
-
-            await fetchAndHandle('https://mail.example/send', {
-                method: 'POST',
-                body: JSON.stringify(email),
-                retries: 2,
-            })
-        `} />
-    </Section>
-
     <Section level={3} title="Stop asking once the caller leaves">
-        <p>Pass the request's <code>signal</code>. Its abort is thrown, the one thing
-            <code>fetchAndHandle</code> throws, and nothing is asked again.</p>
+        <p>Pass the request's <code>signal</code>, joined with a deadline where one is due. Its
+            abort is thrown as its reason, the one thing <code>fetchAndHandle</code> rejects
+            with that is not a <code>FetchFailed</code>.</p>
         <Code language="ts" caption="server" code={`
             import { fetchAndHandle, request } from '@abide/abide/server'
 
             fetchAndHandle('https://registry.example/companies/ada', {
-                signal: request().signal,
-                timeout: 5_000,
+                signal: AbortSignal.any([request().signal, AbortSignal.timeout(5_000)]),
             })
         `} />
     </Section>

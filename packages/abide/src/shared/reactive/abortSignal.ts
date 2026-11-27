@@ -19,7 +19,7 @@ export const BODY_RUN: { cell: Cell | null } = { cell: null }
 /**
  * The signal that says stop to the work this is called in — the innermost owner it runs under, which
  * aborts where any owner above it does: a `memo` run's own (7.22, 7.23, 7.24), the request being
- * served (7.25), a `job`'s run (54.35), and otherwise the one `App.stop` aborts before it waits on what is in flight (7.20).
+ * served (7.25), a `job`'s run (54.32), and otherwise the one `App.stop` aborts before it waits on what is in flight (7.20).
  * Never aborted where no app stops and no run is replaced, a browser outside a run among them.
  */
 export function abortSignal(): AbortSignal {

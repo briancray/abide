@@ -12,6 +12,7 @@ import { toComputed } from '#compiler/toComputed.ts'
 import { toComputedCall } from '#compiler/toComputedCall.ts'
 import { toDerived } from '#compiler/toDerived.ts'
 import { toFetchAndHandle } from '#compiler/toFetchAndHandle.ts'
+import { toFetchOptions } from '#compiler/toFetchOptions.ts'
 import { toMemo } from '#compiler/toMemo.ts'
 import { toRpcText } from '#compiler/toRpc.ts'
 import { upgrade } from '#compiler/upgrade.ts'
@@ -1259,4 +1260,33 @@ const listNotes = GET(({ id }: { id: string }) => [id])
     expect(notes).toEqual([
         'this listed answered GET alone, and exported bare from a <script server> it would also answer the writes its value derives where that is a table, a job, a pipe or a ledger',
     ])
+})
+
+// 38.234 — A FETCH ASKS ONCE: a `timeout` is the `signal`'s deadline where the call hands none, a
+// `retries: 0` goes — the options with it where it was all they held — and every retry the call still
+// asks for is named at its line for a pipe. A call of a `fetchAndHandle` the file declared itself is
+// left. THE REVERT: drop the `drops` splices in `toFetchOptions`; `{ retries: 0 }` is left in place.
+test('abide upgrade moves a fetch off its own timeout and retries — 38.234', () => {
+    const text = `import { fetchAndHandle } from '@abide/abide/server'
+
+export const once = () => fetchAndHandle('https://a.example', { retries: 0 })
+export const quick = () =>
+    fetchAndHandle('https://a.example', { retries: 0, timeout: 500, as: 'text' })
+export const busy = () => fetchAndHandle('https://a.example', { retries: 3, backoff: 1_000 })
+`
+    const notes: string[] = []
+    expect(toFetchOptions(text, 'src/a.server.ts', (line) => notes.push(line)))
+        .toBe(`import { fetchAndHandle } from '@abide/abide/server'
+
+export const once = () => fetchAndHandle('https://a.example')
+export const quick = () =>
+    fetchAndHandle('https://a.example', { signal: AbortSignal.timeout(500), as: 'text' })
+export const busy = () => fetchAndHandle('https://a.example', { retries: 3, backoff: 1_000 })
+`)
+    expect(notes).toEqual([
+        "export const busy = () => fetchAndHandle('https://a.example', { retries: 3, backoff: 1_000 })",
+    ])
+    const own =
+        "const fetchAndHandle = (url: string, options: object) => url\nfetchAndHandle('a', { retries: 0 })"
+    expect(toFetchOptions(own, 'src/own.ts')).toBe(own)
 })

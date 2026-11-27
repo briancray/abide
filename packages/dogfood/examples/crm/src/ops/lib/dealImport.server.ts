@@ -15,7 +15,7 @@ export const dealImport = job({
                 : DEALS.filter((deal) => deal.stage === stage)
         await Bun.sleep(300) // the old CRM paging out its deals
         log.info(`imported: ${deals.length} deals checked against the old CRM`)
-        // 54.41 — what a run answers is its status's `lastResult`.
+        // 54.38 — what a run answers is its status's `lastResult`.
         return deals.length
     },
 })

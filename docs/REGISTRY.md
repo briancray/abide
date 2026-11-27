@@ -1137,13 +1137,13 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `authorize` | `(admits: Partial<Principal> \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string; status?: 403 \| 404 }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined> \| Failed<'NotFound', { path: string; method: string }>>` | A rung admitting a signed-in caller whose claims hold the ones it names, or whom a function passes, from `@abide/abide/server`. | 13.12, 15.7, 15.9, 54.2, 54.3, 54.4, 54.24 |
+| `authorize` | `(admits: Partial<Principal> \| ((principal: Principal) => boolean \| Promise<boolean>), options?: { message?: string; status?: 403 \| 404 }) => Middleware<never, object, Failed<'SignedOut', undefined> \| Failed<'Forbidden', undefined> \| Failed<'NotFound', { path: string; method: string }>>` | A rung admitting a signed-in caller whose claims hold the ones it names, or whom a function passes, from `@abide/abide/server`. | 13.12, 15.7, 15.9, 54.2, 54.3, 54.4, 54.21 |
 
 ## `trustedIdentity`
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `trustedIdentity` | `(options: { header: string; proxies: readonly string[]; claims: (value: string) => Record<string, unknown> }) => Middleware` | A rung signing in the caller a trusted proxy names in a header, from `@abide/abide/server`. | 54.31, 54.32, 54.33 |
+| `trustedIdentity` | `(options: { header: string; proxies: readonly string[]; claims: (value: string) => Record<string, unknown> }) => Middleware` | A rung signing in the caller a trusted proxy names in a header, from `@abide/abide/server`. | 54.28, 54.29, 54.30 |
 
 ## `readOnly`
 
@@ -1244,7 +1244,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `abortSignal` | `() => AbortSignal` | The signal that says stop to the work it is called in, from the innermost owner that work runs under. | 7.20, 7.21, 7.22, 7.23, 7.24, 7.25, 7.26, 54.35 |
+| `abortSignal` | `() => AbortSignal` | The signal that says stop to the work it is called in, from the innermost owner that work runs under. | 7.20, 7.21, 7.22, 7.23, 7.24, 7.25, 7.26, 54.32 |
 
 # Browser context
 
@@ -1281,8 +1281,8 @@ type Reached = { readonly [REACHED]: true }
 | `App` | `interface App` | What a host, a test or a script holds the app as. | 42.12, 42.13 |
 | `App.fetch` | `(request: Request, options?: { principal?: Record<string, unknown>; caller?: string }) => Promise<Response>` | The whole request path, entered in process. | 42.5, 42.6, 42.20, 42.21 |
 | `App.run` | `<Result>(fn: () => Result \| Promise<Result>, options?: { request?: Request; principal?: Record<string, unknown>; caller?: string }) => Promise<Result>` | One scope around a function, and nothing else. | 42.7, 42.8, 42.19, 42.21, 11.38 |
-| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 16.23, 16.56, 18.28, 18.29, 18.30, 54.14 |
-| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 42.17, 37.4, 7.20, 54.43 |
+| `App.listen` | `(options?: { port?: number; hostname?: string; unix?: string }) => Promise<void>` | The socket, bound. | 42.9, 16.23, 16.56, 18.28, 18.29, 18.30, 54.11 |
+| `App.stop` | `() => Promise<void>` | The drain and the teardown. | 42.10, 42.11, 42.15, 42.17, 37.4, 7.20, 54.40 |
 | `App[Symbol.asyncDispose]` | `() => Promise<void>` | `App.stop`, under the name `await using` calls. | 42.14 |
 
 ## Environment variables
@@ -1423,10 +1423,10 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `fetchAndHandle` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T>` | A URL's body, read as its type says or as `as` names, asked with a deadline and retries, on either side. | 54.7, 54.8, 54.9, 54.10, 54.11, 54.12, 54.13, 54.27, 54.30, 54.26, 54.28, 54.29 |
-| `fetchAndHandle.isError` | `(error: unknown, name: 'FetchFailed') => error is FetchFailed` | Whether a caught failure is the refusal a fetch gave up with. | 54.40 |
-| `FetchOptions<T>` | `RequestInit & { as?: 'json' \| 'text' \| 'blob'; timeout?: number; retries?: number; backoff?: number \| ((retry: number) => number); schema?: Schema<T> }` | `fetch`'s own options, with the reading, the deadline, the retries and their spacing and the gate beside them. | 54.7, 54.8, 54.9, 54.10, 54.13 |
-| `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'timeout' \| 'network' \| 'status' \| 'shape' }>` | The refusal a fetch that gave up rejects with. | 15.9, 54.12, 54.13, 54.27, 54.30 |
+| `fetchAndHandle` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T>` | A URL's body, read as its type says or as `as` names, asked once, on either side. | 54.7, 54.8, 54.9, 54.10, 54.24, 54.27, 54.23, 54.25, 54.26 |
+| `fetchAndHandle.isError` | `(error: unknown, name: 'FetchFailed') => error is FetchFailed` | Whether a caught failure is the refusal a fetch was refused with. | 54.37 |
+| `FetchOptions<T>` | `RequestInit & { as?: 'json' \| 'text' \| 'blob'; schema?: Schema<T> }` | `fetch`'s own options, with the reading and the gate beside them. | 54.8, 54.10 |
+| `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'network' \| 'status' \| 'shape' }>` | The refusal a refused fetch rejects with. | 15.9, 15.19, 54.9, 54.10, 54.24, 54.27 |
 
 # Orchestration
 
@@ -1476,13 +1476,13 @@ type FirstIn<Steps> = Steps extends readonly [infer First, ...unknown[]] ? StepI
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `job` | `<Input = undefined>(options: JobOptions<Input>) => Job<Input>` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.14, 54.43, 54.15, 54.17, 54.19, 54.21, 54.22, 54.25, 54.34, 54.35, 54.36, 54.37, 54.38 |
-| `Job` | `<Input = undefined>{ status: Memo<undefined, JobStatus>; run: (input?: Input) => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.14 |
-| `Job.status` | `Memo<undefined, JobStatus>` | Where the job stands, one value for every caller. | 54.18, 54.20 |
-| `Job.run` | `(input?: Input) => Promise<JobStatus>` | A run ahead of the schedule, handed the input it is called with. | 54.16, 54.22, 54.39 |
-| `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.22, 54.23 |
-| `JobOptions` | `<Input = undefined>{ name?: string; run: (input: Input \| undefined) => unknown; store?: Store<JobStatus>; delay?: number; paused?: Reactive<boolean> \| (() => boolean) } & ({ every: number \| (() => number); from?: 'end' \| 'start' } \| { cron: string; timeZone?: string })` | What a job is: its name, the work, where its status is kept, what holds it and how long after the app opens it first looks, beside its schedule — an interval measured from a run's end or start, or the times a cron expression names in a zone. | 54.14, 54.15, 54.17, 54.19, 54.21, 54.22, 54.25, 54.34, 54.36, 54.37, 54.38, 54.42, 54.44 |
-| `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastTook: number \| null; lastResult: unknown; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.18, 54.19, 54.20, 54.21, 54.23, 54.41 |
+| `job` | `<Input = undefined>(options: JobOptions<Input>) => Job<Input>` | Work the server runs on a schedule, one run at a time, from `@abide/abide/server`. | 54.11, 54.40, 54.12, 54.14, 54.16, 54.18, 54.19, 54.22, 54.31, 54.32, 54.33, 54.34, 54.35 |
+| `Job` | `<Input = undefined>{ status: Memo<undefined, JobStatus>; run: (input?: Input) => Promise<JobStatus>; stop: () => Promise<JobStatus> }` | What `job` hands back. | 54.11 |
+| `Job.status` | `Memo<undefined, JobStatus>` | Where the job stands, one value for every caller. | 54.15, 54.17 |
+| `Job.run` | `(input?: Input) => Promise<JobStatus>` | A run ahead of the schedule, handed the input it is called with. | 54.13, 54.19, 54.36 |
+| `Job.stop` | `() => Promise<JobStatus>` | The end of the job's schedule, and of its run in flight. | 54.19, 54.20 |
+| `JobOptions` | `<Input = undefined>{ name?: string; run: (input: Input \| undefined) => unknown; store?: Store<JobStatus>; delay?: number; paused?: Reactive<boolean> \| (() => boolean) } & ({ every: number \| (() => number); from?: 'end' \| 'start' } \| { cron: string; timeZone?: string })` | What a job is: its name, the work, where its status is kept, what holds it and how long after the app opens it first looks, beside its schedule — an interval measured from a run's end or start, or the times a cron expression names in a zone. | 54.11, 54.12, 54.14, 54.16, 54.18, 54.19, 54.22, 54.31, 54.33, 54.34, 54.35, 54.39, 54.41 |
+| `JobStatus` | `{ running: boolean; lastRun: string \| null; nextRun: string \| null; lastTook: number \| null; lastResult: unknown; lastError: string \| null }` | Whether a run is going, when the last ended and the next is due, and the last run's failure. | 54.15, 54.16, 54.17, 54.18, 54.20, 54.38 |
 
 ## Worker files
 
@@ -1878,7 +1878,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide check [dir…]` | The type-checker over a `.abide` tree. | 38.3, 38.31, 38.32, 38.33, 38.40, 38.105, 38.123, 38.138, 38.196, 38.197, 38.209, 38.210, 38.212, 38.218 |
 | `abide format [--check] [path…]` | The formatter over a `.abide` tree. | 38.25, 38.125, 38.126, 38.127, 38.128, 38.129, 38.137 |
 | `abide routes [--json]` | Every address the app answers, the file answering it, what each matcher takes, the rungs each handler names, and where each hook is filed. | 38.108, 38.123, 38.135 |
-| `abide dev [--port <n>] [--hostname <host>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97, 38.123, 38.136, 54.14 |
+| `abide dev [--port <n>] [--hostname <host>]` | Watches the project and keeps the app up. | 16.23, 16.56, 37.8, 37.9, 38.4, 38.14, 38.15, 38.16, 38.17, 38.19, 38.24, 38.25, 38.26, 38.28, 38.30, 38.35, 38.36, 38.37, 38.38, 38.41, 38.43, 38.58, 38.63, 38.64, 38.65, 38.94, 38.96, 38.97, 38.123, 38.136, 54.11 |
 | `abide build` | Builds the client into content-hashed chunks and a manifest. | 38.43, 38.5, 38.18, 38.25, 38.26, 38.27, 38.30, 38.66, 38.94, 38.123, 38.139, 38.218 |
 | `abide start [--port <n>] [--hostname <host>]` | Boots the built app. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.100, 38.20, 38.21, 38.22, 38.23, 38.25, 38.26, 38.27, 38.28, 38.29, 38.58, 38.67, 38.68, 38.95, 38.97, 38.110, 38.123, 38.136, 38.139 |
 | `abide [--url <origin>] [--port <n>] [--hostname <host>]` | The interactive shell — on the built app it boots, or on the running app `--url` names. | 37.8, 37.10, 37.11, 37.12, 38.6, 38.7, 38.53, 38.54, 38.55, 38.58, 38.59, 38.60, 38.62, 38.123, 38.136 |
@@ -1889,7 +1889,7 @@ rows a runner prints, and an adapter for an abide app.
 | `abide compile [--target] [--out] [--platforms]` | One standalone executable. | 37.8, 37.10, 37.11, 37.12, 38.10, 38.25, 38.26, 38.44, 38.45, 38.46, 38.47, 38.48, 38.49, 38.50, 38.51, 38.52, 38.56, 38.93, 38.97, 38.123, 38.136, 38.181 |
 | `abide native [--out] [--required] [--notes <file>]` | A native app for the host platform, with a window on the app, and the update that installs it. | 38.10, 38.25, 38.26, 38.70, 38.71, 38.72, 38.73, 38.74, 38.75, 38.76, 38.77, 38.78, 38.79, 38.80, 38.81, 38.82, 38.83, 38.84, 38.85, 38.86, 38.87, 38.88, 38.89, 38.90, 38.91, 38.92, 38.101, 38.102, 38.123, 38.140, 38.146, 38.147, 38.174, 38.175, 38.176, 38.178, 38.179, 38.180, 38.181, 38.182, 38.186, 38.187, 38.188, 38.189, 38.190, 38.191, 38.192, 38.193, 38.194, 44.77, 44.80 |
 | `abide lsp` | The `.abide` language server, over stdio. | 38.11, 38.34, 38.39, 38.98, 38.116, 38.117, 38.118, 38.130 |
-| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215, 38.217, 38.219, 38.220, 38.221, 38.222, 38.223, 38.224, 38.225, 38.226, 38.227, 38.228, 38.229, 38.230, 38.231, 38.232, 38.233 |
+| `abide upgrade [--check] [--from <version>]` | The migrations that move an app's own files past what each release since `--from` changed. | 38.25, 38.26, 38.198, 38.199, 38.200, 38.201, 38.202, 38.203, 38.215, 38.217, 38.219, 38.220, 38.221, 38.222, 38.223, 38.224, 38.225, 38.226, 38.227, 38.228, 38.229, 38.230, 38.231, 38.232, 38.233, 38.234 |
 | `--help` · `-h` · `abide help` | Usage, generated from the command list. | 38.12, 38.113, 38.114 |
 | `--version` · `-v` | The version of abide, or of the app a compiled executable holds. | 38.115 |
 

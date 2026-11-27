@@ -1,17 +1,13 @@
 import { refuse } from '@abide/abide'
 import { fetchAndHandle, rpc } from '@abide/abide/server'
 
-import { registryOrigin } from './lib/registryOrigin.server.ts'
-
-type Registration = { founded: number; employees: number }
+import { askRegistry } from './lib/askRegistry.server.ts'
 
 /** A company's entry at the registry, held a minute, or why it gave up. */
 export default rpc(
     async ({ id }: { id: string }) => {
         try {
-            return await fetchAndHandle<Registration>(
-                `${registryOrigin()}/companies/${id}`,
-            )
+            return await askRegistry(id)
         } catch (failed) {
             // A company the registry has never heard of is one the CRM has not either.
             if (

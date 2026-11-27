@@ -150,6 +150,20 @@ export function isTransient(status: number): boolean {
 }
 
 /**
+ * 15.19 — whether `failure` says "not now": by its own status, or a `FetchFailed`'s by the status its
+ * service answered, and as "not now" where the service did not answer at all. Its own is 502 whatever
+ * the service said, so read by its status alone a service's 404 was asked again.
+ */
+export function refusedTransiently(failure: Failed<string, unknown>): boolean {
+    if (failure.name !== 'FetchFailed') return isTransient(failure.status)
+    const { status, reason } = failure.data as {
+        status: number | null
+        reason: string
+    }
+    return status === null ? reason === 'network' : isTransient(status)
+}
+
+/**
  * 15.23 — the time a refusal's `Retry-After` named, kept beside the refusal rather than on it: 15.1's
  * four fields are what a `Failed` is, and this is what the answer carrying one said of it.
  */

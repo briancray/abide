@@ -223,9 +223,9 @@ test('a worker file the thread imports is the module itself, run in that thread 
 })
 
 // A worker export is a function a job's `run` can call: each run is a thread of its own, and the call
-// is made where `abortSignal` answers the run's signal (54.35), so `stop` ends the thread and rejects
+// is made where `abortSignal` answers the run's signal (54.32), so `stop` ends the thread and rejects
 // the call with the stop (55.8) — the call handed no signal of its own.
-test('a job whose run is a worker export runs it off the main thread, and stopping it ends the thread — 54.22, 54.35, 55.8', async () => {
+test('a job whose run is a worker export runs it off the main thread, and stopping it ends the thread — 54.19, 54.32, 55.8', async () => {
     let onMain: boolean | undefined
     const offloaded = job({
         name: 'offloaded',

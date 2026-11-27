@@ -8,7 +8,7 @@ import { registryAsked } from './registryOrigin.server.ts'
 /** What the CRM answers for the company `id`, a refusal included. */
 async function registrationOf(id: string) {
     await using app = await createApp()
-    return app.run(async () => {
+    return await app.run(async () => {
         try {
             return await getRegistration({ id })
         } catch (refusal) {
@@ -17,7 +17,7 @@ async function registrationOf(id: string) {
     })
 }
 
-// THE REVERT: give up at the first 503, and Hopper & Co is refused.
+// THE REVERT: drop `retries` from `askRegistry`, and Hopper & Co is refused at the first 503.
 test('a registry failing twice is asked a third time', async () => {
     expect(await registrationOf('hopper-and-co')).toEqual({
         founded: 1906,

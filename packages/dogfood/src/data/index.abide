@@ -145,21 +145,32 @@ import Section from '#src/lib/Section.abide'
 
     <Section title="Fetch another service, on either side">
         <p><a href={url('/data/fetch-and-handle')}><code>fetchAndHandle</code></a> is
-            <code>fetch</code> asked with a deadline and asked again after a 503, twice by default,
-            its body read as its type says. Where the service still fails it rejects with a
-            <code>FetchFailed</code>, and a handler that lets it reject refuses at 502.</p>
+            <code>fetch</code> asked once, its body read as its type says. Where the service
+            refuses it rejects with a <code>FetchFailed</code>, and a handler that lets it reject
+            refuses at 502. Asking a busy service again is a
+            <a href={url('/orchestration/pipe')}><code>pipe</code></a>'s.</p>
         <Code language="ts" caption="server" code={`
-            import { fetchAndHandle } from '@abide/abide'
+            import { fetchAndHandle, pipe } from '@abide/abide'
             import { rpc } from '@abide/abide/server'
             import { registryOrigin } from './lib/registryOrigin.server.ts'
 
             type Registration = { founded: number; employees: number }
 
-            export default rpc(
-                ({ id }: { id: string }) =>
-                    fetchAndHandle<Registration>(\`\${registryOrigin()}/companies/\${id}\`),
-                { global: true, ttl: 60_000 },
+            const askRegistry = pipe(
+                [
+                    (id: string, signal: AbortSignal) =>
+                        fetchAndHandle<Registration>(
+                            \`\${registryOrigin()}/companies/\${id}\`,
+                            { signal },
+                        ),
+                ],
+                { concurrency: 4, retries: 2 },
             )
+
+            export default rpc(({ id }: { id: string }) => askRegistry(id), {
+                global: true,
+                ttl: 60_000,
+            })
         `} />
         <p>The CRM's registry answers Hopper &amp; Co on every third ask, so the retries reach
             an answer. Asked when this page loaded:</p>
@@ -169,7 +180,7 @@ import Section from '#src/lib/Section.abide'
         <Exchange path="/companies/getRegistration?id=langley-research" />
     </Section>
 
-    <Section title="Catch a FetchFailed to read why it gave up">
+    <Section title="Catch a FetchFailed to read why it was refused">
         <p>A refusal rejects, so catch it and narrow it with <code>fetchAndHandle.isError</code>.
             <code>as</code> reads the body as <code>'text'</code>, <code>'json'</code> or a
             <code>'blob'</code> whatever its type says.</p>
@@ -179,11 +190,10 @@ import Section from '#src/lib/Section.abide'
             try {
                 await fetchAndHandle('https://registry.example/filings/ada.txt', {
                     as: 'text',
-                    timeout: 2_000,
                 })
             } catch (failed) {
                 if (!fetchAndHandle.isError(failed, 'FetchFailed')) throw failed
-                log.warning('registry gave up', failed.data, failed.cause)
+                log.warning('registry refused', failed.data, failed.cause)
             }
         `} />
     </Section>

@@ -46,7 +46,7 @@ export const SOURCED = new Set([
 const POLL_IS_TTL =
     'poll is now ttl: this entry is refreshed only while something reads it, and let go when nothing does. Work that has to run whether or not anything reads it is a job writing the memo: job({ every, run }). RULEBOOK 6.1, 38.227.'
 const POLL_IS_A_JOB =
-    'poll with a delay scheduled work whether or not anything read it, and poll is gone: make it a job writing the memo — job({ every, run }) — or a ttl. RULEBOOK 54.14, 38.227.'
+    'poll with a delay scheduled work whether or not anything read it, and poll is gone: make it a job writing the memo — job({ every, run }) — or a ttl. RULEBOOK 54.11, 38.227.'
 const VALUE_OPTIONS_UNREAD =
     'these options are not written out here, so whether they carry a ttl, throttle, debounce, tags, global or poll cannot be read: reactive takes none of them — move any onto a memo, read through reactive(() => m(args)), or make the value a memo (handlers serve one, never a Reactive). RULEBOOK 11.81, 16.109, 38.227.'
 const VALUE_TAKES_NONE =

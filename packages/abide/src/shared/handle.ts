@@ -1,4 +1,4 @@
-// 54.26-54.29 — A `Response` THE APP FETCHED ITSELF, read as its type says. The fetch is the caller's —
+// 54.23-54.26 — A `Response` THE APP FETCHED ITSELF, read as its type says. The fetch is the caller's —
 // its options, its headers, and whatever it throws, which reaches the caller untouched — so `handle`
 // is only what comes after: `fetch(url).then(handle)`.
 
@@ -14,20 +14,20 @@ import { essenceOf, framedStream, framingOf, isJsonEssence } from './framing.ts'
  * @param response what a `fetch` answered
  */
 export function handle(response: Response): Promise<unknown | FetchFailed> {
-    // 54.27 — refused: the status it was answered at, and what the service said as its cause.
+    // 54.24 — refused: the status it was answered at, and what the service said as its cause.
     return response.ok ? readBody(response) : refusedBy(response)
 }
 
 /**
- * A 2xx `Response`'s body, read as its `content-type` says (54.26, 54.28, 54.29), or as `as` names
- * whatever its type says (54.13): `handle`'s reading, and `fetchAndHandle`'s.
+ * A 2xx `Response`'s body, read as its `content-type` says (54.23, 54.25, 54.26), or as `as` names
+ * whatever its type says (54.10): `handle`'s reading, and `fetchAndHandle`'s.
  */
 export async function readBody(
     response: Response,
     as?: 'json' | 'text' | 'blob',
 ): Promise<unknown | FetchFailed> {
     const type = response.headers.get('content-type')
-    // 54.28 — a stream is handed back as it arrives, never read to its end first.
+    // 54.25 — a stream is handed back as it arrives, never read to its end first.
     const framing = as === undefined ? framingOf(type) : null
     if (framing !== null)
         return response.body === null
@@ -50,13 +50,13 @@ export async function readBody(
             return failure
         }
     }
-    // 54.29 — text whatever its subtype, and a type that says nothing is text too.
+    // 54.26 — text whatever its subtype, and a type that says nothing is text too.
     if (essence === '' || essence.startsWith('text/')) return response.text()
     return response.blob()
 }
 
 /**
- * 54.27 — a `Response` outside 2xx as the `FetchFailed` naming its status, what the service said as
+ * 54.24 — a `Response` outside 2xx as the `FetchFailed` naming its status, what the service said as
  * its `cause`. 15.23, 15.24 — the service's own `Retry-After` is kept with it, so a handler handing
  * it on says it too.
  */
@@ -68,11 +68,11 @@ export async function refusedBy(response: Response): Promise<FetchFailed> {
     return failure
 }
 
-// 54.27 — the most of a refused body read; a longer one is let go unread.
+// 54.24 — the most of a refused body read; a longer one is let go unread.
 const REFUSAL_BODY_BYTES = 65_536
 
 /**
- * A refused `Response`'s body, read as 54.26 and 54.29 read one — JSON that does not parse, and a
+ * A refused `Response`'s body, read as 54.23 and 54.26 read one — JSON that does not parse, and a
  * stream, as its text — or `undefined` where there is none or it runs past `REFUSAL_BODY_BYTES`.
  */
 async function refusalBody(response: Response): Promise<unknown> {

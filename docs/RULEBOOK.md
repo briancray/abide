@@ -1032,7 +1032,7 @@ wire, and before the handler runs — at status 422.
 
 15.9 An implementation MUST declare no refusal names beyond those `refuse.notFound`,
 `refuse.validation` and `refuse.aborted` carry, the one 17.4 names, and those 54.1, 54.4, 54.5 and
-54.12 name.
+54.9 name.
 
 15.10 An expression statement whose type is `Failed` MUST be a compile error naming both repairs.
 
@@ -1060,8 +1060,9 @@ and its data's type MUST be inferred from that `schema`; a `message` function MU
 beside one.
 
 15.19 A `Keyed` entry or an `Rpc` whose last answer was a transient refusal — at status 408, 425,
-429, or 500 and above — or a throw, MUST run its body again for the next reach rather than serve that
-answer, save as 15.23 holds it.
+429, or 500 and above, save a `FetchFailed`, which is transient where its service answered at one of
+those or did not answer — or a throw, MUST run its body again for the next reach rather than serve
+that answer, save as 15.23 holds it.
 
 15.20 A refusal 15.19 does not count transient MUST be held for the next reach as a production is,
 until its `ttl` ends.
@@ -4032,6 +4033,11 @@ the answer of a body written in its place, and MUST leave every other `reactive`
 
 38.233 The migration keyed to 0.145.0 MUST spell every `derived` member of abide's `reactive` as
 `reactive`, and MUST leave a `derived` member of anything else.
+
+38.234 The migration keyed to 0.145.0 MUST, in each call of abide's `fetchAndHandle` whose options
+are an object literal written in place, spell a `timeout` as a `signal` of `AbortSignal.timeout` where
+the options name no `signal`, remove a `retries` of 0, and note by 38.226 each `retries`, `backoff`
+and `timeout` it leaves.
 
 # 39. Head and view transitions
 
@@ -7026,138 +7032,125 @@ request of any other method with a refusal named `ReadOnly`, at status 403, save
 
 ## Fetches
 
-54.7 `fetchAndHandle` MUST abort an attempt not answered within `timeout` milliseconds,
-10000 where none is given.
+54.7 `fetchAndHandle` MUST make one request per call, and MUST NOT make another whatever it is
+answered.
 
-54.8 `fetchAndHandle` MUST ask again, up to `retries` times, after an attempt that threw,
-that 54.7 aborted, or that was answered at a status 15.19 counts transient, and MUST NOT ask again
-after an attempt answered at any other status.
+54.8 An abort of the `signal` a caller passes `fetchAndHandle` MUST be thrown as its reason.
 
-54.9 `retries` MUST default to 2 for a method RFC 9110 defines as idempotent, and to 0 for any
-other.
+54.9 `fetchAndHandle` MUST reject with a `FetchFailed` at status 502 where its request threw or was
+answered outside 2xx, carrying the status it was answered at, or null where none answered, and why,
+and MUST reject with nothing else but 54.8's abort.
 
-54.10 A retry under 54.8 MUST wait `backoff` milliseconds, 250 where none is given, doubled for each
-retry before it — or, where `backoff` is a function, what it answers given the retry's number counted
-from 1 — or the time the answer's `Retry-After` names, in seconds or as an HTTP date, where that is
-later, and MUST NOT be made where that wait is longer than `timeout`.
-
-54.11 An abort of the `signal` a caller passes `fetchAndHandle` MUST be thrown as its
-reason, and MUST NOT be asked again.
-
-54.12 `fetchAndHandle` MUST reject with a `FetchFailed` at status 502 where it gives up, carrying the
-status the last attempt was answered at, or null where none answered, and why, and MUST reject with
-nothing else but 54.11's abort.
-
-54.13 `fetchAndHandle` MUST read a 2xx body as 54.26, 54.28 and 54.29 say, save where `as` names a
+54.10 `fetchAndHandle` MUST read a 2xx body as 54.23, 54.25 and 54.26 say, save where `as` names a
 reading — `json` parsed as JSON, `text` as its text, `blob` as a `Blob`, whatever
 its type says — and MUST settle to a `FetchFailed` for the reason `shape` where its `schema` refuses
 what was read.
 
 ## Jobs
 
-54.14 A `job` MUST look whether a run is due every `every` milliseconds where `every` is a number
+54.11 A `job` MUST look whether a run is due every `every` milliseconds where `every` is a number
 under a minute, and every minute otherwise, each look that long after the one before it ended, from a
 first look made where `App.listen` or `abide dev` opens the app, and MUST stop looking where
 `App.stop` begins, before it drains what is in flight.
 
-54.15 A look MUST start a run of a `job` given `every` where no run has ended, or where `every` milliseconds have
-passed since the last one ended, or since it started under 54.25.
+54.12 A look MUST start a run of a `job` given `every` where no run has ended, or where `every` milliseconds have
+passed since the last one ended, or since it started under 54.22.
 
-54.16 `Job.run`, and a look, MUST join a run of the `job` in flight, and MUST NOT start a second; the
+54.13 `Job.run`, and a look, MUST join a run of the `job` in flight, and MUST NOT start a second; the
 input a `Job.run` that joined one was called with MUST NOT reach any run.
 
-54.17 A `job` given a `store` MUST keep its status there, and MUST read it once, on its first look,
+54.14 A `job` given a `store` MUST keep its status there, and MUST read it once, on its first look,
 reading the `lastRun` it holds as a run that ended then.
 
-54.18 `Job.status` MUST be one `global` `memo` entry the job writes, as a run starts and as it ends.
+54.15 `Job.status` MUST be one `global` `memo` entry the job writes, as a run starts and as it ends.
 
-54.19 A run that throws MUST be written through `log.error` under the namespace `log.named` builds
+54.16 A run that throws MUST be written through `log.error` under the namespace `log.named` builds
 from `job` and, where it is given, the job's `name`, and its message MUST stand as `lastError`
 until a run ends without throwing.
 
-54.20 A run whose signal 54.22 aborted MUST NOT move `lastRun` or `lastError`.
+54.17 A run whose signal 54.19 aborted MUST NOT move `lastRun` or `lastError`.
 
-54.21 A `job` whose `every` is not a positive number MUST start no run from a look, and its
+54.18 A `job` whose `every` is not a positive number MUST start no run from a look, and its
 `nextRun` MUST be null while it is not.
 
-54.22 `run` MUST be handed the input the `Job.run` that started it was called with, and `undefined`
+54.19 `run` MUST be handed the input the `Job.run` that started it was called with, and `undefined`
 where a look started it, and a run's signal MUST be one aborted where 7.20's is, and where `Job.stop`
 is called.
 
-54.23 `Job.stop` MUST settle once a run in flight has ended, and a `job` it stopped MUST start no
+54.20 `Job.stop` MUST settle once a run in flight has ended, and a `job` it stopped MUST start no
 run, from a look or from `Job.run`, and MUST hold `nextRun` null.
 
-54.24 `authorize` given `status: 404` MUST answer an authenticated caller it does not admit with
+54.21 `authorize` given `status: 404` MUST answer an authenticated caller it does not admit with
 the refusal 15.7 answers an address nothing serves, naming the path and method of the request.
 
-54.25 A `job` given `from: 'start'` MUST measure `every` from when its last run started, and its
+54.22 A `job` given `from: 'start'` MUST measure `every` from when its last run started, and its
 looks MUST be spaced from when each started rather than from the end of the run it started.
 
-54.26 `fetchAndHandle` MUST answer a 2xx response with its body read as its `content-type` says: JSON, or
-a type ending `+json`, as its parsed value, and a type 54.28 and 54.29 do not name as a `Blob`.
+54.23 `fetchAndHandle` MUST answer a 2xx response with its body read as its `content-type` says: JSON, or
+a type ending `+json`, as its parsed value, and a type 54.25 and 54.26 do not name as a `Blob`.
 
-54.27 `fetchAndHandle` MUST reject a response outside 2xx with a `FetchFailed` carrying its status, the
-reason `status`, and as its `cause` its body read as 54.26 and 54.29 read one — a stream, and JSON
+54.24 `fetchAndHandle` MUST reject a response outside 2xx with a `FetchFailed` carrying its status, the
+reason `status`, and as its `cause` its body read as 54.23 and 54.26 read one — a stream, and JSON
 that does not parse, as its text — where the body is 65,536 bytes or fewer, and no `cause` where it is
 longer; and MUST reject a 2xx response whose JSON does not parse with one for the reason `shape`
 whose `cause` is what the parse threw.
 
-54.28 `fetchAndHandle` MUST answer a JSON Lines or event stream response with an async iterable of its
+54.25 `fetchAndHandle` MUST answer a JSON Lines or event stream response with an async iterable of its
 chunks, each yielded as the frame carrying it completes.
 
-54.29 `fetchAndHandle` MUST answer a `text/` type, and a response naming no type, as its text, and a
+54.26 `fetchAndHandle` MUST answer a `text/` type, and a response naming no type, as its text, and a
 204 or a response with no body as `undefined`.
 
-54.30 A `FetchFailed` that `fetchAndHandle` rejects with for a thrown attempt MUST carry what
-was thrown as its `cause`, one for an attempt answered outside 2xx the body 54.27 reads, and Problem
+54.27 A `FetchFailed` that `fetchAndHandle` rejects with for a thrown attempt MUST carry what
+was thrown as its `cause`, one for an attempt answered outside 2xx the body 54.24 reads, and Problem
 Details MUST NOT carry a `cause`.
 
-54.31 `trustedIdentity` MUST sign in, for the request it runs in, the caller its `header` names on a
+54.28 `trustedIdentity` MUST sign in, for the request it runs in, the caller its `header` names on a
 request from one of its `proxies`, as the claims `claims` makes of the header's value, as `App.run`'s
 `principal` does (42.19).
 
-54.32 `trustedIdentity` MUST read the peer a request came from as `request.ip` answers it, and MUST
+54.29 `trustedIdentity` MUST read the peer a request came from as `request.ip` answers it, and MUST
 ignore its `header` on a request from a peer none of its `proxies` names, and on one made in
 process.
 
-54.33 `trustedIdentity` MUST seal no cookie, and MUST pass a request whose `header` is absent or
+54.30 `trustedIdentity` MUST seal no cookie, and MUST pass a request whose `header` is absent or
 empty as it came.
 
-54.34 A look MUST NOT start a run of a `job` while its `paused` reads true, and `Job.run` MUST run
+54.31 A look MUST NOT start a run of a `job` while its `paused` reads true, and `Job.run` MUST run
 it all the same.
 
-54.35 A `job`'s run MUST run outside every request and every `memo` run, whichever started it, and
+54.32 A `job`'s run MUST run outside every request and every `memo` run, whichever started it, and
 `abortSignal` called in it, outside every run 7.22 and 7.24 name and every request entered in it,
-MUST answer the run's signal 54.22 names.
+MUST answer the run's signal 54.19 names.
 
-54.36 A look MUST start a run of a `job` given `cron` once a time `cron` names has passed since its
+54.33 A look MUST start a run of a `job` given `cron` once a time `cron` names has passed since its
 last run ended, or since its first look where no run has ended, and MUST start one run however many
 such times have passed; such a `job` MUST look every second, and its `nextRun` MUST be the first time
 `cron` names after the last run ended, or after its first look.
 
-54.37 A `job` MUST read `cron` in the zone `timeZone` names, and in the server's own where it names
+54.34 A `job` MUST read `cron` in the zone `timeZone` names, and in the server's own where it names
 none.
 
-54.38 `job` MUST throw a `TypeError` where it is given both `every` and `cron`, or neither, and MUST
+54.35 `job` MUST throw a `TypeError` where it is given both `every` and `cron`, or neither, and MUST
 throw where `cron` is not an expression `Bun.cron.parse` reads.
 
-54.39 `Job.run` MUST reject with what the run it started or joined threw, or with the refusal it
-answered, and a run answering a refusal MUST be written and logged as one that threw (54.19).
+54.36 `Job.run` MUST reject with what the run it started or joined threw, or with the refusal it
+answered, and a run answering a refusal MUST be written and logged as one that threw (54.16).
 
-54.40 `fetchAndHandle.isError` MUST answer whether a caught failure is a refusal named as it is given, and
+54.37 `fetchAndHandle.isError` MUST answer whether a caught failure is a refusal named as it is given, and
 MUST narrow it to a `FetchFailed` where it is.
 
-54.41 A run of a `job` that ends MUST record in its status how long it took, in milliseconds, and a run
+54.38 A run of a `job` that ends MUST record in its status how long it took, in milliseconds, and a run
 that did not fail MUST record what it answered as `lastResult`, which a failed run MUST leave as it
 was; a run told to stop MUST record neither.
 
-54.42 A `job` opening on a status its `store` kept MUST read it as no run going, and MUST keep the
+54.39 A `job` opening on a status its `store` kept MUST read it as no run going, and MUST keep the
 `lastResult` and `lastError` it holds.
 
-54.43 `App.stop` MUST wait on the run each `job` has in flight, once the requests in flight have
+54.40 `App.stop` MUST wait on the run each `job` has in flight, once the requests in flight have
 drained, before `onStop` runs and within 42.17's deadline.
 
-54.44 A `job` given `delay` MUST make its first look `delay` milliseconds after the app opens, rather
+54.41 A `job` given `delay` MUST make its first look `delay` milliseconds after the app opens, rather
 than as it opens.
 
 # 55. Worker files
@@ -7326,8 +7319,10 @@ another `pipe`.
 aborts MUST be made again, up to `retries` times, 0 where none is given; any other answer MUST NOT
 be.
 
-57.10 A step's attempt made again under 57.9 MUST wait as 54.10 has a fetch's retry wait, from the
-step's `backoff`.
+57.10 A step's attempt made again under 57.9 MUST wait `backoff` milliseconds, 250 where none is
+given, doubled for each retry before it — or, where `backoff` is a function, what it answers given
+the retry's number counted from 1 — or the time the refusal's `Retry-After` names, in seconds or as an
+HTTP date, where that is later.
 
 57.11 A refusal with a `Retry-After` MUST keep its step from starting an attempt, for every item of
 the `pipe`, until the time it names.

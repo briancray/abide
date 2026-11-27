@@ -1238,7 +1238,7 @@ const WRITTEN: readonly {
                 route: '/data/fetch-and-handle',
                 title: '`fetchAndHandle`',
                 description:
-                    'Fetch a URL with a deadline and retries, read its body as its type says, and catch a FetchFailed when it gives up.',
+                    'Fetch a URL once, read its body as its type says, and catch the FetchFailed it is refused with; a pipe asks again.',
                 where: 'anywhere',
             },
         ],

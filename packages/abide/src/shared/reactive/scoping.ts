@@ -83,7 +83,7 @@ type Scoping = {
     requestSignal(scope: Scope | undefined): AbortSignal | undefined
     /**
      * The signal of the work running outside every run: the request's (7.25), or the `job` run's it
-     * is owned by (54.35) — or `undefined` where neither is.
+     * is owned by (54.32) — or `undefined` where neither is.
      */
     ownerSignal(): AbortSignal | undefined
 }
