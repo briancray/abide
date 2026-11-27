@@ -1,0 +1,13 @@
+<script>
+import { hotkeys, reactive } from '@abide/abide'
+
+let stage = reactive('lead')
+
+const keys = hotkeys({
+    Digit1: () => (stage = 'lead'),
+    Digit2: () => (stage = 'qualified'),
+})
+</script>
+
+<window onkeydown={keys} />
+<p class="status">Press 1 or 2, on any layout: {stage}</p>

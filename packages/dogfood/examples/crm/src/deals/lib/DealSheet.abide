@@ -1,0 +1,18 @@
+<script>
+import { drawer, format } from '@abide/abide'
+
+// Half the screen, or nearly all of it: a tap on the grip steps between them, and a drag follows the
+// finger by a transform, settling by the transition once it is let go.
+const sheet = drawer({ side: 'bottom', modal: false, stops: [0.5, 0.9] })
+</script>
+
+<button onclick={() => (sheet.open = true)}>Show Engine renewal</button>
+<dialog class="fixed inset-x-0 bottom-0 m-0 mt-auto w-full
+        not-data-following:transition-transform not-data-following:duration-200"
+    {...sheet.drawer} aria-label="Engine renewal">
+    <div class="mx-auto my-2 h-1 w-10 rounded-full bg-rule" {...sheet.handle}></div>
+    <ul class="fields">
+        <li><span>deal</span><strong>Engine renewal</strong></li>
+        <li><span>amount</span><strong>{format.money(12_000, { maximumFractionDigits: 0 })}</strong></li>
+    </ul>
+</dialog>

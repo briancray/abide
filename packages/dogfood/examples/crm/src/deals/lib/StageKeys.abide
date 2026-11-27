@@ -1,0 +1,22 @@
+<script>
+import { hotkeys, keyLabel, reactive } from '@abide/abide'
+
+const STAGES = ['lead', 'qualified', 'proposal']
+
+let stage = reactive('lead')
+
+// The number row by where its keys sit, so a French keyboard's & still picks the first stage.
+const keys = hotkeys({
+    Digit1: () => (stage = 'lead'),
+    Digit2: () => (stage = 'qualified'),
+    Digit3: () => (stage = 'proposal'),
+})
+</script>
+
+<window onkeydown={keys} />
+<div class="tabs">
+    {#for each, at of STAGES}
+        <button aria-pressed={stage === each} onclick={() => (stage = each)}>
+            <kbd>{keyLabel(`Digit${at + 1}`)}</kbd> {each}</button>
+    {/for}
+</div>

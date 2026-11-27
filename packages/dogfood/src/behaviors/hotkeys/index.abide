@@ -8,6 +8,8 @@ import NewDealKey from './lib/NewDealKey.abide'
 import newDealKey from './lib/NewDealKey.abide' with { type: 'text' }
 import SaveNote from './lib/SaveNote.abide'
 import saveNote from './lib/SaveNote.abide' with { type: 'text' }
+import StageKeys from './lib/StageKeys.abide'
+import stageKeys from './lib/StageKeys.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -31,6 +33,14 @@ import saveNote from './lib/SaveNote.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/hotkeys.test.ts',
             from: ["test('a symbol is matched by what it types, shift or not"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/StageKeys.test.ts',
+            from: ["test('the number row picks a stage by where its keys sit"],
+        },
+        {
+            path: 'packages/abide/tests/hotkeys.test.ts',
+            from: ["test('a key written as its code is matched by where it sits"],
         },
         {
             path: 'packages/abide/tests/hotkeys.test.ts',
@@ -85,6 +95,14 @@ import saveNote from './lib/SaveNote.abide' with { type: 'text' }
                 },
             })
         `} />
+    </Section>
+
+    <Section level={3} title="Bind the number row on any keyboard layout">
+        <p>Write a key as its <code>KeyboardEvent.code</code>, like <code>Digit1</code> or
+            <code>KeyQ</code>, and the binding matches where the key sits rather than what it
+            types. A French keyboard's <code>&amp;</code> still runs <code>Digit1</code>.
+            <code>keyLabel</code> writes the key a US layout types there.</p>
+        <Example code={stageKeys}><StageKeys /></Example>
     </Section>
 
     <Section level={3} title="Save a note with ⌘↩ on a Mac and Ctrl+Enter elsewhere">

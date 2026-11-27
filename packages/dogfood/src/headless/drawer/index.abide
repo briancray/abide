@@ -9,6 +9,8 @@ import FilterDrawer from './lib/FilterDrawer.abide'
 import filterDrawer from './lib/FilterDrawer.abide' with { type: 'text' }
 import GrabberDragged from './lib/GrabberDragged.abide'
 import grabberDragged from './lib/GrabberDragged.abide' with { type: 'text' }
+import SheetSettles from './lib/SheetSettles.abide'
+import sheetSettles from './lib/SheetSettles.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -21,12 +23,21 @@ import grabberDragged from './lib/GrabberDragged.abide' with { type: 'text' }
             ],
         },
         {
+            path: 'packages/dogfood/examples/crm/src/deals/lib/DealSheet.test.ts',
+            from: [
+                "test('the deal sheet follows a drag by a transform, and a tap steps it'",
+            ],
+        },
+        {
             path: 'packages/abide/tests/drawer.test.ts',
             from: [
                 "test('a drawer opens as its dialog does",
                 "test(\"a drawer's backdrop is its dialog's",
                 "test('a drawer with stops let go settles at the nearest stop",
                 "test('a drawer with no stops let go rests where it was dropped",
+                "test('a drawer with stops follows a drag by a transform",
+                "test('a tap on the handle of a drawer with stops",
+                "test('a drawer let go settles by its transition on the push",
             ],
         },
     ]}
@@ -42,9 +53,19 @@ import grabberDragged from './lib/GrabberDragged.abide' with { type: 'text' }
     <Section level={3} title="Raise a list of deals from the bottom on a phone">
         <p>Give <code>stops</code>, sizes as shares of the viewport across its edge, and a
             drawer let go settles at the nearest one, a flick carrying it on to the next.
-            Dragged below every stop, it closes. Without <code>stops</code> it rests where it
-            is dropped. Give <code>modal: false</code> to keep the page behind it usable.</p>
+            Dragged below every stop, it closes. A tap on the handle steps it to the next stop.
+            Without <code>stops</code> it rests where it is dropped. Give
+            <code>modal: false</code> to keep the page behind it usable.</p>
         <Example code={dealSheet}><DealSheet /></Example>
+    </Section>
+
+    <Section level={3} title="Settle the sheet with a transition">
+        <p>With <code>stops</code>, a drag moves the drawer by a <code>transform</code> alone, so
+            nothing is laid out while it follows the finger, and it carries
+            <code>data-following</code>. When the finger lifts, the transform eases to the stop
+            and the drawer is sized there as the transition ends. Put the transition on
+            <code>transform</code> outside <code>data-following</code>.</p>
+        <Example code={sheetSettles}><SheetSettles /></Example>
     </Section>
 
     <Section level={3} title="Widen the grabber while the sheet is dragged">
