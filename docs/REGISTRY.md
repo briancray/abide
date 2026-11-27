@@ -197,8 +197,8 @@ A property written `name?: T` in a signature takes `undefined` as it takes the p
 | --- | --- | --- | --- |
 | `href={x}`, any attribute | the element | the attribute or property | 35.7, 35.8 |
 | `class:`, `style:`, `bind:` | the element | the class, the style property, the bound property | 35.7 |
-| `<title>{name}</title>` | the `<title>` | `.textContent` | 35.9, 35.10 |
-| `<textarea>{v}</textarea>` | the `<textarea>` | `.defaultValue` | 35.9 |
+| `<title>{name}</title>` | the `<title>` | its text, `.textContent` | 35.9, 35.10 |
+| `<textarea>{v}</textarea>` | the `<textarea>` | its text, `.defaultValue` | 35.9 |
 
 ## `route`
 

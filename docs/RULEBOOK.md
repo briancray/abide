@@ -3015,7 +3015,8 @@ fill once that value lands.
 
 35.8 An attribute a sink fills MUST be filled on the element itself.
 
-35.9 A sink inside RCDATA MUST fill through the element's own property rather than through markup.
+35.9 A sink inside RCDATA MUST fill as the element's own text, a `Raw` value as its source, and MUST
+NOT fill through markup or carry an anchor.
 
 35.10 The batching unit of a sink fill MUST be the turn and MUST NOT be the production.
 

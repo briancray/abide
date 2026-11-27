@@ -17,6 +17,7 @@ export {
 export {
     escapeAttribute,
     escapeStyleValue,
+    escapeRcdata,
     escapeText,
     withDeclaration,
 } from './escapeText.ts'

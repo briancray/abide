@@ -15,6 +15,7 @@ import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import { IDENTIFIER_PART, isNamedAlone } from './isNamedAlone.ts'
 import { lineOf } from './lineOf.ts'
 import { PositionedRefusal } from './PositionedRefusal.ts'
+import { RCDATA_PIECES } from './RCDATA_PIECES.ts'
 import { importedNames } from './splitImports.ts'
 import { TEMPLATE_BLOCKS } from './TEMPLATE_BLOCKS.ts'
 import {
@@ -255,6 +256,8 @@ export function parseAbide(source: string): AbideFile {
     const root: TemplateNode[] = []
     // The open elements, innermost last. `root` is the floor and is never popped.
     const stack: TemplateNode[][] = [root]
+    // 35.9 — the children lists of each `<textarea>` and `<title>`, whose expressions are RCDATA.
+    const rcdata = new Set<TemplateNode[]>()
     // WHAT EACH OPEN LEVEL IS, so a close tag only closes the thing it names. Popping whatever is
     // innermost lets `</br>` end the `<p>` around it and a stray `{/if}` end the `<div>` around
     // it — the nodes after it then hang outside the element the author wrote them in, which is a
@@ -479,6 +482,9 @@ export function parseAbide(source: string): AbideFile {
             }
             origins.holders.set(element, at + 1)
             children.push(element)
+            // 35.9 — RCDATA: what this element holds is its own text, never markup.
+            if (lowerTag === 'textarea' || lowerTag === 'title')
+                rcdata.add(element.children)
             // The same rule again: `<BR>` read as an ordinary element was pushed onto the open
             // stack and swallowed the rest of the file as its children, and the emitter wrote a
             // `</BR>` no browser accepts.
@@ -670,6 +676,7 @@ export function parseAbide(source: string): AbideFile {
             }
             origins.holders.set(expression, slot.at)
             children.push(expression)
+            if (rcdata.has(children)) RCDATA_PIECES.add(expression)
             at = end + 1
             continue
         }

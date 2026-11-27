@@ -28,6 +28,15 @@ export function escapeText(value: unknown): string {
     return escapeMarkup(value == null ? '' : String(value))
 }
 
+/**
+ * 35.9 — a slot value as RCDATA text, a `<textarea>`'s or a `<title>`'s: always escaped, a `Raw`'s
+ * html as its source. The parser reads RCDATA as text, so markup there would be shown as its tags
+ * on the server's document and parsed away by the browser's, and the two would disagree.
+ */
+export function escapeRcdata(value: unknown): string {
+    return escapeMarkup(textOf(value))
+}
+
 // The rewrite alone, with no brand read — the one both slot and attribute escaping run.
 function escapeMarkup(text: string): string {
     const at = text.search(SPECIAL)
