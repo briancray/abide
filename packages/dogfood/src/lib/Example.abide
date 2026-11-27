@@ -3,22 +3,20 @@
 // page's markdown twin read the render (see `Tests.abide`).
 import { readFileSync } from 'node:fs'
 
-import { directoryAbove } from './directoryAbove.ts'
+import { workspaceDirectory } from './exampleDirectory.server.ts'
 
 // A server file beside an example under the docs app's own `src` — never a path off it.
 const EXAMPLE_SERVER = /^(?:[\w-]+\/)+lib\/\w+\.server\.ts$/
-
-let root: string | undefined
 
 // THE SERVER FILE AN EXAMPLE CALLS, as its text: read here, since the browser never imports a server
 // file (16.29), and shown under the example that imports it.
 export const serverSource = ({ path }: { path: string }) => {
     if (!EXAMPLE_SERVER.test(path))
         throw new Error(`docs: ${path} is not a server file beside an example`)
-    root ??= directoryAbove('docs/RULEBOOK.md')
-    if (root === undefined)
-        throw new Error('docs: no workspace above the docs app')
-    return readFileSync(`${root}/packages/dogfood/src/${path}`, 'utf8')
+    return readFileSync(
+        `${workspaceDirectory()}/packages/dogfood/src/${path}`,
+        'utf8',
+    )
 }
 </script>
 

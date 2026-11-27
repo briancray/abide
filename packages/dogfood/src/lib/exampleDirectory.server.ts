@@ -1,4 +1,4 @@
-// WHERE THE CRM IS ON DISK: `examples/crm` beside the docs app.
+// WHERE THE CRM IS ON DISK: `examples/crm` beside the docs app, and the workspace both are in.
 
 import { directoryAbove } from './directoryAbove.ts'
 import type { ExampleResults } from './ExampleResults.ts'
@@ -16,6 +16,16 @@ export function crmDirectory(): string {
     crm ??= exampleDirectory()
     if (crm === undefined) throw new Error('docs: no CRM above the docs app')
     return crm
+}
+
+let workspace: string | undefined
+
+/** The workspace's root, found once: the nearest directory above the docs app holding `docs/RULEBOOK.md`. */
+export function workspaceDirectory(): string {
+    workspace ??= directoryAbove('docs/RULEBOOK.md')
+    if (workspace === undefined)
+        throw new Error('docs: no workspace above the docs app')
+    return workspace
 }
 
 /** What `bun run examples:results` last kept for the CRM, or `null` where this build never ran it. */

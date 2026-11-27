@@ -9,7 +9,7 @@ import type { FetchFailed } from '@abide/abide/server'
 import { exampleArchive } from './exampleArchive.server.ts'
 import { pageMarkdown } from './pageMarkdown.server.ts'
 import { SITE } from './SITE.ts'
-import { markdownAddressOf, PAGES } from './sitePages.ts'
+import { markdownAddressOf, PAGES, sitePageAt } from './sitePages.ts'
 
 const MARKDOWN = { 'content-type': 'text/markdown; charset=utf-8' }
 
@@ -66,10 +66,9 @@ export const serveDownloads: Middleware<Response> = async (
               })
             : next()
     }
-    if (!pathname.endsWith('.md') && !pathname.endsWith('/llms.txt'))
-        return next()
     if (pathname === '/llms.txt')
         return new Response('# abide\n\nEvery page, as markdown: abide.md\n')
+    if (!pathname.endsWith('.md')) return next()
     if (pathname === '/abide.md') {
         bundled ??= bundle()
         const contents = await bundled
@@ -77,8 +76,11 @@ export const serveDownloads: Middleware<Response> = async (
         if (isFailed(contents)) bundled = undefined
         return markdownAnswer(contents)
     }
-    for (const page of PAGES)
-        if (pathname === markdownAddressOf(page.route))
-            return markdownAnswer(await pageMarkdown(page.route))
-    return next()
+    // `markdownAddressOf`'s inverse: a page's twin is its route and `.md`, the home page's `/index.md`.
+    const page = sitePageAt(
+        pathname === '/index.md' ? '/' : pathname.slice(0, -'.md'.length),
+    )
+    return page === undefined
+        ? next()
+        : markdownAnswer(await pageMarkdown(page.route))
 }

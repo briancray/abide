@@ -4,26 +4,16 @@
 // would stream in after it, and miss the page's markdown twin, which reads that first answer.
 import { readFileSync } from 'node:fs'
 
-import { directoryAbove } from './directoryAbove.ts'
+import { workspaceDirectory } from './exampleDirectory.server.ts'
 import { slice } from './slice.ts'
 
 // A test file of the workspace, by its path from the repo's root — never a path off it.
 const TEST_FILE = /^packages\/(?:[\w.-]+\/)*[\w.-]+\.(?:test|spec|bench)\.ts$/
 
-let root: string | undefined
-
-/** The workspace's root: the nearest directory above this module holding `docs/RULEBOOK.md`. */
-function repositoryRoot(): string {
-    const above = directoryAbove('docs/RULEBOOK.md')
-    if (above === undefined)
-        throw new Error('docs: no workspace above the docs app')
-    return above
-}
-
 // Read on the server (40.15): a test file is hundreds of lines, and a page shows a case or two of it.
 // Each entry is one JSON string: a GET's args ride the query, which holds a list of strings.
 export const testCases = ({ tests }: { tests: string[] }) => {
-    root ??= repositoryRoot()
+    const root = workspaceDirectory()
     const sliced: { path: string; code: string }[] = []
     for (const entry of tests) {
         const { path, from } = JSON.parse(entry) as {
