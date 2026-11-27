@@ -372,8 +372,11 @@ test('a call reaches an http server with its own headers alone — 44.95', async
                     },
                 },
             )}\n\n`
+            // A media type is cased any way (29.2's reading): the bridge reads this one as a stream.
+            // THE REVERT: test the raw header for `text/event-stream` in `callTool`; the call reads
+            // the stream as JSON and fails.
             return new Response(said, {
-                headers: { 'content-type': 'text/event-stream' },
+                headers: { 'content-type': 'Text/Event-Stream; charset=utf-8' },
             })
         },
     })

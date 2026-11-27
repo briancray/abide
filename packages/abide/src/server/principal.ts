@@ -90,8 +90,8 @@ function seal(
  *
  * 26.13 — A BAD SIGNATURE, A LAPSED SEAL AND A MALFORMED COOKIE ARE ONE ANSWER: nothing.
  */
-function unseal(sealed: string | null): Sealed | undefined {
-    if (sealed === null) return undefined
+function unseal(sealed: string | null | undefined): Sealed | undefined {
+    if (sealed === null || sealed === undefined) return undefined
     const [header, payload, signed, ...rest] = sealed.split('.')
     // ONE HEADER IS READ, abide's own: a token naming another `alg` — `none` above all — is no seal.
     if (header !== JWT_HEADER || payload === undefined || rest.length > 0)
@@ -248,10 +248,7 @@ export function signedInAs(): string {
 
 /** Who `request` is signed in as, as `signedInAs` says it, read off its own cookie alone. 16.98. */
 export function signedInBy(request: Request): string {
-    const sealed = cookieOf(request, PRINCIPAL_COOKIE)
-    return identityOf(
-        (sealed === undefined ? undefined : unseal(sealed)) ?? null,
-    )
+    return identityOf(unseal(cookieOf(request, PRINCIPAL_COOKIE)) ?? null)
 }
 
 /**

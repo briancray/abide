@@ -11,6 +11,7 @@ import { numberFromText } from '#shared/numberFromText.ts'
 import { processWide } from '#shared/reactive/index.ts'
 import { refuse } from '#shared/refuse.ts'
 import { runSchema } from '#shared/Schema.ts'
+import { UNNAMED } from '#shared/UNNAMED.ts'
 
 import { executableName } from './executableName.ts'
 import { type Env, HOOKS, inOrder } from './hooks.ts'
@@ -132,7 +133,7 @@ export function launcherDataDirectory(): string {
     const directory = beforeSchema('APP_DATA_DIR')
     return typeof directory === 'string' && directory !== ''
         ? directory
-        : dataDirectory(APP_PACKAGE.current.name ?? 'app')
+        : dataDirectory(APP_PACKAGE.current.name ?? UNNAMED)
 }
 
 /** One value of the document before any schema, or `undefined` where `onConfig`'s defaults threw. */
@@ -164,7 +165,7 @@ function coerce(text: string, standing: unknown): unknown {
  */
 export function derived(): Record<string, string> {
     const manifest = APP_PACKAGE.current
-    const name = manifest.name ?? 'app'
+    const name = manifest.name ?? UNNAMED
     return {
         ...ADDED,
         APP_NAME: name,
@@ -202,7 +203,7 @@ export function derivedAppName(): string | undefined {
 export function appIdentity(): { name: string; version: string } {
     const resolved = config.peek()
     return {
-        name: String(resolved?.APP_NAME ?? 'app'),
+        name: String(resolved?.APP_NAME ?? UNNAMED),
         version: String(resolved?.APP_VERSION ?? UNVERSIONED),
     }
 }

@@ -14,6 +14,7 @@ import { DEBUG_META } from './DEBUG_META.ts'
 import { numberFromText } from './numberFromText.ts'
 import { paint } from './paint.ts'
 import { processWide, type Reactive } from './reactive/index.ts'
+import { UNNAMED } from './UNNAMED.ts'
 
 type Level = 'debug' | 'info' | 'warning' | 'error'
 
@@ -325,7 +326,7 @@ export const APP_NAME: { derived: () => string | undefined } = {
 
 /** The name every `log.named` hangs off: the environment's, or the one the app derived (28.4). */
 export function appName(): string {
-    return environment('APP_NAME') ?? APP_NAME.derived() ?? 'app'
+    return environment('APP_NAME') ?? APP_NAME.derived() ?? UNNAMED
 }
 
 /**

@@ -327,9 +327,9 @@ function httpSession(
                 return undefined
             }
             if (
-                !(answer.headers.get('content-type') ?? '').includes(
-                    'text/event-stream',
-                )
+                !(answer.headers.get('content-type') ?? '')
+                    .toLowerCase()
+                    .includes('text/event-stream')
             )
                 return (await answer.json()) as RpcMessage
             let data = ''
