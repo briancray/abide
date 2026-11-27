@@ -5,7 +5,7 @@
 import { checkParts } from './checkParts.ts'
 import { handFocus } from './handFocus.ts'
 import { type Live, live } from './live.ts'
-import { randomToken } from './randomToken.ts'
+import { madeId } from './madeId.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { stepRounded } from './stepRounded.ts'
 
@@ -40,7 +40,7 @@ export type Spinbutton = {
 /** WAI-ARIA's spin button: a field and its two buttons, as parts to spread. */
 export function spinbutton(options: SpinbuttonOptions = {}): Spinbutton {
     const value = options.value ?? reactive(live(options.min) ?? 0)
-    const id = options.id ?? `spinbutton-${randomToken(4, 'hex')}`
+    const id = options.id ?? madeId('spinbutton')
     if (process.env.NODE_ENV !== 'production') checkParts('spinbutton', id)
     const step = () => live(options.step) ?? 1
     const min = () => live(options.min) ?? Number.NEGATIVE_INFINITY

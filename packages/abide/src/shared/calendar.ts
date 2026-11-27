@@ -10,7 +10,7 @@ import { timeZone, visitorZone } from './format/timeZone.ts'
 import { wallClockOf } from './format/wallClockOf.ts'
 import { type Live, live } from './live.ts'
 import { LOCALE } from './LOCALE.ts'
-import { randomToken } from './randomToken.ts'
+import { madeId } from './madeId.ts'
 import { flushSync, type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving, stepOf } from './roving.ts'
@@ -253,7 +253,7 @@ export function calendar<Range extends boolean = false>(
     >
     const picked = options.month ?? reactive<string | undefined>(undefined)
     const localeOf = () => live(options.locale) ?? LOCALE
-    const base = options.id ?? `calendar-${randomToken(4, 'hex')}`
+    const base = options.id ?? madeId('calendar')
     // A grid's and a heading's ids are by their place among the months shown, so paging keeps them.
     const gridId = (index: number) => `${base}-grid-${index}`
     const headingId = (index: number) => `${base}-heading-${index}`

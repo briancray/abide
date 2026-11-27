@@ -12,7 +12,7 @@ import {
     listedOrFirst,
 } from './itemKey.ts'
 import { type Live, live } from './live.ts'
-import { randomToken } from './randomToken.ts'
+import { madeId } from './madeId.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving } from './roving.ts'
@@ -74,7 +74,7 @@ export function toggleGroup<
         keyOfItem(options.key as ((item: Item) => Key) | undefined, item)
     const keysOf = listedKeys(options.items, keyOf)
     // Hydration runs setup again (41.6), and the focus a key moves is found by these ids.
-    const base = options.id ?? `toggle-group-${randomToken(4, 'hex')}`
+    const base = options.id ?? madeId('toggle-group')
     const itemId = (key: Key) => `${base}-${encodeURIComponent(key)}`
 
     // 51.114 — picking one, the key in the tab order: the one picked, the first where none is listed.

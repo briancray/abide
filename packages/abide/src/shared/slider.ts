@@ -7,7 +7,7 @@
 import { checkParts } from './checkParts.ts'
 import { number } from './format/index.ts'
 import { type Live, live } from './live.ts'
-import { randomToken } from './randomToken.ts'
+import { madeId } from './madeId.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { scrub, type ScrubPosition } from './scrub.ts'
 import { stepRounded } from './stepRounded.ts'
@@ -147,7 +147,7 @@ export function slider<Range extends boolean = false>(
 
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the ids are
     // rewritten together.
-    const base = options.id ?? `range-${randomToken(4, 'hex')}`
+    const base = options.id ?? madeId('range')
     const thumbId = (which: number) => `${base}-${which}`
     if (process.env.NODE_ENV !== 'production') checkParts('slider', base)
 

@@ -2,6 +2,7 @@ import { CURRENT_ROUTER, type NavigateOptions } from '#shared/CURRENT_ROUTER.ts'
 import { decodedOrKept } from '#shared/decodedOrKept.ts'
 import { ERROR_META } from '#shared/ERROR_META.ts'
 import { beginHydration, endHydration } from '#shared/hydrating.ts'
+import { startMadeIds } from '#shared/madeId.ts'
 import { firstMatch, type Found, partsOf } from '#shared/matchRoute.ts'
 import { unmounted } from '#shared/mount.ts'
 import { NAVIGATION_HEADER } from '#shared/NAVIGATION_HEADER.ts'
@@ -512,6 +513,8 @@ export class Router {
             // THE HYDRATE SHARE. Same name as the navigation's mount because it is the same work on
             // the same chain — what differs is the op it is a fraction of.
             this.arriveAt(new URL(location.href), found)
+            // 41.36 — after the modules' top levels, which count apart on both sides.
+            startMadeIds()
             this.levels.hydrate(standing)
         } finally {
             endHydration()

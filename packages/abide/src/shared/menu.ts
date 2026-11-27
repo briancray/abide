@@ -9,8 +9,8 @@
 // submenu stops short of the menu it opened from, and each menu's keys are its own focus's.
 
 import { type Live, live } from './live.ts'
+import { madeId } from './madeId.ts'
 import { popoverLayer, type PopoverOptions } from './popover.ts'
-import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { inGroup, join } from './register.ts'
 import { openingEnd, roving, typeahead } from './roving.ts'
@@ -85,7 +85,7 @@ export function menu(options: MenuOptions = {}): Menu {
     // popover's own check (49.7) covers every id the menu names.
     const layer = popoverLayer({
         ...options,
-        id: options.id ?? `menu-${randomToken(4, 'hex')}`,
+        id: options.id ?? madeId('menu'),
         align: () => live(options.align) ?? 'start',
         offset: () => live(options.offset) ?? 4,
     })

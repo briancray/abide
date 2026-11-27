@@ -13,7 +13,7 @@ import { dismissing } from '../dismissible.ts'
 import { sizeBinding } from '../element/elementSize.ts'
 import { number, percent } from '../format/index.ts'
 import { type Live, live } from '../live.ts'
-import { randomToken } from '../randomToken.ts'
+import { madeId } from '../madeId.ts'
 import { reactive, watch } from '../reactive/index.ts'
 import type { Disposer } from '../reactive/watch.ts'
 import { scrub } from '../scrub.ts'
@@ -771,7 +771,7 @@ export function chart(options: ChartOptions): ChartParts {
         }
     }
     // Hydration runs setup again (41.6), and the chart's `aria-describedby` is bound to it.
-    const base = options.id ?? `chart-${randomToken(4, 'hex')}`
+    const base = options.id ?? madeId('chart')
     if (process.env.NODE_ENV !== 'production') checkParts('chart', base)
     const tipId = `${base}-tip`
     const holdTip = (element: HTMLElement): Disposer => {

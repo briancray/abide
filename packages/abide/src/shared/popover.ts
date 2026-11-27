@@ -15,8 +15,8 @@ import {
     type OpenedBy,
 } from './hoverAndFocus.ts'
 import type { Live } from './live.ts'
+import { madeId } from './madeId.ts'
 import type { PlaceOptions } from './place.ts'
-import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
 import { withPart } from './withPart.ts'
@@ -74,7 +74,7 @@ export function popoverLayer(options: PopoverOptions): PopoverParts & {
     const open = options.open ?? reactive(false)
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the ids are
     // rewritten together.
-    const id = options.id ?? `popover-${randomToken(4, 'hex')}`
+    const id = options.id ?? madeId('popover')
     const anchorId = `${id}-anchor`
     if (process.env.NODE_ENV !== 'production') checkParts('popover', id)
     // Whether it was open as the trigger was pressed: the press outside closes it before the click

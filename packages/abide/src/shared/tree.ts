@@ -14,7 +14,7 @@ import {
     writtenBy,
 } from './itemKey.ts'
 import { type Live, live } from './live.ts'
-import { randomToken } from './randomToken.ts'
+import { madeId } from './madeId.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { roving, typeahead } from './roving.ts'
 import { type Picked, Selection } from './Selection.ts'
@@ -160,7 +160,7 @@ export function tree<
           })
         : undefined
 
-    const base = options.id ?? `tree-${randomToken(4, 'hex')}`
+    const base = options.id ?? madeId('tree')
     const itemId = (each: ItemKey) => `${base}-${encodeURIComponent(each)}`
     if (process.env.NODE_ENV !== 'production') checkParts('tree', base)
     const focus = (each: ItemKey): void => {

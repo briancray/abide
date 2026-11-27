@@ -6,7 +6,7 @@
 
 import { checkParts } from './checkParts.ts'
 import { type Live, live } from './live.ts'
-import { randomToken } from './randomToken.ts'
+import { madeId } from './madeId.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { stepOf } from './roving.ts'
 
@@ -49,7 +49,7 @@ export function resizable(options: ResizableOptions = {}): Resizable {
     const across = options.axis === 'y' ? 'y' : 'x'
     const sign = options.edge === 'start' ? -1 : 1
     const size = options.size ?? reactive<number | undefined>(undefined)
-    const id = options.id ?? `resizable-${randomToken(4, 'hex')}`
+    const id = options.id ?? madeId('resizable')
     const panelId = `${id}-panel`
     if (process.env.NODE_ENV !== 'production') checkParts('resizable', id)
     const min = () => live(options.min) ?? 0

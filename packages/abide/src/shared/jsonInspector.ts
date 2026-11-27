@@ -6,8 +6,8 @@
 import type { JsonValue } from './JsonValue.ts'
 import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { type Live, live } from './live.ts'
+import { madeId } from './madeId.ts'
 import { pointerToken } from './pointerToken.ts'
-import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { tree } from './tree.ts'
@@ -108,7 +108,7 @@ const valueText = (row: JsonRow): string | undefined =>
 
 /** A JSON value searched and inspected: a search field and `tree`'s parts over a row per value. */
 export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
-    const base = options.id ?? `json-${randomToken(4, 'hex')}`
+    const base = options.id ?? madeId('json')
     const query = options.query ?? reactive('')
     const expanded = options.expanded ?? reactive<readonly string[]>([''])
     const selected = options.selected ?? reactive<string | undefined>(undefined)

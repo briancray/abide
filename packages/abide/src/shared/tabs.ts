@@ -12,7 +12,7 @@ import {
     listedOrFirst,
 } from './itemKey.ts'
 import type { Live } from './live.ts'
-import { randomToken } from './randomToken.ts'
+import { madeId } from './madeId.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving } from './roving.ts'
@@ -64,7 +64,7 @@ export function tabs<Item, Key extends ItemKey = KeyOf<Item>>(
     ) as unknown as () => Key | undefined
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the ids
     // are rewritten together.
-    const base = options.id ?? `tabs-${randomToken(4, 'hex')}`
+    const base = options.id ?? madeId('tabs')
     const tabId = (key: Key) => `${base}-tab-${encodeURIComponent(key)}`
     const panelId = (key: Key) => `${base}-panel-${encodeURIComponent(key)}`
     if (process.env.NODE_ENV !== 'production') checkParts('tabs', base)

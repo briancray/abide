@@ -18,7 +18,7 @@ import { coerceArgs, collapsed, type Document } from './coerceArgs.ts'
 import type { Issues } from './Issues.ts'
 import { jsonSchema } from './jsonSchema.ts'
 import type { JsonValue } from './JsonValue.ts'
-import { randomToken } from './randomToken.ts'
+import { madeId } from './madeId.ts'
 import {
     type CallOf,
     type Reactive,
@@ -125,7 +125,7 @@ export function form<Handler extends AnyRpc>(
     )
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the ids are
     // rewritten together.
-    const base = `form-${randomToken(4, 'hex')}`
+    const base = madeId('form')
     const errorId = (name: string) => `${base}-${encodeURIComponent(name)}`
     if (process.env.NODE_ENV !== 'production') checkParts('form', base)
     let shown: HTMLFormElement | undefined

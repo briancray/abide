@@ -14,8 +14,8 @@ import {
 import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
+import { madeId } from './madeId.ts'
 import { popoverOn } from './popover.ts'
-import { randomToken } from './randomToken.ts'
 import { busy, type Reactive, reactive, watch } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { openingEnd } from './roving.ts'
@@ -97,7 +97,7 @@ export function combobox<Item, Multiple extends boolean = false>(
     options: ComboboxOptions<Item, Multiple>,
 ): ComboboxParts<Item, Multiple> {
     const { debounce } = options
-    const id = options.id ?? `combobox-${randomToken(4, 'hex')}`
+    const id = options.id ?? madeId('combobox')
     // 49.11 — read where they are used; the id, the debounce and whether it picks many are
     // fixed for the life of the parts.
     const key = (item: Item) => keyOfItem(options.key, item)

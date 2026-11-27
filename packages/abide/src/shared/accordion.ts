@@ -4,7 +4,7 @@
 
 import { type Disclosure, disclosure } from './disclosure.ts'
 import type { ItemKey } from './itemKey.ts'
-import { randomToken } from './randomToken.ts'
+import { madeId } from './madeId.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import type { Picked } from './Selection.ts'
@@ -48,7 +48,7 @@ export function accordion<
             : reactive<Key | undefined>(undefined))) as Reactive<
         Picked<Key, boolean>
     >
-    const base = options.id ?? `accordion-${randomToken(4, 'hex')}`
+    const base = options.id ?? madeId('accordion')
     const isOpen = (key: Key): boolean => {
         const now = open()
         return many

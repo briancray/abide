@@ -10,7 +10,7 @@ import { hotkeys } from './hotkeys.ts'
 import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
-import { randomToken } from './randomToken.ts'
+import { madeId } from './madeId.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 import { withPart } from './withPart.ts'
 
@@ -79,7 +79,7 @@ const MATCH = { 'data-command-palette': 'match' }
 export function commandPalette(
     options: CommandPaletteOptions,
 ): CommandPaletteParts {
-    const { commands, id = `palette-${randomToken(4, 'hex')}` } = options
+    const { commands, id = madeId('palette') } = options
     // 49.11 — read where they are used; the id is the ids' base, fixed for the life of the parts.
     const label = () => live(options.label) ?? 'Commands'
     const open = options.open ?? reactive(false)

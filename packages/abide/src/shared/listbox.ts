@@ -9,7 +9,7 @@ import {
     listedOrFirst,
 } from './itemKey.ts'
 import { type Live, live } from './live.ts'
-import { randomToken } from './randomToken.ts'
+import { madeId } from './madeId.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { unowned } from './reactive/watch.ts'
 import { roving } from './roving.ts'
@@ -86,7 +86,7 @@ export function listbox<
     // 49.11 — read where they are used; the id and whether it selects many are fixed for the life of
     // the parts.
     const options = () => live(given.options)
-    const id = given.id ?? `listbox-${randomToken(4, 'hex')}`
+    const id = given.id ?? madeId('listbox')
     // Keys are held as `ItemKey` inside, and as `Key` at the surface.
     const key = (option: Option): ItemKey =>
         keyOfItem(given.key as ((option: Option) => Key) | undefined, option)

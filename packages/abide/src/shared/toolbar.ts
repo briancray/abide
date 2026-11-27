@@ -12,7 +12,7 @@ import { BIND_ELEMENT } from './BIND_ELEMENT.ts'
 import { byDocumentOrder } from './byDocumentOrder.ts'
 import { isEditableTarget } from './isEditableTarget.ts'
 import { type Live, live } from './live.ts'
-import { randomToken } from './randomToken.ts'
+import { madeId } from './madeId.ts'
 import type { Disposer } from './reactive/watch.ts'
 import { roving } from './roving.ts'
 
@@ -43,7 +43,7 @@ export type Toolbar = {
 /** WAI-ARIA's toolbar, or its menubar: controls sharing one tab stop, walked by the arrow keys. */
 export function toolbar(options: ToolbarOptions = {}): Toolbar {
     const role = options.role ?? 'toolbar'
-    const id = options.id ?? `${role}-${randomToken(4, 'hex')}`
+    const id = options.id ?? madeId(role)
     const orientation = () => live(options.orientation) ?? 'horizontal'
 
     // Every item standing, and the one Tab reaches: the item focused last, or the first in the document.

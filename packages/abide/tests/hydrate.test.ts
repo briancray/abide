@@ -12,6 +12,7 @@ import { measure } from '@abide/harness/abide'
 
 import { emitClient, parseAbide } from '#compiler'
 import { flushSync } from '#shared'
+import { startMadeIds } from '#shared/madeId.ts'
 
 import { click } from './click.ts'
 import { removeTemporaryModules } from './temporaryModule.ts'
@@ -1292,4 +1293,32 @@ let label = reactive('a')
         dot: document.querySelector('#dot')?.localName,
         warned,
     }).toEqual({ href: '#b', dot: undefined, warned: [] })
+})
+
+// 41.36 — AN ID A PART MAKES IS THE ONE THE SERVER WROTE: hydration runs setup again (41.6), and a
+// part's id drawn at random was a new one in the browser. The part's own attributes were written
+// again with it, and an attribute the app wrote off `tip.id`, which no hydration rewrites, kept the
+// server's — naming nothing. A module's top-level part counts apart, as `startMadeIds` starts the
+// hydration's count after it, as the router does.
+//
+// THE REVERT: make `madeId` answer `${prefix}-${randomToken(4, 'hex')}`. `named` reads the server's
+// id while `popover` reads the browser's, and the server's html names a different one again.
+test("an attribute written off a part's id names the part after hydration — 41.36", async () => {
+    const { html, mount } = await renderPage(`<script>
+import { popover } from '@abide/abide'
+
+const tip = popover()
+</script>
+
+<span id="thing" aria-describedby={tip.id}>soil</span><div {...tip.popover}>loam</div>`)
+    startMadeIds()
+    mount()
+    const served = /<div id="(popover-[^"]+)"/.exec(html)?.[1]
+    expect({
+        named: document
+            .querySelector('#thing')
+            ?.getAttribute('aria-describedby'),
+        popover: document.querySelector('[popover]')?.id,
+    }).toEqual({ named: served, popover: served })
+    expect(served).toBeDefined()
 })

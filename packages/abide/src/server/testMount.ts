@@ -17,6 +17,7 @@
 // ends, so a sign-in a call makes is who the next call is.
 
 import { CURRENT_ROUTER, type Navigable } from '#shared/CURRENT_ROUTER.ts'
+import { startMadeIds } from '#shared/madeId.ts'
 import { forgetPrincipalMembers } from '#shared/principal.ts'
 import { flushSync } from '#shared/reactive/Reactive.ts'
 import { arrive } from '#shared/route.ts'
@@ -87,6 +88,8 @@ async function mounted(
         await Promise.all([mountable.client(), import('#ui/regions.ts')])
     const region = pageRegion(document.body, added[0] ?? null)
     arrived()
+    // 41.36 — the ids its parts make counted as its render counted them.
+    startMadeIds()
     const scope = hydrate(region, mountable.accessors)
     flushSync()
     let stopped = false

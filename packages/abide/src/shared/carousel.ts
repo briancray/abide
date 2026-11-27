@@ -18,8 +18,8 @@ import {
     writtenBy,
 } from './itemKey.ts'
 import { type Live, live } from './live.ts'
+import { madeId } from './madeId.ts'
 import { media } from './media.ts'
-import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
 import { reactiveOver } from './reactiveOver.ts'
@@ -181,7 +181,7 @@ export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
     )
     // 53.63 — what a scroll writes, and replaced by the resting item whenever that moves.
     const current = reactive((): ItemKey | undefined => resting())
-    const base = options.id ?? `carousel-${randomToken(4, 'hex')}`
+    const base = options.id ?? madeId('carousel')
     if (process.env.NODE_ENV !== 'production') checkParts('carousel', base)
 
     const elements = new Map<ItemKey, Element>()
