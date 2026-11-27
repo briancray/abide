@@ -1,4 +1,4 @@
-import { jsonSchema } from '@abide/abide'
+import { jsonSchema, refuse } from '@abide/abide'
 import { rpc } from '@abide/abide/server'
 
 import { DEALS } from '../pipeline/lib/DEALS.server.ts'
@@ -16,8 +16,15 @@ const NEW_DEAL = jsonSchema<NewDeal>({
     },
 })
 
+// A refusal that names no field: the deal is whole, and another holds its name.
+const nameTaken = refuse.named('NameTaken', {
+    status: 409,
+    message: 'A deal of that name is open.',
+})
+
 export default rpc(
     ({ name, company, amount }) => {
+        if (DEALS.some((each) => each.name === name)) return nameTaken()
         // Every caller shares one list: past ten, the newest replaces the last.
         if (DEALS.length >= 10) DEALS.pop()
         const deal = {

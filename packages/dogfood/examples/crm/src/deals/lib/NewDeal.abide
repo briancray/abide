@@ -1,9 +1,14 @@
 <script>
-import { form } from '@abide/abide'
+import { form, reactive } from '@abide/abide'
 
 import createDeal from '../createDeal.server.ts'
 
-const deal = form(createDeal)
+let added = reactive('')
+
+const deal = form(createDeal, {
+    resetOnSuccess: true,
+    onsuccess: (created) => (added = `Added ${created.name}`),
+})
 </script>
 
 <form {...deal.form} class="row">
@@ -18,3 +23,6 @@ const deal = form(createDeal)
         <li {...deal.field(name).error}><span>{name}</span><strong>{deal.field(name).message}</strong></li>
     {/for}
 </ul>
+
+<p {...deal.error} class="status">{deal.message}</p>
+<p class="status">{added}</p>

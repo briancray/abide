@@ -1,0 +1,16 @@
+<script>
+import { form } from '@abide/abide'
+
+import addDeal from './RefusedAsAWhole.server.ts'
+
+const deal = form(addDeal)
+</script>
+
+<form {...deal.form} class="row">
+    <label>
+        name <input {...deal.field('name').input} value="Ledger audit">
+    </label>
+    <button {...deal.submit}>Add deal</button>
+</form>
+
+<p {...deal.error} class="status text-bad">{deal.message}</p>

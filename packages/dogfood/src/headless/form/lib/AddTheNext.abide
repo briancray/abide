@@ -1,0 +1,19 @@
+<script>
+import { form, reactive } from '@abide/abide'
+
+import addDeal from './AddTheNext.server.ts'
+
+let added = reactive('')
+
+const deal = form(addDeal, {
+    resetOnSuccess: true,
+    onsuccess: (created) => (added = `Added ${created.name}`),
+})
+</script>
+
+<form {...deal.form} class="row">
+    <label>name <input {...deal.field('name').input}></label>
+    <button {...deal.submit}>Add deal</button>
+</form>
+
+<p class="status">{added}</p>
