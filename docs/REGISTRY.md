@@ -306,7 +306,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `s.set` | `(value: Accepted \| Promise<Accepted> \| Reactive<Accepted, unknown, Failures, unknown>) => void \| Failures` | Write the current value here, gated by `identity`. | 3.6, 4.1, 4.2, 4.9, 4.13, 4.17, 4.18, 5.6, 9.4, 9.11, 9.12, 11.58, 11.60, 11.64, 11.65, 11.69 |
-| `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutate the value in place. | 5.7, 5.22, 9.13, 11.58, 18.11, 18.13, 32.33 |
+| `s.patch` | `(mutate: (value: Stored) => void) => void` | Mutate the value in place. | 5.7, 5.22, 5.26, 9.13, 11.58, 18.11, 18.13, 32.33 |
 
 ### Probes
 

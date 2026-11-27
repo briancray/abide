@@ -4,7 +4,7 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
-import { flushSync, invalidate, refresh, watch } from '#shared'
+import { flushSync, invalidate, reactive, refresh, watch } from '#shared'
 import { answerOf } from '#shared/answerOf.ts'
 import { PRINCIPAL_HEADER } from '#shared/PRINCIPAL_HEADER.ts'
 import type { Reactive } from '#shared/reactive/index.ts'
@@ -764,4 +764,42 @@ test('a copy something reads stays followed through every sweep — 18.48', asyn
     sweepFollows()
     stop()
     expect(opsFor(address)).toEqual(['sub'])
+})
+
+// 5.26 OVER THE WIRE — the patch a server's `memo.patch` sends lands in the copy in place, so a value
+// built over the copy that hands it back unfiltered holds the same reference it served. THE REVERT:
+// drop the `writtenSince` arm in `produce`; the pass-through's reader keeps 'dune'.
+test('a patch written into the copy reaches a value that passes it through — 5.26', async () => {
+    shelf = ['dune']
+    const passedRpc = wire('GET', `${LIBRARY}/passed`)
+    const passed = (args?: unknown) =>
+        reachOf(passedRpc, args) as Reactive<string[]> & PromiseLike<string[]>
+    const rows = reactive(() => passed())
+    const filtering = reactive(false)
+    const shown = reactive(() =>
+        filtering.get() ? rows.get().filter(Boolean) : rows.get(),
+    )
+    await shown
+    await Bun.sleep(10)
+    const socket = muxSocket()
+    const follow = socket.sent.find(
+        (frame) => frame.address === `${LIBRARY}/passed`,
+    ) as Sent
+    const seen: string[] = []
+    const stop = watch(() => {
+        seen.push(shown.get()[0] ?? '')
+    })
+    try {
+        socket.push({
+            op: 'patch',
+            id: follow.id,
+            base: follow.version,
+            version: (follow.version as number) + 1,
+            ops: [{ op: 'replace', path: '/0', value: 'dune messiah' }],
+        })
+        flushSync()
+        expect(seen).toEqual(['dune', 'dune messiah'])
+    } finally {
+        stop()
+    }
 })

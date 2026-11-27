@@ -378,6 +378,10 @@ call MUST answer the last value written.
 it served, reporting `s.busy` true and `s.ready` as it stood, until the entry starts, and 11.16 MUST
 then apply.
 
+5.26 A production handing back the reference a value already serves MUST wake its readers as
+`s.patch` does where an `s.patch` has written to that object since the value served it, and 5.2
+MUST govern it otherwise.
+
 # 6. Expiry
 
 6.1 An entry of a `memo` whose `ttl` runs out while something subscribes to it MUST be refreshed per

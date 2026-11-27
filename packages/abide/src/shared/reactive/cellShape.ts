@@ -370,6 +370,11 @@ export class Cell {
      */
     declare ringBase: number
     declare ordinal: number
+    /**
+     * 5.26 — the patch epoch (`patchMarks.ts`) as of what this value last served or woke on, so a
+     * rerun handing back that reference can tell a patch written to it since from no change.
+     */
+    declare patchSeen: number
     declare generation: number
     declare alive: boolean
     declare isEffect: boolean
@@ -559,6 +564,7 @@ export class Cell {
         this.ring = EMPTY_RING
         this.ringBase = 0
         this.ordinal = 0
+        this.patchSeen = 0
         this.generation = 0
         this.alive = true
         this.state = CLEAN

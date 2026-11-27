@@ -2022,6 +2022,58 @@ test('a patch of an adopted value wakes the adopter — 11.13, 5.7', () => {
     stop()
 })
 
+// 5.26 — A BODY PASSING A PATCHED OBJECT THROUGH reran on the patch, handed back the reference it
+// already served, and 5.2's gate read that as no change — so `reactive(() => rows.get())` never
+// showed a row a server patched, two levels down from where the adopter case above was fixed.
+// THE REVERT: drop the `writtenSince` arm in `produce`; the pass-through's watch runs once, not twice.
+test('a patch reaches the readers of a value that passes it through — 5.26', () => {
+    const rows = reactive([{ id: 1, n: 0 }])
+    const passThrough = reactive(() => rows.get())
+    const twice = reactive(() => passThrough.get() ?? [])
+    const seen: number[] = []
+    const stop = watch(() => {
+        seen.push(twice.get()[0]?.n ?? -1)
+    })
+    rows.patch((value) => {
+        value[0] = { id: 1, n: 1 }
+    })
+    flushSync()
+    rows.patch((value) => {
+        ;(value[0] as { n: number }).n = 2
+    })
+    flushSync()
+    expect(seen).toEqual([0, 1, 2])
+    stop()
+})
+
+// 5.2 still holds beside 5.26: a rerun that hands back the same reference with no patch since wakes
+// nobody, and neither does a later rerun over an object whose patch it has already passed on.
+// THE REVERTS: drop the stamp in `serve` or in `wakePatched`; the watch runs 3 times, not 2.
+test('a pass-through rerun with nothing patched since wakes no reader — 5.2, 5.26', () => {
+    const rows = reactive([{ id: 1, n: 0 }])
+    // Patched before the pass-through first serves it, so only `serve`'s stamp says it has seen it.
+    rows.patch((value) => {
+        ;(value[0] as { n: number }).n = -1
+    })
+    const other = reactive(0)
+    const passThrough = reactive(() => (other.get(), rows.get()))
+    let woken = 0
+    const stop = watch(() => {
+        passThrough.get()
+        woken += 1
+    })
+    other.set(1)
+    flushSync()
+    rows.patch((value) => {
+        ;(value[0] as { n: number }).n = 1
+    })
+    flushSync()
+    other.set(2)
+    flushSync()
+    expect(woken).toBe(2)
+    stop()
+})
+
 test('adopted productions mirror into the outer value, through its own transform', () => {
     const feed = reactive(1)
     const outer = reactive(() => feed, {

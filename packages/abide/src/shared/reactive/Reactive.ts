@@ -52,6 +52,7 @@ import { isThenable } from './isThenable.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import { NotLanded } from './NotLanded.ts'
 import { logOf, PatchLog, type PatchOp, sendInvalidate } from './patchLog.ts'
+import { patchEpoch, writtenSince } from './patchMarks.ts'
 import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 import { recordWrites } from './recordWrites.ts'
 import { runAsRun } from './scoping.ts'
@@ -1009,6 +1010,17 @@ function produce(cell: Cell, produced: unknown): number {
             const settling = settleProbes(cell)
             serveAgain(cell)
             if (settling) probesMoved(cell)
+            // 5.26 — THE SAME REFERENCE, PATCHED SINCE THIS SERVED IT: a body passing a patched
+            // object through (`() => rows.get()`, `x ?? []`) reran on the patch and handed back
+            // what it holds, which the gate reads as no change, so its readers never heard of
+            // the patch. It wakes them as the patch woke this. The integer compare first, so a
+            // collapse with no patch anywhere since never reaches the WeakMap.
+            if (
+                patchEpoch() > cell.patchSeen &&
+                produced === previous &&
+                writtenSince(produced, cell.patchSeen)
+            )
+                wakePatched(cell, produced)
             return cell.ordinal
         }
     }
@@ -1099,6 +1111,7 @@ function endLoad(cell: Cell, moved: boolean): void {
  */
 function serve(cell: Cell, value: unknown): void {
     cell.value = value
+    cell.patchSeen = patchEpoch()
     cell.landed = true
     cell.servable = true
     // THE ONE PLACE `direct` IS SET TRUE ON A PRODUCTION, and it reads the state rather
@@ -3182,6 +3195,7 @@ function firstWritten(
 }
 
 function wakePatched(cell: Cell, head: unknown): void {
+    cell.patchSeen = patchEpoch()
     const cap = cell.cap
     if (cap === null || !capsWrite(cell) || wakes(cell, cap, head)) {
         cascade(cell)
