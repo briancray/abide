@@ -648,10 +648,12 @@ test.skipIf(process.platform !== 'darwin')(
         const info = JSON.parse(plist.stdout) as {
             CFBundleIdentifier: string
             LSUIElement: boolean
+            NSLocalNetworkUsageDescription: string
             CFBundleURLTypes: { CFBundleURLSchemes: string[] }[]
         }
         expect(info.CFBundleIdentifier).toBe(IDENTIFIER)
         expect(info.LSUIElement).toBe(true)
+        expect(info.NSLocalNetworkUsageDescription).not.toBe('')
         expect(info.CFBundleURLTypes[0]?.CFBundleURLSchemes).toEqual([
             PAIRING_SCHEME,
         ])

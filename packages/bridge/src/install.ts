@@ -210,6 +210,12 @@ async function installMac(
     for (const [key, type, value] of [
         ['CFBundleIdentifier', '-string', IDENTIFIER],
         ['LSUIElement', '-bool', 'YES'],
+        // Without it macOS never asks for Local Network access, and a bridge to a LAN site is refused.
+        [
+            'NSLocalNetworkUsageDescription',
+            '-string',
+            'Pairs your Claude Code with sites on your local network.',
+        ],
         [
             'CFBundleURLTypes',
             '-json',
