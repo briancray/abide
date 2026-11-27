@@ -118,14 +118,18 @@ export function drawer(options: DrawerOptions = {}): Drawer {
         const settle = (stop: number): void => {
             const height = stood as number
             following.set(false)
-            pushed.set(stop === 0 ? height : height - Math.round(stop * viewport()))
+            pushed.set(
+                stop === 0 ? height : height - Math.round(stop * viewport()),
+            )
             flushSync()
             const panel = panelOf()
             const style =
                 panel === null || panel === undefined
                     ? undefined
                     : globalThis.getComputedStyle?.(panel)
-            const lasts = longest(style?.transitionDuration) + longest(style?.transitionDelay)
+            const lasts =
+                longest(style?.transitionDuration) +
+                longest(style?.transitionDelay)
             if (panel === null || panel === undefined || lasts === 0)
                 return commit(stop)
             let timer: ReturnType<typeof setTimeout> | undefined
@@ -233,8 +237,7 @@ export function drawer(options: DrawerOptions = {}): Drawer {
                 const sizing = sized.panel.style as string | undefined
                 const by = pushed()
                 if (by === undefined) return sizing
-                const toward =
-                    side === 'start' || side === 'top' ? -by : by
+                const toward = side === 'start' || side === 'top' ? -by : by
                 return `${sizing === undefined ? '' : `${sizing};`}transform:translate${across === 'x' ? 'X' : 'Y'}(${toward}px)`
             },
             get 'data-following'() {
@@ -256,7 +259,10 @@ function longest(times: string | undefined): number {
     for (const time of (times ?? '').split(',')) {
         const value = Number.parseFloat(time)
         if (Number.isFinite(value))
-            most = Math.max(most, time.trim().endsWith('ms') ? value : value * 1000)
+            most = Math.max(
+                most,
+                time.trim().endsWith('ms') ? value : value * 1000,
+            )
     }
     return most
 }

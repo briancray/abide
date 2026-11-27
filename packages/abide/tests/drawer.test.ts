@@ -179,13 +179,25 @@ test('a drawer with stops follows a drag by a transform, and is sized once it is
         configurable: true,
         value: 800,
     })
-    const sheet = drawer({ side: 'bottom', stops: [0.25, 0.5, 1], modal: false })
+    const sheet = drawer({
+        side: 'bottom',
+        stops: [0.25, 0.5, 1],
+        modal: false,
+    })
     const { panel, send } = standing(sheet)
     sheet.open.set(true)
     flushSync()
     sheet.size.set(200)
     flushSync()
-    send(still(new PointerEvent('pointerdown', { clientY: 600, button: 0, buttons: 1 })))
+    send(
+        still(
+            new PointerEvent('pointerdown', {
+                clientY: 600,
+                button: 0,
+                buttons: 1,
+            }),
+        ),
+    )
     const sizes: (number | undefined)[] = []
     const styles: unknown[] = []
     for (const y of [580, 540, 480]) {
@@ -208,7 +220,15 @@ test('a drawer with stops follows a drag by a transform, and is sized once it is
         'block-size:400px',
     ])
     // A cancelled drag leaves it as it was.
-    send(still(new PointerEvent('pointerdown', { clientY: 400, button: 0, buttons: 1 })))
+    send(
+        still(
+            new PointerEvent('pointerdown', {
+                clientY: 400,
+                button: 0,
+                buttons: 1,
+            }),
+        ),
+    )
     send(still(new PointerEvent('pointermove', { clientY: 300, buttons: 1 })))
     send(still(new PointerEvent('pointercancel', {})))
     expect([sheet.size(), sheet.drawer.style]).toEqual([
@@ -225,16 +245,32 @@ test('a tap on the handle of a drawer with stops stands it at the next stop, goi
         configurable: true,
         value: 800,
     })
-    const sheet = drawer({ side: 'bottom', stops: [0.25, 0.5, 1], modal: false })
+    const sheet = drawer({
+        side: 'bottom',
+        stops: [0.25, 0.5, 1],
+        modal: false,
+    })
     const { send } = standing(sheet)
     sheet.open.set(true)
     sheet.size.set(200)
     flushSync()
     const sizes: (number | undefined)[] = []
     for (let tap = 0; tap < 4; tap += 1) {
-        send(still(new PointerEvent('pointerdown', { clientY: 600, button: 0, buttons: 1 })))
+        send(
+            still(
+                new PointerEvent('pointerdown', {
+                    clientY: 600,
+                    button: 0,
+                    buttons: 1,
+                }),
+            ),
+        )
         // A press that wanders less than the slop is still a tap.
-        send(still(new PointerEvent('pointermove', { clientY: 604, buttons: 1 })))
+        send(
+            still(
+                new PointerEvent('pointermove', { clientY: 604, buttons: 1 }),
+            ),
+        )
         send(still(new PointerEvent('pointerup', { clientY: 604 })))
         sizes.push(sheet.size())
     }
@@ -256,25 +292,50 @@ test('a drawer let go settles by its transition on the push, and is sized as it 
         transitionDelay: '0s',
     })) as unknown as typeof getComputedStyle
     try {
-        const sheet = drawer({ side: 'bottom', stops: [0.25, 0.5, 1], modal: false })
+        const sheet = drawer({
+            side: 'bottom',
+            stops: [0.25, 0.5, 1],
+            modal: false,
+        })
         const { panel, send } = standing(sheet)
         sheet.open.set(true)
         sheet.size.set(200)
         flushSync()
-        send(still(new PointerEvent('pointerdown', { clientY: 600, button: 0, buttons: 1 })))
-        send(still(new PointerEvent('pointermove', { clientY: 480, buttons: 1 })))
+        send(
+            still(
+                new PointerEvent('pointerdown', {
+                    clientY: 600,
+                    button: 0,
+                    buttons: 1,
+                }),
+            ),
+        )
+        send(
+            still(
+                new PointerEvent('pointermove', { clientY: 480, buttons: 1 }),
+            ),
+        )
         expect(sheet.drawer['data-following']).toBe('')
         send(still(new PointerEvent('pointerup', { clientY: 480 })))
-        expect([sheet.size(), sheet.drawer.style, sheet.drawer['data-following']]).toEqual([
+        expect([
+            sheet.size(),
+            sheet.drawer.style,
+            sheet.drawer['data-following'],
+        ]).toEqual([
             800,
             'block-size:800px;transform:translateY(400px)',
             undefined,
         ])
         panel.dispatchEvent(
-            Object.assign(new Event('transitionend'), { propertyName: 'transform' }),
+            Object.assign(new Event('transitionend'), {
+                propertyName: 'transform',
+            }),
         )
         flushSync()
-        expect([sheet.size(), sheet.drawer.style]).toEqual([400, 'block-size:400px'])
+        expect([sheet.size(), sheet.drawer.style]).toEqual([
+            400,
+            'block-size:400px',
+        ])
     } finally {
         globalThis.getComputedStyle = computed
     }

@@ -10,7 +10,12 @@ const pressed = () =>
 
 function press(key: string, code: string): void {
     document.body.dispatchEvent(
-        new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true }),
+        new KeyboardEvent('keydown', {
+            key,
+            code,
+            bubbles: true,
+            cancelable: true,
+        }),
     )
     flushSync()
 }
