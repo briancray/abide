@@ -86,7 +86,13 @@ function keyOf(element: unknown, key: Exclude<Key, null>): unknown {
 
 /**
  * The ops by key: what left is removed, then each position of `after` is filled from the element
- * already standing there, moved from later, or added — the array the ops build is walked alongside.
+ * already standing there, moved from later, or added.
+ *
+ * THE ARRAY THE OPS BUILD IS NEVER BUILT. Past the removes, positions `[0, at)` hold `after`'s first
+ * `at` and the rest hold the survivors not yet placed, in their order — so an element's `from` is `at`
+ * plus how many unplaced survivors stand before it, which a Fenwick tree over the survivors answers in
+ * log time. Simulating it instead spliced per move and scanned per position: a full reverse was
+ * quadratic, 82 ms at 10,000 rows.
  */
 function diffByKey(
     ops: PatchOp[],
@@ -96,35 +102,83 @@ function diffByKey(
     key: Exclude<Key, null>,
 ): void {
     const wanted = new Set<unknown>()
-    for (const element of after) wanted.add(keyOf(element, key))
-    const current = before.slice()
-    for (let at = current.length - 1; at >= 0; at -= 1)
-        if (!wanted.has(keyOf(current[at], key))) {
+    const afterKeys: unknown[] = []
+    for (const element of after) {
+        const id = keyOf(element, key)
+        afterKeys.push(id)
+        wanted.add(id)
+    }
+    const beforeKeys: unknown[] = []
+    for (const element of before) beforeKeys.push(keyOf(element, key))
+    for (let at = before.length - 1; at >= 0; at -= 1)
+        if (!wanted.has(beforeKeys[at]))
             ops.push({ op: 'remove', path: `${path}/${at}` })
-            current.splice(at, 1)
+    // The survivors in order, and each key's survivors by their rank among them, taken first to last.
+    const survivors: unknown[] = []
+    const ranks = new Map<unknown, { ranks: number[]; next: number }>()
+    for (let at = 0; at < before.length; at += 1) {
+        const id = beforeKeys[at]
+        if (!wanted.has(id)) continue
+        let held = ranks.get(id)
+        if (held === undefined) {
+            held = { ranks: [], next: 0 }
+            ranks.set(id, held)
         }
+        held.ranks.push(survivors.length)
+        survivors.push(before[at])
+    }
+    const unplaced = new Unplaced(survivors.length)
     for (let at = 0; at < after.length; at += 1) {
-        const target = after[at]
-        const id = keyOf(target, key)
-        let from = -1
-        for (let look = at; look < current.length; look += 1)
-            if (keyOf(current[look], key) === id) {
-                from = look
-                break
-            }
-        if (from === -1) {
-            ops.push({ op: 'add', path: `${path}/${at}`, value: target })
-            current.splice(at, 0, target)
+        const id = afterKeys[at]
+        // `===`, as a scan for the key would compare: a NaN key matches nothing.
+        const held = id === id ? ranks.get(id) : undefined
+        const rank =
+            held === undefined || held.next === held.ranks.length
+                ? -1
+                : (held.ranks[held.next++] as number)
+        if (rank === -1) {
+            ops.push({ op: 'add', path: `${path}/${at}`, value: after[at] })
             continue
         }
-        if (from !== at) {
+        const from = at + unplaced.before(rank)
+        if (from !== at)
             ops.push({
                 op: 'move',
                 from: `${path}/${from}`,
                 path: `${path}/${at}`,
             })
-            current.splice(at, 0, ...current.splice(from, 1))
+        unplaced.place(rank)
+        diffInto(ops, `${path}/${at}`, survivors[rank], after[at], null)
+    }
+}
+
+/** Which of `size` survivors are not yet placed, as a Fenwick tree of ones: counted below a rank in log time. */
+class Unplaced {
+    readonly tree: Int32Array
+    constructor(size: number) {
+        const tree = new Int32Array(size + 1)
+        for (let index = 1; index <= size; index += 1) {
+            tree[index] = (tree[index] as number) + 1
+            const parent = index + (index & -index)
+            if (parent <= size)
+                tree[parent] =
+                    (tree[parent] as number) + (tree[index] as number)
         }
-        diffInto(ops, `${path}/${at}`, current[at], target, null)
+        this.tree = tree
+    }
+
+    /** How many survivors ranked below `rank` are not yet placed. */
+    before(rank: number): number {
+        let count = 0
+        for (let index = rank; index > 0; index -= index & -index)
+            count += this.tree[index] as number
+        return count
+    }
+
+    /** Marks the survivor at `rank` placed. */
+    place(rank: number): void {
+        const tree = this.tree
+        for (let index = rank + 1; index < tree.length; index += index & -index)
+            tree[index] = (tree[index] as number) - 1
     }
 }
