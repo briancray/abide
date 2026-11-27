@@ -24,7 +24,8 @@ export function bindGroup(
     const bound = element as HTMLInputElement
     scope.watch(() => {
         const checked = groupHolds(boundValue(operand), own())
-        bound.checked = checked
+        // Every input of the group reruns for one write; the ones it leaves alone write nothing.
+        if (bound.checked !== checked) bound.checked = checked
         bound.toggleAttribute('checked', checked)
     })
     bound.addEventListener('change', () => {

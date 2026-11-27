@@ -465,6 +465,43 @@ let mine = reactive('s')
     expect(input('moving').checked).toBe(true)
 })
 
+// 32.8 — A GROUP WRITE TOUCHES THE INPUTS IT MOVES, and no other: every input of the group reruns
+// its compare, and only the one leaving and the one arriving write `checked`. Counted as writes of the
+// property, which the checked states cannot show. THE REVERT: write `bound.checked` unguarded in
+// `bindGroup`; moving the choice across five radios writes 5, against 2.
+test('a group write sets checked only on the inputs it moves — 32.8', async () => {
+    await mountPage(`<script>
+import { reactive } from '@abide/abide'
+
+let choice = reactive(1)
+const options = [1, 2, 3, 4, 5]
+</script>
+
+<main>{#for option of options}<input type="radio" name="g" value={option} bind:group={choice}>{/for}
+<button id="pick" onclick={() => { choice = 2 }}>pick</button></main>`)
+    flushSync()
+    const descriptor = Object.getOwnPropertyDescriptor(
+        Object.getPrototypeOf(document.createElement('input')),
+        'checked',
+    ) as PropertyDescriptor
+    let writes = 0
+    const prototype = Object.getPrototypeOf(document.createElement('input'))
+    Object.defineProperty(prototype, 'checked', {
+        ...descriptor,
+        set(on: boolean) {
+            writes += 1
+            descriptor.set?.call(this, on)
+        },
+    })
+    try {
+        ;(document.getElementById('pick') as HTMLElement).click()
+        flushSync()
+    } finally {
+        Object.defineProperty(prototype, 'checked', descriptor)
+    }
+    expect(writes).toBe(2)
+})
+
 // 32.72 — A BIND AND SOMETHING ELSE WRITING ONE VALUE IS REFUSED. The server wrote both — two
 // `value=` attributes, or two `<option selected>` — and the browser kept whichever came first, and
 // the client moved with whichever wrote last.

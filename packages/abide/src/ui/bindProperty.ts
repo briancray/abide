@@ -50,8 +50,10 @@ function bindValue(bound: Bound, operand: unknown, scope: Scope): void {
         // 32.62 — the list of what is selected, read and written per option.
         const select = bound as unknown as HTMLSelectElement
         const choose = (value: unknown) => {
-            for (const option of select.options)
-                option.selected = selectHolds(value, option.value)
+            for (const option of select.options) {
+                const selected = selectHolds(value, option.value)
+                if (option.selected !== selected) option.selected = selected
+            }
         }
         scope.watch(() => choose(boundValue(operand)))
         chooseOnNewOptions(select, () => choose(heldValue(operand)), scope)
