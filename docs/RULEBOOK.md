@@ -1644,7 +1644,8 @@ MUST be fed from it, as a call for them would build it.
 
 18.41 A production that replaces a followed value MUST be sent to a subscription standing at the
 version it replaced as the JSON Patch from that value to the new one, an array its `key` tells apart
-matched element by element, and MUST NOT be sent as the value.
+matched element by element, and MUST NOT be sent as the value — save where that patch is one
+`replace` of the root, which MUST be sent as the value.
 
 18.42 A served `memo` entry kept in a store with an append face MUST record each change in that
 log, and its version MUST be the number of the change's record; opened again on that store where

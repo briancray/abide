@@ -102,22 +102,54 @@ test('a change is serialized once for every follower of a value, and each is sen
     value.set(shelf(['dune', 'emma']))
     flushSync()
     expect(serialized).toBe(1)
-    // 18.41 — each stood at the version it was sent, so the replacement reaches it as the patch from it.
-    for (let at = 0; at < FOLLOWERS; at++) {
-        const [first, last] = sent[at] ?? []
-        expect(last).toMatchObject({
-            op: 'patch',
+    // 18.41 — a value answering its own `toJSON` is replaced whole, so each is sent it as the value.
+    for (let at = 0; at < FOLLOWERS; at++)
+        expect(sent[at]?.[1]).toEqual({
+            op: 'value',
             id: at + 1,
-            base: first?.version,
+            version: expect.any(Number),
+            value: { titles: ['dune', 'emma'] },
         })
-        expect(patched(first?.value, last?.ops)).toEqual({
-            titles: ['dune', 'emma'],
-        })
-    }
     for (const connection of connections) connection.close()
     value.set(shelf(['gone']))
     flushSync()
     expect(sent[0]?.length).toBe(2)
+})
+
+// 18.41 — A REPLACEMENT NOTHING IN COMMON WITH THE VALUE BEFORE IS SENT AS THE VALUE: its diff is one
+// \`replace\` of the root, which a follower patching in place cannot apply to a primitive or a value of
+// another shape. THE REVERT: send the diff whatever it is; each follower is sent a root \`replace\`,
+// and applying it is refused.
+test('a replacement of another shape reaches a follower as the value, not a root replace — 18.41', async () => {
+    const cases: [unknown, unknown][] = [
+        [false, true],
+        [[], {}],
+        [{ at: 1 }, 'gone'],
+    ]
+    for (const [before, after] of cases) {
+        const value = rpc((): unknown => before, { global: true })
+        const served = value as unknown as { address: string }
+        served.address = '/shape'
+        const mux = muxOver(served)
+        const frames: { op: string; value?: unknown; ops?: unknown }[] = []
+        const connection = mux.connect(
+            new Request('http://app.test/__abide/socket'),
+            {
+                send(text: string) {
+                    frames.push(JSON.parse(text))
+                },
+                close() {},
+            },
+        )
+        await connection.message(
+            JSON.stringify({ op: 'sub', id: 1, address: served.address }),
+        )
+        value.set(after)
+        flushSync()
+        expect(frames.map((frame) => frame.op)).toEqual(['value', 'value'])
+        expect(frames[1]?.value).toEqual(after)
+        connection.close()
+    }
 })
 
 // 7.10, 7.18, 13.4 — A TRIGGER OVER A TAG reaches the copies a value it names is feeding, as the

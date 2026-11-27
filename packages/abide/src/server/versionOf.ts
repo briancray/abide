@@ -12,7 +12,7 @@
 // over, back through the last `RECENT_PATCHES` of them, so a follower standing anywhere on that chain
 // is sent the writes since rather than the value — a reconnect a few lines behind a log, or a burst a
 // slow tab missed. A production that replaced the value is a step too, as the diff from the value it
-// replaced (18.41); only one whose diff would say more than the value breaks the chain.
+// replaced (18.41); only one whose diff is the value whole breaks the chain.
 
 import { diffOps } from '#shared/reactive/diffOps.ts'
 import { elementKeyOf } from '#shared/reactive/elementKeyOf.ts'
@@ -77,16 +77,17 @@ export function versionOf(value: unknown): number {
     )
         return stamp.version
     // THE WRITES SINCE THE LAST STAMP stand for the change where nothing else moved it; a value
-    // replaced is diffed against the one it replaced (18.41), so the chain carries on through it.
+    // replaced is diffed against the one it replaced (18.41), so the chain carries on through it —
+    // unless the diff is one `replace` of the root, which is the value whole and which no follower can
+    // apply in place to a value of another shape (a primitive, `undefined`, an array become a record).
     const drained = drainLog(cell)
-    const ops =
-        stamp === undefined
-            ? null
-            : stamp.ordinal === cell.ordinal && stamp.held === held
-              ? drained
-              : stamp.held === undefined || held === undefined
-                ? null
-                : diffOps(stamp.held, held, elementKeyOf(value))
+    let ops: PatchOp[] | null = null
+    if (stamp !== undefined)
+        if (stamp.ordinal === cell.ordinal && stamp.held === held) ops = drained
+        else {
+            const diffed = diffOps(stamp.held, held, elementKeyOf(value))
+            ops = diffed.length === 1 && diffed[0]?.path === '' ? null : diffed
+        }
     let version: number
     if (chain === null) {
         next += 1
