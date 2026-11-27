@@ -164,3 +164,80 @@ test('a drawer with no stops let go rests where it was dropped — 50.64', () =>
     send(new PointerEvent('pointerup', { clientX: 250 }))
     expect([filters.size(), filters.open()]).toEqual([250, true])
 })
+
+// A press stamped at one instant, so a drag's speed carries it nowhere and the stop is the test's.
+const still = (event: PointerEvent): PointerEvent =>
+    Object.defineProperty(event, 'timeStamp', { value: 0 })
+
+// 50.63 — A DRAG WITH STOPS FOLLOWS THE POINTER BY A TRANSFORM ALONE: the drawer is stood at its
+// largest stop once, pushed back to where it stood, and every move after writes only how far it is
+// pushed — so a drag lays nothing out until it is let go. THE REVERT: call the resizable's own
+// `onpointermove` from the drawer's, as it once did; `size` then moves with every move — the sizes
+// read [220, 260, 320] where [800, 800, 800] is due — and the panel is laid out on every frame.
+test('a drawer with stops follows a drag by a transform, and is sized once it is let go — 50.63', () => {
+    Object.defineProperty(globalThis, 'innerHeight', {
+        configurable: true,
+        value: 800,
+    })
+    const sheet = drawer({ side: 'bottom', stops: [0.25, 0.5, 1], modal: false })
+    const { panel, send } = standing(sheet)
+    sheet.open.set(true)
+    flushSync()
+    sheet.size.set(200)
+    flushSync()
+    send(still(new PointerEvent('pointerdown', { clientY: 600, button: 0, buttons: 1 })))
+    const sizes: (number | undefined)[] = []
+    const styles: unknown[] = []
+    for (const y of [580, 540, 480]) {
+        send(still(new PointerEvent('pointermove', { clientY: y, buttons: 1 })))
+        sizes.push(sheet.size())
+        styles.push(sheet.drawer.style)
+    }
+    expect(sizes).toEqual([800, 800, 800])
+    expect(styles).toEqual([
+        'block-size:800px;transform:translateY(580px)',
+        'block-size:800px;transform:translateY(540px)',
+        'block-size:800px;transform:translateY(480px)',
+    ])
+    expect(panel.hasAttribute('data-following')).toBe(false)
+    expect(sheet.drawer['data-following']).toBe('')
+    send(still(new PointerEvent('pointerup', { clientY: 480 })))
+    // Let go at 320, nearest a half: sized there, and pushed no more.
+    expect([sheet.size(), sheet.drawer.style]).toEqual([
+        400,
+        'block-size:400px',
+    ])
+    // A cancelled drag leaves it as it was.
+    send(still(new PointerEvent('pointerdown', { clientY: 400, button: 0, buttons: 1 })))
+    send(still(new PointerEvent('pointermove', { clientY: 300, buttons: 1 })))
+    send(still(new PointerEvent('pointercancel', {})))
+    expect([sheet.size(), sheet.drawer.style]).toEqual([
+        400,
+        'block-size:400px',
+    ])
+})
+
+// 50.84 — A TAP ON THE HANDLE OF A DRAWER WITH STOPS STANDS IT AT THE NEXT ONE, going round. THE
+// REVERT: settle a tap as a drag let go where it began; it stays at a quarter, [200, 200, 200, 200]
+// where [400, 800, 200, 400] is due.
+test('a tap on the handle of a drawer with stops stands it at the next stop, going round — 50.84', () => {
+    Object.defineProperty(globalThis, 'innerHeight', {
+        configurable: true,
+        value: 800,
+    })
+    const sheet = drawer({ side: 'bottom', stops: [0.25, 0.5, 1], modal: false })
+    const { send } = standing(sheet)
+    sheet.open.set(true)
+    sheet.size.set(200)
+    flushSync()
+    const sizes: (number | undefined)[] = []
+    for (let tap = 0; tap < 4; tap += 1) {
+        send(still(new PointerEvent('pointerdown', { clientY: 600, button: 0, buttons: 1 })))
+        // A press that wanders less than the slop is still a tap.
+        send(still(new PointerEvent('pointermove', { clientY: 604, buttons: 1 })))
+        send(still(new PointerEvent('pointerup', { clientY: 604 })))
+        sizes.push(sheet.size())
+    }
+    expect(sizes).toEqual([400, 800, 200, 400])
+    expect(sheet.open()).toBe(true)
+})

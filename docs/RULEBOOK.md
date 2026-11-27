@@ -5677,10 +5677,13 @@ none is given; its `backdrop` part MUST be that `dialog`'s `backdrop` part.
 50.62 `drawer`'s `handle` part MUST be that `resizable`'s `handle`, sizing the drawer across `side`
 and growing it as the handle moves away from the edge `side` names.
 
-50.63 A pointer let go of `drawer`'s `handle`, where `stops` is given, MUST set `size` to the one of
-`stops`, as shares of the viewport's extent across `side`, nearest the size the drag would rest at
-carried on by its speed for 150 milliseconds, and MUST write `false` to `open` where no stop is nearer
-that size than none.
+50.63 A pointer dragged on `drawer`'s `handle`, where `stops` is given, MUST set `size` once, to the
+largest of `stops` or the size it stood at where that is larger, and MUST then follow the pointer by a
+`transform` on the `drawer` part alone, which carries `data-following` while it does; let go, it MUST
+drop the `transform` and set `size` to the one of `stops`, as shares of the viewport's extent across
+`side`, nearest the size the drag would rest at carried on by its speed for 150 milliseconds, and
+MUST write `false` to `open`, leaving `size` as the drag found it, where no stop is nearer that size
+than none. A drag cancelled MUST leave `size` and `open` as the drag found them.
 
 50.64 A pointer let go of `drawer`'s `handle`, where no `stops` is given, MUST leave `size` where the
 drag set it and `open` as it was.
@@ -5737,6 +5740,10 @@ it and every `menu` it is a submenu of, returning focus to the trigger of the ou
 
 50.83 `prompts.host`'s `input` part MUST carry each attribute the showing prompt's `input` names,
 under the attributes the host writes there itself.
+
+50.84 A pointer let go of `drawer`'s `handle` less than 8 pixels from where it was pressed, where
+`stops` is given, MUST set `size` to the stop after the one nearest its size, the first after the
+last, and MUST NOT move it as a drag.
 
 # 51. Lists and tables
 
@@ -6323,6 +6330,10 @@ for its input's text with the whitespace at either end taken off, where that lea
 item it lists or holds carries that text as its `label`, ignoring case.
 
 51.191 `combobox`'s `creating` MUST be the item 51.190 lists, and `undefined` where it lists none.
+
+51.192 `Listbox`'s `option` MUST answer the same listener for each event of a key at every call, and
+a change of which key is active or selected MUST wake the binding of only an option whose
+`data-active` or `aria-selected` it changes.
 
 # 52. Formatting, markdown and charts
 
