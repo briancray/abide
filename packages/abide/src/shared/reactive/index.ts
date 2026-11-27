@@ -400,7 +400,14 @@ function refuseValue(body: unknown, name: string): void {
  * The options a source declares and a value does not (11.81): a `memo` paces, ages, tags and files
  * what it computes, and a `reactive` reading it is a view of that.
  */
-const SOURCED = ['ttl', 'throttle', 'debounce', 'tags', 'global']
+const SOURCED = [
+    'ttl',
+    'staleIfError',
+    'throttle',
+    'debounce',
+    'tags',
+    'global',
+]
 
 // 11.81 — at construction, as 11.59 is: the types refuse these, and this is for JavaScript and for a
 // spread the types could not see.

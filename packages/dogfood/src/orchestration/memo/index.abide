@@ -76,6 +76,46 @@ import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
         `} />
     </Section>
 
+    <Section level={3} title="Answer the last good entry while the registry is down">
+        <p>Give the <code>memo</code> a <code>staleIfError</code> beside its <code>ttl</code>. An
+            entry nothing reads is kept that much longer once its <code>ttl</code> runs out, and the
+            next call looks again in place: it answers what the registry answers, or, where the
+            registry fails, what the entry held. A server's call reads nothing, so without it the
+            entry is let go and a failed look has nothing to answer with.</p>
+        <Code language="ts" caption="server" code={`
+            import { fetchAndHandle, memo } from '@abide/abide'
+            import type { Registration } from './askRegistry.server.ts'
+            import { registryOrigin } from './registryOrigin.server.ts'
+
+            export const registration = memo(
+                ({ id }: { id: string }) =>
+                    fetchAndHandle<Registration>(\`\${registryOrigin()}/companies/\${id}\`),
+                { global: true, ttl: 600_000, staleIfError: Infinity },
+            )
+        `} />
+    </Section>
+
+    <Section level={3} title="Stop asking the registry once every request waiting has gone">
+        <p>Hand each call a <code>signal</code>, as an <a href={url('/handlers/rpc')}><code>rpc</code></a>
+            call takes one. Calls with the same args share one run, and the run is ended, its
+            <a href={url('/ambients/abort-signal')}><code>abortSignal</code></a> with it, once every
+            call waiting on it handed a signal and every one has aborted. A call whose signal
+            aborts is refused <code>Aborted</code> at once, and a call with no signal keeps the run
+            going.</p>
+        <Code language="ts" caption="server" code={`
+            import { abortSignal, memo } from '@abide/abide'
+            import { askRegistry } from './askRegistry.server.ts'
+
+            const registrations = memo(
+                ({ id }: { id: string }) => askRegistry(id, abortSignal()),
+                { global: true, ttl: 0 },
+            )
+
+            export const registrationFor = (id: string, signal: AbortSignal) =>
+                registrations({ id }, { signal })
+        `} />
+    </Section>
+
     <Section level={3} title="Keep only the headcount from each registry entry">
         <p>Give the <code>memo</code> a <code>transform</code>, and each entry keeps what it hands
             back, so a call answers the headcount rather than the whole record. A

@@ -7,14 +7,23 @@
 // (11.24), the args gate (11.27), `ttl` (11.45), tags and the pattern triggers are the keyed value's,
 // built once by `keyedValue`; this adds the call's answer and the writes an owner of a value has.
 
+import type { CallOptions } from '../rpc.ts'
 import type { Schema } from '../Schema.ts'
 import { answerOfCall } from './answerOfCall.ts'
-import { ARGS_GATE, type Gated, PARAMETER_DEFAULTS } from './argsContract.ts'
+import {
+    ARGS_GATE,
+    canonicalKey,
+    type Gated,
+    normalized,
+    PARAMETER_DEFAULTS,
+} from './argsContract.ts'
 import type { CALL_ENTRY } from './CALL_ENTRY.ts'
+import { attendCall } from './callLoad.ts'
+import { cellOf } from './cellShape.ts'
 import type { Kept, Shaping } from './index.ts'
 import type { Keyed } from './Keyed.ts'
 import { MEMO_BRAND } from './MEMO_BRAND.ts'
-import { isStreaming, patchInto, produceInto } from './producer.ts'
+import { isStreaming, loadOf, patchInto, produceInto } from './producer.ts'
 import type { Reactive, Sourced, Store } from './Reactive.ts'
 
 /**
@@ -62,6 +71,11 @@ export type ArgsTuple<Args> = undefined extends Args
     ? [args?: Args]
     : [args: Args]
 
+/** What a memo's call takes: its args as `ArgsTuple` has them, and who may end its load (16.48). */
+export type MemoCallTuple<Args> = undefined extends Args
+    ? [args?: Args, options?: Pick<CallOptions, 'signal'>]
+    : [args: Args, options?: Pick<CallOptions, 'signal'>]
+
 /**
  * What one call of a `memo` or an `Rpc` answers: the stream of its chunks where it streams —
  * `Produced` is a chunk where `Value` is the chunks — and otherwise the promise of its value, rejected
@@ -91,7 +105,9 @@ export type Memo<
     Args = undefined,
     Failures = never,
     Produced = Value,
-> = ((...args: ArgsTuple<Args>) => CallAnswer<Value, Failures, Produced>) & {
+> = ((
+    ...args: MemoCallTuple<Args>
+) => CallAnswer<Value, Failures, Produced>) & {
     invalidate(pattern?: Partial<Args>): void
     refresh(pattern?: Partial<Args>): void
     set(...given: Written<Args, Value>): void
@@ -128,9 +144,30 @@ export function memoOver<Args, Value>(
         (keyed as (args: Args) => Reactive<Value>)(args)
     // 11.2, 11.75 — the promise of the entry's value, or its stream: a cursor of this caller's own
     // over the one run, from its start.
-    const call = (...given: [args?: Args]): unknown => {
-        const entry = entryOf(given[0] as Args)
-        return answerOfCall(entry, streams || isStreaming(entry))
+    const call = (
+        args?: Args,
+        options?: Pick<CallOptions, 'signal'>,
+    ): unknown => {
+        const signal = options?.signal
+        // 16.48 — whether the load this call reaches is one it starts, asked only of a signaled call.
+        let before: number | undefined
+        let standing: unknown
+        if (signal !== undefined) {
+            standing = face.entries.get(canonicalKey(normalized(face, args)))
+            before = standing === undefined ? undefined : loadOf(standing)
+        }
+        const entry = entryOf(args as Args)
+        const cell = cellOf(entry)
+        // A settled entry no call ended has no load to attend: two reads, and nothing filed.
+        if (signal !== undefined || cell.loading || cell.failure !== undefined)
+            attendCall(
+                entry,
+                signal,
+                entry !== standing ||
+                    before === undefined ||
+                    loadOf(entry) !== before,
+            )
+        return answerOfCall(entry, streams || isStreaming(entry), signal)
     }
     return Object.assign(call, {
         [MEMO_BRAND]: true,

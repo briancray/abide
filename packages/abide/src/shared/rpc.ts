@@ -747,7 +747,7 @@ export function declare<Declared extends Method>(
         // its refusal, or the stream of its chunks. The value the call reached stays the handler's,
         // carried on the answer for a derived `reactive` handing it back whole to adopt (11.12).
         const call = (given?: unknown, options?: CallOptions): unknown =>
-            answerOfCall(reachCall(given, options), streams)
+            answerOfCall(reachCall(given, options), streams, options?.signal)
         // THE HANDLER'S OWN TRIGGERS, handed the pattern, which a `Keyed` narrows by.
         //
         // 13.19 — AND NOT YET BUILT, NEITHER BUILDS IT: building an unkeyed value starts its body

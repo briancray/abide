@@ -135,6 +135,39 @@ export function callLoad(
     return reached
 }
 
+/**
+ * 16.48, 16.62 FOR A `memo`'s CALL, which reaches its entry itself: `signal` is one vote on the load
+ * `reached` has in flight, a call with none pins it, and a call reaching an entry whose last load
+ * 16.48 ended starts another.
+ *
+ * A CALL WITH NO SIGNAL FILES NOTHING WHERE NO SIGNALED CALL HAS, so a memo nothing hands a signal pays
+ * no record per load — and that is why a load a signaled call finds in flight, rather than `started`,
+ * is pinned: a call with no signal may be waiting on it, and filed nothing to say so.
+ */
+export function attendCall(
+    reached: object,
+    signal: AbortSignal | undefined,
+    started: boolean,
+): void {
+    let attended = ATTENDED.get(reached)
+    if (attended?.abandoned) {
+        attended.abandoned = false
+        if (loadOf(reached) === undefined) {
+            ;(reached as { refresh(): void }).refresh()
+            started = true
+        }
+    }
+    const load = loadOf(reached)
+    if (load === undefined) return
+    if (attended === undefined || attended.load !== load) {
+        if (signal === undefined) return
+        attended = new Attended(reached, load, undefined)
+        attended.pinned = !started
+        ATTENDED.set(reached, attended)
+    }
+    attend(attended, signal)
+}
+
 /** Files a call's signal, or its pin, against the load it reached (16.48). */
 function attend(attended: Attended, signal: AbortSignal | undefined): void {
     if (signal === undefined) {

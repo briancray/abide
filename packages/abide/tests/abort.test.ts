@@ -175,3 +175,32 @@ test('a load every caller aborted aborts its request — 16.49', async () => {
         window.fetch = previous
     }
 })
+
+// 16.120 — A CALL'S SIGNAL IS ITS OWN WAY OUT, on the call an app makes rather than the value it
+// reached: the call that left is refused while the one with no signal is answered. THE REVERT: hand
+// `answerOfCall` no `signal` in `rpc.ts`'s `call`; the call that left waits on the load, `still
+// waiting, invoice 9`.
+test('a call whose signal aborts is refused at once, while the load goes on — 16.120', async () => {
+    const { releases } = held()
+    const getInvoice = rpc(
+        ({ id }: { id: string }) =>
+            new Promise<string>((done) => {
+                releases.push(() => done(`invoice ${id}`))
+            }),
+    )
+    const outcome = (answer: Promise<unknown>): Promise<string> =>
+        answer.then(
+            (value) => `${value}`,
+            (failure: { name?: string }) => `refused ${failure.name}`,
+        )
+    const leaving = new AbortController()
+    const left = outcome(getInvoice({ id: '9' }, { signal: leaving.signal }))
+    const stayed = outcome(getInvoice({ id: '9' }))
+    leaving.abort()
+    const leftFirst = await Promise.race([
+        left,
+        Bun.sleep(20).then(() => 'still waiting'),
+    ])
+    releases[0]?.()
+    expect(`${leftFirst}, ${await stayed}`).toBe('refused Aborted, invoice 9')
+})

@@ -153,13 +153,26 @@ function end(follower: Follower): void {
 
 class Lifetime {
     ms: number
+    /** 6.6 — how long past `ms` an entry nothing subscribes to is kept to revalidate; 0 keeps none. */
+    staleMs: number
     followed: Map<string, Follower>
+    /**
+     * 6.6 — the entries whose life ran out with nothing subscribed, kept `staleMs` longer: in the order
+     * their lives ran out, which is `followed`'s order, so the oldest is again the first. Made on the
+     * first one, so a `Keyed` declaring no `staleIfError` never holds one.
+     */
+    expired: Map<string, Follower> | null
     timer: ReturnType<typeof setTimeout> | null
+    /** When `timer` fires — what a touch compares against where `expired` can have armed it late. */
+    due: number
 
-    constructor(ms: number) {
+    constructor(ms: number, staleMs: number) {
         this.ms = ms
+        this.staleMs = staleMs
         this.followed = new Map()
+        this.expired = null
         this.timer = null
+        this.due = 0
     }
 
     follow(key: string, entry: Callable, evict: () => void): void {
@@ -194,20 +207,36 @@ class Lifetime {
         follower.at = Date.now()
         this.followed.delete(key)
         this.followed.set(key, follower)
+        const expired = this.expired
+        if (expired !== null) expired.delete(key)
         // THE STANDING TIMER IS LEFT WHERE IT IS. It is armed at an entry at least as old as
         // this one, so it fires no later than anything this touch could need — at worst
         // early, and an early fire evicts nothing and re-arms. Re-arming here would be a
-        // `setTimeout` per production.
-        if (this.timer === null) this.arm()
+        // `setTimeout` per production. Save where 6.6 keeps expired entries: the timer may stand at
+        // one's later release, and this life ends before it.
+        if (
+            this.timer === null ||
+            (expired !== null && follower.at + this.ms < this.due)
+        )
+            this.arm()
     }
 
     arm(): void {
+        let due = Number.POSITIVE_INFINITY
         for (const oldest of this.followed.values()) {
-            armTimer(this, oldest.at + this.ms - Date.now(), () => {
+            due = oldest.at + this.ms
+            break
+        }
+        if (this.expired !== null)
+            for (const oldest of this.expired.values()) {
+                due = Math.min(due, oldest.at + this.ms + this.staleMs)
+                break
+            }
+        this.due = due
+        if (due !== Number.POSITIVE_INFINITY)
+            armTimer(this, due - Date.now(), () => {
                 this.sweep()
             })
-            return
-        }
     }
 
     sweep(): void {
@@ -219,7 +248,19 @@ class Lifetime {
             // 11.68 — PARKED, NOT EVICTED: a call reaching it joins the load, and the load's end
             // touches it back into the order.
             if (follower.cell.loading) continue
-            this.ranOut(follower)
+            this.ranOut(follower, false)
+        }
+        // 6.7 — what 6.6 kept and nothing reached for `staleMs` is released.
+        const expired = this.expired
+        if (expired !== null) {
+            const released = deadline - this.staleMs
+            for (const [key, follower] of expired) {
+                if (follower.at > released) break
+                expired.delete(key)
+                // Subscribed since by a reader that held the entry rather than reaching its key.
+                if (subscribed(follower.cell)) this.ranOut(follower, true)
+                else end(follower)
+            }
         }
         this.arm()
     }
@@ -230,12 +271,26 @@ class Lifetime {
      * (11.68), and what lands touches it back in, so its age counts from the landing (6.3). A life of
      * 0 — a mutation's, 16.7 — and a mutation's entry are released whoever follows them (6.5): refreshed,
      * the one would run its body on every turn and the other send its write again (13.16).
+     *
+     * 6.6, 6.8 — AND WHERE `staleIfError` KEEPS IT, one nothing follows that serves a value is kept
+     * rather than released, and the reach that finds it — `reached` — refreshes it as 6.1 does.
      */
-    ranOut(follower: Follower): boolean {
+    ranOut(follower: Follower, reached: boolean): boolean {
         const cell = follower.cell
-        if (this.ms === 0 || cell.mutation || !subscribed(cell)) {
+        if (this.ms === 0 || cell.mutation) {
             end(follower)
             return true
+        }
+        if (!subscribed(cell)) {
+            if (this.staleMs === 0 || !cell.servable) {
+                end(follower)
+                return true
+            }
+            if (!reached) {
+                this.expired ??= new Map()
+                this.expired.set(follower.key, follower)
+                return false
+            }
         }
         ;(cell.callable as Reactive<unknown>).refresh()
         // A refresh that started no load — a store answering at once — landed already.
@@ -250,6 +305,12 @@ class Lifetime {
      * entry produces — leaves an entry a reach would otherwise join. 16.7's mutation called twice in one turn is the case: the second call is a second write.
      */
     outlived(key: string): boolean {
+        // 6.8 — kept past its life by 6.6, and reached: revalidated in place.
+        const kept = this.expired?.get(key)
+        if (kept !== undefined) {
+            ;(this.expired as Map<string, Follower>).delete(key)
+            return this.ranOut(kept, true)
+        }
         const follower = this.followed.get(key)
         if (
             follower === undefined ||
@@ -258,7 +319,7 @@ class Lifetime {
         )
             return false
         this.followed.delete(key)
-        return this.ranOut(follower)
+        return this.ranOut(follower, true)
     }
 }
 
@@ -390,7 +451,7 @@ export function createKeyed<
     // 5.18, 5.24: `throttle` AND `debounce` STAY ON THE ENTRY TOO — the window below holds back
     // starting a key, and each entry's own caps what it produces once started: a key reached anew and
     // a held key's new value are each paced, and every follower of an entry with it (16.110).
-    const { args, ...entryOptions } = options ?? {}
+    const { args, staleIfError, ...entryOptions } = options ?? {}
     const { ttl, throttle, debounce } = entryOptions
     const gate = args as Schema<Args> | undefined
     // 5.14, at the factory: a keyed value is capped one way or the other.
@@ -403,7 +464,8 @@ export function createKeyed<
                   throttle !== undefined,
                   (throttle ?? debounce) as number,
               )
-    const lifetime = ttl === undefined ? null : new Lifetime(ttl)
+    const lifetime =
+        ttl === undefined ? null : new Lifetime(ttl, staleIfError ?? 0)
     const entryBody = heldOnce(body)
     // 11.27, 11.29 — the defaults are applied before the key is taken, so the entry is one for a
     // call that wrote them and one that left them to the parameter. Read once, here: a body with

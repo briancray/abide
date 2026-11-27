@@ -1,3 +1,4 @@
+import { refuse } from '../refuse.ts'
 import { CALL_ENTRY } from './CALL_ENTRY.ts'
 import { cellOf } from './cellShape.ts'
 import { settledOf } from './Reactive.ts'
@@ -15,8 +16,16 @@ import { track, TRACKING } from './tracking.ts'
  * A REJECTION NOBODY AWAITS IS NOT REPORTED: a call handed back whole is adopted and never awaited,
  * and a call made for its effect alone — `onclick={() => save(args)}` — leaves its refusal on the
  * handler (`save.error`) as it always did. Whoever awaits the promise is handed the rejection.
+ *
+ * 16.120 — A CALL'S `signal` IS ITS OWN WAY OUT: once it aborts the promise refuses as 16.49's does,
+ * whether or not the load goes on for the calls that remain (16.48). A call with none is handed the
+ * promise the value settles to as it is, with nothing allocated beside it.
  */
-export function answerOfCall(entry: unknown, streams: boolean): object {
+export function answerOfCall(
+    entry: unknown,
+    streams: boolean,
+    signal?: AbortSignal | undefined,
+): object {
     const reader = TRACKING.reader
     if (reader !== null) {
         // The stable arm `Reactive`'s reads inline: a rerun calling at the same spot keeps its
@@ -35,8 +44,40 @@ export function answerOfCall(entry: unknown, streams: boolean): object {
     else {
         const settled = settledOf(entry)
         settled.then(undefined, () => undefined)
-        answer = settled
+        answer = signal === undefined ? settled : leavable(settled, signal)
     }
     ;(answer as { [CALL_ENTRY]?: unknown })[CALL_ENTRY] = entry
+    return answer
+}
+
+/** `settled`, refused as 16.49's ended load is the moment `signal` aborts (16.120). */
+function leavable(
+    settled: Promise<unknown>,
+    signal: AbortSignal,
+): Promise<unknown> {
+    const answer = new Promise<unknown>((resolve, reject) => {
+        if (signal.aborted) {
+            reject(refuse.aborted())
+            return
+        }
+        const leave = (): void => {
+            reject(refuse.aborted())
+        }
+        signal.addEventListener('abort', leave, { once: true })
+        const settle = (): void => {
+            signal.removeEventListener('abort', leave)
+        }
+        settled.then(
+            (value) => {
+                settle()
+                resolve(value)
+            },
+            (failure: unknown) => {
+                settle()
+                reject(failure)
+            },
+        )
+    })
+    answer.then(undefined, () => undefined)
     return answer
 }

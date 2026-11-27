@@ -180,6 +180,8 @@ export type ReactiveOptions<
 export type Sourced<Args> = {
     /** RULEBOOK 11.45, 6.1 through 6.5: the life of a keyed entry. */
     ttl?: number | undefined
+    /** RULEBOOK 6.6 through 6.9: how long past its `ttl` an entry nothing subscribes to is kept. */
+    staleIfError?: number | undefined
     /** RULEBOOK 5.8, 5.12: a change reaches a reader immediately and then at most once per window. */
     throttle?: number | undefined
     /** RULEBOOK 5.8, 5.13: a change reaches a reader once the changes stop. */
@@ -4016,6 +4018,8 @@ export function abandonLoad(value: unknown, failure: unknown): void {
     const cell = cellOf(value)
     if (!cell.loading) return
     supersede(cell)
+    // 7.23 — an ended load is a run nothing will read, so its signal says stop.
+    endRun(cell)
     refused(cell, failure)
 }
 
