@@ -672,30 +672,30 @@ test('a Reactive declared inside a function is read and written by name — 31.1
         "import { reactive } from '@abide/abide'\nconst takes = (v: number) => v\n"
     const arrow = `${takes}const xs = [1].map(() => { const inner = reactive(2); return takes(inner) })`
     expect(await lower(arrow)).toBe(
-        `${takes}const xs = [1].map(() => { const inner = reactive(2); return takes(inner()) })`,
+        `${takes}const xs = [1].map(() => { const inner = reactive(2); return takes(inner.get()) })`,
     )
     const declared = `${takes}function f() { let n = reactive(3); n = 4; n += 1; return takes(n) }`
     expect(await lower(declared)).toBe(
-        `${takes}function f() { let n = reactive(3); n.set(4); n.set(n() + (1)); return takes(n()) }`,
+        `${takes}function f() { let n = reactive(3); n.set(4); n.set(n.get() + (1)); return takes(n.get()) }`,
     )
     const method = `${takes}const o = { m() { const inner = reactive(2); return takes(inner) } }`
     expect(await lower(method)).toBe(
-        `${takes}const o = { m() { const inner = reactive(2); return takes(inner()) } }`,
+        `${takes}const o = { m() { const inner = reactive(2); return takes(inner.get()) } }`,
     )
     const block = `${takes}if (takes(1)) { const inner = reactive(2); takes(inner) }`
     expect(await lower(block)).toBe(
-        `${takes}if (takes(1)) { const inner = reactive(2); takes(inner()) }`,
+        `${takes}if (takes(1)) { const inner = reactive(2); takes(inner.get()) }`,
     )
     // 31.17 — a pattern's names, nested as deep.
     const pattern = `${takes}const g = () => { const { a } = { a: reactive(1) }; return takes(a) }`
     expect(await lower(pattern)).toBe(
-        `${takes}const g = () => { const { a } = { a: reactive(1) }; return takes(a()) }`,
+        `${takes}const g = () => { const { a } = { a: reactive(1) }; return takes(a.get()) }`,
     )
     // A nested name shadowing the page's: each is read as its own declaration types it — a
     // nested `Reactive` over a plain one, and a nested plain one over a `Reactive`.
     const shadowing = `${takes}const top = reactive(1)\nconst plain = 1\nconst h = () => { const top = 5; const plain = reactive(2); return takes(top) + takes(plain) }\ntakes(top)`
     expect(await lower(shadowing)).toBe(
-        `${takes}const top = reactive(1)\nconst plain = 1\nconst h = () => { const top = 5; const plain = reactive(2); return takes(top) + takes(plain()) }\ntakes(top())`,
+        `${takes}const top = reactive(1)\nconst plain = 1\nconst h = () => { const top = 5; const plain = reactive(2); return takes(top) + takes(plain.get()) }\ntakes(top.get())`,
     )
     // A nested name bound to no `Reactive` is left as written.
     const unbound = `${takes}const k = () => { let count = 1; count = 2; return takes(count) }`
@@ -723,25 +723,25 @@ test('a binding typed from a read holds the value it was handed — 31.1, 31.17'
 })`
     expect(await lower(nested))
         .toBe(`${outer}const row = reactive((): number => {
-    const [held, day] = [quest(), today()]
-    const obj = { q: quest() }
+    const [held, day] = [quest.get(), today.get()]
+    const obj = { q: quest.get() }
     const { q } = obj
-    const p = pick(quest())
-    const [m] = [1].map(() => quest())
+    const p = pick(quest.get())
+    const [m] = [1].map(() => quest.get())
     return takes(held) + day.length + takes(q) + takes(p) + takes(m)
 })`)
     const top = `${outer}const [tq, td] = [quest, today]\nconst picked = pick(quest)\ntakes(tq) + td.length + takes(picked)`
     expect(await lower(top)).toBe(
-        `${outer}const [tq, td] = [quest(), today()]\nconst picked = pick(quest())\ntakes(tq) + td.length + takes(picked)`,
+        `${outer}const [tq, td] = [quest.get(), today.get()]\nconst picked = pick(quest.get())\ntakes(tq) + td.length + takes(picked)`,
     )
     // A shorthand in a returned literal with no declared type reads (31.3), so the item is a value.
     const looped = `${outer}const controls = [1].map((v) => { const value = reactive(v); return { value } })\nfor (const { value } of controls) takes(value)`
     expect(await lower(looped)).toBe(
-        `${outer}const controls = [1].map((v) => { const value = reactive(v); return { value: value() } })\nfor (const { value } of controls) takes(value)`,
+        `${outer}const controls = [1].map((v) => { const value = reactive(v); return { value: value.get() } })\nfor (const { value } of controls) takes(value)`,
     )
-    const held = `${outer}const controls = [1].map((v): { value: Reactive<number> } => { const value = reactive(v); return { value } })\nfor (const { value } of controls) { value.peek(); value.set(2); value(); takes(value); value += 1 }`
+    const held = `${outer}const controls = [1].map((v): { value: Reactive<number> } => { const value = reactive(v); return { value } })\nfor (const { value } of controls) { value.peek(); value.set(2); value.get(); takes(value); value += 1 }`
     expect(await lower(held)).toBe(
-        `${outer}const controls = [1].map((v): { value: Reactive<number> } => { const value = reactive(v); return { value } })\nfor (const { value } of controls) { value.peek(); value.set(2); value(); takes(value()); value.set(value() + (1)) }`,
+        `${outer}const controls = [1].map((v): { value: Reactive<number> } => { const value = reactive(v); return { value } })\nfor (const { value } of controls) { value.peek(); value.set(2); value.get(); takes(value.get()); value.set(value.get() + (1)) }`,
     )
 })
 

@@ -181,15 +181,16 @@ test('a patch a production replaced the value with leaves what was read before a
     shelf = [{ title: 'dune' }, { title: 'emma' }] as never
     const replacedRpc = wire('GET', `${LIBRARY}/replaced`)
     const replaced = (args?: unknown) =>
-        reachOf(replacedRpc, args) as (() => { title: string }[]) &
-            PromiseLike<{ title: string }[]>
+        reachOf(replacedRpc, args) as {
+            get(): { title: string }[]
+        } & PromiseLike<{ title: string }[]>
     await replaced()
     await Bun.sleep(10)
     const socket = muxSocket()
     const follow = socket.sent.find(
         (frame) => frame.address === `${LIBRARY}/replaced`,
     ) as Sent
-    const held = replaced()()
+    const held = replaced().get()
 
     socket.push({
         op: 'patch',
@@ -200,7 +201,7 @@ test('a patch a production replaced the value with leaves what was read before a
         ops: [{ op: 'replace', path: '/0/title', value: 'dune messiah' }],
     })
     flushSync()
-    const now = replaced()()
+    const now = replaced().get()
     expect(now).toEqual([{ title: 'dune messiah' }, { title: 'emma' }])
     expect(held[0]?.title).toBe('dune')
     expect(now[1]).toBe(held[1] as { title: string })
