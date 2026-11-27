@@ -3956,7 +3956,8 @@ its top otherwise.
 
 38.204 `settled` MUST resolve only once no value that went loading since the test awaiting it began
 is still loading and no effect is pending, and MUST NOT resolve before a turn of the event loop has
-passed since it was called.
+passed since it was called. A value nothing reads, with no run of its own in flight and a source
+moved since the run that left it loading, is not still loading.
 
 38.205 `settled` MUST throw where its timeout passes first, naming each value still loading — by the
 method and address of the handler a call reached it through, where one did.
@@ -4082,6 +4083,11 @@ was written with, per 23.28. Where the document has no router, a router MUST sta
 mount to the last one's stop that writes a `navigate` to a URL into `history` — a new entry, or the
 standing one where `replace` is set — and steps `history` for a number, per 30.38, and `route` MUST
 arrive at each entry it reaches before the `navigate` settles.
+
+38.236 Under `mount`, where a call is outside every request and every `job`'s run, `principal`,
+`cookies`, `request` and a handler's rungs MUST read one session's request — at the document's
+address, carrying no cookie when it opens — whose cookie jar keeps what each call writes for the next,
+and the session MUST stand from the first mount to the last one's stop.
 
 # 39. Head and view transitions
 
@@ -5680,10 +5686,10 @@ and growing it as the handle moves away from the edge `side` names.
 50.63 A pointer dragged on `drawer`'s `handle`, where `stops` is given, MUST set `size` once, to the
 largest of `stops` or the size it stood at where that is larger, and MUST then follow the pointer by a
 `transform` on the `drawer` part alone, which carries `data-following` while it does; let go, it MUST
-drop the `transform` and set `size` to the one of `stops`, as shares of the viewport's extent across
-`side`, nearest the size the drag would rest at carried on by its speed for 150 milliseconds, and
-MUST write `false` to `open`, leaving `size` as the drag found it, where no stop is nearer that size
-than none. A drag cancelled MUST leave `size` and `open` as the drag found them.
+settle per 50.85 at the one of `stops`, as shares of the viewport's extent across
+`side`, nearest the size the drag would rest at carried on by its speed for 150 milliseconds, setting
+`size` to it, or MUST write `false` to `open`, leaving `size` as the drag found it, where no stop is
+nearer that size than none. A drag cancelled MUST leave `size` and `open` as the drag found them.
 
 50.64 A pointer let go of `drawer`'s `handle`, where no `stops` is given, MUST leave `size` where the
 drag set it and `open` as it was.
@@ -5744,6 +5750,11 @@ under the attributes the host writes there itself.
 50.84 A pointer let go of `drawer`'s `handle` less than 8 pixels from where it was pressed, where
 `stops` is given, MUST set `size` to the stop after the one nearest its size, the first after the
 last, and MUST NOT move it as a drag.
+
+50.85 A `drawer` 50.63 settles MUST drop `data-following` and push its `transform` to where the stop it
+settles at stands, or off its edge where it closes, and MUST set `size` and `open` and drop the
+`transform` once a transition the app's CSS runs on that `transform` ends, and at once where it runs
+none.
 
 # 51. Lists and tables
 

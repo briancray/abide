@@ -7,7 +7,7 @@
 
 import { dialog, type DialogOptions } from './dialog.ts'
 import { type Live, live } from './live.ts'
-import { type Reactive, reactive } from './reactive/index.ts'
+import { flushSync, type Reactive, reactive } from './reactive/index.ts'
 import { resizable } from './resizable.ts'
 import { withPart } from './withPart.ts'
 
@@ -63,6 +63,7 @@ export function drawer(options: DrawerOptions = {}): Drawer {
     // 50.63 — pushed toward its edge by this many pixels while a drag follows the pointer, so the
     // drag moves it by a transform alone and lays nothing out until it is let go.
     const pushed = reactive<number | undefined>(undefined)
+    const following = reactive(false)
     if (options.stops !== undefined) {
         // 50.63 — growing is moving right or down from the start or top edge, left or up from the others.
         const growing = side === 'start' || side === 'top' ? 1 : -1
@@ -111,6 +112,44 @@ export function drawer(options: DrawerOptions = {}): Drawer {
             }
             sized.size.set(Math.round(stop * viewport()))
         }
+        // 50.85 — let go, it is pushed to where the stop stands, and sized there once a transition the
+        // app's CSS runs on that push ends — at once where it runs none.
+        let settling: (() => void) | undefined
+        const settle = (stop: number): void => {
+            const height = stood as number
+            following.set(false)
+            pushed.set(stop === 0 ? height : height - Math.round(stop * viewport()))
+            flushSync()
+            const panel = panelOf()
+            const style =
+                panel === null || panel === undefined
+                    ? undefined
+                    : globalThis.getComputedStyle?.(panel)
+            const lasts = longest(style?.transitionDuration) + longest(style?.transitionDelay)
+            if (panel === null || panel === undefined || lasts === 0)
+                return commit(stop)
+            let timer: ReturnType<typeof setTimeout> | undefined
+            const done = (): void => {
+                if (settling !== done) return
+                settling = undefined
+                clearTimeout(timer)
+                panel.removeEventListener('transitionend', ended)
+                panel.removeEventListener('transitioncancel', ended)
+                commit(stop)
+            }
+            const ended = (event: Event): void => {
+                if (
+                    event.target === panel &&
+                    (event as TransitionEvent).propertyName === 'transform'
+                )
+                    done()
+            }
+            settling = done
+            panel.addEventListener('transitionend', ended)
+            panel.addEventListener('transitioncancel', ended)
+            // A transition that never starts — a push to where it already stands — ends nothing.
+            timer = setTimeout(done, lasts + 50)
+        }
         // The resizable's own press and release, which capture the pointer and mark `data-dragging`;
         // its move is left out, since a drag here sizes nothing until it is let go. A part laid over
         // another replaces a key, never adds to it.
@@ -121,6 +160,8 @@ export function drawer(options: DrawerOptions = {}): Drawer {
         withPart(handle, {
             onpointerdown: (event: PointerEvent) => {
                 if (event.button !== 0) return
+                // A press on a drawer still settling sizes it where it was going first.
+                settling?.()
                 sizing.onpointerdown?.(event)
                 pressedAt = at(event)
                 from = measured()
@@ -149,6 +190,7 @@ export function drawer(options: DrawerOptions = {}): Drawer {
                         largest = Math.max(largest, stop * viewport())
                     stood = Math.round(largest)
                     sized.size.set(stood)
+                    following.set(true)
                 }
                 pushed.set(stood - Math.max(0, Math.min(stood, from + moved)))
             },
@@ -167,12 +209,13 @@ export function drawer(options: DrawerOptions = {}): Drawer {
                 }
                 const resting = stood - (pushed.peek() ?? 0) + speed * CARRY
                 speed = 0
-                commit(nearest(resting, true))
+                settle(nearest(resting, true))
             },
             onpointercancel: (event: PointerEvent) => {
                 sizing.onpointercancel?.(event)
                 pressedAt = undefined
                 if (stood !== undefined) {
+                    following.set(false)
                     pushed.set(undefined)
                     stood = undefined
                     sized.size.set(from)
@@ -195,7 +238,7 @@ export function drawer(options: DrawerOptions = {}): Drawer {
                 return `${sizing === undefined ? '' : `${sizing};`}transform:translate${across === 'x' ? 'X' : 'Y'}(${toward}px)`
             },
             get 'data-following'() {
-                return pushed() === undefined ? undefined : ''
+                return following() ? '' : undefined
             },
         }),
         backdrop: withPart({}, shown.backdrop, {
@@ -205,4 +248,15 @@ export function drawer(options: DrawerOptions = {}): Drawer {
         open: shown.open,
         size: sized.size,
     }
+}
+
+/** The longest of a computed list of CSS times (`0.18s, 50ms`), in milliseconds. */
+function longest(times: string | undefined): number {
+    let most = 0
+    for (const time of (times ?? '').split(',')) {
+        const value = Number.parseFloat(time)
+        if (Number.isFinite(value))
+            most = Math.max(most, time.trim().endsWith('ms') ? value : value * 1000)
+    }
+    return most
 }

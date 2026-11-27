@@ -472,7 +472,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `drawer` | `(options?: DrawerOptions) => Drawer` | A `dialog` standing on an edge of the page, sized from a `resizable`'s handle on its inner edge and settling at its stops, as parts an app spreads onto a `<dialog>` and a handle of its own. | 50.61, 50.62, 50.63, 50.64, 50.84, 49.2, 49.4, 49.5, 49.6 |
+| `drawer` | `(options?: DrawerOptions) => Drawer` | A `dialog` standing on an edge of the page, sized from a `resizable`'s handle on its inner edge and settling at its stops, as parts an app spreads onto a `<dialog>` and a handle of its own. | 50.61, 50.62, 50.63, 50.64, 50.84, 50.85, 49.2, 49.4, 49.5, 49.6 |
 | `DrawerOptions` | `DialogOptions & { side?: 'start' \| 'end' \| 'top' \| 'bottom'; size?: Reactive<number \| undefined>; min?: number \| (() => number); max?: number \| (() => number); label?: string \| (() => string); stops?: readonly number[] \| (() => readonly number[]) }` | How it opens, the edge it stands on, its size and the bounds of it, the handle's accessible name, and the sizes it settles at as shares of the viewport's. | 50.61, 50.62, 50.63, 50.64, 49.8, 49.10, 49.11, 49.19 |
 | `Drawer` | `{ readonly drawer: Record<string, unknown>; readonly backdrop: Record<string, unknown>; readonly handle: Record<string, unknown>; readonly open: Reactive<boolean>; readonly size: Reactive<number \| undefined> }` | The dialog's part, its backdrop's, the handle's, whether it is showing, and its size. | 32.11, 50.61, 50.62, 49.3, 49.8, 49.9 |
 
@@ -1643,7 +1643,7 @@ rows a runner prints, and an adapter for an abide app.
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `mount` | `(component: Component) => Promise<Mounted>` | A bound component, rendered into the document's body and hydrated there. | 38.119, 38.121, 38.134, 38.207, 38.235 |
+| `mount` | `(component: Component) => Promise<Mounted>` | A bound component, rendered into the document's body and hydrated there. | 38.119, 38.121, 38.134, 38.207, 38.235, 38.236 |
 | `Mounted` | `{ stop(): void; [Symbol.dispose](): void }` | A component `mount` hydrated, until it is stopped. | 38.119 |
 
 ## `settled`
