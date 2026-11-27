@@ -3687,8 +3687,8 @@ in its `bunfig.toml` (38.43), and a stylesheet importing `tailwindcss` that its 
 38.132 The project `abide scaffold` writes MUST carry a Dockerfile whose image holds the executable
 `abide compile` writes and nothing else of the app.
 
-38.133 Under `bun test` with `@abide/abide/test` preloaded, each test file after the first in a
-process MUST start as a bare `invalidate` (13.6) leaves the values the files before it loaded.
+38.133 Under `bun test` with `@abide/abide/test` preloaded, each test after the first in a process
+MUST start as a bare `invalidate` (13.6) leaves the values the tests before it loaded.
 
 38.134 A prop a test hands a component it binds for `mount` as an own getter MUST be read through
 that getter on each read the component makes, and any other prop but a `Reactive` (38.207) MUST be

@@ -30,11 +30,11 @@ const root = appRoot(undefined)
 if (root !== undefined && !(await isWorkspaceRoot(root)))
     await servedBuild(root, await processBuild(root, true), spawnedBuild)
 
-// 38.133 — EACH TEST FILE STARTS COLD: a handler's answer another file settled is otherwise served
-// at once to the next file in the process, so a file's tests pass or fail by the order `bun test`
-// happened to run the files in. Bun has no per-file hook a preload can register, so a test's own
-// `beforeEach` notices the file change through `Bun.main`. Outside the test runner — a bench or a
-// script importing `mount`'s module — there is no runner to register with, and nothing to reset.
+// 38.133 — EACH TEST STARTS COLD: a handler's answer another test settled is otherwise served at once
+// to the next in the process, so a test passes or fails by the order `bun test` happened to run it in
+// — and, a test being a browser of its own (38.236), an answer a rung admitted one caller to is
+// served to the next caller unasked. Outside the test runner — a bench or a script importing
+// `mount`'s module — there is no runner to register with, and nothing to reset.
 //
 // 38.204 — AND EACH TEST WAITS ON ITS OWN LOADS: a value an earlier test left loading — a stream
 // still open, a call nothing answered — is that test's, and `settled` in this one does not wait on it.
@@ -42,7 +42,7 @@ if (root !== undefined && !(await isWorkspaceRoot(root)))
 // 38.236 — AND EACH TEST IS A FRESH BROWSER: a session of its own, signed out, that what it calls
 // outside every request reads as the request. The principal's members are built again from it:
 // built before, outside every request, they hold the last test's, or what 22.1 threw there.
-let fileUnderTest: string | undefined
+let first = true
 try {
     beforeEach(() => {
         keepLoads()
@@ -52,9 +52,8 @@ try {
                 : location.href,
         )
         forgetPrincipalMembers()
-        if (Bun.main === fileUnderTest) return
-        if (fileUnderTest !== undefined) invalidate()
-        fileUnderTest = Bun.main
+        if (!first) invalidate()
+        first = false
     })
 } catch {}
 

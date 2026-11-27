@@ -539,12 +539,14 @@ test('one listener is live while mounted, and none once stopped', async () => {
     )
 }, 90_000)
 
-// 38.133 — EACH TEST FILE STARTS COLD: one file settles a handler's answer, and the next file in the
-// same process mounts a component calling it and still finds it unanswered, then answered. The two
-// files are named on the command line, which is the order `bun test` runs them in — the order a
-// Linux runner happened to choose is what found it. THE REVERT: drop the `invalidate()` from the
-// preload's `beforeEach`; the cold file reads `1` at mount where `0` is due — exit 1, `1 pass`.
-test('a test file finds no answer an earlier file settled — 38.133', async () => {
+// 38.133 — EACH TEST STARTS COLD: one test settles a handler's answer, and the next — in the same
+// file, and in the next file in the same process — mounts a component calling it and still finds it
+// unanswered, then answered. The two files are named on the command line, which is the order `bun
+// test` runs them in — the order a Linux runner happened to choose is what found it. THE REVERT: drop
+// the `invalidate()` from the preload's `beforeEach`; both cold tests read `1` at mount where `0` is
+// due — exit 1, `1 pass`. Invalidating only where `Bun.main` names another file, as it once did, fails
+// the same file's second test alone — `2 pass`.
+test('a test finds no answer an earlier test settled — 38.133', async () => {
     const cwd = temporaryModule({
         'package.json': JSON.stringify({
             name: 'cold-fixture',
@@ -582,6 +584,13 @@ test('the answer settles', async () => {
     await Bun.sleep(300)
     expect(document.querySelectorAll('li').length).toBe(1)
 })
+
+test('the next test waits for its own answer', async () => {
+    using _things = await mount(Things({}))
+    expect(document.querySelectorAll('li').length).toBe(0)
+    await Bun.sleep(300)
+    expect(document.querySelectorAll('li').length).toBe(1)
+})
 `,
         'src/things/tests/cold.test.ts': `import { expect, test } from 'bun:test'
 import { mount } from '@abide/harness/abide'
@@ -604,7 +613,7 @@ test('the next file waits for its own answer', async () => {
         ],
         { cwd },
     )
-    expect(`${ran.exitCode} ${ran.stderr.includes('2 pass')}`, ran.stderr).toBe(
+    expect(`${ran.exitCode} ${ran.stderr.includes('3 pass')}`, ran.stderr).toBe(
         '0 true',
     )
 }, 90_000)
