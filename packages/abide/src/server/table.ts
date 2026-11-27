@@ -76,6 +76,28 @@ export type Table<Row, Written = Row, Inserted = Written> = ((
     delete(match: Match<Row>): number
     readonly readable: ReadableStream<Change<Row>>
     readonly writable: WritableStream<Written>
+    /**
+     * 47.54 — this same table, the columns `Narrow` names typed as it says: a JSON column's value, or
+     * a text column's union. The checker's alone; nothing changes at run time.
+     */
+    as<
+        Narrow extends {
+            [Column in keyof Narrow]: Column extends keyof Row
+                ? Row[Column]
+                : never
+        },
+    >(): Table<
+        Narrowed<Row, Narrow>,
+        Narrowed<Written, Narrow>,
+        Narrowed<Inserted, Narrow>
+    >
+}
+
+/** `Shape` with the columns `Narrow` names typed as `Narrow` types them, optional where they were. */
+type Narrowed<Shape, Narrow> = {
+    [Column in keyof Shape]: Column extends keyof Narrow
+        ? Narrow[Column]
+        : Shape[Column]
 }
 
 /** What a `table` is told beyond its name: the key it writes by, and the columns its changes carry. */
@@ -226,6 +248,7 @@ export function table<Row extends Record<string, unknown>>(
                 return readable
             },
         },
+        as: { value: () => called },
         writable: {
             get() {
                 connection()

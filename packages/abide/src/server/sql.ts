@@ -22,8 +22,15 @@ import { codecOf, type CodedColumn, decodeRows } from './columnCodec.ts'
 /** The tag an opener's `sql` is: rows, typed as the caller says they are. */
 export type Sql = <Row = Record<string, unknown>>(
     strings: TemplateStringsArray,
-    ...values: (SQLQueryBindings | readonly SQLQueryBindings[])[]
+    ...values: SqlValue[]
 ) => Row[]
+
+/** 47.32, 47.37, 47.52 — what `sql` binds: a value, a list of them, or a plain object as its JSON. */
+type SqlValue =
+    | SQLQueryBindings
+    | readonly SQLQueryBindings[]
+    // An interface carries no index signature, so a record type would refuse one; `object` admits it.
+    | object
 
 /** A call site's statement, and the columns of its rows it decodes. */
 type Prepared = { statement: Statement; coded: CodedColumn[] }
@@ -41,7 +48,7 @@ const PREPARED = new WeakMap<
 export function sqlOver(acquire: () => Database): Sql {
     return <Row>(
         strings: TemplateStringsArray,
-        ...values: (SQLQueryBindings | readonly SQLQueryBindings[])[]
+        ...values: SqlValue[]
     ): Row[] => {
         const db = acquire()
         let perDatabase = PREPARED.get(strings)
@@ -93,7 +100,7 @@ function codedOf(statement: Statement): CodedColumn[] {
 /** 47.37 — the statement's text: a `?` per value, and a list's slots per array. */
 function textOf(
     strings: TemplateStringsArray,
-    values: readonly (SQLQueryBindings | readonly SQLQueryBindings[])[],
+    values: readonly SqlValue[],
 ): string {
     let text = strings[0] as string
     for (let at = 0; at < values.length; at += 1) {
@@ -105,9 +112,7 @@ function textOf(
 }
 
 /** 47.37, 47.52 — the values bound: each list's in its place, a plain object as its JSON. */
-function flattened(
-    values: readonly (SQLQueryBindings | readonly SQLQueryBindings[])[],
-): SQLQueryBindings[] {
+function flattened(values: readonly SqlValue[]): SQLQueryBindings[] {
     const bound: SQLQueryBindings[] = []
     for (const value of values) {
         if (Array.isArray(value))

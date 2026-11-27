@@ -5417,6 +5417,10 @@ key, and MUST answer the rows as stored, their key as SQLite assigned it, decode
 47.53 `table` MUST NOT open the database until the table it answers is called, written, peeked, or
 its `readable` or `writable` reached.
 
+47.54 A `table`'s `as` MUST answer that same table, and its type MUST type each column its type
+argument names as that argument types it, in the row read, written and inserted, refusing a type the
+column's own does not admit.
+
 # 48. Problem reports
 
 48.1 `report` MUST answer a `ReportDraft` holding among its `traces` the trace it was given, and the

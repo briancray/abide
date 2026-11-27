@@ -84,6 +84,29 @@ test('a table is typed by the migrations that declare it — 47.47, 47.48', () =
     // An insert may leave out the key SQLite assigns.
     const [inserted] = table(CRM, 'notes').insert({ body: 'first' })
     expect(inserted).toEqual({ id: 1, body: 'first' })
+    // A column narrowed keeps the table's name, its written row and its inserted row.
+    type Detail = { calls: number }
+    const narrowed = table(CRM, 'deals').as<{
+        detail: Detail | null
+        stage: 'lead' | 'won' | null
+    }>()
+    const [fresh] = narrowed.insert({
+        name: 'Initech',
+        createdAt: '2026-11-28',
+        detail: { calls: 4 },
+    })
+    same<Same<NonNullable<typeof fresh>['detail'], Detail | null>>()
+    expect(fresh?.detail).toEqual({ calls: 4 })
+    const refusedNarrowing = () => {
+        // @ts-expect-error a narrowing is a type the column already admits
+        table(CRM, 'deals').as<{ amount: string }>()
+        // @ts-expect-error a narrowed table still writes only what its column narrows to
+        narrowed.patch({ id: 1, stage: 'lost' })
+    }
+    void refusedNarrowing
+    // A plain object binds in sql as its JSON (47.52), typed as one.
+    CRM.sql`UPDATE deals SET detail = ${{ calls: 5 }} WHERE id = ${fresh?.id ?? 0}`
+    expect(narrowed({ id: fresh?.id ?? 0 })[0]?.detail).toEqual({ calls: 5 })
     // A row typed by its caller may leave out what may hold null.
     table<{ id: number; detail: { calls: number } | null }>(CRM, 'deals').patch(
         { id: 1 },
