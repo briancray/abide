@@ -1,5 +1,12 @@
 # @abide/abide
 
+## 0.146.1
+
+### Patch Changes
+
+- d979afb: A value that passes a patched object through — `reactive(() => rows.get())`, `x ?? []`, a filter that only sometimes runs — now wakes its readers on an `s.patch`, a server `memo.patch` arriving over the wire among them, rather than reading the same reference as no change — RULEBOOK 5.26
+- c9119ce: A prop read while its component is torn down answers the value it last answered, rather than reading its caller's expression again against the write that removed it — a disposer calling back with `marker.id` no longer throws where the caller passed `markers.find(…)` and the marker is gone (33.28). A prop first read at teardown still reads its caller's expression (33.29).
+
 ## 0.146.0
 
 ### Minor Changes
