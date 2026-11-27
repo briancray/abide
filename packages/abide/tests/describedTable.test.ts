@@ -347,3 +347,22 @@ test('a table first reached in a transaction that rolls back still logs its chan
     ])
     expect(changes.map((change) => change.row?.amount)).toEqual([2])
 })
+
+// 47.56 — AN UPDATE THAT CHANGES NOTHING IS NO CHANGE: a self-assigning upsert logs nothing, and the
+// next real change is the next one read. THE REVERT: drop the `WHEN` from the update trigger in
+// `prepare`; the reader is handed the no-op first, `amount 1 was 1`.
+test('an update that leaves every column as it was records no change — 47.56', async () => {
+    const db = opener(
+        'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER)',
+    )
+    const deals = table(db, 'deals')
+    deals.set({ id: 1, amount: 1 })
+    const reading = taken(deals.readable, 1)
+    db.sql`INSERT INTO deals (id, amount) VALUES (1, 1) ON CONFLICT (id) DO UPDATE SET amount = amount`
+    db.sql`UPDATE deals SET amount = amount WHERE id = 1`
+    deals.patch({ id: 1, amount: 2 })
+    const [change] = await reading
+    expect(
+        `amount ${change?.row?.amount} was ${change?.previous?.amount}`,
+    ).toBe('amount 2 was 1')
+})

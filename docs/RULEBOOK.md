@@ -5424,6 +5424,8 @@ column's own does not admit.
 47.55 A `table` whose change log and triggers 47.26 made inside a transaction that rolled back MUST
 make them again at its next reach.
 
+47.56 A `table` MUST NOT record per 47.26 an update leaving every column of the row as it was.
+
 # 48. Problem reports
 
 48.1 `report` MUST answer a `ReportDraft` holding among its `traces` the trace it was given, and the

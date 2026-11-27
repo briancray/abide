@@ -621,16 +621,20 @@ function prepare(db: Database, name: string, key: string | undefined): void {
             pairs.push(`'${column}', ${side}."${column}"`)
         return `json_object(${pairs.join(', ')})`
     }
-    const triggers: [string, string, string, string][] = [
-        ['insert', 'INSERT', objectOf('NEW'), 'NULL'],
-        ['update', 'UPDATE', objectOf('NEW'), objectOf('OLD')],
-        ['delete', 'DELETE', 'NULL', objectOf('OLD')],
+    // 47.56 — an update that leaves every column as it was is no change: an upsert matching a row it
+    // writes nothing new to (`DO UPDATE SET x = x`) logs nothing and refreshes no reader.
+    const every = [...description.columns].map((column) => `"${column}"`)
+    const changing = `WHEN (${every.map((column) => `NEW.${column}`).join(', ')}) IS NOT (${every.map((column) => `OLD.${column}`).join(', ')})`
+    const triggers: [string, string, string, string, string][] = [
+        ['insert', 'INSERT', '', objectOf('NEW'), 'NULL'],
+        ['update', 'UPDATE', changing, objectOf('NEW'), objectOf('OLD')],
+        ['delete', 'DELETE', '', 'NULL', objectOf('OLD')],
     ]
     db.transaction(() => {
-        for (const [op, event, row, previous] of triggers) {
+        for (const [op, event, when, row, previous] of triggers) {
             db.run(`DROP TRIGGER IF EXISTS abide_changes_${name}_${op}`)
             db.run(
-                `CREATE TRIGGER abide_changes_${name}_${op} AFTER ${event} ON ${name} BEGIN INSERT INTO abide_changes (tbl, op, row, previous) VALUES ('${name}', '${op}', ${row}, ${previous}); END`,
+                `CREATE TRIGGER abide_changes_${name}_${op} AFTER ${event} ON ${name} ${when} BEGIN INSERT INTO abide_changes (tbl, op, row, previous) VALUES ('${name}', '${op}', ${row}, ${previous}); END`,
             )
         }
     })()
