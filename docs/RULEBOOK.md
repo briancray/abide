@@ -5479,7 +5479,9 @@ reported after the dialog has opened again MUST leave `open` true, and a close w
 refuses MUST show the dialog again and call no `onclose` (49.19).
 
 50.3 Escape, a click on a `dialog`'s backdrop, and a click whose target is the element its `backdrop`
-part is spread on MUST close it where `dismissible` is true, and MUST NOT where it is false.
+part is spread on MUST close it where `dismissible` is true, and MUST NOT where it is false, and an
+Escape a `dialog` opened beside the page does not close MUST be left to the page, its default not
+prevented.
 
 50.4 A `dialog`'s `<dialog>` MUST focus the element inside it carrying `autofocus` as it opens.
 

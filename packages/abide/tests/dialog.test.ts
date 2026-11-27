@@ -110,3 +110,20 @@ test('Escape from inside a dialog opened beside the page closes it — 50.3', ()
     flushSync()
     expect([open.peek(), element.open]).toEqual([false, false])
 })
+
+// 50.3 — AN ESCAPE A DIALOG BESIDE THE PAGE DOES NOT CLOSE IS THE PAGE'S: a panel beside a map, not
+// dismissible, leaves Escape for the map's own keys to step it back. THE REVERT: prevent the Escape's
+// default before asking `dismissible` — `taken` is then true, and the page's keys stand aside.
+test('an Escape a dialog beside the page is not dismissed by is left to the page — 50.3', () => {
+    const open = reactive(true)
+    const parts = dialog({ open, modal: false, dismissible: false })
+    const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        cancelable: true,
+    })
+    ;(parts.dialog.onkeydown as (event: KeyboardEvent) => void)(event)
+    expect({ open: open.peek(), taken: event.defaultPrevented }).toEqual({
+        open: true,
+        taken: false,
+    })
+})
