@@ -13,7 +13,6 @@ import {
     projectShadow,
     type Span,
 } from './projectShadow.ts'
-import { RCDATA_PIECES } from './RCDATA_PIECES.ts'
 import {
     holdsNode,
     type InlineComponent,
@@ -535,8 +534,7 @@ export class Lowering {
     holdsMarkup(run: readonly TemplateNode[]): boolean {
         for (const piece of run) {
             // 35.9 — a `<textarea>`'s or a `<title>`'s text is RCDATA, and holds no markup.
-            if (piece.kind !== 'expression' || RCDATA_PIECES.has(piece))
-                continue
+            if (piece.kind !== 'expression' || piece.rcdata) continue
             // The PROOF, not `isLive`: a row's item makes a position live on the client alone, and
             // both lanes have to agree on whether a run is anchored (32.30).
             if (

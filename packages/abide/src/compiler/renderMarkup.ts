@@ -25,7 +25,6 @@ import {
 } from './invocationProps.ts'
 import { type Lowering, PROPS } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
-import { RCDATA_PIECES } from './RCDATA_PIECES.ts'
 import { shareScope } from './shareScope.ts'
 import type {
     Attribute,
@@ -185,7 +184,7 @@ function renderPosition(
                 piece.kind === 'text'
                     ? JSON.stringify(piece.text)
                     : // 35.9 — RCDATA's text, a `Raw` included, is escaped as text.
-                      `${lowering.use(RCDATA_PIECES.has(piece) ? 'escapeRcdata' : 'escapeText')}(${unlandable(lowering, piece)})`,
+                      `${lowering.use(piece.kind === 'expression' && piece.rcdata ? 'escapeRcdata' : 'escapeText')}(${unlandable(lowering, piece)})`,
             )
         // 32.30 — A RUN THAT CAN HOLD MARKUP IS ANCHORED WHILE IT DOES (`markupRun`), so the client
         // finds the end of what a `Raw` part parsed into. The count is read BEFORE the parts are

@@ -44,7 +44,7 @@ const note = reactive(() => Promise.resolve('Signed in March.'))
     expect(box.defaultValue).toBe('Signed in March.')
 })
 
-// THE REVERT: file no expression in `RCDATA_PIECES` (parseAbide); the server writes the raw run's
+// THE REVERT: set no expression's `rcdata` (parseAbide); the server writes the raw run's
 // anchors inside the textarea, shown as text, and the client parses the markup away — `false, 'bold'`
 // where `true, '<b>bold</b>'` is due.
 test('a raw value in a textarea is its source as text, on the server and once hydrated — 35.9', async () => {

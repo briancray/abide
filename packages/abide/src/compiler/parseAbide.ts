@@ -15,7 +15,6 @@ import { decodeCharacterReferences } from './decodeCharacterReferences.ts'
 import { IDENTIFIER_PART, isNamedAlone } from './isNamedAlone.ts'
 import { lineOf } from './lineOf.ts'
 import { PositionedRefusal } from './PositionedRefusal.ts'
-import { RCDATA_PIECES } from './RCDATA_PIECES.ts'
 import { importedNames } from './splitImports.ts'
 import { TEMPLATE_BLOCKS } from './TEMPLATE_BLOCKS.ts'
 import {
@@ -673,10 +672,10 @@ export function parseAbide(source: string): AbideFile {
             const expression: TemplateNode = {
                 kind: 'expression',
                 source: inner,
+                rcdata: rcdata.has(children),
             }
             origins.holders.set(expression, slot.at)
             children.push(expression)
-            if (rcdata.has(children)) RCDATA_PIECES.add(expression)
             at = end + 1
             continue
         }

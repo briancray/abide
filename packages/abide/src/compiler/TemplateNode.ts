@@ -100,8 +100,10 @@ export type ForBlock = Body & {
 export type TemplateNode =
     | ElementNode
     | { kind: 'text'; text: string }
-    // The source between the braces, verbatim. 32.1 renders it escaped.
-    | { kind: 'expression'; source: string }
+    // The source between the braces, verbatim. 32.1 renders it escaped. 35.9 — `rcdata` where a
+    // `<textarea>` or a `<title>` holds it as its own text, which the parser reads as RCDATA: never
+    // markup, so its run is text on both sides and holds no `Raw` anchor (32.30).
+    | { kind: 'expression'; source: string; rcdata: boolean }
     // 32.12 — a control block renders ONE branch. A REGION: its shape depends on a value, which
     // makes it the one place a marker earns its bytes. `invariance.spec.ts` is why that marker
     // has to be a comment, and `benchGrid.ts` is why there are none anywhere else.
