@@ -188,7 +188,7 @@ A property written `name?: T` in a signature takes `undefined` as it takes the p
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `Component` | `interface Component {}` | A component bound to its props. | 32.17, 34.16, 35.4, 38.208 |
-| `render` | `(component: Component) => Promise<Uint8Array>` | Renders a component bound to its props into a document, as its bytes. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30, 41.31, 41.34, 41.35 |
+| `render` | `(component: Component) => Promise<Uint8Array>` | Renders a component bound to its props into a document, as its bytes. | 29.10, 35.4, 35.5, 35.6, 35.15, 35.16, 41.1, 41.2, 41.3, 41.4, 41.9, 41.13, 41.16, 41.17, 41.18, 41.19, 41.20, 41.28, 35.11, 41.29, 41.30, 41.31, 41.34, 41.35, 41.36 |
 
 ## Sinks
 
@@ -509,7 +509,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `FieldName` | `Handler extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced> ? keyof NonNullable<Args> & string : string` | The names a form's fields post under: the members of its handler's args. | 56.1 |
 | `Form` | `{ readonly form: Record<string, unknown>; field(name: FieldName<Handler>): FormField; readonly error: Record<string, unknown>; get message(): string \| undefined; readonly submit: Record<string, unknown>; readonly reset: Record<string, unknown>; get dirty(): boolean; get changes(): Handler extends Rpc<infer _Value, infer Args, infer _Failures, infer _Produced> ? Partial<NonNullable<Args>> : Record<string, unknown>; get issues(): Issues<Handler> \| undefined; readonly call: Reactive<any, any, any, any> }` | The form's part, a field's parts by name, the form's own message and its element, a submit button's and a reset button's parts, whether a field differs from its baseline and the args holding those that do, what is wrong with the form, and the last call it made. | 32.11, 56.4, 56.10, 56.11, 56.13, 56.16, 56.17, 56.20, 56.22, 49.9 |
 | `FormOptions` | `<Handler extends Rpc<any, any, any, any>>{ resetOnSuccess?: boolean; onsuccess?: (value: Handler extends Rpc<infer Value, infer _Args, infer _Failures, infer _Produced> ? Value : unknown) => void }` | What a form does once a call it made answers without a failure: whether it starts over, and what it hands the answer to. | 56.34, 56.35 |
-| `FormField` | `{ readonly input: Record<string, unknown>; readonly error: Record<string, unknown>; get message(): string \| undefined; get invalid(): boolean; get changed(): boolean }` | One field's parts — the field's and its message element's — with its first message, whether it has one, and whether it differs from its baseline. | 56.9, 56.10, 56.13, 56.16, 56.21, 49.9 |
+| `FormField` | `{ readonly input: Record<string, unknown>; readonly error: Record<string, unknown>; get message(): string \| undefined; get invalid(): boolean; get changed(): boolean }` | One field's parts — the field's and its message element's — with its first message, whether it has one, and whether it differs from its baseline. | 56.9, 56.10, 56.13, 56.16, 56.21, 49.9, 56.36 |
 
 ## `inlineEdit`
 

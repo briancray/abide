@@ -238,6 +238,29 @@ test("a refusal no field owns shows as the form's own message — 56.4, 56.13", 
     expect(deal.field('company').message).toBeUndefined()
 })
 
+// 56.36 — A STRUCTURED MEMBER POSTED AS ONE FIELD (19.27) OWNS WHAT IS WRONG INSIDE IT: the issue at
+// `positions.0.shares` is the `positions` field's message, and a field named alike but not above it
+// takes none. THE REVERT: answer a field's own issues alone — `positions` reads `undefined` where
+// 'must be positive' is due.
+test('a field takes the first issue beneath its name as its message — 56.36', async () => {
+    const record = rpc(
+        (_args: { positions: string; positionsNote: string }) =>
+            refuse.validation<{ positions: string; positionsNote: string }>({
+                'positions.0.shares': ['must be positive'],
+            }),
+        { methods: ['POST'] },
+    )
+    addressed(record, '/accounts/positions')
+    const statement = form(record)
+    await submitted(
+        rendered(statement, { positions: '[]', positionsNote: 'paste' }),
+    )
+    expect(statement.field('positions').message).toBe('must be positive')
+    expect(statement.field('positions').input['aria-invalid']).toBe('true')
+    expect(statement.field('positionsNote').message).toBeUndefined()
+    expect(statement.message).toBeUndefined()
+})
+
 /** A `<form>` as a page renders it over a record: each field's `value` attribute is its baseline (56.14). */
 function opened(
     parts: ReturnType<typeof form>,

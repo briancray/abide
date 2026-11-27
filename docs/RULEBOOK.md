@@ -4084,10 +4084,10 @@ mount to the last one's stop that writes a `navigate` to a URL into `history` �
 standing one where `replace` is set — and steps `history` for a number, per 30.38, and `route` MUST
 arrive at each entry it reaches before the `navigate` settles.
 
-38.236 Under `mount`, where a call is outside every request and every `job`'s run, `principal`,
-`cookies`, `request` and a handler's rungs MUST read one session's request — at the document's
-address, carrying no cookie when it opens — whose cookie jar keeps what each call writes for the next,
-and the session MUST stand from the first mount to the last one's stop.
+38.236 Under `bun test` with `@abide/abide/test` preloaded, work outside every request and every
+`job`'s run MUST read as its request — for `principal`, `cookies`, `request` and a handler's rungs —
+one session per test, at the document's address as the test begins and carrying no cookie then,
+whose cookie jar keeps what each call writes for the next.
 
 # 39. Head and view transitions
 
@@ -4446,6 +4446,11 @@ page or a layout.
 
 41.35 A `render` MUST NOT build under 41.34 a `reactive` built in a component's setup or
 in another `render`, nor one nothing reaches.
+
+41.36 An id a headless component makes where none is given (49.8) MUST be counted in the order the
+components making them are set up, from the start of each render on a server and of a page's
+hydration in a browser, so the setup hydration runs again (41.6) makes the id the server wrote; one
+made outside both MUST be counted apart from them.
 
 # 42. The app object
 
@@ -7403,6 +7408,10 @@ reset its `<form>` in place of 56.19, leaving each field's baseline as it was.
 
 56.35 A call a `form` makes that answers without a failure MUST call `onsuccess` with what it
 answered, once 56.19 or 56.34 has moved its fields.
+
+56.36 A `form`'s `field` whose own name has no issue MUST take as its `message` the first issue whose
+path is beneath that name — `positions.0.shares` beneath `positions` — so a structured member
+posted as one field (19.27) shows what is wrong inside it.
 
 # 57. Pipes
 

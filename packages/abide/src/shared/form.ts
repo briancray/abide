@@ -168,10 +168,18 @@ export function form<Handler extends AnyRpc>(
     }
     // 56.13 — the whole form's message is also a failure that names no field: a 401, a 409.
     const message = (name: string): string | undefined => {
-        const own = issues()?.[name]?.[0]
-        if (own !== undefined || name !== '' || issues() !== undefined)
-            return own
-        return call.error()?.message
+        const found = issues()
+        const own = found?.[name]?.[0]
+        if (own !== undefined) return own
+        if (name === '')
+            return found !== undefined ? undefined : call.error()?.message
+        // 56.36 — a field posting a structured member (19.27) owns every issue beneath its name.
+        if (found !== undefined) {
+            const beneath = `${name}.`
+            for (const path in found)
+                if (path.startsWith(beneath)) return found[path]?.[0]
+        }
+        return undefined
     }
 
     // 56.1 — the fields as a post carries them, coerced to the types the document declares (19.7).
