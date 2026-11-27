@@ -1,7 +1,7 @@
 <script>
 import { reactive, url } from '@abide/abide'
 
-import exportContacts from '../exportContacts.server.ts'
+import { exportContacts } from '../exportContacts.server.ts'
 
 let listed = reactive('—')
 let answers = reactive('—')

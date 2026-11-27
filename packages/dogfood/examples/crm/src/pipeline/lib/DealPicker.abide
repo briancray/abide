@@ -1,7 +1,7 @@
 <script>
 import { reactive } from '@abide/abide'
 
-import listDeals from '../listDeals.server.ts'
+import { listDeals } from '../listDeals.server.ts'
 import DealDetail from './DealDetail.abide'
 import DealRow from './DealRow.abide'
 import { selectedDeal } from './selectedDeal.ts'

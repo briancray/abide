@@ -34,7 +34,7 @@ import Section from '#src/lib/Section.abide'
                 pool.upAt = new Date().toISOString()
             })
 
-            export default rpc(() => ({ upAt: pool.upAt }))
+            export const getPool = rpc(() => ({ upAt: pool.upAt }))
         `} />
         <p>The CRM's pool, asked when this page loaded. It connected before the app came
             up:</p>

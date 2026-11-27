@@ -27,7 +27,7 @@ const docsOnly: Provider = {
 // `assistant`'s events as they come, which `Chat` folds into the answering turn (`Ask.abide`): its
 // words are rendered on the page, a section at a time, and a prompt from a full-access turn is the
 // panel's to answer (44.81, `permit`).
-export default rpc(
+export const answer = rpc(
     async function* ({ messages }: { messages: AssistantMessage[] }) {
         yield* assistant(messages, docsOnly, { tools: true })
     },

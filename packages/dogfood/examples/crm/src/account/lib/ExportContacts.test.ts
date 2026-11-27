@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { createApp } from '@abide/abide/server'
 
-import exportContacts from '../exportContacts.server.ts'
+import { exportContacts } from '../exportContacts.server.ts'
 
 test('an admin exports every contact', async () => {
     await using app = await createApp()

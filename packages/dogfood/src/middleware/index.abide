@@ -43,7 +43,7 @@ const callTool = (name: string) =>
         <Code language="ts" caption="server" code={`
             import { rpc, signedIn } from '@abide/abide/server'
 
-            export default rpc(() => ({ amount: '$6,200' }), {
+            export const getCommission = rpc(() => ({ amount: '$6,200' }), {
                 middleware: [signedIn],
             })
         `} />
@@ -70,7 +70,7 @@ const callTool = (name: string) =>
             import { CONTACTS } from '../contacts/lib/CONTACTS.server.ts'
             import { adminsOnly } from './lib/adminsOnly.ts'
 
-            export default rpc(async () => CONTACTS, { methods: ['POST'],
+            export const exportContacts = rpc(async () => CONTACTS, { methods: ['POST'],
                 middleware: [adminsOnly],
             })
         `} />

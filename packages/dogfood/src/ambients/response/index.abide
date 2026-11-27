@@ -38,7 +38,7 @@ import Section from '#src/lib/Section.abide'
 
             let nextId = 4031
 
-            export default rpc(async ({ name }: { name: string }) => {
+            export const addContact = rpc(async ({ name }: { name: string }) => {
                 const contact = { id: String(nextId), name }
                 nextId += 1
                 response().status = 201
@@ -57,7 +57,7 @@ import Section from '#src/lib/Section.abide'
 
             type NewDeal = { name: string; company: string; amount: number }
 
-            export default rpc(({ name, company, amount }: NewDeal) => {
+            export const createDeal = rpc(({ name, company, amount }: NewDeal) => {
                 const id = \`d\${DEALS.length + 1}\`
                 DEALS.push({ id, name, company, amount, stage: 'lead' })
                 return response.redirect(\`/deals/\${id}\`, 303)
@@ -73,7 +73,7 @@ import Section from '#src/lib/Section.abide'
             import { response, rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default rpc(() => response.jsonl(DEALS))
+            export const exportDeals = rpc(() => response.jsonl(DEALS))
         `} />
     </Section>
 
@@ -85,7 +85,7 @@ import Section from '#src/lib/Section.abide'
             import { COMPANIES } from './lib/COMPANIES.server.ts'
             import CompanySheet from './lib/CompanySheet.abide'
 
-            export default rpc(async ({ id }: { id: string }) => {
+            export const previewCompany = rpc(async ({ id }: { id: string }) => {
                 const company = COMPANIES.find((one) => one.id === id)
                 return response.page(await render(CompanySheet({ company })))
             })

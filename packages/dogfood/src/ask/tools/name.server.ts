@@ -3,7 +3,7 @@ import { rpc } from '@abide/abide/server'
 import { REGISTRY_ROWS } from '#src/lib/REGISTRY_ROWS.server.ts'
 import { routeOfSection } from '#src/lib/sitePages.ts'
 
-export default rpc(
+export const name = rpc(
     ({ name }: { name: string }) => {
         const rows: {
             name: string

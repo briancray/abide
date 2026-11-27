@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { mount, settled } from '@abide/harness/abide'
 
-import getStage from '../getStage.server.ts'
+import { getStage } from '../getStage.server.ts'
 import { LOADS } from './LOADS.server.ts'
 import StageTiles from './StageTiles.abide'
 

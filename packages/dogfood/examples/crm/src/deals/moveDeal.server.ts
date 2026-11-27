@@ -10,7 +10,7 @@ const dealClosed = refuse.named('DealClosed', {
     schema: jsonSchema<{ stage: string }>({ type: 'object' }),
 })
 
-export default rpc(
+export const moveDeal = rpc(
     ({ id, stage }: { id: string; stage: string }) => {
         const deal = DEALS.find((each) => each.id === id)
         if (deal === undefined) return refuse(404)

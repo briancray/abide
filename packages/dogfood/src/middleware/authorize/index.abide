@@ -47,7 +47,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { authorize, rpc } from '@abide/abide/server'
 
-            export default rpc(() => ({ total: '$18,400' }), {
+            export const getTeamCommission = rpc(() => ({ total: '$18,400' }), {
                 middleware: [authorize({ role: 'admin' })],
             })
         `} />
@@ -64,7 +64,7 @@ import Section from '#src/lib/Section.abide'
             import { authorize, rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default rpc(() => DEALS, {
+            export const listDeals = rpc(() => DEALS, {
                 middleware: [authorize({ groups: ['sales'] })],
             })
         `} />
@@ -82,7 +82,7 @@ import Section from '#src/lib/Section.abide'
                 { message: 'Only the team sees the team.' },
             )
 
-            export default rpc(() => TEAM, { middleware: [onTheTeam] })
+            export const getTeam = rpc(() => TEAM, { middleware: [onTheTeam] })
         `} />
     </Section>
 
@@ -91,7 +91,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import getTeamCommission from './getTeamCommission.server.ts'
+            import { getTeamCommission } from './getTeamCommission.server.ts'
 
             const commission = reactive(() => getTeamCommission())
             const error = () => commission.error()
@@ -113,7 +113,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { authorize, rpc } from '@abide/abide/server'
 
-            export default rpc(listPayroll, {
+            export const getPayroll = rpc(listPayroll, {
                 middleware: [authorize({ role: 'admin' }, { status: 404 })],
             })
         `} />

@@ -4,7 +4,7 @@ import { fetchAndHandle, rpc } from '@abide/abide/server'
 import { askRegistry } from './lib/askRegistry.server.ts'
 
 /** A company's entry at the registry, held a minute, or why it gave up. */
-export default rpc(
+export const getRegistration = rpc(
     async ({ id }: { id: string }) => {
         try {
             return await askRegistry(id)

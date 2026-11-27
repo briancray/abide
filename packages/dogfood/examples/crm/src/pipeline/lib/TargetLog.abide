@@ -1,8 +1,8 @@
 <script>
 import { format, reactive } from '@abide/abide'
 
-import listTargets from '../listTargets.server.ts'
-import setTarget from '../setTarget.server.ts'
+import { listTargets } from '../listTargets.server.ts'
+import { setTarget } from '../setTarget.server.ts'
 
 let next = reactive<number | undefined>(600_000)
 const targets = reactive(() => listTargets())

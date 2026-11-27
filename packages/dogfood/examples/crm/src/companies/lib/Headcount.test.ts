@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { createApp } from '@abide/abide/server'
 
-import getHeadcount from '../getHeadcount.server.ts'
+import { getHeadcount } from '../getHeadcount.server.ts'
 import { registryAsked } from './registryOrigin.server.ts'
 
 // THE REVERT: drop the `signal`, and the headcount waits the registry's two seconds and answers 140.

@@ -4,7 +4,7 @@ import { rpc } from '@abide/abide/server'
 import { targets } from './lib/targets.server.ts'
 
 /** The team's target, or `null` where nobody has set one. */
-export default rpc(
+export const getTarget = rpc(
     memo(
         async () => {
             // 47.29 — called, the table reads this again after any committed change, whoever wrote it.

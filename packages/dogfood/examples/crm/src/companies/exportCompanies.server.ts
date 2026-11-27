@@ -1,7 +1,7 @@
 import { rpc } from '@abide/abide/server'
 
 /** Answers at /companies/exportCompanies; the export button calls it. */
-export default rpc(
+export const exportCompanies = rpc(
     async () => {
         // An export worker that has stopped answering.
         throw new Error('the export worker reset the connection')

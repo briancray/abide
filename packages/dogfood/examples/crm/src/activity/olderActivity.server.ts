@@ -7,7 +7,7 @@ const OLDER = [
 ]
 
 /** Answers at /activity/olderActivity, one entry at a time as each is read. */
-export default rpc(
+export const olderActivity = rpc(
     async function* () {
         for (const entry of OLDER) {
             // A slow archive: each entry lands on its own.

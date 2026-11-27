@@ -3,7 +3,7 @@ import { rpc } from '@abide/abide/server'
 import { DEALS } from '../pipeline/lib/DEALS.server.ts'
 
 /** Answers at /reports/getSummary; the summary tiles and their test read it. */
-export default rpc(
+export const getSummary = rpc(
     () => {
         let open = 0
         let pipeline = 0

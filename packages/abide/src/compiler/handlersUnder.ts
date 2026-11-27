@@ -1,6 +1,6 @@
 // 16.2 AND 16.70 — EVERY `rpc` AN APP DECLARES, AND WHERE IT IS ANSWERED. A server file answers at its
-// own path, wherever it stands (16.73): its default there, each named `rpc` below it by its name, or
-// wherever its `address` says — the app's public surface. A server file exporting none is a module. A value a
+// own path, wherever it stands (16.73): its default or the `rpc` named for it there, each other named
+// `rpc` below it by its name, or wherever its `address` says — the app's public surface. A server file exporting none is a module. A value a
 // `<script server>` exports is its file's alone, answered below `/__abide/handlers/` at the file's
 // path and its name, and listed nowhere (16.71). One row per verb each answers (16.111).
 //
@@ -70,14 +70,30 @@ export async function handlersUnder(
     for (const { path, relative, route, scope, matchers } of files) {
         const exported = declared.get(path)
         if (exported === undefined) continue
+        // 16.2 — the default and the export named for the file both answer at the file's route.
+        const stem = relative.slice(relative.lastIndexOf('/') + 1).split('.')[0]
         try {
+            let atRoute: string | undefined
             for (const each of exported) {
                 if (each.method === undefined) continue
-                // 16.73, 16.113 — the default at the file's route, a named one below it by its name,
-                // or wherever its `address` says.
+                // 16.73, 16.113 — the default or the one named for the file at the file's route, any
+                // other named one below it by its name, or wherever its `address` says.
                 const address =
                     each.address ??
-                    (each.name === 'default' ? route : `${route}/${each.name}`)
+                    (each.name === 'default' || each.name === stem
+                        ? route
+                        : `${route}/${each.name}`)
+                if (
+                    each.address === undefined &&
+                    address === route &&
+                    atRoute !== undefined &&
+                    atRoute !== each.name
+                )
+                    throw new Error(
+                        `abide: ${relative} exports an rpc as its default and another named ${stem}, and both would answer at ${route}: keep one. RULEBOOK 16.2.`,
+                    )
+                if (each.address === undefined && address === route)
+                    atRoute = each.name
                 refuseUndeclaredParameters(address, each.args, relative)
                 for (const method of each.methods) {
                     // 20.13 — one name per handler on every generated surface.

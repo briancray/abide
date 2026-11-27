@@ -5,7 +5,7 @@ import {
     rpc,
 } from '@abide/abide/server'
 
-export default rpc(
+export const askClaudeCode = rpc(
     async function* ({ messages }: { messages: AssistantMessage[] }) {
         yield* assistant(
             messages,

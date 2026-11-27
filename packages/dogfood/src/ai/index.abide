@@ -71,7 +71,7 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
 
             type Asked = { messages: AssistantMessage[] }
 
-            export default rpc(
+            export const askAssistant = rpc(
                 async function* ({ messages }: Asked) {
                     yield* assistant(messages, claude, { tools: true })
                 },
@@ -140,7 +140,7 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
 
             type Asked = { messages: AssistantMessage[] }
 
-            export default rpc(
+            export const askClaudeCode = rpc(
                 async function* ({ messages }: Asked) {
                     yield* assistant(
                         messages,
@@ -167,7 +167,7 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
         <Code language="abide" caption="abide" code={`
             <script>
             import { pairing } from '@abide/abide'
-            import askClaudeCode from '../askClaudeCode.server.ts'
+            import { askClaudeCode } from '../askClaudeCode.server.ts'
             import Chat from './Chat.abide'
 
             const { status, step, start } = pairing()
@@ -216,7 +216,7 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
             they stream.</p>
         <Code language="ts" caption="browser" code={`
             import { assistantMessage, type AssistantMessage } from '@abide/abide'
-            import askAssistant from './askAssistant.server.ts'
+            import { askAssistant } from './askAssistant.server.ts'
 
             const messages: AssistantMessage[] = []
             async function ask(question: string) {
@@ -247,8 +247,8 @@ const transcript = (messages: { role: string; content: unknown }[]) =>
         <Code language="abide" caption="abide" code={`
             <script>
             import { chat } from '@abide/abide'
-            import askAssistant from './askAssistant.server.ts'
-            import searchContacts from './searchContacts.server.ts'
+            import { askAssistant } from './askAssistant.server.ts'
+            import { searchContacts } from './searchContacts.server.ts'
 
             const talk = chat({ ask: askAssistant })
             </script>

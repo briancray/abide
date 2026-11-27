@@ -1,7 +1,7 @@
 <script>
 import { reactive } from '@abide/abide'
 
-import getFollowUps from '../getFollowUps.server.ts'
+import { getFollowUps } from '../getFollowUps.server.ts'
 
 const leads = reactive(() => getFollowUps())
 </script>

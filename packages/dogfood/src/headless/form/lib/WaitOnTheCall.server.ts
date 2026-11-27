@@ -1,6 +1,6 @@
 import { rpc } from '@abide/abide/server'
 
-export default rpc(
+export const addDeal = rpc(
     async ({ name }: { name: string }) => {
         await Bun.sleep(1_500)
         return { name }

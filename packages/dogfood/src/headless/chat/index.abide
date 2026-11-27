@@ -175,8 +175,8 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
         <Code language="abide" caption="abide" code={`
             <script>
             import { chat } from '@abide/abide'
-            import askClaudeCode from '../askClaudeCode.server.ts'
-            import permitClaudeCode from '../permitClaudeCode.server.ts'
+            import { askClaudeCode } from '../askClaudeCode.server.ts'
+            import { permitClaudeCode } from '../permitClaudeCode.server.ts'
 
             const talk = chat({ ask: askClaudeCode, permit: permitClaudeCode })
             </script>
@@ -211,8 +211,8 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
         <Code language="abide" caption="abide" code={`
             <script>
             import { chat, props, type ReportDraft, watch } from '@abide/abide'
-            import askReport from '../askReport.server.ts'
-            import draftReport from '../draftReport.server.ts'
+            import { askReport } from '../askReport.server.ts'
+            import { draftReport } from '../draftReport.server.ts'
 
             const { draft } = props<{ draft: ReportDraft }>()
             const talk = chat({
@@ -336,7 +336,7 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
         <Code language="abide" caption="abide" code={`
             <script>
             import { chat } from '@abide/abide'
-            import askAssistant from '../askAssistant.server.ts'
+            import { askAssistant } from '../askAssistant.server.ts'
             import { attachContactCard } from './attachContactCard.ts'
 
             const talk = chat({ ask: askAssistant, attach: attachContactCard })
@@ -375,7 +375,7 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
             it.</p>
         <Code language="ts" caption="browser" code={`
             import type { ChatOptions } from '@abide/abide'
-            import askAssistant from '../askAssistant.server.ts'
+            import { askAssistant } from '../askAssistant.server.ts'
             import { sentFor } from './askAboutThisPage.ts'
 
             export const askAboutThisPage: ChatOptions['ask'] = ({ messages }, options) =>
@@ -390,7 +390,7 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
         <Code language="abide" caption="abide" code={`
             <script>
             import { type AssistantMessage, chat, reactive } from '@abide/abide'
-            import askAssistant from '../askAssistant.server.ts'
+            import { askAssistant } from '../askAssistant.server.ts'
 
             // Last visit's conversation, as you stored it.
             let thread = reactive<AssistantMessage[]>([

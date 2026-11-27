@@ -246,9 +246,20 @@ function exportedNames(text: string): string[] | undefined {
 
 test('a file exporting one thing is named after what it exports', async () => {
     const misnamed: string[] = []
+    const components = new Set<string>()
+    for (const { path } of await authored('abide'))
+        components.add(path.slice(0, -'.abide'.length))
     for (const { path, text } of await authored()) {
         // A test file, a package's or an app's, is named for what it tests.
         if (/^\w+\/tests\//.test(path) || path.endsWith('.test.ts')) continue
+        // A server file beside a component of its name is that component's server half, named for
+        // it — `CheckBeforeSending.server.ts` exports the `addDeal` five examples beside it also do.
+        // THE REVERT: renaming `CheckBeforeSending.abide` names its server file here.
+        if (
+            path.endsWith('.server.ts') &&
+            components.has(path.slice(0, -'.server.ts'.length))
+        )
+            continue
         // A server file is `<name>.server.ts` (RULEBOOK 16.29), a worker file `<name>.worker.ts`
         // (RULEBOOK 55.1) and a param file `<NAME>.param.ts` (RULEBOOK 23.24), and the name is the
         // part before.

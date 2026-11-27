@@ -12,7 +12,7 @@ const ODDS: Record<string, number> = {
 }
 
 /** The pipeline's value, weighted by how likely each deal is to close. */
-export default rpc(
+export const getForecast = rpc(
     async () => {
         // A slow report, so the wait is on screen.
         await Bun.sleep(500)

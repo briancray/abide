@@ -1,7 +1,7 @@
 <script>
 import { format, reactive, tabs } from '@abide/abide'
 
-import getDeal from '../getDeal.server.ts'
+import { getDeal } from '../getDeal.server.ts'
 
 const VIEWS = [
     { id: 'details', label: 'Details' },

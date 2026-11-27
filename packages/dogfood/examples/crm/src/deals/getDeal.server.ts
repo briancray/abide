@@ -4,7 +4,7 @@ import { rpc } from '@abide/abide/server'
 import { DEALS } from '../pipeline/lib/DEALS.server.ts'
 
 /** Answers at /deals/getDeal?id=…; the argument type is the schema. */
-export default rpc(
+export const getDeal = rpc(
     async ({ id }: { id: string }) => {
         // A slow database, so the wait is on screen.
         await Bun.sleep(300)

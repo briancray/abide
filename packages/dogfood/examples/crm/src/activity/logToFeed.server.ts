@@ -1,11 +1,11 @@
 import { rpc } from '@abide/abide/server'
 
-import feed from './feed.server.ts'
+import { feed } from './feed.server.ts'
 
 const KINDS = ['Call', 'Email', 'Meeting']
 
 /** The server writes the entry, so a caller only picks its kind. */
-export default rpc(
+export const logToFeed = rpc(
     ({ account, kind }: { account: string; kind: string }) => {
         if (!KINDS.includes(kind)) return
         feed.patch({ account }, (entries) => {

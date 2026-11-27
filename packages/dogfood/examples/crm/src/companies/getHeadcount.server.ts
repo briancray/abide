@@ -3,7 +3,7 @@ import { fetchAndHandle, rpc } from '@abide/abide/server'
 import { registryOrigin } from './lib/registryOrigin.server.ts'
 
 /** A company's headcount where the registry answers within half a second, else `null`. */
-export default rpc(
+export const getHeadcount = rpc(
     ({ id }: { id: string }) =>
         fetchAndHandle<{ employees: number }>(
             `${registryOrigin()}/companies/${id}`,

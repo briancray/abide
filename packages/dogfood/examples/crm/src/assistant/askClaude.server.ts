@@ -7,9 +7,9 @@ import {
     server,
 } from '@abide/abide/server'
 
-import standIn from './v1/messages.server.ts'
+import { messages as standIn } from './v1/messages.server.ts'
 
-export default rpc(
+export const askClaude = rpc(
     async function* ({ messages }: { messages: AssistantMessage[] }) {
         // This app's stand-in for https://api.anthropic.com, at the socket this app listens on —
         // never the origin a request names, which its `Host` header makes anyone's (42.9). Served

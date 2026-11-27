@@ -4,7 +4,7 @@ import { CLOSE_DATES } from './lib/CLOSE_DATES.server.ts'
 import { type Deal, DEALS } from './lib/DEALS.server.ts'
 
 /** Every open deal with the date it is expected to close, where it has one. */
-export default rpc(
+export const listClosing = rpc(
     async () => {
         // A slow database, so the wait is on screen.
         await Bun.sleep(300)

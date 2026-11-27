@@ -6,7 +6,7 @@ import { exampleDirectory } from '#src/lib/exampleDirectory.server.ts'
 // A file of the CRM, by its path below the CRM's root — never a path out of it.
 const CRM_FILE = /^src\/(?:[\w-]+\/)*[\w.-]+\.(?:ts|abide|css|json)$/
 
-export default rpc(
+export const source = rpc(
     async ({ path }: { path: string }) => {
         const crm = exampleDirectory()
         const file = crm && CRM_FILE.test(path) && Bun.file(`${crm}/${path}`)

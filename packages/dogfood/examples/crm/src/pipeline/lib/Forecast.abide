@@ -1,7 +1,7 @@
 <script>
 import { format, reactive } from '@abide/abide'
 
-import getForecast from '../getForecast.server.ts'
+import { getForecast } from '../getForecast.server.ts'
 
 const forecast = reactive(() => getForecast())
 const reloading = reactive(() => forecast.busy() && forecast.ready())

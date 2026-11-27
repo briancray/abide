@@ -1,7 +1,7 @@
 import { refuse } from '@abide/abide'
 import { rpc } from '@abide/abide/server'
 
-export default rpc(
+export const savePhone = rpc(
     ({ phone }: { phone: string }) => {
         const digits = phone.replace(/\D/g, '')
         if (digits.length < 7)

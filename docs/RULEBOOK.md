@@ -1111,9 +1111,10 @@ a wire again under 15.21.
 16.1 A handler MUST be a plain function, a plain value or a promise of one, a `memo`, a `table`, a
 `job`, a `pipe` or a `ledger`.
 
-16.2 `rpc` MUST give the handler an address over http: a handler file's default `rpc` that file's
-path below the app's root without `.server.ts`, its brackets read as 23.14 reads a route's, and each
-other `rpc` it exports that address and then the export's name.
+16.2 `rpc` MUST give the handler an address over http: a handler file's default `rpc`, or the one
+exported by the file's own name, that file's path below the app's root without `.server.ts`, its
+brackets read as 23.14 reads a route's, and each other `rpc` it exports that address and then the
+export's name; a file exporting both MUST be refused at build.
 
 16.3 An `Rpc` called MUST answer a promise of the handler's value for those `Args`, rejected with its
 refusal, or where the handler streams, an async iterable of its chunks.
@@ -4079,7 +4080,9 @@ module shows it to be, and
 each of `POST`, `PUT`, `PATCH` and `DELETE` as `rpc` whose options' `methods` names that verb, so no
 address answers a verb it did not; MUST write that `methods` as a formatter would; MUST move each
 `<name>.handler.ts` to `<name>.server.ts`, and every import specifier naming it with it, noting by
-38.226 one whose server file is already there; and MUST export each `rpc` a `<script server>` binds,
+38.226 one whose server file is already there; MUST export a moved file's default as `<name>`, and
+import it by that name wherever it was imported as the default, save where `<name>` is no identifier
+or the file already declares it; and MUST export each `rpc` a `<script server>` binds,
 as its value where the `rpc` takes no options, noting by 38.226 each one that takes them.
 
 38.232 The migration keyed to 0.145.0 MUST, ahead of 38.233, hand back from a body every function

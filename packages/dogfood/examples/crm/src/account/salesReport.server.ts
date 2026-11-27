@@ -9,7 +9,7 @@ const BY_REGION: Record<string, { week: string; total: string }[]> = {
 }
 
 /** A row every 300 ms; the bound is on the first row, and a report that has begun keeps its pace. */
-export default rpc(
+export const salesReport = rpc(
     async function* ({ region }: { region: string }) {
         // South takes too long to start.
         if (region === 'south') await Bun.sleep(2_000)

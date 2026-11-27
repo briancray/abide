@@ -13,7 +13,7 @@ const SUMMARY = [
 ]
 
 /** A deal's summary in markdown, a chunk every 100 ms. */
-export default rpc(
+export const summarizeDeal = rpc(
     async function* () {
         for (const chunk of SUMMARY) {
             await Bun.sleep(100)

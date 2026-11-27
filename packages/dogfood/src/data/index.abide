@@ -49,7 +49,7 @@ import Section from '#src/lib/Section.abide'
             import { crmDatabase } from './lib/crmDatabase.server.ts'
             import type { Target } from './lib/targets.server.ts'
 
-            export default rpc(
+            export const listTargets = rpc(
                 () =>
                     crmDatabase.sql<Target>\`SELECT id, target, setAt FROM targets
                         ORDER BY id DESC LIMIT 5\`,
@@ -73,7 +73,7 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { crmDatabase } from './lib/crmDatabase.server.ts'
 
-            export default rpc(
+            export const setTarget = rpc(
                 ({ target }: { target: number }) => {
                     crmDatabase.sql\`INSERT INTO targets (target) VALUES (\${target})\`
                 },
@@ -93,7 +93,7 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { targets } from './lib/targets.server.ts'
 
-            export default rpc(
+            export const getTarget = rpc(
                 memo(async () => targets().at(-1)?.target ?? null, { global: true }),
             )
         `} />
@@ -135,7 +135,7 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { digest } from './lib/digest.server.ts'
 
-            export default rpc(digest.status, {
+            export const getDigest = rpc(digest.status, {
                 description: 'When the follow-up digest last went out, and goes next.',
             })
         `} />
@@ -167,10 +167,10 @@ import Section from '#src/lib/Section.abide'
                 { concurrency: 4, retries: 2 },
             )
 
-            export default rpc(({ id }: { id: string }) => askRegistry(id), {
-                global: true,
-                ttl: 60_000,
-            })
+            export const getRegistration = rpc(
+                ({ id }: { id: string }) => askRegistry(id),
+                { global: true, ttl: 60_000 },
+            )
         `} />
         <p>The CRM's registry answers Hopper &amp; Co on every third ask, so the retries reach
             an answer. Asked when this page loaded:</p>

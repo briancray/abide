@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test'
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
 
-import listCalls from '../listCalls.server.ts'
+import { listCalls } from '../listCalls.server.ts'
 import CallLog from './CallLog.abide'
 
 test('a call logged with the network is saved, and nothing waits', async () => {
@@ -22,7 +22,7 @@ test('a call logged with the network is saved, and nothing waits', async () => {
 })
 
 test('a call sent twice under one id is logged once', async () => {
-    const { default: logCall } = await import('../logCall.server.ts')
+    const { logCall } = await import('../logCall.server.ts')
     const call = { id: 'again', note: 'Asked twice' }
     await logCall(call)
     await logCall(call)

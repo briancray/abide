@@ -1,7 +1,7 @@
 <script>
 import { reactive, watch } from '@abide/abide'
 
-import saveNote from '../saveNote.server.ts'
+import { saveNote } from '../saveNote.server.ts'
 
 let note = reactive('Wants a quote by Friday.')
 let saved = reactive('Wants a quote by Friday.')

@@ -40,7 +40,7 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { TEAM } from './lib/TEAM.server.ts'
 
-            export default rpc(async ({ email }: { email: string }) => {
+            export const signIn = rpc(async ({ email }: { email: string }) => {
                 const member = TEAM.find((one) => one.email === email)
                 if (member === undefined) return refuse(401, 'No such account.')
                 await principal.set({ id: member.id })
@@ -61,7 +61,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { principal } from '@abide/abide'
-            import signOut from './signOut.server.ts'
+            import { signOut } from './signOut.server.ts'
             import SignIn from './lib/SignIn.abide'
             </script>
 
@@ -81,7 +81,7 @@ import Section from '#src/lib/Section.abide'
             import { principal } from '@abide/abide'
             import { rpc } from '@abide/abide/server'
 
-            export default rpc(async (): Promise<Contact> => {
+            export const getContact = rpc(async (): Promise<Contact> => {
                 const { dealValue, ...rest } = CONTACT
                 const { role } = await principal.resolved
                 return role === 'admin' ? CONTACT : rest
@@ -102,7 +102,7 @@ import Section from '#src/lib/Section.abide'
 
             const lastExport = new Map<string, number>()
 
-            export default rpc(async () => {
+            export const exportContacts = rpc(async () => {
                 const caller = principal.caller()
                 if (Date.now() - (lastExport.get(caller) ?? 0) < 60_000)
                     return refuse(429, 'Try again shortly.')

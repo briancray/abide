@@ -47,7 +47,7 @@ const searchHopper = JSON.stringify(
             import { rpc } from '@abide/abide/server'
             import { CONTACTS } from '../contacts/lib/CONTACTS.server.ts'
 
-            export default rpc(
+            export const searchContacts = rpc(
                 ({ name }: { name: string }) =>
                     CONTACTS.filter((contact) => contact.name.includes(name)),
                 { description: 'The contacts whose name contains \`name\`.' },

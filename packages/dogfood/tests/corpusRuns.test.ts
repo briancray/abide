@@ -266,12 +266,15 @@ test('every example renders on the server and mounts on the client', async () =>
                 `${APP}${root}`,
                 new Diagnostics(APP, true),
             ).handlers) {
-                const { default: handler } = await import(
-                    `${dir}/${root}/${belowRoot}`
-                )
-                if (typeof handler === 'function' && 'method' in handler)
-                    (handler as { address?: string }).address =
-                        routeOf(belowRoot)
+                const module = await import(`${dir}/${root}/${belowRoot}`)
+                const route = routeOf(belowRoot)
+                const stem = route.slice(route.lastIndexOf('/') + 1)
+                for (const [name, handler] of Object.entries(module))
+                    if (typeof handler === 'function' && 'method' in handler)
+                        (handler as { address?: string }).address =
+                            name === 'default' || name === stem
+                                ? route
+                                : `${route}/${name}`
             }
         }
         // A `raw` CALL GOES OVER THE WIRE, and there is no server here: it is answered `null`, which

@@ -34,7 +34,7 @@ import Section from '#src/lib/Section.abide'
             import { request, rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default rpc(({ id }: { id: string }) => {
+            export const getDealAmount = rpc(({ id }: { id: string }) => {
                 const deal = DEALS.find((each) => each.id === id)
                 const locale = request().headers.get('accept-language')?.split(',')[0]
                 return new Intl.NumberFormat(locale).format(deal?.amount ?? 0)
@@ -54,7 +54,7 @@ import Section from '#src/lib/Section.abide'
             import { log } from '@abide/abide'
             import { request, rpc } from '@abide/abide/server'
 
-            export default rpc(({ email }: { email: string }) => {
+            export const signIn = rpc(({ email }: { email: string }) => {
                 const from = request.ip()
                 const address = from === 'in-process' ? from : from?.address
                 log.info('sign-in', { email, address })
@@ -68,7 +68,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { request, rpc } from '@abide/abide/server'
 
-            export default rpc(async ({ domain }: { domain: string }) => {
+            export const lookupCompany = rpc(async ({ domain }: { domain: string }) => {
                 const lookup = await fetch(\`https://api.example/companies/\${domain}\`, {
                     signal: request().signal,
                 })

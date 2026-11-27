@@ -119,7 +119,7 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { digest } from './lib/digest.server.ts'
 
-            export default rpc(digest.status)
+            export const getDigest = rpc(digest.status)
         `} />
     </Section>
 
@@ -131,7 +131,7 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { digest } from './lib/digest.server.ts'
 
-            export default rpc(() => digest.run(), { methods: ['POST'] })
+            export const sendDigest = rpc(() => digest.run(), { methods: ['POST'] })
         `} />
     </Section>
 
@@ -154,7 +154,7 @@ import Section from '#src/lib/Section.abide'
                 message: 'An import is already running.',
             })
 
-            export default rpc(
+            export const importDeals = rpc(
                 async () => {
                     if ((await dealImport.status()).running) return importRunning()
                     void dealImport.run()
@@ -188,7 +188,7 @@ import Section from '#src/lib/Section.abide'
                 },
             })
 
-            export default rpc((options: { stage?: string } = {}) =>
+            export const importDeals = rpc((options: { stage?: string } = {}) =>
                 dealImport.run(options),
              { methods: ['POST'] },)
         `} />
@@ -265,7 +265,7 @@ import Section from '#src/lib/Section.abide'
             job's stop ends the steps in flight with no signal handed to it.</p>
         <Code language="ts" caption="server" code={`
             import { job, pipe } from '@abide/abide/server'
-            import getDeal from '../deals/getDeal.server.ts'
+            import { getDeal } from '../deals/getDeal.server.ts'
 
             const nightly = pipe([() => getDeal({ id: 'd2' }), (deal) => deal.name])
             job({

@@ -4,7 +4,7 @@ import { DEALS } from './lib/DEALS.server.ts'
 import { LOADS } from './lib/LOADS.server.ts'
 
 /** Takes args, so it is keyed: one entry per stage. */
-export default rpc(
+export const getStage = rpc(
     async ({ stage }: { stage: string }) => {
         // A slow database, so the wait is on screen.
         await Bun.sleep(400)

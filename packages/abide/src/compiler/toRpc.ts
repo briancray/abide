@@ -4,8 +4,9 @@
 // over anything else keeps `GET` as its one verb — bare, a table, a job, a pipe or a ledger would
 // answer its writes too (16.117) — and a mutation keeps its verb in its options:
 // `POST(f, o)` is `rpc(f, { methods: ['POST'], ...o })`. A
-// handler file is a server file (16.73): `<name>.handler.ts` is `<name>.server.ts`, answering at the
-// same route, and every import naming it is moved with it. A handler a `<script server>` declares is
+// handler file is a server file (16.73): `<name>.handler.ts` is `<name>.server.ts`, its default
+// exported as `<name>` and so answering at the same route (16.2), and every import naming it is moved
+// with it. A handler a `<script server>` declares is
 // a value it exports bare (16.70): `rpc(v)` there is `v`, and one given options is noted, as only a
 // server file's `rpc` takes them.
 
@@ -37,7 +38,7 @@ type Note = (path: string, line: string, message: string) => void
 const VERBS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 
 const TAKEN =
-    'abide upgrade moves a handler file to <name>.server.ts, and that file is already there: merge the two — the handler as `export default rpc(…)` — so it answers where it did. RULEBOOK 16.73, 38.231.'
+    'abide upgrade moves a handler file to <name>.server.ts, and that file is already there: merge the two — the handler as `export const <name> = rpc(…)` — so it answers where it did. RULEBOOK 16.2, 16.73, 38.231.'
 
 /** 38.231 — a server block's `GET` over a value that may answer writes bare, by its export's name. */
 const READ_ONLY = (name: string): string =>
@@ -62,18 +63,39 @@ export async function toRpc(
     const present = new Set(paths)
     const moved = new Map<string, string>()
     const taken = new Set<string>()
+    // 16.2 — a handler file's default is named for its file, answering where it did; a file that
+    // already declares that name keeps its default, and every import of a file of that name with it.
+    const unnamed = new Set<string>()
     for (const path of paths) {
         if (!path.endsWith('.handler.ts')) continue
         const target = `${path.slice(0, -'.handler.ts'.length)}.server.ts`
         if (present.has(target)) taken.add(path)
         else moved.set(path, target)
+        const stem = handlerStem(path)
+        const text = await read(path)
+        if (
+            taken.has(path) ||
+            !IDENTIFIER.test(stem) ||
+            text === undefined ||
+            declaresTopLevel(text, stem)
+        )
+            unnamed.add(stem)
     }
     for (const path of paths) {
         const text = await read(path)
         if (text === undefined) continue
-        const migrated = toRpcText(text, path, (line, message) =>
-            note(moved.get(path) ?? path, line, message),
+        let migrated = toRpcText(
+            text,
+            path,
+            (line, message) => note(moved.get(path) ?? path, line, message),
+            unnamed,
         )
+        const stem = handlerStem(path)
+        if (moved.has(path) && !unnamed.has(stem))
+            migrated = migrated.replace(
+                /^export default rpc\(/m,
+                `export const ${stem} = rpc(`,
+            )
         if (taken.has(path)) note(path, migrated.split('\n')[0] ?? '', TAKEN)
         const target = moved.get(path)
         if (target !== undefined) {
@@ -90,8 +112,9 @@ export function toRpcText(
     text: string,
     path: string,
     note: (line: string, message: string) => void = () => {},
+    unnamed: ReadonlySet<string> = new Set(),
 ): string {
-    let out = movedSpecifiers(text)
+    let out = movedSpecifiers(namedHandlerImports(text, unnamed))
     // The rewrite reads a file holding a verb's name: a file importing one of them holds it.
     for (const verb of VERBS)
         if (out.includes(verb))
@@ -105,6 +128,53 @@ export function toRpcText(
         /\bserver\b/.test(open)
             ? `${open}${bareExports(exportedHandlers(body), note)}${close}`
             : whole,
+    )
+}
+
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/
+
+/** The name a handler file at `path` is given: its file's, less `.handler.ts`. */
+function handlerStem(path: string): string {
+    return path.slice(path.lastIndexOf('/') + 1, -'.handler.ts'.length)
+}
+
+/** Whether `text` declares `name` at its top level or imports it. */
+function declaresTopLevel(text: string, name: string): boolean {
+    if (
+        new RegExp(
+            String.raw`^(?:export\s+)?(?:async\s+)?(?:const|let|var|function\*?|class)\s+${name}`,
+            'm',
+        ).test(text)
+    )
+        return true
+    for (const statement of importStatements(text))
+        for (const binding of statement.bindings)
+            if (binding.local === name) return true
+    return false
+}
+
+/** Each default import of a handler file the migration names, importing that name instead (16.2). */
+function namedHandlerImports(
+    text: string,
+    unnamed: ReadonlySet<string>,
+): string {
+    if (!text.includes('.handler')) return text
+    return text.replace(
+        /import\s+([A-Za-z_$][\w$]*)(\s*,\s*\{([^}]*)\})?\s+from\s+(['"])((?:[^'"\n]*\/)?([A-Za-z_$][\w$]*)\.handler(?:\.ts)?)\4/g,
+        (
+            whole,
+            local: string,
+            _rest,
+            others: string | undefined,
+            quote: string,
+            specifier: string,
+            stem: string,
+        ) => {
+            if (unnamed.has(stem)) return whole
+            const named = local === stem ? stem : `${stem} as ${local}`
+            const rest = others?.trim() ? `, ${others.trim()}` : ''
+            return `import { ${named}${rest} } from ${quote}${specifier}${quote}`
+        },
     )
 }
 

@@ -28,7 +28,7 @@ import Section from '#src/lib/Section.abide'
 
             onConfig(() => ({ RETRIES: 3 }))
 
-            export default rpc(() => ({ retries: config.get().RETRIES }))
+            export const getRetries = rpc(() => ({ retries: config.get().RETRIES }))
         `} />
         <p>The CRM's <code>.env</code> sets <code>RETRIES=5</code>. Its retry count, asked
             when this page loaded:</p>

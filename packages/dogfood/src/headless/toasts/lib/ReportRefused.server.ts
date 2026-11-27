@@ -3,7 +3,7 @@ import { rpc } from '@abide/abide/server'
 
 const mailer = log.named('mailer')
 
-export default rpc(
+export const sendStatement = rpc(
     ({ id }: { id: string }) => {
         log(`statement for ${id} built`)
         mailer.error('550 mailbox full')

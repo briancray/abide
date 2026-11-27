@@ -23,7 +23,7 @@ const recorded: Provider = {
     },
 }
 
-export default rpc(
+export const askAssistant = rpc(
     async function* ({ messages }: { messages: AssistantMessage[] }) {
         yield* assistant(messages, recorded, { tools: true })
     },

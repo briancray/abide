@@ -1,5 +1,5 @@
 <script>
-import qualifyLead from '../qualifyLead.server.ts'
+import { qualifyLead } from '../qualifyLead.server.ts'
 import { STAGES } from './STAGES.ts'
 import StageTile from './StageTile.abide'
 </script>

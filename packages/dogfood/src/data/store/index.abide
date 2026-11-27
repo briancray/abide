@@ -36,8 +36,8 @@ import keepStage from './lib/KeepStage.abide' with { type: 'text' }
             a value behind two handlers, so every visitor reads the one target.</p>
         <Code language="ts" caption="shared" code={`
             import { reactive, type Store } from '@abide/abide'
-            import getTarget from './getTarget.server.ts'
-            import setTarget from './setTarget.server.ts'
+            import { getTarget } from './getTarget.server.ts'
+            import { setTarget } from './setTarget.server.ts'
 
             export const targetStore: Store<number | undefined> = {
                 get: async () => (await getTarget()) ?? undefined,

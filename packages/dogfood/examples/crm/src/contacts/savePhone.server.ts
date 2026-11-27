@@ -2,7 +2,7 @@ import { refuse } from '@abide/abide'
 import { rpc } from '@abide/abide/server'
 
 /** Answers at /contacts/savePhone: a number too short to dial is refused. */
-export default rpc(
+export const savePhone = rpc(
     ({ phone }: { phone: string }) => {
         const digits = phone.replace(/\D/g, '')
         if (digits.length < 7)

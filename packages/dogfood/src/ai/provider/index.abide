@@ -60,7 +60,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { provider, rpc } from '@abide/abide/server'
 
-            export default rpc(
+            export const permitClaudeCode = rpc(
                 ({ id, allow }: { id: string; allow: boolean }) =>
                     provider.claudeCode.permit(id, allow),
                 { methods: ['POST'], clients: { mcp: false } },

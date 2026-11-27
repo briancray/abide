@@ -2,7 +2,7 @@ import { rpc } from '@abide/abide/server'
 
 import { exampleResults } from '#src/lib/exampleDirectory.server.ts'
 
-export default rpc(
+export const results = rpc(
     async ({ path }: { path: string }) => {
         const results = await exampleResults()
         if (results === null) return null

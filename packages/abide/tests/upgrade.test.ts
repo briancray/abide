@@ -1078,7 +1078,8 @@ export const listed = GET(rows)
 // and one with options is a note (16.70), as is a handler file whose server file is there already.
 // Run again, nothing is left to move (38.200). THE REVERT: drop `toRpc` from the migrations; nothing
 // moves, and the handler file is still `getDeal.handler.ts`. Dropping `bareExports` alone leaves
-// `export const listNotes = rpc(` in the server block.
+// `export const listNotes = rpc(` in the server block. Dropping `namedHandlerImports` leaves
+// `import getDeal from` a file with no default (16.2).
 test('abide upgrade moves the five verbs to rpc and a handler file to a server file — 38.231, 38.200', async () => {
     const app = temporaryModule({
         'src/deals/getDeal.handler.ts': `import { GET } from '@abide/abide/server'
@@ -1122,16 +1123,16 @@ export default DELETE(() => 1)
     expect(after('src/deals/getDeal.server.ts'))
         .toBe(`import { rpc } from '@abide/abide/server'
 
-export default rpc(({ id }: { id: string }) => id, { description: 'One deal.' })
+export const getDeal = rpc(({ id }: { id: string }) => id, { description: 'One deal.' })
 `)
     expect(after('src/deals/moveDeal.server.ts')).toContain(
-        "export default rpc(({ id }: { id: string }) => id, { methods: ['POST'], ...OPTIONS })",
+        "export const moveDeal = rpc(({ id }: { id: string }) => id, { methods: ['POST'], ...OPTIONS })",
     )
     expect(after('src/deals/index.abide')).toContain(
         "export const rename = rpc(({ name }: { name: string }) => name, { methods: ['PATCH'] })",
     )
     expect(after('src/deals/index.abide')).toContain(
-        "import getDeal from './getDeal.server.ts'",
+        "import { getDeal } from './getDeal.server.ts'",
     )
     expect(after('src/deals/lib/DealNotes.abide')).toBe(`<script server>
 export const listNotes = ({ id }: { id: string }) => [id]

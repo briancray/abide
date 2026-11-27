@@ -26,7 +26,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { rpc, server } from '@abide/abide/server'
 
-            export default rpc(() => ({
+            export const getServerLoad = rpc(() => ({
                 inFlight: server().pendingRequests,
                 sockets: server().pendingWebSockets,
             }))

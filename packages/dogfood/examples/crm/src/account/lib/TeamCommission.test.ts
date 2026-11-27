@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { createApp } from '@abide/abide/server'
 
-import getTeamCommission from '../getTeamCommission.server.ts'
+import { getTeamCommission } from '../getTeamCommission.server.ts'
 
 /** What a caller signed in as `id`, or nobody, is answered. */
 async function askedBy(id?: string) {

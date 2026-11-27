@@ -171,7 +171,7 @@ A property written `name?: T` in a signature takes `undefined` as it takes the p
 | `**/index.abide` | The page at its directory's route. | 19.1, 23.3, 23.4, 23.14, 23.18, 35.19 |
 | `**/<name>.abide` | The page at its directory's route and then `<name>`. | 19.1, 23.3, 23.4, 23.14, 23.21, 35.19 |
 | `**/<NAME>.param.ts` | A param file: the matcher a segment naming `NAME` matches by. | 23.22, 23.24, 23.25, 23.26 |
-| `**/<name>.server.ts` | A server file: each `rpc` it exports answers at its path, its default there, every other below that by its name; one exporting none answers nowhere. | 16.2, 16.28, 16.73, 16.74, 16.113, 19.1, 23.14, 23.22, 23.23 |
+| `**/<name>.server.ts` | A server file: each `rpc` it exports answers at its path, the one named for the file there, every other below that by its name; one exporting none answers nowhere. | 16.2, 16.28, 16.73, 16.74, 16.113, 19.1, 23.14, 23.22, 23.23 |
 | `**/layout.abide` | A layout, rendering every page below its route through a slot, and the hooks over that route. | 35.1, 35.12, 35.13, 37.2, 41.11, 41.19, 41.23 |
 | `src/native/` | The native app's own pages, which are no routes of the app's. | 23.15, 23.33 |
 | `src/native/launcher.abide` | The native launcher: the `onLauncher` it calls, and its page in place of the launcher's own where it has markup. | 38.80, 38.82, 38.84, 38.85, 38.107 |
@@ -1070,10 +1070,10 @@ type Reached = { readonly [REACHED]: true }
 
 | File | Declares | Served at | Rules |
 | --- | --- | --- | --- |
-| `users/getUser.server.ts` | `export default rpc(…)` | `/users/getUser` | 16.2, 16.73, 19.1, 19.20, 23.14 |
+| `users/getUser.server.ts` | `export const getUser = rpc(…)` | `/users/getUser` | 16.2, 16.73, 19.1, 19.20, 23.14 |
 | `users/getUser.server.ts` | `export const avatar = rpc(…)` | `/users/getUser/avatar` | 16.2, 16.73 |
-| `health.server.ts` | `export default rpc(…)` | `/health` | 16.2, 23.14 |
-| `media/[id]/save.server.ts` | `export default rpc(…, { methods: ['POST'] })` | `/media/[id]/save`, `id` reaching its `Args` | 16.2, 16.65, 16.66, 16.67, 16.69, 16.111 |
+| `health.server.ts` | `export const health = rpc(…)` | `/health` | 16.2, 23.14 |
+| `media/[id]/save.server.ts` | `export const save = rpc(…, { methods: ['POST'] })` | `/media/[id]/save`, `id` reaching its `Args` | 16.2, 16.65, 16.66, 16.67, 16.69, 16.111 |
 | `media/[id]/lib/Comments.abide` | `export const addComment = …` in its `<script server>` | `/__abide/handlers/media/id/lib/Comments/addComment` | 16.70, 16.71, 16.72, 34.17 |
 | any `rpc` | `{ address: '/api/v1/deals/[id]' }` | that address | 16.113 |
 | a `GET` | its args past 2048 characters of URL | the same address, sent as `QUERY` | 16.114 |

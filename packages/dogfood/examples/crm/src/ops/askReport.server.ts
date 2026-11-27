@@ -30,7 +30,7 @@ const recorded: Provider = {
 }
 
 /** Answers at /ops/askReport: the assistant, handed the draft. */
-export default rpc(
+export const askReport = rpc(
     async function* ({ draft }: { draft: string }) {
         const content = `Write my problem report from this draft:\n\n${draft}`
         yield* assistant([{ role: 'user', content }], recorded, { tools: true })

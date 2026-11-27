@@ -12,7 +12,7 @@ const DEAL = jsonSchema<Deal>({
     },
 })
 
-export default rpc((deal: Deal) => deal, {
+export const addDeal = rpc((deal: Deal) => deal, {
     methods: ['POST'],
     args: DEAL,
 })

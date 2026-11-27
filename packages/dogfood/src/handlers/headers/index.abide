@@ -42,7 +42,10 @@ import Section from '#src/lib/Section.abide'
             import { closedTotals } from './lib/closedTotals.ts'
 
             // cache-control: private, max-age=60
-            export default rpc(() => closedTotals(30), { global: true, ttl: 60_000 })
+            export const getClosedTotals = rpc(() => closedTotals(30), {
+                global: true,
+                ttl: 60_000,
+            })
         `} />
     </Section>
 
@@ -53,7 +56,7 @@ import Section from '#src/lib/Section.abide'
             import { response, rpc } from '@abide/abide/server'
             import { COMPANIES } from './lib/COMPANIES.server.ts'
 
-            export default rpc(() => {
+            export const listCompanies = rpc(() => {
                 response().headers.set('cache-control', 'public, max-age=300')
                 return COMPANIES
             })

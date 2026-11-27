@@ -1,7 +1,7 @@
 <script>
 import { combobox, reactive } from '@abide/abide'
 
-import listContacts from '../listContacts.server.ts'
+import { listContacts } from '../listContacts.server.ts'
 
 type Contact = { id: string; name: string; company: string }
 

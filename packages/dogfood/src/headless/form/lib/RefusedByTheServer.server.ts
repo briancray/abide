@@ -3,7 +3,7 @@ import { rpc } from '@abide/abide/server'
 
 const TAKEN = ['Ledger audit']
 
-export default rpc(
+export const addDeal = rpc(
     ({ name }: { name: string }) =>
         TAKEN.includes(name)
             ? refuse.validation<{ name: string }>({ name: ['is taken'] })

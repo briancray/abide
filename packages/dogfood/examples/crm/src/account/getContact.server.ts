@@ -10,7 +10,7 @@ const CONTACT: Contact = {
 }
 
 /** The deal value is an admin's to read; everyone else gets the rest. */
-export default rpc(
+export const getContact = rpc(
     async (): Promise<Contact> => {
         const { dealValue, ...rest } = CONTACT
         const { role } = await principal.resolved

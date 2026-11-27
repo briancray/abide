@@ -4,7 +4,7 @@ import { DEALS } from './lib/DEALS.server.ts'
 import { LOADS } from './lib/LOADS.server.ts'
 
 /** The deals whose name holds the query, ignoring case: a query is searched once the typing stops. */
-export default rpc(
+export const searchDeals = rpc(
     async ({ q }: { q: string }) => {
         // A slow search service, so the wait is on screen.
         await Bun.sleep(300)

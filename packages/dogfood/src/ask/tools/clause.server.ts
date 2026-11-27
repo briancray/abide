@@ -3,7 +3,7 @@ import { rpc } from '@abide/abide/server'
 
 import { CLAUSE_TEXTS } from '#src/rulebook/lib/CLAUSE_TEXTS.server.ts'
 
-export default rpc(
+export const clause = rpc(
     ({ number }: { number: string }) => {
         const text = CLAUSE_TEXTS.get(number)
         if (text === undefined)

@@ -199,7 +199,7 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { targets } from './lib/targets.server.ts'
 
-            export default rpc(targets, { columns: ['id', 'target'] })
+            export const listTargets = rpc(targets, { columns: ['id', 'target'] })
         `} />
     </Section>
 

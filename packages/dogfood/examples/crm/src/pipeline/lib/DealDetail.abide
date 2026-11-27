@@ -1,7 +1,7 @@
 <script>
 import { reactive } from '@abide/abide'
 
-import listDeals from '../listDeals.server.ts'
+import { listDeals } from '../listDeals.server.ts'
 import { selectedDeal } from './selectedDeal.ts'
 
 const deals = reactive(() => listDeals())

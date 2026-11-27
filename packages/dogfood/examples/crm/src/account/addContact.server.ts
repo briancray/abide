@@ -3,7 +3,7 @@ import { response, rpc } from '@abide/abide/server'
 let nextId = 4031
 
 /** Answers 201, and where the new contact lives. */
-export default rpc(
+export const addContact = rpc(
     async ({ name }: { name: string }) => {
         const contact = { id: String(nextId), name }
         nextId += 1

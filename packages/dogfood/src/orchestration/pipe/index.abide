@@ -51,8 +51,8 @@ import Section from '#src/lib/Section.abide'
             the refusal a step answered, as a handler's call does.</p>
         <Code language="ts" caption="shared" code={`
             import { pipe } from '@abide/abide'
-            import getDeal from './getDeal.server.ts'
-            import saveDeal from './saveDeal.server.ts'
+            import { getDeal } from './getDeal.server.ts'
+            import { saveDeal } from './saveDeal.server.ts'
 
             const rename = pipe([
                 (id: string) => getDeal({ id }),
@@ -70,7 +70,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { pipe, reactive } from '@abide/abide'
-            import saveDeal from './saveDeal.server.ts'
+            import { saveDeal } from './saveDeal.server.ts'
 
             const save = pipe([saveDeal], { retries: 2 })
             const saved = reactive(() =>
@@ -88,9 +88,9 @@ import Section from '#src/lib/Section.abide'
             step is handed their answers in the list's order.</p>
         <Code language="ts" caption="shared" code={`
             import { pipe } from '@abide/abide'
-            import getContact from './getContact.server.ts'
-            import getCompany from './getCompany.server.ts'
-            import getDeal from './getDeal.server.ts'
+            import { getContact } from './getContact.server.ts'
+            import { getCompany } from './getCompany.server.ts'
+            import { getDeal } from './getDeal.server.ts'
 
             const brief = pipe([
                 (id: string) => getDeal({ id }),
@@ -109,7 +109,7 @@ import Section from '#src/lib/Section.abide'
             contact's do not.</p>
         <Code language="ts" caption="shared" code={`
             import { pipe } from '@abide/abide'
-            import syncContact from './syncContact.server.ts'
+            import { syncContact } from './syncContact.server.ts'
 
             export const syncs = pipe([syncContact], {
                 concurrency: 4,
@@ -124,8 +124,8 @@ import Section from '#src/lib/Section.abide'
             pipe around it allows — so give it the same.</p>
         <Code language="ts" caption="shared" code={`
             import { pipe } from '@abide/abide'
-            import getDeal from './getDeal.server.ts'
-            import saveDeal from './saveDeal.server.ts'
+            import { getDeal } from './getDeal.server.ts'
+            import { saveDeal } from './saveDeal.server.ts'
 
             const byId = (id: string) => getDeal({ id })
             export const fetched = pipe([byId], { concurrency: 4 })
@@ -185,7 +185,7 @@ import Section from '#src/lib/Section.abide'
             every call after. It settles once nothing runs.</p>
         <Code language="ts" caption="shared" code={`
             import { pipe } from '@abide/abide'
-            import syncContact from './syncContact.server.ts'
+            import { syncContact } from './syncContact.server.ts'
 
             const syncs = pipe([syncContact], { concurrency: 4 })
             await syncs.stop()
@@ -197,7 +197,7 @@ import Section from '#src/lib/Section.abide'
             ones running finish.</p>
         <Code language="ts" caption="shared" code={`
             import { pipe, reactive } from '@abide/abide'
-            import logToFeed from './logToFeed.server.ts'
+            import { logToFeed } from './logToFeed.server.ts'
 
             const onCall = reactive(false)
             const activity = pipe([logToFeed], { paused: onCall })

@@ -93,7 +93,7 @@ import Section from '#src/lib/Section.abide'
 
             type Registration = { founded: number; employees: number }
 
-            export default rpc(({ id }: { id: string }) =>
+            export const getRegistration = rpc(({ id }: { id: string }) =>
                 fetchAndHandle<Registration>(
                     \`https://registry.example/companies/\${id}\`,
                 ),
@@ -130,7 +130,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { fetchAndHandle, rpc } from '@abide/abide/server'
 
-            export default rpc(({ id }: { id: string }) =>
+            export const getFilings = rpc(({ id }: { id: string }) =>
                 fetchAndHandle(\`https://registry.example/filings/\${id}.txt\`, {
                     as: 'text',
                 }),
@@ -145,7 +145,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { fetchAndHandle, rpc } from '@abide/abide/server'
 
-            export default rpc(async ({ id }: { id: string }) => {
+            export const getRegistration = rpc(async ({ id }: { id: string }) => {
                 const answer = await fetchAndHandle(
                     \`https://registry.example/companies/\${id}\`,
                     { method: 'HEAD', as: 'response' },
@@ -216,7 +216,7 @@ import Section from '#src/lib/Section.abide'
             import { refuse } from '@abide/abide'
             import { fetchAndHandle, rpc } from '@abide/abide/server'
 
-            export default rpc(async ({ id }: { id: string }) => {
+            export const getRegistration = rpc(async ({ id }: { id: string }) => {
                 try {
                     return await fetchAndHandle(\`https://registry.example/companies/\${id}\`)
                 } catch (failed) {
@@ -236,7 +236,7 @@ import Section from '#src/lib/Section.abide'
             import { refuse } from '@abide/abide'
             import { fetchAndHandle, rpc } from '@abide/abide/server'
 
-            export default rpc(async ({ id }: { id: string }) => {
+            export const getRegistration = rpc(async ({ id }: { id: string }) => {
                 try {
                     return await fetchAndHandle<Registration>(
                         \`https://registry.example/companies/\${id}\`,
@@ -257,7 +257,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { fetchAndHandle, rpc } from '@abide/abide/server'
 
-            export default rpc(({ id }: { id: string }) =>
+            export const getHeadcount = rpc(({ id }: { id: string }) =>
                 fetchAndHandle<{ employees: number }>(
                     \`https://registry.example/companies/\${id}\`,
                     { signal: AbortSignal.timeout(500) },

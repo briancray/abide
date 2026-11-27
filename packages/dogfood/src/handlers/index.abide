@@ -40,7 +40,7 @@ const callTool = (name: string, args: Record<string, string>) =>
             import { rpc } from '@abide/abide/server'
             import { DEALS } from '../pipeline/lib/DEALS.server.ts'
 
-            export default rpc(
+            export const getDeal = rpc(
                 ({ id }: { id: string }) =>
                     DEALS.find((deal) => deal.id === id) ?? refuse(404),
                 { description: 'One deal, by id.' },
@@ -55,7 +55,7 @@ const callTool = (name: string, args: Record<string, string>) =>
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import getDeal from './getDeal.server.ts'
+            import { getDeal } from './getDeal.server.ts'
 
             const deal = reactive(() => getDeal({ id: 'd1' }))
             </script>
@@ -137,7 +137,7 @@ const callTool = (name: string, args: Record<string, string>) =>
         <Code language="ts" caption="server" code={`
             import { rpc, signedIn } from '@abide/abide/server'
 
-            export default rpc(() => ({ amount: '$6,200' }), {
+            export const getCommission = rpc(() => ({ amount: '$6,200' }), {
                 middleware: [signedIn],
                 description: "The signed-in member's commission this quarter.",
             })
@@ -158,7 +158,7 @@ const callTool = (name: string, args: Record<string, string>) =>
             import { rpc } from '@abide/abide/server'
             import { CONTACTS } from '../contacts/lib/CONTACTS.server.ts'
 
-            export default rpc(() => CONTACTS, {
+            export const exportContacts = rpc(() => CONTACTS, {
                 description: 'Every contact, for the export button.',
                 clients: { mcp: false },
             })

@@ -1,7 +1,7 @@
 <script>
 import { prompts } from '@abide/abide'
 
-import deleteDeal from './ConfirmDelete.server.ts'
+import { deleteDeal } from './ConfirmDelete.server.ts'
 
 type Deal = { id: string; name: string }
 const deal: Deal = { id: 'acme', name: 'Acme renewal' }

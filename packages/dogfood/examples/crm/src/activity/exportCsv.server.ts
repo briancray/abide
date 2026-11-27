@@ -18,6 +18,6 @@ async function* csvOf(): AsyncGenerator<Uint8Array> {
 }
 
 /** Answers at /activity/exportCsv with a file, whatever the caller asks. */
-export default rpc(() => response.bytes(csvOf()), {
+export const exportCsv = rpc(() => response.bytes(csvOf()), {
     description: "Hopper & Co's activity, as CSV.",
 })

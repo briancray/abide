@@ -4,7 +4,7 @@ import { reachable, rpc } from '@abide/abide/server'
 import { billingOrigin } from './lib/billingOrigin.server.ts'
 
 /** Refuses at once while billing is down, rather than waiting on every call. */
-export default rpc(
+export const syncContact = rpc(
     async ({ id }: { id: string }) => {
         const origin = billingOrigin()
         const asked = performance.now()

@@ -1,7 +1,7 @@
 <script>
 import { form, reactive } from '@abide/abide'
 
-import createDeal from '../createDeal.server.ts'
+import { createDeal } from '../createDeal.server.ts'
 
 let added = reactive('')
 

@@ -4,7 +4,7 @@ import { onPrincipal, rpc } from '@abide/abide/server'
 import { TEAM } from './lib/TEAM.server.ts'
 
 /** Seals the member's id into the cookie, and nothing else. */
-export default rpc(
+export const signIn = rpc(
     async ({ email }: { email: string }) => {
         const member = TEAM.find((one) => one.email === email)
         if (member === undefined) return refuse(401, 'No such account.')

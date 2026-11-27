@@ -4,7 +4,7 @@ import { rpc, trace } from '@abide/abide/server'
 import { billing } from './lib/billing.ts'
 
 /** Answers at /ops/syncContact: syncs a contact, with its trace's lines. */
-export default rpc(
+export const syncContact = rpc(
     async ({ id }: { id: string }) => {
         log(`contact ${id} loaded`)
         await billing.notify(id)

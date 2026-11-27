@@ -3,7 +3,7 @@ import { rpc } from '@abide/abide/server'
 export type Call = { id: string; note: string }
 
 /** Answers at /ops/listCalls: the calls logged against Grace Hopper, followed by every tab reading it. */
-export default rpc(
+export const listCalls = rpc(
     (): Call[] => [{ id: 'c1', note: 'Wants a quote by Friday.' }],
     {
         global: true,

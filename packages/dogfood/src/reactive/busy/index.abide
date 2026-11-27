@@ -43,7 +43,7 @@ import dimBoard from './lib/DimBoard.abide' with { type: 'text' }
         <Code language="ts" caption="shared" code={`
             import { busy, reactive } from '@abide/abide'
             // declared rpc(…, { tags: ['stages'] })
-            import getStage from './getStage.server.ts'
+            import { getStage } from './getStage.server.ts'
 
             const won = reactive(() => getStage({ stage: 'won' }))
 

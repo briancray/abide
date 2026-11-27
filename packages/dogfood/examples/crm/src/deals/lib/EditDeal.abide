@@ -1,8 +1,8 @@
 <script>
 import { form, reactive } from '@abide/abide'
 
-import getDeal from '../getDeal.server.ts'
-import saveDeal from '../saveDeal.server.ts'
+import { getDeal } from '../getDeal.server.ts'
+import { saveDeal } from '../saveDeal.server.ts'
 
 const deal = reactive(() => getDeal({ id: 'd1' }))
 const edit = form(saveDeal)

@@ -7,6 +7,6 @@ const MOVES = [
 ]
 
 /** Answers at /activity/ticker as server-sent events, whatever is asked. */
-export default rpc(() => response.sse(MOVES), {
+export const ticker = rpc(() => response.sse(MOVES), {
     description: "Today's deal moves, as server-sent events.",
 })

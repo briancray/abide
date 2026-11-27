@@ -512,9 +512,9 @@ export const theme = rpc({ mode: 'dark' })
             answered.push(`${mount.method} ${mount.address}`)
     expect(answered.sort()).toEqual([
         'GET /__abide/handlers/lib/Counter/count',
-        'GET /lib/board/board',
+        'GET /lib/board',
         'GET /lib/board/theme',
-        'PATCH /lib/board/board',
+        'PATCH /lib/board',
     ])
     expect(files['lib/Counter.abide']?.client ?? '').toContain(
         'const count = __wire("GET"',
@@ -1136,4 +1136,47 @@ export const db = DB
         'GET /media/getGrid/stages stages',
         'POST /media/getGrid/save save',
     ])
+})
+
+// 16.2 — THE `rpc` NAMED FOR ITS FILE ANSWERS AT THE FILE'S ROUTE, as a default would: the name says
+// the file again, so it adds no segment. THE REVERT: drop `each.name === stem` from `handlersUnder`;
+// `getGrid` answers at `/media/getGrid/getGrid`.
+test('the rpc named for its file answers at the file’s route, a sibling below it — 16.2', async () => {
+    const { mounts } = await compileApp(
+        appFixture({
+            'index.abide': '<p>home</p>',
+            'media/getGrid.server.ts': `import { rpc } from '@abide/abide/server'
+
+export const getGrid = rpc(() => [1, 2])
+export const stages = rpc(() => ['lead', 'won'])
+`,
+        }),
+    )
+    const addresses: string[] = []
+    for (const mount of mounts)
+        addresses.push(`${mount.method} ${mount.address} ${mount.export}`)
+    expect(addresses.sort()).toEqual([
+        'GET /media/getGrid getGrid',
+        'GET /media/getGrid/stages stages',
+    ])
+})
+
+// 16.2 — A DEFAULT AND THE `rpc` NAMED FOR THE FILE ARE TWO HANDLERS AT ONE ROUTE, refused whatever
+// methods each answers: 20.13 would only catch the pair answering one verb. THE REVERT: drop the
+// `atRoute` check from `handlersUnder`; the GET and the POST below both mount at `/media/getGrid`.
+test('a file exporting a default rpc and one named for it is refused — 16.2', async () => {
+    const refused = await refusal(
+        compileApp(
+            appFixture({
+                'index.abide': '<p>home</p>',
+                'media/getGrid.server.ts': `import { rpc } from '@abide/abide/server'
+
+export default rpc(() => [1, 2])
+export const getGrid = rpc(() => 1, { methods: ['POST'] })
+`,
+            }),
+        ),
+    )
+    expect(refused).toContain('16.2')
+    expect(refused).toContain('/media/getGrid')
 })

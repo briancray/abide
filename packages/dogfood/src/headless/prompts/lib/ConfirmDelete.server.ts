@@ -1,5 +1,5 @@
 import { rpc } from '@abide/abide/server'
 
-export default rpc(({ id }: { id: string }) => id, {
+export const deleteDeal = rpc(({ id }: { id: string }) => id, {
     methods: ['POST'],
 })

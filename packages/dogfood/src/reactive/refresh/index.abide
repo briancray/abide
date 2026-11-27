@@ -39,7 +39,7 @@ import winLead from './lib/WinLead.abide' with { type: 'text' }
             import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default rpc(
+            export const getStage = rpc(
                 async ({ stage }: { stage: string }) =>
                     DEALS.filter((deal) => deal.stage === stage).length,
                 { tags: ({ stage }) => [\`stage:\${stage}\`] },

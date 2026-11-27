@@ -104,7 +104,7 @@ import toneEdges from './lib/ToneEdges.abide' with { type: 'text' }
             is pressed or you pass its id to <code>toasts.dismiss</code>.</p>
         <Code language="ts" caption="browser" code={`
             import { toasts } from '@abide/abide'
-            import sendDigest from '../sendDigest.server.ts'
+            import { sendDigest } from '../sendDigest.server.ts'
 
             const id = toasts.notify('Sending the digest…', { timeout: Infinity })
             await sendDigest()
@@ -119,7 +119,7 @@ import toneEdges from './lib/ToneEdges.abide' with { type: 'text' }
             down.</p>
         <Code language="ts" caption="browser" code={`
             import { reactive, toasts } from '@abide/abide'
-            import reopenDeal from '../archive/reopenDeal.server.ts'
+            import { reopenDeal } from '../archive/reopenDeal.server.ts'
 
             const undos = reactive(0)
 

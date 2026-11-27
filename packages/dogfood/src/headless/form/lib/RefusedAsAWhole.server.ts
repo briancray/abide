@@ -6,7 +6,7 @@ const nameTaken = refuse.named('NameTaken', {
     message: 'A deal of that name is open.',
 })
 
-export default rpc(
+export const addDeal = rpc(
     ({ name }: { name: string }) =>
         name === 'Ledger audit' ? nameTaken() : { name },
     { methods: ['POST'] },

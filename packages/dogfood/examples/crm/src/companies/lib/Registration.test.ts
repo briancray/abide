@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import { createApp } from '@abide/abide/server'
 
-import getRegistration from '../getRegistration.server.ts'
+import { getRegistration } from '../getRegistration.server.ts'
 import { registryAsked } from './registryOrigin.server.ts'
 
 /** What the CRM answers for the company `id`, a refusal included. */

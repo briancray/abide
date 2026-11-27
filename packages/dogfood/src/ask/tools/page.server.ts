@@ -4,7 +4,7 @@ import { rpc } from '@abide/abide/server'
 import { pageMarkdown } from '#src/lib/pageMarkdown.server.ts'
 import { sitePageAt } from '#src/lib/sitePages.ts'
 
-export default rpc(
+export const page = rpc(
     async ({ route }: { route: string }) => {
         if (sitePageAt(route) === undefined)
             throw refuse.notFound({ path: route, method: 'GET' })

@@ -3,8 +3,8 @@ import { expect, test } from 'bun:test'
 import { createApp } from '@abide/abide/server'
 
 import { crmDatabase } from '../../pipeline/lib/crmDatabase.server.ts'
-import getDigest from '../getDigest.server.ts'
-import sendDigest from '../sendDigest.server.ts'
+import { getDigest } from '../getDigest.server.ts'
+import { sendDigest } from '../sendDigest.server.ts'
 
 const sent = () =>
     crmDatabase()

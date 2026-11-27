@@ -9,7 +9,7 @@ const importRunning = refuse.named('ImportRunning', {
 })
 
 /** Starts the import from the old CRM, every deal or those at one stage, and answers at once with where it stands. */
-export default rpc(
+export const importDeals = rpc(
     async (options: { stage?: string } = {}) => {
         if ((await dealImport.status()).running) return importRunning()
         void dealImport.run(options)

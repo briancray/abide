@@ -31,7 +31,7 @@ import Section from '#src/lib/Section.abide'
             with no handler in the way.</p>
         <Code language="ts" caption="shared" code={`
             import { memo, refuse } from '@abide/abide'
-            import getDeal from './getDeal.server.ts'
+            import { getDeal } from './getDeal.server.ts'
 
             const noAmount = refuse.named('NoAmount', {
                 message: 'This deal has no amount yet.',
@@ -83,7 +83,7 @@ import Section from '#src/lib/Section.abide'
                 schema: jsonSchema<{ stage: string }>({ type: 'object' }),
             })
 
-            export default rpc(({ id, stage }: { id: string; stage: string }) => {
+            export const moveDeal = rpc(({ id, stage }: { id: string; stage: string }) => {
                 const deal = DEALS.find((each) => each.id === id)
                 if (deal === undefined) return refuse(404)
                 if (deal.stage === 'won') return dealClosed({ stage: deal.stage })
@@ -97,7 +97,7 @@ import Section from '#src/lib/Section.abide'
         <p>A refused call throws. <code>isError</code> narrows by name, so
             <code>error.data</code> has the type the handler declared.</p>
         <Code language="ts" caption="browser" code={`
-            import moveDeal from './moveDeal.server.ts'
+            import { moveDeal } from './moveDeal.server.ts'
 
             let notice = ''
             try {
@@ -118,7 +118,7 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default rpc(async ({ id }: { id: string }) =>
+            export const getDeal = rpc(async ({ id }: { id: string }) =>
                 DEALS.find((deal) => deal.id === id) ?? refuse(404),
             )
         `} />

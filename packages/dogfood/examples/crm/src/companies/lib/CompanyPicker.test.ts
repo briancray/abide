@@ -4,7 +4,7 @@ import { flushSync } from '@abide/abide'
 import { measure, mount, settled } from '@abide/harness/abide'
 import { atMost } from '@abide/harness/gate'
 
-import searchCompanies from '../searchCompanies.server.ts'
+import { searchCompanies } from '../searchCompanies.server.ts'
 import CompanyPicker from './CompanyPicker.abide'
 
 const input = () => document.querySelector('input') as HTMLInputElement

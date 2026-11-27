@@ -1,5 +1,5 @@
 <script server>
-import getStatement from '../getStatement.server.ts'
+import { getStatement } from '../getStatement.server.ts'
 
 // Another site's browser, asking for the statement under its own origin.
 export const askAs = async ({ origin }: { origin: string }) => {

@@ -1,7 +1,7 @@
 import { principal } from '@abide/abide'
 import { rpc } from '@abide/abide/server'
 
-export default rpc(() => principal.clear(), {
+export const signOut = rpc(() => principal.clear(), {
     methods: ['POST'],
     description: 'Signs out.',
 })

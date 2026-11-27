@@ -108,7 +108,7 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
             <code>error</code> part: here, that a closed deal does not move.</p>
         <Code language="ts" caption="browser" code={`
             import { prompts } from '@abide/abide'
-            import moveDeal from '../moveDeal.server.ts'
+            import { moveDeal } from '../moveDeal.server.ts'
 
             await prompts.confirm({
                 body: 'Mark Engine renewal lost?',

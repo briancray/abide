@@ -45,7 +45,7 @@ const callExport = JSON.stringify(
             import { rpc } from '@abide/abide/server'
             import { CONTACTS } from './lib/CONTACTS.server.ts'
 
-            export default rpc(() => CONTACTS, {
+            export const exportContacts = rpc(() => CONTACTS, {
                 description: 'Every contact, for the export button.',
                 clients: { mcp: false },
             })
@@ -61,7 +61,7 @@ const callExport = JSON.stringify(
             import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default rpc(
+            export const winDeal = rpc(
                 ({ id }: { id: string }) => {
                     const deal = DEALS.find((each) => each.id === id)
                     if (deal) deal.stage = 'won'

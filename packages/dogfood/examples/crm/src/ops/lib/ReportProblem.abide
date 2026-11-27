@@ -1,8 +1,8 @@
 <script>
 import { onRefusal, reactive, report } from '@abide/abide'
 
-import listReports from '../listReports.server.ts'
-import sendStatement from '../sendStatement.server.ts'
+import { listReports } from '../listReports.server.ts'
+import { sendStatement } from '../sendStatement.server.ts'
 
 let failed = reactive<string | undefined>(undefined)
 const reports = reactive(() => listReports())

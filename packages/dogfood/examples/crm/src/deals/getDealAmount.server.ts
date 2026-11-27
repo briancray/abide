@@ -3,7 +3,7 @@ import { request, rpc } from '@abide/abide/server'
 import { DEALS } from '../pipeline/lib/DEALS.server.ts'
 
 /** A deal's amount, written the way the caller's language writes numbers. */
-export default rpc(
+export const getDealAmount = rpc(
     ({ id }: { id: string }) => {
         const deal = DEALS.find((each) => each.id === id)
         const locale = request().headers.get('accept-language')?.split(',')[0]

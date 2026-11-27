@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test'
 import { reactive } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
 
-import olderActivity from '../olderActivity.server.ts'
+import { olderActivity } from '../olderActivity.server.ts'
 import ActivityHistory from './ActivityHistory.abide'
 
 const listed = () => document.querySelectorAll('li').length

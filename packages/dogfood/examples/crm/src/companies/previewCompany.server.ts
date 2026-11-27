@@ -5,7 +5,7 @@ import { COMPANIES } from './lib/COMPANIES.server.ts'
 import CompanySheet from './lib/CompanySheet.abide'
 
 /** Answers at /companies/previewCompany: an account sheet, as its own page. */
-export default rpc(
+export const previewCompany = rpc(
     async ({ id }: { id: string }) => {
         const company = COMPANIES.find((one) => one.id === id)
         if (company === undefined) return refuse.notFound()

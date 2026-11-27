@@ -16,7 +16,7 @@ const SAVED_DEAL = jsonSchema<SavedDeal>({
     },
 })
 
-export default rpc(
+export const saveDeal = rpc(
     ({ id, name, company, amount }) => {
         const deal = DEALS.find((each) => each.id === id)
         if (deal === undefined) return refuse(404)

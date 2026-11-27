@@ -26,7 +26,7 @@ function best<Hit>(hits: { hit: Hit; score: number }[]): Hit[] {
     return kept
 }
 
-export default rpc(
+export const search = rpc(
     ({ query }: { query: string }) => {
         const words = query
             .toLowerCase()

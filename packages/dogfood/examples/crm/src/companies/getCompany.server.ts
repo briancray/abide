@@ -4,7 +4,7 @@ import { rpc } from '@abide/abide/server'
 import { COMPANIES } from './lib/COMPANIES.server.ts'
 
 /** Answers at /companies/getCompany; a company's page reads it. */
-export default rpc(
+export const getCompany = rpc(
     async ({ id }: { id: string }) => {
         const company = COMPANIES.find((one) => one.id === id)
         // A miss is answered at once, so the page can say 404.

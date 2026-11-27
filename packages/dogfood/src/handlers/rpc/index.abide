@@ -103,6 +103,8 @@ import Section from '#src/lib/Section.abide'
             path: 'packages/abide/tests/appAddresses.test.ts',
             from: [
                 "test('a server file answers its default at its route, each named rpc below it, and an address where it says — 16.2, 16.113'",
+                "test('the rpc named for its file answers at the file’s route, a sibling below it — 16.2'",
+                "test('a file exporting a default rpc and one named for it is refused — 16.2'",
             ],
         },
     ]}
@@ -116,7 +118,7 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { DEALS } from '../pipeline/lib/DEALS.server.ts'
 
-            export default rpc(
+            export const getDeal = rpc(
                 ({ id }: { id: string }) =>
                     DEALS.find((deal) => deal.id === id) ?? refuse(404),
                 { description: 'One deal, by id.' },
@@ -134,7 +136,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import getDeal from './getDeal.server.ts'
+            import { getDeal } from './getDeal.server.ts'
 
             let id = reactive('d1')
             const deal = reactive(() => getDeal({ id }))
@@ -158,7 +160,7 @@ import Section from '#src/lib/Section.abide'
                 { on: '2026-10-01', note: 'Signed for 40 seats' },
             ]
 
-            export default rpc(async function* () {
+            export const olderActivity = rpc(async function* () {
                 for (const entry of OLDER) {
                     await Bun.sleep(600) // a slow archive
                     yield entry
@@ -173,7 +175,7 @@ import Section from '#src/lib/Section.abide'
             blob's own type.</p>
         <Code language="abide" caption="abide" code={`
             <script>
-            import exportDeals from './exportDeals.server.ts'
+            import { exportDeals } from './exportDeals.server.ts'
             </script>
 
             <a href={exportDeals.url()} download="deals.csv">Download deals</a>
@@ -187,7 +189,7 @@ import Section from '#src/lib/Section.abide'
             sorted, so one filter is one address. A list of plain values repeats its name. The
             handler reads both back as its <code>Args</code> declares them.</p>
         <Code language="ts" caption="browser" code={`
-            import searchDeals from './searchDeals.server.ts'
+            import { searchDeals } from './searchDeals.server.ts'
 
             const address = searchDeals.url({
                 filter: { stage: 'won', owner: 'ada' },
@@ -203,7 +205,7 @@ import Section from '#src/lib/Section.abide'
             <code>tool_use</code> carries. It is read off the route, so it stays the same under a
             sub-path.</p>
         <Code language="ts" caption="browser" code={`
-            import draftReport from './draftReport.server.ts'
+            import { draftReport } from './draftReport.server.ts'
 
             // 'post_ops_draftReport'
             const drafting = (block: { type: string; name?: string }) =>
@@ -215,8 +217,8 @@ import Section from '#src/lib/Section.abide'
         <p>Pass the handler's <code>refresh</code> a pattern of its args, and the entries matching
             it load again while every other stage stays as it is.</p>
         <Code language="ts" caption="browser" code={`
-            import getStage from './getStage.server.ts'
-            import winDeal from './winDeal.server.ts'
+            import { getStage } from './getStage.server.ts'
+            import { winDeal } from './winDeal.server.ts'
 
             await winDeal()
             getStage.refresh({ stage: 'lead' })
@@ -231,9 +233,9 @@ import Section from '#src/lib/Section.abide'
             rather than the list again. <code>key</code> says which row is which.</p>
         <Code language="ts" caption="server" code={`
             import { rpc } from '@abide/abide/server'
-            import listCalls, { type Call } from './listCalls.server.ts'
+            import { listCalls, type Call } from './listCalls.server.ts'
 
-            export default rpc(({ id, note }: Call) => {
+            export const logCall = rpc(({ id, note }: Call) => {
                 listCalls.patch((held) => {
                     if (!held.some((call) => call.id === id)) held.push({ id, note })
                 })
@@ -249,7 +251,7 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default rpc(
+            export const searchDeals = rpc(
                 ({ q }: { q: string }) => {
                     const names: string[] = []
                     for (const deal of DEALS)
@@ -263,7 +265,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import searchDeals from '../searchDeals.server.ts'
+            import { searchDeals } from '../searchDeals.server.ts'
 
             let q = reactive('')
             const found = reactive(() => searchDeals({ q }))
@@ -286,7 +288,7 @@ import Section from '#src/lib/Section.abide'
 
             export type Call = { id: string; note: string }
 
-            export default rpc((): Call[] => [], {
+            export const listCalls = rpc((): Call[] => [], {
                 global: true,
                 key: 'id',
                 store: store.sqlite<Call[]>(crmDatabase, 'calls'),
@@ -302,7 +304,7 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { DEALS } from '../pipeline/lib/DEALS.server.ts'
 
-            export default rpc(
+            export const moveDeal = rpc(
                 ({ id, stage }: { id: string; stage: string }) => {
                     const deal = DEALS.find((each) => each.id === id)
                     if (deal === undefined) return refuse(404)
@@ -323,7 +325,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import moveDeal from './moveDeal.server.ts'
+            import { moveDeal } from './moveDeal.server.ts'
 
             let stage = reactive('proposal')
             async function win() {
@@ -342,7 +344,7 @@ import Section from '#src/lib/Section.abide'
             import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default rpc(
+            export const qualifyLead = rpc(
                 () => {
                     const deal = DEALS.find((each) => each.stage === 'lead')
                     if (deal) deal.stage = 'qualified'
@@ -357,8 +359,8 @@ import Section from '#src/lib/Section.abide'
         <p>Give the call <code>offline</code>. Where the network fails, the call settles to what
             it returns and the write waits in <code>outbox</code> to be sent.</p>
         <Code language="ts" caption="browser" code={`
-            import listCalls from './listCalls.server.ts'
-            import logCall from './logCall.server.ts'
+            import { listCalls } from './listCalls.server.ts'
+            import { logCall } from './logCall.server.ts'
 
             const call = { id: crypto.randomUUID(), note: 'Wants a demo' }
             logCall(call, {
@@ -375,7 +377,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="ts" caption="server" code={`
             import { rpc } from '@abide/abide/server'
 
-            export default rpc(
+            export const seats = rpc(
                 { seats: 40 },
                 {
                     methods: ['GET', 'PUT', 'PATCH'],
@@ -384,7 +386,7 @@ import Section from '#src/lib/Section.abide'
             )
         `} />
         <Code language="ts" caption="browser" code={`
-            import seats from './seats.server.ts'
+            import { seats } from './seats.server.ts'
 
             seats.patch((held) => {
                 held.seats += 1
@@ -393,14 +395,15 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Answer the pipeline's reads from one server file">
-        <p>Export as many as the file needs. The default answers at the file's route, each named
-            one below it by its name, and anything else it exports stays on the server.</p>
+        <p>Export as many as the file needs. The one named for the file answers at its route, each
+            other one below it by its name, and anything else it exports stays on the server.</p>
         <Code language="ts" caption="server" code={`
+            // src/pipeline/listDeals.server.ts
             import { rpc } from '@abide/abide/server'
             import { DEALS } from './lib/DEALS.server.ts'
 
-            export default rpc(() => DEALS)
-            export const stages = rpc(() => ['lead', 'won'])
+            export const listDeals = rpc(() => DEALS) // /pipeline/listDeals
+            export const stages = rpc(() => ['lead', 'won']) // /pipeline/listDeals/stages
         `} />
     </Section>
 

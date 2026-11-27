@@ -39,7 +39,7 @@ import Section from '#src/lib/Section.abide'
 
             onConfig(() => ({ RETRIES: 3 }))
 
-            export default rpc(() => ({ retries: config.get().RETRIES }))
+            export const getRetries = rpc(() => ({ retries: config.get().RETRIES }))
         `} />
     </Section>
 
@@ -61,7 +61,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import getRetries from './getRetries.server.ts'
+            import { getRetries } from './getRetries.server.ts'
 
             const policy = reactive(() => getRetries())
             </script>

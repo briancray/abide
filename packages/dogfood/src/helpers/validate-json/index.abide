@@ -56,7 +56,7 @@ import Section from '#src/lib/Section.abide'
         <Code language="abide" caption="abide" code={`
             <script>
             import { reactive } from '@abide/abide'
-            import addContact from './addContact.server.ts'
+            import { addContact } from './addContact.server.ts'
 
             let name = reactive('')
             let saving = reactive<typeof addContact>()
@@ -77,7 +77,7 @@ import Section from '#src/lib/Section.abide'
 
             const INSERT = 'INSERT INTO targets (target) VALUES (?)'
 
-            export default rpc(
+            export const setTarget = rpc(
                 ({ target }) => {
                     crmDatabase().query(INSERT).run(target)
                 },

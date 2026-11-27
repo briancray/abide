@@ -1,7 +1,7 @@
 <script>
 import { format, reactive } from '@abide/abide'
 
-import getSummary from '../getSummary.server.ts'
+import { getSummary } from '../getSummary.server.ts'
 
 const summary = reactive(() => getSummary())
 </script>

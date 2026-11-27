@@ -1,7 +1,7 @@
 <script>
 import { reactive } from '@abide/abide'
 
-import olderActivity from '../olderActivity.server.ts'
+import { olderActivity } from '../olderActivity.server.ts'
 
 const entries = reactive(() => olderActivity())
 </script>

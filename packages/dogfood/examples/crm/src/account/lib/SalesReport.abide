@@ -1,7 +1,7 @@
 <script>
 import { reactive, toggleGroup } from '@abide/abide'
 
-import salesReport from '../salesReport.server.ts'
+import { salesReport } from '../salesReport.server.ts'
 
 const REGIONS = ['north', 'south']
 

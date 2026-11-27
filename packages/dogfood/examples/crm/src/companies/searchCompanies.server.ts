@@ -3,7 +3,7 @@ import { rpc } from '@abide/abide/server'
 import { COMPANIES } from './lib/COMPANIES.server.ts'
 
 /** The companies whose name or city holds the query, ignoring case. */
-export default rpc(
+export const searchCompanies = rpc(
     async ({ q }: { q: string }) => {
         // A slow search service, so the wait is on screen.
         await Bun.sleep(150)
