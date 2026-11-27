@@ -99,9 +99,12 @@ export class Lowering {
      * rather than called, whose forwarding arrow takes an untyped rest.
      */
     readonly checking: boolean
+    /** What the file's scripts import from abide: each local name to the name it imports (`abideBindings`). */
+    readonly abideImports: ReadonlyMap<string, string>
     /**
-     * Whether a script imports abide's own `raw`, which a checked lowering then leaves a template's
-     * `raw(x)` calling — the same function, and the import read where the author reads it.
+     * Whether a script binds `raw` to abide's own `raw`, which a checked lowering then leaves a
+     * template's `raw(x)` calling — the same function, and the import read where the author reads it.
+     * By what the local name imports: `import { other as raw }` is not abide's `raw`.
      */
     private readonly importsRaw: boolean
     /**
@@ -155,7 +158,8 @@ export class Lowering {
         this.answer = answer
         this.holdsSlot = holdsNode(file.template, isSlot)
         this.checking = checking
-        this.importsRaw = abideBindings(scriptBodies(file)).has('raw')
+        this.abideImports = abideBindings(scriptBodies(file))
+        this.importsRaw = this.abideImports.get('raw') === 'raw'
         this.chunks = chunks
         this.routed = routed
     }

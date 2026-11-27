@@ -9,10 +9,9 @@ import {
 import { type CheckerAnswer, UNCHECKED } from './CheckerAnswer.ts'
 import { placed } from './Cursor.ts'
 import { guardedSetup } from './guardedSetup.ts'
-import { abideBindings } from './hookCalls.ts'
 import { type LoweredChunk, Lowering, PROPS } from './Lowering.ts'
 import { moduleImports } from './moduleImports.ts'
-import { type AbideFile, scriptBodies } from './parseAbide.ts'
+import type { AbideFile } from './parseAbide.ts'
 import { privateExports } from './projectShadow.ts'
 import {
     concat,
@@ -158,7 +157,10 @@ ${privateExports(file.servers.join('\n'), SERVER_SPECIFIER)}${heldToAnnotations(
     // siblings after it had started a load, where the browser's answers once every setup has run.
     const probes =
         !settles &&
-        readsBareProbe(file, `${head}\n${declared}\n${body.join('\n')}`)
+        readsBareProbe(
+            lowering.abideImports,
+            `${head}\n${declared}\n${body.join('\n')}`,
+        )
     const waits = !settles && !probes && holdsStatement(setup.body)
     const level =
         settles || probes
@@ -180,13 +182,16 @@ ${waits ? `    const ${CALLS_BEFORE} = ${lowering.use('callsInRender')}()\n` : '
 
 /**
  * Whether `markup`, a component's emitted head and body, calls `busy` or `ready` with no argument,
- * under any name the file's scripts import either by from `@abide/abide`. A member's (`s.busy()`)
+ * under any name the file's scripts import either by from `@abide/abide` (`imports`). A member's (`s.busy()`)
  * is not bare, and neither is the name written in text: the markup's static text is emitted as
  * string literals, which the tokens step over.
  */
-function readsBareProbe(file: AbideFile, markup: string): boolean {
+function readsBareProbe(
+    imports: ReadonlyMap<string, string>,
+    markup: string,
+): boolean {
     const names = new Set<string>()
-    for (const [local, imported] of abideBindings(scriptBodies(file)))
+    for (const [local, imported] of imports)
         if (imported === 'busy' || imported === 'ready') names.add(local)
     if (names.size === 0) return false
     const tokens = tokenize(markup)
