@@ -16,6 +16,9 @@ onStop(async (stop) => {
 })
 
 /** Answers at /ops/getPool: when the pool connected, and the app came up. */
-export const getPool = rpc(() => ({ connectedAt: pool.connectedAt, upAt: pool.upAt }), {
-    description: 'When the pool connected, and when the app came up.',
-})
+export const getPool = rpc(
+    () => ({ connectedAt: pool.connectedAt, upAt: pool.upAt }),
+    {
+        description: 'When the pool connected, and when the app came up.',
+    },
+)

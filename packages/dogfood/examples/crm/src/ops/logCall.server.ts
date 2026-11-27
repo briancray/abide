@@ -1,6 +1,6 @@
 import { rpc } from '@abide/abide/server'
 
-import { listCalls, type Call } from './listCalls.server.ts'
+import { type Call, listCalls } from './listCalls.server.ts'
 
 /** Logs a call once, however often it is sent: the browser picks its id. */
 export const logCall = rpc(

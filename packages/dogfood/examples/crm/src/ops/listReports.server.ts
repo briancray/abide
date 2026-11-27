@@ -10,6 +10,9 @@ onReport((report) => {
 })
 
 /** Answers at /ops/listReports: the summaries this browser has sent. */
-export const listReports = rpc(() => received.get(principal.caller.get()) ?? [], {
-    description: 'Lists the problem reports this browser sent.',
-})
+export const listReports = rpc(
+    () => received.get(principal.caller.get()) ?? [],
+    {
+        description: 'Lists the problem reports this browser sent.',
+    },
+)
