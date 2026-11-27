@@ -1495,6 +1495,9 @@ that is an `rpc` already MUST be refused as it is declared.
 16.120 A call answering a promise MUST refuse with 16.49's refusal once its `signal` aborts, whether
 or not 16.48 ends the load it reached.
 
+16.121 A rung's `ctx.request` MUST be read from the scope when the rung reads it, so a call whose
+rungs never read it MUST run in a scope made without a request (42.8).
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.
