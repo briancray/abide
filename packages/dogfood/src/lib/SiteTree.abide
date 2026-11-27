@@ -6,7 +6,8 @@ import { crmDirectory } from './exampleDirectory.server.ts'
 import { ownOrigin } from './ownOrigin.server.ts'
 
 const DIRECTORY = /^(?:[\w-]+\/)*[\w-]*$/
-const METHOD = /export default (GET|POST|PUT|PATCH|DELETE)\b/
+// 16.111 — the verb a handler file's `rpc` is called by: the first its `methods` names, else `GET`.
+const METHOD = /\bmethods:\s*\[\s*'(GET|POST|PUT|PATCH|DELETE)'/
 
 type Entry = {
     path: string
@@ -23,14 +24,14 @@ function addressOf(path: string): string {
     const parts = path.split('/')
     const file = parts.pop() as string
     if (!['index.abide', 'layout.abide', 'error.abide'].includes(file))
-        parts.push(file.replace(/\.(?:abide|handler\.ts)$/, ''))
+        parts.push(file.replace(/\.(?:abide|server\.ts)$/, ''))
     return `/${parts.join('/')}`
 }
 
 // EACH FILE OF ONE DIRECTORY OF THE CRM, and what its place and its name make it: a page, a layout or
 // an error page at its address, a handler answering a method there, a matcher, a test — and a `lib`
 // directory, which is no address, as one line.
-export const filesUnder = async ({ directory }: { directory: string }) => {
+export const filesUnder = ({ directory }: { directory: string }) => {
     if (!DIRECTORY.test(directory))
         throw new Error(`docs: ${directory} is not a directory of the CRM`)
     const root = `${crmDirectory()}/src`
@@ -111,18 +112,6 @@ export const filesUnder = async ({ directory }: { directory: string }) => {
                 link: false,
             })
     }
-    // A page is linked where it answers: one a rung refuses (an admin page to a reader signed out)
-    // or one this site does not serve is listed, and not offered as a link nobody could follow.
-    await Promise.all(
-        entries.map(async (entry) => {
-            if (!entry.link) return
-            const answer = await fetch(new URL(entry.address, ownOrigin()), {
-                method: 'HEAD',
-                redirect: 'manual',
-            })
-            entry.link = answer.ok
-        }),
-    )
     for (const [fence, count] of fenced)
         entries.push({
             path: `${fence}/`,
@@ -140,6 +129,24 @@ export const filesUnder = async ({ directory }: { directory: string }) => {
     )
     return entries
 }
+
+// A page is linked where it answers: one a rung refuses (an admin page to a reader signed out) or one
+// this site does not serve is listed, and not offered as a link nobody could follow. Asked apart from
+// the listing, which answers at once and so is painted where the page renders (41.28); each answer
+// is a request to this server, so the links arrive after.
+export const answering = async ({ addresses }: { addresses: string[] }) => {
+    const answered: string[] = []
+    await Promise.all(
+        addresses.map(async (address) => {
+            const answer = await fetch(new URL(address, ownOrigin()), {
+                method: 'HEAD',
+                redirect: 'manual',
+            })
+            if (answer.ok) answered.push(address)
+        }),
+    )
+    return answered
+}
 </script>
 
 <script>
@@ -150,6 +157,13 @@ import { props, reactive, type RouteLiteral, url } from '@abide/abide'
 
 const { directory } = props<{ directory: string }>()
 const entries = reactive(() => filesUnder({ directory }))
+const linkable = reactive(() => {
+    const addresses: string[] = []
+    for (const entry of entries) if (entry.link) addresses.push(entry.address)
+    return answering({ addresses })
+})
+const answers = (address: string) =>
+    linkable.ready() && linkable.includes(address)
 </script>
 
 {#if entries}
@@ -161,7 +175,7 @@ const entries = reactive(() => filesUnder({ directory }))
                     <td><code>{entry.path.slice(directory === '' ? 0 : directory.length + 1)}</code></td>
                     <td>{entry.role}</td>
                     <td>
-                        {#if entry.link}
+                        {#if answers(entry.address)}
                             <a href={url(entry.address as RouteLiteral)}><code>{entry.address}</code></a>
                         {:else if entry.address}
                             <code>{entry.address}</code>

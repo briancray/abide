@@ -39,16 +39,12 @@ function routes(): Set<string> {
 
 // 40.22 — A TWIN IS THE PAGE, READ. Every page's `.md` is what `markdownOf` reads off the document
 // the same app serves at the page's address, so the twin cannot say a word the page does not.
-// A page holding a `SiteTree` is left out: its table is in one render of the page and not in the
-// next — a lone request renders it empty, and one served beside another sometimes holds it — so two
-// renders of it disagree with no twin involved.
 // THE REVERT: have `pageMarkdown` write the twin from the page's `SITE` entry — `# title` and its description — rather than read it off the page; 193 pages read as differing where none may.
 test("every page's markdown twin is read off the page it renders — 40.22", async () => {
     const twins = await renderedMarkdown()
     const documents = await renderedHtml()
     const differs: string[] = []
     for (const page of await docsPages()) {
-        if (page.source.includes("from '#src/lib/SiteTree.abide'")) continue
         const document = documents.get(page.route) ?? ''
         if (markdownOf(document) !== twins.get(page.route))
             differs.push(page.route)
