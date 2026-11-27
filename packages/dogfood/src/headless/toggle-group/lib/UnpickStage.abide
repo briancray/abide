@@ -1,0 +1,14 @@
+<script>
+import { reactive, toggleGroup } from '@abide/abide'
+
+const STAGES = ['lead', 'qualified', 'proposal', 'won']
+let stage = reactive<string | undefined>(undefined)
+const chips = toggleGroup({ items: STAGES, value: stage, deselectable: true })
+</script>
+
+<div class="tabs" {...chips.group}>
+    {#for each of STAGES key each}
+        <button {...chips.item(each)}>{each}</button>
+    {/for}
+</div>
+<p>Showing: {stage ?? 'every stage'}</p>

@@ -7,6 +7,8 @@ import FilterStages from './lib/FilterStages.abide'
 import filterStages from './lib/FilterStages.abide' with { type: 'text' }
 import PickView from './lib/PickView.abide'
 import pickView from './lib/PickView.abide' with { type: 'text' }
+import UnpickStage from './lib/UnpickStage.abide'
+import unpickStage from './lib/UnpickStage.abide' with { type: 'text' }
 </script>
 
 <Doc
@@ -27,6 +29,7 @@ import pickView from './lib/PickView.abide' with { type: 'text' }
             from: [
                 "test('a group picking many is a toggle per key",
                 "test('a group picking one is a radio group",
+                "test('a group picking one given deselectable",
                 "test('in a group picking one, only the key picked",
             ],
         },
@@ -38,6 +41,12 @@ import pickView from './lib/PickView.abide' with { type: 'text' }
             move the pick and focus together, and only the key picked is a stop in the tab
             order.</p>
         <Example code={pickView}><PickView /></Example>
+    </Section>
+
+    <Section level={3} title="Unpick a stage with a second press">
+        <p>Give <code>deselectable: true</code> and a press on the key picked unpicks it, leaving
+            <code>value</code> <code>undefined</code>: one filter at a time, or none.</p>
+        <Example code={unpickStage}><UnpickStage /></Example>
     </Section>
 
     <Section level={3} title="Filter deals by stage with chips">

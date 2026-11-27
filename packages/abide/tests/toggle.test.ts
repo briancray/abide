@@ -81,6 +81,19 @@ test('a group picking one is a radio group, and a press on the key picked keeps 
     )
 })
 
+// THE REVERT: drop the `deselectable` arm from the radio's click, and the second press keeps
+// `value` at 'board' where `undefined` is due.
+test('a group picking one given deselectable unpicks the key picked on a press — 51.112', () => {
+    const view = toggleGroup({ items: ['list', 'board'], deselectable: true })
+    click(view.item('board'))
+    expect(view.value()).toBe('board')
+    click(view.item('board'))
+    expect(view.value()).toBeUndefined()
+    expect(view.item('board')['aria-checked']).toBe('false')
+    click(view.item('list'))
+    expect(view.value()).toBe('list')
+})
+
 // THE REVERT: move focus on an arrow without picking, and the arrows leave `value` where it was.
 test('in a group picking one, the arrows move the pick and focus together, going round — 51.113', () => {
     const view = toggleGroup({ id: 'view', items: ['list', 'board', 'chart'] })

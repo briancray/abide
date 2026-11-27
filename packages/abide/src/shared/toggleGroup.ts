@@ -30,6 +30,8 @@ export type ToggleGroupOptions<Item, Multiple extends boolean = false> = {
     value?: Reactive<Picked<string, Multiple>> | undefined
     /** The group's accessible name; a function is read live. */
     label?: Live<string> | undefined
+    /** Picking one, whether a click on the item picked unpicks it, leaving `value` `undefined`. `false` by default. */
+    deselectable?: boolean | undefined
 } & KeyOption<Item>
 
 /** The parts `toggleGroup` hands back: `<div {...view.group}>`, `<button {...view.item('board')}>`. */
@@ -49,6 +51,7 @@ export function toggleGroup<Item, Multiple extends boolean = false>(
     options: ToggleGroupOptions<Item, Multiple>,
 ): ToggleGroup<Item, Multiple> {
     const many = options.multiple === true
+    const deselectable = options.deselectable === true
     const picks = new Selection(
         options.value as Reactive<Picked<string, boolean>> | undefined,
         many,
@@ -96,7 +99,10 @@ export function toggleGroup<Item, Multiple extends boolean = false>(
             return current() === key ? '0' : '-1'
         },
         // 51.112
-        onclick: () => picks.pick(key),
+        onclick: () =>
+            deselectable && picks.has(key)
+                ? picks.selected.set(undefined)
+                : picks.pick(key),
     })
 
     // Each key's part is built once and kept, so a render asking for it again builds nothing.
