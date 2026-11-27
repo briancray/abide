@@ -9,6 +9,7 @@ import {
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
+import { unowned } from './reactive/watch.ts'
 import { roving } from './roving.ts'
 import { type Picked, Selection } from './Selection.ts'
 
@@ -52,6 +53,16 @@ export type Listbox<Option, Multiple extends boolean = false> = {
     option(option: Option): Record<string, unknown>
     /** The keys selected, read and set: the key last moved to, or every key selected where it selects many. */
     readonly selected: Reactive<Picked<string, Multiple>>
+}
+
+// One option's standing state: the latest option under its key, its id, its two booleans and its handlers.
+type OptionRow<Option> = {
+    option: Option
+    id: string
+    active: () => boolean
+    selected: () => boolean
+    onpointermove: () => void
+    onclick: (event: MouseEvent) => void
 }
 
 /** A keyboard controller over a list of keyed options, for markup the app writes itself. */
@@ -177,6 +188,52 @@ export function listbox<Option, Multiple extends boolean = false>(
         }
     }
 
+    // 51.192 — ONE ROW PER KEY, KEPT ACROSS CALLS: its handlers are the same functions at every call, so
+    // a spread rerun binds no listener again, and its `active` and `selected` are its own booleans, so a
+    // step wakes the two rows whose answer changed rather than every row reading the one active key.
+    // Built unowned, as a row's spread is where `option` is first called and its rerun would stop them.
+    const rows = new Map<string, OptionRow<Option>>()
+    function rowOf(option: Option): OptionRow<Option> {
+        const each = key(option)
+        let row = rows.get(each)
+        if (row === undefined) {
+            // A long-lived list that has filtered through many keys keeps only those still listed.
+            const listed = order.peek() ?? []
+            if (rows.size > 64 && rows.size > 2 * listed.length) {
+                const kept = new Set(listed)
+                for (const stale of rows.keys())
+                    if (!kept.has(stale)) rows.delete(stale)
+            }
+            row = unowned(() => newRow(option, each))
+            rows.set(each, row)
+        } else row.option = option
+        return row
+    }
+    function newRow(option: Option, each: string): OptionRow<Option> {
+        const row: OptionRow<Option> = {
+            option,
+            id: idOf(each),
+            active: reactive(() => active() === each),
+            selected: reactive(() => isSelected(each)),
+            onpointermove: () => {
+                const over = chosen.peek()
+                const pointer = pointed.peek()
+                if (pointer?.key === each && pointer.over === over) return
+                pointed.set({ key: each, over })
+            },
+            // 51.99, 51.105.
+            onclick: (event: MouseEvent) => {
+                if (many) {
+                    if (selection.press(each, event, active.peek(), order))
+                        moveKey(each)
+                    return
+                }
+                if (moveKey(each)) given.onpick?.(row.option)
+            },
+        }
+        return row
+    }
+
     return {
         id,
         get active() {
@@ -198,36 +255,23 @@ export function listbox<Option, Multiple extends boolean = false>(
             'aria-multiselectable': many ? 'true' : undefined,
         },
         option: (option) => {
-            const each = key(option)
+            const row = rowOf(option)
             return {
-                id: idOf(each),
+                id: row.id,
                 role: 'option',
                 'data-listbox': 'option',
                 // 51.98, 51.94 — where it selects one, the selection is the key moved to (51.104).
                 get 'aria-selected'() {
-                    return isSelected(each) ? 'true' : 'false'
+                    return row.selected() ? 'true' : 'false'
                 },
                 get 'data-active'() {
-                    return active() === each ? '' : undefined
+                    return row.active() ? '' : undefined
                 },
                 get 'data-selected'() {
-                    return isSelected(each) ? '' : undefined
+                    return row.selected() ? '' : undefined
                 },
-                onpointermove: () => {
-                    const over = chosen.peek()
-                    const pointer = pointed.peek()
-                    if (pointer?.key === each && pointer.over === over) return
-                    pointed.set({ key: each, over })
-                },
-                // 51.99, 51.105.
-                onclick: (event: MouseEvent) => {
-                    if (many) {
-                        if (selection.press(each, event, active.peek(), order))
-                            moveKey(each)
-                        return
-                    }
-                    if (moveKey(each)) given.onpick?.(option)
-                },
+                onpointermove: row.onpointermove,
+                onclick: row.onclick,
             }
         },
         selected: selection.selected as Reactive<Picked<string, Multiple>>,

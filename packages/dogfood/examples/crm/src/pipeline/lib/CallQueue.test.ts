@@ -35,10 +35,17 @@ test('the arrows step through the leads, and Enter calls one', async () => {
     expect(document.querySelector('strong')?.textContent).toBe(leads.at(-1))
 })
 
+// 51.192 — A STEP WAKES THE TWO ROWS IT MOVES THE MARK BETWEEN, and binds no listener again: each
+// option's handlers stand across calls, and each row reads its own `active` rather than the one key.
+// THE REVERT (structural — the rows are built inside `listbox`): hand back fresh handlers per call
+// and read `active() === key` in the row's getter — over three leads, 6 listeners bound and 4 wakes,
+// every row woken, where 0 and 3 are due; the wakes hold at 3 however many leads are listed.
 test('a step moves the mark between two rows, and no other', async () => {
     using _queue = await mount(CallQueue({}))
     await settled()
     const work = measure(() => press('ArrowDown'))
     // Two rows' `data-active` and `aria-selected`, and the list's pointer.
-    atMost(work, { nodesCreated: 0, attributesSet: 5 })
+    atMost(work, { nodesCreated: 0, attributesSet: 5, listenersBound: 0 })
+    // The two rows, and the list's `aria-activedescendant`.
+    expect(work.wakes).toBe(3)
 })
