@@ -13,7 +13,7 @@
 // are never answered with a patch again (18.47). A sync log (`store.sqlite`) runs the same path, its
 // answers just arriving at once.
 
-import { applyPatch } from '#shared/applyPatch.ts'
+import { applyPatch, rooted } from '#shared/applyPatch.ts'
 import type { Logged, LogStore } from '#shared/ledger.ts'
 import { deepEqual } from '#shared/reactive/deepEqual.ts'
 import { isThenable } from '#shared/reactive/isThenable.ts'
@@ -21,8 +21,18 @@ import { holdLog, type PatchOp } from '#shared/reactive/patchLog.ts'
 import { produceInto } from '#shared/reactive/producer.ts'
 import { type Reactive, unwatchStore } from '#shared/reactive/Reactive.ts'
 
-/** One record of a served value's log: what a change wrote, or the value whole. */
-type Record = { ops?: PatchOp[] | undefined; snapshot?: unknown }
+/**
+ * One record of a served value's log: what a change wrote, or the value whole — `replaced` where the
+ * writes are a production's diff (18.41) rather than an `s.patch`'s.
+ */
+type Record = {
+    ops?: PatchOp[] | undefined
+    snapshot?: unknown
+    replaced?: true | undefined
+}
+
+/** The writes past a version, and whether a production replaced the value among them (18.49). */
+export type WritesSince = { ops: PatchOp[]; replaced: boolean }
 
 /** A record and the number it stands at. */
 type Kept = { seq: number; record: Record }
@@ -288,10 +298,10 @@ export class DurableChain {
     }
 
     /** The patches past `since`, or `undefined` where the log no longer holds them (18.43, 18.47). */
-    since(since: number): PatchOp[] | undefined {
+    since(since: number): WritesSince | undefined {
         if (!this.opened || since > this.last || this.abandoned.has(since))
             return undefined
-        if (since === this.last) return []
+        if (since === this.last) return { ops: [], replaced: false }
         const records = this.records
         let from = -1
         for (let at = records.length - 1; at >= 0; at -= 1)
@@ -301,13 +311,18 @@ export class DurableChain {
             }
         if (from === -1) return undefined
         const ops: PatchOp[] = []
+        let replaced = false
         for (let at = from; at < records.length; at += 1) {
             const record = (records[at] as Kept).record
-            if (record.snapshot !== undefined)
+            if (record.snapshot !== undefined) {
+                replaced = true
                 ops.push({ op: 'replace', path: '', value: record.snapshot })
-            else for (const op of record.ops ?? []) ops.push(op)
+            } else {
+                if (record.replaced === true) replaced = true
+                for (const op of record.ops ?? []) ops.push(op)
+            }
         }
-        return ops
+        return { ops, replaced }
     }
 
     /**
@@ -393,16 +408,4 @@ export function chainOf(
     )
     waited = true
     return chain
-}
-
-/** `ops` re-rooted under `/value`, for `applyPatch` to reach a root `replace` through a holder. */
-function rooted(ops: PatchOp[]): PatchOp[] {
-    const under: PatchOp[] = []
-    for (const op of ops)
-        under.push({
-            ...op,
-            path: `/value${op.path}`,
-            ...('from' in op ? { from: `/value${op.from}` } : {}),
-        } as PatchOp)
-    return under
 }

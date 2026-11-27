@@ -173,6 +173,39 @@ test('a patch over the version held is written into the copy', async () => {
     expect(answers).toBe(before)
 })
 
+// 18.49 — A PATCH A PRODUCTION'S DIFF IS AMONG IS TAKEN AS A NEW VALUE, as the server's `set` made
+// one: what a reader took from the copy before is left as it was, and what the patch does not write
+// is the object it held. THE REVERT: write every patch frame into the copy in place, in
+// `Following.receive`; the title read before reads 'dune messiah' where 'dune' is due.
+test('a patch a production replaced the value with leaves what was read before as it was — 18.49', async () => {
+    shelf = [{ title: 'dune' }, { title: 'emma' }] as never
+    const replacedRpc = wire('GET', `${LIBRARY}/replaced`)
+    const replaced = (args?: unknown) =>
+        reachOf(replacedRpc, args) as (() => { title: string }[]) &
+            PromiseLike<{ title: string }[]>
+    await replaced()
+    await Bun.sleep(10)
+    const socket = muxSocket()
+    const follow = socket.sent.find(
+        (frame) => frame.address === `${LIBRARY}/replaced`,
+    ) as Sent
+    const held = replaced()()
+
+    socket.push({
+        op: 'patch',
+        id: follow.id,
+        base: follow.version,
+        version: (follow.version as number) + 1,
+        replaced: true,
+        ops: [{ op: 'replace', path: '/0/title', value: 'dune messiah' }],
+    })
+    flushSync()
+    const now = replaced()()
+    expect(now).toEqual([{ title: 'dune messiah' }, { title: 'emma' }])
+    expect(held[0]?.title).toBe('dune')
+    expect(now[1]).toBe(held[1] as { title: string })
+})
+
 // 18.12 — WRITES MADE OVER ANOTHER VERSION WOULD LAND SOMEWHERE ELSE, so the copy reads again. THE
 // REVERT: apply the ops whatever the base; the copy is written over a shelf it never held, and no
 // read is made.

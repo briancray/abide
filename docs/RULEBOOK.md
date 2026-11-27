@@ -1676,6 +1676,11 @@ value.
 18.48 A client's subscription of 18.3 to a `GET` MUST end once its copy has had no reader for 60
 seconds, MUST NOT end before 30 seconds of none, and MUST leave the copy stale as it ends.
 
+18.49 A subscriber's copy of a `GET` sent writes that 18.41's patch is among MUST take what they make
+as a new value, leaving what a reader read from the copy before as it was and each part the writes do
+not reach as the one it held; sent 18.11's writes alone, it MUST write them into the value it holds,
+as 5.7 does.
+
 # 19. Mount paths and schemas
 
 19.1 A route MUST be answered for each method by one file at most, a page answering `GET` and `HEAD`
