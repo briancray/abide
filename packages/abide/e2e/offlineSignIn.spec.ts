@@ -7,20 +7,14 @@
 import { expect, type Page, test } from '@playwright/test'
 import type { Server, Subprocess } from 'bun'
 
+import { BARE_LAYOUT } from '../bench/BARE_LAYOUT.ts'
 import { servedFixture } from './servedFixture.ts'
 import { untilSaved } from './untilSaved.ts'
 
 test.describe.configure({ mode: 'default' })
 
 const FILES = {
-    'layout.abide': `<html lang="en">
-<head>
-    <meta charset="utf-8" />
-</head>
-<body>
-    <slot/>
-</body>
-</html>`,
+    'layout.abide': BARE_LAYOUT,
     'index.abide': '<main id="home"><h1>Home</h1></main>',
     'about/index.abide': '<main id="about"><h1>About</h1></main>',
 }

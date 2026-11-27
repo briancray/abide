@@ -3,19 +3,22 @@
 import { directoryAbove } from './directoryAbove.ts'
 import type { ExampleResults } from './ExampleResults.ts'
 
-/** The CRM's directory, or `undefined` where no CRM is above the docs app. */
+let crm: string | null | undefined
+
+/** The CRM's directory, found once, or `undefined` where no CRM is above the docs app. */
 export function exampleDirectory(): string | undefined {
-    const above = directoryAbove('examples/crm/package.json')
-    return above && `${above}/examples/crm`
+    if (crm === undefined) {
+        const above = directoryAbove('examples/crm/package.json')
+        crm = above === undefined ? null : `${above}/examples/crm`
+    }
+    return crm ?? undefined
 }
 
-let crm: string | undefined
-
-/** The CRM's directory, found once — a docs app with no CRM above it is a build that cannot serve. */
+/** The CRM's directory — a docs app with no CRM above it is a build that cannot serve. */
 export function crmDirectory(): string {
-    crm ??= exampleDirectory()
-    if (crm === undefined) throw new Error('docs: no CRM above the docs app')
-    return crm
+    const found = exampleDirectory()
+    if (found === undefined) throw new Error('docs: no CRM above the docs app')
+    return found
 }
 
 let workspace: string | undefined

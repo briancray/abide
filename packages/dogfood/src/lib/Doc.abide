@@ -46,27 +46,27 @@ const {
     /** The test cases that exercise what the page documents, each a file and its anchors (40.15). */
     tests?: readonly { path: string; from: readonly string[] }[]
 }>()
-const page = documentPage ?? pageAt(route.name)
+// A page of the site, or `undefined` for a document, which hands over its own words.
+const sitePage = documentPage === undefined ? pageAt(route.name) : undefined
+const page = documentPage ?? (sitePage as SitePage)
+const group = sitePage && groupOf(sitePage.route)
+const guide = sitePage?.guide === true
 // Where the name is reached for (40.36): a page of a group says it, the home page and a document do not.
 const where =
-    documentPage === undefined &&
-    groupOf(page.route) !== undefined &&
-    !pageAt(page.route).guide
-        ? WHERE[pageAt(page.route).where]
+    sitePage !== undefined && group !== undefined && !guide
+        ? WHERE[sitePage.where]
         : undefined
-const documents = documentPage === undefined && page.registry !== ''
+const documents = sitePage !== undefined && page.registry !== ''
 const { previous, next } =
-    documentPage === undefined
-        ? neighborsOf(page.route)
-        : { previous: undefined, next: undefined }
-const group = groupOf(page.route)
+    sitePage === undefined
+        ? { previous: undefined, next: undefined }
+        : neighborsOf(sitePage.route)
 const examplesFirst = group?.form === 'authoring'
-const guide = documentPage === undefined && pageAt(page.route).guide
 const plain = page.title.replaceAll('`', '')
 const markdown =
-    documentPage === undefined
-        ? url(markdownAddressOf(page.route) as RouteLiteral)
-        : undefined
+    sitePage === undefined
+        ? undefined
+        : url(markdownAddressOf(sitePage.route) as RouteLiteral)
 
 const headings = docHeadings()
 

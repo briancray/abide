@@ -5,7 +5,7 @@ import { mount } from '@abide/harness/abide'
 
 import ContactPhoto from './ContactPhoto.abide'
 
-const ICON = new URL('../../../../../src/public/icon.png', import.meta.url)
+const ICON = new URL('../../public/icon.png', import.meta.url)
 
 test('a photo picked is shrunk before it is kept', async () => {
     using _photo = await mount(ContactPhoto({}))
