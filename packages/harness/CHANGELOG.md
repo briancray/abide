@@ -1,5 +1,118 @@
 # @abide/harness
 
+## 0.7.2
+
+### Patch Changes
+
+- installLeadingNewline as bun fmt writes it ([`1490721`](https://github.com/briancray/abide/commit/14907211184910f5a1575474ee5acb9b192a1de5))
+- the harness's parser node type takes undefined (59.2), and the settling sheet's handle wraps inside the column ([`460d3f5`](https://github.com/briancray/abide/commit/460d3f5c7b177ae595f382bafcbff8ba9ea6f444))
+- c59e5c7: The DOM preload empties a file input on its form's `reset()`, as a browser does — happy-dom kept the files picked, so a form starting over after its call left the file standing under `bun test` (43.48).
+- 2be27f3: the DOM preload drops the newline after a `<textarea>`, `<pre>` or `<listing>` start tag as the HTML parser does, so a textarea abide wrote empty reads `''` — 43.49
+- 4f1bd4d: The DOM preload gives `<option>` its `defaultSelected`, and a `<select>` built from markup — parsed, or cloned out of a `<template>` — lands on the option its `selected` attribute marks, so a `form` over a select reads its baseline as a browser does (43.47).
+- Updated dependencies [bfb0b4f]
+- Updated dependencies [90bbeec]
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies [fb32791]
+- Updated dependencies [240c0ed]
+- Updated dependencies [425d699]
+- Updated dependencies [1a00262]
+- Updated dependencies [fb92896]
+- Updated dependencies [34330c7]
+- Updated dependencies [78331e2]
+- Updated dependencies [82c0967]
+- Updated dependencies [fbc98e7]
+- Updated dependencies [e0d56ec]
+- Updated dependencies [999dbd4]
+- Updated dependencies [90bb2bc]
+- Updated dependencies [e279505]
+- Updated dependencies [01454d8]
+- Updated dependencies [5353112]
+- Updated dependencies [5753219]
+- Updated dependencies [242abb0]
+- Updated dependencies [77bfdc1]
+- Updated dependencies [8c68122]
+- Updated dependencies [40db88d]
+- Updated dependencies [9fba0e6]
+- Updated dependencies [abfdd44]
+- Updated dependencies [1e552bf]
+- Updated dependencies [ee4a643]
+- Updated dependencies [8f52d76]
+- Updated dependencies [c9a246e]
+- Updated dependencies [5e76ab6]
+- Updated dependencies [143db68]
+- Updated dependencies [0333bdd]
+- Updated dependencies [300fae3]
+- Updated dependencies [0f042bc]
+- Updated dependencies [2cbd1ba]
+- Updated dependencies [bb6e8e7]
+- Updated dependencies [7889dff]
+- Updated dependencies [6a43885]
+- Updated dependencies [8fe38de]
+- Updated dependencies [40db88d]
+- Updated dependencies [c07e4ac]
+- Updated dependencies [b597b29]
+- Updated dependencies [b8cf643]
+- Updated dependencies [13dfada]
+- Updated dependencies [9292992]
+- Updated dependencies [5728128]
+- Updated dependencies [25577ff]
+- Updated dependencies [877fb20]
+- Updated dependencies [9f63bae]
+- Updated dependencies [2ea2c43]
+- Updated dependencies [ceb3b83]
+- Updated dependencies [8482505]
+- Updated dependencies [9675b3a]
+- Updated dependencies [62bae53]
+- Updated dependencies [86881c2]
+- Updated dependencies [530ed34]
+- Updated dependencies [f3cde2c]
+- Updated dependencies [bcae040]
+- Updated dependencies [90e0023]
+- Updated dependencies [ebf31be]
+- Updated dependencies [e4d5fb0]
+- Updated dependencies [2c9faf1]
+- Updated dependencies [56ac207]
+- Updated dependencies [3cc0e47]
+  - @abide/abide@0.145.0
+
 ## 0.7.1
 
 ### Patch Changes

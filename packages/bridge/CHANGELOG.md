@@ -1,5 +1,14 @@
 # @abide/bridge
 
+## 0.9.2
+
+### Patch Changes
+
+- bench:share navigates between two pages the docs have; citations that resolve to the wrong clause point at the right one ([`89a42d5`](https://github.com/briancray/abide/commit/89a42d581c4fcd0a8a80c667692ecda7518f7c81))
+- the bridge carries no abide at run time, held by a test ([`ff0827e`](https://github.com/briancray/abide/commit/ff0827e11b7f957c51210595662266018aafb926))
+- 660c375: A bridge reads a visitor's MCP server answering `Text/Event-Stream` as a stream, however the media type is cased
+- b5e98bd: A bridge run `--full` and passed an `--mcp-config` finds the visitor's user-scope MCP servers too, as the full turn does: a tool of a user-scope server is granted rather than reported missing
+
 ## 0.9.1
 
 ### Patch Changes
