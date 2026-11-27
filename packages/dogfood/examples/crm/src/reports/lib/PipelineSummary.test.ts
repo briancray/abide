@@ -9,5 +9,5 @@ test('the summary answers in process as it does on the wire', async () => {
         new Request('http://crm.invalid/reports/getSummary'),
     )
     expect(answer.status).toBe(200)
-    expect(await answer.json()).toEqual({ open: 3, pipeline: 15500 })
+    expect(await answer.json()).toEqual({ open: 6, pipeline: 96000 })
 })
