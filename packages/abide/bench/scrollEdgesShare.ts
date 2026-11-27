@@ -20,6 +20,7 @@
 import { chromium, type Page } from '@playwright/test'
 
 import { servedFixture } from '../e2e/servedFixture.ts'
+import { BARE_LAYOUT } from './BARE_LAYOUT.ts'
 import { settle, taskDurationOf } from './mainThread.ts'
 import { median, spread } from './median.ts'
 
@@ -28,15 +29,6 @@ const SIZES =
 const RUNS = 3
 const FRAMES = 60
 const REMOUNTS = 10
-
-const LAYOUT = `<html lang="en">
-<head>
-    <meta charset="utf-8" />
-</head>
-<body>
-    <slot/>
-</body>
-</html>`
 
 const VANILLA = `function vanilla(element: HTMLElement) {
     let frame = 0
@@ -139,7 +131,10 @@ try {
         for (const arm of ['abide', 'vanilla'] as const) {
             const { base, server } = await servedFixture(
                 `bench-edges-${arm}-${count}`,
-                { 'layout.abide': LAYOUT, 'index.abide': page(count, arm) },
+                {
+                    'layout.abide': BARE_LAYOUT,
+                    'index.abide': page(count, arm),
+                },
             )
             servers.push(server)
             for (let attempt = 0; attempt < RUNS; attempt += 1) {

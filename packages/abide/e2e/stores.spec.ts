@@ -5,19 +5,11 @@
 import { expect, test } from '@playwright/test'
 import type { Subprocess } from 'bun'
 
+import { BARE_LAYOUT } from '../bench/BARE_LAYOUT.ts'
 import { servedFixture } from './servedFixture.ts'
 
 // ONE TREE AND ONE WORKER PER PROJECT, for `routing.spec.ts`'s reason.
 test.describe.configure({ mode: 'default' })
-
-const LAYOUT = `<html lang="en">
-<head>
-    <meta charset="utf-8" />
-</head>
-<body>
-    <slot/>
-</body>
-</html>`
 
 let server: Subprocess | undefined
 let base = ''
@@ -29,7 +21,7 @@ test.beforeAll(async ({}, testInfo) => {
     // The fixture's `package.json` names it, and 8.29 keeps every key under that name.
     app = `${directory}-fixture`
     ;({ base, server } = await servedFixture(directory, {
-        'layout.abide': LAYOUT,
+        'layout.abide': BARE_LAYOUT,
         'cookie/index.abide': `<script>
 import { reactive, store } from '@abide/abide'
 

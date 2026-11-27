@@ -15,6 +15,7 @@
 import { chromium } from '@playwright/test'
 
 import { servedFixture } from '../e2e/servedFixture.ts'
+import { BARE_LAYOUT } from './BARE_LAYOUT.ts'
 import { scrollFrames, settle, taskDurationOf } from './mainThread.ts'
 import { median, percent, spread } from './median.ts'
 
@@ -22,15 +23,6 @@ const SIZES =
     process.argv.length > 2 ? process.argv.slice(2).map(Number) : [10, 100, 500]
 const RUNS = 3
 const FRAMES = 60
-
-const LAYOUT = `<html lang="en">
-<head>
-    <meta charset="utf-8" />
-</head>
-<body>
-    <slot/>
-</body>
-</html>`
 
 const page = (count: number): string => `<script>
 import { elementRect } from '@abide/abide'
@@ -86,7 +78,7 @@ const servers: { kill: () => void }[] = []
 try {
     for (const count of SIZES) {
         const { base, server } = await servedFixture(`bench-rect-${count}`, {
-            'layout.abide': LAYOUT,
+            'layout.abide': BARE_LAYOUT,
             'index.abide': page(count),
         })
         servers.push(server)

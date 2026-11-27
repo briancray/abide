@@ -5,19 +5,11 @@
 import { expect, type Page, test } from '@playwright/test'
 import type { Subprocess } from 'bun'
 
+import { BARE_LAYOUT } from '../bench/BARE_LAYOUT.ts'
 import { servedFixture } from './servedFixture.ts'
 
 // ONE TREE AND ONE SERVER PER PROJECT, for `routing.spec.ts`'s reason.
 test.describe.configure({ mode: 'default' })
-
-const LAYOUT = `<html lang="en">
-<head>
-    <meta charset="utf-8" />
-</head>
-<body>
-    <slot/>
-</body>
-</html>`
 
 const PAGE = `<script>
 import { carousel, reactive } from '@abide/abide'
@@ -130,7 +122,7 @@ test.beforeAll(async ({}, testInfo) => {
     ;({ base, server } = await servedFixture(
         `e2e-carousel-${testInfo.project.name}`,
         {
-            'layout.abide': LAYOUT,
+            'layout.abide': BARE_LAYOUT,
             'index.abide': PAGE,
             'viewer.abide': VIEWER,
             'tour.abide': TOUR,

@@ -7,20 +7,12 @@
 import { expect, type Page, test } from '@playwright/test'
 import type { Subprocess } from 'bun'
 
+import { BARE_LAYOUT } from '../bench/BARE_LAYOUT.ts'
 import { servedFixture } from './servedFixture.ts'
 import { untilSaved } from './untilSaved.ts'
 
 // ONE TREE AND ONE WORKER PER PROJECT, for `routing.spec.ts`'s reason.
 test.describe.configure({ mode: 'default' })
-
-const LAYOUT = `<html lang="en">
-<head>
-    <meta charset="utf-8" />
-</head>
-<body>
-    <slot/>
-</body>
-</html>`
 
 const HOME = `<script>
 import { reactive } from '@abide/abide'
@@ -132,7 +124,7 @@ const tags = reactive(() => getTags())
 </script>
 
 <main id="note"><p id="text">{note().text}</p><ul id="tags">{#for tag of tags.ready() ? tags : []}<li>{tag}</li>{/for}</ul></main>`,
-            'layout.abide': LAYOUT,
+            'layout.abide': BARE_LAYOUT,
             'index.abide': HOME,
             'about/index.abide':
                 '<main id="about"><h1>About</h1><a id="to-home" href="/">home</a><a id="to-tab" href="/about?tab=2">tab</a></main>',

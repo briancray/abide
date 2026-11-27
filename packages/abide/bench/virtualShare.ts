@@ -12,6 +12,7 @@
 import { chromium } from '@playwright/test'
 
 import { servedFixture } from '../e2e/servedFixture.ts'
+import { BARE_LAYOUT } from './BARE_LAYOUT.ts'
 import { scrollFrames, settle, taskDurationOf } from './mainThread.ts'
 import { median, spread } from './median.ts'
 
@@ -22,15 +23,6 @@ const SIZES =
 const RUNS = 3
 const FRAMES = 60
 const ROW = 24
-
-const LAYOUT = `<html lang="en">
-<head>
-    <meta charset="utf-8" />
-</head>
-<body>
-    <slot/>
-</body>
-</html>`
 
 const STYLE = `<style>
 .viewport { height: 480px; overflow: auto; }
@@ -158,7 +150,7 @@ try {
             const { base, server } = await servedFixture(
                 `bench-virtual-${arm}-${count}`,
                 {
-                    'layout.abide': LAYOUT,
+                    'layout.abide': BARE_LAYOUT,
                     'index.abide': (ARMS[arm] as (count: number) => string)(
                         count,
                     ),

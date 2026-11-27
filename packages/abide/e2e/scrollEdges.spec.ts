@@ -6,19 +6,11 @@
 import { expect, test } from '@playwright/test'
 import type { Subprocess } from 'bun'
 
+import { BARE_LAYOUT } from '../bench/BARE_LAYOUT.ts'
 import { servedFixture } from './servedFixture.ts'
 
 // ONE TREE AND ONE SERVER PER PROJECT, for `routing.spec.ts`'s reason.
 test.describe.configure({ mode: 'default' })
-
-const LAYOUT = `<html lang="en">
-<head>
-    <meta charset="utf-8" />
-</head>
-<body>
-    <slot/>
-</body>
-</html>`
 
 const PAGE = `<script>
 import { reactive, scrollEdges } from '@abide/abide'
@@ -58,7 +50,7 @@ let base = ''
 test.beforeAll(async ({}, testInfo) => {
     ;({ base, server } = await servedFixture(
         `e2e-scroll-edges-${testInfo.project.name}`,
-        { 'layout.abide': LAYOUT, 'index.abide': PAGE },
+        { 'layout.abide': BARE_LAYOUT, 'index.abide': PAGE },
     ))
 })
 
