@@ -310,6 +310,41 @@ test('a pipe called in a memo body is told when the run is superseded — 57.13,
     )
 })
 
+// 57.13 — A SIGNAL HANDED IN REPLACES THE ONE READ WHERE THE CALL IS MADE: a lane called from a
+// memo body for a job many callers share is the shared job's, and the run that started it being
+// superseded does not end it. THE REVERT: join the ambient signal to the one handed in, and
+// `handed-in step told: true`.
+test('a pipe called with a signal ends on it alone, not on the run it was called in — 57.13', async () => {
+    const signals: AbortSignal[] = []
+    const lane = pipe(
+        [
+            (_q: string, signal: AbortSignal) => {
+                signals.push(signal)
+                return new Promise<string>((_settle, fail) =>
+                    signal.addEventListener('abort', () => fail(signal.reason)),
+                )
+            },
+        ],
+        { concurrency: 2 },
+    )
+    const shared = new AbortController()
+    const q = reactive('a')
+    const found = reactive(() => lane(q(), shared.signal))
+    found.peek()
+    await turn()
+    q.set('ab')
+    found.peek()
+    flushSync()
+    await turn()
+    expect(`handed-in step told: ${(signals[0] as AbortSignal).aborted}`).toBe(
+        'handed-in step told: false',
+    )
+    shared.abort()
+    expect(
+        `told once its own signal aborts: ${(signals[0] as AbortSignal).aborted}`,
+    ).toBe('told once its own signal aborts: true')
+})
+
 // 57.14 — A STREAM THAT FAILS AFTER IT YIELDED IS NOT MADE AGAIN: what it handed on cannot be taken
 // back. THE REVERT: retry the stream's later chunks, and `opened: 2`.
 test('a streaming step that fails after yielding is not tried again — 57.14', async () => {

@@ -256,22 +256,20 @@ class Runner {
 
     /** 57.5, 57.13 — one item, called: its answer, or every answer where a step fanned out; a refusal rejects. */
     async call(input: unknown, signal?: AbortSignal): Promise<unknown> {
-        // 57.13 — read where the call is made: inside a `memo` body, the run's own (7.22).
-        const told = abortSignal()
-        const walked = await this.item(input, signal, told)
+        // 57.13 — A SIGNAL HANDED IN IS WHAT THE ITEM ENDS ON, in place of the one read where the
+        // call is made: an item started for many callers — a lane under a shared job — is not the
+        // first caller's to end. Read only where none is given: inside a `memo` body, the run's own (7.22).
+        const told = signal ?? abortSignal()
+        const walked = await this.item(input, told)
         if (walked.refusal !== undefined) throw walked.refusal
         return walked.fanned ? walked.answers : walked.answers[0]
     }
 
     /** One item: a slot under 57.6-57.8, its walk through every step, and the slot handed on. */
-    async item(
-        input: unknown,
-        signal: AbortSignal | undefined,
-        told: AbortSignal,
-    ): Promise<Walked> {
+    async item(input: unknown, told: AbortSignal): Promise<Walked> {
         // 57.18 — a stopped pipe takes nothing.
         if (this.stopping.signal.aborted) throw this.stopping.signal.reason
-        const ended = this.endedBy(told, signal)
+        const ended = this.endedBy(told)
         const lane = this.laneOf(input)
         await this.slot(lane, ended)
         const walk = this.walk(input, ended)
@@ -293,13 +291,13 @@ class Runner {
     }
 
     /**
-     * 57.13 — the signal an item ends on: the pipe's stop, the stop it was called under, and the
-     * caller's. ONE SIGNAL FOR EVERY ITEM in the common case — called outside a body with no signal
-     * of its own — made again only where the app's stop has been renewed (7.21): a combined signal
-     * per item was a third of a no-op item's cost against a hand-written lane.
+     * 57.13 — the signal an item ends on: the pipe's stop, and the caller's or else the stop it was
+     * called under. ONE SIGNAL FOR EVERY ITEM in the common case — called outside a body with no
+     * signal of its own — made again only where the app's stop has been renewed (7.21): a combined
+     * signal per item was a third of a no-op item's cost against a hand-written lane.
      */
-    endedBy(told: AbortSignal, signal: AbortSignal | undefined): AbortSignal {
-        if (signal === undefined && told === appStopSignal()) {
+    endedBy(told: AbortSignal): AbortSignal {
+        if (told === appStopSignal()) {
             if (this.sharedFor !== told) {
                 this.sharedFor = told
                 const shared = AbortSignal.any([this.stopping.signal, told])
@@ -321,11 +319,7 @@ class Runner {
             }
             return this.shared as AbortSignal
         }
-        return AbortSignal.any(
-            signal === undefined
-                ? [this.stopping.signal, told]
-                : [this.stopping.signal, told, signal],
-        )
+        return AbortSignal.any([this.stopping.signal, told])
     }
 
     laneOf(input: unknown): Lane {
@@ -592,7 +586,7 @@ class Runner {
                 const sequence = written
                 written += 1
                 const lane = this.laneOf(input)
-                const ended = this.endedBy(told, undefined)
+                const ended = this.endedBy(told)
                 // 57.20 — the write waits for the slot the item runs in.
                 await this.slot(lane, ended)
                 const walk = this.walk(input, ended)

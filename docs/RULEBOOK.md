@@ -6021,7 +6021,8 @@ takes it out.
 `aria-checked` naming whether `value` is that key, carrying `data-pressed` while it is.
 
 51.112 A click on the `item` of a `toggleGroup` that is not `multiple` MUST set `value` to its key,
-and MUST NOT clear `value` where it is that key already.
+and MUST NOT clear `value` where it is that key already — save where the group is given
+`deselectable` `true`, where that click MUST set `value` to `undefined`.
 
 51.113 In a `toggleGroup` that is not `multiple`, ArrowRight and ArrowDown MUST set `value` to the
 next key and ArrowLeft and ArrowUp to the one before, going round, and Home and End to the first and
@@ -7347,9 +7348,9 @@ the `pipe`, until the time it names.
 
 57.12 An attempt MUST be aborted once it runs past `timeout` milliseconds.
 
-57.13 A step MUST be handed a signal that aborts where its attempt is aborted, where the signal the
-`Pipe` was called with aborts, where `stop` is called, and where the signal `abortSignal` answers
-where its call was made aborts.
+57.13 A step MUST be handed a signal that aborts where its attempt is aborted, where `stop` is
+called, and where the signal the `Pipe` was called with aborts, or, where it was called with none,
+where the signal `abortSignal` answers where its call was made aborts.
 
 57.14 A `pipe` step 57.4 reads MUST NOT be attempted again once it has yielded.
 
