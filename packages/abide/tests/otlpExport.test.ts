@@ -148,8 +148,8 @@ test('lines and spans reach the collector as OTLP, the request as the root span 
     expect(lookup).toMatchObject({ kind: 1, parentSpanId: responded })
     // Exported, and with `abide:request` closed, written nowhere: no span is a log line as well.
     expect(
-        log
-            .records()
+        log.records
+            .get()
             .some(
                 (record) =>
                     record.namespace === 'abide:request' &&

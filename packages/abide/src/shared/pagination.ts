@@ -5,6 +5,7 @@
 
 import { handFocus } from './handFocus.ts'
 import { type Live, live } from './live.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { withPart } from './withPart.ts'
 
@@ -13,7 +14,7 @@ export type PaginationOptions = {
     /** How many pages there are; a function is read live. */
     count: Live<number>
     /** The page on, from `1`: a `Reactive` to read and set. Held by the parts, and handed back as `page`, where none is given. */
-    page?: Reactive<number> | undefined
+    page?: Bindable<number> | undefined
     /** How many pages either side of the page on are listed. `1` by default; a function is read live. */
     around?: Live<number> | undefined
     /** The address of a page, making each part a link to it rather than a button. */
@@ -40,9 +41,9 @@ export type Pagination = {
 
 /** Pagination over `count` pages, as parts to spread. */
 export function pagination(options: PaginationOptions): Pagination {
-    const page = options.page ?? reactive(1)
+    const page = bindable(options.page) ?? reactive(1)
     const count = () => Math.max(1, live(options.count))
-    const on = () => Math.min(Math.max(1, page()), count())
+    const on = () => Math.min(Math.max(1, page.get()), count())
     const { href } = options
 
     // 51.125 — always `2 × around + 5` entries once there are more pages than that, so the list

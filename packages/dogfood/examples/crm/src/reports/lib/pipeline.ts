@@ -8,10 +8,10 @@ export function pipeline(count: number): () => void {
     for (let at = 0; at < count; at += 1)
         opening.push({ company: `Company ${at}`, amount: 1000, stage: 'lead' })
     const deals = reactive(opening)
-    const expected = reactive(() => forecast(deals()))
-    expected()
+    const expected = reactive(() => forecast(deals.get()))
+    expected.get()
     return () => {
-        deals.set(advance(deals(), 0))
-        expected()
+        deals.set(advance(deals.get(), 0))
+        expected.get()
     }
 }

@@ -121,6 +121,8 @@ export type { LabelRun } from './labelRuns.ts'
 export type { Picked } from './Selection.ts'
 // 49.21 — what a headless component's items are told apart by, kept as it is.
 export type { ItemKey, KeyOf } from './itemKey.ts'
+// 49.8 — what an option a headless component binds takes.
+export type { Bindable } from './reactive/bindable.ts'
 export { isServer } from './isServer.ts'
 export { jsonSchema } from './jsonSchema.ts'
 export { type Logger, type LogRecord, log, type Span } from './log.ts'

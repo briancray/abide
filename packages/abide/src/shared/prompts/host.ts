@@ -47,26 +47,26 @@ export type PromptsHost = {
 export function host(): PromptsHost {
     // 50.36 — this host, among the ones standing; the last shows the queue.
     const shows = asking.stand()
-    const current = reactive(() => (shows() ? queue()[0] : undefined))
+    const current = reactive(() => (shows() ? queue.get()[0] : undefined))
     // Closing writes `false` here; the queue moving on computes it again.
-    const showing = reactive(() => shows() && queue().length > 0)
+    const showing = reactive(() => shows() && queue.get().length > 0)
     // Each prompt starts from its own `value`; typing writes over it until the queue moves on.
-    const typed = reactive(() => current()?.value ?? '')
+    const typed = reactive(() => current.get()?.value ?? '')
     const typedRight = reactive(() => {
-        const asked = current()?.mustType
+        const asked = current.get()?.mustType
         return (
             asked === undefined ||
-            typed().trim().toLowerCase() === asked.trim().toLowerCase()
+            typed.get().trim().toLowerCase() === asked.trim().toLowerCase()
         )
     })
     // 50.45 — a confirm whose `run` is in flight, and what its last run failed with; each prompt starts
     // from neither. Each reads `current` alone so the queue moving on resets it, as `typed` is.
     const busy = reactive((): boolean => {
-        void current()
+        void current.get()
         return false
     })
     const failure = reactive((): string | undefined => {
-        void current()
+        void current.get()
         return undefined
     })
 
@@ -121,7 +121,7 @@ export function host(): PromptsHost {
     // The field's own value follows what is typed, which a prompt moving on starts again.
     const following = (field: HTMLInputElement) =>
         watch(() => {
-            const text = typed() ?? ''
+            const text = typed.get() ?? ''
             if (field.value !== text) field.value = text
         })
 
@@ -130,19 +130,19 @@ export function host(): PromptsHost {
             role: 'alertdialog',
             'data-prompts': 'dialog',
             get 'aria-label'() {
-                return current()?.title ?? current()?.body
+                return current.get()?.title ?? current.get()?.body
             },
             get 'data-danger'() {
-                return current()?.danger ? '' : undefined
+                return current.get()?.danger ? '' : undefined
             },
             get 'data-busy'() {
-                return busy() ? '' : undefined
+                return busy.get() ? '' : undefined
             },
         },
 
         dialog({
             open: showing,
-            modal: () => current()?.modal ?? true,
+            modal: () => current.get()?.modal ?? true,
             onclose: answered,
         }).dialog,
     )
@@ -151,10 +151,10 @@ export function host(): PromptsHost {
         dialog: shown,
         form: { method: 'dialog', 'data-prompts': 'form', onsubmit: submitted },
         get current() {
-            return current()
+            return current.get()
         },
         get typing() {
-            const asked = current()
+            const asked = current.get()
             return (
                 asked !== undefined &&
                 (asked.mustType !== undefined || asked.kind === 'prompt')
@@ -165,7 +165,7 @@ export function host(): PromptsHost {
         field: { 'data-prompts': 'field' },
         // 50.83 — the prompt's own attributes first, so the ones the host keeps are its to keep.
         get input() {
-            const asked = current()
+            const asked = current.get()
             return {
                 ...asked?.input,
                 'data-prompts': 'input',
@@ -181,7 +181,7 @@ export function host(): PromptsHost {
             }
         },
         get failed() {
-            return failure()
+            return failure.get()
         },
         error: { role: 'alert', 'data-prompts': 'error' },
         confirm: {
@@ -189,10 +189,10 @@ export function host(): PromptsHost {
             'data-prompts': 'confirm',
             value: 'confirm',
             get disabled() {
-                return !typedRight() || busy()
+                return !typedRight.get() || busy.get()
             },
             get autofocus() {
-                return current()?.kind === 'alert'
+                return current.get()?.kind === 'alert'
             },
         },
         cancel: {
@@ -200,7 +200,7 @@ export function host(): PromptsHost {
             'data-prompts': 'cancel',
             value: 'cancel',
             get autofocus() {
-                const asked = current()
+                const asked = current.get()
                 return asked?.kind === 'confirm' && asked.mustType === undefined
             },
         },

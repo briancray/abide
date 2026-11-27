@@ -134,12 +134,12 @@ test('a watch opened unowned inside an effect does not wait on it', () => {
             opened = true
             unowned(() =>
                 watch(() => {
-                    source()
+                    source.get()
                     order.push('unowned')
                 }),
             )
         }
-        source()
+        source.get()
         order.push('opener')
     })
     order.length = 0

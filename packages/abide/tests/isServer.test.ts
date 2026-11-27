@@ -14,7 +14,7 @@ import { inMemoryApp } from './inMemoryApp.ts'
 async function answered(): Promise<{ side: string; threw: string }> {
     await using app = await inMemoryApp({
         'probe/side.server.ts': {
-            default: rpc(() => ({ server: isServer(), online: online() })),
+            default: rpc(() => ({ server: isServer(), online: online.get() })),
         },
         'probe/effect.server.ts': {
             default: rpc(() => {

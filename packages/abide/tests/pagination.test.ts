@@ -62,7 +62,7 @@ test('a page link turns to its page, and the page on is current — 51.126, 51.1
     const list = pagination({ count: 4 })
     expect(list.link(1)['aria-current']).toBe('page')
     click(list.link(3))
-    expect(list.page()).toBe(3)
+    expect(list.page.get()).toBe(3)
     expect([
         list.link(1)['aria-current'],
         list.link(3)['aria-current'],
@@ -79,12 +79,12 @@ test('previous and next step one page, and stop at the ends — 51.128, 51.129',
     const list = pagination({ count: 3, label: 'Deal pages' })
     expect([list.previous.disabled, list.next.disabled]).toEqual([true, false])
     click(list.previous)
-    expect(list.page()).toBe(1)
+    expect(list.page.get()).toBe(1)
     click(list.next)
     click(list.next)
-    expect([list.page(), list.next.disabled]).toEqual([3, true])
+    expect([list.page.get(), list.next.disabled]).toEqual([3, true])
     click(list.next)
-    expect(list.page()).toBe(3)
+    expect(list.page.get()).toBe(3)
     const linked = pagination({ count: 3, href: (page) => `?page=${page}` })
     expect([linked.previous.href, linked.previous['aria-disabled']]).toEqual([
         undefined,

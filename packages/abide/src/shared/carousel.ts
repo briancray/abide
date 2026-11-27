@@ -20,6 +20,7 @@ import {
 import { type Live, live } from './live.ts'
 import { madeId } from './madeId.ts'
 import { media } from './media.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
 import { reactiveOver } from './reactiveOver.ts'
@@ -33,7 +34,7 @@ export type CarouselOptions<Item, Key extends ItemKey = KeyOf<Item>> = {
     /** The items, in the order they render; a function is read live. */
     items: Live<readonly Item[]>
     /** The key of the item the carousel rests on, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. A key no item has rests on the first. */
-    selected?: Reactive<Key | undefined> | undefined
+    selected?: Bindable<Key | undefined> | undefined
     /** Which edge of an item, or its center, lines up with the same place in the scroller: `'center'` by default, as `scroll-snap-align` names it. A function is read live. */
     align?: Live<'start' | 'center' | 'end'> | undefined
     /** How `scrollTo`, `reset`, `previous` and `next` scroll. `'smooth'` by default; a function is read live. */
@@ -43,7 +44,7 @@ export type CarouselOptions<Item, Key extends ItemKey = KeyOf<Item>> = {
     /** The milliseconds between steps while it plays; none, and it never steps by itself. A function is read live. */
     autoplay?: Live<number | undefined> | undefined
     /** Whether it is playing: a `Reactive` to read and set. Held by the parts, and handed back as `playing`, where none is given — starting true where `autoplay` is given. */
-    playing?: Reactive<boolean> | undefined
+    playing?: Bindable<boolean> | undefined
 } & KeyOption<Item, Key> &
     LabelOption<Item>
 
@@ -173,14 +174,14 @@ export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
     const behavior = () => live(options.behavior) ?? 'smooth'
     const align = () => live(options.align) ?? 'center'
     const keys = listedKeys(options.items, keyOf)
-    const selected = (options.selected ??
+    const selected = (bindable(options.selected) ??
         reactive<Key | undefined>(undefined)) as Reactive<ItemKey | undefined>
     // 53.61 — a key no item has rests on the first.
     const resting = reactive((): ItemKey | undefined =>
-        listedOrFirst(keys(), selected()),
+        listedOrFirst(keys.get(), selected.get()),
     )
     // 53.63 — what a scroll writes, and replaced by the resting item whenever that moves.
-    const current = reactive((): ItemKey | undefined => resting())
+    const current = reactive((): ItemKey | undefined => resting.get())
     const base = options.id ?? madeId('carousel')
     if (process.env.NODE_ENV !== 'production') checkParts('carousel', base)
 
@@ -189,8 +190,8 @@ export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
     let bindings = 0
     const bound = reactive(bindings)
     const restingElement = reactive((): Element | undefined => {
-        bound()
-        const key = resting()
+        bound.get()
+        const key = resting.get()
         return key === undefined ? undefined : elements.get(key)
     })
     let scroller: Element | undefined
@@ -390,7 +391,7 @@ export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
         // 53.62 — at once when bound, as `behavior` names after.
         let rested = false
         const stop = watch(() => {
-            const target = restingElement()
+            const target = restingElement.get()
             if (target === undefined) return
             alignTo(
                 resting.peek() as ItemKey,
@@ -421,11 +422,11 @@ export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
     // 53.67 — the first key `step` reaches from the current one that a scroll to would move the
     // scroller, past an end to the other where `loop` holds, and never the current one itself.
     const beside = (step: number): ItemKey | undefined => {
-        const listed = keys()
-        const from = current()
+        const listed = keys.get()
+        const from = current.get()
         const at = listed.indexOf(from as ItemKey)
         if (at === -1) return undefined
-        const measured = stops()
+        const measured = stops.get()
         const loops = live(options.loop) === true
         let to = at
         for (let left = listed.length - 1; left > 0; left--) {
@@ -483,25 +484,26 @@ export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
 
     // 53.75
     const playing =
-        options.playing ?? reactive(live(options.autoplay) !== undefined)
+        bindable(options.playing) ??
+        reactive(live(options.autoplay) !== undefined)
     // 53.76 — the hydrating page reads the server's `false` (23.31), so this fires once it settles too.
     const reduced = media('(prefers-reduced-motion: reduce)')
     watch(() => {
-        if (reduced()) playing.set(false)
+        if (reduced.get()) playing.set(false)
     })
     // 53.73, 53.74
     const rotating = reactive(
         (): boolean =>
-            playing() &&
+            playing.get() &&
             live(options.autoplay) !== undefined &&
-            shown() &&
-            !held(),
+            shown.get() &&
+            !held.get(),
     )
     // 53.71, 53.72 — one timer per item current, so a step by hand or a swipe starts the count again.
     watch(() => {
         const every = live(options.autoplay)
-        if (!rotating() || every === undefined) return
-        current()
+        if (!rotating.get() || every === undefined) return
+        current.get()
         const timer = setTimeout(() => {
             const key = beside(1)
             if (key === undefined) playing.set(false)
@@ -512,9 +514,10 @@ export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
 
     // 53.77 — playing from the end starts over.
     const pressed = reactiveOver(
-        () => playing(),
+        () => playing.get(),
         (on: boolean) => {
-            const first = on && beside(1) === undefined ? keys()[0] : undefined
+            const first =
+                on && beside(1) === undefined ? keys.get()[0] : undefined
             const refused = playing.set(on)
             if (refused === undefined && first !== undefined) scrollTo(first)
             return refused
@@ -524,7 +527,7 @@ export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
         'data-carousel': 'play',
         'aria-controls': base,
         get 'aria-label'() {
-            return playing() ? 'Pause' : 'Play'
+            return playing.get() ? 'Pause' : 'Play'
         },
     })
 
@@ -538,7 +541,7 @@ export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
             'data-carousel': 'host',
             // 53.78
             get 'aria-live'() {
-                return rotating() ? 'off' : undefined
+                return rotating.get() ? 'off' : undefined
             },
             'bind:element': bindHost,
         },
@@ -550,10 +553,10 @@ export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
                 'aria-label': labelOf(item),
                 'data-carousel': 'item',
                 get 'data-current'() {
-                    return current() === key ? '' : undefined
+                    return current.get() === key ? '' : undefined
                 },
                 get 'data-selected'() {
-                    return selected() === key ? '' : undefined
+                    return selected.get() === key ? '' : undefined
                 },
                 'bind:element': (element: Element): Disposer => {
                     elements.set(key, element)
@@ -575,7 +578,7 @@ export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
         play,
         playing,
         get current() {
-            return current() as Key | undefined
+            return current.get() as Key | undefined
         },
         selected: selected as Reactive<Key | undefined>,
         scrollTo,

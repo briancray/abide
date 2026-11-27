@@ -54,5 +54,5 @@ let inside: Batched | undefined
 keyedValue(() => {
     inside = batch({ case: 'sql inside a run', arms, emulated: null })
     return 0
-})()()
+})().get()
 if (inside !== undefined) report('inside a run', inside)

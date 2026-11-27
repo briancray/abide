@@ -106,7 +106,7 @@ afterAll(() => {
     resetSocketWire()
 })
 
-type Copy = (() => unknown) & {
+type Copy = { get(): unknown } & {
     ready(): boolean
     busy(): boolean
     error(): unknown
@@ -115,7 +115,7 @@ type Copy = (() => unknown) & {
 async function landed(copy: Copy): Promise<unknown> {
     for (let turns = 0; turns < 200 && !copy.ready(); turns += 1)
         await Bun.sleep(1)
-    return copy()
+    return copy.get()
 }
 
 // THE GATE: K copies streaming, and once each has shown its first chunk, the http connections they

@@ -21,7 +21,7 @@ import { writtenAt } from '#shared/reactive/patchMarks.ts'
 import { servedCellOf } from '#shared/reactive/producer.ts'
 import type { Reactive } from '#shared/reactive/Reactive.ts'
 
-import { chainOf, type DurableChain } from './durableChain.ts'
+import { chainOf, type DurableChain, type WritesSince } from './durableChain.ts'
 
 let next = Date.now() * 1000
 
@@ -29,8 +29,11 @@ let next = Date.now() * 1000
 // so a write appends rather than shifting the chain.
 const RECENT_PATCHES = 64
 
-/** One patch's step along the chain: the version it was written over, and what it wrote. */
-type Step = { from: number; ops: PatchOp[] }
+/**
+ * One step along the chain: the version it was written over, what it wrote, and whether a production
+ * replaced the value there (18.41) rather than an `s.patch` writing into it.
+ */
+type Step = { from: number; ops: PatchOp[]; replaced: boolean }
 
 type Stamp = {
     ordinal: number
@@ -82,9 +85,11 @@ export function versionOf(value: unknown): number {
     // apply in place to a value of another shape (a primitive, `undefined`, an array become a record).
     const drained = drainLog(cell)
     let ops: PatchOp[] | null = null
+    let replaced = false
     if (stamp !== undefined)
         if (stamp.ordinal === cell.ordinal && stamp.held === held) ops = drained
         else {
+            replaced = true
             const diffed = diffOps(stamp.held, held, elementKeyOf(value))
             ops = diffed.length === 1 && diffed[0]?.path === '' ? null : diffed
         }
@@ -97,13 +102,17 @@ export function versionOf(value: unknown): number {
     else if (stamp === undefined) version = chain.last
     else
         version = chain.append(
-            ops === null ? { snapshot: structuredClone(held) } : { ops },
+            ops === null
+                ? { snapshot: structuredClone(held) }
+                : replaced
+                  ? { ops, replaced: true }
+                  : { ops },
             held,
         )
     // The chain carries on from the stamp this replaces, whose array it takes over.
     const recent = ops === null || stamp === undefined ? [] : stamp.recent
     if (ops !== null && stamp !== undefined) {
-        recent.push({ from: stamp.version, ops })
+        recent.push({ from: stamp.version, ops, replaced })
         if (recent.length >= RECENT_PATCHES * 2)
             recent.splice(0, recent.length - RECENT_PATCHES)
     }
@@ -118,13 +127,13 @@ export function versionOf(value: unknown): number {
 }
 
 /**
- * Every patch written since version `since`, in order, or `undefined` where its follower must be sent
+ * Every write made since version `since`, in order, or `undefined` where its follower must be sent
  * the value: `since` older than the chain reaches, or not on it at all.
  */
 export function patchesSince(
     value: unknown,
     since: number | undefined,
-): PatchOp[] | undefined {
+): WritesSince | undefined {
     if (since === undefined) return undefined
     const cell = servedCellOf(value)
     // 18.43 — a value kept in a log is sent what the log holds past `since`, across restarts.
@@ -134,11 +143,17 @@ export function patchesSince(
     if (recent === undefined) return undefined
     for (let at = 0; at < recent.length; at += 1) {
         if ((recent[at] as Step).from !== since) continue
-        if (at === recent.length - 1) return (recent[at] as Step).ops
+        const last = recent[at] as Step
+        if (at === recent.length - 1)
+            return { ops: last.ops, replaced: last.replaced }
         const ops: PatchOp[] = []
-        for (let step = at; step < recent.length; step += 1)
-            for (const op of (recent[step] as Step).ops) ops.push(op)
-        return ops
+        let replaced = false
+        for (let step = at; step < recent.length; step += 1) {
+            const one = recent[step] as Step
+            if (one.replaced) replaced = true
+            for (const op of one.ops) ops.push(op)
+        }
+        return { ops, replaced }
     }
     return undefined
 }

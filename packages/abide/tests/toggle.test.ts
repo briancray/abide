@@ -20,7 +20,7 @@ test('a toggle flips pressed on a click, and says so as a toggle button or a swi
         undefined,
     ])
     click(pin.button)
-    expect(pin.pressed()).toBe(true)
+    expect(pin.pressed.get()).toBe(true)
     expect([pin.button['aria-pressed'], pin.button['data-pressed']]).toEqual([
         'true',
         '',
@@ -45,9 +45,9 @@ test('a group picking many is a toggle per key, pressed while value holds it —
     expect(chips.item('won')['aria-pressed']).toBe('true')
     expect(chips.item('lead')['aria-pressed']).toBe('false')
     click(chips.item('lead'))
-    expect(value()).toEqual(['won', 'lead'])
+    expect(value.get()).toEqual(['won', 'lead'])
     click(chips.item('won'))
-    expect(value()).toEqual(['lead'])
+    expect(value.get()).toEqual(['lead'])
     // The app writing `value` presses the buttons it names.
     value.set(['proposal'])
     flushSync()
@@ -72,9 +72,9 @@ test('a group picking one is a radio group, and a press on the key picked keeps 
         ['radio', 'false'],
     )
     click(view.item('board'))
-    expect(view.value()).toBe('board')
+    expect(view.value.get()).toBe('board')
     click(view.item('board'))
-    expect(view.value()).toBe('board')
+    expect(view.value.get()).toBe('board')
     expect(view.item('board')['data-pressed']).toBe('')
     expect(toggleGroup({ items: ['a'], multiple: true }).group.role).toBe(
         'group',
@@ -86,12 +86,12 @@ test('a group picking one is a radio group, and a press on the key picked keeps 
 test('a group picking one given deselectable unpicks the key picked on a press — 51.112', () => {
     const view = toggleGroup({ items: ['list', 'board'], deselectable: true })
     click(view.item('board'))
-    expect(view.value()).toBe('board')
+    expect(view.value.get()).toBe('board')
     click(view.item('board'))
-    expect(view.value()).toBeUndefined()
+    expect(view.value.get()).toBeUndefined()
     expect(view.item('board')['aria-checked']).toBe('false')
     click(view.item('list'))
-    expect(view.value()).toBe('list')
+    expect(view.value.get()).toBe('list')
 })
 
 // THE REVERT: move focus on an arrow without picking, and the arrows leave `value` where it was.
@@ -107,7 +107,7 @@ test('in a group picking one, the arrows move the pick and focus together, going
             new KeyboardEvent('keydown', { key, cancelable: true }),
         )
         flushSync()
-        return [view.value(), document.activeElement?.id]
+        return [view.value.get(), document.activeElement?.id]
     }
     expect(press('ArrowRight')).toEqual(['board', 'view-board'])
     expect(press('ArrowDown')).toEqual(['chart', 'view-chart'])
@@ -170,7 +170,7 @@ test('in a group picking one, a refused pick leaves focus on the radio it was on
         new KeyboardEvent('keydown', { key: 'ArrowRight', cancelable: true }),
     )
     flushSync()
-    expect([view.value(), document.activeElement?.id]).toEqual([
+    expect([view.value.get(), document.activeElement?.id]).toEqual([
         'list',
         'refused-list',
     ])

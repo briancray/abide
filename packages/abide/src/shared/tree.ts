@@ -15,6 +15,7 @@ import {
 } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { madeId } from './madeId.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { roving, typeahead } from './roving.ts'
 import { type Picked, Selection } from './Selection.ts'
@@ -32,11 +33,11 @@ export type TreeOptions<
     /** A node's children, in order; none, or an empty list, for a leaf. */
     children(node: Node): readonly Node[] | undefined
     /** The keys of the nodes expanded, where the app holds them: a `Reactive` to read and set. Held by the parts, none expanded, and handed back as `expanded`, where none is given. */
-    expanded?: Reactive<readonly Key[]> | undefined
+    expanded?: Bindable<readonly Key[]> | undefined
     /** 51.98 — whether it selects many, each press changing the selection rather than replacing it. `false` by default. */
     multiple?: Multiple | undefined
     /** The key of the node picked, or every key picked where it selects many, where the app holds them: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<Picked<Key, Multiple>> | undefined
+    selected?: Bindable<Picked<Key, Multiple>> | undefined
 } & KeyOption<Node, Key> &
     LabelOption<Node>
 
@@ -95,11 +96,12 @@ export function tree<
         keyOfItem(options.key as ((node: Node) => Key) | undefined, node)
     const label = (node: Node) => writtenBy(options.label, node)
     const rootsOf = () => live(options.roots)
-    const expanded = (options.expanded ??
+    const expanded = (bindable(options.expanded) ??
         reactive<readonly Key[]>([])) as Reactive<readonly ItemKey[]>
     const many = options.multiple === true
     const selection = new Selection(
-        options.selected as Reactive<Picked<ItemKey, boolean>> | undefined,
+        bindable(options.selected) as
+            Reactive<Picked<ItemKey, boolean>> | undefined,
         many,
     )
     const typedTo = typeahead()
@@ -107,7 +109,7 @@ export function tree<
     // EVERY NODE PLACED, and the ones that show in order: one walk, again only when the nodes or what
     // is expanded change.
     const walked = reactive(() => {
-        const open = new Set(expanded())
+        const open = new Set(expanded.get())
         const placed = new Map<ItemKey, Placed>()
         const shown: ItemKey[] = []
         const shownNodes: Node[] = []
@@ -145,18 +147,19 @@ export function tree<
     // the first.
     const focused = reactive<ItemKey | undefined>(undefined)
     const current = reactive((): ItemKey | undefined => {
-        const { shown } = walked()
-        const wanted = focused()
+        const { shown } = walked.get()
+        const wanted = focused.get()
         if (wanted !== undefined && shown.includes(wanted)) return wanted
         for (const each of selection.list())
             if (shown.includes(each)) return each
         return shown[0]
     })
-    const shownKeys = () => walked().shown
+    const shownKeys = () => walked.get().shown
     // 51.101 — every node, where it selects many.
     const selectAll = many
         ? hotkeys({
-              'mod+a': () => selection.all(() => [...walked().placed.keys()]),
+              'mod+a': () =>
+                  selection.all(() => [...walked.get().placed.keys()]),
           })
         : undefined
 
@@ -179,14 +182,14 @@ export function tree<
         'aria-multiselectable': many ? 'true' : undefined,
         onkeydown: (event: KeyboardEvent) => {
             selectAll?.(event)
-            const { placed, shown, labels, open } = walked()
+            const { placed, shown, labels, open } = walked.get()
             // The item the key was pressed in, read off the event, so focus put there by any means counts.
             const within = (event.target as Element | null)?.closest?.(
                 '[role=treeitem]',
             )
             const at =
                 within === null || within === undefined
-                    ? shown.indexOf(current() as ItemKey)
+                    ? shown.indexOf(current.get() as ItemKey)
                     : shown.findIndex((one) => itemId(one) === within.id)
             const each = shown[at]
             const place = each === undefined ? undefined : placed.get(each)
@@ -240,7 +243,7 @@ export function tree<
 
     const item = (node: Node): Record<string, unknown> => {
         const each = key(node)
-        const place = () => walked().placed.get(each)
+        const place = () => walked.get().placed.get(each)
         return {
             role: 'treeitem',
             'data-tree': 'item',
@@ -257,11 +260,11 @@ export function tree<
             // 51.78 — a branch says whether it is open; a leaf says nothing.
             get 'aria-expanded'() {
                 if (place()?.branch !== true) return undefined
-                return walked().open.has(each) ? 'true' : 'false'
+                return walked.get().open.has(each) ? 'true' : 'false'
             },
             // 49.17 — a leaf is never open.
             get 'data-open'() {
-                return walked().open.has(each) && place()?.branch === true
+                return walked.get().open.has(each) && place()?.branch === true
                     ? ''
                     : undefined
             },
@@ -269,7 +272,7 @@ export function tree<
                 return selection.has(each) ? 'true' : 'false'
             },
             get tabindex() {
-                return current() === each ? '0' : '-1'
+                return current.get() === each ? '0' : '-1'
             },
             get 'data-selected'() {
                 return selection.has(each) ? '' : undefined
@@ -300,7 +303,7 @@ export function tree<
             role: 'group',
             'data-tree': 'group',
             get hidden() {
-                return !walked().open.has(each)
+                return !walked.get().open.has(each)
             },
         }
     }
@@ -314,14 +317,14 @@ export function tree<
                 item: item(node),
                 group: group(node),
                 get expanded() {
-                    return walked().open.has(each)
+                    return walked.get().open.has(each)
                 },
                 toggle: () =>
                     setOpen(each, !(expanded.peek() ?? []).includes(each)),
             }
         },
         get shown() {
-            return walked().shownNodes
+            return walked.get().shownNodes
         },
         expanded: expanded as Reactive<readonly Key[]>,
         selected: selection.selected as Reactive<Picked<Key, Multiple>>,

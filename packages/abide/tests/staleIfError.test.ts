@@ -45,11 +45,13 @@ test('an entry past its ttl is kept, and a failed revalidation answers what it h
 // THE REVERT: drop the `expired` release from `Lifetime.sweep`; the kept entry is never let go,
 // `entries: 1`.
 test('an entry kept past its ttl is released once staleIfError runs out — 6.7', async () => {
-    const listed = memo(async () => 'list', { ttl: 20, staleIfError: 40 })
+    // Windows wide enough that a timer a loaded `--parallel` worker runs late still lands in them:
+    // expired by 60, kept until 20 + 400, released by 600.
+    const listed = memo(async () => 'list', { ttl: 20, staleIfError: 400 })
     await listed()
-    await Bun.sleep(40)
+    await Bun.sleep(60)
     expect(`kept: ${entriesOf(listed)}`).toBe('kept: 1')
-    await Bun.sleep(80)
+    await Bun.sleep(540)
     expect(`entries: ${entriesOf(listed)}`).toBe('entries: 0')
 })
 

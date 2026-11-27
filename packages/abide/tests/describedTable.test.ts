@@ -186,12 +186,12 @@ test('a write inside a transaction refreshes once it commits, and not at all whe
         for (const deal of deals()) sum += deal.amount
         return sum
     })()
-    expect(total()).toBe(100)
+    expect(total.get()).toBe(100)
     let seenInside: number | undefined
     try {
         db().transaction(() => {
             deals.set({ id: 2, amount: 50 })
-            seenInside = total()
+            seenInside = total.get()
             throw new Error('rolled back')
         })()
     } catch {}
@@ -199,8 +199,8 @@ test('a write inside a transaction refreshes once it commits, and not at all whe
     db().transaction(() => {
         deals.set({ id: 3, amount: 25 })
     })()
-    await until(() => total() === 125)
-    expect(`inside: ${seenInside}, total: ${total()}, runs: ${runs}`).toBe(
+    await until(() => total.get() === 125)
+    expect(`inside: ${seenInside}, total: ${total.get()}, runs: ${runs}`).toBe(
         'inside: 100, total: 125, runs: 2',
     )
 })
@@ -272,10 +272,10 @@ test('a peek reads the rows without the run that made it following them — 47.5
         runs += 1
         return deals.peek().length
     })()
-    expect(count()).toBe(1)
+    expect(count.get()).toBe(1)
     deals.set({ id: 2, amount: 20 })
     await Bun.sleep(150)
-    expect(`count: ${count()}, runs: ${runs}`).toBe('count: 1, runs: 1')
+    expect(`count: ${count.get()}, runs: ${runs}`).toBe('count: 1, runs: 1')
 })
 
 // 47.52, 47.33 — AN INSERT IS ANSWERED AS STORED, its key assigned; a column left `undefined` is not

@@ -3,7 +3,6 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import type { CheckerAnswer } from './CheckerAnswer.ts'
 import type { Read } from './classifyRead.ts'
 import { isSlot } from './classifyTemplate.ts'
-import type { Finding } from './Diagnostics.ts'
 import { abideBindings } from './hookCalls.ts'
 import { IDENTIFIER_PART, isNamedAlone } from './isNamedAlone.ts'
 import { type AbideFile, scriptBodies } from './parseAbide.ts'
@@ -107,20 +106,21 @@ export class Lowering {
      */
     private readonly importsRaw: boolean
     /**
-     * The names a checked lowering read, each with whether it was read through a props accessor.
+     * The names a checked lowering read, each with what it reads through: a `Reactive`, a props
+     * accessor handing back a cell (`through`), or a props accessor answering the value (33.4).
      *
      * A read is `__values.name` there rather than `name()`: two calls are two values to the
      * checker, so `{thread ? thread.text : ''}` failed to narrow where the program it lowers to
      * reads one value twice — and a property of one declared record narrows (`checkedShadow`).
      */
-    readonly values = new Map<string, boolean>()
+    readonly values = new Map<string, ValueSource>()
     /**
-     * What a checked lowering found that a build refuses, at the projection offset of the read.
-     *
-     * Collected rather than thrown, so one refusal is one finding and the rest of the file is
-     * still checked.
+     * 38.138 — the same, for each branch-local `<script>` or inline component head a checked read
+     * went through, by where it starts: what `checkedShadow` declares ahead of it. Only a name read
+     * through the record is in it, so a body whose names are only ever handed on as their
+     * `Reactive` declares no record nothing reads.
      */
-    readonly refusals: Finding[] = []
+    readonly localValues = new Map<number, Map<string, ValueSource>>()
     /**
      * 38.97 — where given, each chunk this lowering hands an emitter, with where its runs stood in
      * the projection: what `sourceMapOf` finds in the module the emitter writes.
@@ -453,7 +453,7 @@ export class Lowering {
             source: to,
             length: 0,
         })
-        return `${open}${got}, set: (${STORED}) => ${name}.set(${this.use('writePath')}(${name}(), [${segments.join(', ')}], ${STORED})) }`
+        return `${open}${got}, set: (${STORED}) => ${name}.set(${this.use('writePath')}(${name}.get(), [${segments.join(', ')}], ${STORED})) }`
     }
 
     /**
@@ -755,7 +755,7 @@ export class Lowering {
         // 23.9 — WHAT THIS PAGE'S OWN ROUTE PROMISES, for the checker alone: the running module
         // reads the one `route` every page shares.
         if (this.routed !== undefined && read.routeParams)
-            return `(${spelled} as unknown as () => __RouteParams<${JSON.stringify(this.routed.route)}, ${JSON.stringify(this.routed.kind)}>)`
+            return `(${spelled} as unknown as { get(): __RouteParams<${JSON.stringify(this.routed.route)}, ${JSON.stringify(this.routed.kind)}> })`
         if (read.held) return `${this.use('heldProp')}(${spelled})`
         return read.through ? `${spelled}()` : spelled
     }
@@ -816,16 +816,6 @@ export class Lowering {
                 return this.checking
                     ? `${name}.${read.path[0]?.name}`
                     : `((...args) => ${name}.${read.path[0]?.name}(...args))`
-            // 31.7 — the explicit spelling keeps compiling. 31.11 — AND IT TAKES NO ARGUMENTS.
-            // Passed through, `count(5)` calls the read with a value the read ignores: an author
-            // who meant a write, silently given one.
-            case 'call':
-                if (read.arguments > 0) {
-                    const message = `abide: ${spelled}() is a read by name and takes no arguments, and this one is given one. Write ${spelled}.set(…) to write it. RULEBOOK 31.11.`
-                    if (!this.checking) throw new Error(message)
-                    this.refusals.push({ at: read.start, message })
-                }
-                return name === spelled ? undefined : name
             // 33.15 — a props rest element's member: the key's accessor, called.
             case 'restMember':
                 return `${spelled}?.()`
@@ -931,9 +921,9 @@ export class Lowering {
         // have emitted a call on `f()`'s result. A read prefix is `n += 1`, worth what it stored;
         // only a read postfix binds what it read, which is what JavaScript hands back.
         const step = read.operator
-        if (read.discarded) return `${name}.set(${name}() ${step} 1)`
+        if (read.discarded) return `${name}.set(${name}.get() ${step} 1)`
         if (read.prefix) return writeParts(name, step, false).join(value)
-        return `((${PREVIOUS}) => (${name}.set(${PREVIOUS} ${step} 1), ${PREVIOUS}))(${name}())`
+        return `((${PREVIOUS}) => (${name}.set(${PREVIOUS} ${step} 1), ${PREVIOUS}))(${name}.get())`
     }
 
     /**
@@ -959,7 +949,9 @@ export class Lowering {
         const cell = read.through
             ? `ReturnType<typeof ${spelled}>`
             : `typeof ${spelled}`
-        const takes = `) satisfies Parameters<${cell}['set']>[0])`
+        // What a write takes: the FIRST of `set`'s overloads, the whole of it (31.4) — `Parameters`
+        // reads the last, the value alone that is there for `Bindable` (49.8).
+        const takes = `) satisfies (${cell} extends { set(value: infer Whole): unknown; set(value: infer _Value): unknown } ? Whole : never))`
         const op = read.operator
         // A WRITE THAT IS A WHOLE STATEMENT MUST NOT OPEN ON `(`: after a line with no semicolon,
         // JavaScript reads it as a call on that line — `await f()` then `x = 1` checked as
@@ -972,18 +964,20 @@ export class Lowering {
         return [`${open}${held} = ${written}${held} ${op} (`, `)${takes})`]
     }
 
-    /** A read of the value: `name()`, or `__values.name` where the checker is asked. */
+    /** A read of the value: `name.get()`, or `__values.name` where the checker is asked. */
     private valueOf(spelled: string, read: Read, name: string): string {
         const record = this.recordOf(spelled, read)
         if (record !== undefined) return `${record}.${spelled}`
-        return read.optional ? `${name}?.()` : `${name}()`
+        // 33.4 — a prop's accessor is called; a `Reactive`'s value is its `get`.
+        if (read.accessor) return read.optional ? `${name}?.()` : `${name}()`
+        return read.optional ? `${name}?.get()` : `${name}.get()`
     }
 
     /**
      * The record a checked lowering reads `read` through, or `undefined` where it is called.
      *
      * 38.138 — A BRANCH-LOCAL NAME HAS A RECORD OF ITS OWN, declared ahead of the setup or the
-     * inline component's head that declares it (`localRecords`): it is out of scope where the page's
+     * inline component's head that declares it (`localValues`): it is out of scope where the page's
      * is declared, and two bodies may each declare one of the same spelling. Read through a record,
      * a prop narrows under an `{#if}` as a page's own value does; called, it would not narrow at all.
      */
@@ -991,11 +985,16 @@ export class Lowering {
         // 31.1 — a read of what may be no `Reactive` is `n?.()`, typed as it runs.
         if (!this.checking || read.optional) return undefined
         if (!read.local) {
-            this.values.set(spelled, read.through)
+            this.values.set(spelled, sourceOf(read))
             return CHECKED_VALUES
         }
         const setup = this.setupDeclaring(read)
-        return setup === undefined ? undefined : `${CHECKED_VALUES}${setup}`
+        if (setup === undefined) return undefined
+        const names =
+            this.localValues.get(setup) ?? new Map<string, ValueSource>()
+        names.set(spelled, sourceOf(read))
+        this.localValues.set(setup, names)
+        return `${CHECKED_VALUES}${setup}`
     }
 
     /**
@@ -1008,28 +1007,6 @@ export class Lowering {
         return setup?.kind === 'setup' || setup?.kind === 'head'
             ? setup.start
             : undefined
-    }
-
-    /**
-     * 38.138 — each branch-local `<script>` or inline component head a checked read goes through,
-     * by where it starts, and the names read through its record — each with whether it is read
-     * through a props accessor (`Read.through`): what `checkedShadow` declares ahead of it.
-     */
-    localRecords(): Map<number, Map<string, boolean>> {
-        const records = new Map<number, Map<string, boolean>>()
-        if (!this.checking) return records
-        for (const read of this.answer.reads) {
-            if (!read.local) continue
-            const setup = this.setupDeclaring(read)
-            if (setup === undefined) continue
-            const names = records.get(setup) ?? new Map<string, boolean>()
-            names.set(
-                this.projection.text.slice(read.start, read.end),
-                read.through,
-            )
-            records.set(setup, names)
-        }
-        return records
     }
 
     /**
@@ -1052,9 +1029,9 @@ export class Lowering {
         // An op-assign or an update through a path READS the path first, the same way `n += 1`
         // reads `n`, and a SHORT-CIRCUITING one reads it to decide whether to write at all.
         const op = read.operator
-        const current = `${name}()${segments.map((segment) => `[${segment}]`).join('')}`
+        const current = `${name}.get()${segments.map((segment) => `[${segment}]`).join('')}`
         const short = SHORT_CIRCUIT.has(op)
-        const writePath = `${this.use('writePath')}(${name}(), [${segments.join(', ')}], `
+        const writePath = `${this.use('writePath')}(${name}.get(), [${segments.join(', ')}], `
         // A POSTFIX UPDATE IS WORTH WHAT IT READ, and only it: every other write is worth what it
         // stored, as the whole-name forms are.
         if (!read.discarded && read.shape === 'update' && !read.prefix)
@@ -1105,9 +1082,17 @@ function grouped(text: string): string {
  */
 export const PROPS = '__props'
 
+/** What a checked read reads its value through (`Lowering.values`). */
+export type ValueSource = 'reactive' | 'cell' | 'accessor'
+
+function sourceOf(read: Read): ValueSource {
+    if (read.through) return 'cell'
+    return read.accessor ? 'accessor' : 'reactive'
+}
+
 /**
  * The record a checked lowering reads each value through (`Lowering.values`) — suffixed, for a
- * branch-local value, by where the setup declaring it starts (`Lowering.localRecords`).
+ * branch-local value, by where the setup declaring it starts (`Lowering.localValues`).
  */
 export const CHECKED_VALUES = '__values'
 
@@ -1149,8 +1134,8 @@ function writeParts(
         ? `${name}.set(`
         : `((${STORED}) => (${name}.set(${STORED}), ${STORED}))(`
     if (op === '') return [open, ')']
-    if (SHORT_CIRCUIT.has(op)) return [`${name}() ${op} ${open}`, ')']
-    return [`${open}${name}() ${op} (`, '))']
+    if (SHORT_CIRCUIT.has(op)) return [`${name}.get() ${op} ${open}`, ')']
+    return [`${open}${name}.get() ${op} (`, '))']
 }
 
 /**

@@ -33,7 +33,7 @@ affected code saying what it did, and tell the user.
   test that only reads the text back passes against a component doing ten times the work.
   A prop the test moves is handed as its `Reactive` — `Label({ label })` — which the component
   reads live and writes back to as a `bind:` would (RULEBOOK 38.207, 38.208), or as a getter —
-  `Label({ get label() { return source() } })` — read through on every read (RULEBOOK 38.134); any
+  `Label({ get label() { return source.get() } })` — read through on every read (RULEBOOK 38.134); any
   other prop is the value it was given.
   A test waits on a value landing — `await` the handler call, or the `Reactive` the component
   reads, which is thenable (RULEBOOK 1.4), or, after a click whose calls the test cannot reach,
@@ -120,12 +120,12 @@ affected code saying what it did, and tell the user.
 
 - Export a `Reactive` itself, never wrapped in an object — one per file, even when several belong
   together: an `.abide` file reads and writes it by name (RULEBOOK 31.1), and one reached through a
-  property is left to `x()` and `x.set(v)` (31.7).
+  property is left to `x.get()` and `x.set(v)` (31.7).
 - Change part of a value by writing through its path — `edits.kind = kind`, `items.push(item)`
   (RULEBOOK 31.8, 31.9) — not by rebuilding it (`edits = { ...edits, kind }`,
   `items = [...items, item]`). Bind through the path too: `bind:value={edits.kind}` (32.5), not a
   `{ get, set }` pair. In a `.ts` file the same write is
-  `edits.patch((value) => { value.kind = kind })`, not `edits.set({ ...edits(), kind })`.
+  `edits.patch((value) => { value.kind = kind })`, not `edits.set({ ...edits.get(), kind })`.
 - Derive a value with `reactive(() => …)`. `watch` is only for reaching outside the reactive graph —
   the DOM, a timer, an imperative API — and its run never assigns state, a value computed from what
   it read being a derived value. What a timer or a call it started hands back is written when that

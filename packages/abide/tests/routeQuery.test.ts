@@ -36,7 +36,7 @@ test('each member is parsed by its default’s type — 30.41', () => {
             'https://crm.invalid/deals?watch=3&tab=mine&open=true&tags=a&tags=b',
         ),
     )
-    expect(routeQuery(address, DEFAULTS)()).toEqual({
+    expect(routeQuery(address, DEFAULTS).get()).toEqual({
         watch: 3,
         tab: 'mine',
         open: true,
@@ -48,18 +48,18 @@ test('a member absent or unparseable reads its default — 30.42', () => {
     const address = reactive(
         new URL('https://crm.invalid/deals?watch=three&open=yes'),
     )
-    expect(routeQuery(address, DEFAULTS)()).toEqual(DEFAULTS)
+    expect(routeQuery(address, DEFAULTS).get()).toEqual(DEFAULTS)
     address.set(new URL('https://crm.invalid/deals?watch='))
-    expect(routeQuery(address, DEFAULTS)().watch).toBe(0)
+    expect(routeQuery(address, DEFAULTS).get().watch).toBe(0)
 })
 
 // 30.28 — `tags` with no `=` is the empty list, and `tags=` the list holding ''.
 test('a list member named with no `=` reads as the empty list — 30.41', () => {
     const address = reactive(new URL('https://crm.invalid/deals?tags'))
     const query = routeQuery(address, { tags: ['open'] })
-    expect(query().tags).toEqual([])
+    expect(query.get().tags).toEqual([])
     address.set(new URL('https://crm.invalid/deals?tags='))
-    expect(query().tags).toEqual([''])
+    expect(query.get().tags).toEqual([''])
 })
 
 test('url leaves out a member spelled as its default — 30.40', () => {
@@ -95,7 +95,7 @@ test('a set replaces the query, and a member it leaves out goes back to its defa
             { replace: true, keepScroll: true },
         ],
     ])
-    expect(query()).toEqual({ ...DEFAULTS, open: true })
+    expect(query.get()).toEqual({ ...DEFAULTS, open: true })
 })
 
 // What `query.watch = 4` lowers to (31.8): a copy of the value with the one member changed, set.
@@ -105,11 +105,11 @@ test('a write through one member changes that member alone — 30.43, 31.8', () 
     )
     const { went } = standIn(address)
     const query = routeQuery(address, DEFAULTS)
-    query.set({ ...query(), watch: 4 })
+    query.set({ ...query.get(), watch: 4 })
     expect(went.map(([to]) => to)).toEqual([
         'https://crm.invalid/deals?watch=4&tab=mine',
     ])
-    query.set({ ...query(), tab: 'all' })
+    query.set({ ...query.get(), tab: 'all' })
     expect(went.map(([to]) => to)).toEqual([
         'https://crm.invalid/deals?watch=4&tab=mine',
         'https://crm.invalid/deals?watch=4',
@@ -167,7 +167,7 @@ test('the value is typed by its defaults — 30.41', () => {
             tab: string
             open: boolean
             tags: string[]
-        } = query()
+        } = query.get()
         query.set({ tab: 'mine' })
         // @ts-expect-error — a member is written as its default's type.
         query.set({ watch: '3' })
@@ -202,19 +202,24 @@ test('writes in one turn build on each other, through any defaults — 30.48', a
     const watching = routeQuery(address, { watch: 0 })
     const tabs = routeQuery(address, { tab: 'all' })
     watching.set({ watch: 4 })
-    expect(watching().watch).toBe(4)
+    expect(watching.get().watch).toBe(4)
     tabs.set({ tab: 'mine' })
     expect(went).toEqual([
         'https://crm.invalid/deals?watch=4',
         'https://crm.invalid/deals?watch=4&tab=mine',
     ])
     const query = routeQuery(address, DEFAULTS)
-    query.set({ ...query(), open: true })
+    query.set({ ...query.get(), open: true })
     expect(went.at(-1)).toBe(
         'https://crm.invalid/deals?watch=4&tab=mine&open=true',
     )
     for (const arrive of arrivals) arrive()
     await Promise.resolve()
     await Promise.resolve()
-    expect(query()).toEqual({ ...DEFAULTS, watch: 4, tab: 'mine', open: true })
+    expect(query.get()).toEqual({
+        ...DEFAULTS,
+        watch: 4,
+        tab: 'mine',
+        open: true,
+    })
 })

@@ -55,7 +55,7 @@ test('a revalidation giving up on abortSignal is not warned on — 4.12, 37.28',
         runs += 1
         return runs === 1 ? 1 : givenUp(abortSignal())
     })
-    landed()
+    landed.get()
     landed.refresh()
     const app = await inMemoryApp({})
     serving(app)
@@ -106,15 +106,15 @@ test('abortSignal in a memo body is its run’s own, ended by the next run — 7
     const query = reactive('lead')
     const signals: AbortSignal[] = []
     const found = reactive(() => {
-        const asked = query()
+        const asked = query.get()
         signals.push(abortSignal())
         return asked
     })
-    found()
+    found.get()
     const first = signals[0] as AbortSignal
     const own = first !== abortSignal()
     query.set('won')
-    found()
+    found.get()
     expect(
         `own: ${own}, first after a rerun: ${first.aborted}, second: ${(signals[1] as AbortSignal).aborted}`,
     ).toBe('own: true, first after a rerun: true, second: false')
@@ -168,7 +168,7 @@ test('on a server, abortSignal after an await in a memo body is still its run’
     const query = reactive('lead')
     const signals: AbortSignal[] = []
     const found = reactive(async () => {
-        const asked = query()
+        const asked = query.get()
         await Bun.sleep(0)
         signals.push(abortSignal())
         return asked
@@ -192,7 +192,7 @@ test('a run asking after the next run started is handed a signal already aborted
     let resume: () => void = () => undefined
     const asked: AbortSignal[] = []
     const found = reactive(async () => {
-        const run = query()
+        const run = query.get()
         if (run === 1) await new Promise<void>((resolve) => (resume = resolve))
         asked[run] = abortSignal()
         return run

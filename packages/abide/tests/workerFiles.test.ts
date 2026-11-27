@@ -64,11 +64,13 @@ export async function ticking(record: string): Promise<string> {
     return 'ticking'
 }
 
-export async function untilAborted(signal: AbortSignal): Promise<string> {
-    if (signal.aborted) return 'aborted'
-    return new Promise((resolve) =>
-        signal.addEventListener('abort', () => resolve('aborted')),
-    )
+export async function busy(
+    milliseconds: number,
+    signal: AbortSignal,
+): Promise<string> {
+    const until = performance.now() + milliseconds
+    while (performance.now() < until) signal.throwIfAborted()
+    return 'finished'
 }
 
 export async function fails(): Promise<never> {
@@ -106,7 +108,7 @@ type Thread = {
     naturals: (record: string) => AsyncGenerator<number>
     finite: (to: number) => AsyncGenerator<number, string>
     ticking: (record: string) => Promise<string>
-    untilAborted: (signal: AbortSignal) => Promise<string>
+    busy: (milliseconds: number, signal: AbortSignal) => Promise<string>
     fails: () => Promise<never>
     echo: (value: unknown) => Promise<unknown>
     never: () => Promise<never>
@@ -193,16 +195,92 @@ test('a thread ends once its call has settled — 55.11', async () => {
     expect(Bun.file(record).size).toBe(settled)
 })
 
-// Aborted before the thread has the module or after: either is a signal aborted from whenever the
-// one passed is. THE REVERT: drop `aborted` from the call `WorkerModule` posts — a signal aborted
-// before the call reaches the export unaborted, nothing aborts it after, and the second call never
-// settles.
-test('an AbortSignal argument aborts in the thread as it aborts here — 55.6', async () => {
+// THE REVERT: hand the abort to the thread as a message rather than ending it — `busy` never yields,
+// so the message waits behind the loop, and the call answers 'finished' two seconds later.
+test('an abort of a signal argument ends the thread at once, rejecting with its reason — 55.6', async () => {
     const controller = new AbortController()
-    const answered = thread.untilAborted(controller.signal)
-    controller.abort()
-    expect(await answered).toBe('aborted')
-    expect(await thread.untilAborted(AbortSignal.abort())).toBe('aborted')
+    const started = performance.now()
+    setTimeout(() => controller.abort(new RangeError('given up')), 50)
+    const thrown = await thread
+        .busy(2_000, controller.signal)
+        .catch((error: unknown) => error)
+    expect(thrown).toBeInstanceOf(RangeError)
+    expect((thrown as Error).message).toBe('given up')
+    expect(performance.now() - started).toBeLessThan(1_000)
+})
+
+// Each `new Worker` the stand-ins make while `body` runs.
+async function threadsStarted(body: () => Promise<unknown>): Promise<number> {
+    const Spawned = globalThis.Worker
+    let started = 0
+    globalThis.Worker = class extends Spawned {
+        constructor(...args: ConstructorParameters<typeof Worker>) {
+            super(...args)
+            started += 1
+        }
+    }
+    try {
+        await body()
+    } finally {
+        globalThis.Worker = Spawned
+    }
+    return started
+}
+
+// THE REVERT: spawn the thread before looking at the signals — each call below starts one, and
+// the job's runs to its end though the job had stopped before it was made.
+test('a call whose signal has aborted already starts no thread — 55.6, 55.8', async () => {
+    let thrown: unknown
+    expect(
+        await threadsStarted(async () => {
+            thrown = await thread
+                .busy(0, AbortSignal.abort('before'))
+                .catch((error: unknown) => error)
+        }),
+    ).toBe(0)
+    expect(thrown).toBe('before')
+    let ended: unknown
+    const late = job({
+        name: 'late',
+        every: 3_600_000,
+        run: async () => {
+            const signal = abortSignal()
+            await Bun.sleep(20)
+            ended = await thread
+                .onMainThread()
+                .catch((error: unknown) => error === signal.reason)
+        },
+    })
+    expect(
+        await threadsStarted(async () => {
+            const running = late.run()
+            await late.stop()
+            await running
+        }),
+    ).toBe(0)
+    expect(ended).toBe(true)
+})
+
+// THE REVERT: end the thread on the signal `abortSignal` answers as well as the one handed in — the
+// job's stop ends a call it does not own, and `answered` reads the stop.
+test('a call handed a signal ends on it alone, not where its caller stops — 55.8, 57.13', async () => {
+    let answered: unknown
+    let calling = () => {}
+    const called = new Promise<void>((done) => (calling = done))
+    const sharing = job({
+        name: 'sharing',
+        every: 3_600_000,
+        run: async () => {
+            const answer = thread.busy(300, new AbortController().signal)
+            calling()
+            answered = await answer.catch((error: unknown) => error)
+        },
+    })
+    const running = sharing.run()
+    await called
+    await sharing.stop()
+    await running
+    expect(answered).toBe('finished')
 })
 
 test('what an export throws is what its call rejects with — 55.12', async () => {

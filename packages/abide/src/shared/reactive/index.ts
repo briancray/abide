@@ -106,6 +106,7 @@ function sweepOf(
     selection: Selection | undefined,
 ): string[] | null | undefined {
     if (selection === undefined) return null
+    if (isReactive(selection)) return undefined
     return typeof selection === 'object'
         ? (selection as { tags: string[] }).tags
         : undefined
@@ -215,8 +216,8 @@ export type Held<Accepted> = [Accepted] extends [{ invalidate: unknown }]
       ? never
       : Accepted | (PromiseLike<Accepted> & { invalidate?: never | undefined })
 /**
- * What `reactive` runs: a plain function, never a `Reactive` or a `memo`, which are callable too and
- * which the value form adopts (11.60).
+ * What `reactive` runs: a plain function, never a `memo`, which is callable too and which the value
+ * form adopts (11.60).
  */
 type Body<Result> = (() => Result) & { invalidate?: never | undefined }
 /**
@@ -234,6 +235,20 @@ export type BodyProduced<Result, Otherwise> =
     Awaited<Result> extends AsyncIterable<infer Chunk>
         ? Chunk
         : AdoptedProduced<Result, Otherwise>
+/**
+ * A body with nothing shaping it — the overload below at its defaults, FIRST for that one's reason,
+ * and spelled apart for the value form's: written where a `Bindable` is due (49.8), the checker
+ * infers `Shaped` from that slot to `unknown`, where here there is no `Shaped` to infer.
+ */
+export function reactive<Value = never, Result = Value>(
+    body: Body<Result>,
+): Reactive<
+    Kept<BodyValue<Result>>,
+    BodyValue<Result>,
+    | AdoptedFailures<Result>
+    | Refusals<BodyValue<Result>, Schema<BodyValue<Result>>, BodyValue<Result>>,
+    BodyProduced<Result, Kept<BodyValue<Result>>>
+>
 /**
  * A value `body` produces, run again when a value it read changes (11.1), and a stream where it hands
  * back an async iterable (9.6). FIRST, so a function is never tried as a value the scope owns.
@@ -262,6 +277,26 @@ export function reactive<
     BodyValue<Result>,
     AdoptedFailures<Result> | Refusals<Shaped, Gate, BodyValue<Result>>,
     BodyProduced<Result, Kept<Shaped>>
+>
+/**
+ * 11.60 — A `Reactive` handed over, adopted rather than held: the value it holds, written through to
+ * it. Its own overload since a `Reactive` is no function for the body form to take it as.
+ */
+export function reactive<Stored, Accepted, Failures>(
+    adopted: Reactive<Stored, Accepted, Failures, unknown>,
+): Reactive<Stored, Accepted, Failures>
+/**
+ * A value with nothing shaping it — the overload below at its defaults, spelled apart as the body's
+ * is: written where a `Bindable` is due (49.8), the checker infers `Shaped` from that slot to
+ * `unknown`, where here there is no `Shaped` to infer.
+ */
+export function reactive<Accepted>(
+    initial:
+        Held<Accepted> | ([Accepted] extends [unknown] ? undefined : never),
+): Reactive<
+    Kept<Accepted>,
+    Accepted,
+    Refusals<Accepted, Schema<Accepted>, Accepted>
 >
 /**
  * A value the scope owns outright, opening at `initial`, or at what a promise of it settles to.

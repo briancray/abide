@@ -188,7 +188,7 @@ test('a function names the file as it opens, so it reads the config of that mome
     const garage = database(
         () => {
             calls += 1
-            return String(config().GARAGE_DB)
+            return String(config.get().GARAGE_DB)
         },
         { migrations: [CARS] },
     )
@@ -590,7 +590,7 @@ test('store.sqlite given an opener keeps working after the app stop closes its D
     await app.stop()
     expect({
         read: kept.get(),
-        again: reactive(0, { store: sqlite<number>(crm, 'target') })(),
+        again: reactive(0, { store: sqlite<number>(crm, 'target') }).get(),
     }).toEqual({ read: 750_000, again: 750_000 })
     crm.close()
 })
@@ -690,7 +690,7 @@ test('changed counts another connection’s commits, and is asked only while fol
 
     const seen: number[] = []
     const stop = watch(() => {
-        seen.push(garage.changed())
+        seen.push(garage.changed.get())
     })
     await Bun.sleep(0)
     expect(asked).toBeGreaterThan(0)
@@ -717,7 +717,7 @@ test('following changed does not open the database — 47.24', async () => {
     onDisk()
     const garage = database('unopened', { migrations: [CARS] })
     const stop = watch(() => {
-        garage.changed()
+        garage.changed.get()
     })
     await Bun.sleep(1_100)
     stop()

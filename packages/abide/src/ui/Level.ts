@@ -245,7 +245,7 @@ function reconcileLater(chain: HeadChain): void {
         const opened = unowned(() => reactive(0))
         unowned(() =>
             watchTracked(() => {
-                opened()
+                opened.get()
                 const chains = [...STALE]
                 STALE.clear()
                 for (const chain of chains) chain.reconcile()

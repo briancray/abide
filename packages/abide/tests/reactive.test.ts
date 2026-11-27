@@ -125,7 +125,7 @@ test('a value form lands at construction and reads as ready — 3.9', () => {
     const total = reactive(41)
     expect(total.ready()).toBe(true)
     expect(total.busy()).toBe(false)
-    expect(total()).toBe(41)
+    expect(total.get()).toBe(41)
     expect(total.peek()).toBe(41)
 })
 
@@ -134,7 +134,7 @@ test('a read throws NotLanded where nothing has landed, and peek does not — 2.
     const pending = reactive(new Promise<number>(() => {}))
     expect(pending.ready()).toBe(false)
     expect(pending.busy()).toBe(true)
-    expect(() => pending()).toThrow(NotLanded)
+    expect(() => pending.get()).toThrow(NotLanded)
     expect(pending.peek()).toBeUndefined()
 })
 
@@ -143,14 +143,14 @@ test('refresh keeps serving while it reloads — 2.1', async () => {
     let answer = 1
     const held = reactive(() => Promise.resolve(answer))
     await held
-    expect(held()).toBe(1)
+    expect(held.get()).toBe(1)
     answer = 2
     held.refresh()
     expect(held.ready()).toBe(true)
     expect(held.busy()).toBe(true)
-    expect(held()).toBe(1)
+    expect(held.get()).toBe(1)
     await held
-    expect(held()).toBe(2)
+    expect(held.get()).toBe(2)
 })
 
 // SERVED UNTIL A READ OR A PROBE RUNS THE PRODUCER (7.16, 7.17). A probe answers about the value a
@@ -163,7 +163,7 @@ test('invalidate keeps serving until a probe or a read runs the producer — 7.7
     held.invalidate()
     expect(`busy: ${held.busy()}`).toBe('busy: true')
     expect(`ready: ${held.ready()}`).toBe('ready: false')
-    expect(() => held()).toThrow(NotLanded)
+    expect(() => held.get()).toThrow(NotLanded)
     expect(`busy after the read: ${held.busy()}`).toBe(
         'busy after the read: true',
     )
@@ -187,19 +187,19 @@ test('invalidate keeps serving until a probe or a read runs the producer — 7.7
 test('a reload that lands the value already held frees the bodies that aborted', async () => {
     const answer = 1
     const held = reactive(() => Promise.resolve(answer))
-    const doubled = reactive(() => held() * 2)
+    const doubled = reactive(() => held.get() * 2)
     await held
-    expect(doubled()).toBe(2)
+    expect(doubled.get()).toBe(2)
 
     held.invalidate()
     // The read is what settles the debt: it unserves `held`, starts the reload, and
     // `doubled` aborts on the unlanded read.
-    expect(() => doubled()).toThrow(NotLanded)
+    expect(() => doubled.get()).toThrow(NotLanded)
     await held
     flushSync()
     // The cascade is what left `doubled` marked. Without it the aborted body is CLEAN and
     // holding nothing, so the read resolves to no run and throws again.
-    expect(`read: ${doubled()}`).toBe('read: 2')
+    expect(`read: ${doubled.get()}`).toBe('read: 2')
 })
 
 // 2.13's own half of the same thing: a value nothing READS and only a guard asks about is
@@ -209,7 +209,7 @@ test('a reload that lands the value already held frees the bodies that aborted',
 test('a guard over an aborted body comes back when the reload lands what was held', async () => {
     const answer = 1
     const held = reactive(() => Promise.resolve(answer))
-    const doubled = reactive(() => held() * 2)
+    const doubled = reactive(() => held.get() * 2)
     const seen: boolean[] = []
     const stop = watch(() => {
         seen.push(doubled.ready())
@@ -218,7 +218,7 @@ test('a guard over an aborted body comes back when the reload lands what was hel
     flushSync()
 
     held.invalidate()
-    expect(() => doubled()).toThrow(NotLanded)
+    expect(() => doubled.get()).toThrow(NotLanded)
     await held
     flushSync()
     expect(`ready: ${seen[seen.length - 1]}`).toBe('ready: true')
@@ -233,8 +233,8 @@ test('busy propagates through a derived value while its source refreshes — 11.
     const answer = 1
     const invoice = reactive(() => Promise.resolve(answer))
     await invoice
-    const doubled = reactive(() => invoice() * 2)
-    expect(doubled()).toBe(2)
+    const doubled = reactive(() => invoice.get() * 2)
+    expect(doubled.get()).toBe(2)
     expect(doubled.busy()).toBe(false)
 
     invoice.refresh()
@@ -256,7 +256,7 @@ test('a body reading an unlanded value mints nothing and reruns on landing', asy
     let runs = 0
     const derived = reactive(() => {
         runs += 1
-        return source() + 1
+        return source.get() + 1
     })
     expect(runs).toBe(1)
     expect(derived.ready()).toBe(false)
@@ -270,7 +270,7 @@ test('a body reading an unlanded value mints nothing and reruns on landing', asy
     // body is abandoned rather than completed against an absent value, and it mints
     // nothing on the run that aborted.
     expect(runs).toBe(1)
-    expect(derived()).toBe(42)
+    expect(derived.get()).toBe(42)
     expect(runs).toBe(2)
 })
 
@@ -290,11 +290,13 @@ test('a body something only guards reruns when the value it aborted on lands', a
     let bodyRuns = 0
     const unpaid = reactive(() => {
         bodyRuns += 1
-        return rows().filter((row) => !row.paid)
+        return rows.get().filter((row) => !row.paid)
     })
     const painted: string[] = []
     const stop = watch(() => {
-        painted.push(unpaid.ready() ? `ready:${unpaid().length}` : 'counting…')
+        painted.push(
+            unpaid.ready() ? `ready:${unpaid.get().length}` : 'counting…',
+        )
     })
     flushSync()
     expect(`before: ${painted.join(' | ')}`).toBe('before: counting…')
@@ -323,7 +325,7 @@ test('a watched derived value reruns on the write, not on a later read', async (
     let runs = 0
     const derived = reactive(() => {
         runs += 1
-        return source() + 1
+        return source.get() + 1
     })
     const seen: number[] = []
     const stop = derived.watch((value) => {
@@ -343,7 +345,7 @@ test('a watched derived value reruns on the write, not on a later read', async (
 // promise of its value. THE REVERT: build a keyed value per call in `memo`; `runs: 2` after the second.
 test('reactive given a body is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3, 11.25', async () => {
     const unkeyed = reactive(() => 7)
-    expect(unkeyed()).toBe(7)
+    expect(unkeyed.get()).toBe(7)
 
     let runs = 0
     const once = memo(() => {
@@ -373,12 +375,12 @@ test('a rerun calling a memo at the same spot subscribes nothing again — 11.74
     const trigger = reactive(0)
     const after = reactive(1)
     const body = reactive(() => {
-        trigger()
+        trigger.get()
         score({ id: 2 })
-        return after()
+        return after.get()
     })
     const stop = watch(() => {
-        body()
+        body.get()
     })
     flushSync()
     const readers = cellOf(after).readers
@@ -412,20 +414,20 @@ test('a computed calling a memo follows the key it called — 11.74, 16.107', as
     shown.peek()
     awaited.peek()
     await Bun.sleep(5)
-    expect(`shown: ${shown()}, awaited: ${awaited()}`).toBe(
+    expect(`shown: ${shown.get()}, awaited: ${awaited.get()}`).toBe(
         'shown: 2, awaited: 3',
     )
     answer = 5
     score.refresh({ id: 3 })
     await Bun.sleep(5)
-    expect(`shown: ${shown()}, awaited: ${awaited()}`).toBe(
+    expect(`shown: ${shown.get()}, awaited: ${awaited.get()}`).toBe(
         'shown: 2, awaited: 3',
     )
     score.refresh({ id: 2 })
     awaited.peek()
     await Bun.sleep(5)
     expect(
-        `shown: ${shown()}, awaited: ${awaited()}, adopting runs: ${adoptingRuns}`,
+        `shown: ${shown.get()}, awaited: ${awaited.get()}, adopting runs: ${adoptingRuns}`,
     ).toBe('shown: 10, awaited: 11, adopting runs: 1')
 })
 
@@ -504,9 +506,9 @@ test('a memo entry is set and patched by its owner, and a reader follows — 11.
     feed.patch({ account: 'a' }, (entries) => {
         entries.push(2)
     })
-    expect(`entries: ${shown()}`).toBe('entries: 1,2')
+    expect(`entries: ${shown.get()}`).toBe('entries: 1,2')
     feed.set({ account: 'a' }, [9])
-    expect(`entries: ${shown()}, runs: ${runs}`).toBe('entries: 9, runs: 1')
+    expect(`entries: ${shown.get()}, runs: ${runs}`).toBe('entries: 9, runs: 1')
 })
 
 // 11.77 — `readable` HANDS ON THE ENTRY'S VALUE NOW, THEN AFTER EACH CHANGE, each a copy of its own, so a
@@ -669,7 +671,7 @@ test('an Args member the canonical key cannot carry is refused at the reach', ()
     let nonFinite = 'accepted'
     let served = 'nothing'
     try {
-        served = `${byPage({ page: Number.NaN })()}`
+        served = `${byPage({ page: Number.NaN }).get()}`
     } catch (thrown) {
         nonFinite = (thrown as Error).message.split(':')[0] ?? ''
     }
@@ -707,14 +709,14 @@ test('a static probe over a keyed value allocates no entry', () => {
 test('a function held as data goes inside a record', () => {
     const handler = (): string => 'called'
     const held = reactive({ handler })
-    expect(held().handler).toBe(handler)
+    expect(held.get().handler).toBe(handler)
 })
 
 test('an effect runs immediately and again on change, and its disposer runs first', () => {
     const count = reactive(1)
     const order: string[] = []
     const stop = watch(() => {
-        order.push(`run:${count()}`)
+        order.push(`run:${count.get()}`)
         return () => order.push('dispose')
     })
     count.set(2)
@@ -841,12 +843,12 @@ gate(
 // intermediate cannot be observed.
 test('a diamond produces once, and never a value the system was not in', () => {
     const a = reactive(10)
-    const b = reactive(() => a() * 10)
-    const c = reactive(() => a() * 10 + 100)
+    const b = reactive(() => a.get() * 10)
+    const c = reactive(() => a.get() * 10 + 100)
     let runs = 0
     const d = reactive(() => {
         runs += 1
-        return b() + c()
+        return b.get() + c.get()
     })
     const seen: number[] = []
     const stop = d.watch((value) => {
@@ -857,7 +859,7 @@ test('a diamond produces once, and never a value the system was not in', () => {
 
     a.set(11)
     flushSync()
-    expect(d()).toBe(11 * 10 + (11 * 10 + 100))
+    expect(d.get()).toBe(11 * 10 + (11 * 10 + 100))
     expect(runs).toBe(1)
     expect(seen).toEqual([320])
     stop()
@@ -868,15 +870,15 @@ test('a diamond produces once, and never a value the system was not in', () => {
 // `Object.is(produced, previous)` in `produce`: `woken` is 1 against 0.
 test('a diamond whose value does not change wakes nobody', () => {
     const a = reactive(1)
-    const b = reactive(() => a() > 0)
-    const c = reactive(() => a() < 100)
-    const both = reactive(() => b() && c())
+    const b = reactive(() => a.get() > 0)
+    const c = reactive(() => a.get() < 100)
+    const both = reactive(() => b.get() && c.get())
     const woken = wakes(both)
 
     a.set(2)
-    expect(both()).toBe(true)
+    expect(both.get()).toBe(true)
     a.set(3)
-    expect(both()).toBe(true)
+    expect(both.get()).toBe(true)
     expect(woken.count()).toBe(0)
     woken.stop()
 })
@@ -900,13 +902,13 @@ test('a diamond whose value does not change wakes nobody', () => {
 test('a write runs no derived body, and the read runs one', () => {
     const source = reactive(0)
     let runs = 0
-    const fan: (() => number)[] = []
+    const fan: Reactive<number>[] = []
     for (let index = 0; index < 50; index += 1)
         fan.push(
             reactive(() => {
                 runs += 1
-                return source() + index
-            }) as unknown as () => number,
+                return source.get() + index
+            }),
         )
     // 3.16: reaching an instance starts the work it is for, so construction runs each
     // body once. What a WRITE does is the claim.
@@ -915,11 +917,11 @@ test('a write runs no derived body, and the read runs one', () => {
 
     source.set(1)
     expect(runs).toBe(0)
-    expect((fan[0] as () => number)()).toBe(1)
+    expect((fan[0] as Reactive<number>).get()).toBe(1)
     expect(runs).toBe(1)
     // And the other forty-nine still serve the right value, each running once, on the
     // read that asks for it.
-    expect((fan[7] as () => number)()).toBe(8)
+    expect((fan[7] as Reactive<number>).get()).toBe(8)
     expect(runs).toBe(2)
 })
 
@@ -947,13 +949,15 @@ test('a write runs no derived body, and the read runs one', () => {
 // why the existing reorder case beside this one passes either way.
 test('a body that reads one value twice keeps it when a later run reads it once', () => {
     const name = reactive<string>('ada')
-    const shown = reactive(() => (name() ? name().toUpperCase() : 'anon'))
-    expect(shown()).toBe('ADA')
+    const shown = reactive(() =>
+        name.get() ? name.get().toUpperCase() : 'anon',
+    )
+    expect(shown.get()).toBe('ADA')
     // The falsy run reads `name` ONCE, so it truncates the second slot.
     name.set('')
-    expect(shown()).toBe('anon')
+    expect(shown.get()).toBe('anon')
     name.set('bob')
-    expect(`shown: ${shown()}`).toBe('shown: BOB')
+    expect(`shown: ${shown.get()}`).toBe('shown: BOB')
 })
 
 // A SLOT IS NOT A SUBSCRIPTION, from the append side. `sources` is POSITIONAL — one slot
@@ -975,9 +979,9 @@ test('a body that reads one value three times holds one subscription of it', () 
     // A guard over the same value it then reads, twice over — the most ordinary shape there
     // is, and the one a row body written against a shared value has.
     const stop = watch(() => {
-        value()
-        value()
-        value()
+        value.get()
+        value.get()
+        value.get()
     })
     flushSync()
     const held = cellOf(value).readers.length
@@ -1026,14 +1030,14 @@ test('disposing the readers of one value reads none of the readers left', () => 
     for (let index = 0; index < rows; index += 1)
         old.push(
             watch(() => {
-                selected()
+                selected.get()
             }),
         )
     const replacing: (() => void)[] = []
     for (let index = 0; index < rows; index += 1)
         replacing.push(
             watch(() => {
-                selected()
+                selected.get()
             }),
         )
     const slotsRead = countSlotsRead(selected, 'readers')
@@ -1063,9 +1067,9 @@ test('tearing down rows that derive off one value reads none of its readers', ()
         for (let index = 0; index < rows; index += 1) {
             const previous = collectWatches(stops)
             const id = from + index
-            const isSelected = reactive(() => selected() === id)
+            const isSelected = reactive(() => selected.get() === id)
             watch(() => {
-                isSelected()
+                isSelected.get()
             })
             collectWatches(previous)
         }
@@ -1091,17 +1095,17 @@ test('tearing down rows that derive off one value reads none of its readers', ()
 test('a released orphan read again holds one subscription — 12.14', () => {
     const source = reactive(1)
     const stopOther = watch(() => {
-        source()
+        source.get()
     })
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    const derived = reactive(() => source() + 1)
+    const derived = reactive(() => source.get() + 1)
     collectWatches(previous)
-    expect(derived()).toBe(2)
+    expect(derived.get()).toBe(2)
     for (const stop of stops) stop()
     let seen = 0
     const stopFollower = watch(() => {
-        seen = derived() as number
+        seen = derived.get() as number
     })
     flushSync()
     const held = cellOf(source).readers.length
@@ -1140,13 +1144,13 @@ test('a released stream read again starts once more — 12.16', async () => {
     await Bun.sleep(5)
     let seen: unknown
     const stopFirst = watch(() => {
-        seen = s()
+        seen = s.get()
     })
     for (const stop of stops) stop()
     // The last reader leaves, mid-stream.
     stopFirst()
     const stopAgain = watch(() => {
-        seen = s()
+        seen = s.get()
     })
     s.busy()
     await Bun.sleep(5)
@@ -1172,14 +1176,14 @@ test('a refresh of a released stream starts it once, and the read after it does 
     collectWatches(previous)
     await Bun.sleep(5)
     const stopFirst = watch(() => {
-        s()
+        s.get()
     })
     for (const stop of stops) stop()
     stopFirst()
     s.refresh()
     let seen: unknown
     const stopAgain = watch(() => {
-        seen = s()
+        seen = s.get()
     })
     await Bun.sleep(5)
     stopAgain()
@@ -1208,14 +1212,14 @@ test('a released value forwarding a stream adopts it again when read — 12.14',
     await Bun.sleep(5)
     let seen: unknown
     const stopFirst = watch(() => {
-        seen = forwarding()
+        seen = forwarding.get()
     })
     for (const stop of stops) stop()
     stopFirst()
     gate()
     await Bun.sleep(5)
     const stopAgain = watch(() => {
-        seen = forwarding()
+        seen = forwarding.get()
     })
     stopAgain()
     expect(JSON.stringify(seen)).toBe('[1,2]')
@@ -1231,10 +1235,10 @@ test('the last live reader leaving takes the dead ones with it', () => {
     const value = reactive(0)
     const reading = reactive(true)
     const stopFirst = watch(() => {
-        value()
+        value.get()
     })
     const stopSecond = watch(() => {
-        if (reading()) value()
+        if (reading.get()) value.get()
     })
     stopFirst()
     reading.set(false)
@@ -1256,7 +1260,7 @@ test('the last live reader leaving takes the dead ones with it', () => {
 test('a flip that reruns every guard over one value reads its probe readers once', () => {
     const flag = reactive(0)
     const shared = reactive(() => {
-        const at = flag()
+        const at = flag.get()
         return at % 2 === 0 ? at : new Promise<number>(() => {})
     })
     const guards = 100
@@ -1289,26 +1293,26 @@ test('a body that reorders its sources keeps every one of them subscribed', () =
     let runs = 0
     const joined = reactive(() => {
         runs += 1
-        return swapped()
-            ? `${first()}${third()}${second()}`
-            : `${first()}${second()}${third()}`
-    }) as unknown as () => string
-    expect(joined()).toBe('abc')
+        return swapped.get()
+            ? `${first.get()}${third.get()}${second.get()}`
+            : `${first.get()}${second.get()}${third.get()}`
+    })
+    expect(joined.get()).toBe('abc')
 
     // The reorder itself: matches `swapped` and `first`, diverges where `second` was,
     // and reads `second` again one slot later.
     swapped.set(true)
-    expect(joined()).toBe('acb')
+    expect(joined.get()).toBe('acb')
     runs = 0
 
     // Each of the three still wakes it exactly once, and the one that moved PAST the
     // divergence is the one a missing truncation loses.
     first.set('A')
-    expect(joined()).toBe('Acb')
+    expect(joined.get()).toBe('Acb')
     second.set('B')
-    expect(joined()).toBe('AcB')
+    expect(joined.get()).toBe('AcB')
     third.set('C')
-    expect(joined()).toBe('ACB')
+    expect(joined.get()).toBe('ACB')
     expect(`runs: ${runs}`).toBe('runs: 3')
 })
 
@@ -1318,10 +1322,10 @@ test('busy propagates through three levels of derivation', async () => {
     const answer = 1
     const source = reactive(() => Promise.resolve(answer))
     await source
-    const one = reactive(() => source() * 2)
-    const two = reactive(() => one() * 2)
-    const three = reactive(() => two() * 2)
-    expect(three()).toBe(8)
+    const one = reactive(() => source.get() * 2)
+    const two = reactive(() => one.get() * 2)
+    const three = reactive(() => two.get() * 2)
+    expect(three.get()).toBe(8)
     expect(three.busy()).toBe(false)
 
     source.refresh()
@@ -1332,10 +1336,10 @@ test('busy propagates through three levels of derivation', async () => {
 // THE CYCLE GUARD, which nothing anywhere exercised. `a` reads `b` and `b` reads `a`;
 // a probe must terminate rather than recurse forever.
 test('a probe over a cycle terminates', () => {
-    let other: (() => number) | null = null
-    const first = reactive(() => (other === null ? 1 : other()))
-    const second = reactive(() => first() + 1)
-    other = second as unknown as () => number
+    let other: Reactive<number> | null = null
+    const first = reactive(() => (other === null ? 1 : other.get()))
+    const second = reactive(() => first.get() + 1)
+    other = second
     first.refresh()
     expect(first.busy()).toBe(false)
     expect(second.busy()).toBe(false)
@@ -1345,8 +1349,8 @@ test('a probe over a cycle terminates', () => {
 
 // THE CONTRACT IS "CARRIES NEITHER ITS MEMBERS NOR ITS FIELDS", and a correctness test
 // cannot see either half: the members answer identically whether they are own properties
-// or inherited ones, and the fields do whether they sit on the function or on a record it
-// captures — so only the count moves. `Object.assign(self, MEMBERS)` was 437 of the 501 ns
+// or inherited ones, and the fields do whether they sit on the value or on its record — so
+// only the count moves. `Object.assign(self, MEMBERS)` was 437 of the 501 ns
 // a value cost to construct under bun's JSC and 855 of 985 under V8 — 87% of it — and a
 // table builds one of these per cell per row.
 //
@@ -1370,8 +1374,8 @@ test('a value carries its fields and not its members', () => {
     } finally {
         SCOPING.provider = provider
     }
-    // The three a function always has, and nothing of the value's own.
-    expect(Object.getOwnPropertyNames(value).length).toBe(3)
+    // Nothing of the value's own: a plain object on its seat.
+    expect(Object.getOwnPropertyNames(value).length).toBe(0)
     // The record, and only the record: the brand is inherited, so it is not one per value.
     expect(Object.getOwnPropertySymbols(value)).toEqual([CELL])
     expect(Object.hasOwn(value, 'peek')).toBe(false)
@@ -1395,7 +1399,7 @@ test('a disposed watch is collectable once the turn that queued it drained', asy
     const probe = ((): WeakRef<object> => {
         const captured = { held: new Uint8Array(4_000_000) }
         const stop = watch(() => {
-            source()
+            source.get()
             if (captured.held.length < 0) throw new Error('unreachable')
         })
         // Queue it and drain it, which is what puts it in a slot.
@@ -1413,14 +1417,13 @@ test('a disposed watch is collectable once the turn that queued it drained', asy
     expect(`reachable: ${probe.deref() !== undefined}`).toBe('reachable: false')
 })
 
-// The three things the prototype must not have cost, because callability and the brand
-// are what every other guard in the design is written over.
-test('a value stays callable, thenable and branded through its prototype', async () => {
+// The things the prototype must not have cost, because the read and the brand are what every
+// other guard in the design is written over — and no callability: a read is `get` (32.6, 49.8).
+test('a value reads, is thenable and branded through its prototype', async () => {
     const value = reactive(41)
-    expect(typeof value).toBe('function')
-    expect(value instanceof Function).toBe(true)
+    expect(typeof value).toBe('object')
     expect(isReactive(value)).toBe(true)
-    expect(value()).toBe(41)
+    expect(value.get()).toBe(41)
     expect(value.peek()).toBe(41)
     expect(value.ready()).toBe(true)
     // 1.4: thenable, and reached through the prototype like every other member.
@@ -1446,21 +1449,21 @@ test('a value is directly servable again after a mark that changed nothing', () 
         cellOf(value)
 
     const settled = reactive(41)
-    settled()
+    settled.get()
     expect(inner(settled).direct).toBe(true)
 
     // A diamond whose value does not move: `both` is marked CHECK, resolves to no
     // change, and must go back to being served from the field.
     const source = reactive(1)
-    const left = reactive(() => source() > 0)
-    const right = reactive(() => source() < 100)
-    const both = reactive(() => left() && right())
-    expect(both()).toBe(true)
+    const left = reactive(() => source.get() > 0)
+    const right = reactive(() => source.get() < 100)
+    const both = reactive(() => left.get() && right.get())
+    expect(both.get()).toBe(true)
     expect(inner(both).direct).toBe(true)
 
     source.set(2)
     expect(inner(both).direct).toBe(false)
-    expect(both()).toBe(true)
+    expect(both.get()).toBe(true)
     expect(inner(both).direct).toBe(true)
 })
 
@@ -1546,7 +1549,7 @@ test('an effect that throws leaves its siblings running, on that write and the n
     const warn = console.warn
     console.warn = (): void => {}
     watch(source, () => {
-        if (source() === 1) throw new Error('boom')
+        if (source.get() === 1) throw new Error('boom')
     })
     const second = watch(source, () => {
         ran.push(1)
@@ -1650,10 +1653,10 @@ test('on a server, an effect that throws reaches onError and warns on abide:watc
     const { handed, warned, threw } = effectReports(true, () => {
         watch(source, () => {
             runs += 1
-            if (source() === 1) throw new Error('boom')
+            if (source.get() === 1) throw new Error('boom')
         })
         watch(() => {
-            if (source() === 1) failing()
+            if (source.get() === 1) failing.get()
         })
         source.set(1)
         flushSync()
@@ -1683,7 +1686,7 @@ test('in a browser, an effect that throws warns on abide:watch and surfaces as u
     let first: unknown
     const { handed, warned, threw } = effectReports(false, () => {
         watch(source, () => {
-            if (source() === 1) throw new Error('boom')
+            if (source.get() === 1) throw new Error('boom')
         })
         try {
             watch(() => {
@@ -1738,7 +1741,7 @@ test('a disposer that throws reaches onError and warns, and its effect still rer
 // more than the one production made.
 test('a patch replaces the head production rather than appending one', () => {
     const held = reactive<{ n: number }>({ n: 1 })
-    held()
+    held.get()
     const before = cellOf(held).ordinal
     let woken = 0
     const stop = held.watch(() => {
@@ -1752,7 +1755,7 @@ test('a patch replaces the head production rather than appending one', () => {
     flushSync()
     // The reader is woken — a mutation in place is still something to re-render.
     expect(woken).toBe(1)
-    expect(held().n).toBe(2)
+    expect(held.get().n).toBe(2)
     // And no production was minted: one production, mutated, not two.
     expect(cellOf(held).ordinal).toBe(before)
     stop()
@@ -1785,7 +1788,7 @@ test('a watch given sources runs only when those sources change', () => {
     const stop = watch(a, () => {
         runs += 1
         // Read, and deliberately not declared. A tracked body would subscribe here.
-        void b()
+        void b.get()
     })
     expect(runs).toBe(1)
     runs = 0
@@ -1885,11 +1888,11 @@ test('a disposer run from inside another effect does not subscribe it — 14.10'
     const read = reactive(0)
     const toggle = reactive(0)
     const inner = watch(() => () => {
-        read()
+        read.get()
     })
     let outer = 0
     watch(() => {
-        toggle()
+        toggle.get()
         outer += 1
         if (outer === 2) inner()
     })
@@ -1909,11 +1912,11 @@ test('a derived and an adopting value stop reading when their owner stops — 12
     const source = reactive(1)
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    const derived = reactive(() => source() + 1)
+    const derived = reactive(() => source.get() + 1)
     const adopting = reactive(() => source)
     collectWatches(previous)
-    expect(derived()).toBe(2)
-    expect(adopting()).toBe(1)
+    expect(derived.get()).toBe(2)
+    expect(adopting.get()).toBe(1)
     const readers = cellOf(source).readers
     expect(readers.length).toBe(2)
 
@@ -1925,8 +1928,8 @@ test('a derived and an adopting value stop reading when their owner stops — 12
     expect(WORK.wakes - wakes).toBe(0)
 
     // Read again, each derives afresh and is current.
-    expect(derived()).toBe(3)
-    expect(adopting()).toBe(2)
+    expect(derived.get()).toBe(3)
+    expect(adopting.get()).toBe(2)
 })
 
 // ── Adoption: RULEBOOK 11.12 to 11.19 ────────────────────────────────────────────
@@ -1939,10 +1942,10 @@ test('a derived and an adopting value stop reading when their owner stops — 12
 test('a body that hands back a Reactive adopts it rather than storing it', () => {
     const inner = reactive(1)
     const outer = reactive(() => inner)
-    expect(outer()).toBe(1)
+    expect(outer.get()).toBe(1)
     // And it goes on serving what the adopted one serves.
     inner.set(2)
-    expect(outer()).toBe(2)
+    expect(outer.get()).toBe(2)
 })
 
 // 11.13 and 11.14 together: the adopted productions mirror into the OUTER value, and the
@@ -1961,7 +1964,7 @@ test('a body that hands back a Reactive adopts it rather than storing it', () =>
 test('a transform runs untracked, whatever reader made the write', () => {
     const other = reactive(1)
     const target = reactive<number>(undefined, {
-        transform: (value: number) => value + other(),
+        transform: (value: number) => value + other.get(),
     })
     let woken = 0
     const stop = watch(() => {
@@ -1983,18 +1986,18 @@ test('a transform runs untracked, whatever reader made the write', () => {
 // read says 3, where both are due 4.
 test('an adopted derived value mirrors what it recomputes to — 11.13', () => {
     const cents = reactive(300)
-    const dollars = reactive(() => cents() / 100)
+    const dollars = reactive(() => cents.get() / 100)
     const watched = reactive(() => dollars)
     const seen: unknown[] = []
     const stop = watch(() => {
-        seen.push(watched())
+        seen.push(watched.get())
     })
     const read = reactive(() => dollars)
-    read()
+    read.get()
     cents.set(400)
     flushSync()
     expect(seen).toEqual([3, 4])
-    expect(read()).toBe(4)
+    expect(read.get()).toBe(4)
     stop()
 })
 
@@ -2007,7 +2010,9 @@ test('a patch of an adopted value wakes the adopter — 11.13, 5.7', () => {
     const adopter = reactive(() => rows)
     const seen: boolean[] = []
     const stop = watch(() => {
-        seen.push((adopter() as { watched: boolean }[])[0]?.watched ?? false)
+        seen.push(
+            (adopter.get() as { watched: boolean }[])[0]?.watched ?? false,
+        )
     })
     rows.patch((value) => {
         ;(value[0] as { watched: boolean }).watched = true
@@ -2022,7 +2027,7 @@ test('adopted productions mirror into the outer value, through its own transform
     const outer = reactive(() => feed, {
         transform: (value: number) => value * 10,
     })
-    const seen: number[] = [outer()]
+    const seen: number[] = [outer.get()]
     const stop = outer.watch((value) => {
         seen.push(value)
     })
@@ -2031,7 +2036,7 @@ test('adopted productions mirror into the outer value, through its own transform
     feed.set(3)
     flushSync()
     stop()
-    expect(outer()).toBe(30)
+    expect(outer.get()).toBe(30)
     expect(seen).toEqual([10, 10, 20, 30])
 })
 
@@ -2046,7 +2051,7 @@ test('a recompute onto the same adopted Reactive wakes no reader', () => {
     const trigger = reactive(0)
     const held = reactive(1)
     const outer = reactive(() => {
-        trigger()
+        trigger.get()
         return held
     })
     const woken = wakes(outer)
@@ -2055,7 +2060,7 @@ test('a recompute onto the same adopted Reactive wakes no reader', () => {
     expect(woken.count()).toBe(0)
     trigger.set(2)
     expect(woken.count()).toBe(0)
-    expect(outer()).toBe(1)
+    expect(outer.get()).toBe(1)
     woken.stop()
 })
 
@@ -2081,7 +2086,7 @@ test('re-adopting a Reactive holding what is already served wakes no reader — 
     flushSync()
     const count = woken.count()
     woken.stop()
-    expect(`${outer().n}, wakes: ${count}`).toBe('2, wakes: 0')
+    expect(`${outer.get().n}, wakes: ${count}`).toBe('2, wakes: 0')
 })
 
 // 11.16: on re-adoption the outer clears where the newly adopted has nothing to serve. It
@@ -2091,12 +2096,12 @@ test('re-adopting something with nothing to serve clears the outer', () => {
     const pick = reactive(0)
     const landed = reactive(41)
     const pending = reactive(new Promise<number>(() => {}))
-    const outer = reactive(() => (pick() === 0 ? landed : pending))
-    expect(outer()).toBe(41)
+    const outer = reactive(() => (pick.get() === 0 ? landed : pending))
+    expect(outer.get()).toBe(41)
     expect(outer.ready()).toBe(true)
 
     pick.set(1)
-    expect(() => outer()).toThrow(NotLanded)
+    expect(() => outer.get()).toThrow(NotLanded)
     expect(outer.ready()).toBe(false)
     // 11.19: and it reports busy for the one it now adopts.
     expect(outer.busy()).toBe(true)
@@ -2112,11 +2117,11 @@ test('re-adopting something with nothing to serve clears the outer', () => {
 test('a read a ready guard admitted does not throw — 3.2', () => {
     const playing = reactive(false)
     const pending = reactive(new Promise<number[]>(() => {}))
-    const keyframes = reactive(() => (playing() ? pending : []))
-    expect(keyframes()).toEqual([])
+    const keyframes = reactive(() => (playing.get() ? pending : []))
+    expect(keyframes.get()).toEqual([])
     playing.set(true)
     const guarded = (): unknown =>
-        keyframes.ready() ? keyframes() : 'fallback'
+        keyframes.ready() ? keyframes.get() : 'fallback'
     expect(guarded()).toBe('fallback')
     expect(keyframes.busy()).toBe(true)
 })
@@ -2131,7 +2136,7 @@ test('a read a ready guard admitted does not throw — 3.2', () => {
 test('a guard on ready hears an input move the body to a load — 3.2', () => {
     const playing = reactive(false)
     const pending = reactive(new Promise<number[]>(() => {}))
-    const keyframes = reactive(() => (playing() ? pending : []))
+    const keyframes = reactive(() => (playing.get() ? pending : []))
     const seen: boolean[] = []
     const stop = watch(() => {
         seen.push(keyframes.ready())
@@ -2160,7 +2165,7 @@ test('re-adopting something with nothing to serve wakes the guards too', () => {
     const landed = reactive(1)
     const pending = reactive(new Promise<number>(() => {}))
     const flag = reactive(true)
-    const outer = reactive(() => (flag() ? landed : pending))
+    const outer = reactive(() => (flag.get() ? landed : pending))
     const seen: boolean[] = []
     const stop = watch(() => {
         seen.push(outer.ready())
@@ -2188,7 +2193,7 @@ test('an adopting value inherits the identity it did not declare', () => {
     const first = reactive({ id: 1 }, { identity: deepEqual })
     const second = reactive({ id: 1 }, { identity: deepEqual })
     const pick = reactive(true)
-    const outer = reactive(() => (pick() ? first : second))
+    const outer = reactive(() => (pick.get() ? first : second))
     const woken = wakes(outer)
 
     pick.set(false)
@@ -2207,10 +2212,12 @@ test('a value that stops adopting goes back to the identity it declared', () => 
     const inner = reactive({ id: 1 }, { identity: (row) => row.id })
     const adopting = reactive(true)
     const count = reactive(0)
-    const outer = reactive((): unknown => (adopting() ? inner : count()))
-    expect(outer()).toEqual({ id: 1 })
+    const outer = reactive((): unknown =>
+        adopting.get() ? inner : count.get(),
+    )
+    expect(outer.get()).toEqual({ id: 1 })
     adopting.set(false)
-    expect(outer()).toBe(0)
+    expect(outer.get()).toBe(0)
 
     const seen: unknown[] = []
     const stop = outer.watch((value) => {
@@ -2218,7 +2225,7 @@ test('a value that stops adopting goes back to the identity it declared', () => 
     })
     count.set(5)
     flushSync()
-    expect(outer()).toBe(5)
+    expect(outer.get()).toBe(5)
     expect(seen).toEqual([0, 5])
     stop()
 })
@@ -2233,14 +2240,14 @@ test('a re-adoption takes the identity of what it adopts now', () => {
     const keyed = reactive({ id: 1, name: 'a' }, { identity: (row) => row.id })
     const plain = reactive({ id: 1, name: 'a' })
     const pick = reactive(true)
-    const outer = reactive(() => (pick() ? keyed : plain))
-    expect(outer()).toEqual({ id: 1, name: 'a' })
+    const outer = reactive(() => (pick.get() ? keyed : plain))
+    expect(outer.get()).toEqual({ id: 1, name: 'a' })
     pick.set(false)
-    expect(outer()).toEqual({ id: 1, name: 'a' })
+    expect(outer.get()).toEqual({ id: 1, name: 'a' })
     const woken = wakes(outer)
     plain.set({ id: 1, name: 'b' })
     expect(woken.count()).toBe(1)
-    expect(outer()).toEqual({ id: 1, name: 'b' })
+    expect(outer.get()).toEqual({ id: 1, name: 'b' })
     woken.stop()
 })
 
@@ -2260,7 +2267,7 @@ test('busy propagates from the adopted value', async () => {
 
     settle(7)
     await loading
-    expect(outer()).toBe(7)
+    expect(outer.get()).toBe(7)
     expect(outer.busy()).toBe(false)
 })
 
@@ -2275,16 +2282,16 @@ test('busy propagates from the adopted value', async () => {
 test('a trigger on an adopting value settles it again over the same adoption', () => {
     const inner = reactive(1)
     const outer = reactive(() => inner)
-    expect(outer()).toBe(1)
+    expect(outer.get()).toBe(1)
 
     outer.invalidate()
-    expect(outer()).toBe(1)
+    expect(outer.get()).toBe(1)
     expect(`ready: ${outer.ready()}`).toBe('ready: true')
     expect(`busy: ${outer.busy()}`).toBe('busy: false')
 
     outer.refresh()
     expect(`busy: ${outer.busy()}`).toBe('busy: false')
-    expect(outer()).toBe(1)
+    expect(outer.get()).toBe(1)
 })
 
 // 11.18 THROUGH THE SETTLE ABOVE. The re-mirror goes through the identity gate, so the
@@ -2341,12 +2348,12 @@ test('a trigger on an adopting value reaches the adopted one', () => {
         return produced
     })
     const outer = reactive(() => inner)
-    expect(outer()).toBe(1)
+    expect(outer.get()).toBe(1)
 
     runs = 0
     outer.refresh()
     expect(`inner runs: ${runs}`).toBe('inner runs: 1')
-    expect(outer()).toBe(2)
+    expect(outer.get()).toBe(2)
 
     // Lazily, so nothing runs until the outer value is read (7.12).
     runs = 0
@@ -2354,7 +2361,7 @@ test('a trigger on an adopting value reaches the adopted one', () => {
     expect(`inner runs before a read: ${runs}`).toBe(
         'inner runs before a read: 0',
     )
-    expect(outer()).toBe(3)
+    expect(outer.get()).toBe(3)
     expect(`inner runs: ${runs}`).toBe('inner runs: 1')
     expect(outer.ready()).toBe(true)
 })
@@ -2424,7 +2431,7 @@ test('a failure of the adopted value is the adopter error, its read throw and it
     expect(`guard: ${guard[guard.length - 1]}`).toBe('guard: boom')
     let thrown: unknown
     try {
-        outer()
+        outer.get()
     } catch (error) {
         thrown = error
     }
@@ -2448,7 +2455,7 @@ test('a failed revalidation of the adopted value leaves the adopter serving, wit
     inner.refresh()
     fail(new Error('revalidate failed'))
     await Bun.sleep(1)
-    expect(outer()).toBe(1)
+    expect(outer.get()).toBe(1)
     expect(
         `error: ${(outer.error() as unknown as Error | undefined)?.message}`,
     ).toBe('error: revalidate failed')
@@ -2468,8 +2475,8 @@ test('a derived value is not ready while a value it read has nothing to serve', 
     const answer = 1
     const source = reactive(() => Promise.resolve(answer))
     await source
-    const derived = reactive(() => source() * 2)
-    expect(derived()).toBe(2)
+    const derived = reactive(() => source.get() * 2)
+    expect(derived.get()).toBe(2)
     expect(derived.ready()).toBe(true)
 
     // 7.4: a refresh keeps serving, so the floor is unmoved.
@@ -2483,7 +2490,7 @@ test('a derived value is not ready while a value it read has nothing to serve', 
     // (3.2), and the floor follows the source there.
     source.invalidate()
     expect(derived.ready()).toBe(false)
-    expect(() => source()).toThrow(NotLanded)
+    expect(() => source.get()).toThrow(NotLanded)
     expect(source.ready()).toBe(false)
     expect(derived.busy()).toBe(true)
     expect(derived.ready()).toBe(false)
@@ -2498,14 +2505,14 @@ test('a derived value is not ready while a value it read has nothing to serve', 
 test('a derived value that aborts wakes the guard asking whether it is ready', () => {
     const flag = reactive(false)
     const pending = reactive<number>()
-    const derived = reactive(() => (flag() ? pending() : 0))
+    const derived = reactive(() => (flag.get() ? pending.get() : 0))
     const seen: boolean[] = []
     const guard = watch(() => {
         seen.push(derived.ready())
     })
     // What pulls the body: a reader of the VALUE, apart from the guard.
     const painter = watch(() => {
-        derived()
+        derived.get()
     })
     expect(seen).toEqual([true])
     flag.set(true)
@@ -2524,12 +2531,12 @@ test('the floor reaches the adopted value as well as the read ones', async () =>
     const inner = reactive(() => Promise.resolve(answer))
     await inner
     const outer = reactive(() => inner)
-    expect(outer()).toBe(41)
+    expect(outer.get()).toBe(41)
     expect(outer.ready()).toBe(true)
 
     inner.invalidate()
     expect(outer.ready()).toBe(false)
-    expect(() => inner()).toThrow(NotLanded)
+    expect(() => inner.get()).toThrow(NotLanded)
     expect(outer.busy()).toBe(true)
 })
 
@@ -2555,7 +2562,7 @@ test('a guard on a probe comes back when the value lands', async () => {
     let painted: unknown
     const stop = watch(() => {
         renders += 1
-        painted = value.ready() ? value() : 'spinner'
+        painted = value.ready() ? value.get() : 'spinner'
     })
     expect(painted).toBe('spinner')
     expect(renders).toBe(1)
@@ -2621,7 +2628,7 @@ test('the hit after an invalidate wakes a reader that asked whether it was ready
     const answer = 1
     const source = reactive(() => Promise.resolve(answer))
     await source
-    const derived = reactive(() => source() * 2)
+    const derived = reactive(() => source.get() * 2)
     const seen: boolean[] = []
     const stop = watch(() => {
         seen.push(derived.ready())
@@ -2631,7 +2638,7 @@ test('the hit after an invalidate wakes a reader that asked whether it was ready
     source.invalidate()
     flushSync()
     expect(seen).toEqual([true])
-    expect(() => source()).toThrow(NotLanded)
+    expect(() => source.get()).toThrow(NotLanded)
     flushSync()
     expect(seen).toEqual([true, false])
     stop()
@@ -2646,12 +2653,12 @@ test('a derived body may read a probe and wakes when it moves', async () => {
     const source = reactive(() => Promise.resolve(answer))
     await source
     const label = reactive(() => (source.busy() ? 'loading' : 'idle'))
-    expect(label()).toBe('idle')
+    expect(label.get()).toBe('idle')
 
     source.refresh()
-    expect(label()).toBe('loading')
+    expect(label.get()).toBe('loading')
     await source
-    expect(label()).toBe('idle')
+    expect(label.get()).toBe('idle')
 })
 
 // A guard that stops being taken stops waking: the run's probe cursor ends short of it and
@@ -2670,15 +2677,15 @@ test('a probe a body stops reading stops waking it', async () => {
     let bodyRuns = 0
     const body = reactive(() => {
         bodyRuns += 1
-        return use() ? watched.busy() : false
+        return use.get() ? watched.busy() : false
     })
     const stopReader = watch(() => {
-        body()
+        body.get()
     })
     let guardRuns = 0
     const stopGuard = watch(() => {
         guardRuns += 1
-        if (use()) watched.busy()
+        if (use.get()) watched.busy()
     })
     flushSync()
     use.set(false)
@@ -2727,7 +2734,7 @@ test('a capped body over a probe holds the run its probe moving marks', async ()
     })
     const seen: string[] = []
     const stop = watch(() => {
-        seen.push(label())
+        seen.push(label.get())
     })
     flushSync()
     source.refresh()
@@ -2765,7 +2772,7 @@ test('a throttle lets the leading change through and holds the rest', () => {
     // 5.12: the first change immediately, and then at most once per window — so nine of
     // the ten reached nobody, and the one that did is the one that opened the window.
     expect(woken.count()).toBe(1)
-    expect(query()).toBe(1)
+    expect(query.get()).toBe(1)
     woken.stop()
 })
 
@@ -2777,7 +2784,7 @@ test('a throttle of Infinity lets the first change through and no other', () => 
     query.set(1)
     query.set(2)
     query.set(3)
-    expect(query()).toBe(1)
+    expect(query.get()).toBe(1)
 })
 
 // 5.12 FROM A VALUE BUILT WITH ONE: the value it is constructed with is a landing, not a change, so
@@ -2792,7 +2799,7 @@ test('a throttle built with a value lets the first set through at once', () => {
     status.set({ running: true })
     status.set({ running: false })
     expect(
-        `read: ${status().running}, wakes: ${woken.count()}, busy: ${status.busy()}`,
+        `read: ${status.get().running}, wakes: ${woken.count()}, busy: ${status.busy()}`,
     ).toBe('read: true, wakes: 1, busy: true')
     woken.stop()
 })
@@ -2806,7 +2813,7 @@ test('a debounce holds every change after the first landing', () => {
     // 5.13: the change waits for the changes to STOP, so nobody has been woken and what
     // a reader sees is still the value the run started from.
     expect(woken.count()).toBe(0)
-    expect(query()).toBe(0)
+    expect(query.get()).toBe(0)
     woken.stop()
 })
 
@@ -2829,11 +2836,11 @@ test('a held value goes on being served, and the window reads as busy', async ()
     query.set(1)
     query.set(2)
     // 5.15: what a reader sees is the value the window released, not the one it holds.
-    expect(query()).toBe(1)
+    expect(query.get()).toBe(1)
     expect(query.busy()).toBe(true)
     expect(query.ready()).toBe(true)
     await Bun.sleep(AFTER_WINDOW)
-    expect(query()).toBe(2)
+    expect(query.get()).toBe(2)
     expect(query.busy()).toBe(false)
 })
 
@@ -2845,7 +2852,7 @@ test('the identity gate compares against the last production, not the last relea
     // Comparing the third write against the RELEASED 1 would collapse it, and the reader
     // would then settle on 2 for a value whose last write was 1.
     await Bun.sleep(AFTER_WINDOW)
-    expect(query()).toBe(1)
+    expect(query.get()).toBe(1)
 })
 
 // THE OTHER HALF OF 5.9, AND IT IS A CAP OVER A BODY. A window over a value form moves
@@ -2877,7 +2884,7 @@ test('a throttle caps the wakes a run of patches makes', async () => {
     expect(rows.busy()).toBe(true)
     await Bun.sleep(AFTER_WINDOW)
     expect(woken.count()).toBe(2)
-    expect((rows()[0] as { n: number }).n).toBe(10)
+    expect((rows.get()[0] as { n: number }).n).toBe(10)
     expect(rows.busy()).toBe(false)
     woken.stop()
 })
@@ -2928,10 +2935,10 @@ test('a debounce holds refreshes until they stop, and reloads with nobody readin
 
 test('a throttled derived value that recomputes to the same figure wakes nobody', async () => {
     const source = reactive(1)
-    const derived = pacedBody(() => source() > 0, { throttle: WINDOW })
+    const derived = pacedBody(() => source.get() > 0, { throttle: WINDOW })
     let woken = 0
     const stop = watch(() => {
-        derived()
+        derived.get()
         woken += 1
     })
     flushSync()
@@ -2940,7 +2947,7 @@ test('a throttled derived value that recomputes to the same figure wakes nobody'
         source.set(write)
         flushSync()
         await Bun.sleep(AFTER_WINDOW)
-        derived()
+        derived.get()
         flushSync()
     }
     expect(`wakes: ${woken}`).toBe('wakes: 0')
@@ -2949,10 +2956,10 @@ test('a throttled derived value that recomputes to the same figure wakes nobody'
 
 test('a throttled derived value that does move still wakes, once per window', async () => {
     const source = reactive(1)
-    const derived = pacedBody(() => source() * 2, { throttle: WINDOW })
+    const derived = pacedBody(() => source.get() * 2, { throttle: WINDOW })
     let woken = 0
     const stop = watch(() => {
-        derived()
+        derived.get()
         woken += 1
     })
     flushSync()
@@ -2961,11 +2968,11 @@ test('a throttled derived value that does move still wakes, once per window', as
         source.set(write)
         flushSync()
         await Bun.sleep(AFTER_WINDOW)
-        derived()
+        derived.get()
         flushSync()
     }
     expect(`wakes: ${woken}`).toBe('wakes: 5')
-    expect(derived()).toBe(12)
+    expect(derived.get()).toBe(12)
     stop()
 })
 
@@ -2989,7 +2996,7 @@ test('a run of writes wakes once per window rather than twice at its edges', asy
     // throttle that re-opened a window on an empty close would wake again here for
     // nothing, which is the shape a trailing-edge timer usually gets wrong.
     expect(woken.count()).toBe(2)
-    expect(query()).toBe(2)
+    expect(query.get()).toBe(2)
     woken.stop()
 })
 
@@ -3017,7 +3024,7 @@ test('a debounce waits for the changes to stop, not for the first of them', asyn
     expect(woken.count()).toBe(0)
     await Bun.sleep(LONG * 3)
     expect(woken.count()).toBe(1)
-    expect(query()).toBe(12)
+    expect(query.get()).toBe(12)
     woken.stop()
 })
 
@@ -3028,7 +3035,7 @@ test('a window does not hold back the first landing', () => {
     // page reading as not-ready on mount.
     const typed = pacedValue<string>('', { debounce: WINDOW })
     expect(typed.ready()).toBe(true)
-    expect(typed()).toBe('')
+    expect(typed.get()).toBe('')
     expect(typed.busy()).toBe(false)
 
     // 4.16: an opening `undefined` is a landing the window never saw, so it is ready at once and the
@@ -3038,7 +3045,7 @@ test('a window does not hold back the first landing', () => {
     })
     expect(capped.ready()).toBe(true)
     capped.set(1)
-    expect(capped()).toBeUndefined()
+    expect(capped.get()).toBeUndefined()
     expect(capped.busy()).toBe(true)
 })
 
@@ -3058,9 +3065,9 @@ test('a cap on the key spares the call a superseded key would have made', async 
         calls += 1
         return `orders in ${args.region}`
     })
-    const orders = reactive(() => countOrders({ region: region() }))
+    const orders = reactive(() => countOrders({ region: region.get() }))
     const stop = watch(() => {
-        orders()
+        orders.get()
     })
     // The opening value landed and was reached, which is the one call before any typing.
     expect(calls).toBe(1)
@@ -3074,7 +3081,7 @@ test('a cap on the key spares the call a superseded key would have made', async 
     // Four keystrokes, no new call: every intermediate key was superseded inside the
     // window and never reached, and the last one is the key already held.
     expect(calls).toBe(1)
-    expect(orders()).toBe('orders in north')
+    expect(orders.get()).toBe('orders in north')
     stop()
 })
 
@@ -3115,10 +3122,10 @@ function searchRig(options: Record<string, number>): {
         keys.push(args.region)
         return `n=${args.region}`
     }, options)
-    const orders = reactive(() => countOrders({ region: region() }))
+    const orders = reactive(() => countOrders({ region: region.get() }))
     const stop = watch(() => {
         try {
-            orders()
+            orders.get()
             woken += 1
         } catch {
             // Nothing landed yet is not a wake worth counting.
@@ -3246,14 +3253,14 @@ test('a failed load wakes the guards that asked about it', async () => {
 test('a body that stops handing back a Reactive stops mirroring it', () => {
     const inner = reactive(1)
     const adopting = reactive(true)
-    const outer = reactive(() => (adopting() ? inner : 99))
-    expect(outer()).toBe(1)
+    const outer = reactive(() => (adopting.get() ? inner : 99))
+    expect(outer.get()).toBe(1)
 
     adopting.set(false)
-    expect(outer()).toBe(99)
+    expect(outer.get()).toBe(99)
     inner.set(5)
     flushSync()
-    expect(outer()).toBe(99)
+    expect(outer.get()).toBe(99)
     // And the floor is its own again: it was reporting through a value it no longer reads.
     expect(outer.ready()).toBe(true)
 })
@@ -3272,9 +3279,9 @@ test('a narrowed watch runs untracked inside a tracked body', () => {
     let outerRuns = 0
     const stop = watch(() => {
         outerRuns += 1
-        read()
+        read.get()
         untouched.watch(() => {
-            untouched()
+            untouched.get()
         })
     })
     expect(outerRuns).toBe(1)
@@ -3298,15 +3305,15 @@ test('a keyed entry does not recompute when a value its body read changes', () =
     let runs = 0
     const price = keyedValue((args: { amount: number }) => {
         runs += 1
-        return args.amount * rate()
+        return args.amount * rate.get()
     })
     const entry = price({ amount: 10 })
-    expect(entry()).toBe(20)
+    expect(entry.get()).toBe(20)
     rate.set(3)
-    expect(`value: ${entry()}`).toBe('value: 20')
+    expect(`value: ${entry.get()}`).toBe('value: 20')
     expect(`runs: ${runs}`).toBe('runs: 1')
     entry.refresh()
-    expect(`after refresh: ${entry()}`).toBe('after refresh: 30')
+    expect(`after refresh: ${entry.get()}`).toBe('after refresh: 30')
 })
 
 // 2.13 STILL HOLDS FOR AN ENTRY. An abort is not a completed run: the read that threw has
@@ -3322,15 +3329,15 @@ test('a keyed body aborted on a value that had not landed reruns when it lands, 
     let runs = 0
     const price = keyedValue((args: { amount: number }) => {
         runs += 1
-        return args.amount * rate()
+        return args.amount * rate.get()
     })
     const entry = price({ amount: 10 })
     expect(`ready: ${entry.ready()}`).toBe('ready: false')
     settle(2)
     await rate
-    expect(entry()).toBe(20)
+    expect(entry.get()).toBe(20)
     rate.set(5)
-    expect(entry()).toBe(20)
+    expect(entry.get()).toBe(20)
     expect(`runs: ${runs}`).toBe('runs: 2')
 })
 
@@ -3340,9 +3347,11 @@ test('a keyed entry is not busy because a value its body read is', async () => {
     let answer = 1
     const source = reactive(() => Promise.resolve(answer))
     await source
-    const keyed = keyedValue((args: { times: number }) => source() * args.times)
+    const keyed = keyedValue(
+        (args: { times: number }) => source.get() * args.times,
+    )
     const entry = keyed({ times: 3 })
-    expect(entry()).toBe(3)
+    expect(entry.get()).toBe(3)
     answer = 2
     source.refresh()
     expect(`source busy: ${source.busy()}`).toBe('source busy: true')
@@ -3379,7 +3388,7 @@ test('an args gate refuses before the body runs, and the refusal is no entry —
     )
     let thrown: unknown
     try {
-        refused()
+        refused.get()
     } catch (error) {
         thrown = error
     }
@@ -3387,7 +3396,7 @@ test('an args gate refuses before the body runs, and the refusal is no entry —
         'read threw: ValidationError',
     )
     expect(`entries: ${invoice.entries.size}`).toBe('entries: 0')
-    expect(invoice({ id: 4 })()).toBe(8)
+    expect(invoice({ id: 4 }).get()).toBe(8)
 })
 
 // 11.71 — A REFUSAL IS BUILT WITH NONE OF THE VALUE'S OPTIONS: a `store` holding a value for the
@@ -3414,7 +3423,7 @@ test('a refused args reads its refusal, not a value its store holds — 11.71', 
     })
     let read: unknown
     try {
-        read = invoice({ id: -1 })()
+        read = invoice({ id: -1 }).get()
     } catch (error) {
         read = (error as Error).name
     }
@@ -3436,10 +3445,10 @@ test('a refresh does not run the args gate again — 11.71', async () => {
         },
     })
     const entry = invoice({ id: 4 })
-    expect(entry()).toBe(8)
+    expect(entry.get()).toBe(8)
     entry.refresh()
     await turns()
-    expect(entry()).toBe(8)
+    expect(entry.get()).toBe(8)
     expect(`gate runs: ${gateRuns}`).toBe('gate runs: 1')
 })
 
@@ -3539,7 +3548,7 @@ test('an args gate on a keyed stream keeps it a stream, and refuses before it st
     )
     const eu = rows({ region: 'eu' })
     await turns()
-    expect(eu()).toEqual(['eu-1'])
+    expect(eu.get()).toEqual(['eu-1'])
     const none = rows({ region: '' })
     await turns()
     expect(`started: ${started}`).toBe('started: 1')
@@ -3564,7 +3573,7 @@ test('a keyed entry past its ttl is evicted whole, and the next reach starts aga
         { ttl: 20 },
     )
     const first = keyed({ id: 1 })
-    expect(first()).toBe(10)
+    expect(first.get()).toBe(10)
     expect(keyed.entries.size).toBe(1)
 
     await Bun.sleep(80)
@@ -3826,13 +3835,13 @@ function walkSubjects(): Subject[] {
     // The body reaches every arm `run` has: a production, the abort (11.51), a refusal,
     // and an adoption whose source stops being servable (11.16).
     const derived = reactive(() => {
-        if (abortNow) return unlanded()
+        if (abortNow) return unlanded.get()
         if (failNow) throw new Error('refused')
         // 15.5: a refusal handed back rather than thrown, which `run` lands on its own arm.
         if (refuseNow) return refuse.named('Refused')() as unknown as number
         if (adoptPendingNow) return unlanded
         if (adoptNow) return source
-        return source() + 1
+        return source.get() + 1
     })
     let loadRuns = 0
     const reloading = reactive(() => {
@@ -4000,7 +4009,7 @@ const OWES_RELOAD = 2
 
 function readOf(value: Reactive<unknown>): unknown {
     try {
-        return value()
+        return value.get()
     } catch (thrown) {
         return thrown instanceof NotLanded ? NOT_LANDED : thrown
     }
@@ -4143,7 +4152,7 @@ test('a transform that refuses stores nothing and mints nothing', () => {
     const woken = counter.count()
     counter.stop()
     // 4.9 both halves: nothing stored, and no production minted for it.
-    expect(`value: ${bounded()}`).toBe('value: 1')
+    expect(`value: ${bounded.get()}`).toBe('value: 1')
     expect(`ordinal moved: ${ordinalOf() - before}`).toBe('ordinal moved: 0')
     // 5.1: the value did not change, so nothing on the value edge may have woken.
     expect(`wakes: ${woken}`).toBe('wakes: 0')
@@ -4174,7 +4183,7 @@ test('an accepted write clears the standing refusal', () => {
     bounded.set(99)
     expect(`error: ${bounded.error()?.name}`).toBe('error: TooBig')
     bounded.set(2)
-    expect(`value: ${bounded()}`).toBe('value: 2')
+    expect(`value: ${bounded.get()}`).toBe('value: 2')
     expect(
         `error: ${bounded.error() === undefined ? 'none' : 'standing'}`,
     ).toBe('error: none')
@@ -4201,7 +4210,7 @@ test('a failed revalidation goes on serving and wakes nobody', async () => {
     await Bun.sleep(10)
     const woken = counter.count()
     counter.stop()
-    expect(`value: ${loaded()}`).toBe('value: held')
+    expect(`value: ${loaded.get()}`).toBe('value: held')
     expect(`ready: ${loaded.ready()}`).toBe('ready: true')
     expect(`wakes: ${woken}`).toBe('wakes: 0')
     // A CAST, AND IT IS HONEST RATHER THAN LAZY: this producer rejected with a plain
@@ -4255,7 +4264,7 @@ test('a failed revalidation warns once on abide:reactive naming the value, and g
     )
     const entry = row({ id: 7 })
     await Promise.all([loaded, stream, entry])
-    expect(body()).toBe('held')
+    expect(body.get()).toBe('held')
     fail = true
     for (const [name, value, label] of [
         ['load', loaded, 'derived'],
@@ -4270,9 +4279,9 @@ test('a failed revalidation warns once on abide:reactive naming the value, and g
         expect(`${name} warned: ${said.length}`).toBe(`${name} warned: 1`)
         expect(said[0]).toStartWith(`${label}: a revalidation failed`)
         expect(said[0]).toContain('the reload failed')
-        expect(`${name} serves: ${String(value()).replace(/ 7$/, '')}`).toBe(
-            `${name} serves: held`,
-        )
+        expect(
+            `${name} serves: ${String(value.get()).replace(/ 7$/, '')}`,
+        ).toBe(`${name} serves: held`)
     }
 })
 
@@ -4288,7 +4297,7 @@ test('a first load that fails, and a failed run a source started, are not revali
     )
     const source = reactive(1)
     const derived = reactive(() =>
-        source() === 1
+        source.get() === 1
             ? Promise.resolve('held')
             : Promise.reject(new Error('rerun failed')),
     )
@@ -4319,13 +4328,13 @@ test('a body that fails over a value still being served wakes nobody, thrown or 
             if (how === 'thrown') throw new Error('the reload failed')
             return refuse.named('Reload')() as unknown as string
         })
-        expect(loaded()).toBe('held')
+        expect(loaded.get()).toBe('held')
         const counter = wakes(loaded)
         failNext = true
         loaded.refresh()
         const woken = counter.count()
         counter.stop()
-        expect(`${how} value: ${loaded()}`).toBe(`${how} value: held`)
+        expect(`${how} value: ${loaded.get()}`).toBe(`${how} value: held`)
         expect(`${how} wakes: ${woken}`).toBe(`${how} wakes: 0`)
         expect(
             `${how} error: ${loaded.error() === undefined ? 'none' : 'standing'}`,
@@ -4351,7 +4360,7 @@ test('a reload that fails over an invalidated value wakes the reader it left wai
     let answered = 'nothing'
     const stop = watch(() => {
         try {
-            answered = loaded()
+            answered = loaded.get()
         } catch (thrown) {
             answered = (thrown as Error).message
         }
@@ -4360,7 +4369,7 @@ test('a reload that fails over an invalidated value wakes the reader it left wai
     failNext = true
     // The read that settles the debt (7.13): it unserves, the watch reruns onto the abort,
     // and the reload is in flight.
-    expect(() => loaded()).toThrow()
+    expect(() => loaded.get()).toThrow()
     flushSync()
     await Bun.sleep(10)
     flushSync()
@@ -4388,14 +4397,14 @@ test('a body that fails over its opening undefined serves the failure, to what w
             }),
     )
     const status = reactive(() =>
-        copy.ready() || copy.error() !== undefined ? copy() : undefined,
+        copy.ready() || copy.error() !== undefined ? copy.get() : undefined,
     )
-    const derived = reactive(() => status())
-    const twice = reactive(() => derived())
+    const derived = reactive(() => status.get())
+    const twice = reactive(() => derived.get())
     const seen: string[] = []
     const stop = watch(() => {
         try {
-            seen.push(`reads ${twice()}`)
+            seen.push(`reads ${twice.get()}`)
         } catch (thrown) {
             seen.push(`throws ${(thrown as Error).message}`)
         }
@@ -4404,7 +4413,7 @@ test('a body that fails over its opening undefined serves the failure, to what w
     await Bun.sleep(5)
     flushSync()
     stop()
-    const after = reactive(() => status())
+    const after = reactive(() => status.get())
     const rows: string[] = []
     for (const [name, value] of [
         ['status', status],
@@ -4414,7 +4423,7 @@ test('a body that fails over its opening undefined serves the failure, to what w
     ] as const) {
         let read: string
         try {
-            read = `reads ${value()}`
+            read = `reads ${value.get()}`
         } catch (thrown) {
             read = `throws ${(thrown as Error).message}`
         }
@@ -4444,13 +4453,15 @@ test('a body over its opening undefined that lands wakes its readers once — 4.
     let statusRuns = 0
     const status = reactive(() => {
         statusRuns += 1
-        return copy.ready() || copy.error() !== undefined ? copy() : undefined
+        return copy.ready() || copy.error() !== undefined
+            ? copy.get()
+            : undefined
     })
-    const derived = reactive(() => status())
-    const twice = reactive(() => derived())
+    const derived = reactive(() => status.get())
+    const twice = reactive(() => derived.get())
     const seen: string[] = []
     const stop = watch(() => {
-        seen.push(`${twice()}`)
+        seen.push(`${twice.get()}`)
     })
     land('paired')
     await Bun.sleep(5)
@@ -4522,7 +4533,7 @@ test('a schema runs before transform, and transform gets what it returned — 4.
     })
     trimmed.set('  abc  ')
     expect(order.join(', ')).toBe('schema, transform')
-    expect(`stored: ${trimmed()}`).toBe('stored: 3')
+    expect(`stored: ${trimmed.get()}`).toBe('stored: 3')
 })
 
 // 4.5: THE THROW IS CAUGHT AND CONVERTED, and 15.8 says what into. A schema that threw past
@@ -4546,7 +4557,7 @@ test('a schema refuses by throwing, and the throw becomes a ValidationError', ()
     const woken = counter.count()
     counter.stop()
     // 4.9: nothing stored, nothing minted.
-    expect(`value: ${positive()}`).toBe('value: 1')
+    expect(`value: ${positive.get()}`).toBe('value: 1')
     expect(`wakes: ${woken}`).toBe('wakes: 0')
     const refusal = positive.error() as unknown as {
         name: string
@@ -4629,10 +4640,10 @@ test('a schema gates what a body produced', () => {
             return value
         },
     })
-    expect(`value: ${loaded()}`).toBe('value: 3')
+    expect(`value: ${loaded.get()}`).toBe('value: 3')
     answer = 'not a number'
     loaded.refresh()
-    expect(`still: ${loaded()}`).toBe('still: 3')
+    expect(`still: ${loaded.get()}`).toBe('still: 3')
     expect(`error: ${(loaded.error() as unknown as Error).name}`).toBe(
         'error: ValidationError',
     )
@@ -4740,17 +4751,17 @@ test('an async generator body streams: ready from its first chunk, busy until it
     await turns()
     expect(`ready: ${rows.ready()}`).toBe('ready: true')
     expect(`busy: ${rows.busy()}`).toBe('busy: true')
-    expect(rows()).toEqual([1])
+    expect(rows.get()).toEqual([1])
 
     run.push(2)
     run.push(3)
     await turns()
-    expect(rows()).toEqual([1, 2, 3])
+    expect(rows.get()).toEqual([1, 2, 3])
 
     run.close()
     await turns()
     expect(`busy: ${rows.busy()}`).toBe('busy: false')
-    expect(rows()).toEqual([1, 2, 3])
+    expect(rows.get()).toEqual([1, 2, 3])
 })
 
 // 9.6 BY WHAT THE RUN HANDS BACK. An arrow returning a generator types as a stream (the overload
@@ -4766,7 +4777,7 @@ test('a body handing back an async generator streams as one declared so — 9.6,
     const first = feed.runs[0] as Run<number>
     first.push(1)
     await turns()
-    expect(rows()).toEqual([1])
+    expect(rows.get()).toEqual([1])
     expect(`busy: ${rows.busy()}`).toBe('busy: true')
     first.close()
     await turns()
@@ -4774,11 +4785,11 @@ test('a body handing back an async generator streams as one declared so — 9.6,
 
     rows.refresh()
     expect(feed.runs.length).toBe(2)
-    expect(rows()).toEqual([1])
+    expect(rows.get()).toEqual([1])
     const second = feed.runs[1] as Run<number>
     second.push(2)
     await turns()
-    expect(rows()).toEqual([2])
+    expect(rows.get()).toEqual([2])
 })
 
 // 9.6 FROM THAT RUN ON, whichever run it is: a body that lands a plain value first and a generator
@@ -4787,14 +4798,14 @@ test('a body handing back an async generator streams as one declared so — 9.6,
 test('a body that hands back a generator on a later run streams from that run — 9.6', async () => {
     const feed = streamOf<number>()
     const live = reactive(false)
-    const rows = reactive(() => (live() ? feed.body() : 0))
-    expect(rows()).toBe(0)
+    const rows = reactive(() => (live.get() ? feed.body() : 0))
+    expect(rows.get()).toBe(0)
     live.set(true)
-    rows()
+    rows.get()
     const run = feed.runs[0] as Run<number>
     run.push(1)
     await turns()
-    expect(rows() as unknown).toEqual([1])
+    expect(rows.get() as unknown).toEqual([1])
 })
 
 // 9.6 THROUGH A PROMISE: an async body resolving to a generator is a stream once it resolves, as a
@@ -4807,7 +4818,7 @@ test('a body whose promise resolves to an async generator streams — 9.6', asyn
     const run = feed.runs[0] as Run<number>
     run.push(1)
     await turns()
-    expect(rows()).toEqual([1])
+    expect(rows.get()).toEqual([1])
     expect(`busy: ${rows.busy()}`).toBe('busy: true')
     run.close()
     expect(await rows).toEqual([1])
@@ -4836,7 +4847,7 @@ test('a body handing back a ReadableStream streams its chunks — 9.6', async ()
     first.enqueue(1)
     first.enqueue(2)
     await turns()
-    expect(rows()).toEqual([1, 2])
+    expect(rows.get()).toEqual([1, 2])
     rows.refresh()
     await turns()
     expect(`cancelled: ${cancelled}`).toBe('cancelled: 1')
@@ -4844,7 +4855,7 @@ test('a body handing back a ReadableStream streams its chunks — 9.6', async ()
     second.enqueue(3)
     second.close()
     await turns()
-    expect(rows()).toEqual([3])
+    expect(rows.get()).toEqual([3])
     expect(`busy: ${rows.busy()}`).toBe('busy: false')
 })
 
@@ -4854,9 +4865,9 @@ test('a body handing back a ReadableStream streams its chunks — 9.6', async ()
 test('a body handing back a Reactive adopts it rather than streaming it — 9.6, 11.12', () => {
     const source = reactive(1)
     const follows = reactive(() => source)
-    expect(follows()).toBe(1)
+    expect(follows.get()).toBe(1)
     source.set(2)
-    expect(follows()).toBe(2)
+    expect(follows.get()).toBe(2)
 })
 
 // 9.2 AND 9.8, ASSERTED AS THE WORK. The accumulation is pushed into per chunk and
@@ -4877,8 +4888,8 @@ test('a stream materializes its accumulation on the read, not per chunk — 4.8'
     const run = feed.runs[0] as Run<number>
     for (let chunk = 0; chunk < 100; chunk += 1) run.push(chunk)
     await turns()
-    expect(rows().length).toBe(100)
-    expect(rows().length).toBe(100)
+    expect(rows.get().length).toBe(100)
+    expect(rows.get().length).toBe(100)
     expect(`transforms: ${transforms}`).toBe('transforms: 1')
 })
 
@@ -4889,18 +4900,18 @@ test('a stream materializes its accumulation on the read, not per chunk — 4.8'
 test('each read of a moved stream is a snapshot of its own', async () => {
     const feed = streamOf<string>()
     const rows = reactive(feed.body)
-    const count = reactive(() => rows().length)
+    const count = reactive(() => rows.get().length)
     const run = feed.runs[0] as Run<string>
     run.push('a')
     await turns()
-    const first = rows()
-    expect(count()).toBe(1)
+    const first = rows.get()
+    expect(count.get()).toBe(1)
     run.push('b')
     await turns()
     expect(first).toEqual(['a'])
-    expect(rows()).toEqual(['a', 'b'])
-    expect(rows()).not.toBe(first)
-    expect(count()).toBe(2)
+    expect(rows.get()).toEqual(['a', 'b'])
+    expect(rows.get()).not.toBe(first)
+    expect(count.get()).toBe(2)
 })
 
 // 9.7: A REFRESH SERVES WHAT IT HELD UNTIL THE NEW STREAM SAYS SOMETHING. Swapping at the
@@ -4918,12 +4929,12 @@ test('refreshing a stream serves the old accumulation until the new first chunk'
 
     rows.refresh()
     expect(`busy: ${rows.busy()}`).toBe('busy: true')
-    expect(`during: ${rows().join(',')}`).toBe('during: old')
+    expect(`during: ${rows.get().join(',')}`).toBe('during: old')
 
     const second = feed.runs[1] as Run<string>
     second.push('new')
     await turns()
-    expect(`after: ${rows().join(',')}`).toBe('after: new')
+    expect(`after: ${rows.get().join(',')}`).toBe('after: new')
     second.close()
     await turns()
     expect(`busy: ${rows.busy()}`).toBe('busy: false')
@@ -4940,7 +4951,7 @@ test('a chunk from a superseded stream lands nowhere', async () => {
     rows.refresh()
     first.push('late')
     await turns()
-    expect(rows()).toEqual(['a'])
+    expect(rows.get()).toEqual(['a'])
 })
 
 // 2.6: the run being served, from its first chunk — so a cursor opened after three chunks hands
@@ -5187,7 +5198,7 @@ test('a stream that closes without a chunk lands an empty accumulation', async (
     await turns()
     expect(`ready: ${rows.ready()}`).toBe('ready: true')
     expect(`busy: ${rows.busy()}`).toBe('busy: false')
-    expect(rows()).toEqual([])
+    expect(rows.get()).toEqual([])
 })
 
 // 2.4 AND 2.2 ON A STREAM. A stream that fails after it said something leaves what it said
@@ -5201,7 +5212,7 @@ test('a stream that fails keeps what it accumulated, and one with nothing throws
     await turns()
     run.fail(new Error('socket closed'))
     await turns()
-    expect(rows()).toEqual([1])
+    expect(rows.get()).toEqual([1])
     expect(`busy: ${rows.busy()}`).toBe('busy: false')
     expect((rows.error() as unknown as Error).message).toBe('socket closed')
 
@@ -5211,7 +5222,7 @@ test('a stream that fails keeps what it accumulated, and one with nothing throws
     await turns()
     let thrown: unknown
     try {
-        nothing()
+        nothing.get()
     } catch (error) {
         thrown = error
     }
@@ -5227,8 +5238,8 @@ test('a keyed async generator body streams each entry', async () => {
     const one = keyed({ id: 1 })
     const two = keyed({ id: 2 })
     await turns()
-    expect(one()).toEqual([1, 10])
-    expect(two()).toEqual([2, 20])
+    expect(one.get()).toEqual([1, 10])
+    expect(two.get()).toEqual([2, 20])
     expect(`busy: ${one.busy()}`).toBe('busy: false')
 })
 
@@ -5256,7 +5267,7 @@ test('a burst of chunks in one task wakes a reader once', async () => {
     let seen = 0
     const stop = watch(() => {
         wakes += 1
-        seen = rows().length
+        seen = rows.get().length
     })
     // The run at registration is the subscription, and it found nothing landed.
     wakes = 0
@@ -5284,7 +5295,7 @@ test('flushSync delivers a stream wake held for the next task', async () => {
     })
     let seen = 0
     const stop = watch(() => {
-        seen = rows().length
+        seen = rows.get().length
     })
     for (let step = 0; step < 20; step += 1) await Promise.resolve()
     expect(`landed: ${rows.peek()?.length}`).toBe('landed: 2')
@@ -5322,7 +5333,7 @@ test('a value adopting a stream is that stream to a cursor, a guard and an await
     run.push(1)
     run.push(2)
     await turns()
-    expect(rows()).toEqual([1, 2])
+    expect(rows.get()).toEqual([1, 2])
     expect(settled).toBeNull()
 
     const cursor = rows[Symbol.asyncIterator]()
@@ -5367,8 +5378,8 @@ test('a value adopting a stream materializes nothing until it is read, through i
     expect(`outer transforms before a read: ${transforms}`).toBe(
         'outer transforms before a read: 0',
     )
-    expect(total()).toEqual([6])
-    expect(total()).toEqual([6])
+    expect(total.get()).toEqual([6])
+    expect(total.get()).toEqual([6])
     expect(`outer transforms after two reads: ${transforms}`).toBe(
         'outer transforms after two reads: 1',
     )
@@ -5389,7 +5400,7 @@ test('a capped value adopting a stream while its window holds a write keeps forw
     await Bun.sleep(AFTER_WINDOW)
     run.push(2)
     await turns()
-    expect(outer()).toEqual([1, 2])
+    expect(outer.get()).toEqual([1, 2])
     run.close()
     await turns()
     expect(`busy: ${outer.busy()}`).toBe('busy: false')
@@ -5417,12 +5428,12 @@ test('a value that stops adopting a stream serves its own value again', async ()
     const feed = streamOf<number>()
     const inner = reactive(feed.body)
     const flag = reactive(true)
-    const outer = reactive(() => (flag() ? inner : [99]))
+    const outer = reactive(() => (flag.get() ? inner : [99]))
     ;(feed.runs[0] as Run<number>).push(1)
     await turns()
-    expect(outer()).toEqual([1])
+    expect(outer.get()).toEqual([1])
     flag.set(false)
-    expect(outer()).toEqual([99])
+    expect(outer.get()).toEqual([99])
     expect(isStreaming(outer)).toBe(false)
     expect(`direct: ${cellOf(outer).direct}`).toBe('direct: true')
 })
@@ -5445,17 +5456,17 @@ test('a set on a stream stands until the next chunk overwrites it', async () => 
     run.push('2')
     await turns()
     rows.set(['local'])
-    expect(`after set: ${rows().join(',')}`).toBe('after set: local')
+    expect(`after set: ${rows.get().join(',')}`).toBe('after set: local')
     await turns()
-    expect(`still: ${rows().join(',')}`).toBe('still: local')
+    expect(`still: ${rows.get().join(',')}`).toBe('still: local')
     run.push('3')
     await turns()
-    expect(`after chunk: ${rows().join(',')}`).toBe('after chunk: 1,2,3')
+    expect(`after chunk: ${rows.get().join(',')}`).toBe('after chunk: 1,2,3')
 
     const silent = streamOf<string>()
     const early = reactive(silent.body)
     early.set(['early'])
-    expect(`before any chunk: ${early().join(',')}`).toBe(
+    expect(`before any chunk: ${early.get().join(',')}`).toBe(
         'before any chunk: early',
     )
 })
@@ -5484,7 +5495,7 @@ test('a patch that reshapes a stream keeps its cursors in step', async () => {
         rows.patch((chunks) => {
             reshape(chunks)
         })
-        const read = rows().join(',')
+        const read = rows.get().join(',')
         const pending = cursor.next()
         run.push('3')
         const taken = await Promise.race([
@@ -5582,12 +5593,12 @@ test('a Reactive set on a stream is followed until the next chunk', async () => 
     const woken = wakes(rows)
 
     rows.set(other as never)
-    expect(`stored: ${isReactive(rows())}`).toBe('stored: false')
-    expect(`followed: ${rows().join(',')}`).toBe('followed: 7,8')
+    expect(`stored: ${isReactive(rows.get())}`).toBe('stored: false')
+    expect(`followed: ${rows.get().join(',')}`).toBe('followed: 7,8')
     expect(`woken by the set: ${woken.count()}`).toBe('woken by the set: 1')
 
     other.set([9])
-    expect(`after the adopted write: ${rows().join(',')}`).toBe(
+    expect(`after the adopted write: ${rows.get().join(',')}`).toBe(
         'after the adopted write: 9',
     )
     expect(`woken by the adopted write: ${woken.count() - 1}`).toBe(
@@ -5599,7 +5610,7 @@ test('a Reactive set on a stream is followed until the next chunk', async () => 
     run.push(3)
     await turns()
     taken.push((await pending).value)
-    expect(`after the chunk: ${rows().join(',')}`).toBe(
+    expect(`after the chunk: ${rows.get().join(',')}`).toBe(
         'after the chunk: 1,2,3',
     )
     expect(`woken by the chunk: ${woken.count() - 2}`).toBe(
@@ -5610,7 +5621,7 @@ test('a Reactive set on a stream is followed until the next chunk', async () => 
     expect(`woken after the chunk: ${woken.count() - 3}`).toBe(
         'woken after the chunk: 0',
     )
-    expect(`still: ${rows().join(',')}`).toBe('still: 1,2,3')
+    expect(`still: ${rows.get().join(',')}`).toBe('still: 1,2,3')
     expect(
         `adopted readers after: ${cellOf(other).readers.length - readersBefore}`,
     ).toBe('adopted readers after: 0')
@@ -5634,12 +5645,12 @@ test('a set over a followed Reactive on a stream replaces it', async () => {
     const other = reactive([7])
     const readersBefore = cellOf(other).readers.length
     rows.set(other as never)
-    expect(`followed: ${rows().join(',')}`).toBe('followed: 7')
+    expect(`followed: ${rows.get().join(',')}`).toBe('followed: 7')
 
     const woken = wakes(rows)
     rows.set([5])
-    expect(`replaced: ${rows().join(',')}`).toBe('replaced: 5')
-    expect(`adopted untouched: ${other().join(',')}`).toBe(
+    expect(`replaced: ${rows.get().join(',')}`).toBe('replaced: 5')
+    expect(`adopted untouched: ${other.get().join(',')}`).toBe(
         'adopted untouched: 7',
     )
     expect(`woken by the write: ${woken.count()}`).toBe('woken by the write: 1')
@@ -5647,7 +5658,7 @@ test('a set over a followed Reactive on a stream replaces it', async () => {
     expect(`woken by the adopted write: ${woken.count() - 1}`).toBe(
         'woken by the adopted write: 0',
     )
-    expect(`still: ${rows().join(',')}`).toBe('still: 5')
+    expect(`still: ${rows.get().join(',')}`).toBe('still: 5')
     expect(
         `adopted readers after: ${cellOf(other).readers.length - readersBefore}`,
     ).toBe('adopted readers after: 0')
@@ -5657,7 +5668,7 @@ test('a set over a followed Reactive on a stream replaces it', async () => {
     rows.set(other as never)
     rows.set(third as never)
     other.set([0])
-    expect(`re-pointed: ${rows().join(',')}`).toBe('re-pointed: 3')
+    expect(`re-pointed: ${rows.get().join(',')}`).toBe('re-pointed: 3')
     expect(
         `first let go: ${cellOf(other).readers.length - readersBefore}`,
     ).toBe('first let go: 0')
@@ -5703,7 +5714,7 @@ test('a followed Reactive on a closed stream reports its probes', async () => {
     await turns()
     flushSync()
     expect(`busy after: ${rows.busy()}`).toBe('busy after: false')
-    expect(`value after: ${rows().join(',')}`).toBe('value after: 4')
+    expect(`value after: ${rows.get().join(',')}`).toBe('value after: 4')
     expect(`guard heard it: ${guardRuns >= 2}`).toBe('guard heard it: true')
 
     const failing = reactive<number[]>(() => {
@@ -5728,10 +5739,10 @@ test('patch on a stream mutates its accumulation, and later chunks land after it
     rows.patch((chunks) => {
         chunks[0] = 10
     })
-    expect(`after patch: ${rows().join(',')}`).toBe('after patch: 10,2')
+    expect(`after patch: ${rows.get().join(',')}`).toBe('after patch: 10,2')
     run.push(3)
     await turns()
-    expect(`after chunk: ${rows().join(',')}`).toBe('after chunk: 10,2,3')
+    expect(`after chunk: ${rows.get().join(',')}`).toBe('after chunk: 10,2,3')
 })
 
 // 11.58: THE ADOPTER HOLDS THE ADOPTED BUFFER BY REFERENCE, so a patch through it is a patch of
@@ -5748,20 +5759,24 @@ test('patch and set through a value adopting a stream reach the stream', async (
     const run = feed.runs[0] as Run<number>
     run.push(1)
     await turns()
-    expect(inner()).toEqual([1])
+    expect(inner.get()).toEqual([1])
     outer.patch((chunks) => {
         chunks[0] = 9
     })
     flushSync()
-    expect(`inner: ${inner().join(',')}`).toBe('inner: 9')
-    expect(`outer: ${outer().join(',')}`).toBe('outer: 9')
+    expect(`inner: ${inner.get().join(',')}`).toBe('inner: 9')
+    expect(`outer: ${outer.get().join(',')}`).toBe('outer: 9')
 
     outer.set([42])
-    expect(`outer after set: ${outer().join(',')}`).toBe('outer after set: 42')
-    expect(`inner after set: ${inner().join(',')}`).toBe('inner after set: 42')
+    expect(`outer after set: ${outer.get().join(',')}`).toBe(
+        'outer after set: 42',
+    )
+    expect(`inner after set: ${inner.get().join(',')}`).toBe(
+        'inner after set: 42',
+    )
     run.push(2)
     await turns()
-    expect(`outer after chunk: ${outer().join(',')}`).toBe(
+    expect(`outer after chunk: ${outer.get().join(',')}`).toBe(
         'outer after chunk: 9,2',
     )
 })
@@ -5784,7 +5799,7 @@ test('throttle on a stream wakes readers once per window, and a cursor still get
     const run = feed.runs[0] as Run<number>
     let wakes = 0
     const stop = watch(() => {
-        rows()
+        rows.get()
         wakes += 1
     })
     const cursor = rows[Symbol.asyncIterator]()
@@ -5825,9 +5840,9 @@ test('a read of a throttled stream serves the accumulation as the last release l
     await turns()
     run.push(3)
     await turns()
-    expect(`during: ${rows().join(',')}`).toBe('during: 1,2')
+    expect(`during: ${rows.get().join(',')}`).toBe('during: 1,2')
     await Bun.sleep(AFTER_WINDOW)
-    expect(`after: ${rows().join(',')}`).toBe('after: 1,2,3')
+    expect(`after: ${rows.get().join(',')}`).toBe('after: 1,2,3')
 })
 
 // 5.13 ON A STREAM: a debounce releases once the chunks stop, and a close releases what it holds, so
@@ -5842,9 +5857,9 @@ test('a debounced stream releases once the chunks stop, and its close releases w
         run.push(chunk)
         await turns()
     }
-    expect(`held: ${rows().join(',')}`).toBe('held: 1')
+    expect(`held: ${rows.get().join(',')}`).toBe('held: 1')
     await Bun.sleep(AFTER_WINDOW)
-    expect(`released: ${rows().join(',')}`).toBe('released: 1,2,3,4')
+    expect(`released: ${rows.get().join(',')}`).toBe('released: 1,2,3,4')
     run.push(5)
     run.close()
     expect(`awaited: ${(await rows).join(',')}`).toBe('awaited: 1,2,3,4,5')
@@ -5907,9 +5922,9 @@ test('invalidate over tags reaches every value carrying any of them, and no othe
         { tags: ['elsewhere'] },
     )
     invalidate({ tags: ['invoice', 'customer:1'] })
-    a()
-    b()
-    c()
+    a.get()
+    b.get()
+    c.get()
     expect(`runs: ${runs.a},${runs.b},${runs.c}`).toBe('runs: 2,2,1')
 })
 
@@ -5936,14 +5951,14 @@ test('refresh over tags reloads what something reads and marks the rest', () => 
         { tags: ['report'] },
     )
     const stop = watch(() => {
-        read()
+        read.get()
     })
     refresh({ tags: ['report'] })
     expect(`read runs: ${readRuns}`).toBe('read runs: 2')
     expect(`unread runs before a read: ${unreadRuns}`).toBe(
         'unread runs before a read: 1',
     )
-    expect(unread()).toBe(2)
+    expect(unread.get()).toBe(2)
     stop()
 })
 
@@ -6056,11 +6071,11 @@ test('a refresh over tags reruns no synchronous derivation that carries none of 
     )
     const doubled = reactive(() => {
         derivationRuns += 1
-        return stock() * 2
+        return stock.get() * 2
     })
     const seen: number[] = []
     const stop = watch(() => {
-        seen.push(doubled())
+        seen.push(doubled.get())
     })
     const before = derivationRuns
     refresh({ tags: ['stock'] })
@@ -6130,11 +6145,11 @@ function memoryStore<Stored>(initial?: {
 test('a store answers before the initial value, and a miss falls back to it', () => {
     const hit = memoryStore<number>({ answer: () => 9 })
     const restored = reactive(4, { store: hit.store })
-    expect(`restored: ${restored()}`).toBe('restored: 9')
+    expect(`restored: ${restored.get()}`).toBe('restored: 9')
     expect(`busy: ${restored.busy()}`).toBe('busy: false')
 
     const miss = memoryStore<number>({ answer: () => undefined })
-    expect(`miss: ${reactive(4, { store: miss.store })()}`).toBe('miss: 4')
+    expect(`miss: ${reactive(4, { store: miss.store }).get()}`).toBe('miss: 4')
 
     const unreadable = memoryStore<number>({
         answer: () => {
@@ -6143,7 +6158,7 @@ test('a store answers before the initial value, and a miss falls back to it', ()
     })
     warningsWhile(() =>
         expect(
-            `unreadable: ${reactive(4, { store: unreadable.store })()}`,
+            `unreadable: ${reactive(4, { store: unreadable.store }).get()}`,
         ).toBe('unreadable: 4'),
     )
 })
@@ -6174,7 +6189,7 @@ test('a restore runs neither schema nor transform', () => {
             return input * 100
         },
     })
-    expect(`value: ${value()}`).toBe('value: 9')
+    expect(`value: ${value.get()}`).toBe('value: 9')
     expect(`gates: ${gates}`).toBe('gates: 0')
 })
 
@@ -6204,7 +6219,7 @@ test('writes to a slow store coalesce latest-wins and never block a read', async
     const memory = memoryStore<number>({ answer: () => undefined, slow: true })
     const value = reactive(0, { store: memory.store })
     for (let step = 1; step <= 4; step += 1) value.set(step)
-    expect(value()).toBe(4)
+    expect(value.get()).toBe(4)
     expect(
         `in flight: ${memory.sets.map((write) => write.value).join(',')}`,
     ).toBe('in flight: 1')
@@ -6229,10 +6244,10 @@ test('a store miss falling back to the initial value does not write it, and a bo
         answer: () => undefined,
     })
     const value = reactive<Record<string, number>>({}, { store: initial.store })
-    expect(value()).toEqual({})
+    expect(value.get()).toEqual({})
     const body = memoryStore<number>({ answer: () => undefined })
     const derived = reactive(() => 7, { store: body.store })
-    expect(derived()).toBe(7)
+    expect(derived.get()).toBe(7)
     expect(
         `sets: ${initial.sets.length}, body: ${body.sets.map((write) => write.value).join(',')}`,
     ).toBe('sets: 0, body: 7')
@@ -6293,10 +6308,10 @@ test('a store in front of a body is read first, and the body runs on a miss and 
         },
         { store: hit.store },
     )
-    expect(`cached: ${cached()}`).toBe('cached: 41')
+    expect(`cached: ${cached.get()}`).toBe('cached: 41')
     expect(`runs on a hit: ${runs}`).toBe('runs on a hit: 0')
     cached.refresh()
-    expect(`after refresh: ${cached()}`).toBe('after refresh: 1')
+    expect(`after refresh: ${cached.get()}`).toBe('after refresh: 1')
     expect(`set: ${hit.sets.map((write) => write.value).join(',')}`).toBe(
         'set: 1',
     )
@@ -6310,7 +6325,7 @@ test('a store in front of a body is read first, and the body runs on a miss and 
         },
         { store: miss.store },
     )
-    expect(`miss: ${derived()}`).toBe('miss: 7')
+    expect(`miss: ${derived.get()}`).toBe('miss: 7')
     expect(`runs on a miss: ${missRuns}`).toBe('runs on a miss: 1')
 })
 
@@ -6320,10 +6335,10 @@ test('refresh on a value with a store re-reads the store', () => {
     let stored = 1
     const memory = memoryStore<number>({ answer: () => stored })
     const theme = reactive(0, { store: memory.store })
-    expect(theme()).toBe(1)
+    expect(theme.get()).toBe(1)
     stored = 2
     theme.refresh()
-    expect(`after refresh: ${theme()}`).toBe('after refresh: 2')
+    expect(`after refresh: ${theme.get()}`).toBe('after refresh: 2')
     expect(`gets: ${memory.gets}`).toBe('gets: 2')
 })
 
@@ -6377,8 +6392,8 @@ test('a keyed store is built per entry from its args', () => {
             },
         },
     )
-    expect(profile({ id: 1 })()).toBe('stored 1')
-    expect(profile({ id: 2 })()).toBe('computed 2')
+    expect(profile({ id: 1 }).get()).toBe('stored 1')
+    expect(profile({ id: 2 }).get()).toBe('computed 2')
     expect(`entry 2 wrote: ${stores.get(2)?.sets[0]?.value}`).toBe(
         'entry 2 wrote: computed 2',
     )
@@ -6398,13 +6413,13 @@ test('a keyed store is built per entry from its args', () => {
 test('a store is not read behind a write it has not confirmed', () => {
     const slow = memoryStore<number>({ answer: () => 1, slow: true })
     const value = reactive<number, number>(0, { store: slow.store })
-    expect(`restored: ${value()}`).toBe('restored: 1')
+    expect(`restored: ${value.get()}`).toBe('restored: 1')
 
     const reads = slow.gets
     value.set(99)
     value.refresh()
     expect(`reads: ${slow.gets - reads}`).toBe('reads: 0')
-    expect(`value: ${value()}`).toBe('value: 99')
+    expect(`value: ${value.get()}`).toBe('value: 99')
 
     slow.release()
 })
@@ -6438,10 +6453,10 @@ test('a store that says it changed is read again, and neither runs the body nor 
             },
         },
     )
-    expect(`restored: ${document()}`).toBe('restored: first')
+    expect(`restored: ${document.get()}`).toBe('restored: first')
     saved = 'edited elsewhere'
     changed()
-    expect(`value: ${document()}`).toBe('value: edited elsewhere')
+    expect(`value: ${document.get()}`).toBe('value: edited elsewhere')
     expect(`runs: ${runs}`).toBe('runs: 0')
     expect(`sets: ${sets}`).toBe('sets: 0')
 })
@@ -6465,10 +6480,10 @@ test('a store watch stops with the owner that built its value, keyed or not — 
     // A setup, as a component's is collected.
     const stops: (() => void)[] = []
     const previous = collectWatches(stops)
-    reactive(() => 'body', { store: watching(0) })()
+    reactive(() => 'body', { store: watching(0) }).get()
     keyedValue((args: { id: number }) => `body ${args.id}`, {
         store: () => watching(1),
-    })({ id: 1 })()
+    })({ id: 1 }).get()
     collectWatches(previous)
     for (const stop of stops) stop()
     expect(`stopped: ${stopped.join(',')}`).toBe('stopped: 1,1')
@@ -6488,11 +6503,11 @@ test('invalidate runs nothing until the next read, which runs fresh — 7.2', ()
         runs += 1
         return answer
     })
-    expect(held()).toBe(1)
+    expect(held.get()).toBe(1)
     answer = 2
     held.invalidate()
     expect(`runs at the call: ${runs}`).toBe('runs at the call: 1')
-    expect(`read: ${held()}`).toBe('read: 2')
+    expect(`read: ${held.get()}`).toBe('read: 2')
     expect(`runs after the read: ${runs}`).toBe('runs after the read: 2')
 })
 
@@ -6507,7 +6522,7 @@ test('invalidate wakes no reader, and the next hit reloads', () => {
     const held = reactive(() => answer)
     let valueWakes = 0
     const stopValue = watch(() => {
-        held()
+        held.get()
         valueWakes += 1
     })
     const guard: boolean[] = []
@@ -6520,7 +6535,7 @@ test('invalidate wakes no reader, and the next hit reloads', () => {
     flushSync()
     expect(`value wakes: ${valueWakes}`).toBe('value wakes: 0')
     expect(`guard: ${guard.join(',')}`).toBe('guard: true')
-    expect(`read: ${held()}`).toBe('read: 2')
+    expect(`read: ${held.get()}`).toBe('read: 2')
     stopValue()
     stopGuard()
 })
@@ -6533,11 +6548,11 @@ test('invalidate wakes no reader, and the next hit reloads', () => {
 test('a read of a derived value runs the producer an invalidate marked upstream', () => {
     let answer = 1
     const source = reactive(() => answer)
-    const derived = reactive(() => source() * 10)
-    expect(derived()).toBe(10)
+    const derived = reactive(() => source.get() * 10)
+    expect(derived.get()).toBe(10)
     answer = 2
     source.invalidate()
-    expect(`derived: ${derived()}`).toBe('derived: 20')
+    expect(`derived: ${derived.get()}`).toBe('derived: 20')
 })
 
 // 7.15: A LOAD IN FLIGHT WHEN THE VALUE IS MARKED WRONG was started from what the mark says is
@@ -6556,7 +6571,7 @@ test('invalidate discards the load it finds in flight', async () => {
     expect(`ready after the discarded load: ${held.ready()}`).toBe(
         'ready after the discarded load: false',
     )
-    expect(() => held()).toThrow(NotLanded)
+    expect(() => held.get()).toThrow(NotLanded)
     ;(settles[1] as (value: number) => void)(2)
     expect(await held).toBe(2)
 })
@@ -6575,13 +6590,13 @@ test('invalidate stops a stream in flight, and the next read starts a new run', 
     expect(`runs before a read: ${feed.runs.length}`).toBe(
         'runs before a read: 1',
     )
-    expect(() => rows()).toThrow(NotLanded)
+    expect(() => rows.get()).toThrow(NotLanded)
     expect(`runs after a read: ${feed.runs.length}`).toBe(
         'runs after a read: 2',
     )
     ;(feed.runs[1] as Run<number>).push(9)
     await turns()
-    expect(rows()).toEqual([9])
+    expect(rows.get()).toEqual([9])
 })
 
 // 1.7 THROUGH `then`: awaiting a marked value is reaching it, so it runs the producer rather than
@@ -6600,10 +6615,10 @@ test('reading a value adopting an invalidated one runs the adopted producer', ()
     let answer = 1
     const inner = reactive(() => answer)
     const outer = reactive(() => inner)
-    expect(outer()).toBe(1)
+    expect(outer.get()).toBe(1)
     answer = 2
     inner.invalidate()
-    expect(`outer: ${outer()}`).toBe('outer: 2')
+    expect(`outer: ${outer.get()}`).toBe('outer: 2')
 })
 
 // 7.9: A WRITE OVER A MARKED VALUE SETTLES THE MARK. What the invalidate said was wrong has been
@@ -6625,9 +6640,11 @@ test('a write over an invalidated value is served, and the owed reload is not ru
         held.set('written')
         expect(`peek: ${held.peek()}`).toBe('peek: written')
         expect(`ready: ${held.ready()}`).toBe('ready: true')
-        expect(`read: ${held()}`).toBe('read: written')
+        expect(`read: ${held.get()}`).toBe('read: written')
         await Promise.resolve()
-        expect(`runs: ${runs}, then: ${held()}`).toBe('runs: 1, then: written')
+        expect(`runs: ${runs}, then: ${held.get()}`).toBe(
+            'runs: 1, then: written',
+        )
     }
 })
 
@@ -6658,7 +6675,7 @@ test('a refresh over an invalidated value does not serve what the mark said was 
     const settled = reactive(() => 1)
     settled.invalidate()
     settled.refresh()
-    expect(settled()).toBe(1)
+    expect(settled.get()).toBe(1)
     const loading = reactive(() => Promise.resolve(1))
     await loading.then(() => {
         loading.invalidate()
@@ -6680,7 +6697,7 @@ test('awaiting a derived value settles once the source it aborted on lands', asy
             settle = resolve
         }),
     )
-    const doubled = reactive(() => source() * 2)
+    const doubled = reactive(() => source.get() * 2)
     const awaited = doubled.then((value) => value)
     settle(21)
     expect(`awaited: ${await awaited}`).toBe('awaited: 42')
@@ -6700,7 +6717,7 @@ test('a Reactive written with set is adopted rather than stored', () => {
     const inner = reactive(1)
     const held = reactive<number | undefined>(undefined)
     held.set(inner)
-    expect(`adopted: ${held()}`).toBe('adopted: 1')
+    expect(`adopted: ${held.get()}`).toBe('adopted: 1')
     let woken = 0
     const stop = held.watch(() => {
         woken += 1
@@ -6708,12 +6725,12 @@ test('a Reactive written with set is adopted rather than stored', () => {
     woken = 0
     inner.set(2)
     flushSync()
-    expect(`after: ${held()}`).toBe('after: 2')
+    expect(`after: ${held.get()}`).toBe('after: 2')
     expect(`woken: ${woken}`).toBe('woken: 1')
     // 11.58 from the other end: the adopter's own write is the adopted value's.
     held.set(9)
     flushSync()
-    expect(`inner after a write to the adopter: ${inner()}`).toBe(
+    expect(`inner after a write to the adopter: ${inner.get()}`).toBe(
         'inner after a write to the adopter: 9',
     )
     stop()
@@ -6727,14 +6744,14 @@ test('a Reactive written with set is adopted rather than stored', () => {
 test('a Reactive handed to reactive is adopted rather than stored', () => {
     const inner = reactive({ name: 'server' })
     const opened = reactive(inner)
-    expect(`opened: ${typeof opened()}`).toBe('opened: object')
-    expect(opened().name).toBe('server')
+    expect(`opened: ${typeof opened.get()}`).toBe('opened: object')
+    expect(opened.get().name).toBe('server')
     inner.set({ name: 'moved' })
     flushSync()
-    expect(opened().name).toBe('moved')
+    expect(opened.get().name).toBe('moved')
     opened.set({ name: 'written' })
     flushSync()
-    expect(inner().name).toBe('written')
+    expect(inner.get().name).toBe('written')
 })
 
 // 11.19 THROUGH 11.60: `paid = payInvoice(…)` over a `reactive()` that holds nothing. The guard
@@ -6773,9 +6790,9 @@ test('a busy guard hears a write that adopts a call in flight', async () => {
 test('set and patch on an adopting value reach the adopted value', () => {
     const source = reactive({ n: 1 })
     const outer = reactive(() => source)
-    expect(outer().n).toBe(1)
+    expect(outer.get().n).toBe(1)
     outer.set({ n: 2 })
-    expect(`source after set: ${source().n}`).toBe('source after set: 2')
+    expect(`source after set: ${source.get().n}`).toBe('source after set: 2')
     let woken = 0
     const stop = source.watch(() => {
         woken += 1
@@ -6787,7 +6804,7 @@ test('set and patch on an adopting value reach the adopted value', () => {
     flushSync()
     stop()
     expect(`source woken by patch: ${woken}`).toBe('source woken by patch: 1')
-    expect(outer().n).toBe(4)
+    expect(outer.get().n).toBe(4)
 })
 
 // 11.61 AND 4.16: A KEYED VALUE WITH NOTHING TO LOAD answers `undefined`, which is a value like
@@ -6809,7 +6826,7 @@ test('a body answering undefined is loaded, and is not shaped', () => {
     )
     const onboarding = turns({ conversation: 'onboarding' })
     expect(`ready: ${onboarding.ready()}`).toBe('ready: true')
-    expect(onboarding()).toBeUndefined()
+    expect(onboarding.get()).toBeUndefined()
     expect(`transformed: ${transformed}`).toBe('transformed: 0')
 })
 
@@ -6822,10 +6839,10 @@ test('a body answering undefined is loaded, and is not shaped', () => {
 test('reactive(initial) accepts the undefined its initial value may be', () => {
     const opening = ['ada'].find((name) => name.length > 9)
     const held = reactive(opening)
-    expect(held()).toBe(undefined)
+    expect(held.get()).toBe(undefined)
     held.set('grace')
     held.set(undefined)
-    expect(held()).toBe(undefined)
+    expect(held.get()).toBe(undefined)
 })
 
 // 11.2 — A BODY WHOSE PARAMETER IS OPTIONAL IS KEYED, in its type as it is at run time: called with
@@ -6842,7 +6859,7 @@ test('a body with an optional parameter is typed keyed — 11.2', async () => {
     // @ts-expect-error — a type the parameter does not take.
     void tags({ type: 'color' })
     const count = reactive(() => 1)
-    const counted: number = count()
+    const counted: number = count.get()
     const invoice = keyedValue(({ id }: { id: number }) => id)
     // @ts-expect-error — a required parameter stays required.
     void invoice()
@@ -6884,9 +6901,9 @@ test('reactive() is empty and reactive(undefined) is loaded', () => {
     const empty = reactive<string>()
     const loaded = reactive<string | undefined>(undefined)
     expect(`empty ready: ${empty.ready()}`).toBe('empty ready: false')
-    expect(() => empty()).toThrow(NotLanded)
+    expect(() => empty.get()).toThrow(NotLanded)
     expect(`loaded ready: ${loaded.ready()}`).toBe('loaded ready: true')
-    expect(loaded()).toBeUndefined()
+    expect(loaded.get()).toBeUndefined()
 })
 
 // ── A window on a keyed value holds back starting a key (RULEBOOK 5.18, 5.19, 5.20) ─────────
@@ -6920,7 +6937,7 @@ test('a debounce on a keyed value starts the first key, then only the key the re
     expect(`held: ${search.entries.size}`).toBe('held: 2')
     await Bun.sleep(AFTER_WINDOW)
     expect(`calls: ${calls.join(',')}`).toBe('calls: n,nor')
-    expect(last()).toBe(3)
+    expect(last.get()).toBe(3)
     expect(`superseded busy: ${first.busy()}`).toBe('superseded busy: false')
 })
 
@@ -6971,21 +6988,21 @@ test('a write through a member path mints a new identity', () => {
     const user = reactive({ name: 'ada', tags: ['pascal'] })
     let woke = 0
     const stop = watch(() => {
-        user()
+        user.get()
         woke += 1
     })
     expect(woke).toBe(1)
 
-    const before = user()
+    const before = user.get()
     // What `Lowering` emits for `user.name = 'grace'`.
-    user.set(writePath(user(), ['name'], 'grace') as typeof before)
+    user.set(writePath(user.get(), ['name'], 'grace') as typeof before)
     flushSync()
     expect(woke).toBe(2)
-    expect(user().name).toBe('grace')
-    expect(user()).not.toBe(before)
+    expect(user.get().name).toBe('grace')
+    expect(user.get()).not.toBe(before)
     // THE COPY IS ONE LEVEL DEEP PER STEP. What the path did not walk keeps its identity, which is
     // what stops a write costing a copy of everything the value holds.
-    expect(user().tags).toBe(before.tags)
+    expect(user.get().tags).toBe(before.tags)
     expect(before.name).toBe('ada')
     stop()
 })
@@ -7006,14 +7023,14 @@ test('a write through a path into an object that is not plain data lands on it',
     const video = reactive(element)
     let woke = 0
     const stop = watch(() => {
-        video()
+        video.get()
         woke += 1
     })
     // What `Lowering` emits for `video.currentTime = 5`.
-    video.set(writePath(video(), ['currentTime'], 5) as Player)
+    video.set(writePath(video.get(), ['currentTime'], 5) as Player)
     flushSync()
     expect(element.seeked).toBe(5)
-    expect(video()).toBe(element)
+    expect(video.get()).toBe(element)
     expect(woke).toBe(1)
     // And below plain data: the plain levels above it are not copied either.
     const holder = { player: element }
@@ -7109,8 +7126,8 @@ test('an adoption that would close a cycle is refused where it forms', () => {
     expect((thrown as Error | undefined)?.message).toContain('cycle')
     // Refused, not half-made: `b` still holds its own value and `a` still reaches it.
     a.set(7 as never)
-    expect(b()).toBe(7)
-    expect(a()).toBe(7)
+    expect(b.get()).toBe(7)
+    expect(a.get()).toBe(7)
     try {
         a.set(a as never)
         thrown = undefined
@@ -7140,14 +7157,14 @@ test('a schema runs untracked', () => {
     const source = reactive(0)
     const target = reactive(0, {
         schema: (value: unknown) => {
-            other()
+            other.get()
             return value
         },
     })
     let bodyRuns = 0
     watch(() => {
         bodyRuns += 1
-        target.set(source() as never)
+        target.set(source.get() as never)
     })
     flushSync()
     const settled = bodyRuns
@@ -7285,10 +7302,10 @@ test('a body that diverges near its front dedups its reads in linear work', () =
     const list = reactive(rows)
     const sum = reactive(() => {
         let total = 0
-        for (const row of list()) total += row()
+        for (const row of list.get()) total += row.get()
         return total
     })
-    expect(sum()).toBe((width * (width - 1)) / 2)
+    expect(sum.get()).toBe((width * (width - 1)) / 2)
     const record = cellOf(sum)
     let loads = 0
     record.sources = new Proxy(record.sources, {
@@ -7298,11 +7315,11 @@ test('a body that diverges near its front dedups its reads in linear work', () =
         },
     })
     list.set([reactive(width), ...rows])
-    expect(sum()).toBe((width * (width + 1)) / 2)
+    expect(sum.get()).toBe((width * (width + 1)) / 2)
     expect(loads).toBeLessThan(width * 10)
     // Every value is still subscribed once: one more write to a row recomputes the sum.
     ;(rows[500] as Reactive<number>).set(0)
-    expect(sum()).toBe((width * (width + 1)) / 2 - 500)
+    expect(sum.get()).toBe((width * (width + 1)) / 2 - 500)
     expect(cellOf(rows[500]).readers.length).toBe(1)
 })
 
@@ -7317,17 +7334,17 @@ test('a long body that reads one value many times holds one subscription of it',
     // The flip puts `one` at the second slot, so the run diverges there and every read after it
     // is deduped by `track`.
     const total = reactive(() => {
-        let sum = flip() ? one() : 0
-        for (const row of rows) sum += row() + repeated()
+        let sum = flip.get() ? one.get() : 0
+        for (const row of rows) sum += row.get() + repeated.get()
         return sum
     })
-    total()
+    total.get()
     flip.set(true)
-    expect(total()).toBe(4951)
+    expect(total.get()).toBe(4951)
     expect(cellOf(repeated).readers.length).toBe(1)
     expect(cellOf(rows[99]).readers.length).toBe(1)
     repeated.set(1)
-    expect(total()).toBe(5051)
+    expect(total.get()).toBe(5051)
 })
 
 // 5.7 AND 2.5 FOR A CURSOR BEHIND: a patch that grew the accumulation AFTER where a cursor stands
@@ -7377,13 +7394,13 @@ test('a patch that reshapes a stream skips nothing a cursor behind it has still 
 // — the body was stored as the value rather than run.
 test('reactive runs a function as a body, and holds one a body hands back — 4.20', () => {
     const derived = reactive(() => 2)
-    expect(`derived: ${typeof derived()}`).toBe('derived: number')
+    expect(`derived: ${typeof derived.get()}`).toBe('derived: number')
     const format = (amount: number): string => `$${amount}`
     const held = reactive(() => format)
-    expect(`held: ${typeof held()}`).toBe('held: function')
-    expect(held()(5)).toBe('$5')
+    expect(`held: ${typeof held.get()}`).toBe('held: function')
+    expect(held.get()(5)).toBe('$5')
     held.set((amount: number) => `€${amount}`)
-    expect(held()(5)).toBe('€5')
+    expect(held.get()(5)).toBe('€5')
 })
 
 // 11.73 — `memo` IS HANDED A BODY: a value, or a `Reactive` already built, throws
@@ -7445,7 +7462,7 @@ test('a handle hands back what create answers, and throws outside an instance �
     const previous = enterShare()
     try {
         expect(
-            `adopted: ${adopted() === held}, plain: ${isReactive(plain()) && plain()()}`,
+            `adopted: ${adopted() === held}, plain: ${isReactive(plain()) && plain().get()}`,
         ).toBe('adopted: true, plain: 2')
     } finally {
         leaveShare(previous)
@@ -7475,7 +7492,7 @@ test('a body that peeks a value is not rerun by a write to it — 2.11', () => {
 test('a body that peeks a stand-in is not rerun by a write past it — 2.11', () => {
     const source = reactive(1)
     const standIn = reactiveOver(
-        () => source(),
+        () => source.get(),
         (next: number) => source.set(next),
     )
     let runs = 0
@@ -7498,13 +7515,13 @@ test('a body that peeks a stand-in is not rerun by a write past it — 2.11', ()
 // `warnings: 1` where `warnings: 0` is due.
 test('a write to a derived value warns nothing — 11.9', () => {
     const source = reactive(2)
-    const doubled = reactive(() => source() * 2)
-    expect(doubled()).toBe(4)
+    const doubled = reactive(() => source.get() * 2)
+    expect(doubled.get()).toBe(4)
     const said = warningsWhile(() => {
         doubled.set(10)
         flushSync()
     })
-    expect(`warnings: ${said.length}, held: ${doubled()}`).toBe(
+    expect(`warnings: ${said.length}, held: ${doubled.get()}`).toBe(
         'warnings: 0, held: 10',
     )
 })
@@ -7517,11 +7534,11 @@ test('a write to a derived value warns nothing — 11.9', () => {
 // `busy: true` serving 4 where `busy: false` serving 10 is due.
 test('a settled write to a derived value moves no probe — 11.10', () => {
     const source = reactive(2)
-    const doubled = reactive(() => source() * 2)
-    expect(doubled()).toBe(4)
+    const doubled = reactive(() => source.get() * 2)
+    expect(doubled.get()).toBe(4)
     doubled.set(10)
     expect(
-        `busy: ${doubled.busy()}, ready: ${doubled.ready()}, error: ${doubled.error()}, held: ${doubled()}`,
+        `busy: ${doubled.busy()}, ready: ${doubled.ready()}, error: ${doubled.error()}, held: ${doubled.get()}`,
     ).toBe('busy: false, ready: true, error: undefined, held: 10')
 })
 
@@ -7531,8 +7548,8 @@ test('a settled write to a derived value moves no probe — 11.10', () => {
 // and the promise held where `busy: true` serving 4 is due.
 test('an unsettled write to a derived value is a load — 11.11', async () => {
     const source = reactive(2)
-    const doubled = reactive(() => source() * 2)
-    expect(doubled()).toBe(4)
+    const doubled = reactive(() => source.get() * 2)
+    expect(doubled.get()).toBe(4)
     let settle = (_value: number): void => {}
     doubled.set(
         new Promise<number>((resolve) => {
@@ -7542,9 +7559,9 @@ test('an unsettled write to a derived value is a load — 11.11', async () => {
     const inFlight = `busy: ${doubled.busy()}, ready: ${doubled.ready()}, held: ${typeof doubled.peek()} ${doubled.peek()}`
     settle(10)
     await doubled
-    expect(`${inFlight} | busy: ${doubled.busy()}, held: ${doubled()}`).toBe(
-        'busy: true, ready: true, held: number 4 | busy: false, held: 10',
-    )
+    expect(
+        `${inFlight} | busy: ${doubled.busy()}, held: ${doubled.get()}`,
+    ).toBe('busy: true, ready: true, held: number 4 | busy: false, held: 10')
 })
 
 // 11.36 — A `global` CACHE IS BOUNDED BY ITS `ttl` AND `invalidate` ALONE (11.35), so however many
@@ -7561,7 +7578,7 @@ test('a global memo evicts no entry for how many it holds — 11.36', () => {
         { global: true },
     )
     for (let id = 0; id < 5000; id += 1) record({ id })
-    expect(record({ id: 0 })()).toBe(0)
+    expect(record({ id: 0 }).get()).toBe(0)
     expect(`runs: ${runs}, entries: ${record.entries.size}`).toBe(
         'runs: 5000, entries: 5000',
     )
@@ -7606,10 +7623,10 @@ test('a sink fill is batched by the turn, not by the production — 35.10', () =
     const titleNode = document.createTextNode('')
     const stops = [
         watch(() => {
-            setText(nameNode, name())
+            setText(nameNode, name.get())
         }),
         watch(() => {
-            setText(titleNode, title())
+            setText(titleNode, title.get())
         }),
     ]
     expect(`busy: ${name.busy()}, ready: ${name.ready()}`).toBe(

@@ -728,7 +728,7 @@ function watchOf(
     }
     const standing = watches.get(name)
     if (standing !== undefined) return standing
-    // 47.29 — the baseline taken where the table is named, so a write before the first look is heard.
+    // 47.29 — the baseline taken as the table is first used, so a write before the first look is heard.
     const watch: Watch = {
         name,
         seen: undefined,

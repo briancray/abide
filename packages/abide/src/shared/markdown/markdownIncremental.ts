@@ -131,7 +131,7 @@ export function markdownIncremental(options: {
 
     return {
         get sections() {
-            return sections()
+            return sections.get()
         },
     }
 }

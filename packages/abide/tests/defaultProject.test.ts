@@ -50,8 +50,8 @@ test('an app with no tsconfig.json is typed against a default project — 38.30'
     ).json()) as { files: Record<string, { server: string; client: string }> }
     const server = files['index.abide']?.server ?? ''
     const client = files['index.abide']?.client ?? ''
-    expect(server).toContain('slotValue(() => count())')
-    expect(client).toContain('count.set(count() + 1)')
+    expect(server).toContain('slotValue(() => count.get())')
+    expect(client).toContain('count.set(count.get() + 1)')
 })
 
 // THE REVERT: drop `moduleDetection` from `COMPILER_OPTIONS`, and a script awaiting at its top with

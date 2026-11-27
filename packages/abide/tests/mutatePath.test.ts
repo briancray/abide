@@ -56,7 +56,7 @@ if (pending) pending.push({ id: 3 })`)
         '__mutatePath(pending, [], (__mutated) => __mutated?.push({ id: 2 }))',
     )
     expect(lowered).toContain(
-        'if (pending()) __mutatePath(pending, [], (__mutated) => __mutated.push({ id: 3 }))',
+        'if (pending.get()) __mutatePath(pending, [], (__mutated) => __mutated.push({ id: 3 }))',
     )
 })
 
@@ -73,17 +73,17 @@ const tags = reactive(['a'])
 const joined = tags.join(',')
 const loose = reactive(undefined as any)
 loose.push(1)`)
-    expect(lowered).toContain("stack().push('a')")
-    expect(lowered).toContain("lookup().set('a', 1)")
-    expect(lowered).toContain("const joined = tags().join(',')")
-    expect(lowered).toContain('loose().push(1)')
+    expect(lowered).toContain("stack.get().push('a')")
+    expect(lowered).toContain("lookup.get().set('a', 1)")
+    expect(lowered).toContain("const joined = tags.get().join(',')")
+    expect(lowered).toContain('loose.get().push(1)')
     expect(lowered).not.toContain('__mutatePath')
 })
 
 // THE WORK: one write per call, a copy each time, and the array a reader held never changed under it.
 test('a lifted mutator wakes its readers once and leaves the old array as it was — 31.9', () => {
     const tags = reactive(['a'])
-    const before = tags()
+    const before = tags.get()
     let wakes = 0
     const stop = tags.watch(() => {
         wakes += 1
@@ -92,7 +92,7 @@ test('a lifted mutator wakes its readers once and leaves the old array as it was
     wakes = 0
     expect(mutatePath(tags, [], (held: string[]) => held.push('b'))).toBe(2)
     flushSync()
-    expect(tags()).toEqual(['a', 'b'])
+    expect(tags.get()).toEqual(['a', 'b'])
     expect(before).toEqual(['a'])
     expect(wakes).toBe(1)
     stop()
@@ -114,7 +114,7 @@ test('a mutator through a value that is not plain data is called in place — 31
     mutatePath(holder, ['held', 'rows'], (rows: string[]) => rows.push('b'))
     flushSync()
     expect(held.rows).toEqual(['a', 'b'])
-    expect(holder().held).toBe(held)
+    expect(holder.get().held).toBe(held)
     expect(wakes).toBe(0)
     stop()
 })

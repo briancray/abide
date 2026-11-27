@@ -16,12 +16,12 @@ const key = (viewer: { dialog: Record<string, unknown> }, name: string) => {
 // THE REVERT: open it without setting `selected`, and it rests on the first photo whichever was picked.
 test('show opens the lightbox resting on the item picked — 50.65, 50.67', () => {
     const viewer = lightbox({ items: PHOTOS })
-    expect(viewer.open()).toBe(false)
+    expect(viewer.open.get()).toBe(false)
     viewer.show('side')
     flushSync()
     expect([
-        viewer.open(),
-        viewer.carousel.selected(),
+        viewer.open.get(),
+        viewer.carousel.selected.get(),
         viewer.carousel.current,
     ]).toEqual([true, 'side', 'side'])
     expect(viewer.dialog['data-dialog']).toBe('dialog')
@@ -55,10 +55,10 @@ test("its backdrop is its dialog's: a click on it closes the lightbox, a click i
         click({ target, currentTarget: veil } as unknown as Event)
     clickOn(photo)
     flushSync()
-    expect(viewer.open()).toBe(true)
+    expect(viewer.open.get()).toBe(true)
     clickOn(veil)
     flushSync()
-    expect([viewer.open(), viewer.backdrop['data-lightbox']]).toEqual([
+    expect([viewer.open.get(), viewer.backdrop['data-lightbox']]).toEqual([
         false,
         'backdrop',
     ])
@@ -76,9 +76,9 @@ test('show lands both of its writes or neither — 49.19', () => {
     const viewer = lightbox({ items: PHOTOS, open, selected })
     viewer.show('back')
     flushSync()
-    expect([open(), selected()]).toEqual([false, 'front'])
+    expect([open.get(), selected.get()]).toEqual([false, 'front'])
     const shut = lightbox({ items: PHOTOS, selected })
     shut.show('side')
     flushSync()
-    expect([shut.open(), selected()]).toEqual([false, 'front'])
+    expect([shut.open.get(), selected.get()]).toEqual([false, 'front'])
 })

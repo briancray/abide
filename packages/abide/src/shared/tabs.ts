@@ -13,6 +13,7 @@ import {
 } from './itemKey.ts'
 import type { Live } from './live.ts'
 import { madeId } from './madeId.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving } from './roving.ts'
@@ -24,7 +25,7 @@ export type TabsOptions<Item, Key extends ItemKey = KeyOf<Item>> = {
     /** The tabs, in the order they render; a function is read live. */
     items: Live<readonly Item[]>
     /** The selected tab's key, where the app holds it: a `Reactive` to read and set the pick. Held by the parts, and handed back as `selected`, where none is given. A key no tab has selects the first. */
-    selected?: Reactive<Key | undefined> | undefined
+    selected?: Bindable<Key | undefined> | undefined
 } & KeyOption<Item, Key>
 
 /** One tab's parts: its button, and the panel kept for it alone, hidden while another is selected. */
@@ -56,12 +57,16 @@ export function tabs<Item, Key extends ItemKey = KeyOf<Item>>(
     const keyOf = (item: Item) =>
         keyOfItem(options.key as ((item: Item) => Key) | undefined, item)
     const keysOf = listedKeys(options.items, keyOf)
-    const picked = options.selected ?? reactive<Key | undefined>(undefined)
+    const picked =
+        bindable(options.selected) ?? reactive<Key | undefined>(undefined)
     // 51.34 — a key no tab has selects the first.
     // A computed over a generic key reads back as `Awaited` of it, which the key is.
     const current = reactive((): Key | undefined =>
-        listedOrFirst(keysOf() as readonly Key[], picked() as Key | undefined),
-    ) as unknown as () => Key | undefined
+        listedOrFirst(
+            keysOf.get() as readonly Key[],
+            picked.get() as Key | undefined,
+        ),
+    ) as unknown as Reactive<Key | undefined>
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the ids
     // are rewritten together.
     const base = options.id ?? madeId('tabs')
@@ -79,11 +84,11 @@ export function tabs<Item, Key extends ItemKey = KeyOf<Item>>(
         role: 'tablist',
         'data-tabs': 'list',
         onkeydown: (event: KeyboardEvent) => {
-            const listed = keysOf()
+            const listed = keysOf.get()
             const key =
                 listed[
                     roving(event.key, 'horizontal', () => [
-                        listed.indexOf(current() as Key),
+                        listed.indexOf(current.get() as Key),
                         listed.length,
                     ])
                 ]
@@ -104,17 +109,17 @@ export function tabs<Item, Key extends ItemKey = KeyOf<Item>>(
                 // 51.40 — only the selected tab names its panel: the shared panel exists for it alone, so a
                 // tab naming its own while another is selected would name nothing.
                 get 'aria-controls'() {
-                    return current() === key ? panelId(key) : undefined
+                    return current.get() === key ? panelId(key) : undefined
                 },
                 get 'aria-selected'() {
-                    return current() === key ? 'true' : 'false'
+                    return current.get() === key ? 'true' : 'false'
                 },
                 // 51.39 — only the selected tab is in the page's tab order.
                 get tabindex() {
-                    return current() === key ? '0' : '-1'
+                    return current.get() === key ? '0' : '-1'
                 },
                 get 'data-selected'() {
-                    return current() === key ? '' : undefined
+                    return current.get() === key ? '' : undefined
                 },
                 onclick: () => select(key),
             },
@@ -126,7 +131,7 @@ export function tabs<Item, Key extends ItemKey = KeyOf<Item>>(
                 id: panelId(key),
                 'aria-labelledby': tabId(key),
                 get hidden() {
-                    return current() !== key
+                    return current.get() !== key
                 },
             },
         }
@@ -138,17 +143,17 @@ export function tabs<Item, Key extends ItemKey = KeyOf<Item>>(
         'data-tabs': 'panel',
         tabindex: '0',
         get id() {
-            const shown = current()
+            const shown = current.get()
             return shown === undefined ? undefined : panelId(shown)
         },
         get 'aria-labelledby'() {
-            const shown = current()
+            const shown = current.get()
             return shown === undefined ? undefined : tabId(shown)
         },
     }
 
     const selected = reactiveOver(
-        () => current(),
+        () => current.get(),
         (key: Key | undefined) => picked.set(key),
     )
     return { id: base, list, tab, panel, selected }

@@ -36,14 +36,14 @@ test('a number key is picked as a number, and written as text only in an id — 
     })
     const typed: Reactive<number | undefined> = picker.value
     click(picker.item({ id: 2 }))
-    expect(typed()).toBe(2)
+    expect(typed.get()).toBe(2)
     expect(picker.item({ id: 2 }).id).toBe('watch-2')
     expect(picker.item({ id: 2 })['aria-checked']).toBe('true')
 
     const views = tabs({ items: [10, 20] })
     const shown: Reactive<number | undefined> = views.selected
     click(views.tab(20).button)
-    expect(shown()).toBe(20)
+    expect(shown.get()).toBe(20)
 
     const people = listbox({
         options: [{ name: 'Ada', born: 1815 }],

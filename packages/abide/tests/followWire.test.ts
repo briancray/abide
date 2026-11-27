@@ -97,7 +97,7 @@ afterAll(() => {
 test('a GET loaded is followed at the version it was answered with, and takes what it is sent', async () => {
     const booksRpc = wire('GET', `${LIBRARY}/books`)
     const books = (args?: unknown) =>
-        reachOf(booksRpc, args) as (() => string[]) & PromiseLike<string[]>
+        reachOf(booksRpc, args) as { get(): string[] } & PromiseLike<string[]>
     expect(await books()).toEqual(['dune'])
     await Bun.sleep(10)
 
@@ -116,7 +116,7 @@ test('a GET loaded is followed at the version it was answered with, and takes wh
         value: ['dune', 'emma'],
     })
     flushSync()
-    expect(books()()).toEqual(['dune', 'emma'])
+    expect(books().get()).toEqual(['dune', 'emma'])
 })
 
 // 7.10 over the wire — an invalidate the server sent marks the copy stale, and the next read runs its
@@ -125,7 +125,7 @@ test('a GET loaded is followed at the version it was answered with, and takes wh
 test('an invalidate the server sends makes the next read fetch', async () => {
     const contact = wire('GET', `${LIBRARY}/contact`) as (
         args?: unknown,
-    ) => (() => unknown) & PromiseLike<unknown>
+    ) => { get(): unknown } & PromiseLike<unknown>
     await contact({ id: 7 })
     await Bun.sleep(10)
     const socket = muxSocket()
@@ -147,14 +147,14 @@ test('a patch over the version held is written into the copy', async () => {
     shelf = ['dune']
     const shelvedRpc = wire('GET', `${LIBRARY}/shelved`)
     const shelved = (args?: unknown) =>
-        reachOf(shelvedRpc, args) as (() => string[]) & PromiseLike<string[]>
+        reachOf(shelvedRpc, args) as { get(): string[] } & PromiseLike<string[]>
     await shelved()
     await Bun.sleep(10)
     const socket = muxSocket()
     const follow = socket.sent.find(
         (frame) => frame.address === `${LIBRARY}/shelved`,
     ) as Sent
-    const held = shelved()()
+    const held = shelved().get()
     const before = answers
 
     socket.push({
@@ -168,9 +168,43 @@ test('a patch over the version held is written into the copy', async () => {
         ],
     })
     flushSync()
-    expect(shelved()()).toEqual(['dune messiah', 'emma'])
-    expect(shelved()()).toBe(held)
+    expect(shelved().get()).toEqual(['dune messiah', 'emma'])
+    expect(shelved().get()).toBe(held)
     expect(answers).toBe(before)
+})
+
+// 18.49 — A PATCH A PRODUCTION'S DIFF IS AMONG IS TAKEN AS A NEW VALUE, as the server's `set` made
+// one: what a reader took from the copy before is left as it was, and what the patch does not write
+// is the object it held. THE REVERT: write every patch frame into the copy in place, in
+// `Following.receive`; the title read before reads 'dune messiah' where 'dune' is due.
+test('a patch a production replaced the value with leaves what was read before as it was — 18.49', async () => {
+    shelf = [{ title: 'dune' }, { title: 'emma' }] as never
+    const replacedRpc = wire('GET', `${LIBRARY}/replaced`)
+    const replaced = (args?: unknown) =>
+        reachOf(replacedRpc, args) as {
+            get(): { title: string }[]
+        } & PromiseLike<{ title: string }[]>
+    await replaced()
+    await Bun.sleep(10)
+    const socket = muxSocket()
+    const follow = socket.sent.find(
+        (frame) => frame.address === `${LIBRARY}/replaced`,
+    ) as Sent
+    const held = replaced().get()
+
+    socket.push({
+        op: 'patch',
+        id: follow.id,
+        base: follow.version,
+        version: (follow.version as number) + 1,
+        replaced: true,
+        ops: [{ op: 'replace', path: '/0/title', value: 'dune messiah' }],
+    })
+    flushSync()
+    const now = replaced().get()
+    expect(now).toEqual([{ title: 'dune messiah' }, { title: 'emma' }])
+    expect(held[0]?.title).toBe('dune')
+    expect(now[1]).toBe(held[1] as { title: string })
 })
 
 // 18.12 — WRITES MADE OVER ANOTHER VERSION WOULD LAND SOMEWHERE ELSE, so the copy reads again. THE
@@ -180,7 +214,9 @@ test('a patch over a version the copy does not hold makes it read again', async 
     shelf = ['dune']
     const archivedRpc = wire('GET', `${LIBRARY}/archived`)
     const archived = (args?: unknown) =>
-        reachOf(archivedRpc, args) as (() => string[]) & PromiseLike<string[]>
+        reachOf(archivedRpc, args) as { get(): string[] } & PromiseLike<
+            string[]
+        >
     await archived()
     await Bun.sleep(10)
     const socket = muxSocket()
@@ -199,7 +235,7 @@ test('a patch over a version the copy does not hold makes it read again', async 
     })
     await Bun.sleep(10)
     expect(answers).toBe(before + 1)
-    expect(archived()()).toEqual(['the whole shelf, read again'])
+    expect(archived().get()).toEqual(['the whole shelf, read again'])
 })
 
 // 18.21 — A COPY WRITTEN TO HERE IS NOT WHAT THE SERVER'S PATCH WAS WRITTEN OVER, so the copy reads
@@ -239,7 +275,7 @@ test('a copy written to locally reads again rather than take a patch over it', a
     flushSync()
     kept.removeFirst((kept.follow.version as number) + 1)
     flushSync()
-    expect(kept.copy()).toEqual([])
+    expect(kept.copy.get()).toEqual([])
     expect(answers).toBe(before)
 
     for (const [name, write] of [
@@ -260,7 +296,7 @@ test('a copy written to locally reads again rather than take a patch over it', a
         local.removeFirst(local.follow.version as number)
         await Bun.sleep(10)
         reads.push(answers - before)
-        held.push(local.copy())
+        held.push(local.copy.get())
     }
     expect({ reads, held }).toEqual({
         reads: [1, 1],
@@ -280,8 +316,9 @@ test("a frame the follow takes does not keep a page's load going — 16.48", asy
         args?: unknown,
         options?: { signal?: AbortSignal },
     ) => Promise<unknown>
-    const value = reachOf(reading) as (() => unknown) &
-        PromiseLike<unknown> & { refresh(): void; busy(): boolean }
+    const value = reachOf(reading) as {
+        get(): unknown
+    } & PromiseLike<unknown> & { refresh(): void; busy(): boolean }
     await value
     await Bun.sleep(10)
     const socket = muxSocket()
@@ -319,12 +356,12 @@ test('a bare refresh does not send a mutation again — 13.16', async () => {
     try {
         const save = wire('POST', `${LIBRARY}/save`) as (
             args?: unknown,
-        ) => (() => unknown) & PromiseLike<unknown>
+        ) => { get(): unknown } & PromiseLike<unknown>
         const saved = save({ title: 'emma' })
         await saved
         const stop = watch(() => {
             try {
-                saved()
+                saved.get()
             } catch {}
         })
         flushSync()
@@ -357,7 +394,7 @@ test('a bare refresh during a mutation leaves its answer to land — 13.17', asy
     try {
         const save = wire('POST', `${LIBRARY}/save`) as (
             args?: unknown,
-        ) => (() => unknown) & PromiseLike<unknown>
+        ) => { get(): unknown } & PromiseLike<unknown>
         const saved = save({ title: 'emma' })
         const awaited = Promise.resolve(saved).then(() => 'landed')
         refresh()
@@ -397,7 +434,7 @@ test('a bare invalidate during a mutation does not send it again — 13.17', asy
     try {
         const save = wire('POST', `${LIBRARY}/save`) as (
             args?: unknown,
-        ) => (() => unknown) & PromiseLike<unknown>
+        ) => { get(): unknown } & PromiseLike<unknown>
         const saved = save({ title: 'emma' })
         const awaited = Promise.resolve(saved)
         flushSync()
@@ -611,8 +648,9 @@ test('a copy written here takes nothing sent while its calls wait, and reads aga
     shelf = ['dune']
     const stackedRpc = wire('GET', `${LIBRARY}/stacked`)
     const stacked = (args?: unknown) =>
-        reachOf(stackedRpc, args) as (() => string[]) &
-            PromiseLike<string[]> & {
+        reachOf(stackedRpc, args) as { get(): string[] } & PromiseLike<
+            string[]
+        > & {
                 synced(): boolean
                 patch(mutate: (held: string[]) => void): void
             }
@@ -651,7 +689,7 @@ test('a copy written here takes nothing sent while its calls wait, and reads aga
             },
         )
         await Bun.sleep(10)
-        expect(stacked()()).toEqual(['dune', 'mine'])
+        expect(stacked().get()).toEqual(['dune', 'mine'])
         expect(stacked().synced()).toBe(false)
         socket.push({
             op: 'value',
@@ -660,13 +698,13 @@ test('a copy written here takes nothing sent while its calls wait, and reads aga
             value: ['dune'],
         })
         flushSync()
-        expect(stacked()()).toEqual(['dune', 'mine'])
+        expect(stacked().get()).toEqual(['dune', 'mine'])
         reachable = true
         deliver()
         await Bun.sleep(10)
         await Bun.sleep(10)
         expect(outbox()).toEqual([])
-        expect(stacked()()).toEqual(['dune', 'mine'])
+        expect(stacked().get()).toEqual(['dune', 'mine'])
         expect(stacked().synced()).toBe(true)
     } finally {
         globalThis.fetch = answering
@@ -692,7 +730,7 @@ test('a copy nothing reads stops being followed at the second sweep, and its nex
     const address = `${LIBRARY}/unread`
     const unread = wire('GET', address) as (
         args?: unknown,
-    ) => (() => unknown) & PromiseLike<unknown>
+    ) => { get(): unknown } & PromiseLike<unknown>
     await unread()
     await Bun.sleep(10)
     sweepFollows()
@@ -712,11 +750,11 @@ test('a copy something reads stays followed through every sweep — 18.48', asyn
     const address = `${LIBRARY}/read`
     const read = wire('GET', address) as (
         args?: unknown,
-    ) => (() => unknown) & PromiseLike<unknown>
+    ) => { get(): unknown } & PromiseLike<unknown>
     await read()
     const stop = watch(() => {
         try {
-            read()()
+            read().get()
         } catch {}
     })
     flushSync()

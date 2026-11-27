@@ -15,13 +15,15 @@ function panels(count: number): () => void {
         }
     }
     const stages = [reactive('lead'), reactive('lead'), reactive('lead')]
-    const readers = stages.map((stage) => reactive(() => entries.get(stage())))
-    for (const reader of readers) reader()
+    const readers = stages.map((stage) =>
+        reactive(() => entries.get(stage.get())),
+    )
+    for (const reader of readers) reader.get()
     let at = 0
     return () => {
         at = (at + 1) % STAGES.length
         for (const stage of stages) stage.set(STAGES[at] as string)
-        for (const reader of readers) reader()
+        for (const reader of readers) reader.get()
     }
 }
 

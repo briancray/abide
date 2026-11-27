@@ -19,8 +19,8 @@ afterEach(() => {
 })
 
 const spansOf = (traceId: string): LogRecord[] =>
-    log
-        .records()
+    log.records
+        .get()
         .filter(
             (record) => record.trace === traceId && record.span !== undefined,
         )

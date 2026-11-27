@@ -55,12 +55,12 @@ test('a bare invalidate marks every load, starts none of them, and skips a value
         told += 1
     })
     const stop = watch(() => {
-        loaded()
+        loaded.get()
     })
     invalidate()
     expect(`followers told: ${told}`).toBe('followers told: 0')
     expect(`runs before a read: ${runs}`).toBe('runs before a read: 1')
-    expect(published()).toBe(5)
+    expect(published.get()).toBe(5)
     loaded.peek()
     expect(`runs after a read: ${runs}`).toBe('runs after a read: 2')
     stop()
@@ -84,7 +84,7 @@ test('a bare refresh reloads the subscribed loads and marks the rest — 13.7', 
     await read
     await unread
     const stop = watch(() => {
-        read()
+        read.get()
     })
     refresh()
     flushSync()
@@ -110,10 +110,10 @@ test('a bare refresh reruns no synchronous derivation — 13.6, 13.14', async ()
     })
     const doubled = reactive(() => {
         derivationRuns += 1
-        return source() * 2
+        return source.get() * 2
     })
     const stop = watch(() => {
-        doubled()
+        doubled.get()
     })
     await source
     flushSync()
@@ -149,7 +149,7 @@ test('a guard over the bare selection subscribes once and wakes twice for n relo
     flushSync()
     const readers = values.map((value) =>
         watch(() => {
-            value()
+            value.get()
         }),
     )
     const busySaw: boolean[] = []
@@ -200,15 +200,15 @@ test('refreshing on reconnect reloads what is read and marks the rest', async ()
     await orders
     await archive
     const page = watch(() => {
-        orders()
+        orders.get()
     })
     const layout = watch(() => {
-        if (online()) refresh()
+        if (online.get()) refresh()
     })
     flushSync()
     window.dispatchEvent(new Event('offline'))
     flushSync()
-    const offline = online()
+    const offline = online.get()
     const beforeReconnect = ordersRuns
     window.dispatchEvent(new Event('online'))
     flushSync()

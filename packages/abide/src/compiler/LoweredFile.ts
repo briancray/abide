@@ -418,7 +418,7 @@ export class LoweredFile {
  * The completions at `offset` in a `.abide`'s `text`, asked through `lowered` — its file's last
  * lowering, where it has one — or `undefined` where none can be written.
  *
- * 38.98 — ASKED WHERE A HOVER IS, so `config().` offers the fields 27.13 declared and a name read by
+ * 38.98 — ASKED WHERE A HOVER IS, so `config.` offers the fields 27.13 declared and a name read by
  * name offers its value's members (31.1). MEMBERS ALONE in a script or an expression: at an
  * identifier the API rejects ("completion list needs auto imports"), which the language server
  * answers as nothing offered. 38.117 — MARKUP offers a block keyword, a component in scope, or a

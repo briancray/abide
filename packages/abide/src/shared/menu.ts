@@ -278,10 +278,10 @@ export function menu(options: MenuOptions = {}): Menu {
         role: 'menu',
         'data-menu': 'menu',
         get 'data-from'() {
-            return cameFrom()
+            return cameFrom.get()
         },
         get 'data-to'() {
-            return goingTo()
+            return goingTo.get()
         },
         ontoggle: toggled,
         onkeydown: (event: KeyboardEvent) => {

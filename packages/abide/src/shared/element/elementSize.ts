@@ -70,8 +70,8 @@ export function elementSize(
     target?: unknown,
     options?: { box?: unknown },
 ): Record<string, unknown> | SizeObserved {
-    // 1.6 — a `Reactive` is a function, so the brand needs no read ahead of this one.
-    if (typeof target === 'function')
+    // 1.6 — the brand first: a `Reactive` target, or a function handing back the element.
+    if (isReactive(target) || typeof target === 'function')
         return {
             'data-element-size': 'host',
             'bind:element': sizeBinding(target, options),
@@ -91,10 +91,10 @@ export function elementSize(
             ),
         },
         get width() {
-            return width()
+            return width.get()
         },
         get height() {
-            return height()
+            return height.get()
         },
     }
 }
@@ -126,7 +126,7 @@ export function sizeBinding(
         let stop: Disposer | undefined
         if (isReactive(box))
             stop = watchTracked(() => {
-                observeIn((box as () => unknown)())
+                observeIn(box.get())
             })
         else observeIn(box)
         return () => {

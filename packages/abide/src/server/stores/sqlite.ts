@@ -44,7 +44,7 @@ export function sqlite<Stored>(
               ? database
               : () => database
     // 8.25 — made in each `Database` the opener hands back, since a reopened `:memory:` holds none; and
-    // at the first `get` or `set` rather than here, so an opener reading `config()` is called no sooner
+    // at the first `get` or `set` rather than here, so an opener reading `config.get()` is called no sooner
     // than the app would call it.
     let prepared: Database | undefined
     const connection = (): Database => {

@@ -46,7 +46,7 @@ test('the page reads what the assistant wrote off its calls to draftReport', asy
     })
     talk.draft.set({ role: 'user', content: 'Write my problem report.' })
     talk.submit()
-    while (talk.messages().length < 2 || talk.streaming) await Bun.sleep(1)
+    while (talk.messages.get().length < 2 || talk.streaming) await Bun.sleep(1)
     const [written] = talk.calls(draftReport)
     expect([written?.value, written?.failed]).toEqual([
         {

@@ -29,13 +29,13 @@ const viewport = (width: number): void =>
 test('media follows matchMedia and its change event — 23.30', () => {
     viewport(1024)
     const narrow = media('(max-width: 600px)')
-    expect(narrow()).toBe(false)
+    expect(narrow.get()).toBe(false)
     viewport(500)
     flushSync()
-    expect(`narrow at 500px: ${narrow()}`).toBe('narrow at 500px: true')
+    expect(`narrow at 500px: ${narrow.get()}`).toBe('narrow at 500px: true')
     viewport(1024)
     flushSync()
-    expect(narrow()).toBe(false)
+    expect(narrow.get()).toBe(false)
 })
 
 // 23.30 — A QUERY FIRST ASKED BY A REQUEST ANSWERS THE BROWSER'S OUTSIDE IT: in a test process a page
@@ -47,15 +47,15 @@ test('a query a request asked first answers the browser after it — 23.30', asy
     const query = '(min-width: 640px)'
     const inRequest = await inReleasedScope(
         new Request('http://app/'),
-        async () => media(query)(),
+        async () => media(query).get(),
     )
     const after = media(query)
     flushSync()
-    const read = after()
+    const read = after.get()
     after.refresh()
     flushSync()
     expect(
-        `in the request ${inRequest}, after it ${read}, refreshed ${after()}`,
+        `in the request ${inRequest}, after it ${read}, refreshed ${after.get()}`,
     ).toBe('in the request false, after it true, refreshed true')
 })
 
@@ -157,12 +157,12 @@ test('an offline event while the page hydrates waits for hydration to end — 41
         try {
             window.dispatchEvent(new Event('offline'))
             flushSync()
-            expect(online()).toBe(true)
+            expect(online.get()).toBe(true)
         } finally {
             endHydration()
         }
         flushSync()
-        expect(online()).toBe(false)
+        expect(online.get()).toBe(false)
     } finally {
         delete (navigator as unknown as { onLine?: boolean }).onLine
         window.dispatchEvent(new Event('online'))

@@ -4,7 +4,7 @@ An isomorphic, type-safe framework for reactive async interfaces — for humans 
 built on Bun and web standards.
 
 Same callable, same name, same *intent* on both sides. A reactive value is read and written BY NAME
-inside a `.abide` file, and the explicit `x()` / `x.set(v)` spelling keeps compiling: the sugar
+inside a `.abide` file, and the explicit `x.get()` / `x.set(v)` spelling keeps compiling: the sugar
 is over it, never instead of it.
 
 Status: **pre-1.0**. `@abide/abide` is published and its surface still changes between minor

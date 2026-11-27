@@ -62,7 +62,7 @@ import getMeetings from '#src/data/getMeetings.server.ts'
 const meetings = reactive(() => getMeetings())
 </script>
 
-<main id="meetings"><p id="listed">{meetings.ready() ? meetings().join(',') : ''}</p><a id="to-new" href="/meetings/new">new</a></main>`,
+<main id="meetings"><p id="listed">{meetings.ready() ? meetings.join(',') : ''}</p><a id="to-new" href="/meetings/new">new</a></main>`,
             'meetings/new/index.abide': `<script>
 import { navigate, refresh } from '@abide/abide'
 import addMeeting from '#src/data/addMeeting.server.ts'
@@ -105,7 +105,7 @@ async function add() {
 }
 </script>
 
-<main id="outboxed"><button id="add" onclick={add}>add</button><p id="said">{said}</p><p id="waiting">{outbox().length}</p><p id="kept">{outbox().map((call) => call.value().from + (call.value.synced() ? ' saved' : ' not saved')).join(',')}</p></main>`,
+<main id="outboxed"><button id="add" onclick={add}>add</button><p id="said">{said}</p><p id="waiting">{outbox().length}</p><p id="kept">{outbox().map((call) => call.value.from + (call.value.synced() ? ' saved' : ' not saved')).join(',')}</p></main>`,
             'data/getNote.server.ts': `import { rpc } from '@abide/abide/server'
 
 export default rpc(() => ({ text: 'a saved note' }))
@@ -123,7 +123,7 @@ const note = reactive(() => getNote())
 const tags = reactive(() => getTags())
 </script>
 
-<main id="note"><p id="text">{note().text}</p><ul id="tags">{#for tag of tags.ready() ? tags : []}<li>{tag}</li>{/for}</ul></main>`,
+<main id="note"><p id="text">{note.text}</p><ul id="tags">{#for tag of tags.ready() ? tags : []}<li>{tag}</li>{/for}</ul></main>`,
             'layout.abide': BARE_LAYOUT,
             'index.abide': HOME,
             'about/index.abide':

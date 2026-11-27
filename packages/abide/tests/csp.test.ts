@@ -16,7 +16,7 @@ import getTotal from '#src/totals/getTotal.server.ts'
 const total = reactive(() => getTotal())
 </script>
 
-<main><p id="total">{total()}</p></main>`
+<main><p id="total">{total}</p></main>`
 
 // A PAGE THAT HYDRATES and writes the nonce, reading `csp` from `@abide/abide` as any page reads a name.
 const INLINE = `<script>

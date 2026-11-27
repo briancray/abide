@@ -11,6 +11,7 @@ import {
     type KeyOption,
 } from './itemKey.ts'
 import { type Live, live } from './live.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 import { runOf } from './Selection.ts'
 import type { Sort } from './Sort.ts'
@@ -23,9 +24,9 @@ export type SortableTableOptions<Row, Key extends ItemKey = KeyOf<Row>> = {
     /** The columns: what each sorts by, shows and lines up on. */
     columns: Live<readonly Column<Row>[]>
     /** The column sorted by and its direction: hand it a `Reactive` to read and set the sort. */
-    sort?: Reactive<Sort | undefined> | undefined
+    sort?: Bindable<Sort | undefined> | undefined
     /** The keys of the rows picked: hand it a `Reactive` to read and set the selection (51.72). */
-    selected?: Reactive<readonly Key[] | undefined> | undefined
+    selected?: Bindable<readonly Key[] | undefined> | undefined
 } & KeyOption<Row, Key>
 
 /** One column's parts: its header cell, the button in it that sorts, and its body cells. */
@@ -80,15 +81,15 @@ export function sortableTable<Row, Key extends ItemKey = KeyOf<Row>>(
     // 49.11 — read where it is used. Keys are held as `ItemKey` inside, and as `Key` at the surface.
     const key = (row: Row): ItemKey =>
         keyOfItem(options.key as ((row: Row) => Key) | undefined, row)
-    const sort = options.sort ?? reactive<Sort | undefined>(undefined)
-    const selected = (options.selected ??
+    const sort = bindable(options.sort) ?? reactive<Sort | undefined>(undefined)
+    const selected = (bindable(options.selected) ??
         reactive<readonly Key[] | undefined>(undefined)) as Reactive<
         readonly ItemKey[] | undefined
     >
     const rows = () => live(options.rows)
     const columns = () => live(options.columns)
 
-    const sorted = reactive(() => sortRows(rows(), columns(), sort()))
+    const sorted = reactive(() => sortRows(rows(), columns(), sort.get()))
 
     // 51.50 — a header pressed again turns its direction round; a new one sorts its first direction.
     function sortBy(column: Column<Row>) {
@@ -109,19 +110,20 @@ export function sortableTable<Row, Key extends ItemKey = KeyOf<Row>>(
         )
     }
     const directionOf = (column: Column<Row>) => {
-        const standing = sort()
+        const standing = sort.get()
         return standing?.key === column.key ? standing.direction : undefined
     }
 
     // 51.72-51.76 — ROWS PICKED BY NATIVE CHECKBOXES: a table is no grid, so each row's checkbox is in
     // the page's tab order and Space toggles it as the browser does, with nothing to rove.
-    const picked = reactive(() => new Set(selected()))
+    const picked = reactive(() => new Set(selected.get()))
     // Read only where the header's box is spread, so a table with nothing selectable holds no value
     // that waits on its rows.
     const every = () =>
-        sorted().length > 0 && sorted().every((row) => picked().has(key(row)))
+        sorted.get().length > 0 &&
+        sorted.get().every((row) => picked.get().has(key(row)))
     const some = () =>
-        !every() && sorted().some((row) => picked().has(key(row)))
+        !every() && sorted.get().some((row) => picked.get().has(key(row)))
     // The row a click last checked or cleared, which a Shift-click runs a range from (51.74).
     let anchor: ItemKey | undefined
 
@@ -155,7 +157,7 @@ export function sortableTable<Row, Key extends ItemKey = KeyOf<Row>>(
     return {
         table: { 'data-sortable-table': 'table' },
         get rows() {
-            return sorted()
+            return sorted.get()
         },
         column: (column) => ({
             header: {
@@ -180,7 +182,7 @@ export function sortableTable<Row, Key extends ItemKey = KeyOf<Row>>(
             row: {
                 'data-sortable-table': 'row',
                 get 'data-selected'() {
-                    return picked().has(key(row)) ? '' : undefined
+                    return picked.get().has(key(row)) ? '' : undefined
                 },
             },
             select: { 'data-sortable-table': 'select' },
@@ -192,7 +194,7 @@ export function sortableTable<Row, Key extends ItemKey = KeyOf<Row>>(
                     return `Select ${first === undefined ? key(row) : cellText(row, first)}`
                 },
                 get checked() {
-                    return picked().has(key(row))
+                    return picked.get().has(key(row))
                 },
                 onclick: (event: MouseEvent) => toggle(row, event),
             },

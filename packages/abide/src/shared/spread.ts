@@ -15,6 +15,7 @@
 import { attributeText, writtenMarkup } from './attributeText.ts'
 import { BIND_ELEMENT } from './BIND_ELEMENT.ts'
 import { isEventName } from './isEventName.ts'
+import { isReactive } from './reactive/isReactive.ts'
 import { abortedBy } from './slotValue.ts'
 
 /** A `{...expr}` on a component, as one live prop accessor per key the value carries. */
@@ -75,7 +76,8 @@ export function spreadEntries(
                 listeners.push([lower.slice(2), member as EventListener])
             continue
         }
-        if (typeof member === 'function') continue
+        // A `Reactive` member is a part's state, read where it is used, and no attribute (1.6).
+        if (typeof member === 'function' || isReactive(member)) continue
         // 32.99 — an element binding a headless component carries is bound at mount, never markup.
         if (lower === BIND_ELEMENT) continue
         if (!ATTRIBUTE_NAME.test(name)) continue

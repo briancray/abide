@@ -13,10 +13,10 @@ import { removeTemporaryModules } from './temporaryModule.ts'
 const PAGE = `<script>
 import { visits } from '#src/lib/visits.ts'
 
-visits.set(visits() + 1)
+visits += 1
 </script>
 
-<main><p id="visits">{visits()}</p></main>`
+<main><p id="visits">{visits}</p></main>`
 
 let stop = (): void => {}
 let base = ''

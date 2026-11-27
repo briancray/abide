@@ -48,19 +48,19 @@ export class Selection {
                 Picked<ItemKey, boolean>
             >)
         const held = this.selected as Reactive<readonly ItemKey[] | undefined>
-        this.keys = reactive(() => (many ? new Set(held() ?? []) : NONE))
+        this.keys = reactive(() => (many ? new Set(held.get() ?? []) : NONE))
     }
 
     /** Whether `key` is selected, read live. */
     has(key: ItemKey): boolean {
         return this.many
-            ? this.keys().has(key)
-            : (this.selected as Reactive<ItemKey | undefined>)() === key
+            ? this.keys.get().has(key)
+            : (this.selected as Reactive<ItemKey | undefined>).get() === key
     }
 
     /** The keys selected, in the order they were. */
     list(): readonly ItemKey[] {
-        const now = this.selected()
+        const now = this.selected.get()
         if (this.many) return (now as readonly ItemKey[] | undefined) ?? []
         return now === undefined ? [] : [now as ItemKey]
     }

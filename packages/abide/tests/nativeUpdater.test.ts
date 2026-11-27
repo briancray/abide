@@ -337,10 +337,10 @@ test('every check writes one line naming what it found — 38.142', async () => 
         'http://127.0.0.1:9/updates',
         await newUpdateKey(),
     )
-    const before = log.records().length
+    const before = log.records.get().length
     await updater.check()
-    const lines = log
-        .records()
+    const lines = log.records
+        .get()
         .slice(before)
         .filter((record) => record.namespace.endsWith(':update'))
         .map((record) => record.message)

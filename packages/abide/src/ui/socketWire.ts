@@ -9,7 +9,7 @@ import {
     answerOf,
     noAnswer,
 } from '#shared/answerOf.ts'
-import { applyPatch } from '#shared/applyPatch.ts'
+import { applyPatch, patchedCopy } from '#shared/applyPatch.ts'
 import { HYDRATE_LOG } from '#shared/log.ts'
 import { mounted } from '#shared/mount.ts'
 import { MUX_FOLLOWS } from '#shared/MUX_FOLLOWS.ts'
@@ -147,7 +147,15 @@ class Following {
                 copy.refresh()
             else {
                 this.version = frame.version
-                patchInto(copy, (value) => applyPatch(value, frame.ops ?? []))
+                // 18.49 — A PRODUCTION'S DIFF IS A NEW VALUE, as it was on the server: what a
+                // reader took from the copy before is left as it was. An `s.patch`'s writes go
+                // into the value held, as 5.7 wrote them there.
+                if (frame.replaced === true)
+                    produceInto(copy, patchedCopy(copy.peek(), frame.ops ?? []))
+                else
+                    patchInto(copy, (value) =>
+                        applyPatch(value, frame.ops ?? []),
+                    )
                 this.inStep()
             }
         } else if (frame.op === 'invalidate') copy.invalidate()

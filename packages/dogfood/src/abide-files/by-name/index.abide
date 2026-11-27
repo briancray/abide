@@ -68,7 +68,7 @@ import starContact from './lib/StarContact.abide' with { type: 'text' }
             import { reactive } from '@abide/abide'
 
             export const starred = reactive(false)
-            export const toggle = () => starred.set(!starred())
+            export const toggle = () => starred.set(!starred.get())
         `} />
     </Section>
 </Doc>

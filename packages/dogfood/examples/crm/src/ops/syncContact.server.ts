@@ -9,7 +9,7 @@ export default rpc(
         log(`contact ${id} loaded`)
         await billing.notify(id)
         const lines: string[] = []
-        for (const record of log.records().slice(-50))
+        for (const record of log.records.get().slice(-50))
             if (record.trace === trace()) lines.push(record.message)
         return { trace: trace(), lines }
     },

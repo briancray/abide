@@ -55,7 +55,7 @@ export function reportDialog(draft: ReportDraft): Promise<boolean> {
     dialog.append(form)
     // 48.7 — the preview is the draft's own text, so what is shown is what is sent.
     const stop = watch(() => {
-        preview.textContent = draft.markdown()
+        preview.textContent = draft.markdown.get()
     })
     const close = (sent: boolean): void => {
         stop()

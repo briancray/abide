@@ -51,7 +51,7 @@ test('a press turns the text into its field, holding the value, selected and foc
     expect([name.view.hidden, name.input.hidden]).toEqual([false, true])
     view.click()
     await settle()
-    expect([name.editing(), name.view.hidden, name.input.hidden]).toEqual([
+    expect([name.editing.get(), name.view.hidden, name.input.hidden]).toEqual([
         true,
         true,
         false,
@@ -91,7 +91,7 @@ test('Enter saves before the value takes it, and a failed save keeps the field o
     release()
     await Bun.sleep(5)
     flushSync()
-    expect([name.value(), name.editing(), name.error]).toEqual([
+    expect([name.value.get(), name.editing.get(), name.error]).toEqual([
         'Engine renewal',
         true,
         'Names are unique',
@@ -100,7 +100,7 @@ test('Enter saves before the value takes it, and a failed save keeps the field o
     await type('Engine renewal, phase 2', 'Enter')
     await Bun.sleep(5)
     flushSync()
-    expect([name.value(), name.editing(), name.error]).toEqual([
+    expect([name.value.get(), name.editing.get(), name.error]).toEqual([
         'Engine renewal, phase 2',
         false,
         undefined,
@@ -117,11 +117,11 @@ test('Escape puts the value back and hands focus to the text, and leaving saves 
     view.click()
     await settle()
     await type('Scratch', 'Escape')
-    expect([name.value(), name.editing(), document.activeElement]).toEqual([
-        'Engine renewal',
-        false,
-        view,
-    ])
+    expect([
+        name.value.get(),
+        name.editing.get(),
+        document.activeElement,
+    ]).toEqual(['Engine renewal', false, view])
     view.click()
     await settle()
     // 56.24, 32.113 — opened again, the field holds the value rather than what Escape left in it.
@@ -129,7 +129,7 @@ test('Escape puts the value back and hands focus to the text, and leaving saves 
     input.value = 'Hopper expansion'
     input.dispatchEvent(new FocusEvent('blur'))
     await settle()
-    expect(name.value()).toBe('Hopper expansion')
+    expect(name.value.get()).toBe('Hopper expansion')
 })
 
 // THE REVERT: finish the edit whatever the write answered, and the Enter whose text the value refused
@@ -151,11 +151,11 @@ test('Enter whose text the value refuses stays in the field, focus where it was 
     view.click()
     await settle()
     await type('', 'Enter')
-    expect([name.value(), name.editing(), document.activeElement]).toEqual([
-        'Engine renewal',
-        true,
-        input,
-    ])
+    expect([
+        name.value.get(),
+        name.editing.get(),
+        document.activeElement,
+    ]).toEqual(['Engine renewal', true, input])
 })
 
 // THE REVERT: write `value` first and return where it is refused, before `save` is called; `saved`
@@ -183,7 +183,7 @@ test('Enter whose text the value refuses still calls save with it — 49.20', as
     view.click()
     await settle()
     await type('', 'Enter')
-    expect([saved, name.value(), name.editing()]).toEqual([
+    expect([saved, name.value.get(), name.editing.get()]).toEqual([
         [''],
         'Engine renewal',
         true,

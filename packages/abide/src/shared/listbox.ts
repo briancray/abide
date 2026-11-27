@@ -10,6 +10,7 @@ import {
 } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { madeId } from './madeId.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { unowned } from './reactive/watch.ts'
 import { roving } from './roving.ts'
@@ -30,7 +31,7 @@ export type ListboxOptions<
     /** 51.98 — whether it selects many, each press changing the selection rather than moving it. `false` by default. */
     multiple?: Multiple | undefined
     /** The keys selected, where the app holds them: a `Reactive` to read and set. Where it selects one, the key last moved to (51.104). Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<Picked<Key, Multiple>> | undefined
+    selected?: Bindable<Picked<Key, Multiple>> | undefined
     /** Called with the active option when Enter is pressed, and with an option clicked where it selects one. */
     onpick?: ((option: Option) => void) | undefined
     /** Called when Escape is pressed. */
@@ -69,8 +70,8 @@ export type Listbox<
 type OptionRow<Option> = {
     option: Option
     id: string
-    active: () => boolean
-    selected: () => boolean
+    active: Reactive<boolean>
+    selected: Reactive<boolean>
     onpointermove: () => void
     onclick: (event: MouseEvent) => void
 }
@@ -93,7 +94,8 @@ export function listbox<
     const many = given.multiple === true
     if (process.env.NODE_ENV !== 'production') checkParts('listbox', `${id}-`)
     const selection = new Selection(
-        given.selected as Reactive<Picked<ItemKey, boolean>> | undefined,
+        bindable(given.selected) as
+            Reactive<Picked<ItemKey, boolean>> | undefined,
         many,
     )
     // The key last moved to; what is active is this key while it is listed, and the first otherwise.
@@ -102,9 +104,10 @@ export function listbox<
         ? reactive<ItemKey | undefined>(undefined)
         : (selection.selected as Reactive<ItemKey | undefined>)
     const order = listedKeys(given.options, key)
+    const orderOf = () => order.get()
     // 51.101 — `mod+a` as `hotkeys` reads it, only where it selects many.
     const selectAll = many
-        ? hotkeys({ 'mod+a': () => selection.all(order) })
+        ? hotkeys({ 'mod+a': () => selection.all(orderOf) })
         : undefined
     // 51.94 — the key a pointer last moved over, and the key moved to when it did: a pointer
     // activates without moving, so it holds only until a move or a write to `selected` changes that key.
@@ -119,10 +122,10 @@ export function listbox<
         return true
     }
     const active = reactive(() => {
-        const moved = chosen()
-        const pointer = pointed()
+        const moved = chosen.get()
+        const pointer = pointed.get()
         return listedOrFirst(
-            order(),
+            order.get(),
             pointer !== undefined && pointer.over === moved
                 ? pointer.key
                 : moved,
@@ -130,10 +133,10 @@ export function listbox<
     })
 
     const isSelected = (each: ItemKey): boolean =>
-        many ? selection.has(each) : chosen() === each
+        many ? selection.has(each) : chosen.get() === each
 
     function activeOption(): Option | undefined {
-        const wanted = active()
+        const wanted = active.get()
         for (const option of options())
             if (key(option) === wanted) return option
         return undefined
@@ -149,7 +152,7 @@ export function listbox<
         if (option === undefined) return
         const each = key(option)
         // 51.103 — Shift carries the selection along with the move.
-        if (extend && !selection.extend(active.peek(), each, order)) return
+        if (extend && !selection.extend(active.peek(), each, orderOf)) return
         if (!moveKey(each)) return
         // The active option kept in view as the arrows step through a list longer than its box.
         globalThis.document
@@ -183,7 +186,7 @@ export function listbox<
                 const current = active.peek()
                 if (!many || current === undefined) return
                 event.preventDefault()
-                if (event.shiftKey) selection.extend(current, current, order)
+                if (event.shiftKey) selection.extend(current, current, orderOf)
                 else selection.toggle(current)
                 return
             }
@@ -229,7 +232,7 @@ export function listbox<
         const row: OptionRow<Option> = {
             option,
             id: idOf(each),
-            active: reactive(() => active() === each),
+            active: reactive(() => active.get() === each),
             selected: reactive(() => isSelected(each)),
             onpointermove: () => {
                 const over = chosen.peek()
@@ -240,7 +243,7 @@ export function listbox<
             // 51.99, 51.105.
             onclick: (event: MouseEvent) => {
                 if (many) {
-                    if (selection.press(each, event, active.peek(), order))
+                    if (selection.press(each, event, active.peek(), orderOf))
                         moveKey(each)
                     return
                 }
@@ -253,13 +256,13 @@ export function listbox<
     return {
         id,
         get active() {
-            return active() as Key | undefined
+            return active.get() as Key | undefined
         },
         get activeOption() {
             return activeOption()
         },
         get activeId() {
-            const current = active()
+            const current = active.get()
             return current === undefined ? undefined : idOf(current)
         },
         activate: moveKey,
@@ -278,13 +281,13 @@ export function listbox<
                 'data-listbox': 'option',
                 // 51.98, 51.94 — where it selects one, the selection is the key moved to (51.104).
                 get 'aria-selected'() {
-                    return row.selected() ? 'true' : 'false'
+                    return row.selected.get() ? 'true' : 'false'
                 },
                 get 'data-active'() {
-                    return row.active() ? '' : undefined
+                    return row.active.get() ? '' : undefined
                 },
                 get 'data-selected'() {
-                    return row.selected() ? '' : undefined
+                    return row.selected.get() ? '' : undefined
                 },
                 onpointermove: row.onpointermove,
                 onclick: row.onclick,

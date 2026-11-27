@@ -1,9 +1,9 @@
 // 27.13 — `Config` IS TYPED BY AN `onConfig` IN A HANDLER FILE, the one module that is no `.abide`
 // and may call a hook (37.13): each is typed beside the file (`moduleConfigShadow`), and a page that
-// only reads `config()` is held to what they default.
+// only reads `config` is held to what they default.
 //
 // THE REVERT: drop the handler-file loop from `diagnoseSources`; nothing declares the
-// two keys, every `config()` member reads the index's `unknown`, and the findings are 5 where 2 are
+// two keys, every `config` member reads the index's `unknown`, and the findings are 5 where 2 are
 // due — the two assignments to a `string`, and three `unknown` assigned to typed bindings beside them.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
@@ -28,8 +28,8 @@ beforeAll(async () => {
 onConfig(() => ({ RETRIES: 3 }))
 
 export default rpc(() => {
-    const retries: number = config().RETRIES
-    const wrong: string = config().RETRIES
+    const retries: number = config.get().RETRIES
+    const wrong: string = config.get().RETRIES
     return { retries, wrong }
 })
 `,
@@ -42,9 +42,9 @@ export default rpc(() => 'grid')
         'reads/index.abide': `<script server>
 import { config } from '@abide/abide/server'
 
-const label: string = config().LABEL
-const retries: number = config().RETRIES
-const wrong: number = config().LABEL
+const label: string = config.LABEL
+const retries: number = config.RETRIES
+const wrong: number = config.LABEL
 </script>
 
 <p>reads</p>`,

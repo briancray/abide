@@ -2,7 +2,7 @@
 // one pair of axes, handed back as the geometry each mark is drawn at and as parts an app spreads onto
 // elements, SVG or HTML — `{#for point of plot.points}<circle {...point.circle} r="3" />` — with the
 // root's part measuring it, scrubbing a crosshair by pointer and keyboard, and its readout opened
-// against the crosshair in an element of the app's own. Callable, with the
+// against the crosshair in an element of the app's own. HoldsCell, with the
 // arithmetic it draws with as its members, as `reactive` carries `reactive.shared`: `chart.ticks` and the
 // rest are what a chart of one's own draws with where even these parts are too much.
 
@@ -239,8 +239,8 @@ export function chart(options: ChartOptions): ChartParts {
         const xZero = live(options.xZero) === true
         const bounds = live(options.bounds)
         const given = live(options.x)
-        const { width, height } = size()
-        const vars = !svgRoot()
+        const { width, height } = size.get()
+        const vars = !svgRoot.get()
         const placed = stackSeries(series, {
             stack: live(options.stack) === true,
             normalize,
@@ -669,8 +669,8 @@ export function chart(options: ChartOptions): ChartParts {
 
     // What the readout reads at the x the crosshair is on.
     const readout = reactive((): ChartReadout | undefined => {
-        const index = hovered()
-        const drawn = plot()
+        const index = hovered.get()
+        const drawn = plot.get()
         if (index < 0 || index >= drawn.xs.length) return undefined
         const at = drawn.xs[index] ?? 0
         const normalize = live(options.normalize) === true
@@ -724,8 +724,9 @@ export function chart(options: ChartOptions): ChartParts {
 
     // 52.26, 52.69 — the crosshair's x, picked by the pointer or the arrows.
     const scrubbing = scrub(hovered, {
-        count: () => plot().xs.length,
-        nearest: (fraction) => nearest(plot().xs, fraction * measuredWidth()),
+        count: () => plot.get().xs.length,
+        nearest: (fraction) =>
+            nearest(plot.get().xs, fraction * measuredWidth()),
     })
 
     // 52.38, 52.70 — a click picks the x nearest it, read again from the click's own position, and Enter
@@ -778,9 +779,9 @@ export function chart(options: ChartOptions): ChartParts {
         if (process.env.NODE_ENV !== 'production')
             checkPopover('chart', element)
         return watch(() => {
-            const anchor = line()
+            const anchor = line.get()
             // Read tracked, so a crosshair kept as one element is placed again at each x.
-            const read = readout()
+            const read = readout.get()
             if (anchor === undefined) return
             const stop = anchored(anchor, element, {
                 // 52.27 — the side with more of the plot.
@@ -814,13 +815,13 @@ export function chart(options: ChartOptions): ChartParts {
         root: {
             'data-chart': 'root',
             get width() {
-                return size().width
+                return size.get().width
             },
             get height() {
-                return size().height
+                return size.get().height
             },
             get viewBox() {
-                const { width, height } = size()
+                const { width, height } = size.get()
                 return `0 0 ${width} ${height}`
             },
             role: 'img',
@@ -828,10 +829,10 @@ export function chart(options: ChartOptions): ChartParts {
                 return live(options.label)
             },
             get 'data-hovering'() {
-                return readout() === undefined ? undefined : ''
+                return readout.get() === undefined ? undefined : ''
             },
             get 'aria-describedby'() {
-                return readout() === undefined ? undefined : tipId
+                return readout.get() === undefined ? undefined : tipId
             },
             tabindex: '0',
             'bind:element': bindRoot,
@@ -841,37 +842,37 @@ export function chart(options: ChartOptions): ChartParts {
             onkeydown: key,
             onclick: (event: MouseEvent) => pick(scrubbing.indexAt(event)),
         },
-        x: (value) => plot().toX(value),
-        y: (value) => plot().toY(value),
+        x: (value) => plot.get().toX(value),
+        y: (value) => plot.get().toY(value),
         get yTicks() {
-            return plot().yTicks
+            return plot.get().yTicks
         },
         get xTicks() {
-            return plot().xTicks
+            return plot.get().xTicks
         },
         get zero() {
-            return plot().zero
+            return plot.get().zero
         },
         get xZero() {
-            return plot().xZero
+            return plot.get().xZero
         },
         get marks() {
-            return plot().marks
+            return plot.get().marks
         },
         get lines() {
-            return plot().marks.filter((mark) => mark.kind === 'line')
+            return plot.get().marks.filter((mark) => mark.kind === 'line')
         },
         get areas() {
-            return plot().marks.filter((mark) => mark.kind === 'area')
+            return plot.get().marks.filter((mark) => mark.kind === 'area')
         },
         get bars() {
-            return plot().marks.flatMap((mark) => mark.bars)
+            return plot.get().marks.flatMap((mark) => mark.bars)
         },
         get points() {
-            return plot().points
+            return plot.get().points
         },
         get readout() {
-            return readout()
+            return readout.get()
         },
         tip: {
             id: tipId,
@@ -879,14 +880,14 @@ export function chart(options: ChartOptions): ChartParts {
             popover: 'manual',
             'data-chart': 'readout',
             get 'data-disabled'() {
-                return readout()?.disabled === true ? '' : undefined
+                return readout.get()?.disabled === true ? '' : undefined
             },
             'bind:element': holdTip,
         },
         get crosshair() {
-            const read = readout()
+            const read = readout.get()
             if (read === undefined) return undefined
-            const { width, height, vars } = plot()
+            const { width, height, vars } = plot.get()
             return {
                 index: read.index,
                 x: read.x,

@@ -14,22 +14,22 @@ const told = (detail: unknown): void => {
 // THE REVERT is the `abide:update` listener dropped: the page reads `undefined` after the window
 // tells it of 1.1.0. And `isServer()` dropped from the body: a request answers 1.1.0 too.
 test('pendingUpdate holds what the window staged, and nothing on a server — 38.148', async () => {
-    expect(pendingUpdate()).toBeUndefined()
+    expect(pendingUpdate.get()).toBeUndefined()
     told({ version: '1.1.0', required: true, notes: 'Fixes export.' })
     try {
-        const staged = pendingUpdate()
+        const staged = pendingUpdate.get()
         expect(
             `${staged?.version} required ${staged?.required}: ${staged?.notes}`,
         ).toBe('1.1.0 required true: Fixes export.')
         const inRequest = await inReleasedScope(
             new Request('http://app/'),
-            async () => pendingUpdate()?.version,
+            async () => pendingUpdate.get()?.version,
         )
         expect(`in a request ${inRequest}`).toBe('in a request undefined')
     } finally {
         told(null)
     }
-    expect(pendingUpdate()).toBeUndefined()
+    expect(pendingUpdate.get()).toBeUndefined()
 })
 
 // THE REVERT is `install` posting nothing: the window is never asked, and `posted` stays empty.
@@ -45,7 +45,7 @@ test('install asks the window to restart into the update — 38.145', () => {
     }
     told({ version: '1.1.0', required: false, notes: undefined })
     try {
-        pendingUpdate()?.install()
+        pendingUpdate.get()?.install()
         expect(posted).toEqual(['install'])
     } finally {
         told(null)

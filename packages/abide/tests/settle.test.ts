@@ -44,7 +44,7 @@ const invoice = reactive(() => getInvoice({ id: '4021' }))
 const slow = reactive(() => getSlow())
 </script>
 
-<p id="invoice">{invoice().id} {invoice().setups}</p><p id="slow">{slow()}</p>`
+<p id="invoice">{invoice.id} {invoice.setups}</p><p id="slow">{slow}</p>`
 
 let stop = (): void => {}
 let base = ''

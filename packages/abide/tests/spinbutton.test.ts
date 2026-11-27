@@ -27,14 +27,14 @@ test('the keys step it, a page at a time by ten, and Home and End take it to its
     ]).toEqual(['spinbutton', 0, 0, 100])
     key(seats.input, 'ArrowUp')
     key(seats.input, 'ArrowUp')
-    expect(seats.value()).toBe(5)
+    expect(seats.value.get()).toBe(5)
     key(seats.input, 'PageUp')
-    expect(seats.value()).toBe(30)
+    expect(seats.value.get()).toBe(30)
     key(seats.input, 'End')
     key(seats.input, 'ArrowUp')
-    expect(seats.value()).toBe(100)
+    expect(seats.value.get()).toBe(100)
     key(seats.input, 'Home')
-    expect(seats.value()).toBe(0)
+    expect(seats.value.get()).toBe(0)
 })
 
 // THE REVERT: leave the buttons in the tab order, and Tab stops on each of them.
@@ -45,9 +45,9 @@ test('its buttons step it, out of the tab order, and are disabled at its bounds 
         false,
     ])
     press(seats.increment)
-    expect([seats.value(), seats.increment.disabled]).toEqual([2, true])
+    expect([seats.value.get(), seats.increment.disabled]).toEqual([2, true])
     press(seats.increment)
-    expect(seats.value()).toBe(2)
+    expect(seats.value.get()).toBe(2)
 })
 
 // THE REVERT: take the typed number as it is, and 7.3 stands where steps of 0.5 allow only 7.5.
@@ -59,7 +59,7 @@ test('a number typed is kept to its bounds and its step, and anything else is pu
         field.value = text
         field.dispatchEvent(new Event('change'))
         flushSync()
-        return [rate.value(), field.value]
+        return [rate.value.get(), field.value]
     }
     expect(type('7.3')).toEqual([7.5, '7.5'])
     expect(type('40')).toEqual([10, '10'])
@@ -68,7 +68,7 @@ test('a number typed is kept to its bounds and its step, and anything else is pu
     key(tenths.input, 'ArrowUp')
     key(tenths.input, 'ArrowUp')
     key(tenths.input, 'ArrowUp')
-    expect(tenths.value()).toBe(0.3)
+    expect(tenths.value.get()).toBe(0.3)
 })
 
 // THE REVERT: keep every `input` that reads as a number, and the 60 still being typed is taken as 50 â€”
@@ -81,7 +81,7 @@ test('a number is taken as it is typed, where it already stands within its bound
         field.value = text
         field.dispatchEvent(new Event('input'))
         flushSync()
-        return [seats.value(), field.value]
+        return [seats.value.get(), field.value]
     }
     expect(type('1')).toEqual([5, '1'])
     expect(type('12')).toEqual([12, '12'])
@@ -95,20 +95,20 @@ test('a wizard goes on only where its step is valid, and back to any step done â
     const named = reactive(false)
     const signup = wizard({
         steps: ['account', 'plan', 'invite'],
-        valid: (step) => step !== 'account' || named(),
+        valid: (step) => step !== 'account' || named.get(),
     })
     expect([
-        signup.current(),
+        signup.current.get(),
         signup.next.disabled,
         signup.previous.disabled,
     ]).toEqual(['account', true, true])
     press(signup.next)
-    expect(signup.current()).toBe('account')
+    expect(signup.current.get()).toBe('account')
     named.set(true)
     flushSync()
     press(signup.next)
     press(signup.next)
-    expect([signup.current(), signup.last, signup.next.disabled]).toEqual([
+    expect([signup.current.get(), signup.last, signup.next.disabled]).toEqual([
         'invite',
         true,
         true,
@@ -119,10 +119,10 @@ test('a wizard goes on only where its step is valid, and back to any step done â
         signup.step('invite')['data-done'],
     ]).toEqual(['', 'step', undefined])
     press(signup.step('account'))
-    expect(signup.current()).toBe('account')
+    expect(signup.current.get()).toBe('account')
     // A step ahead is not a way forward.
     press(signup.step('invite'))
-    expect(signup.current()).toBe('account')
+    expect(signup.current.get()).toBe('account')
 })
 
 // THE REVERT: count the steps done as the meter's value, and the first step reads as none of the way.

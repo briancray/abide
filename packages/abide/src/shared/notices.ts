@@ -258,8 +258,8 @@ export function notices(options: NoticesOptions = {}): Notices {
                 },
                 get notices() {
                     if (!shows()) return []
-                    const all = list()
-                    const forgets = remembered?.() ?? {}
+                    const all = list.get()
+                    const forgets = remembered?.get() ?? {}
                     const at = Date.now()
                     // 50.70, 50.72 — the common list, nothing remembered and nothing expiring, is
                     // the list itself.

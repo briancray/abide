@@ -438,7 +438,7 @@ test('playing steps on its own every autoplay, counted afresh after a step by ha
     })
     laidOut(view)
     flushSync()
-    expect(view.playing()).toBe(true)
+    expect(view.playing.get()).toBe(true)
     expect(timers.map((timer) => timer.delay)).toEqual([AUTOPLAY])
     elapse()
     expect(view.current).toBe('qualified')
@@ -451,7 +451,7 @@ test('playing steps on its own every autoplay, counted afresh after a step by ha
     elapse()
     expect(view.current).toBe('won')
     elapse()
-    expect([view.current, view.playing(), timers.length]).toEqual([
+    expect([view.current, view.playing.get(), timers.length]).toEqual([
         'won',
         false,
         0,
@@ -507,15 +507,15 @@ test('focus on a stepping button holds it still, until focus leaves the carousel
 
 // THE REVERT: hold `playing` as `false` whatever `autoplay` says, and the carousel given one waits.
 test('playing starts as whether autoplay is given, and reduced motion pauses it — 53.75, 53.76', () => {
-    expect(carousel({ items: STAGES }).playing()).toBe(false)
+    expect(carousel({ items: STAGES }).playing.get()).toBe(false)
     const view = carousel({ items: STAGES, autoplay: 1000 })
-    expect(view.playing()).toBe(true)
+    expect(view.playing.get()).toBe(true)
     const reduced = media('(prefers-reduced-motion: reduce)')
     reduced.set(true)
     flushSync()
     try {
-        expect(view.playing()).toBe(false)
-        expect(carousel({ items: STAGES, autoplay: 1000 }).playing()).toBe(
+        expect(view.playing.get()).toBe(false)
+        expect(carousel({ items: STAGES, autoplay: 1000 }).playing.get()).toBe(
             false,
         )
     } finally {
@@ -535,7 +535,7 @@ test('play is a toggle over playing, and playing from the last item starts at th
     view.scrollTo('won')
     ;(view.play.onclick as () => void)()
     flushSync()
-    expect([view.playing(), view.current]).toEqual([true, 'lead'])
+    expect([view.playing.get(), view.current]).toEqual([true, 'lead'])
     expect([view.play['aria-pressed'], view.play['aria-label']]).toEqual([
         'true',
         'Pause',
@@ -554,5 +554,5 @@ test('a play its playing refuses leaves the carousel on the item it rests on —
     view.scrollTo('won')
     ;(view.play.onclick as () => void)()
     flushSync()
-    expect([view.playing(), view.current]).toEqual([false, 'won'])
+    expect([view.playing.get(), view.current]).toEqual([false, 'won'])
 })

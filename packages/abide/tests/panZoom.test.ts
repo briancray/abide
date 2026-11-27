@@ -45,13 +45,13 @@ test('a wheel with Ctrl zooms about the pointer, and without pans — 53.92, 53.
     })
     const zoomed = send(pinch)
     expect(zoomed.defaultPrevented).toBe(true)
-    const { x, y, k } = map.view()
+    const { x, y, k } = map.view.get()
     expect(k).toBeCloseTo(2, 1)
     // The content point under the pointer, (100, 100), is still under it.
     expect((100 - x) / k).toBeCloseTo(100, 5)
     expect((100 - y) / k).toBeCloseTo(100, 5)
     send(new WheelEvent('wheel', { deltaX: 30, deltaY: 50, cancelable: true }))
-    expect([map.view().x, map.view().y]).toEqual([x - 30, y - 50])
+    expect([map.view.get().x, map.view.get().y]).toEqual([x - 30, y - 50])
     const round = (value: number, to: number) => Math.round(value * to) / to
     expect(map.content.style).toBe(
         `transform:translate(${round(x - 30, 100)}px,${round(y - 50, 100)}px) scale(${round(k, 10_000)});transform-origin:0 0`,
@@ -76,7 +76,7 @@ test('one pointer drags it, two pinch it, and its bounds hold — 53.94, 53.95',
             clientY: 90,
         }),
     )
-    expect(map.view()).toEqual({ x: 40, y: -10, k: 1 })
+    expect(map.view.get()).toEqual({ x: 40, y: -10, k: 1 })
     send(
         new PointerEvent('pointerdown', {
             pointerId: 2,
@@ -92,7 +92,7 @@ test('one pointer drags it, two pinch it, and its bounds hold — 53.94, 53.95',
             clientY: 90,
         }),
     )
-    expect(map.view().k).toBeCloseTo(2, 5)
+    expect(map.view.get().k).toBeCloseTo(2, 5)
     send(
         new PointerEvent('pointermove', {
             pointerId: 2,
@@ -100,7 +100,7 @@ test('one pointer drags it, two pinch it, and its bounds hold — 53.94, 53.95',
             clientY: 90,
         }),
     )
-    expect(map.view().k).toBe(3)
+    expect(map.view.get().k).toBe(3)
     send(new PointerEvent('pointerup', { pointerId: 1 }))
     send(new PointerEvent('pointerup', { pointerId: 2 }))
 })
@@ -111,14 +111,14 @@ test('the keys zoom about the middle, pan and go home, and a double click zooms 
     const key = (name: string) =>
         send(new KeyboardEvent('keydown', { key: name, cancelable: true }))
     key('ArrowRight')
-    expect(map.view()).toEqual({ x: -40, y: 0, k: 1 })
+    expect(map.view.get()).toEqual({ x: -40, y: 0, k: 1 })
     key('0')
     key('+')
-    expect(map.view().k).toBe(1.25)
-    expect((200 - map.view().x) / 1.25).toBeCloseTo(200, 5)
+    expect(map.view.get().k).toBe(1.25)
+    expect((200 - map.view.get().x) / 1.25).toBeCloseTo(200, 5)
     key('0')
     send(new MouseEvent('dblclick', { clientX: 40, clientY: 30 }))
-    expect(map.view()).toEqual({ x: -40, y: -30, k: 2 })
+    expect(map.view.get()).toEqual({ x: -40, y: -30, k: 2 })
 })
 
 // THE REVERT: fit without the margin, and the box runs to the surface's edge.
@@ -127,8 +127,8 @@ test('fit frames a box of the content in the surface, clear of its edges — 53.
     const { map } = standing({ view })
     map.fit({ x: 1000, y: 500, width: 200, height: 100 }, 50)
     // 300 wide and 200 tall clear of a 50px margin: 1.5 by width, 2 by height, so 1.5.
-    expect(view().k).toBe(1.5)
-    expect([view().x, view().y]).toEqual([
+    expect(view.get().k).toBe(1.5)
+    expect([view.get().x, view.get().y]).toEqual([
         (400 - 300) / 2 - 1500,
         (300 - 150) / 2 - 750,
     ])

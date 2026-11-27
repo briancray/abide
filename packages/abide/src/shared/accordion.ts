@@ -5,6 +5,7 @@
 import { type Disclosure, disclosure } from './disclosure.ts'
 import type { ItemKey } from './itemKey.ts'
 import { madeId } from './madeId.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import type { Picked } from './Selection.ts'
@@ -20,7 +21,7 @@ export type AccordionOptions<
     /** Whether any number may be open at once. `false` by default: opening one closes the one open. */
     multiple?: Multiple | undefined
     /** The key open, or every key open where many may be: a `Reactive` to read and set. Held by the parts, and handed back as `open`, where none is given. */
-    open?: Reactive<Picked<Key, Multiple>> | undefined
+    open?: Bindable<Picked<Key, Multiple>> | undefined
 }
 
 /** The parts `accordion` hands back: `<button {...faq.item('pricing').button}>`. */
@@ -42,7 +43,7 @@ export function accordion<
     Key extends ItemKey = string,
 >(options: AccordionOptions<Multiple, Key> = {}): Accordion<Multiple, Key> {
     const many = options.multiple === true
-    const open = (options.open ??
+    const open = (bindable(options.open) ??
         (many
             ? reactive<readonly Key[]>([])
             : reactive<Key | undefined>(undefined))) as Reactive<
@@ -50,7 +51,7 @@ export function accordion<
     >
     const base = options.id ?? madeId('accordion')
     const isOpen = (key: Key): boolean => {
-        const now = open()
+        const now = open.get()
         return many
             ? ((now as readonly Key[]) ?? []).includes(key)
             : now === key

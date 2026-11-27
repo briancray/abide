@@ -11,7 +11,6 @@ import type { FromWorker, ToWorker } from './WorkerMessage.ts'
 export function serveWorker(
     module: Record<string, unknown> | Promise<Record<string, unknown>>,
 ): void {
-    const controller = new AbortController()
     let iterator: AsyncIterator<unknown, unknown> | undefined
     // What a pull or a stop posted while the module still loads waits on.
     let started = () => {}
@@ -34,10 +33,6 @@ export function serveWorker(
         }
     }
     self.onmessage = async ({ data }: MessageEvent<ToWorker>) => {
-        if ('abort' in data) {
-            controller.abort()
-            return
-        }
         if ('pull' in data) {
             await begun
             const pulled = iterator
@@ -59,8 +54,8 @@ export function serveWorker(
             return
         }
         const args = data.args
-        for (const at of data.signals) args[at] = controller.signal
-        if (data.aborted) controller.abort()
+        // 55.6 — the caller's abort ends this thread, so the signal the export holds never aborts.
+        for (const at of data.signals) args[at] = NEVER_ABORTED
         try {
             const exported = (await module)[data.name] as (
                 ...args: unknown[]
@@ -80,6 +75,8 @@ export function serveWorker(
         }
     }
 }
+
+const NEVER_ABORTED = new AbortController().signal
 
 function isAsyncIterator(
     value: unknown,

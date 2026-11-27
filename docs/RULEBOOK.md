@@ -170,6 +170,8 @@ validation refusal wherever a `schema` is declared, without the app declaring it
 1.8 Reaching a `Reactive` that already exists MUST join the standing work rather than start a
 second.
 
+1.9 A `Reactive` MUST NOT be callable.
+
 # 2. Reads
 
 2.1 A read MUST return what is held, and MUST NOT await.
@@ -1495,6 +1497,9 @@ that is an `rpc` already MUST be refused as it is declared.
 16.120 A call answering a promise MUST refuse with 16.49's refusal once its `signal` aborts, whether
 or not 16.48 ends the load it reached.
 
+16.121 A rung's `ctx.request` MUST be read from the scope when the rung reads it, so a call whose
+rungs never read it MUST run in a scope made without a request (42.8).
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.
@@ -1672,6 +1677,11 @@ value.
 
 18.48 A client's subscription of 18.3 to a `GET` MUST end once its copy has had no reader for 60
 seconds, MUST NOT end before 30 seconds of none, and MUST leave the copy stale as it ends.
+
+18.49 A subscriber's copy of a `GET` sent writes that 18.41's patch is among MUST take what they make
+as a new value, leaving what a reader read from the copy before as it was and each part the writes do
+not reach as the one it held; sent 18.11's writes alone, it MUST write them into the value it holds,
+as 5.7 does.
 
 # 19. Mount paths and schemas
 
@@ -2393,7 +2403,7 @@ other member of the address standing.
 
 31.3 A name MUST hold the `Reactive` only where the declared type of its position is a `Reactive`: an
 annotated binding, an annotated return, a `Reactive`-typed parameter, a member of an object literal
-passed where a parameter's type declares that member a `Reactive`, a `bind:` operand, an `await` operand — or where 31.13
+passed where a parameter's type declares that member a `Reactive` or a `Bindable` (49.8), a `bind:` operand, an `await` operand — or where 31.13
 holds it.
 
 31.4 Assignment to such a name MUST be a write, and the assigned value MAY be settled, a load, or a
@@ -2407,7 +2417,7 @@ member as written.
 31.6 A call on such a name MUST reach the `Reactive` API where 31.5 reaches the `Reactive`'s
 member, and the value's method otherwise.
 
-31.7 `s` and `s.set` MUST keep compiling inside a `.abide` file.
+31.7 `s.get` and `s.set` MUST keep compiling inside a `.abide` file.
 
 31.8 A write through a member path into plain data MUST copy down that path and then write, and the
 copy MUST NOT be optimized away.
@@ -2418,7 +2428,7 @@ Arguments that suspend — an `await`, a `yield` — MUST be evaluated before th
 
 31.10 A template-local binding MUST shadow a name bound to a `Reactive` for the body it is bound in.
 
-31.11 A read spelled `foo()` MUST take no arguments, and an argument MUST be a compile error.
+31.11 A call of a name bound to a `Reactive` MUST call the value the `Reactive` holds.
 
 31.12 A destructuring pattern or a spread over such a name MUST read it once.
 
@@ -3711,7 +3721,9 @@ at any nesting included.
 condition and the conditions of the arms before it established, as TypeScript checks nested `if`
 statements — a value a branch-local `<script>` declares, or a prop an inline component's pattern
 binds (32.40), as much as one the file's `<script>` declares — and MUST NOT carry what a condition
-established past a write of the value, nor into a function the arm declares.
+established past a write of the value, nor into a function the arm declares. What it declares to
+check a body by MUST NOT be reported unused where the body reads none of its names as a value — a
+prop an inline component only hands on as its `Reactive` (33.27) included.
 
 38.139 A refusal that stops `abide build`, or the build 38.100 makes, MUST be printed as `abide check`
 prints it and fail the command, and MUST NOT be printed as a stack.
@@ -5365,6 +5377,9 @@ to one power of two, and lists longer than 1024, MUST each share one statement p
 `table` call and by `sql`, its stopped watch said once per database, and the writes made through its
 `table` MUST then be all that refresh what 47.29 names.
 
+47.39 `table` MUST NOT open its database as it declares the table, and MUST open it no sooner than
+the table it hands back is called, peeked, written through, or its `readable` or `writable` reached.
+
 47.40 A `table` MUST read the table's columns, the type each declares and its primary key from the
 database, once per `Database` it reaches the table through.
 
@@ -5497,9 +5512,10 @@ that pattern names.
 parts that names by id an element the document does not hold, and for each of its parts whose role
 stands outside the role WAI-ARIA requires around it, and a build MUST NOT carry the check.
 
-49.8 Every option of a headless component an app binds — a `Reactive` the parts read and write — MUST be
-optional, and the parts MUST hand back what they read and write as a `Reactive` member under the
-option's name, the app's where one is given and one of their own from its default where none is; an
+49.8 Every option of a headless component an app binds — a `Bindable` the parts read and write —
+MUST be optional, and the parts MUST hand back what they read and write as a `Reactive` member under
+the option's name: the app's where it is a `Reactive`, one over the pair where it is any other
+`Bindable`, and one of their own from its default where none is given; an
 id a headless component writes MUST be optional with one made where none is given, and readable among its
 parts; its `key` and `label` MUST be optional where an item is a string or a number, which is then
 its own key and label; and its `key` MUST be optional where an item carries an `id`, which, written
@@ -7373,14 +7389,17 @@ MUST be a build error naming the file and the export.
 55.5 A call to an `async function*` export MUST answer an async generator running the export's
 generator one chunk for each chunk read, and returning what it returned.
 
-55.6 An `AbortSignal` among a call's arguments MUST reach the export as a signal aborted whenever, and
-from whenever, the one passed is.
+55.6 An abort of an `AbortSignal` among a call's arguments MUST end the call's thread at once,
+rejecting the call with that signal's reason, and a call made with one aborted already MUST start no
+thread; the export MUST be handed, in its place, a signal that never aborts.
 
 55.7 A consumer ending a stream before it is done MUST end the export's generator, its `finally`
 included.
 
 55.8 A thread MUST end where the signal `abortSignal` answers where its call was made aborts, 7.20's
-among them, rejecting its call with that abort.
+among them, rejecting its call with that abort, and a call made where that signal has aborted
+already MUST start no thread — save a call handed an `AbortSignal` among its arguments, which 55.6
+alone ends.
 
 55.9 A thread that fails outside its export MUST reject its call.
 

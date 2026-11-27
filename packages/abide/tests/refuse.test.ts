@@ -330,7 +330,7 @@ test("a refusal's schema runs untracked", () => {
     const mine = refuse.named<'Mine', { n: number }>('Mine', {
         status: 400,
         schema: (value: unknown) => {
-            other()
+            other.get()
             return value as { n: number }
         },
     })
@@ -383,12 +383,12 @@ test('a body that returns a refusal refuses — 15.2, 15.5', async () => {
 test('a recompute that returns a refusal keeps serving what it had', () => {
     const id = reactive('42')
     const invoice = reactive(() =>
-        id() === '42' ? 'INV-0042' : refuse.notFound(),
+        id.get() === '42' ? 'INV-0042' : refuse.notFound(),
     )
     const seen: string[] = []
     watch(() => {
         const error = invoice.error() as Error | undefined
-        seen.push(`${invoice()} ${error?.name ?? 'none'}`)
+        seen.push(`${invoice.get()} ${error?.name ?? 'none'}`)
     })
     id.set('nope')
     flushSync()

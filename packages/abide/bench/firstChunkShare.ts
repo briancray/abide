@@ -37,7 +37,7 @@ import ticks from '#src/data/ticks.server.ts'
 const a = reactive(() => ticks({ n: 'a' }))
 </script>
 
-<main><p id="a">{a.ready() ? a().length : 0}</p></main>`
+<main><p id="a">{a.ready() ? a.length : 0}</p></main>`
 
 const { base, server } = await servedFixture(
     'first-chunk',

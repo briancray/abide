@@ -14,7 +14,7 @@ import '#src/lib/face.css'
 const invoice = reactive(() => getInvoice({ id: '4' }))
 </script>
 
-<main><a id="home" href={url('/')}>home</a><a id="link" href={url('/invoices/[id]', { id: 4 })}>four</a><p id="total">{invoice().total}</p></main>`
+<main><a id="home" href={url('/')}>home</a><a id="link" href={url('/invoices/[id]', { id: 4 })}>four</a><p id="total">{invoice.total}</p></main>`
 
 let base = ''
 let stop = (): void => {}
@@ -27,7 +27,7 @@ beforeAll(async () => {
 import { route } from '@abide/abide'
 </script>
 
-<main>an invoice at <b id="at">{route.url().pathname}</b></main>`,
+<main>an invoice at <b id="at">{route.url.pathname}</b></main>`,
             // 37.19, 37.20 — a root rung that says what it was handed, and a gate over pages alone
             // that sends a closed caller to the login page — written by lane and by the app's own
             // address, with no address of abide's spelled out.

@@ -58,9 +58,9 @@ const ECHOED = `{#if f}<p title={t}>x</p>{:else if e}<i></i>{/if}
 const ROUTED = `<script>
 import { route } from '@abide/abide'
 
-const id: string = route.params().id
-const rest: string[] = route.params().rest
-const wrong: number = route.params().id
+const id: string = route.params.id
+const rest: string[] = route.params.rest
+const wrong: number = route.params.id
 const named: string = route.params.id
 const listed: boolean = route.name.startsWith('/routed') && !route.navigating
 </script>
@@ -130,6 +130,39 @@ status = 'nope'
 
 <p>{status} {deep} {sum}</p>
 <button onclick={() => { step++; deep = 'b' }}>next</button>`
+
+const NESTED = `<script>
+import { reactive } from '@abide/abide'
+
+const takes = (v: number) => v
+const top = reactive(1)
+const xs = [1].map(() => {
+    const inner = reactive(2)
+    return takes(inner)
+})
+function counted() {
+    let n = reactive(3)
+    n = 4
+    n += 1
+    return takes(n)
+}
+const shadowed = () => {
+    const top = reactive('a')
+    const wrong: number = top
+    return takes(top.length)
+}
+const today = reactive('d')
+const managed = reactive(() => {
+    const [held, day] = [top, today]
+    const { q } = { q: top }
+    return takes(held) + day.length + takes(q)
+})
+const [first, label] = [top, today]
+const sum: number = takes(first) + label.length
+</script>
+
+<p>{xs} {counted()} {shadowed()} {top} {managed} {sum}</p>
+<button onclick={() => { const local = reactive(1); local = takes(local) }}>go</button>`
 
 const LINKED = `<script>
 import { url } from '@abide/abide'
@@ -371,7 +404,7 @@ question.set({ text: 'd', stale: 4 })
 
 <button onclick={() => { question = { text: 'e', stale: 5 } }}>ask</button>`
 
-// 27.13 — what `onConfig`'s defaults return is what `config()` hands back, in the file that files
+// 27.13 — what `onConfig`'s defaults return is what `config` holds, in the file that files
 // them and in one that only reads. `middleware` is declared beside `onConfig` and declares nothing.
 const CONFIGURED = `<script server>
 import { config, middleware, onConfig } from '@abide/abide/server'
@@ -379,8 +412,8 @@ import { config, middleware, onConfig } from '@abide/abide/server'
 onConfig(() => ({ RETRIES: 3, LABEL: 'x' }))
 middleware((next) => next())
 
-const retries: number = config().RETRIES
-const wrong: string = config().RETRIES
+const retries: number = config.RETRIES
+const wrong: string = config.RETRIES
 </script>`
 
 // 38.208 — A DIRECT CALL TAKES A PROP AS ITS VALUE OR AS A `Reactive` OF IT, the write path a
@@ -429,6 +462,7 @@ beforeAll(async () => {
         'queried/index.abide': QUERIED,
         'member-written/index.abide': MEMBER_WRITTEN,
         'destructured/index.abide': DESTRUCTURED,
+        'nested/index.abide': NESTED,
         'excess/index.abide': EXCESS,
         'lib/question.ts':
             "import { reactive } from '@abide/abide'\n\nexport const question = reactive<{ text: string }>({ text: '' })\n",
@@ -437,12 +471,12 @@ beforeAll(async () => {
         'configured/elsewhere/index.abide': `<script server>
 import { config } from '@abide/abide/server'
 
-const label: string = config().LABEL
+const label: string = config.LABEL
 </script>`,
         'routed/layout.abide': `<script>
 import { route } from '@abide/abide'
 
-const section: string | string[] | undefined = route.params().section
+const section: string | string[] | undefined = route.params.section
 </script>
 <slot/>`,
         'lib/Typo.abide': TYPO,
@@ -654,6 +688,26 @@ test('a name a pattern binds to a Reactive is read and written by name — 31.17
     ])
 })
 
+// 31.1 — A NAME DECLARED INSIDE A FUNCTION — an arrow's, a function's, a listener's — is read and
+// written by name as the page's own is, and one shadowing the page's is held to its own type. THE
+// REVERT, run: drop the `innerDeclarations` walks in `readsIn`; 7 findings land where 1 is due —
+// each nested `Reactive` handed to a `number` parameter, written as a rebinding, and read as a
+// `Reactive` where `wrong` is the one mismatch the author wrote.
+//
+// AND A BINDING TYPED FROM A READ IS THE VALUE THE READ HANDS IT, nested or not:
+// `const [held, day] = [top, today]` holds two values as it runs. THE REVERT, run: drop the `plain`
+// direction from `bindingsOfReads`; 5 findings more land on the patterns' names — a call on a value
+// (TS2349) inside the function, a record typed by a value (TS2344) at the top.
+test('a Reactive declared inside a function is read and written by name — 31.1', () => {
+    expect(
+        inFile('nested/index.abide').map(({ line, column, code }) => ({
+            line,
+            column,
+            code,
+        })),
+    ).toEqual([{ ...place(NESTED, 'wrong'), code: 2322 }])
+})
+
 // 31.18 — THE REVERT, run: drop the `satisfies` from `checkedWriteParts` and hold the value by
 // `__written`'s constraint again, as before; a literal inferred into a type parameter is never
 // checked for excess properties, and 1 finding lands where 5 are due — the explicit `set` alone.
@@ -668,7 +722,10 @@ test('a write by name is refused a property its set does not take — 31.18', ()
         { ...place(EXCESS, 'stale: 1'), code: 2353 },
         { ...place(EXCESS, 'stale: 2'), code: 2353 },
         { ...place(EXCESS, 'stale: 3'), code: 2353 },
-        { ...place(EXCESS, 'stale: 4'), code: 2353 },
+        // The explicit `set` call, held by its overloads: `set` declares two (the second for
+        // `Bindable`, 49.8), so the checker reports no overload matching, the excess property named
+        // in the last one's error.
+        { ...place(EXCESS, 'stale: 4'), code: 2769 },
         { ...place(EXCESS, 'stale: 5'), code: 2353 },
     ])
 })
@@ -697,7 +754,7 @@ test('url refuses a literal no page, public file or framework address is at — 
 // THE REVERTS: have `configDeclarations` augment an interface other than `Config`; every field reads
 // `unknown`, and the page reports 2 findings where 1 is due. Or drop the name test from
 // `configReads`; `middleware` is captured as defaults, and the page reports 3.
-test('config() is typed by what onConfig defaults — 27.13', () => {
+test('config is typed by what onConfig defaults — 27.13', () => {
     expect(
         inFile('configured/index.abide').map(({ line, column, code }) => ({
             line,
@@ -731,24 +788,27 @@ test('a write narrows the name it writes — 38.3', () => {
     expect(inFile('narrowed/index.abide')).toEqual([])
 })
 
-// 31.11 — A BUILD REFUSAL, REPORTED AS A FINDING, and the rest of the file still checked around
-// it. THE REVERT: throw in `Lowering` whatever the mode; the check ends at this page with nothing
-// said about its other lines.
-test('a read given an argument is a finding at the read — 31.11', () => {
-    const refused = inFile('broken/index.abide').filter(
-        (diagnosis) => diagnosis.code === 0,
+// 31.11 — A CALL ON A NAME BOUND TO A `Reactive` CALLS THE VALUE IT HOLDS: `count(5)` reads `count`
+// and calls the number, which the checker refuses at the call (TS2349), the rest of the file still
+// checked around it. THE REVERT: lower the call as a read of the `Reactive` again (`count(5)` left as
+// written); a `Reactive` has no call signature either, and the finding names it rather than the
+// number the author holds.
+test('a call on a name calls the value it holds — 31.11', () => {
+    const called = inFile('broken/index.abide').filter(
+        (diagnosis) => diagnosis.code === 2349,
     )
-    expect(refused.length).toBe(1)
-    expect(refused[0]?.message).toContain('RULEBOOK 31.11')
-    expect(refused[0]).toMatchObject(place(BROKEN, 'count(5)'))
+    expect(called.length).toBe(1)
+    expect(called[0]?.message).toContain("Type 'Number' has no call signatures")
+    expect(called[0]).toMatchObject(place(BROKEN, 'count(5)'))
 })
 
-// AND ONCE, across the app. THE REVERT: hand `emitApp` every readable file, and its own lowering
-// throws the same 31.11 at the app root — two findings, and the app-wide ones after it never said.
-test('a read given an argument is reported once for the whole app — 31.11', () => {
+// AND ONCE, across the app: the page is checked once, however many builds read it.
+test('a call of a value that is no function is reported once for the whole app — 31.11', () => {
     expect(
-        found.filter((diagnosis) =>
-            diagnosis.message.includes('RULEBOOK 31.11'),
+        found.filter(
+            (diagnosis) =>
+                diagnosis.code === 2349 &&
+                diagnosis.path.endsWith('broken/index.abide'),
         ).length,
     ).toBe(1)
 })

@@ -45,7 +45,7 @@ import Section from '#src/lib/Section.abide'
             import { deepEqual, reactive, watch } from '@abide/abide'
 
             const filter = reactive({ stage: 'won' }, { identity: deepEqual })
-            watch(filter, () => console.log('filter', filter()))
+            watch(filter, () => console.log('filter', filter.get()))
             filter.set({ stage: 'won' }) // no run
             filter.set({ stage: 'lead' }) // runs
         `} />

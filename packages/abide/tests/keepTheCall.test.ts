@@ -109,7 +109,7 @@ test('a kept call is busy in flight, refused, and dropped for the next call — 
     expect(saving.error()).toBeUndefined()
     release()
     await settled(saving)
-    expect(saving()).toEqual({ account: 'checking', amount: 5 })
+    expect(saving.get()).toEqual({ account: 'checking', amount: 5 })
     expect(busy).toEqual([false, true, false, true, false])
     // `toStrictEqual`: `toEqual` passes an array short of its trailing `undefined`s.
     expect(errors).toStrictEqual([
@@ -141,7 +141,7 @@ test('a second submit is adopted, and the form follows the new call — 11.60', 
         expect(saving.busy()).toBe(true)
         release()
         await settled(saving)
-        expect(saving()).toEqual({ account: 'savings', amount })
+        expect(saving.get()).toEqual({ account: 'savings', amount })
     }
     expect(busy).toEqual([false, true, false, true, false])
 })
@@ -602,7 +602,7 @@ test('a promise chain keeps a step that is not a call under the same busy and er
     flushSync()
     release()
     await settled(saving)
-    expect(saving()).toEqual({ account: 'checking', amount: 5 })
+    expect(saving.get()).toEqual({ account: 'checking', amount: 5 })
     expect(busy).toEqual([false, true, false])
 
     saving.set(

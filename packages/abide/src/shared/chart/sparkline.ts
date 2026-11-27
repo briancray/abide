@@ -132,13 +132,13 @@ export function sparkline(options: SparklineOptions): SparklineParts {
                 return live(options.label)
             },
             get 'data-trend'() {
-                return drawing().trend
+                return drawing.get().trend
             },
         },
         line: {
             'data-sparkline': 'line',
             get d() {
-                return drawing().line
+                return drawing.get().line
             },
             fill: 'none',
             stroke: 'currentColor',
@@ -149,7 +149,7 @@ export function sparkline(options: SparklineOptions): SparklineParts {
         area: {
             'data-sparkline': 'area',
             get d() {
-                return drawing().area
+                return drawing.get().area
             },
             fill: 'currentColor',
             'fill-opacity': '0.15',
@@ -158,7 +158,7 @@ export function sparkline(options: SparklineOptions): SparklineParts {
         bars: {
             'data-sparkline': 'bar',
             get d() {
-                return drawing().bars
+                return drawing.get().bars
             },
             fill: 'currentColor',
             stroke: 'none',
@@ -166,10 +166,10 @@ export function sparkline(options: SparklineOptions): SparklineParts {
         dot: {
             'data-sparkline': 'dot',
             get d() {
-                return drawing().end
+                return drawing.get().end
             },
             get style() {
-                return drawing().endAt
+                return drawing.get().endAt
             },
             fill: 'none',
             stroke: 'currentColor',
@@ -178,10 +178,10 @@ export function sparkline(options: SparklineOptions): SparklineParts {
             'vector-effect': 'non-scaling-stroke',
         },
         get trend() {
-            return drawing().trend
+            return drawing.get().trend
         },
         get ended() {
-            return drawing().end !== ''
+            return drawing.get().end !== ''
         },
     }
 }

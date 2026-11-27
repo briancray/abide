@@ -13,6 +13,7 @@ import {
 } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { madeId } from './madeId.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving } from './roving.ts'
@@ -33,7 +34,7 @@ export type ToggleGroupOptions<
     /** Whether it picks many, each press adding its key or taking it out. `false` by default. */
     multiple?: Multiple | undefined
     /** The key picked, or every key picked where it picks many: a `Reactive` to read and set. Held by the parts, and handed back as `value`, where none is given. */
-    value?: Reactive<Picked<Key, Multiple>> | undefined
+    value?: Bindable<Picked<Key, Multiple>> | undefined
     /** The group's accessible name; a function is read live. */
     label?: Live<string> | undefined
     /** Picking one, whether a click on the item picked unpicks it, leaving `value` `undefined`. `false` by default. */
@@ -67,7 +68,8 @@ export function toggleGroup<
     const many = options.multiple === true
     const deselectable = options.deselectable === true
     const picks = new Selection(
-        options.value as Reactive<Picked<ItemKey, boolean>> | undefined,
+        bindable(options.value) as
+            Reactive<Picked<ItemKey, boolean>> | undefined,
         many,
     )
     const keyOf = (item: Item) =>
@@ -80,7 +82,7 @@ export function toggleGroup<
     // 51.114 — picking one, the key in the tab order: the one picked, the first where none is listed.
     // A computed, as `tabs`' is: every radio's `tabindex` reads it, so a pick walks the keys once.
     const current = reactive((): Key | undefined =>
-        listedOrFirst(keysOf(), picks.selected() as Key | undefined),
+        listedOrFirst(keysOf.get(), picks.selected.get() as Key | undefined),
     )
 
     // 51.110 — picking many, a key's button is a `toggle`, pressed while the key is picked.
@@ -111,7 +113,7 @@ export function toggleGroup<
             return picks.has(key) ? '' : undefined
         },
         get tabindex() {
-            return current() === key ? '0' : '-1'
+            return current.get() === key ? '0' : '-1'
         },
         // 51.112
         onclick: () =>
@@ -142,7 +144,7 @@ export function toggleGroup<
         // 51.113 — picking one, every arrow moves the pick and focus with it, going round.
         onkeydown: (event: KeyboardEvent) => {
             if (many) return
-            const listed = keysOf()
+            const listed = keysOf.get()
             const along =
                 event.key === 'ArrowDown'
                     ? 'ArrowRight'
@@ -152,7 +154,7 @@ export function toggleGroup<
             const next =
                 listed[
                     roving(along, 'horizontal', () => [
-                        listed.indexOf(current() as Key),
+                        listed.indexOf(current.get() as Key),
                         listed.length,
                     ])
                 ]

@@ -240,7 +240,7 @@ test('a contributor that throws stands as it last read — 12.6, 39.16, 39.20', 
     try {
         warned = warningsWhile(() => {
             const a = contributeHead(region([]), () => {
-                if (failing()) throw new Error('failed load')
+                if (failing.get()) throw new Error('failed load')
                 return '<style>.a{}</style>'
             })
             flushSync()
@@ -248,7 +248,7 @@ test('a contributor that throws stands as it last read — 12.6, 39.16, 39.20', 
             const painted = document.createElement('style')
             painted.textContent = '.p{}'
             const p = contributeHead(region([painted]), () => {
-                if (failing()) throw new Error('failed load')
+                if (failing.get()) throw new Error('failed load')
                 return '<style>.p{}</style>'
             })
             failing.set(true)
@@ -301,7 +301,7 @@ test('a painted level whose head throws stands as the server wrote it — 39.14,
     const page = new Level(chainOf(levels))
     const failing = reactive(false)
     page.setHead(() => {
-        if (failing()) throw new Error('failed load')
+        if (failing.get()) throw new Error('failed load')
         return '<title>Page</title><style>.page{}</style>'
     })
     levels.push(layout, page)

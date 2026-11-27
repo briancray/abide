@@ -32,7 +32,7 @@ const total = reactive(() => call({ id: '${call}' }))
 </script>
 
 <head><title>${title}</title></head>
-<p class="${call}">{total.busy() ? 'loading' : total().total}</p><Grand />`
+<p class="${call}">{total.busy() ? 'loading' : total.total}</p><Grand />`
 
 const GRAND = `<script>
 import { reactive } from '@abide/abide'
@@ -41,7 +41,7 @@ import getTick from '#src/totals/getTick.server.ts'
 const total = reactive(() => getTick({ id: 'grand' }))
 </script>
 
-<b>{total.busy() ? 'loading' : total().total}</b>`
+<b>{total.busy() ? 'loading' : total.total}</b>`
 
 const PAGE = `<script>
 import Plain from './lib/Plain.abide'

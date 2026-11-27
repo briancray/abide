@@ -11,6 +11,7 @@ import { wallClockOf } from './format/wallClockOf.ts'
 import { type Live, live } from './live.ts'
 import { LOCALE } from './LOCALE.ts'
 import { madeId } from './madeId.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { flushSync, type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { roving, stepOf } from './roving.ts'
@@ -25,11 +26,11 @@ export type CalendarOptions<Range extends boolean = false> = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
     id?: string | undefined
     /** The first month shown as `YYYY-MM`, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `month`, where none is given. */
-    month?: Reactive<string | undefined> | undefined
+    month?: Bindable<string | undefined> | undefined
     /** 52.97 — whether it picks a range of days rather than one. Read once. */
     range?: Range | undefined
     /** The day picked as `YYYY-MM-DD`, or the range as `[start, end]`, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<CalendarPick<Range>> | undefined
+    selected?: Bindable<CalendarPick<Range>> | undefined
     /** How many months are shown side by side, from the first. 1 by default. */
     months?: Live<number | undefined> | undefined
     /** The day a week starts on, `1` for Monday to `7` for Sunday, as `Intl.Locale` numbers them. The locale's by default. */
@@ -247,11 +248,12 @@ export function calendar<Range extends boolean = false>(
 ): Calendar<Range> {
     // 49.11 — read once.
     const range = options.range === true
-    const selected = (options.selected ??
+    const selected = (bindable(options.selected) ??
         reactive<CalendarPick<Range>>(undefined)) as Reactive<
         string | readonly [string, string | undefined] | undefined
     >
-    const picked = options.month ?? reactive<string | undefined>(undefined)
+    const picked =
+        bindable(options.month) ?? reactive<string | undefined>(undefined)
     const localeOf = () => live(options.locale) ?? LOCALE
     const base = options.id ?? madeId('calendar')
     // A grid's and a heading's ids are by their place among the months shown, so paging keeps them.
@@ -265,34 +267,34 @@ export function calendar<Range extends boolean = false>(
     const today = reactive(() =>
         dayIn(
             Date.now(),
-            live(options.timeZone) ?? timeZone() ?? visitorZone(),
+            live(options.timeZone) ?? timeZone.get() ?? visitorZone.get(),
         ),
     )
     // A range's ends, or the day picked as both.
     const start = reactive((): string | undefined => {
-        const value = selected()
+        const value = selected.get()
         return Array.isArray(value) ? value[0] : (value as string | undefined)
     })
     const end = reactive((): string | undefined => {
-        const value = selected()
+        const value = selected.get()
         return Array.isArray(value) ? value[1] : (value as string | undefined)
     })
     // 52.85 — the first month shown: the month written, else the picked day's, else today's.
     const shown = reactive((): string => {
-        for (const wanted of [picked(), start()])
+        for (const wanted of [picked.get(), start.get()])
             if (wanted !== undefined && MONTH.test(wanted))
                 return wanted.slice(0, 7)
-        return today().slice(0, 7)
+        return today.get().slice(0, 7)
     })
     // 52.96 — how many months are shown, and the last of them.
     const count = reactive(() =>
         Math.max(1, Math.trunc(live(options.months) ?? 1)),
     )
-    const last = reactive(() => monthOn(shown(), count() - 1))
+    const last = reactive(() => monthOn(shown.get(), count.get() - 1))
     // Whether `date` falls in a month shown; `YYYY-MM` strings order as the months do.
     const isShown = (date: string) => {
         const month = date.slice(0, 7)
-        return MONTH.test(date) && month >= shown() && month <= last()
+        return MONTH.test(date) && month >= shown.get() && month <= last.get()
     }
     const firstDay = reactive(
         () => live(options.firstDay) ?? firstDayIn(localeOf()),
@@ -302,19 +304,19 @@ export function calendar<Range extends boolean = false>(
     // a month shown, and the first month's first day where none is.
     const focused = reactive<string | undefined>(undefined)
     const active = reactive((): string => {
-        for (const wanted of [focused(), start(), today()])
+        for (const wanted of [focused.get(), start.get(), today.get()])
             if (wanted !== undefined && isShown(wanted)) return wanted
-        return `${shown()}-01`
+        return `${shown.get()}-01`
     })
     // 52.99 — the day last pointed at in a grid, while one is.
     const pointed = reactive<string | undefined>(undefined)
     const shared: Shared = {
         range,
-        start,
-        end,
-        preview: () => pointed() ?? focused(),
-        active,
-        today,
+        start: () => start.get(),
+        end: () => end.get(),
+        preview: () => pointed.get() ?? focused.get(),
+        active: () => active.get(),
+        today: () => today.get(),
     }
     // 52.91, 52.92, 52.97 — a pick: the day, or a range's start, then its end.
     // 49.19 — whether the pick landed.
@@ -396,7 +398,7 @@ export function calendar<Range extends boolean = false>(
 
     // Every grid's keyboard and pointer, one set of listeners shared by them all.
     const onkeydown = (event: KeyboardEvent) => {
-        const from = active()
+        const from = active.get()
         const across = stepOf(event.key, 'horizontal')
         const down = stepOf(event.key, 'vertical')
         let to: string | undefined
@@ -405,7 +407,10 @@ export function calendar<Range extends boolean = false>(
         else if (down !== 0) to = dateOf(timeOf(from, down * 7))
         else if (event.key === 'Home' || event.key === 'End') {
             const column =
-                (new Date(timeOf(from)).getUTCDay() - (firstDay() % 7) + 7) % 7
+                (new Date(timeOf(from)).getUTCDay() -
+                    (firstDay.get() % 7) +
+                    7) %
+                7
             const end = roving(
                 event.key,
                 'horizontal',
@@ -471,9 +476,9 @@ export function calendar<Range extends boolean = false>(
     // 52.82, 52.94, 52.96 — THE MONTHS SHOWN, again only when the first, the count, the week's
     // first day or the locale changes.
     const months = reactive((): CalendarMonth[] => {
-        const lowest = shown()
-        const total = count()
-        const first = firstDay()
+        const lowest = shown.get()
+        const total = count.get()
+        const first = firstDay.get()
         const locale = localeOf()
         const highest = monthOn(lowest, total - 1)
         const label = cached(
@@ -502,7 +507,7 @@ export function calendar<Range extends boolean = false>(
     // 52.87 — the weekdays in the order a week runs, named in the locale.
     const weekdays = reactive((): CalendarWeekday[] => {
         const locale = localeOf()
-        const first = firstDay()
+        const first = firstDay.get()
         const long = cached(
             `calendar weekday ${locale} long`,
             () =>
@@ -544,12 +549,13 @@ export function calendar<Range extends boolean = false>(
     // Every grid the buttons page, by id.
     const controls = () => {
         const ids: string[] = []
-        for (let index = 0; index < count(); index += 1) ids.push(gridId(index))
+        for (let index = 0; index < count.get(); index += 1)
+            ids.push(gridId(index))
         return ids.join(' ')
     }
 
     const month = reactiveOver(
-        () => shown() as string | undefined,
+        () => shown.get() as string | undefined,
         (next: string | undefined) => picked.set(next),
     )
 
@@ -557,11 +563,11 @@ export function calendar<Range extends boolean = false>(
         id: base,
         // 52.100
         get active() {
-            return active()
+            return active.get()
         },
         idOf: cellId,
         get months() {
-            return months()
+            return months.get()
         },
         previous: {
             type: 'button',
@@ -584,7 +590,7 @@ export function calendar<Range extends boolean = false>(
         header: { role: 'row', 'data-calendar': 'header' },
         week: { role: 'row', 'data-calendar': 'week' },
         get weekdays() {
-            return weekdays()
+            return weekdays.get()
         },
         month,
         selected: selected as Reactive<CalendarPick<Range>>,

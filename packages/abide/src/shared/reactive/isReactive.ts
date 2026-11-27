@@ -1,6 +1,6 @@
 import type { Reactive } from './Reactive.ts'
-// 1.6 — THE BRAND, READ ON ITS OWN. A `Reactive` is callable AND thenable, so every guard that
-// can meet one reads this before `typeof value === 'function'` or an `isThenable` probe.
+// 1.6 — THE BRAND, READ ON ITS OWN. A `Reactive` is thenable, so every guard that
+// can meet one reads this before an `isThenable` probe.
 //
 // A LEAF OF ITS OWN BECAUSE AN IMPORT EDGE IS PRICED BY THE MODULE IT LANDS ON: one symbol, where
 // `Reactive.ts` is the whole graph, the scheduler and the store behind it — so a module asking only
@@ -12,7 +12,8 @@ import { REACTIVE_BRAND } from './REACTIVE_BRAND.ts'
 
 export function isReactive(value: unknown): value is Reactive<unknown> {
     return (
-        typeof value === 'function' &&
+        typeof value === 'object' &&
+        value !== null &&
         (value as { [REACTIVE_BRAND]?: boolean | undefined })[
             REACTIVE_BRAND
         ] === true

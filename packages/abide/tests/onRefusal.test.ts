@@ -30,11 +30,11 @@ const PAGE = `<script>
 import { onRefusal } from '@abide/abide'
 import Inner from './Inner.abide'
 
-const state = (globalThis as unknown as { refusalState: { shown: () => boolean; heard: string[] } }).refusalState
+const state = (globalThis as unknown as { refusalState: { shown: { get(): boolean }; heard: string[] } }).refusalState
 onRefusal((refusal, call) => state.heard.push(\`outer:\${refusal.status} \${call.method} \${call.url} \${call.trace}\`))
 </script>
 
-<main>{#if state.shown()}<Inner/>{/if}</main>`
+<main>{#if state.shown.get()}<Inner/>{/if}</main>`
 
 const INNER = `<script>
 import { onRefusal } from '@abide/abide'

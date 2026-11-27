@@ -8,6 +8,7 @@ import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { type Live, live } from './live.ts'
 import { madeId } from './madeId.ts'
 import { pointerToken } from './pointerToken.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { tree } from './tree.ts'
@@ -38,11 +39,11 @@ export type JsonInspectorOptions = {
     /** The JSON value inspected; a function is read live. */
     value: Live<JsonValue>
     /** What is searched for, where the app holds it: a `Reactive` to read and set. Held by the parts, blank, and handed back as `query`, where none is given. */
-    query?: Reactive<string> | undefined
+    query?: Bindable<string> | undefined
     /** The pointers of the rows expanded, where the app holds them. Held by the parts, the root expanded, and handed back as `expanded`, where none is given. */
-    expanded?: Reactive<readonly string[]> | undefined
+    expanded?: Bindable<readonly string[]> | undefined
     /** The pointer of the row picked, where the app holds it. Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<string | undefined> | undefined
+    selected?: Bindable<string | undefined> | undefined
 }
 
 /** One row's parts: its item, its key and value in runs, whether it is expanded, and the toggle. */
@@ -109,9 +110,11 @@ const valueText = (row: JsonRow): string | undefined =>
 /** A JSON value searched and inspected: a search field and `tree`'s parts over a row per value. */
 export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
     const base = options.id ?? madeId('json')
-    const query = options.query ?? reactive('')
-    const expanded = options.expanded ?? reactive<readonly string[]>([''])
-    const selected = options.selected ?? reactive<string | undefined>(undefined)
+    const query = bindable(options.query) ?? reactive('')
+    const expanded =
+        bindable(options.expanded) ?? reactive<readonly string[]>([''])
+    const selected =
+        bindable(options.selected) ?? reactive<string | undefined>(undefined)
 
     // EVERY ROW, and each one's entries: one walk, again only when the value changes.
     const parsed = reactive(() => {
@@ -161,15 +164,15 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
         return { root, rows, entries }
     })
 
-    const needles = reactive(() => needlesOf(query(), false))
+    const needles = reactive(() => needlesOf(query.get(), false))
 
     // 51.160, 51.161 — WHAT A SEARCH KEEPS: each row matching, in order; each row's entries that
     // match or hold a match — all of them under a row that matches — and the rows holding a match.
     // None while the query is blank.
     const found = reactive(() => {
-        const words = needles()
+        const words = needles.get()
         if (words.length === 0) return undefined
-        const { root, entries } = parsed()
+        const { root, entries } = parsed.get()
         const matching = (text: string | undefined) =>
             text !== undefined && words.every((word) => word.test(text))
         const matches: JsonRow[] = []
@@ -206,10 +209,10 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
     >(undefined)
     const openRows = reactiveOver<readonly string[]>(
         () => {
-            const searching = found()
-            if (searching === undefined) return expanded()
-            const held = searched()
-            return held !== undefined && held.query === query()
+            const searching = found.get()
+            if (searching === undefined) return expanded.get()
+            const held = searched.get()
+            return held !== undefined && held.query === query.get()
                 ? held.open
                 : searching.holding
         },
@@ -221,9 +224,9 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
 
     const view = tree({
         id: base,
-        roots: () => found()?.roots ?? [parsed().root],
+        roots: () => found.get()?.roots ?? [parsed.get().root],
         children: (row: JsonRow) =>
-            (found()?.kept ?? parsed().entries).get(row.pointer),
+            (found.get()?.kept ?? parsed.get().entries).get(row.pointer),
         key: (row: JsonRow) => row.pointer,
         label: keyText,
         expanded: openRows,
@@ -232,7 +235,7 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
 
     const treeId = `${base}-tree`
     const runsOf = (text: string | undefined): readonly LabelRun[] =>
-        text === undefined ? NO_RUNS : labelRuns(text, needles(), MATCH)
+        text === undefined ? NO_RUNS : labelRuns(text, needles.get(), MATCH)
 
     return {
         id: base,
@@ -243,7 +246,7 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
             autocomplete: 'off',
             'aria-controls': treeId,
             get value() {
-                return query()
+                return query.get()
             },
             oninput: (event: Event) =>
                 query.set((event.currentTarget as HTMLInputElement).value),
@@ -262,7 +265,7 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
                     {
                         'data-json-inspector': 'item',
                         get 'data-match'() {
-                            return found()?.matched.has(row.pointer)
+                            return found.get()?.matched.has(row.pointer)
                                 ? ''
                                 : undefined
                         },
@@ -284,14 +287,14 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
             }
         },
         get matches() {
-            return found()?.matches ?? NO_ROWS
+            return found.get()?.matches ?? NO_ROWS
         },
         // 51.164
         get inspected() {
-            const pointer = selected()
+            const pointer = selected.get()
             return pointer === undefined
                 ? undefined
-                : parsed().rows.get(pointer)
+                : parsed.get().rows.get(pointer)
         },
         query,
         expanded,

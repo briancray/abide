@@ -124,14 +124,15 @@ export async function reactiveReads(
  * source with no query answered `UNCHECKED`.
  *
  * 31.1 — A BINDING THE PROJECTION TYPED FROM A `Reactive` IS ASKED OF THE PROGRAM IT RUNS AS: each
- * file holding one is lowered with what it has answered so far, and a binding that is a `Reactive`
- * there is one in the projection too. A binding typed from one that just turned out to be a
- * `Reactive` is asked again, until a round turns none. Nothing is asked, and no second snapshot
- * taken, where no file holds one (`readsIn`'s `suspects`).
+ * file holding one is lowered with what it has answered so far, and a binding is a `Reactive` in
+ * the projection exactly where it is one there — held where the projection typed it none, and
+ * plain where the projection typed it one from a read. A binding typed from one that just turned is
+ * asked again, until a round turns none. Nothing is asked, and no second snapshot taken, where no
+ * file holds one (`readsIn`'s `suspects`).
  *
- * 31.15 — SO IS A MEMBER, the other way: an access the projection typed a `Reactive` from a read
- * that is none in the program it runs as is RELEASED, and read as the plain member it is there.
- * Each position is decided once — held or released — so the rounds end.
+ * 31.15 — SO IS A MEMBER: an access the projection typed a `Reactive` from a read that is none in
+ * the program it runs as is RELEASED, and read as the plain member it is there. Each position is
+ * decided once — held, plain or released — so the rounds end.
  */
 async function fixedPoint(
     host: ShadowHost,
@@ -149,6 +150,7 @@ async function fixedPoint(
     const warned: Diagnosis[][] = sources.map(() => [])
     const suspects: Suspect[][] = sources.map(() => [])
     const held: Set<number>[] = sources.map(() => new Set())
+    const plain: Set<number>[] = sources.map(() => new Set())
     const released: Set<number>[] = sources.map(() => new Set())
     const answer = async (
         asked: Project,
@@ -173,6 +175,7 @@ async function fixedPoint(
             source.file,
             {
                 held: held[at] as Set<number>,
+                plain: plain[at] as Set<number>,
                 released: released[at] as Set<number>,
             },
         )
@@ -242,17 +245,25 @@ async function fixedPoint(
                                         position,
                                     ),
                                 )
+                            if (symbol === undefined) continue
+                            // A name the checker cannot type is nothing it can vouch for.
+                            const type =
+                                await asked.checker.getTypeOfSymbol(symbol)
                             if (
-                                symbol !== undefined &&
-                                (await isReactiveSymbol(
-                                    asked.checker,
-                                    abide,
-                                    symbol,
-                                ))
-                            ) {
-                                ;(held[at] as Set<number>).add(suspect.at)
-                                turning.add(at)
-                            }
+                                type === undefined ||
+                                (type.flags & TypeFlags.Any) !== 0
+                            )
+                                continue
+                            const reactive = await isReactiveSymbol(
+                                asked.checker,
+                                abide,
+                                symbol,
+                            )
+                            // Decided either way, so it is asked once.
+                            ;(
+                                (reactive ? held[at] : plain[at]) as Set<number>
+                            ).add(suspect.at)
+                            if (reactive !== suspect.reactive) turning.add(at)
                         }
                     }),
                 )
@@ -276,8 +287,8 @@ async function fixedPoint(
 /**
  * 31.15 — whether the access that ends at `end` in the lowered program is typed as none of a
  * `Reactive`: a plain member there, which the projection's answer must read as one. A read the
- * lowering rewrote ends where its call does, `glance.view` as `…glance.view()`, so the access is the
- * one that call makes. An access the checker cannot type is nothing it can vouch for, and is left as
+ * lowering rewrote ends where its call does, `glance.view` as `…glance.view.get()`, so the access is
+ * the one that `get` is read off. An access the checker cannot type is nothing it can vouch for, and is left as
  * the projection answered.
  */
 async function isReleased(
@@ -294,8 +305,11 @@ async function isReleased(
         (isCallExpression(node.parent) || isAccess(node.parent))
     )
         node = node.parent
-    if (isCallExpression(node) && node.arguments.length === 0)
+    if (isCallExpression(node) && node.arguments.length === 0) {
         node = node.expression
+        if (isPropertyAccessExpression(node) && node.name.text === 'get')
+            node = node.expression
+    }
     if (!isAccess(node) || node.end > end) return false
     const type = await checker.getTypeAtLocation(node)
     return (

@@ -61,7 +61,6 @@ import {
     callReturnOf,
     isReactiveMember,
     unionMembers,
-    valueTypeOf,
 } from './reactiveTypes.ts'
 import type { ShadowHost } from './ShadowHost.ts'
 
@@ -548,12 +547,13 @@ async function awaitedReturnOf(
     body: Node | undefined,
 ): Promise<Type | undefined> {
     if (body === undefined) return undefined
-    const returned = await valueTypeOf(
-        checker,
+    const handler = await checker.getTypeAtLocation(
         isFunctionDeclaration(body) && body.name !== undefined
             ? body.name
             : body,
     )
+    const returned =
+        handler === undefined ? undefined : await callReturnOf(checker, handler)
     if (
         returned !== undefined &&
         ((returned as ObjectType).objectFlags & ObjectFlags.Reference) !== 0 &&

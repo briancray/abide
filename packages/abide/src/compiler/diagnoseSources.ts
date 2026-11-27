@@ -1,12 +1,6 @@
 import type { AppLayout, PlacedSource } from './appLayout.ts'
 import { checkedShadow, moduleConfigShadow } from './checkedShadow.ts'
-import {
-    byPlace,
-    type Diagnosis,
-    diagnosisAt,
-    type Finding,
-    placedFindings,
-} from './Diagnostics.ts'
+import { byPlace, type Diagnosis, diagnosisAt } from './Diagnostics.ts'
 import { lineOf } from './lineOf.ts'
 import { LoweredFile } from './LoweredFile.ts'
 import { CHECKED_RECORD } from './Lowering.ts'
@@ -38,8 +32,7 @@ export type DiagnosedSource = Omit<ReadSource, 'quiet'> &
  * literal is held to (30.26), and its handler files, which type `Config` (27.13). A source placed
  * as a page or a layout carries its `kind` and `route`, which its `route.params` is typed by (23.9).
  *
- * `refused` is the path of every source whose checked lowering refused, which `diagnoses` has
- * reported at its line — `abide check` emits the rest of the app without them. `lowered` is each
+ * `lowered` is each
  * source's lowering, which the host keeps for an editor's questions about it (`LoweredFile`) —
  * none where the checker opened no project.
  */
@@ -50,7 +43,6 @@ export async function diagnoseSources(
     scripts: boolean,
 ): Promise<{
     diagnoses: Diagnosis[]
-    refused: Set<string>
     lowered: LoweredFile[]
 }> {
     const within = app.root
@@ -58,7 +50,6 @@ export async function diagnoseSources(
     const checked: {
         source: DiagnosedSource
         map: ShadowMap
-        refusals: readonly Finding[]
     }[] = []
     for (const source of sources) {
         const shadow = checkedShadow(
@@ -78,7 +69,7 @@ export async function diagnoseSources(
         // 23.19 — a package's page an editor opens is reported on, so its checked module is a
         // root of the project as its shadow is (`reactiveReads`).
         if (!source.quiet) host.openOutside(source.path, map.checkedPath, edit)
-        checked.push({ source, map, refusals: shadow.refusals })
+        checked.push({ source, map })
     }
     // 34.6 — WHAT THE BUNDLER RESOLVES AND THE CHECKER CANNOT: a stylesheet imported for its
     // effect, and (34.21) markdown imported as text into a `.ts`, which bun's own types leave
@@ -108,9 +99,6 @@ export async function diagnoseSources(
         routesDeclaration(app.addresses, app.routes),
         edit,
     )
-    const refused = new Set<string>()
-    for (const { source, refusals } of checked)
-        if (refusals.length > 0) refused.add(source.path)
     const answered = await host.ask(
         async (project) => {
             const program = project.program
@@ -140,23 +128,12 @@ export async function diagnoseSources(
                 return said
             }
             const reports: Promise<Diagnosis[]>[] = []
-            const refusing: Diagnosis[] = []
             const lowered: LoweredFile[] = []
-            for (const { source, map, refusals } of checked) {
+            for (const { source, map } of checked) {
                 const lowering = new LoweredFile(host, source.text, map)
                 host.keep(lowering)
                 lowered.push(lowering)
                 if (source.quiet) continue
-                // A refusal is at a projection offset (`Lowering.refusals`).
-                refusing.push(
-                    ...placedFindings(
-                        source.path,
-                        source.text,
-                        refusals,
-                        (at) => map.toSource(map.shadowPath, at),
-                        'error',
-                    ),
-                )
                 reports.push(
                     report(map.checkedPath, source.path, (position) =>
                         lineOf(
@@ -187,10 +164,7 @@ export async function diagnoseSources(
                                 .text()
                                 .then((text) => replacedModules(path, text)),
                         )
-            const reported = [
-                ...refusing,
-                ...(await Promise.all(reports)).flat(),
-            ]
+            const reported = (await Promise.all(reports)).flat()
             reported.sort(byPlace)
             // A component's props type is checked twice — in its `props` call and in what a tag is
             // held to (`checkedShadow`) — and both copies place a finding in it at the one place
@@ -209,7 +183,6 @@ export async function diagnoseSources(
     )
     return {
         diagnoses: answered?.diagnoses ?? [],
-        refused,
         lowered: answered?.lowered ?? [],
     }
 }

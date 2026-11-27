@@ -269,4 +269,4 @@ export class LevelChain {
  * kept across `/users/1` -> `/users/2` is not mounted again, so an accessor over the params it was
  * mounted with went on answering user 1.
  */
-const ROUTE_PROPS = { params: (): Params => route.params() }
+const ROUTE_PROPS = { params: (): Params => route.params.get() }

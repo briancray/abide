@@ -14,7 +14,7 @@
 // that reason — `cellShape.ts` has no edge into the cycle, so its place does not matter.
 
 import { CELL } from './CELL.ts'
-import { type Callable, type Cell, cellOf } from './cellShape.ts'
+import { type Cell, cellOf, type HoldsCell } from './cellShape.ts'
 import { isReactive } from './index.ts'
 import { entryDeadline } from './Keyed.ts'
 import { holdLog } from './patchLog.ts'
@@ -113,7 +113,7 @@ export function heldGenerationOf(value: unknown): number | undefined {
  */
 export function isStreaming(value: unknown): boolean {
     if (!isReactive(value)) return false
-    const stream = (value as Partial<Callable>)[CELL]?.stream
+    const stream = (value as Partial<HoldsCell>)[CELL]?.stream
     return stream !== null && stream !== undefined
 }
 

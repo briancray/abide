@@ -149,7 +149,7 @@ test('a selection by the tags a GET declares reaches its copy', async () => {
     answer = { body: ['dune'], life: 'private, no-store' }
     const tagged = wire('GET', '/library/tagged', {
         tags: ['shelf'],
-    }) as (args?: unknown) => (() => unknown) & PromiseLike<unknown>
+    }) as (args?: unknown) => { get(): unknown } & PromiseLike<unknown>
     await tagged()
     const before = loads
     invalidate({ tags: ['shelf'] })
@@ -166,13 +166,13 @@ test('a copy compared structurally wakes nobody for a load that answers the same
         identity: 'deepEqual',
     })
     const shelf = () =>
-        reachOf(shelfRpc) as (() => unknown) & {
+        reachOf(shelfRpc) as { get(): unknown } & {
             refresh(): void
         } & PromiseLike<unknown>
     await shelf()
     let woken = 0
     const stop = watch(() => {
-        shelf()()
+        shelf().get()
         woken += 1
     })
     flushSync()
@@ -191,7 +191,7 @@ test('a copy goes stale when the max-age its answer carried runs out', async () 
     answer = { body: ['fresh'], life: 'private, max-age=1' }
     const timed = wire('GET', '/library/timed') as (
         args?: unknown,
-    ) => (() => unknown) & PromiseLike<unknown>
+    ) => { get(): unknown } & PromiseLike<unknown>
     await timed()
     const before = loads
     await timed()
@@ -208,7 +208,7 @@ test('a copy answered max-age=0 is stale at once', async () => {
     answer = { body: ['last'], life: 'private, max-age=0' }
     const ending = wire('GET', '/library/ending') as (
         args?: unknown,
-    ) => (() => unknown) & PromiseLike<unknown>
+    ) => { get(): unknown } & PromiseLike<unknown>
     await ending()
     const before = loads
     await Bun.sleep(10)
@@ -270,7 +270,7 @@ test("a copy keys a call leaving a member to the handler's default with one that
     const paged = wire('GET', '/paged/list', undefined, {
         names: ['page'],
         values: [1],
-    }) as (args?: unknown) => (() => unknown) & PromiseLike<unknown>
+    }) as (args?: unknown) => { get(): unknown } & PromiseLike<unknown>
     const before = loads
     await paged({})
     await paged({ page: 1 })
@@ -394,12 +394,12 @@ test('a copy given a debounce sends one request for the keys a page reaches insi
     answer = { body: ['found'], life: 'private, no-store' }
     const searched = wire('GET', '/library/searched', {
         debounce: 40,
-    }) as (args: { q: string }) => (() => unknown) & PromiseLike<unknown>
+    }) as (args: { q: string }) => { get(): unknown } & PromiseLike<unknown>
     const q = reactive('')
-    const found = reactive(() => searched({ q: q() }))
+    const found = reactive(() => searched({ q: q.get() }))
     const stop = watch(() => {
         try {
-            found()
+            found.get()
         } catch {}
     })
     flushSync()

@@ -16,6 +16,7 @@ import {
 } from './itemKey.ts'
 import { type Listbox, listbox, type ListboxOptions } from './listbox.ts'
 import { type Live, live } from './live.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { inGroup, join } from './register.ts'
 import type { Picked } from './Selection.ts'
@@ -30,11 +31,11 @@ export type SortableListOptions<
     /** The items; a function is read live. */
     items: Live<readonly Item[]>
     /** The keys of the items in the order put: a `Reactive` to read and set. Held by the parts, and handed back as `order`, where none is given. */
-    order?: Reactive<readonly Key[]> | undefined
+    order?: Bindable<readonly Key[]> | undefined
     /** Whether many may be selected, to move as one. `false` by default. */
     multiple?: Multiple | undefined
     /** The keys selected, as a `listbox`'s are. Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<Picked<Key, Multiple>> | undefined
+    selected?: Bindable<Picked<Key, Multiple>> | undefined
     /** The lists sharing this name take each other's items, by a grip dragged or by Alt with ArrowLeft and ArrowRight. A function is read live. */
     group?: Live<string | undefined> | undefined
 } & KeyOption<Item, Key> &
@@ -129,9 +130,8 @@ export function sortableList<
     options: SortableListOptions<Item, Multiple, Key>,
 ): SortableList<Item, Multiple, Key> {
     // Keys are held as `ItemKey` inside, and as `Key` at the surface.
-    const order = (options.order ?? reactive<readonly Key[]>([])) as Reactive<
-        readonly ItemKey[]
-    >
+    const order = (bindable(options.order) ??
+        reactive<readonly Key[]>([])) as Reactive<readonly ItemKey[]>
     const keyOf = (item: Item): ItemKey =>
         keyOfItem(options.key as ((item: Item) => Key) | undefined, item)
     const labelOf = (item: Item) => writtenBy(options.label, item)
@@ -147,11 +147,11 @@ export function sortableList<
         const named = group()
         const mates: Member[] = []
         if (named !== undefined)
-            for (const member of members())
+            for (const member of members.get())
                 if (member !== self && member.group() === named)
                     mates.push(member)
         const placed: Item[] = []
-        for (const key of order() ?? []) {
+        for (const key of order.get() ?? []) {
             let item = byKey.get(key)
             if (item !== undefined) byKey.delete(key)
             else
@@ -167,7 +167,7 @@ export function sortableList<
         }
         const elsewhere = new Set<ItemKey>()
         for (const mate of mates)
-            for (const key of mate.order() ?? []) elsewhere.add(key)
+            for (const key of mate.order.get() ?? []) elsewhere.add(key)
         for (const [key, item] of byKey)
             if (!elsewhere.has(key)) placed.push(item)
         return placed
@@ -295,7 +295,7 @@ export function sortableList<
             item: withPart({}, choices.option(entry), {
                 'data-sortable-list': 'item',
                 get 'data-grabbed'() {
-                    return grabbed().has(key) ? '' : undefined
+                    return grabbed.get().has(key) ? '' : undefined
                 },
                 'bind:element': (element: Element) => {
                     elements.set(key, element)
@@ -446,7 +446,7 @@ export function sortableList<
         }),
         item,
         get sorted() {
-            return sorted()
+            return sorted.get()
         },
         order: order as Reactive<readonly Key[]>,
         selected: choices.selected as Reactive<Picked<Key, Multiple>>,

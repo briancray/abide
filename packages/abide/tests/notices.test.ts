@@ -53,7 +53,7 @@ test("one list's notices never enter another's — 50.68", () => {
     const id = corner.notify('Saved')
     banner.notify('We are live')
     banner.dismiss(id)
-    expect(texts(corner.list())).toEqual(['Saved'])
+    expect(texts(corner.list.get())).toEqual(['Saved'])
     expect(texts(shown(banner).notices)).toEqual(['We are live'])
 })
 
@@ -72,12 +72,12 @@ test('a list starts with its initial notices, in order, each under the id it was
             },
         ],
     })
-    expect(banner.list().map((notice) => notice.text)).toEqual([
+    expect(banner.list.get().map((notice) => notice.text)).toEqual([
         'We are live',
         'Pipelines can now be shared with a link, from any pipeline.',
     ])
-    expect(banner.list()[0]?.id).toBe('launch')
-    expect(banner.list()[1]?.id.length).toBeLessThan(12)
+    expect(banner.list.get()[0]?.id).toBe('launch')
+    expect(banner.list.get()[1]?.id.length).toBeLessThan(12)
 })
 
 // THE REVERT: hash the notice with a page load's counter in it, and the same announcement is a new id
@@ -86,11 +86,11 @@ test('a notice is told apart by default by a short hash of it as JSON — 50.71'
     const LONG =
         'Pipelines can now be shared with a link, from the menu on any pipeline.'
     const run = () => {}
-    const first = notices({ timeout: Infinity, initial: [LONG] }).list()[0]
+    const first = notices({ timeout: Infinity, initial: [LONG] }).list.get()[0]
     const second = notices({
         timeout: Infinity,
         initial: ['other', LONG, { text: LONG, tone: 'error' }],
-    }).list()
+    }).list.get()
     expect(second[1]?.id).toBe(first?.id as string)
     expect(first?.id.length).toBeLessThan(12)
     // Its content is its id: other words, or another tone, are another notice.
@@ -101,12 +101,12 @@ test('a notice is told apart by default by a short hash of it as JSON — 50.71'
         notices({
             timeout: Infinity,
             initial: [{ text: LONG, action: { label, run } }],
-        }).list()[0]?.id
+        }).list.get()[0]?.id
     expect(withAction('Open')).toBe(
         notices({
             timeout: Infinity,
             initial: [{ text: LONG, action: { label: 'Open', run: () => 1 } }],
-        }).list()[0]?.id as string,
+        }).list.get()[0]?.id as string,
     )
 })
 
@@ -124,7 +124,7 @@ test('a notice whose id the list holds is not added again, and hands back that i
     corner.notify('Saving', { id: 'progress' })
     expect(corner.notify('Saved 40%', { id: 'progress' })).toBe('progress')
     expect(again).toBe(id)
-    expect(texts(corner.list())).toEqual(['Saved', 'Saving'])
+    expect(texts(corner.list.get())).toEqual(['Saved', 'Saving'])
     corner.dismiss(id)
     expect(reasons).toEqual(['first dismissed'])
 })
@@ -160,8 +160,8 @@ test('a dismissal and an action are remembered for ttl, and a timeout is not —
     })
     const host = shown(banner)
     const before = Date.now()
-    banner.dismiss((banner.list()[1] as { id: string }).id)
-    host.notice(banner.list().at(-1) as never).act()
+    banner.dismiss((banner.list.get()[1] as { id: string }).id)
+    host.notice(banner.list.get().at(-1) as never).act()
     await Bun.sleep(20)
     const remembered = writes.at(-1) ?? {}
     expect(Object.keys(remembered).sort()).toEqual(
@@ -181,7 +181,7 @@ test('a dismissal and an action are remembered for ttl, and a timeout is not —
     })
     expect(texts(shown(again).notices)).toEqual(['We are live'])
     // `list` holds them still: the host is what leaves them out.
-    expect(again.list()).toHaveLength(3)
+    expect(again.list.get()).toHaveLength(3)
 })
 
 // THE REVERT: write the remembered keys back as read, and the one forgotten an hour ago rides along
@@ -197,7 +197,7 @@ test('a write leaves out every dismissal already forgotten — 50.73', () => {
         key: byText,
         initial: ['We are live'],
     })
-    banner.dismiss((banner.list()[0] as { id: string }).id)
+    banner.dismiss((banner.list.get()[0] as { id: string }).id)
     expect(Object.keys(writes.at(-1) ?? {}).sort()).toEqual(
         [keyed('We are live'), 'kept'].sort(),
     )
@@ -211,7 +211,7 @@ test('a dismissal remembered forever is kept as a number JSON holds — 50.69', 
         key: byText,
         initial: ['We are live'],
     })
-    banner.dismiss((banner.list()[0] as { id: string }).id)
+    banner.dismiss((banner.list.get()[0] as { id: string }).id)
     expect(JSON.parse(JSON.stringify(writes.at(-1)))).toEqual({
         [keyed('We are live')]: Number.MAX_SAFE_INTEGER,
     })
@@ -232,7 +232,7 @@ test('a notice leaves at its expires, told so as a timeout, and one already past
         onclose: (reason) => reasons.push(reason),
     })
     await Bun.sleep(20)
-    expect(banner.list()).toEqual([])
+    expect(banner.list.get()).toEqual([])
     expect(reasons).toEqual(['timeout'])
 })
 
@@ -263,5 +263,5 @@ test("a server's render leaves out what the request's cookie remembers — 50.70
 
 test('toasts is a list built with no options — 50.74', () => {
     expect(Object.keys(toasts).sort()).toEqual(Object.keys(notices()).sort())
-    expect(toasts.list()).toEqual([])
+    expect(toasts.list.get()).toEqual([])
 })

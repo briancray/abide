@@ -288,7 +288,6 @@ export async function compiledSources(
     const placed: ReadSource<PlacedSource>[] = []
     for (const source of read)
         if (!source.quiet) placed.push(source as ReadSource<PlacedSource>)
-    let emittable = placed
     if (checking) {
         // THE APP'S OWN FILES ARE REPORTED ON: a dependency's is compiled with them (34.23), and
         // what is wrong inside a package is the package's to report. 34.25 — it is still LOWERED,
@@ -302,10 +301,6 @@ export async function compiledSources(
             )
         const diagnosed = await session.diagnose(diagnosing, layout, scripts)
         diagnostics.check(diagnosed.diagnoses)
-        // A FILE WHOSE LOWERING REFUSED is reported already, at its line, and is not emitted.
-        emittable = []
-        for (const source of placed)
-            if (!diagnosed.refused.has(source.path)) emittable.push(source)
     }
     const { ambient, unkeyed } = await session.lints(
         layout.root,
@@ -321,7 +316,7 @@ export async function compiledSources(
         return await emitApp(
             scripts ? layout : { ...layout, handlers: [] },
             session,
-            emittable,
+            placed,
             diagnostics,
         )
     } catch (thrown) {

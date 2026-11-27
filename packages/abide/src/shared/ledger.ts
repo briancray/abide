@@ -6,8 +6,7 @@
 // log as one JSON value, so an append costs one row however long the log has grown (58.9). A ledger
 // with no store keeps its entries in memory.
 //
-// CALLING A LEDGER READS IT (58.5), as calling a `Reactive` reads one (31.11) and calling a `pipe`
-// runs it: what it answers is a stream, and a page that wants the entries as a value hands that
+// CALLING A LEDGER READS IT (58.5): what it answers is a stream, and a page that wants the entries as a value hands that
 // stream to a derived `reactive`, which accumulates it (9.6) — `global` where many readers share one read. The
 // ledger holds no copy of its entries, so one only appended to and read by a cursor costs no memory
 // for the log it keeps, and constructing one reads nothing (58.8).

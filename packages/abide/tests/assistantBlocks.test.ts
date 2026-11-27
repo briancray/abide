@@ -262,15 +262,15 @@ test('chat folds an answer in place, a block keeping its identity from its first
     })
     talk.draft.set({ role: 'user', content: 'my balance?' })
     ;(talk.composer.onsubmit as (event: Event) => void)(new Event('submit'))
-    while (talk.messages().length < 2) await Bun.sleep(1)
-    const first = (talk.messages()[1]?.content as { text: string }[])[0]
+    while (talk.messages.get().length < 2) await Bun.sleep(1)
+    const first = (talk.messages.get()[1]?.content as { text: string }[])[0]
     expect(first?.text).toBe('check')
     release()
     while (talk.streaming) await Bun.sleep(1)
-    const held = talk.messages()[1]?.content as { text: string }[]
+    const held = talk.messages.get()[1]?.content as { text: string }[]
     expect(held[0]).toBe(first)
     expect(first?.text).toBe('checking')
-    expect(talk.messages().slice(1)).toEqual(ANSWERED)
+    expect(talk.messages.get().slice(1)).toEqual(ANSWERED)
 })
 
 // 44.51 — WHAT A HANDLER'S CALLS ANSWERED, read off the messages by the tool its surface names it: a
@@ -389,7 +389,7 @@ test('chat hands back the calls to one handler, live, each value as its event de
     })
     talk.draft.set({ role: 'user', content: 'my balances?' })
     talk.submit()
-    while (talk.messages().length < 2) await Bun.sleep(1)
+    while (talk.messages.get().length < 2) await Bun.sleep(1)
     const read = (calls: ChatCall<{ account: string }, number>[]) =>
         calls.map(({ input, value, failed, streaming }) => ({
             input,
@@ -424,5 +424,5 @@ test('chat hands back the calls to one handler, live, each value as its event de
     expect(resultsOf(assistantMessage('assistant', events), balance)).toEqual([
         4217,
     ])
-    expect(resultsOf(structuredClone(talk.messages()), balance)).toEqual([])
+    expect(resultsOf(structuredClone(talk.messages.get()), balance)).toEqual([])
 })

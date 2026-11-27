@@ -57,7 +57,7 @@ async function delivered(): Promise<void> {
 }
 
 type Call = PromiseLike<unknown> & {
-    (): unknown
+    get(): unknown
     synced(): boolean
     error(): unknown
 }
@@ -89,7 +89,7 @@ test('a GET with no answer settles to its stand-in until the network answers —
     expect(note.synced()).toBe(false)
     network = true
     await Bun.sleep(30)
-    expect(note()).toEqual({ from: 'server', path: '/rpc/getNote' })
+    expect(note.get()).toEqual({ from: 'server', path: '/rpc/getNote' })
     expect(note.synced()).toBe(true)
 })
 
@@ -107,7 +107,7 @@ test('a refresh with no answer keeps what the copy holds — 16.81', async () =>
     network = false
     ;(note as unknown as { refresh(): void }).refresh()
     await Bun.sleep(10)
-    expect(note()).toEqual({ from: 'server', path: '/rpc/getNote' })
+    expect(note.get()).toEqual({ from: 'server', path: '/rpc/getNote' })
 })
 
 // 16.85 — A COPY THE WORKER KEPT IS NOT THE SERVER'S ANSWER, however it got here. THE REVERT: return
@@ -128,7 +128,7 @@ test('an answer the worker kept is not synced until the network answers — 16.8
     expect(note.synced()).toBe(false)
     kept = false
     await Bun.sleep(30)
-    expect(note()).toEqual({ from: 'server' })
+    expect(note.get()).toEqual({ from: 'server' })
     expect(note.synced()).toBe(true)
 })
 
@@ -150,7 +150,7 @@ test('a mutation with no answer is queued, sent again under its key, and lands i
     expect(outbox().map((call) => call.method)).toEqual(['POST'])
     network = true
     await delivered()
-    expect(added()).toEqual({ from: 'server', path: '/rpc/addNote' })
+    expect(added.get()).toEqual({ from: 'server', path: '/rpc/addNote' })
     expect(added.synced()).toBe(true)
     expect(outbox()).toEqual([])
     const keys = sent
@@ -426,7 +426,7 @@ test("a queued call carries its call's value, refused and retried — 46.18, 46.
     queued.retry()
     await Bun.sleep(30)
     expect(queued.value.error()).toBeUndefined()
-    expect(queued.value()).toEqual({ from: 'device' })
+    expect(queued.value.get()).toEqual({ from: 'device' })
     expect(queued.value.synced()).toBe(false)
 })
 
@@ -462,14 +462,14 @@ test('a GET copy another call patched offline reads again once the line is deliv
         },
     )
     await Bun.sleep(10)
-    expect(notes()).toEqual({ from: 'device', path: '/rpc/listNotes' })
+    expect(notes.get()).toEqual({ from: 'device', path: '/rpc/listNotes' })
     expect(notes.synced()).toBe(false)
     from = 'server, with the call'
     network = true
     await delivered()
     await Bun.sleep(10)
     expect(outbox()).toEqual([])
-    expect(notes()).toEqual({
+    expect(notes.get()).toEqual({
         from: 'server, with the call',
         path: '/rpc/listNotes',
     })

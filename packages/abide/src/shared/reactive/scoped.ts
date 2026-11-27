@@ -10,11 +10,11 @@
 // costs there is exactly what it cost before, and the lookup is paid on a server alone.
 //
 // THE INSTANCE IS A WHOLE VALUE, not a cell under the forwarder. A value moves between prototypes
-// while it adopts (`ADOPTING_PROTOTYPE`), and one callable shared by every request would be moved
+// while it adopts (`ADOPTING_PROTOTYPE`), and one value shared by every request would be moved
 // for all of them by the first.
 
 import { contractOf, type Gated } from './argsContract.ts'
-import type { Callable } from './cellShape.ts'
+import type { HoldsCell } from './cellShape.ts'
 import { KEYED_BRAND } from './KEYED_BRAND.ts'
 import { forwardingPrototype } from './Reactive.ts'
 import { currentScope, runInScope, SCOPING } from './scoping.ts'
@@ -112,9 +112,8 @@ function built(filed: Filed, building: object, make: () => unknown): unknown {
     }
 }
 
-// Under `Function.prototype` for `MEMBER_PROTOTYPE`'s reason: the forwarder is called as a read.
 const FORWARDING_PROTOTYPE = forwardingPrototype<Forwarder>(
-    (forwarder) => instanceOf(forwarder[FILED]) as unknown as Callable,
+    (forwarder) => instanceOf(forwarder[FILED]) as unknown as HoldsCell,
 )
 
 /**
@@ -167,10 +166,7 @@ export function scoped(
         })
         return keyed
     }
-    const read = function readScoped(): unknown {
-        return (instanceOf(filed) as unknown as () => unknown)()
-    } as unknown as Forwarder
-    Object.setPrototypeOf(read, FORWARDING_PROTOTYPE)
+    const read = Object.create(FORWARDING_PROTOTYPE) as Forwarder
     read[FILED] = filed
     return read
 }

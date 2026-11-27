@@ -7,6 +7,7 @@
 
 import { dialog, type DialogOptions } from './dialog.ts'
 import { type Live, live } from './live.ts'
+import type { Bindable } from './reactive/bindable.ts'
 import { flushSync, type Reactive, reactive } from './reactive/index.ts'
 import { resizable } from './resizable.ts'
 import { withPart } from './withPart.ts'
@@ -16,7 +17,7 @@ export type DrawerOptions = DialogOptions & {
     /** The edge of the page it stands on. `'end'` by default; read once, since it fixes the axis it sizes along. */
     side?: 'start' | 'end' | 'top' | 'bottom' | undefined
     /** Its size in pixels across its edge, or `undefined` for its own: a `Reactive` to read and set. Held by the parts, and handed back as `size`, where none is given. */
-    size?: Reactive<number | undefined> | undefined
+    size?: Bindable<number | undefined> | undefined
     /** The fewest pixels it keeps. `0` by default; a function is read live. */
     min?: Live<number> | undefined
     /** The most pixels it takes. Unbounded by default; a function is read live. */
@@ -235,13 +236,13 @@ export function drawer(options: DrawerOptions = {}): Drawer {
             // 49.5 — the size the handle set, and while a drag follows the pointer, how far it is pushed.
             get style() {
                 const sizing = sized.panel.style as string | undefined
-                const by = pushed()
+                const by = pushed.get()
                 if (by === undefined) return sizing
                 const toward = side === 'start' || side === 'top' ? -by : by
                 return `${sizing === undefined ? '' : `${sizing};`}transform:translate${across === 'x' ? 'X' : 'Y'}(${toward}px)`
             },
             get 'data-following'() {
-                return following() ? '' : undefined
+                return following.get() ? '' : undefined
             },
         }),
         backdrop: withPart({}, shown.backdrop, {

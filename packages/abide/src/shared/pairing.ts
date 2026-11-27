@@ -180,7 +180,7 @@ function setUp(
         watch(() => {
             const failure = copy.error()
             if (failure !== undefined) status.set(Promise.reject(failure))
-            else if (copy.ready()) status.set(copy())
+            else if (copy.ready()) status.set(copy.get())
         })
     }
     const asked = reactive<Asked>('click')
@@ -199,7 +199,7 @@ function setUp(
     const slow = reactive(false)
     if (read !== undefined)
         watch(() => {
-            const connecting = status() === undefined && !status.error()
+            const connecting = status.get() === undefined && !status.error()
             if (!connecting) {
                 slow.set(false)
                 return
@@ -210,12 +210,12 @@ function setUp(
     // 53.49 — no network is said before anything else, since nothing below it can change until it
     // returns.
     const step = reactive((): PairingStep => {
-        if (!online()) return 'offline'
+        if (!online.get()) return 'offline'
         if (status.error() !== undefined) return 'unavailable'
-        const value = status()
-        if (value === undefined) return slow() ? 'slow' : 'connecting'
+        const value = status.get()
+        if (value === undefined) return slow.get() ? 'slow' : 'connecting'
         if (value.paired) return 'paired'
-        return asked()
+        return asked.get()
     })
     return { status, step, asked, slow, copied }
 }
@@ -246,7 +246,7 @@ function readPairing(): {
         const copy: Reactive<BridgeStatus> = unowned(() =>
             reactive(async () => {
                 // 44.73 — a refresh the follow sends after the last reader went reads nothing.
-                if (aborted.signal.aborted) return copy.peek()
+                if (aborted.signal.aborted) return copy.peek() as BridgeStatus
                 // 44.74 — no tools: the server's `ABIDE_BRIDGE_TOOLS` decides what a pairing grants.
                 const request = rpcRequest('GET', address, undefined)
                 const answer = await answerOf(request, false, aborted.signal)

@@ -89,7 +89,7 @@ function walkTabs(): string[] {
             view.list.onkeydown as (event: KeyboardEvent) => void,
             keyOf(step, false),
         )
-        landed.push(view.selected() ?? '')
+        landed.push(view.selected.get() ?? '')
     }
     document.body.replaceChildren()
     return landed
@@ -157,9 +157,9 @@ test("a menu's trigger opens on the arrows openingEnd names, and at that end", (
     using _bound = { [Symbol.dispose]: bindPart(parts.menu, list) }
     const keydown = parts.trigger.onkeydown as (event: KeyboardEvent) => void
     press(keydown, 'Home')
-    expect(parts.open()).toBe(false)
+    expect(parts.open.get()).toBe(false)
     press(keydown, 'ArrowUp')
-    expect(parts.open()).toBe(true)
+    expect(parts.open.get()).toBe(true)
     expect(document.activeElement?.textContent).toBe('c')
 })
 

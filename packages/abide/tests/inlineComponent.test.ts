@@ -378,3 +378,43 @@ test('an inline component is scoped by its file and by its own style — 32.45, 
     expect(sheet).toContain(`.row[${file}]`)
     expect(sheet).toContain(`li[${own}]`)
 })
+
+// 38.138 — A BODY'S RECORD OF VALUES IS DECLARED ONLY WHERE SOMETHING READS THROUGH IT. A prop the
+// head's `<script>` only hands on as its `Reactive` is read as no value, and a record declared for
+// it anyway is an unused local, which a project with `noUnusedLocals` reports. THE REVERT: declare
+// every local read's record ahead of its setup whether or not the lowering read through it — the
+// page reports TS6133 at lines 10 and 11, the head's record and the script's.
+test('a prop an inline component only hands on as its Reactive checks clean — 38.138', async () => {
+    const handed = appFixture({
+        'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+                noUnusedLocals: true,
+                strict: true,
+                target: 'esnext',
+                module: 'preserve',
+                moduleResolution: 'bundler',
+                allowImportingTsExtensions: true,
+                types: [],
+            },
+        }),
+        'index.abide': `<script>
+import { reactive, type Reactive } from '@abide/abide'
+
+let picked = reactive('a')
+function keep(cell: Reactive<string>): Reactive<string> {
+    return cell
+}
+</script>
+
+{#component Pick({ method }: { method: string })}
+<script>
+const kept = keep(method)
+</script>
+<b>{kept.peek()}</b>
+{/component}
+
+<Pick bind:method={picked}/>`,
+    })
+    const found = await checkApp(handed)
+    expect(found.map(({ line, code }) => ({ line, code }))).toEqual([])
+}, 60_000)

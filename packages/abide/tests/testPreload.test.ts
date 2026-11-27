@@ -208,7 +208,7 @@ import Label from '../lib/Label.abide'
 
 test('the getter source moves the mounted label', async () => {
     const source = reactive('one')
-    using _label = await mount(Label({ get label() { return source() }, fixed: 'still' }))
+    using _label = await mount(Label({ get label() { return source.get() }, fixed: 'still' }))
     expect(document.querySelector('#label')?.textContent).toBe('one still')
     source.set('two')
     flushSync()
@@ -258,7 +258,7 @@ test('the caller reads what the component wrote, and the component what the call
     expect(document.querySelector('#label')?.textContent).toBe('one A')
     document.querySelector<HTMLButtonElement>('#more')?.click()
     flushSync()
-    expect(label()).toBe('one!')
+    expect(label.get()).toBe('one!')
     label.set('two')
     note.set('b')
     flushSync()
@@ -291,7 +291,7 @@ test('a mounted component reads route at the document address, and navigates —
         'src/lib/Where.abide': `<script>
 import { navigate, route } from '@abide/abide'
 
-;(globalThis as { seen?: string[] }).seen?.push(route.url().href)
+;(globalThis as { seen?: string[] }).seen?.push(route.url.href)
 </script>
 
 <p id="at">{route.url.pathname}{route.url.search}{route.url.hash} {route.index} {route.name}</p>

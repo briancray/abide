@@ -24,7 +24,7 @@ test('the content is hidden outright until the cover is pressed, and the cover t
     ;(secret.cover.onclick as () => void)()
     flushSync()
     expect([
-        secret.open(),
+        secret.open.get(),
         secret.cover.hidden,
         secret.content.hidden,
         secret.content['data-open'],
@@ -71,6 +71,6 @@ test('a press whose opening is refused leaves the cover and its focus — 49.19'
     ;(secret.cover.onclick as () => void)()
     flushSync()
     await Promise.resolve()
-    expect([open(), secret.content.hidden]).toEqual([false, true])
+    expect([open.get(), secret.content.hidden]).toEqual([false, true])
     expect(document.activeElement).toBe(cover)
 })

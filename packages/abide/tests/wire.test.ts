@@ -137,7 +137,7 @@ import getInvoice from '#src/invoices/getInvoice.server.ts'
 const invoice = reactive(() => getInvoice({ id: '4021' }))
 </script>
 
-<main><p id="total">{invoice().total}</p></main>`
+<main><p id="total">{invoice.total}</p></main>`
 
 let app = ''
 let stop = (): void => {}
@@ -586,14 +586,14 @@ test('the wire takes a call the page already started, and fetches after that —
     try {
         const getInvoice = wire('GET', '/rpc/getInvoice')
         const reach = (args: { id: string }) =>
-            reachOf(getInvoice, args) as (() => unknown) & {
+            reachOf(getInvoice, args) as { get(): unknown } & {
                 ready(): boolean
                 refresh(): void
             } & PromiseLike<unknown>
         // Arrived: the value lands in the same run, with nothing fetched.
         const arrived = reach({ id: '7' })
         expect(arrived.ready()).toBe(true)
-        expect(arrived()).toEqual({ id: '7' })
+        expect(arrived.get()).toEqual({ id: '7' })
 
         // 41.25 — painted in flight: in flight at adopt, however early its answer arrived, and
         // landed from what arrived. THE REVERT: settle every arrived answer at once; this reads
@@ -647,11 +647,11 @@ test('a stream painted closed lands closed at the reach, and one painted in flig
     try {
         const words = wire('GET', '/rpc/words', { stream: true })
         const reach = (args: { id: string }) =>
-            reachOf(words, args) as (() => unknown) & {
+            reachOf(words, args) as { get(): unknown } & {
                 busy(): boolean
             } & PromiseLike<unknown>
         const closed = reach({ id: 'x' })
-        expect([closed.busy(), closed()]).toEqual([
+        expect([closed.busy(), closed.get()]).toEqual([
             false,
             ['one ', 'two ', 'x'],
         ])
@@ -683,7 +683,7 @@ test('a call painted in flight stays in flight until the page has hydrated, howe
     beginHydration()
     try {
         const whoami = wire('GET', '/rpc/whoami')
-        const me = reachOf(whoami) as (() => unknown) & {
+        const me = reachOf(whoami) as { get(): unknown } & {
             ready(): boolean
         } & PromiseLike<unknown>
         await Bun.sleep(5)
@@ -733,7 +733,7 @@ test('a call painted settled that a reader took in flight holds the wait, and is
     window.__abideCalls = calls
     const slowRpc = wire('GET', '/rpc/slow')
     const slow = (args: { id: string }) =>
-        reachOf(slowRpc, args) as (() => unknown) & { ready(): boolean }
+        reachOf(slowRpc, args) as { get(): unknown } & { ready(): boolean }
     try {
         const early = slow({ id: 'a' })
         beginHydration()
@@ -747,7 +747,7 @@ test('a call painted settled that a reader took in flight holds the wait, and is
         b.land()
         await waitingLate
         expect([early.ready(), late.ready()]).toEqual([true, true])
-        expect([early(), late()]).toEqual([{ id: 'a' }, { id: 'b' }])
+        expect([early.get(), late.get()]).toEqual([{ id: 'a' }, { id: 'b' }])
     } finally {
         endHydration()
         window.__abideCalls = undefined
@@ -882,7 +882,7 @@ test('a copy the build marked as streaming holds each chunk as it lands — 16.3
             wire('GET', '/rpc/rows', {
                 stream: true,
             }),
-        ) as (() => unknown) & {
+        ) as { get(): unknown } & {
             ready(): boolean
             busy(): boolean
         } & PromiseLike<unknown>
@@ -890,7 +890,7 @@ test('a copy the build marked as streaming holds each chunk as it lands — 16.3
         const landed = await Promise.race([
             (async () => {
                 while (!rows.ready()) await Bun.sleep(0)
-                return rows()
+                return rows.get()
             })(),
             Bun.sleep(2000).then(() => 'nothing before the answer closed'),
         ])
@@ -1107,13 +1107,13 @@ test('a streaming copy over binary chunks holds each as a Uint8Array as it lands
             wire('GET', `${base}${RPC}/binaryRows`, {
                 stream: true,
             }),
-        ) as (() => unknown) & {
+        ) as { get(): unknown } & {
             ready(): boolean
         } & PromiseLike<unknown>
         const landed = await Promise.race([
             (async () => {
                 while (!rows.ready()) await Bun.sleep(5)
-                return rows()
+                return rows.get()
             })(),
             Bun.sleep(5000).then(() => 'nothing before the answer closed'),
         ])

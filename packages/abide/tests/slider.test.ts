@@ -20,6 +20,6 @@ test('a thumb steps to a value written in the step’s decimals — 51.86', () =
         new KeyboardEvent('keydown', { key: 'ArrowUp', cancelable: true }),
     )
     flushSync()
-    expect(avoid()).toBe(0.7)
+    expect(avoid.get()).toBe(0.7)
     expect(highways.thumb['aria-valuenow']).toBe(0.7)
 })

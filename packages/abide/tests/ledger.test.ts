@@ -98,10 +98,10 @@ test('a value whose body reads a ledger holds every entry, and each append — 5
     await calls.append('Ada')
     const listed = reactive(() => calls())
     await Bun.sleep(5)
-    expect(`before: ${listed().length}`).toBe('before: 1')
+    expect(`before: ${listed.get().length}`).toBe('before: 1')
     await calls.append('Grace')
     await Bun.sleep(5)
-    expect(`after: ${listed().length}`).toBe('after: 2')
+    expect(`after: ${listed.get().length}`).toBe('after: 2')
 })
 
 // 58.3 — WHAT THE SCHEMA REFUSES IS KEPT NOWHERE. THE REVERT: append before the gate, and `kept: 1`.

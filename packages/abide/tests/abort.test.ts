@@ -10,7 +10,7 @@ import { flushSync } from '#shared'
 import { reachOf } from '#shared/rpc.ts'
 import { wire } from '#ui/wire.ts'
 
-type Loading = (() => unknown) & {
+type Loading = { get(): unknown } & {
     busy(): boolean
     ready(): boolean
     error(): unknown
@@ -93,7 +93,7 @@ test('an aborted reload keeps serving what the value held — 16.49', async () =
     leaving.abort()
     flushSync()
     expect(value.busy()).toBe(false)
-    expect(value()).toBe('invoice 3')
+    expect(value.get()).toBe('invoice 3')
     expect((value.error() as { name: string }).name).toBe('Aborted')
 })
 

@@ -167,9 +167,9 @@ test('a draft made on a server holds its lines and sends in process — 48.3, 48
         'billing refused the key',
     ])
     draft.summary.set('Sync fails')
-    expect(draft.markdown()).toContain(`- traces: ${traced}`)
+    expect(draft.markdown.get()).toContain(`- traces: ${traced}`)
     await draft.send()
-    expect(reports[0]?.markdown).toBe(draft.markdown())
+    expect(reports[0]?.markdown).toBe(draft.markdown.get())
 })
 
 // A PAGE SERVED OVER PLAIN HTTP HAS NO `crypto.randomUUID`, and a draft is still minted an id there.

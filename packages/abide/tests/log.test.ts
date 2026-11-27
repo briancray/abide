@@ -190,7 +190,7 @@ test("a browser's log.named prefixes the app name the document carries — 28.4"
         Object.defineProperty(globalThis, 'process', server ?? {})
         meta.remove()
     }
-    expect(log.records().at(-1)?.namespace).toBe('ledger:billing')
+    expect(log.records.get().at(-1)?.namespace).toBe('ledger:billing')
 })
 
 // 44.31 — A CONVERSATION WRITES ONE LINE ON `abide:assistant` WHEN ITS EVENTS END: why its last run

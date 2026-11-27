@@ -31,7 +31,7 @@ test('a refused check leaves the range anchor where it was, and puts the box bac
     }
     expect(click('a')).toBe(false)
     expect(click('c')).toBe(true)
-    expect(selected()).toEqual(['a'])
+    expect(selected.get()).toEqual(['a'])
     expect(click('d', { shiftKey: true })).toBe(false)
-    expect(selected()).toEqual(['a', 'b', 'c', 'd'])
+    expect(selected.get()).toEqual(['a', 'b', 'c', 'd'])
 })

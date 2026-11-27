@@ -9,7 +9,13 @@
 // `harness/measure` has no abide in its graph at all — the property `lanes.test.ts`
 // walks by resolution, and the reason the harness is a package.
 
-import { deepEqual, flushSync, reactive, watch } from '@abide/abide'
+import {
+    deepEqual,
+    flushSync,
+    type Reactive,
+    reactive,
+    watch,
+} from '@abide/abide'
 
 import { keyedValue } from '#shared/reactive/index.ts'
 
@@ -105,7 +111,7 @@ function constructValue(): Case {
             abide()
             return {
                 vanilla: { holds: hand },
-                abide: { holds: (sink as () => number)() },
+                abide: { holds: (sink as Reactive<number>).get() },
             }
         },
     }
@@ -127,7 +133,7 @@ function constructDerived(): Case {
         const source = reactive(1)
         sink = reactive(() => {
             abideRuns += 1
-            return source() * 2
+            return source.get() * 2
         })
     }
     return {
@@ -160,7 +166,7 @@ function readSettled(): Case {
         sink = held.read()
     }
     const abide = (): void => {
-        sink = value()
+        sink = value.get()
     }
     return {
         name: 'read a settled value',
@@ -384,7 +390,7 @@ function derived(): Case {
     const source = reactive(1)
     const doubled = reactive(() => {
         abideRecomputes += 1
-        return source() * 2
+        return source.get() * 2
     })
 
     // FROM 1, the value the source holds, so the first op writes 0 and is a change.
@@ -398,7 +404,7 @@ function derived(): Case {
     const abide = (): void => {
         flop = flop === 0 ? 1 : 0
         source.set(flop)
-        sink = doubled()
+        sink = doubled.get()
     }
     return {
         name: 'write a source, then read what derives from it',
@@ -440,7 +446,7 @@ function derivedUnchanged(): Case {
     }
 
     const source = reactive(1)
-    const positive = reactive(() => source() > 0)
+    const positive = reactive(() => source.get() > 0)
     // A downstream reader on both arms, so the wake each arm causes is a wake into
     // something — and the counter is in that reader on both, so it is priced alike.
     positive.watch(() => {
@@ -508,7 +514,7 @@ function appendToCappedArrayAndWalk(): Case {
         })
         let total = 0
         let walked = 0
-        for (const row of room()) {
+        for (const row of room.get()) {
             total += row
             walked += 1
         }
@@ -615,13 +621,13 @@ function fanOut(width: number): Case {
         )
 
     const source = reactive(0)
-    const derivedValues: (() => number)[] = []
+    const derivedValues: Reactive<number>[] = []
     for (let index = 0; index < width; index += 1)
         derivedValues.push(
             reactive(() => {
                 abideRuns += 1
-                return source() + index
-            }) as unknown as () => number,
+                return source.get() + index
+            }),
         )
 
     let flip = 0
@@ -634,7 +640,7 @@ function fanOut(width: number): Case {
     const abide = (): void => {
         flop = flop === 0 ? 1 : 0
         source.set(flop)
-        sink = (derivedValues[0] as () => number)()
+        sink = (derivedValues[0] as Reactive<number>).get()
     }
     return {
         name: `fan-out to ${width} readers, one read after the write`,
@@ -675,9 +681,9 @@ function fanIn(width: number): Case {
         abideRuns += 1
         let total = 0
         for (let index = 0; index < width; index += 1)
-            total += (sources[index] as () => number)()
+            total += (sources[index] as Reactive<number>).get()
         return total
-    }) as unknown as () => number
+    })
 
     let flip = 0
     let flop = 0
@@ -689,7 +695,7 @@ function fanIn(width: number): Case {
     const abide = (): void => {
         flop = flop === 0 ? 1 : 0
         ;(sources[0] as { set(value: number): void }).set(flop)
-        sink = summed()
+        sink = summed.get()
     }
     return {
         name: `fan-in from ${width} sources, one changes`,
@@ -750,22 +756,22 @@ function layeredDag(width: number, depth: number): Case {
 
     const abideBase: ReturnType<typeof reactive<number>>[] = []
     let abideRuns = 0
-    const abideTop = build<() => number>(
+    const abideTop = build<Reactive<number>>(
         (index) => {
             const made = reactive(index)
             abideBase.push(
                 made as unknown as ReturnType<typeof reactive<number>>,
             )
-            return made as unknown as () => number
+            return made
         },
         (below, index) =>
             reactive(() => {
                 abideRuns += 1
                 let total = index
                 for (let at = 0; at < below.length; at += 1)
-                    total += (below[at] as () => number)()
+                    total += (below[at] as Reactive<number>).get()
                 return total
-            }) as unknown as () => number,
+            }),
     )
 
     let flip = 0
@@ -778,7 +784,7 @@ function layeredDag(width: number, depth: number): Case {
     const abide = (): void => {
         flop = flop === 0 ? 1 : 0
         ;(abideBase[0] as unknown as { set(value: number): void }).set(flop)
-        sink = abideTop()
+        sink = abideTop.get()
     }
     return {
         name: `layered DAG ${width} wide x ${depth} deep, one base value changes`,
@@ -819,14 +825,14 @@ function chain(depth: number): Case {
     const source = reactive(0)
     let node = reactive(() => {
         abideRuns += 1
-        return source() + 1
-    }) as unknown as () => number
+        return source.get() + 1
+    })
     for (let level = 1; level < depth; level += 1) {
         const below = node
         node = reactive(() => {
             abideRuns += 1
-            return below() + 1
-        }) as unknown as () => number
+            return below.get() + 1
+        })
     }
 
     let flip = 0
@@ -839,7 +845,7 @@ function chain(depth: number): Case {
     const abide = (): void => {
         flop = flop === 0 ? 1 : 0
         source.set(flop)
-        sink = node()
+        sink = node.get()
     }
     return {
         name: `chain ${depth} deep`,
@@ -878,8 +884,8 @@ function alternatingSources(): Case {
     const two = reactive(2)
     const picked = reactive(() => {
         abideRuns += 1
-        return flag() ? one() : two()
-    }) as unknown as () => number
+        return flag.get() ? one.get() : two.get()
+    })
 
     let handFlag = true
     let abideFlag = true
@@ -891,7 +897,7 @@ function alternatingSources(): Case {
     const abide = (): void => {
         abideFlag = !abideFlag
         flag.set(abideFlag)
-        sink = picked()
+        sink = picked.get()
     }
     type Source = { bump(): void }
     // BODY RUNS AND THE EDGES THE OP MOVED, on the timed graph. Neither arm exposes its
@@ -925,8 +931,8 @@ function alternatingSources(): Case {
     }
     const handLeft = { bump: () => left.write(left.read() + 1) }
     const handRight = { bump: () => right.write(right.read() + 1) }
-    const abideLeft = { bump: () => one.set(one() + 1) }
-    const abideRight = { bump: () => two.set(two() + 1) }
+    const abideLeft = { bump: () => one.set(one.get() + 1) }
+    const abideRight = { bump: () => two.set(two.get() + 1) }
     return {
         name: 'a body whose source alternates every run',
         distinguishes:
@@ -947,7 +953,7 @@ function alternatingSources(): Case {
             ),
             abide: counted(
                 abide,
-                () => void picked(),
+                () => void picked.get(),
                 () => abideRuns,
                 () =>
                     abideFlag
@@ -980,9 +986,9 @@ function repeatedReads(times: number): Case {
     const summed = reactive(() => {
         abideRuns += 1
         let total = 0
-        for (let index = 0; index < times; index += 1) total += source()
+        for (let index = 0; index < times; index += 1) total += source.get()
         return total
-    }) as unknown as () => number
+    })
 
     let flip = 1
     let flop = 1
@@ -994,7 +1000,7 @@ function repeatedReads(times: number): Case {
     const abide = (): void => {
         flop = flop === 1 ? 2 : 1
         source.set(flop)
-        sink = summed()
+        sink = summed.get()
     }
     return {
         name: `one source read ${times} times in one body`,
@@ -1045,20 +1051,19 @@ function probeSettledDag(width: number, depth: number): Case {
         return false
     }
 
-    let layer: (() => number)[] = []
-    for (let index = 0; index < width; index += 1)
-        layer.push(reactive(index) as unknown as () => number)
+    let layer: Reactive<number>[] = []
+    for (let index = 0; index < width; index += 1) layer.push(reactive(index))
     for (let level = 1; level < depth; level += 1) {
         const below = layer
-        const next: (() => number)[] = []
+        const next: Reactive<number>[] = []
         for (let index = 0; index < width; index += 1)
             next.push(
                 reactive(() => {
                     let total = index
                     for (let at = 0; at < below.length; at += 1)
-                        total += (below[at] as () => number)()
+                        total += (below[at] as Reactive<number>).get()
                     return total
-                }) as unknown as () => number,
+                }),
             )
         layer = next
     }
@@ -1066,10 +1071,10 @@ function probeSettledDag(width: number, depth: number): Case {
     const top = reactive(() => {
         let total = 0
         for (let at = 0; at < below.length; at += 1)
-            total += (below[at] as () => number)()
+            total += (below[at] as Reactive<number>).get()
         return total
-    }) as unknown as (() => number) & { busy(): boolean }
-    top()
+    })
+    top.get()
 
     const vanilla = (): void => {
         seen.clear()
@@ -1223,7 +1228,7 @@ function mountReaders(width: number): Case {
         for (let index = 0; index < width; index += 1)
             stops.push(
                 watch(() => {
-                    sink = source()
+                    sink = source.get()
                     abideMounted += 1
                 }),
             )
@@ -1347,7 +1352,7 @@ function probeKeyed(): Case {
             ready: true,
             busy: false,
         })
-        sink = keyed({ id: index })()
+        sink = keyed({ id: index }).get()
     }
     const pattern = { id: KEYED_WIDTH - 1 }
     function handProbe(): boolean {

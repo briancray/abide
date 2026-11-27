@@ -43,9 +43,9 @@ export type Read = {
     /**
      * What the occurrence lowers as.
      *
-     * `value` lowers to `n()`; `asWritten` stays as written (`n.set(v)`, 31.5); `member` is one of
-     * the `Reactive`'s own members referenced rather than called, named by `path`; `call` is the
-     * explicit `n()` (31.7), which `arguments` says was given any; `shorthand` is `{ n }`;
+     * `value` lowers to `n.get()` — `n()` too, a call of the value it reads (31.11); `asWritten`
+     * stays as written (`n.set(v)`, 31.5); `member` is one of the `Reactive`'s own members
+     * referenced rather than called, named by `path`; `shorthand` is `{ n }`;
      * `write` and `update` are 31.4, and 31.8 where `path` is not empty. `mutate` is 31.9: an
      * array mutator called through `path`, its `value` the call from the receiver's end.
      *
@@ -60,7 +60,6 @@ export type Read = {
         | 'value'
         | 'asWritten'
         | 'member'
-        | 'call'
         | 'shorthand'
         | 'write'
         | 'update'
@@ -81,7 +80,6 @@ export type Read = {
     prefix: boolean
     /** A write or an update whose value nothing reads (`isDiscarded`). */
     discarded: boolean
-    arguments: number
     /**
      * 31.8 — the member path between the name and the write.
      *
@@ -108,6 +106,11 @@ export type Read = {
      * So the `Reactive` every rewrite reaches is a cell over its accessor, `heldProp(name)`.
      */
     held: boolean
+    /**
+     * 33.4 — the name is a prop the child only reads: an ACCESSOR, a function rather than a
+     * `Reactive`, so a read of it is `name()` where a `Reactive`'s is `name.get()`.
+     */
+    accessor: boolean
     /** 32.32 — the name is bound to a `reactive(…)` whose options declare `key`. */
     byValue: boolean
     /** 14.8 — the name is declared by a branch-local `<script>`, inside the body it scopes. */
@@ -170,12 +173,12 @@ export function newRead(
         operator: '',
         prefix: false,
         discarded: false,
-        arguments: 0,
         path: [],
         value: undefined,
         suspends: undefined,
         through: false,
         held: false,
+        accessor: false,
         byValue: false,
         local: false,
         declaredAt: -1,
@@ -270,8 +273,8 @@ function isNotARead(parent: Node): boolean {
  *
  * A name the `props` pattern bound (33.4, 33.9). Every occurrence is a read of that key's
  * accessor, which is where this parts company with `classifyRead`: `onsave()` is the prop's own
- * value being CALLED and lowers to `onsave()()`, where the same spelling on a `Reactive` is 31.7's
- * explicit read; and `amount.set` is the value's member, a prop nothing writes having no cell. A
+ * value being CALLED and lowers to `onsave()()`, as the same spelling on a `Reactive` lowers to
+ * `onsave.get()()` (31.11); and `amount.set` is the value's member, a prop nothing writes having no cell. A
  * prop the child writes is `classifyRead`'s.
  */
 export function classifyPropRead(node: Node): Read | undefined {
@@ -288,6 +291,7 @@ export function classifyPropRead(node: Node): Read | undefined {
             return undefined
     }
     const read = newRead(node.getStart(), node.end)
+    read.accessor = true
     if (isShorthandPropertyAssignment(parent)) read.shape = 'shorthand'
     return read
 }
@@ -325,18 +329,13 @@ export function classifyRead(
     // because their `<script>` holds one, and `render` awaits it (35.5). Two of them run one after
     // the other, as they would in any other file.
     //
-    // `await n()` IS UNTOUCHED, the call being the operand rather than the name — 31.7's explicit
-    // read, awaited, which is a read of what has landed and still throws.
+    // `await n.get()` IS UNTOUCHED, the member call being the operand rather than the name — 31.7's
+    // explicit read, awaited, which is a read of what has landed and still throws.
     if (parent.kind === SyntaxKind.AwaitExpression) {
         read.shape = 'asWritten'
         return read
     }
 
-    if (isCallExpression(parent) && parent.expression === node) {
-        read.shape = 'call'
-        read.arguments = parent.arguments.length
-        return read
-    }
     if (isShorthandPropertyAssignment(parent)) {
         read.shape = 'shorthand'
         return read

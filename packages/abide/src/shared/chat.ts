@@ -20,6 +20,7 @@ import { isSendable } from './isSendable.ts'
 import { type Live, live } from './live.ts'
 import { MessageAccumulator } from './MessageAccumulator.ts'
 import { messageOf } from './messageOf.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { reactive } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 import type { Rpc } from './rpc.ts'
@@ -70,7 +71,7 @@ export type ChatOptions = {
     /** Whether the composer refuses to send: a provider not yet paired, say. */
     disabled?: Live<boolean | undefined> | undefined
     /** 49.8, 53.105 — the user message being written: bind it to put a question back. Held by the parts, empty, where none is given. */
-    draft?: Reactive<AssistantMessage> | undefined
+    draft?: Bindable<AssistantMessage> | undefined
     /** The files its `dropzone` takes, as an `<input accept>` writes them: every file `assistantMessage` carries by default; a function is read live. */
     accept?: Live<string> | undefined
     /** 53.37 — a file taken as the blocks it answers: `assistantMessage`'s by default. */
@@ -247,8 +248,8 @@ export function chat(options: ChatOptions): ChatParts {
     // 53.47 — a conversation that failed to load is not one to add to.
     const disabled = () =>
         live(options.disabled) === true || messages.error() !== undefined
-    const failed = () => messages.error()?.message ?? outcome().failed
-    const draft = options.draft ?? reactive<AssistantMessage>(blank())
+    const failed = () => messages.error()?.message ?? outcome.get().failed
+    const draft = bindable(options.draft) ?? reactive<AssistantMessage>(blank())
     // 53.105 — the text blocks `attach` made, which the input leaves alone. A block keeps its
     // identity into the transcript, so a question put back into `draft` keeps its files apart.
     const fromFiles = new WeakSet<AssistantContent>()
@@ -274,8 +275,8 @@ export function chat(options: ChatOptions): ChatParts {
     let asking: AbortController | undefined
 
     const empty = () => {
-        if (converting() > 0) return false
-        for (const block of blocksOf(draft()))
+        if (converting.get() > 0) return false
+        for (const block of blocksOf(draft.get()))
             if (isSendable(block)) return false
         return true
     }
@@ -293,8 +294,8 @@ export function chat(options: ChatOptions): ChatParts {
         if (content.length === 0) return
         // 53.107, 49.19
         if (draft.set(blank()) !== undefined) return
-        if (streaming()) {
-            queued.set([...(queued() ?? []), ...content])
+        if (streaming.get()) {
+            queued.set([...(queued.get() ?? []), ...content])
             return
         }
         messages.patch((all) => {
@@ -306,8 +307,8 @@ export function chat(options: ChatOptions): ChatParts {
     // 53.46 — the question an answer answered, asked again in its place: everything after the last
     // message the person wrote before it goes.
     function retry(index: number) {
-        if (streaming()) return
-        const all = messages()
+        if (streaming.get()) return
+        const all = messages.get()
         let asked = index
         while (asked > 0 && !written(all[asked] as AssistantMessage)) asked--
         messages.patch((held) => {
@@ -320,7 +321,7 @@ export function chat(options: ChatOptions): ChatParts {
     async function answerFrom() {
         const controller = new AbortController()
         asking = controller
-        answerStart = messages().length
+        answerStart = messages.get().length
         const accumulator = new MessageAccumulator(answerStart)
         permissions.set([])
         outcome.set({ stop_reason: undefined, failed: undefined })
@@ -328,7 +329,7 @@ export function chat(options: ChatOptions): ChatParts {
         let stop: string | undefined
         try {
             const events = options.ask(
-                { messages: messages() },
+                { messages: messages.get() },
                 { signal: controller.signal },
             )
             for await (const event of events) {
@@ -443,7 +444,7 @@ export function chat(options: ChatOptions): ChatParts {
 
     // The result answering the call `id`, read from the messages after it.
     function resultOf(id: string): ToolResult | undefined {
-        for (const message of messages())
+        for (const message of messages.get())
             if (message.role === 'user' && typeof message.content !== 'string')
                 for (const block of message.content)
                     if (
@@ -468,21 +469,21 @@ export function chat(options: ChatOptions): ChatParts {
     })
     const follow = autoscroll()
 
-    const answering = (index: number) => streaming() && index >= answerStart
+    const answering = (index: number) => streaming.get() && index >= answerStart
     // 53.29 — an assistant message followed by nothing, or by one the person wrote.
     const endsAnswer = (message: AssistantMessage, index: number) => {
         if (message.role !== 'assistant') return false
-        const next = messages()[index + 1]
+        const next = messages.get()[index + 1]
         return next === undefined || written(next)
     }
 
     return {
         messages,
         get streaming() {
-            return streaming()
+            return streaming.get()
         },
         get stop_reason() {
-            return outcome().stop_reason
+            return outcome.get().stop_reason
         },
         get failed() {
             return failed()
@@ -490,10 +491,10 @@ export function chat(options: ChatOptions): ChatParts {
         root: {
             'data-chat': 'root',
             get 'data-streaming'() {
-                return streaming() ? '' : undefined
+                return streaming.get() ? '' : undefined
             },
             get 'data-stop'() {
-                return outcome().stop_reason
+                return outcome.get().stop_reason
             },
             get 'data-failed'() {
                 return failed() === undefined ? undefined : ''
@@ -568,9 +569,10 @@ export function chat(options: ChatOptions): ChatParts {
             }
         },
         // 53.109
-        calls: (handler) => callsOf(messages(), handler.tool, streaming()),
+        calls: (handler) =>
+            callsOf(messages.get(), handler.tool, streaming.get()),
         get permissions() {
-            return permissions()
+            return permissions.get()
         },
         permission(prompt) {
             const answered =
@@ -602,7 +604,7 @@ export function chat(options: ChatOptions): ChatParts {
         composer: {
             'data-chat': 'composer',
             get 'data-attaching'() {
-                return converting() > 0 ? '' : undefined
+                return converting.get() > 0 ? '' : undefined
             },
             onsubmit(event: SubmitEvent) {
                 event.preventDefault()
@@ -621,7 +623,7 @@ export function chat(options: ChatOptions): ChatParts {
             // 53.105 — the typed text blocks, a line apart.
             get value() {
                 let text: string | undefined
-                for (const block of blocksOf(draft()))
+                for (const block of blocksOf(draft.get()))
                     if (typed(block))
                         text =
                             text === undefined
@@ -637,15 +639,15 @@ export function chat(options: ChatOptions): ChatParts {
         draft,
         get attached() {
             const others: AssistantContent[] = []
-            for (const block of blocksOf(draft()))
+            for (const block of blocksOf(draft.get()))
                 if (!typed(block)) others.push(block)
             return others
         },
         get attaching() {
-            return converting() > 0
+            return converting.get() > 0
         },
         get rejected() {
-            const thrown = thrownOn()
+            const thrown = thrownOn.get()
             return thrown.length === 0
                 ? drop.rejected
                 : [...drop.rejected, ...thrown]
@@ -680,7 +682,7 @@ export function chat(options: ChatOptions): ChatParts {
             }
         },
         get pending() {
-            return queued()
+            return queued.get()
         },
         queued: { 'data-chat': 'queued' },
         cancel: {

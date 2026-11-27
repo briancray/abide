@@ -64,7 +64,7 @@ test("a slice's hint binding stands while its words do", () => {
             { label: 'Lead', value: 3 },
             { label: 'Won', value: 1 },
         ],
-        inner: () => inner(),
+        inner: () => inner.get(),
     })
     const before = ring.slices[0]?.circle
     inner.set(0.6)
@@ -80,7 +80,7 @@ test('a sparkline declaring curve draws its line and its area curved — 52.105'
     const trend = sparkline({
         values: [3, 7, 4, 9, 6],
         label: 'Won revenue',
-        curve: () => curved(),
+        curve: () => curved.get(),
     })
     expect(String(trend.line.d).match(/C/g)).toHaveLength(4)
     expect(String(trend.area.d).match(/C/g)).toHaveLength(4)

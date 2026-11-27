@@ -5,6 +5,7 @@
 import { disclosure } from './disclosure.ts'
 import { resized } from './element/resized.ts'
 import { type Live, live } from './live.ts'
+import type { Bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
 import { withPart } from './withPart.ts'
@@ -14,7 +15,7 @@ export type ClampOptions = {
     /** The lines shown while it is shut. `3` by default; a function is read live. */
     lines?: Live<number> | undefined
     /** Whether all of it shows: hand it a `Reactive` to read and write it. Held by the parts, and handed back as `open`, where none is given. */
-    open?: Reactive<boolean> | undefined
+    open?: Bindable<boolean> | undefined
     /** The base the text's id is derived from; unique on the page. One is made where none is given. */
     id?: string | undefined
 }
@@ -50,12 +51,12 @@ export function clamp(options: ClampOptions = {}): Clamp {
             hidden: undefined,
             'data-clamp': 'text',
             get style() {
-                return open()
+                return open.get()
                     ? undefined
                     : `display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;-webkit-line-clamp:${lines()};line-clamp:${lines()}`
             },
             get 'data-clamped'() {
-                return open() ? undefined : ''
+                return open.get() ? undefined : ''
             },
             'bind:element': (element: Element): Disposer =>
                 resized(element, () => measure(element)),
@@ -66,7 +67,7 @@ export function clamp(options: ClampOptions = {}): Clamp {
         }),
         open,
         get overflowing() {
-            return overflowing()
+            return overflowing.get()
         },
     }
 }

@@ -17,11 +17,11 @@ test('an await on a derived that drops a running stream resolves to what it hand
         })(),
     )
     const shown = reactive(() =>
-        which() === 0 ? [] : streaming({ n: which() }),
+        which.get() === 0 ? [] : streaming({ n: which.get() }),
     )
     const stop = watch(() => {
         try {
-            shown()
+            shown.get()
         } catch {}
     })
     let answered: unknown = 'pending'

@@ -10,7 +10,7 @@ import { reactive } from '#shared'
 import { reachOf } from '#shared/rpc.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
 
-type Loading = (() => unknown) & {
+type Loading = { get(): unknown } & {
     busy(): boolean
     ready(): boolean
     error(): unknown
@@ -146,7 +146,7 @@ test('a reload that times out keeps serving what the value held — 16.60', asyn
     expect(reach(invoice)).toBe(value)
     await settled(value)
     expect(value.busy()).toBe(false)
-    expect(value()).toBe('invoice 1')
+    expect(value.get()).toBe('invoice 1')
     expect(statusOf(value)).toBe(504)
 })
 

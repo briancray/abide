@@ -3,6 +3,7 @@
 
 import { filesOf } from './filesOf.ts'
 import { type Live, live } from './live.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
 /** What `dropzone` takes, and what hears it. */
@@ -18,7 +19,7 @@ export type DropzoneOptions = {
     /** Whether more than the first accepted file is taken. `true` by default; a function is read live. */
     multiple?: Live<boolean> | undefined
     /** 49.8 — the files taken last, to read, clear or bind; one of the parts' own by default. */
-    files?: Reactive<readonly File[]> | undefined
+    files?: Bindable<readonly File[]> | undefined
     /** Handed the files a drop, a paste or a pick took, where it took any. */
     onfiles?: ((files: File[], event: Event) => void) | undefined
     /** 53.45 — handed the files a drop, a paste or a pick carried that were not taken, where there are any. */
@@ -50,7 +51,7 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
         const files = accepted(acceptOf(live(options.accept) ?? ''), data)
         return multiple() || files.length < 2 ? files : files.slice(0, 1)
     }
-    const files = options.files ?? reactive<readonly File[]>([])
+    const files = bindable(options.files) ?? reactive<readonly File[]>([])
     const turnedAway = reactive<readonly File[]>([])
     // A drag crossing into a child enters it before it leaves the parent: entries count, so the
     // attribute stays until the drag has left them all.
@@ -100,7 +101,7 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
             took(event.dataTransfer, event)
         },
         get 'data-dragging'() {
-            return entered() > 0 ? '' : undefined
+            return entered.get() > 0 ? '' : undefined
         },
         // Words pasted alone paste as they always do, and so does everything where `paste` is off.
         onpaste: (event: ClipboardEvent) => {
@@ -137,7 +138,7 @@ export function dropzone(options: DropzoneOptions = {}): DropzoneParts {
         input,
         files,
         get rejected() {
-            return turnedAway()
+            return turnedAway.get()
         },
     }
 }

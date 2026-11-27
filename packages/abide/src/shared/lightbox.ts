@@ -7,6 +7,7 @@ import { type Carousel, carousel, type CarouselOptions } from './carousel.ts'
 import { dialog } from './dialog.ts'
 import { hotkeys } from './hotkeys.ts'
 import type { ItemKey, KeyOf } from './itemKey.ts'
+import type { Bindable } from './reactive/bindable.ts'
 import type { Reactive } from './reactive/index.ts'
 import { withPart } from './withPart.ts'
 
@@ -16,7 +17,7 @@ export type LightboxOptions<
     Key extends ItemKey = KeyOf<Item>,
 > = CarouselOptions<Item, Key> & {
     /** Whether it is showing: a `Reactive` to read and write it. One of its own by default. */
-    open?: Reactive<boolean> | undefined
+    open?: Bindable<boolean> | undefined
 }
 
 /** The dialog's parts, the carousel's, whether it is showing, and what opens it on an item. */

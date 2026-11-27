@@ -114,7 +114,7 @@ export class TryRegion extends ArmRegion {
                 this.remount()
             }
         }
-        this.show(armFor(this.failure()))
+        this.show(armFor(this.failure.get()))
     }
 
     /**

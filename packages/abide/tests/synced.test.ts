@@ -21,14 +21,14 @@ test('a value with no body is synced, whatever is written to it — 3.12', () =>
 // drop the `writtenHere` call from `setOverProducer`; the write reads `synced` true.
 test('a write over a value with a body is not synced until the body produces again — 3.10, 3.11', () => {
     const source = reactive(1)
-    const doubled = reactive(() => source() * 2)
-    expect(doubled()).toBe(2)
+    const doubled = reactive(() => source.get() * 2)
+    expect(doubled.get()).toBe(2)
     expect(doubled.synced()).toBe(true)
     doubled.set(10)
-    expect(doubled()).toBe(10)
+    expect(doubled.get()).toBe(10)
     expect(doubled.synced()).toBe(false)
     source.set(2)
-    expect(doubled()).toBe(4)
+    expect(doubled.get()).toBe(4)
     expect(doubled.synced()).toBe(true)
 })
 
@@ -37,8 +37,8 @@ test('a write over a value with a body is not synced until the body produces aga
 // repeat reads `synced` false.
 test('a write identity collapses leaves a value synced — 3.10', () => {
     const source = reactive(1)
-    const doubled = reactive(() => source() * 2)
-    doubled()
+    const doubled = reactive(() => source.get() * 2)
+    doubled.get()
     doubled.set(2)
     expect(doubled.synced()).toBe(true)
 })
@@ -47,13 +47,13 @@ test('a write identity collapses leaves a value synced — 3.10', () => {
 // made. THE REVERT: drop the `writtenHere` call from the `patch` member; the patch reads true.
 test('a patch, and a write of a promise, over a body are not synced — 3.10', async () => {
     const list = reactive(() => [1, 2])
-    list()
+    list.get()
     list.patch((held) => {
         held.push(3)
     })
     expect(list.synced()).toBe(false)
     const later = reactive(() => 'made')
-    later()
+    later.get()
     later.set(Promise.resolve('written'))
     expect(later.synced()).toBe(false)
     expect(await later).toBe('written')
@@ -64,11 +64,11 @@ test('a patch, and a write of a promise, over a body are not synced — 3.10', a
 // in step again. THE REVERT: write with `set` in `produceInto`; this reads false.
 test("a production carried in as the producer's puts a value back in step — 3.11", () => {
     const copy = reactive(() => ({ n: 1 }))
-    copy()
+    copy.get()
     copy.set({ n: 2 })
     expect(copy.synced()).toBe(false)
     produceInto(copy, { n: 3 })
-    expect(copy().n).toBe(3)
+    expect(copy.get().n).toBe(3)
     expect(copy.synced()).toBe(true)
 })
 
@@ -76,10 +76,10 @@ test("a production carried in as the producer's puts a value back in step — 3.
 // THE REVERT: return `true` from `walkSynced` past the value's own `local`; `total` reads true.
 test('a value built from one written here is not synced — 3.13', () => {
     const list = reactive(() => [1, 2])
-    const total = reactive(() => list().reduce((sum, n) => sum + n, 0))
-    expect(total()).toBe(3)
+    const total = reactive(() => list.get().reduce((sum, n) => sum + n, 0))
+    expect(total.get()).toBe(3)
     list.set([1, 2, 3])
-    expect(total()).toBe(6)
+    expect(total.get()).toBe(6)
     expect(total.synced()).toBe(false)
 })
 
@@ -88,8 +88,8 @@ test('a value built from one written here is not synced — 3.13', () => {
 // is never told it went false, and reads [true].
 test('a guard reading synced is woken as it moves each way — 3.3', () => {
     const source = reactive(1)
-    const doubled = reactive(() => source() * 2)
-    doubled()
+    const doubled = reactive(() => source.get() * 2)
+    doubled.get()
     const said: boolean[] = []
     const stop = watch(() => {
         said.push(doubled.synced())
@@ -97,7 +97,7 @@ test('a guard reading synced is woken as it moves each way — 3.3', () => {
     doubled.set(5)
     flushSync()
     source.set(3)
-    doubled()
+    doubled.get()
     flushSync()
     stop()
     expect(said).toEqual([true, false, true])
@@ -106,8 +106,8 @@ test('a guard reading synced is woken as it moves each way — 3.3', () => {
 // 13.18 — OVER A SELECTION, ALL: one entry written here is one the producer has not made.
 test('synced over a keyed value is true only where every matching entry is — 13.18', () => {
     const doubled = keyedValue((args: { n: number }) => args.n * 2)
-    doubled({ n: 1 })()
-    doubled({ n: 2 })()
+    doubled({ n: 1 }).get()
+    doubled({ n: 2 }).get()
     expect(synced(doubled)).toBe(true)
     doubled({ n: 2 }).set(0)
     expect(synced(doubled)).toBe(false)

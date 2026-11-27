@@ -63,12 +63,12 @@ export class ReportDraft {
         this.lines = reactive(linesFor(traces))
         this.markdown = reactive(() =>
             markdownOf(
-                this.summary(),
-                this.description(),
+                this.summary.get(),
+                this.description.get(),
                 this.#context,
                 this.traces,
                 // Empty while the server's lines are on their way (48.4).
-                this.lines() ?? [],
+                this.lines.get() ?? [],
             ),
         )
     }
@@ -105,8 +105,8 @@ export class ReportDraft {
     }
 
     async #deliver(): Promise<void> {
-        const summary = this.summary()
-        const description = this.description()
+        const summary = this.summary.get()
+        const description = this.description.get()
         const lines = await this.lines
         const report: Report = {
             id: this.id,
@@ -168,7 +168,7 @@ function browserContext(): ReportContext {
  */
 function linesFor(traces: string[]): LogRecord[] | Promise<LogRecord[]> {
     if (REPORTING.lines !== undefined) return REPORTING.lines(traces)
-    const page = log.records().slice(-REPORT_LINES)
+    const page = log.records.get().slice(-REPORT_LINES)
     if (traces.length === 0) return page
     return Promise.resolve(
         seededDocument<LogRecord[]>(REPORT_LINES_ADDRESS, {

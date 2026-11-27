@@ -454,13 +454,13 @@ import { reactive } from '@abide/abide'
 
 const copy = reactive(() => (globalThis as unknown as { pairingRead: Promise<string> }).pairingRead)
 const status = reactive(() =>
-    copy.ready() || copy.error() !== undefined ? copy() : undefined,
+    copy.ready() || copy.error() !== undefined ? copy : undefined,
 )
-const shown = reactive(() => status())
+const shown = reactive(() => status)
 </script>
 
 {#try}
-    <strong id="shown">{shown() ?? 'reading'}</strong>
+    <strong id="shown">{shown ?? 'reading'}</strong>
 {:catch problem}
     <p class="status">{problem.message}</p>
 {/try}`)

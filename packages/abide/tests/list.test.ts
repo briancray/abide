@@ -1142,7 +1142,7 @@ test('emptying a list out of the document stops its rows', () => {
             mount: () => {
                 const scope = new Scope()
                 scope.watch(() => {
-                    tick()
+                    tick.get()
                     wakes += 1
                 })
                 return scope
@@ -1323,7 +1323,7 @@ test('a value a row read while it was built does not rerun the list', () => {
     const rows = reactive(['a', 'b'])
     const make = (parent: Node, item: { data: unknown }): Node[] => {
         const row = (parent.ownerDocument as Document).createElement('li')
-        row.className = selected() === item.data ? 'danger' : ''
+        row.className = selected.get() === item.data ? 'danger' : ''
         return [row]
     }
     const list = new List(
@@ -1341,7 +1341,7 @@ test('a value a row read while it was built does not rerun the list', () => {
     const scope = new Scope()
     scope.watch(() => {
         listRuns += 1
-        updateList(list, rows())
+        updateList(list, rows.get())
     })
     flushSync()
     const built = listRuns
@@ -1762,7 +1762,7 @@ test('a {#for} over a copy that has not landed adopts the rows the server painte
 const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
 </script>
 
-<ul id="transcript">{#for turn of transcript()}<li>{turn}</li>{/for}</ul>`)
+<ul id="transcript">{#for turn of transcript.get()}<li>{turn}</li>{/for}</ul>`)
     const painted = document.querySelector('#transcript li')
 
     const landed = Promise.withResolvers<string[]>()
@@ -1887,7 +1887,7 @@ test('a {#for} over a followed GET adopts the rows the server painted, over the 
 const transcript = (globalThis as { transcriptSubject?: any }).transcriptSubject
 </script>
 
-<ul id="transcript">{#for turn of transcript()}<li>{turn}</li>{/for}</ul>`)
+<ul id="transcript">{#for turn of transcript.get()}<li>{turn}</li>{/for}</ul>`)
     const painted = document.querySelector('#transcript li')
 
     const realSocket = side.WebSocket

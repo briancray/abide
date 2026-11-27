@@ -42,9 +42,10 @@ test('a restart over the same store keeps the version, and the patches since —
     expect(
         `step: ${patched - opened}, kept: ${versionOf(after) === patched}`,
     ).toBe('step: 1, kept: true')
-    expect(patchesSince(after, opened)).toEqual([
-        { op: 'add', path: '/-', value: 'emma' },
-    ])
+    expect(patchesSince(after, opened)).toEqual({
+        ops: [{ op: 'add', path: '/-', value: 'emma' }],
+        replaced: false,
+    })
 })
 
 // 18.44 — A FOLLOWER BEHIND THE WINDOW is sent the value, never a gap: past the records kept, the log
@@ -66,9 +67,11 @@ test('a follower behind the kept records is sent the value — 18.44', async () 
         versionOf(entry)
     }
     expect(patchesSince(entry, opened)).toBeUndefined()
-    expect(patchesSince(entry, versionOf(entry) - 1)).toEqual([
-        { op: 'replace', path: '/n', value: 200 },
-    ])
+    // 18.49 — a `set`'s diff, and so a replacement.
+    expect(patchesSince(entry, versionOf(entry) - 1)).toEqual({
+        ops: [{ op: 'replace', path: '/n', value: 200 }],
+        replaced: true,
+    })
 })
 
 // 18.45 — A CHANGE ANOTHER PROCESS MAKES REACHES THIS ONE'S VALUE through the store's log, at the

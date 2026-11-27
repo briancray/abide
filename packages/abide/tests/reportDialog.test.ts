@@ -82,7 +82,7 @@ test('a draft holds the page’s lines and the server’s for its trace, and the
     summary.dispatchEvent(new Event('input'))
     await settle()
     const preview = dialog.querySelector('pre')?.textContent ?? ''
-    expect(preview).toBe(draft.markdown())
+    expect(preview).toBe(draft.markdown.get())
     expect(preview).toContain('## Sync fails')
     expect(preview).toContain('clicked sync')
     expect(preview).toContain('billing refused the key')
