@@ -32,7 +32,7 @@ export type PlaybackOptions = {
 
 /** The parts `playback` hands back, and where it is, whether it plays and how fast. */
 export type Playback = {
-    /** The element whose keys drive it: Space plays and pauses, the arrows move it. */
+    /** The element whose keys drive it: Space plays and pauses, the arrows move it — save a press on a control inside it, which keeps its own keys. */
     readonly root: Record<string, unknown>
     /** The play button: a `toggle`'s, pressed while it plays. */
     readonly play: Record<string, unknown>
@@ -46,6 +46,23 @@ export type Playback = {
     readonly playing: Reactive<boolean>
     /** How fast it plays; written, it changes speed. */
     readonly rate: Reactive<number>
+}
+
+// 51.135 — the controls whose own keys a press on them already means something to: Space presses a
+// button, an arrow moves a slider or a radio's pick.
+const CONTROLS =
+    'button, input, select, textarea, a[href], summary, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="slider"], [role="spinbutton"], [role="radio"], [role="checkbox"], [role="switch"], [role="tab"], [role="option"], [role="menuitem"], [role="combobox"], [role="textbox"], [role="treeitem"]'
+
+/** Whether the press landed on a control inside the root, the root itself being none. */
+function insideControl(event: KeyboardEvent): boolean {
+    const target = event.target as Element | null
+    const control = target?.closest?.(CONTROLS)
+    return (
+        control !== null &&
+        control !== undefined &&
+        control !== event.currentTarget &&
+        (event.currentTarget as Node | null)?.contains?.(control) === true
+    )
 }
 
 /** A clock moving `at` while `playing`, with a play button, a scrubber, speeds and keys. */
@@ -120,7 +137,12 @@ export function playback(options: PlaybackOptions): Playback {
     })
 
     return {
-        root: { 'data-playback': 'root', onkeydown: keys },
+        root: {
+            'data-playback': 'root',
+            onkeydown: (event: KeyboardEvent) => {
+                if (!insideControl(event)) keys(event)
+            },
+        },
         play,
         // 51.133
         scrubber: {

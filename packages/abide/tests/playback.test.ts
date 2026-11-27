@@ -109,6 +109,41 @@ test('Space plays and pauses, and the arrows move it by its step, kept to its le
     expect(trip.at()).toBe(5000)
 })
 
+// A press bubbling from a control inside the root is the control's: Space on a button presses that
+// button, an arrow on a slider moves the slider. Dispatched for real, so `target` and `currentTarget`
+// are a browser's. THE REVERT: bind `root.onkeydown` to the hotkeys alone, and the slider's arrow moves
+// `at` to 5000 and the button's Space plays — `[5000, true]` where `[0, false]` is due.
+test('a press on a control inside the root is the control’s, and a press on the root its own — 51.135', () => {
+    const trip = playback({ duration: 8000 })
+    const root = document.createElement('div')
+    root.tabIndex = 0
+    root.addEventListener('keydown', trip.root.onkeydown as EventListener)
+    const thumb = document.createElement('span')
+    thumb.setAttribute('role', 'slider')
+    const button = document.createElement('button')
+    const label = document.createElement('span')
+    button.append(label)
+    root.append(thumb, button)
+    document.body.append(root)
+    const send = (on: Element, name: string) => {
+        on.dispatchEvent(
+            new KeyboardEvent('keydown', {
+                key: name,
+                bubbles: true,
+                cancelable: true,
+            }),
+        )
+        flushSync()
+    }
+    send(thumb, 'ArrowRight')
+    send(label, ' ')
+    expect([trip.at(), trip.playing()]).toEqual([0, false])
+    send(root, 'ArrowRight')
+    send(root, ' ')
+    expect([trip.at(), trip.playing()]).toEqual([5000, true])
+    root.remove()
+})
+
 // THE REVERT: rewind `at` before writing `playing`, and a refused play still moves it to 0 — `at` reads 0.
 test('a play its playing refuses leaves where it is — 49.19', () => {
     const playing = reactive<boolean>(false, {
