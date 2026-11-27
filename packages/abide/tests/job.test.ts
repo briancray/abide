@@ -48,6 +48,7 @@ function kept(
                 lastResult: undefined,
                 nextRun: null,
                 lastError: null,
+                progress: undefined,
             }
         },
         set: () => undefined,
@@ -547,6 +548,7 @@ test('a job opens on its stored status and waits out its stored last run — 54.
             lastResult: 'sent 3',
             nextRun: null,
             lastError: null,
+            progress: 'halfway',
         },
     }
     const resumed = job({
@@ -568,8 +570,10 @@ test('a job opens on its stored status and waits out its stored last run — 54.
     )
     const now = await resumed.status()
     expect(
-        `result: ${now.lastResult}, runs: ${runs}, running: ${now.running}, waits: ${Date.parse(now.nextRun ?? '') - Date.now() > 3_400_000}`,
-    ).toBe('result: sent 3, runs: 0, running: false, waits: true')
+        `result: ${now.lastResult}, runs: ${runs}, running: ${now.running}, progress: ${now.progress}, waits: ${Date.parse(now.nextRun ?? '') - Date.now() > 3_400_000}`,
+    ).toBe(
+        'result: sent 3, runs: 0, running: false, progress: undefined, waits: true',
+    )
     await resumed.stop()
 })
 
@@ -622,4 +626,62 @@ test('a job given delay makes its first look that long after the app opens — 5
         expect(`runs after it: ${runs}`).toBe('runs after it: 1')
     })
     await delayed.stop()
+})
+
+// THE REVERT: hand `run` its input alone (drop `progress` from `work(input, progress)`), and the
+// run throws "progress is not a function"; keep it but drop `reporting = false`, and the late report
+// leaves `progress: 3 of 3` on the ended status.
+test('a run reports how far it has got into its status, and nothing once it ends — 54.42', async () => {
+    const step = Promise.withResolvers<void>()
+    let late: (value: unknown) => void = () => undefined
+    const digest = job({
+        name: 'reporting',
+        every: 3_600_000,
+        run: async (_input, progress) => {
+            progress('1 of 3')
+            await step.promise
+            progress('2 of 3')
+            late = progress
+        },
+    })
+    const running = digest.run()
+    const midway = (await digest.status()).progress
+    step.resolve()
+    const ended = await running
+    late('3 of 3')
+    expect([midway, ended.progress, (await digest.status()).progress]).toEqual([
+        '1 of 3',
+        undefined,
+        undefined,
+    ])
+})
+
+// THE REVERT: drop `throttle` from the status memo's options, and `woke` reads 32 — the start, every
+// report and the end — rather than a handful.
+test('a job given throttle writes its status at that pace — 54.43', async () => {
+    const digest = job({
+        name: 'paced',
+        every: 3_600_000,
+        throttle: 200,
+        run: async (_input, progress) => {
+            for (let done = 1; done <= 30; done++) {
+                progress(done)
+                await Bun.sleep(2)
+            }
+        },
+    })
+    let woke = 0
+    const reader = digest.status.readable().getReader()
+    const reading = (async () => {
+        for (;;) {
+            const { value, done } = await reader.read()
+            if (done) return
+            woke += 1
+            if (value.running === false && value.lastRun !== null) return
+        }
+    })()
+    await digest.run()
+    await reading
+    await reader.cancel()
+    expect(woke).toBeLessThan(10)
 })

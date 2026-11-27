@@ -7236,6 +7236,12 @@ drained, before `onStop` runs and within 42.17's deadline.
 54.41 A `job` given `delay` MUST make its first look `delay` milliseconds after the app opens, rather
 than as it opens.
 
+54.42 A `job`'s run MUST be handed, beside its input, a function writing what it is given to the
+job's status as `progress`, which MUST be `undefined` while no run is going and from a run's start
+until that run first reports, and a report made once its run has ended MUST write nothing.
+
+54.43 A `job` given `throttle` MUST write its status at that pace, as 5.24 paces a `memo`'s owner.
+
 # 55. Worker files
 
 55.1 An import of a worker file MUST answer each export with a function running that export in the

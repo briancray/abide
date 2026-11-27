@@ -33,6 +33,8 @@ export type JobStatus = {
     lastResult: unknown
     /** The last run's failure, or `null` where it ended without throwing. */
     lastError: string | null
+    /** 54.42 — what the run going last reported, or `undefined` while none is going or it has reported nothing. */
+    progress: unknown
 }
 
 /** One run's ending: the status it wrote, and what it threw or refused, where it failed. */
@@ -49,10 +51,15 @@ export type Job<Input = undefined> = {
 export type JobOptions<Input = undefined> = {
     /** 54.16 — what a failed run is logged under, beside `job`. */
     name?: string | undefined
-    /** 54.19, 54.32 — the work, handed what `Job.run` was given and `undefined` where a look started it; `abortSignal()` in it says stop. */
-    run: (input: Input | undefined) => unknown
+    /** 54.19, 54.32, 54.42 — the work, handed what `Job.run` was given (`undefined` where a look started it) and what reports how far it has got; `abortSignal()` in it says stop. */
+    run: (
+        input: Input | undefined,
+        progress: (value: unknown) => void,
+    ) => unknown
     /** 54.14 — where the status is kept, so a restart resumes the schedule and keeps the last run's result. */
     store?: Store<JobStatus> | undefined
+    /** 54.43 — the pace its status is written at, as a `memo`'s `throttle` paces its owner's writes (5.24): what a run reporting often wants. */
+    throttle?: number | undefined
     /** 54.41 — the milliseconds after the app opens that the first look waits, rather than looking at once. */
     delay?: number | undefined
     /** 54.31 — what holds the schedule: while it reads true, a look starts no run. */
@@ -143,11 +150,13 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         lastResult: undefined,
         nextRun: null,
         lastError: null,
+        progress: undefined,
     }
     // 54.15 — A MEMO THE JOB WRITES, one value for every caller: the server owns no `Reactive` (16.109).
     const status = memo((): JobStatus => current, {
         global: true,
         store: options.store as Store<unknown> | undefined,
+        throttle: options.throttle,
     })
     const write = (changed: Partial<JobStatus>): JobStatus => {
         current = { ...current, ...changed }
@@ -182,13 +191,18 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
         // 54.19 — the app's signal, not the look's: a run outlives the look that started it (7.22).
         const signal = AbortSignal.any([appStopSignal(), stopping.signal])
         const startedAt = Date.now()
-        write({ running: true })
+        write({ running: true, progress: undefined })
+        // 54.42 — a report after its run has ended writes nothing.
+        let reporting = true
+        const progress = (value: unknown): void => {
+            if (reporting) write({ progress: value })
+        }
         let lastError = current.lastError
         let lastResult = current.lastResult
         let failure: unknown
         try {
             // 54.32 — its own owner, whichever request asked for it or look started it.
-            const answered = await ownedBy(signal, () => work(input))
+            const answered = await ownedBy(signal, () => work(input, progress))
             // 54.16 — a run answering a refusal failed, as one throwing did.
             if (isFailed(answered)) throw answered
             lastError = null
@@ -209,8 +223,10 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
             lastTook = lastRunAt - startedAt
             measuredFrom = from === 'start' ? startedAt : lastRunAt
         } else lastResult = current.lastResult
+        reporting = false
         const status = write({
             running: false,
+            progress: undefined,
             lastRun:
                 lastRunAt === undefined
                     ? null
@@ -260,7 +276,7 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
             if (options.store !== undefined) {
                 const kept = await status()
                 if (kept !== current) {
-                    current = { ...kept, running: false }
+                    current = { ...kept, running: false, progress: undefined }
                     write({})
                 }
                 lastRunAt =
