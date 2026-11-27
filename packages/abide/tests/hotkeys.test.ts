@@ -123,6 +123,30 @@ test('a letter alt composed into another character is matched by where it sits �
     expect(pressed(['k'], { key: 'j', code: 'KeyK' }).ran).toEqual([])
 })
 
+// THE REVERT: drop the `code` branch in `hotkeys`' `matches`; `KeyQ` is then matched as the `q` it
+// labels, against the `a` a French layout types there, and runs nothing — `[]` where `['KeyQ']` is due.
+test('a key written as its code is matched by where it sits, whatever the layout types — 53.6', () => {
+    // A French keyboard types `a` where a US one types `q`, and `&` on the 1 of the number row.
+    expect(pressed(['KeyQ'], { key: 'a', code: 'KeyQ' }).ran).toEqual(['KeyQ'])
+    expect(pressed(['Digit1'], { key: '&', code: 'Digit1' }).ran).toEqual([
+        'Digit1',
+    ])
+    expect(
+        pressed(['mod+KeyK'], { key: 'k', code: 'KeyK', ctrlKey: true }).ran,
+    ).toEqual(['mod+KeyK'])
+    expect(pressed(['Slash'], { key: '/', code: 'Slash' }).ran).toEqual([
+        'Slash',
+    ])
+    // Not the key typed elsewhere, and shift is a modifier, as a letter's is.
+    expect(pressed(['KeyQ'], { key: 'q', code: 'KeyA' }).ran).toEqual([])
+    expect(
+        pressed(['Slash'], { key: '?', code: 'Slash', shiftKey: true }).ran,
+    ).toEqual([])
+    // Written for a person, it is the key the code types on a US layout.
+    expect(keyLabel('KeyQ', { apple: false })).toBe('Q')
+    expect(keyLabel('mod+Digit1', { apple: true })).toBe('⌘1')
+})
+
 test('a binding naming no modifier abide knows is refused as it is written — 53.9', () => {
     expect(() => hotkeys({ 'Hyper+k': () => {} })).toThrow(/"Hyper"/)
 })

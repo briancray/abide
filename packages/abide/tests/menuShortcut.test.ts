@@ -32,3 +32,17 @@ test("a MenuItem's arrow keys are spelled as hotkeys and keyLabel spell them —
         modifiers: COMMAND,
     })
 })
+
+// 53.6 — A KEY WRITTEN AS ITS CODE IS THE KEY THAT CODE TYPES on a US layout, which is what AppKit
+// takes. THE REVERT: set `key` to the code itself in `hotkeyBinding` — the menu bar is handed the
+// literal `keyk` and `slash`.
+test("a MenuItem's key written as a code is the key it types — 53.6", () => {
+    expect(menuShortcut('cmd+KeyK')).toEqual({
+        keyEquivalent: 'k',
+        modifiers: COMMAND,
+    })
+    expect(menuShortcut('cmd+Slash')).toEqual({
+        keyEquivalent: '/',
+        modifiers: COMMAND,
+    })
+})

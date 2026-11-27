@@ -35,7 +35,8 @@ type Bound = HotkeyBinding & {
  *
  * A binding is its modifiers and then its key, joined by `+`: `'n'`, `'?'`, `'shift+n'`,
  * `'mod+k'`, `'Escape'`, `'alt+ArrowUp'`. The key is `KeyboardEvent.key`, matched case-blind, and
- * `space` names `' '`. The modifiers are `ctrl`, `meta`, `alt`, `shift`, and `mod`, which is ⌘ on an
+ * `space` names `' '`; a key written as its `KeyboardEvent.code` — `'KeyQ'`, `'Digit1'`,
+ * `'mod+Slash'` — is matched by where it sits, whatever the layout types there. The modifiers are `ctrl`, `meta`, `alt`, `shift`, and `mod`, which is ⌘ on an
  * Apple platform and Ctrl on any other. `keyLabel` writes a binding for a person to read.
  *
  * @param bindings each binding, to what it runs; the first that matches a press is the one that runs
@@ -87,6 +88,9 @@ function matches(
     if (event.altKey !== binding.alt) return false
     if (binding.shift !== undefined && event.shiftKey !== binding.shift)
         return false
+    // 53.6 — a key named by where it sits is matched there, whatever the layout types.
+    if (binding.code !== undefined)
+        return event.code.toLowerCase() === binding.code
     const key = event.key.toLowerCase()
     if (key === binding.key) return true
     // 53.6 — a key alt composed into another character (`alt+k` types `˚` on a Mac), or one typed on

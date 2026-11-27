@@ -17,9 +17,30 @@ const MODIFIERS: Record<string, 'ctrl' | 'meta' | 'alt' | 'shift' | 'mod'> = {
 // What a binding may name a key by besides `KeyboardEvent.key` itself.
 const KEY_NAMES: Record<string, string> = { space: ' ', esc: 'escape' }
 
+// 53.6 — the `KeyboardEvent.code` of a printing key other than a letter or a digit, to what it
+// types on a US layout. No `KeyboardEvent.key` is spelled as any of these, nor as `Key` and a
+// letter, `Digit` or `Numpad` and a digit.
+const CODE_KEYS: Record<string, string> = {
+    minus: '-',
+    equal: '=',
+    bracketleft: '[',
+    bracketright: ']',
+    backslash: '\\',
+    intlbackslash: '\\',
+    semicolon: ';',
+    quote: "'",
+    backquote: '`',
+    comma: ',',
+    period: '.',
+    slash: '/',
+}
+
 /** One binding, parsed once: the key it names and the modifiers it holds. */
 export type HotkeyBinding = {
+    /** What the key types, on a US layout where the binding names it by `code`. */
     key: string
+    /** 53.6 — the `KeyboardEvent.code` the binding names, lowercased, or `undefined` where it names a `key`. */
+    code: string | undefined
     ctrl: boolean
     meta: boolean
     alt: boolean
@@ -39,6 +60,9 @@ export function hotkeyBinding(written: string): HotkeyBinding {
     }
     key = key.toLowerCase()
     key = KEY_NAMES[key] ?? key
+    const code = codeKey(key)
+    const named = key
+    if (code !== undefined) key = code
     const held = new Set<string>()
     for (const token of tokens) {
         const modifier = MODIFIERS[token.toLowerCase()]
@@ -50,12 +74,25 @@ export function hotkeyBinding(written: string): HotkeyBinding {
     }
     return {
         key,
+        code: code === undefined ? undefined : named,
         ctrl: held.has('ctrl'),
         meta: held.has('meta'),
         alt: held.has('alt'),
         mod: held.has('mod'),
-        shift: held.has('shift') ? true : shiftTyped(key) ? undefined : false,
+        shift: held.has('shift')
+            ? true
+            : code === undefined && shiftTyped(key)
+              ? undefined
+              : false,
     }
+}
+
+// 53.6 — what a key named by its `KeyboardEvent.code` types on a US layout, or `undefined` where
+// the name is no such code.
+function codeKey(name: string): string | undefined {
+    if (/^key[a-z]$/.test(name)) return name.charAt(3)
+    if (/^(digit|numpad)[0-9]$/.test(name)) return name.charAt(name.length - 1)
+    return CODE_KEYS[name]
 }
 
 // 53.5 — a symbol's key is what shift typed (`?` is shift and `/` on most layouts), so its binding

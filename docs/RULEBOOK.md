@@ -6726,11 +6726,16 @@ own platform where it serves no request, and off `navigator.userAgent` in a brow
 53.4 A `hotkeys` binding MUST NOT match a `keydown` holding Ctrl, ⌘ or Alt where the binding does not
 hold it, nor one lacking a modifier the binding holds.
 
-53.5 A `hotkeys` binding whose key is a symbol MUST match whether shift is held or not, save where it
-holds `shift`, and any other binding MUST match shift as a modifier.
+53.5 A `hotkeys` binding whose key is a symbol written as what it types MUST match whether shift is
+held or not, save where it holds `shift`, and any other binding MUST match shift as a modifier.
 
-53.6 A `hotkeys` binding MUST match its key against `KeyboardEvent.key` case-blind, and a letter or a
-digit by `KeyboardEvent.code` where the press typed no printable ASCII character.
+53.6 A `hotkeys` binding whose key is written as the `KeyboardEvent.code` of a printing key — `Key` and
+a letter, `Digit` or `Numpad` and a digit, `Minus`, `Equal`, `BracketLeft`, `BracketRight`,
+`Backslash`, `IntlBackslash`, `Semicolon`, `Quote`, `Backquote`, `Comma`, `Period` or `Slash` — MUST
+match `KeyboardEvent.code` case-blind, whatever the press typed, and `keyLabel` and a `MenuItem`'s
+`key` MUST read it as the key that code types on a US layout. Any other binding MUST match its key
+against `KeyboardEvent.key` case-blind, and a letter or a digit by `KeyboardEvent.code` where the
+press typed no printable ASCII character.
 
 53.7 `hotkeys` MUST NOT run a binding for a `keydown` whose target `isEditableTarget` holds for, save
 a binding whose `editable` is `true`.
