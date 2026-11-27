@@ -1,19 +1,12 @@
 // 48.9 — ABIDE'S OWN REPORT DIALOG: what a `ReportDraft` opens in where the app draws none of its own.
-// Plain DOM, loaded only when a draft is opened, so a page that never reports never fetches it.
+// Plain DOM, loaded only when a draft is opened, so a page that never reports never fetches it. It
+// carries no stylesheet and no class, as a headless part does not (49): each piece is named by
+// `data-report`, which the app's own stylesheet styles.
 
 import { isFailed } from '#shared/Failed.ts'
 import { messageOf } from '#shared/messageOf.ts'
 import { watch } from '#shared/reactive/index.ts'
 import type { ReportDraft } from '#shared/report.ts'
-
-// Laid on by class rather than `style=`, so a page's own stylesheet can restyle the dialog.
-const STYLE = `.abide-report{max-width:40rem;width:calc(100% - 2rem);font:inherit}
-.abide-report form{display:grid;gap:.75rem}
-.abide-report label{display:grid;gap:.25rem}
-.abide-report pre{max-height:16rem;overflow:auto;white-space:pre-wrap;font-size:.8em;margin:0}
-.abide-report menu{display:flex;justify-content:end;gap:.5rem;margin:0;padding:0}`
-
-let styled = false
 
 /**
  * Shows `draft` in a modal dialog — the summary and the description to write, and every word that is
@@ -21,14 +14,8 @@ let styled = false
  */
 export function reportDialog(draft: ReportDraft): Promise<boolean> {
     const { promise, resolve } = Promise.withResolvers<boolean>()
-    if (!styled) {
-        const style = document.createElement('style')
-        style.textContent = STYLE
-        document.head.append(style)
-        styled = true
-    }
     const dialog = document.createElement('dialog')
-    dialog.className = 'abide-report'
+    dialog.setAttribute('data-report', 'dialog')
     const form = document.createElement('form')
     form.method = 'dialog'
     const summary = labelled(
@@ -51,9 +38,12 @@ export function reportDialog(draft: ReportDraft): Promise<boolean> {
     const heading = document.createElement('p')
     heading.textContent = 'This is everything that will be sent:'
     const preview = document.createElement('pre')
+    preview.setAttribute('data-report', 'preview')
     const status = document.createElement('p')
+    status.setAttribute('data-report', 'status')
     status.setAttribute('role', 'status')
     const actions = document.createElement('menu')
+    actions.setAttribute('data-report', 'actions')
     const cancel = document.createElement('button')
     cancel.type = 'button'
     cancel.textContent = 'Cancel'

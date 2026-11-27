@@ -74,7 +74,7 @@ test('a draft holds the page’s lines and the server’s for its trace, and the
     const opened = reportDialog(draft)
     await settle()
     const dialog = document.querySelector(
-        'dialog.abide-report',
+        'dialog[data-report="dialog"]',
     ) as HTMLDialogElement
     expect(dialog.open).toBe(true)
     const summary = dialog.querySelector('input') as HTMLInputElement
@@ -102,7 +102,7 @@ test('a draft holds the page’s lines and the server’s for its trace, and the
     expect(
         (body.lines as { message: string }[]).map((line) => line.message),
     ).not.toContain('billing refused the key')
-    expect(document.querySelector('dialog.abide-report')).toBeNull()
+    expect(document.querySelector('dialog[data-report="dialog"]')).toBeNull()
     expect(await opened).toBe(true)
 })
 
@@ -114,7 +114,7 @@ test('a refused send leaves the dialog open on its draft, saying why, and Cancel
     const opened = reportDialog(draft)
     await settle()
     const dialog = document.querySelector(
-        'dialog.abide-report',
+        'dialog[data-report="dialog"]',
     ) as HTMLDialogElement
     ;(dialog.querySelector('form') as HTMLFormElement).requestSubmit()
     await settle()

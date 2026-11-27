@@ -549,6 +549,32 @@
         --drag-tint: color-mix(in srgb, var(--color-signal) 8%, transparent);
     }
 
+    /* abide's own report dialog (48.9), which carries no style of its own: its pieces are `data-report`. */
+    [data-report=dialog] {
+        max-width: 40rem;
+        width: calc(100% - 2rem);
+    }
+
+    [data-report=dialog] form,
+    [data-report=dialog] label {
+        display: grid;
+        gap: 0.5rem;
+    }
+
+    [data-report=preview] {
+        max-height: 16rem;
+        overflow: auto;
+        white-space: pre-wrap;
+        font-size: 0.8em;
+    }
+
+    [data-report=actions] {
+        display: flex;
+        justify-content: end;
+        gap: 0.5rem;
+        padding: 0;
+    }
+
     blockquote {
         padding: 1rem;
         border-left: 2px solid var(--color-rule);

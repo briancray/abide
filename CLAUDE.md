@@ -70,7 +70,9 @@ not a clause
 
 * a bun workspace: `packages/abide` is the framework, `packages/harness` is `@abide/harness`, the published measurement harness everything is tested and measured with, `packages/dogfood` (`abide-docs`) is the documentation app abide is dogfooded on — a page per export, grouped, with the visitor's Claude Code at the top answering from it, and a native app of the same pages. every page's Tests are set in ONE example app, the CRM at `packages/dogfood/examples/crm`, a workspace package of its own, and a page's examples are the smallest `.abide` files that prove their point, under the page's `lib`, shown and mounted (RULEBOOK 40.31); `bun run examples:results` for what its tests and benches last reported — `packages/bridge` is `abide-bridge`, the CLI that connects Claude Code to an abide site — `bun packages/bridge/bin/abideBridge.ts install` makes every pairing link run this checkout's bridge and its handler as edited, rather than the npm release the link names (RULEBOOK 44.89). `editors/` holds the tree-sitter grammar and the zed extension, and is outside the workspace.
 * abide ships NO markup: every widget is a HEADLESS COMPONENT in the `@abide/abide` barrel, spread on
-markup the app writes. RULEBOOK 49 is their contract: no stylesheet, no `class`, state as `data-`
+markup the app writes. The one element abide draws itself is the report dialog `ReportDraft.open`
+shows where an app draws none (RULEBOOK 48.9), and it carries no stylesheet and no `class` either —
+its pieces are named by `data-report`. RULEBOOK 49 is their contract: no stylesheet, no `class`, state as `data-`
 attributes, inner pieces under a `data-` attribute named for the headless component
 (`data-sortable-table="row"`). a headless component is mounted and tested in the CRM, which writes the
 markup, since abide's own test preload compiles no `.abide`. when the docs app hand-rolls what one of

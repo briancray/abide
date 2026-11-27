@@ -13,7 +13,7 @@ test('the assistant fills the draft, and the person reviews it before sending', 
     await row.getByRole('button', { name: 'Ask the assistant' }).click()
     await expect(summary).toHaveText('Statements do not send')
     await row.getByRole('button', { name: 'Review and send' }).click()
-    const dialog = page.locator('dialog.abide-report')
+    const dialog = page.locator('dialog[data-report="dialog"]')
     await expect(dialog.getByLabel('What went wrong')).toHaveValue(
         'Statements do not send',
     )
