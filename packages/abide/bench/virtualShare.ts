@@ -9,11 +9,8 @@
 // `bun run bench:virtual` — N = 1000, 5000, 20000, three runs each; `bun run bench:virtual 50000`
 // for other sizes.
 
-import { chromium } from '@playwright/test'
-
-import { servedFixture } from '../e2e/servedFixture.ts'
 import { BARE_LAYOUT } from './BARE_LAYOUT.ts'
-import { scrollFrames, settle, taskDurationOf } from './mainThread.ts'
+import { eachRun, inChromium, scrollFrames } from './mainThread.ts'
 import { median, spread } from './median.ts'
 
 const SIZES =
@@ -140,64 +137,53 @@ const chosen = (process.env.ARMS ?? 'full,vanilla,virtual').split(',')
 
 type Row = { mountMs: number; scrollMs: number; nodes: number }
 
-const browser = await chromium.launch()
-const servers: { kill: () => void }[] = []
-try {
+await inChromium(async (browser, serve) => {
     for (const count of SIZES) {
         console.log(`\n  N = ${count}`)
         const results = new Map<string, Row[]>()
         for (const arm of chosen) {
-            const { base, server } = await servedFixture(
-                `bench-virtual-${arm}-${count}`,
-                {
-                    'layout.abide': BARE_LAYOUT,
-                    'index.abide': (ARMS[arm] as (count: number) => string)(
-                        count,
-                    ),
+            const base = await serve(`bench-virtual-${arm}-${count}`, {
+                'layout.abide': BARE_LAYOUT,
+                'index.abide': (ARMS[arm] as (count: number) => string)(count),
+            })
+            const rows: Row[] = await eachRun(
+                browser,
+                base,
+                { runs: RUNS, viewport: { width: 800, height: 700 } },
+                async (tab, taskDuration) => {
+                    const mountBefore = await taskDuration()
+                    // A click, then two frames for its render, style, layout and paint.
+                    await tab.evaluate(
+                        () =>
+                            new Promise<void>((resolve) => {
+                                ;(
+                                    document.getElementById(
+                                        'open',
+                                    ) as HTMLElement
+                                ).click()
+                                requestAnimationFrame(() =>
+                                    requestAnimationFrame(() => resolve()),
+                                )
+                            }),
+                    )
+                    const mountAfter = await taskDuration()
+                    const nodes = await tab.evaluate(
+                        () =>
+                            document
+                                .getElementById('viewport')
+                                ?.getElementsByTagName('*').length ?? 0,
+                    )
+                    const scrollBefore = await taskDuration()
+                    await scrollFrames(tab, FRAMES, 8, 'viewport')
+                    const scrollAfter = await taskDuration()
+                    return {
+                        mountMs: (mountAfter - mountBefore) * 1000,
+                        scrollMs:
+                            ((scrollAfter - scrollBefore) * 1000) / FRAMES,
+                        nodes,
+                    }
                 },
             )
-            servers.push(server)
-            const rows: Row[] = []
-            for (let run = 0; run < RUNS; run += 1) {
-                const context = await browser.newContext({
-                    viewport: { width: 800, height: 700 },
-                })
-                const tab = await context.newPage()
-                await tab.goto(`${base}/`, { waitUntil: 'load' })
-                await settle(tab)
-                const session = await context.newCDPSession(tab)
-                const taskDuration = await taskDurationOf(session)
-                const mountBefore = await taskDuration()
-                // A click, then two frames for its render, style, layout and paint.
-                await tab.evaluate(
-                    () =>
-                        new Promise<void>((resolve) => {
-                            ;(
-                                document.getElementById('open') as HTMLElement
-                            ).click()
-                            requestAnimationFrame(() =>
-                                requestAnimationFrame(() => resolve()),
-                            )
-                        }),
-                )
-                const mountAfter = await taskDuration()
-                const nodes = await tab.evaluate(
-                    () =>
-                        document
-                            .getElementById('viewport')
-                            ?.getElementsByTagName('*').length ?? 0,
-                )
-                const scrollBefore = await taskDuration()
-                await scrollFrames(tab, FRAMES, 8, 'viewport')
-                const scrollAfter = await taskDuration()
-                rows.push({
-                    mountMs: (mountAfter - mountBefore) * 1000,
-                    scrollMs: ((scrollAfter - scrollBefore) * 1000) / FRAMES,
-                    nodes,
-                })
-                await session.detach()
-                await context.close()
-            }
             results.set(arm, rows)
             const ms = (value: number): string => value.toFixed(2)
             const mount = rows.map((row) => row.mountMs)
@@ -218,7 +204,4 @@ try {
             )
         }
     }
-} finally {
-    await browser.close()
-    for (const server of servers) server.kill()
-}
+})

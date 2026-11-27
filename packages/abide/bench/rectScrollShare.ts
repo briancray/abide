@@ -12,11 +12,8 @@
 // other sizes. Measured before 32.88 left scrolled frames unarmed, the observers were 31% of the
 // frame at N = 10 and 65% at N = 500, and the whole frame crossed 16.7 ms near N = 4500.
 
-import { chromium } from '@playwright/test'
-
-import { servedFixture } from '../e2e/servedFixture.ts'
 import { BARE_LAYOUT } from './BARE_LAYOUT.ts'
-import { scrollFrames, settle, taskDurationOf } from './mainThread.ts'
+import { eachRun, inChromium, scrollFrames } from './mainThread.ts'
 import { median, percent, spread } from './median.ts'
 
 const SIZES =
@@ -73,61 +70,56 @@ const WRAP = (): void => {
 
 type Row = { frameMs: number; armMs: number; made: number; writes: number }
 
-const browser = await chromium.launch()
-const servers: { kill: () => void }[] = []
-try {
+await inChromium(async (browser, serve) => {
     for (const count of SIZES) {
-        const { base, server } = await servedFixture(`bench-rect-${count}`, {
+        const base = await serve(`bench-rect-${count}`, {
             'layout.abide': BARE_LAYOUT,
             'index.abide': page(count),
         })
-        servers.push(server)
-        const rows: Row[] = []
-        for (let run = 0; run < RUNS; run += 1) {
-            const context = await browser.newContext({
+        const rows: Row[] = await eachRun(
+            browser,
+            base,
+            {
+                runs: RUNS,
                 viewport: { width: 800, height: 600 },
-            })
-            await context.addInitScript(WRAP)
-            const tab = await context.newPage()
-            await tab.goto(`${base}/`, { waitUntil: 'load' })
-            // Settled: every element read and armed, its first delivery made.
-            await tab.waitForFunction(
-                (expected) =>
-                    ((globalThis as { __RECT_WRITES__?: number })
-                        .__RECT_WRITES__ ?? 0) >= expected,
-                count,
-            )
-            await settle(tab)
-            const session = await context.newCDPSession(tab)
-            const taskDuration = await taskDurationOf(session)
-            // What the page counted so far: arms made, their milliseconds, and rect writes.
-            const counters = () =>
-                tab.evaluate(() => {
-                    const state = globalThis as {
-                        __ARMS__?: { made: number; armMs: number }
-                        __RECT_WRITES__?: number
-                    }
-                    return {
-                        made: state.__ARMS__?.made ?? 0,
-                        armMs: state.__ARMS__?.armMs ?? 0,
-                        writes: state.__RECT_WRITES__ ?? 0,
-                    }
-                })
-            const before = await counters()
-            const taskBefore = await taskDuration()
-            // 60 FRAMES OF SCROLL, one step per frame, then two quiet frames for the settle.
-            await scrollFrames(tab, FRAMES, 4)
-            const taskAfter = await taskDuration()
-            const after = await counters()
-            rows.push({
-                frameMs: ((taskAfter - taskBefore) * 1000) / FRAMES,
-                armMs: (after.armMs - before.armMs) / FRAMES,
-                made: after.made - before.made,
-                writes: after.writes - before.writes,
-            })
-            await session.detach()
-            await context.close()
-        }
+                init: WRAP,
+                // Settled: every element read and armed, its first delivery made.
+                ready: (tab) =>
+                    tab.waitForFunction(
+                        (expected) =>
+                            ((globalThis as { __RECT_WRITES__?: number })
+                                .__RECT_WRITES__ ?? 0) >= expected,
+                        count,
+                    ),
+            },
+            async (tab, taskDuration) => {
+                // What the page counted so far: arms made, their milliseconds, and rect writes.
+                const counters = () =>
+                    tab.evaluate(() => {
+                        const state = globalThis as {
+                            __ARMS__?: { made: number; armMs: number }
+                            __RECT_WRITES__?: number
+                        }
+                        return {
+                            made: state.__ARMS__?.made ?? 0,
+                            armMs: state.__ARMS__?.armMs ?? 0,
+                            writes: state.__RECT_WRITES__ ?? 0,
+                        }
+                    })
+                const before = await counters()
+                const taskBefore = await taskDuration()
+                // 60 FRAMES OF SCROLL, one step per frame, then two quiet frames for the settle.
+                await scrollFrames(tab, FRAMES, 4)
+                const taskAfter = await taskDuration()
+                const after = await counters()
+                return {
+                    frameMs: ((taskAfter - taskBefore) * 1000) / FRAMES,
+                    armMs: (after.armMs - before.armMs) / FRAMES,
+                    made: after.made - before.made,
+                    writes: after.writes - before.writes,
+                }
+            },
+        )
         const frame = rows.map((row) => row.frameMs)
         const arm = rows.map((row) => row.armMs)
         const share = rows.map((row) => row.armMs / row.frameMs)
@@ -143,7 +135,4 @@ try {
             `    observers made       ${rows.map((row) => row.made).join('/')}   rect writes ${rows.map((row) => row.writes).join('/')}`,
         )
     }
-} finally {
-    await browser.close()
-    for (const server of servers) server.kill()
-}
+})

@@ -2,7 +2,15 @@
 // `TaskDuration` — every task on the main thread, so style, layout and paint count beside the script.
 // Not `harness/engine`'s `traceOp`: its tracing would load the very `TaskDuration` read here.
 
-import type { CDPSession, Page } from '@playwright/test'
+import {
+    type Browser,
+    type BrowserContext,
+    type CDPSession,
+    chromium,
+    type Page,
+} from '@playwright/test'
+
+import { servedFixture } from '../e2e/servedFixture.ts'
 
 /** Lets the page settle: past a 200 ms timer, then to the next frame. */
 export function settle(tab: Page): Promise<unknown> {
@@ -64,4 +72,62 @@ export function scrollFrames(
             }),
         { frames, pixels, element },
     )
+}
+
+/**
+ * Runs `body` with a chromium and a `serve` that serves a fixture's files and answers its origin —
+ * the browser closed and every server killed once `body` settles, however it does.
+ */
+export async function inChromium(
+    body: (
+        browser: Browser,
+        serve: (name: string, files: Record<string, string>) => Promise<string>,
+    ) => Promise<void>,
+): Promise<void> {
+    const browser = await chromium.launch()
+    const servers: { kill: () => void }[] = []
+    try {
+        await body(browser, async (name, files) => {
+            const { base, server } = await servedFixture(name, files)
+            servers.push(server)
+            return base
+        })
+    } finally {
+        await browser.close()
+        for (const server of servers) server.kill()
+    }
+}
+
+/**
+ * `runs` fresh tabs on `base`, each loaded, made `ready`, settled and read over CDP, and what `op`
+ * measured in each: a context per run, so no run inherits another's JavaScript or layout.
+ */
+export async function eachRun<Row>(
+    browser: Browser,
+    base: string,
+    options: {
+        runs: number
+        viewport: { width: number; height: number }
+        /** A script every document of the run is opened with, ahead of the page's own. */
+        init?: Parameters<BrowserContext['addInitScript']>[0] | undefined
+        /** What the page is waited on for before it settles. */
+        ready?: ((tab: Page) => Promise<unknown>) | undefined
+    },
+    op: (tab: Page, taskDuration: () => Promise<number>) => Promise<Row>,
+): Promise<Row[]> {
+    const rows: Row[] = []
+    for (let run = 0; run < options.runs; run += 1) {
+        const context = await browser.newContext({ viewport: options.viewport })
+        if (options.init !== undefined)
+            await context.addInitScript(options.init)
+        const tab = await context.newPage()
+        await tab.goto(`${base}/`, { waitUntil: 'load' })
+        await options.ready?.(tab)
+        await settle(tab)
+        const session = await context.newCDPSession(tab)
+        rows.push(await op(tab, await taskDurationOf(session)))
+        await session.detach()
+        await context.close()
+    }
+    return rows
 }

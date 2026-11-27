@@ -17,11 +17,10 @@
 //
 // `bun run bench:edges` — N = 100 and 1000, three runs each; `bun run bench:edges 5000` for others.
 
-import { chromium, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
-import { servedFixture } from '../e2e/servedFixture.ts'
 import { BARE_LAYOUT } from './BARE_LAYOUT.ts'
-import { settle, taskDurationOf } from './mainThread.ts'
+import { eachRun, inChromium, settle } from './mainThread.ts'
 import { median, spread } from './median.ts'
 
 const SIZES =
@@ -122,58 +121,51 @@ function run(tab: Page, op: Op): Promise<void> {
     )
 }
 
-const browser = await chromium.launch()
-const servers: { kill: () => void }[] = []
-try {
+await inChromium(async (browser, serve) => {
     for (const count of SIZES) {
         const results = new Map<string, number[]>()
         const observed = new Map<string, number>()
         for (const arm of ['abide', 'vanilla'] as const) {
-            const { base, server } = await servedFixture(
-                `bench-edges-${arm}-${count}`,
+            const base = await serve(`bench-edges-${arm}-${count}`, {
+                'layout.abide': BARE_LAYOUT,
+                'index.abide': page(count, arm),
+            })
+            await eachRun(
+                browser,
+                base,
                 {
-                    'layout.abide': BARE_LAYOUT,
-                    'index.abide': page(count, arm),
+                    runs: RUNS,
+                    viewport: { width: 800, height: 600 },
+                    init: WRAP,
+                    ready: (tab) =>
+                        tab.waitForSelector('#list[data-scrollable]'),
+                },
+                async (tab, taskDuration) => {
+                    observed.set(
+                        arm,
+                        await tab.evaluate(
+                            () =>
+                                (
+                                    globalThis as {
+                                        __RESIZES__?: { observed: number }
+                                    }
+                                ).__RESIZES__?.observed ?? 0,
+                        ),
+                    )
+                    for (const op of OPS) {
+                        const before = await taskDuration()
+                        await run(tab, op)
+                        const after = await taskDuration()
+                        // Per frame stepped, or per remount (an unmount and a mount).
+                        const per = op === 'remount' ? REMOUNTS : FRAMES
+                        const key = `${arm} ${op}`
+                        const values = results.get(key) ?? []
+                        values.push(((after - before) * 1000) / per)
+                        results.set(key, values)
+                        await settle(tab)
+                    }
                 },
             )
-            servers.push(server)
-            for (let attempt = 0; attempt < RUNS; attempt += 1) {
-                const context = await browser.newContext({
-                    viewport: { width: 800, height: 600 },
-                })
-                await context.addInitScript(WRAP)
-                const tab = await context.newPage()
-                await tab.goto(`${base}/`, { waitUntil: 'load' })
-                await tab.waitForSelector('#list[data-scrollable]')
-                await settle(tab)
-                observed.set(
-                    arm,
-                    await tab.evaluate(
-                        () =>
-                            (
-                                globalThis as {
-                                    __RESIZES__?: { observed: number }
-                                }
-                            ).__RESIZES__?.observed ?? 0,
-                    ),
-                )
-                const session = await context.newCDPSession(tab)
-                const taskDuration = await taskDurationOf(session)
-                for (const op of OPS) {
-                    const before = await taskDuration()
-                    await run(tab, op)
-                    const after = await taskDuration()
-                    // Per frame stepped, or per remount (an unmount and a mount).
-                    const per = op === 'remount' ? REMOUNTS : FRAMES
-                    const key = `${arm} ${op}`
-                    const values = results.get(key) ?? []
-                    values.push(((after - before) * 1000) / per)
-                    results.set(key, values)
-                    await settle(tab)
-                }
-                await session.detach()
-                await context.close()
-            }
         }
         const ms = (value: number): string => value.toFixed(3)
         console.log(`\n  N = ${count}`)
@@ -188,7 +180,4 @@ try {
             )
         }
     }
-} finally {
-    await browser.close()
-    for (const server of servers) server.kill()
-}
+})
