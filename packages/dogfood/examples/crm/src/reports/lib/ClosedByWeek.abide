@@ -1,11 +1,12 @@
 <script>
-import { announce, chart, format } from '@abide/abide'
+import { chart, format } from '@abide/abide'
+
+import Announcer from '#src/lib/Announcer.abide'
 
 const WEEKS = [0, 7, 14, 21, 28, 35].map((day) => Date.UTC(2026, 9, 5 + day))
 const CLOSED = [3, 5, 2, 6, 4, 7]
 
 // Where a move the keys make is read out (50.49).
-const regions = announce.host()
 
 // Drawn in HTML rather than SVG: each column a `span` placed by the percentages its part carries
 // (52.116), so it stands right before the chart is measured, and on the server.
@@ -51,10 +52,4 @@ const plot = chart({
         {/for}
     </span>
 {/if}
-<div class="sr-only">
-    <div {...regions.polite}>
-        {#for message of regions.said('polite') key message.count}
-            <span>{message.text}</span>
-        {/for}
-    </div>
-</div>
+<Announcer />

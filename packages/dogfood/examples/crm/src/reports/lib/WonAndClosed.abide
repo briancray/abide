@@ -1,6 +1,7 @@
 <script>
-import { announce, chart, format } from '@abide/abide'
+import { chart, format } from '@abide/abide'
 
+import Announcer from '#src/lib/Announcer.abide'
 import ChartPlot from '#src/lib/ChartPlot.abide'
 
 const MONTHS = [5, 6, 7, 8, 9, 10].map((month) => Date.UTC(2026, month, 1))
@@ -8,7 +9,6 @@ const WON = [18_000, 24_500, 21_000, 31_000, 27_000, 42_000]
 const CLOSED = [4, 6, 5, 8, 7, 9]
 
 // Where a move the keys make is read out (50.49).
-const regions = announce.host()
 
 // Dollars and deals share one axis as shares of their own peaks, and each reads in its own units.
 const ofPeak = (values: number[]) =>
@@ -40,10 +40,4 @@ const plot = chart({
     class="block h-60 w-full overflow-visible text-chrome text-muted
         [&_[data-series='0']]:text-signal"
  />
-<div class="sr-only">
-    <div {...regions.polite}>
-        {#for message of regions.said('polite') key message.count}
-            <span>{message.text}</span>
-        {/for}
-    </div>
-</div>
+<Announcer />
