@@ -5322,7 +5322,7 @@ cancelled or errored MUST answer a new one.
 `table` of it, as `refresh` over those values does, and MUST refresh no value for its `tags`.
 
 47.30 Rows written to a `table`'s `writable` MUST be upserted by its key — `key` where given, else
-the primary key 47.39 reads, else `id` where the table declares none — and the rows written in one
+the primary key 47.40 reads, else `id` where the table declares none — and the rows written in one
 turn MUST be committed in one transaction.
 
 47.31 `table` MUST keep no more than the last 10000 changes of a table its watch has passed, save
@@ -5340,7 +5340,7 @@ rows a `match` names and answer how many; each MUST write in one transaction, an
 carrying no value for a column of its key per 47.30, or a `delete` whose `match` names no column.
 
 47.34 A write through a `table`'s `set`, `patch` or `delete` MUST refresh what 47.29 names at once,
-save as 47.43 states, and 47.29's watch MUST NOT refresh it again for that write.
+save as 47.44 states, and 47.29's watch MUST NOT refresh it again for that write.
 
 47.35 A `table` called MUST answer every row of the table, or with `match` the rows whose every
 column `match` names the value given matches per 47.36, and MUST throw for a column the
@@ -5365,58 +5365,55 @@ to one power of two, and lists longer than 1024, MUST each share one statement p
 `table` call and by `sql`, its stopped watch said once per database, and the writes made through its
 `table` MUST then be all that refresh what 47.29 names.
 
-47.39 A `table` MUST read the table's columns, the type each declares and its primary key from the
+47.40 A `table` MUST read the table's columns, the type each declares and its primary key from the
 database, once per `Database` it reaches the table through.
 
-47.40 A value read by a `table` call, by a `table`'s `readable`, or by `sql` straight from a column,
+47.41 A value read by a `table` call, by a `table`'s `readable`, or by `sql` straight from a column,
 MUST be `true` or `false` where the column is declared `BOOLEAN` or `BOOL`, and its text parsed as
 JSON where the column is declared `JSON` and the value is text; NULL MUST be read as `null`.
 
-47.41 A value written by a `table`'s `set`, `patch` or `writable`, or matched by a `table` call or
+47.42 A value written by a `table`'s `set`, `patch` or `writable`, or matched by a `table` call or
 its `delete`, MUST be bound as its JSON text where its column is declared `JSON` and the value is
 not `null`.
 
-47.42 A `table` given `logged` MUST record in each change only its key's columns per 47.30 and the
+47.43 A `table` given `logged` MUST record in each change only its key's columns per 47.30 and the
 columns `logged` names, with those every other `table` of that name in the process names; once a
 `table` of that name is given no `logged`, every column MUST be recorded per 47.26.
 
-47.43 A write through a `table`'s `set`, `patch` or `delete` made inside an open transaction MUST
+47.44 A write through a `table`'s `set`, `patch` or `delete` made inside an open transaction MUST
 refresh nothing at once, and its commit MUST refresh what 47.29 names on the watch's next look.
 
-47.44 A `table`'s `readable` MUST error, naming this clause, where another process removed a change
+47.45 A `table`'s `readable` MUST error, naming this clause, where another process removed a change
 it had still to read, and MUST NOT count as still to read a change removed before it was reached.
 
-47.45 The migrations `database` runs per 47.6 MUST run with foreign keys unenforced, and MUST throw
+47.46 The migrations `database` runs per 47.6 MUST run with foreign keys unenforced, and MUST throw
 per 47.7 where a row references a row that is not there once the last of them has run.
 
-47.46 `database` MUST run `PRAGMA optimize`, its analysis limited, once 47.6's migrations have run,
+47.47 `database` MUST run `PRAGMA optimize`, its analysis limited, once 47.6's migrations have run,
 and as an opener's `close` closes its `Database`, save where it opens `readonly`.
 
-47.47 The type `database` answers MUST carry, for each migration the checker reads as a string
+47.48 The type `database` answers MUST carry, for each migration the checker reads as a string
 literal, the tables its `CREATE TABLE`, `ALTER TABLE` and `DROP TABLE` statements leave in order, its
 `--` comments read as none,
 and a `table` of that opener named by none of them MUST be a type error where its row is not
 given.
 
-47.48 A column 47.47 types MUST be typed by its declared type — `boolean` for `BOOLEAN` or `BOOL`,
+47.49 A column 47.48 types MUST be typed by its declared type — `boolean` for `BOOLEAN` or `BOOL`,
 `unknown` for `JSON`, and otherwise by the affinity SQLite gives the declared type — joined with
 `null` save where declared `NOT NULL` or `INTEGER PRIMARY KEY`; a row written MUST be allowed to
 leave out a column that may be NULL or has a default, save one of its primary key; a row inserted MUST
 be allowed to leave out its `INTEGER PRIMARY KEY` as well; and a row its caller gives `table` MUST be
 written leaving out any column whose type admits `null`.
 
-47.49 `Tables` of an opener's type MUST be the row each table 47.47 types reads, by table name.
+47.50 `Tables` of an opener's type MUST be the row each table 47.48 types reads, by table name.
 
-47.50 A `table`'s `peek` MUST answer what a call with the same `match` answers, and MUST NOT be
+47.51 A `table`'s `peek` MUST answer what a call with the same `match` answers, and MUST NOT be
 followed by the run it is made in per 47.29.
 
-47.51 A `table`'s `insert` MUST insert each row it is given in one transaction, MUST NOT require its
-key, and MUST answer the rows as stored, their key as SQLite assigned it, decoded per 47.40.
+47.52 A `table`'s `insert` MUST insert each row it is given in one transaction, MUST NOT require its
+key, and MUST answer the rows as stored, their key as SQLite assigned it, decoded per 47.41.
 
-47.52 A plain object interpolated into `sql` MUST be bound as its JSON text.
-
-47.53 `table` MUST NOT open the database until the table it answers is called, written, peeked, or
-its `readable` or `writable` reached.
+47.53 A plain object interpolated into `sql` MUST be bound as its JSON text.
 
 47.54 A `table`'s `as` MUST answer that same table, and its type MUST type each column its type
 argument names as that argument types it, in the row read, written and inserted, refusing a type the

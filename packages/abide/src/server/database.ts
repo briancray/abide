@@ -73,7 +73,7 @@ export function database<
     let scratchFor: string | undefined
     // 47.16, 47.17.
     const close = (closing?: { remove?: boolean | undefined }): void => {
-        // 47.46 — what this connection's queries taught the planner, kept for the next open.
+        // 47.47 — what this connection's queries taught the planner, kept for the next open.
         if (opened !== undefined && options?.readonly !== true)
             try {
                 opened.run('PRAGMA optimize')
@@ -185,7 +185,7 @@ type Opener = (() => Database) & {
     sql: Sql
 }
 
-/** 47.47 — an opener carries the tables its migrations leave, where the checker read any. */
+/** 47.48 — an opener carries the tables its migrations leave, where the checker read any. */
 type TypedBy<Found> = keyof Found extends never ? unknown : Typed<Found>
 
 function checked(file: unknown): string {
@@ -248,7 +248,7 @@ function open(
         // 47.7 — ONE TRANSACTION, so a throw leaves the file at the version it opened at.
         let running = applied
         migrationsBegin(db)
-        // 47.45 — FOREIGN KEYS ARE CHECKED ONCE, AT THE END. A migration rebuilding a table — made anew,
+        // 47.46 — FOREIGN KEYS ARE CHECKED ONCE, AT THE END. A migration rebuilding a table — made anew,
         // copied, the old one dropped and the new renamed — would otherwise cascade the drop into every
         // table referencing it. The pragma is a no-op inside a transaction, so it is set around it.
         db.run('PRAGMA foreign_keys = OFF')
@@ -266,7 +266,7 @@ function open(
                 const first = broken[0]
                 if (first !== undefined)
                     throw new Error(
-                        `${broken.length} row(s) reference rows that are not there, the first in ${first.table} referencing ${first.parent}. RULEBOOK 47.45.`,
+                        `${broken.length} row(s) reference rows that are not there, the first in ${first.table} referencing ${first.parent}. RULEBOOK 47.46.`,
                     )
                 db.run(`PRAGMA user_version = ${migrations.length}`)
             })()
@@ -286,7 +286,7 @@ function open(
 }
 
 /**
- * 47.46 — the query planner's statistics brought up to date after a migration changed the schema:
+ * 47.47 — the query planner's statistics brought up to date after a migration changed the schema:
  * analysed where missing or stale, bounded so a large table is sampled rather than read. A file
  * already current is not written as it opens (47.18), so its statistics wait for the `close`.
  */

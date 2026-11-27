@@ -724,10 +724,10 @@ test('following changed does not open the database — 47.24', async () => {
     expect(await Bun.file(`${directory}/unopened.sqlite`).exists()).toBe(false)
 })
 
-// 47.45 — A MIGRATION REBUILDS A TABLE OTHERS REFERENCE without the drop cascading into them, and a
+// 47.46 — A MIGRATION REBUILDS A TABLE OTHERS REFERENCE without the drop cascading into them, and a
 // reference left dangling once they have all run is refused. THE REVERT: drop the `foreign_keys = OFF`
 // around the migrations; dropping `makes` cascades, and the boot reads `models: 0` where 1 is due.
-test('a migration rebuilds a referenced table without cascading, and a dangling reference is refused — 47.45, 47.7', () => {
+test('a migration rebuilds a referenced table without cascading, and a dangling reference is refused — 47.46, 47.7', () => {
     onDisk()
     const MAKES = 'CREATE TABLE makes (id INTEGER PRIMARY KEY, name TEXT)'
     const MODELS =
@@ -760,7 +760,7 @@ test('a migration rebuilds a referenced table without cascading, and a dangling 
     } catch (thrown) {
         said = String((thrown as Error).cause)
     }
-    expect(said).toContain('RULEBOOK 47.45')
+    expect(said).toContain('RULEBOOK 47.46')
     const reopened = database('garage', {
         migrations: [MAKES, MODELS, SEED, REBUILD],
     })
@@ -768,10 +768,10 @@ test('a migration rebuilds a referenced table without cascading, and a dangling 
     reopened.close()
 })
 
-// 47.46 — WHAT A CONNECTION'S QUERIES TAUGHT THE PLANNER IS KEPT: a close after an indexed lookup
+// 47.47 — WHAT A CONNECTION'S QUERIES TAUGHT THE PLANNER IS KEPT: a close after an indexed lookup
 // leaves the table's statistics in the file. THE REVERT: drop the `PRAGMA optimize` from `close`; the
 // file holds no `sqlite_stat1` row for `cars`.
-test('a close keeps the statistics the connection gathered — 47.46', () => {
+test('a close keeps the statistics the connection gathered — 47.47', () => {
     onDisk()
     const garage = database('garage', {
         migrations: [CARS, 'CREATE INDEX cars_vin ON cars (vin)'],

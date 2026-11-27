@@ -1,4 +1,4 @@
-// 47.30, 47.37, 47.39-47.44 — A TABLE DESCRIBED BY ITS DATABASE: the key it writes by is the table's
+// 47.30, 47.37, 47.40-47.45 — A TABLE DESCRIBED BY ITS DATABASE: the key it writes by is the table's
 // primary key, a `BOOLEAN` or `JSON` column is read and written as one through a table and through
 // `sql`, a list of any length is one statement per shape, a change carries the columns asked for, a
 // write inside a transaction refreshes on its commit, and a reader is never handed a gap silently.
@@ -39,10 +39,10 @@ async function taken<Row>(
     return out
 }
 
-// 47.30, 47.39 — THE KEY IS THE TABLE'S OWN: a table keyed by `slug`, and one keyed by two columns,
+// 47.30, 47.40 — THE KEY IS THE TABLE'S OWN: a table keyed by `slug`, and one keyed by two columns,
 // upserted with no `key` said. THE REVERT: default the key to `id` in `keyColumns`; the first `set`
 // throws `carries no id` where the upsert is due.
-test("a write upserts by the table's own primary key, one column or several — 47.30, 47.33, 47.39", () => {
+test("a write upserts by the table's own primary key, one column or several — 47.30, 47.33, 47.40", () => {
     const db = opener(
         'CREATE TABLE stages (slug TEXT PRIMARY KEY, label TEXT NOT NULL)',
         'CREATE TABLE tags (dealId INTEGER NOT NULL, tag TEXT NOT NULL, note TEXT, PRIMARY KEY (dealId, tag))',
@@ -69,9 +69,9 @@ test("a write upserts by the table's own primary key, one column or several — 
     expect(said).toContain('carries no tag')
 })
 
-// 47.40, 47.41 — A COLUMN IS READ AND WRITTEN AS IT IS DECLARED, through a table, its changes and
+// 47.41, 47.42 — A COLUMN IS READ AND WRITTEN AS IT IS DECLARED, through a table, its changes and
 // `sql`. THE REVERT: return `value` from `decoded`; `won` reads `1` and `notes` reads its text.
-test('a BOOLEAN and a JSON column are read and written as what they declare — 47.40, 47.41', async () => {
+test('a BOOLEAN and a JSON column are read and written as what they declare — 47.41, 47.42', async () => {
     const db = opener(
         'CREATE TABLE deals (id INTEGER PRIMARY KEY, won BOOLEAN NOT NULL, notes JSON, amount INTEGER)',
     )
@@ -153,9 +153,9 @@ test('a list of any length is bound in one statement per shape — 47.37', () =>
     expect(deals({ id: [...range(1, 3), null] }).length).toBe(3)
 })
 
-// 47.42 — A CHANGE CARRIES WHAT IS LOGGED: the key and the columns named, the wide column left out.
+// 47.43 — A CHANGE CARRIES WHAT IS LOGGED: the key and the columns named, the wide column left out.
 // THE REVERT: log every column in `prepare` whatever `LOGGED` holds; `probe` rides every change.
-test('a table given logged records its key and those columns alone — 47.42', async () => {
+test('a table given logged records its key and those columns alone — 47.43', async () => {
     const db = opener(
         'CREATE TABLE files (id INTEGER PRIMARY KEY, mediaId INTEGER, probe JSON)',
     )
@@ -170,10 +170,10 @@ test('a table given logged records its key and those columns alone — 47.42', a
     ])
 })
 
-// 47.43 — A WRITE INSIDE A TRANSACTION REFRESHES ON ITS COMMIT, and one rolled back never does. THE
+// 47.44 — A WRITE INSIDE A TRANSACTION REFRESHES ON ITS COMMIT, and one rolled back never does. THE
 // REVERT: drop the `inTransaction` test in `wrote`; the total reads 150 inside the transaction that is
 // then rolled back, and `runs: 3` where 2 is due.
-test('a write inside a transaction refreshes once it commits, and not at all where it rolls back — 47.43', async () => {
+test('a write inside a transaction refreshes once it commits, and not at all where it rolls back — 47.44', async () => {
     const db = opener(
         'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER NOT NULL)',
         'INSERT INTO deals VALUES (1, 100)',
@@ -205,11 +205,11 @@ test('a write inside a transaction refreshes once it commits, and not at all whe
     )
 })
 
-// 47.31, 47.44 — A READER IS NEVER HANDED A GAP: the watch keeps what a reader here has still to read,
+// 47.31, 47.45 — A READER IS NEVER HANDED A GAP: the watch keeps what a reader here has still to read,
 // and a reader behind a removal another process made errors rather than skipping. THE REVERT: drop the
 // `abide_changes_removed` test in `changesOf`; the reader hands on the change past the gap as if it
 // were next.
-test('a reader behind changes another process removed errors rather than skip them — 47.44', async () => {
+test('a reader behind changes another process removed errors rather than skip them — 47.45', async () => {
     const db = opener(
         'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER)',
     )
@@ -232,11 +232,11 @@ test('a reader behind changes another process removed errors rather than skip th
     } catch (thrown) {
         said = (thrown as Error).message
     }
-    expect(said).toContain('RULEBOOK 47.44')
+    expect(said).toContain('RULEBOOK 47.45')
 })
 
 // 47.31 — THE LOG IS KEPT FOR A READER HERE: past the 10000 kept, a reader still behind reads every
-// change. THE REVERT: trim to `last - CHANGES_KEPT` alone in the watch; the reader meets 47.44's error.
+// change. THE REVERT: trim to `last - CHANGES_KEPT` alone in the watch; the reader meets 47.45's error.
 test('the watch keeps every change a reader in this process has still to read — 47.31', async () => {
     const db = opener('CREATE TABLE ticks (id INTEGER PRIMARY KEY)')
     const ticks = table(db, 'ticks')
@@ -259,9 +259,9 @@ test('the watch keeps every change a reader in this process has still to read �
     expect(`read: ${read}, last: ${last}`).toBe('read: 10100, last: 10100')
 })
 
-// 47.50 — A PEEK IS A READ NOTHING FOLLOWS: a value that peeked runs once, whatever the table does
+// 47.51 — A PEEK IS A READ NOTHING FOLLOWS: a value that peeked runs once, whatever the table does
 // after. THE REVERT: have `peek` call `readBy` as the call does; `runs: 2` where 1 is due.
-test('a peek reads the rows without the run that made it following them — 47.50', async () => {
+test('a peek reads the rows without the run that made it following them — 47.51', async () => {
     const db = opener(
         'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER NOT NULL)',
     )
@@ -278,10 +278,10 @@ test('a peek reads the rows without the run that made it following them — 47.5
     expect(`count: ${count()}, runs: ${runs}`).toBe('count: 1, runs: 1')
 })
 
-// 47.51, 47.33 — AN INSERT IS ANSWERED AS STORED, its key assigned; a column left `undefined` is not
+// 47.52, 47.33 — AN INSERT IS ANSWERED AS STORED, its key assigned; a column left `undefined` is not
 // named, so a patch leaves it and an insert takes its default. THE REVERT: name every key of the row in
 // `statementFor`; the patch writes `notes` NULL where `"kept"` is due.
-test('an insert answers its rows as stored, and an undefined column is not written — 47.51, 47.33', () => {
+test('an insert answers its rows as stored, and an undefined column is not written — 47.52, 47.33', () => {
     const db = opener(
         "CREATE TABLE deals (id INTEGER PRIMARY KEY, name TEXT NOT NULL, stage TEXT NOT NULL DEFAULT 'lead', notes JSON)",
     )
@@ -300,17 +300,17 @@ test('an insert answers its rows as stored, and an undefined column is not writt
     })
 })
 
-// 47.52 — A PLAIN OBJECT BOUND IN SQL IS ITS JSON. THE REVERT: drop the `isPlainData` arm in
+// 47.53 — A PLAIN OBJECT BOUND IN SQL IS ITS JSON. THE REVERT: drop the `isPlainData` arm in
 // `flattened`; bun refuses the object as a binding.
-test('a plain object interpolated into sql is bound as its JSON — 47.52', () => {
+test('a plain object interpolated into sql is bound as its JSON — 47.53', () => {
     const db = opener('CREATE TABLE deals (id INTEGER PRIMARY KEY, notes JSON)')
     db.sql`INSERT INTO deals (id, notes) VALUES (1, ${{ calls: 3 }})`
     expect(db.sql`SELECT notes FROM deals`).toEqual([{ notes: { calls: 3 } }])
 })
 
-// 47.53 — A TABLE DECLARED OPENS NOTHING until it is used. THE REVERT: call `watchOf` in `table`
+// 47.39 — A TABLE DECLARED OPENS NOTHING until it is used. THE REVERT: call `watchOf` in `table`
 // itself; the opener has opened by the time the module declaring the table is read.
-test('declaring a table opens nothing until the table is used — 47.53', () => {
+test('declaring a table opens nothing until the table is used — 47.39', () => {
     let opens = 0
     opened += 1
     const db = database(`described-${opened}`, {
@@ -409,10 +409,10 @@ test('a reader reads on across a reopen of its file, and errors over another fil
     })
 })
 
-// 47.44 — A READER STARTS PAST WHAT WAS REMOVED, though none of the log remains: it is not behind
+// 47.45 — A READER STARTS PAST WHAT WAS REMOVED, though none of the log remains: it is not behind
 // what it never had to read. THE REVERT: start at the log's last change alone in `changesOf`; every
-// read errors with 47.44's message.
-test('a reader starting after every change was removed reads on — 47.44', async () => {
+// read errors with 47.45's message.
+test('a reader starting after every change was removed reads on — 47.45', async () => {
     const db = opener(
         'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER)',
     )

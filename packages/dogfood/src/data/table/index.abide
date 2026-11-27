@@ -37,37 +37,37 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                'test("a write upserts by the table\'s own primary key, one column or several — 47.30, 47.33, 47.39"',
+                'test("a write upserts by the table\'s own primary key, one column or several — 47.30, 47.33, 47.40"',
             ],
         },
         {
             path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                "test('a BOOLEAN and a JSON column are read and written as what they declare — 47.40, 47.41'",
+                "test('a BOOLEAN and a JSON column are read and written as what they declare — 47.41, 47.42'",
             ],
         },
         {
             path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                "test('a table given logged records its key and those columns alone — 47.42'",
+                "test('a table given logged records its key and those columns alone — 47.43'",
             ],
         },
         {
             path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                "test('a write inside a transaction refreshes once it commits, and not at all where it rolls back — 47.43'",
+                "test('a write inside a transaction refreshes once it commits, and not at all where it rolls back — 47.44'",
             ],
         },
         {
             path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                "test('a peek reads the rows without the run that made it following them — 47.50'",
+                "test('a peek reads the rows without the run that made it following them — 47.51'",
             ],
         },
         {
             path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                "test('an insert answers its rows as stored, and an undefined column is not written — 47.51, 47.33'",
+                "test('an insert answers its rows as stored, and an undefined column is not written — 47.52, 47.33'",
             ],
         },
         {

@@ -7,7 +7,7 @@
 // a look at the log's last number, which is an index read; a look that finds nothing new costs that
 // alone.
 //
-// A TABLE IS DESCRIBED BY ITS DATABASE (47.39): its columns, the type each declares and its primary
+// A TABLE IS DESCRIBED BY ITS DATABASE (47.40): its columns, the type each declares and its primary
 // key are read from the file once per connection, so the key a write upserts by is the table's own and
 // a `BOOLEAN` or `JSON` column is read and written as one, with nothing said in code.
 //
@@ -64,9 +64,9 @@ export type { ColumnMatch, Match } from '#shared/Match.ts'
 export type Table<Row, Written = Row, Inserted = Written> = ((
     match?: Match<Row>,
 ) => Row[]) & {
-    /** 47.50 — the rows a call would answer, read without the run it is made in following them. */
+    /** 47.51 — the rows a call would answer, read without the run it is made in following them. */
     peek(match?: Match<Row>): Row[]
-    /** 47.51 — rows inserted, their key assigned where SQLite assigns it, answered as stored. */
+    /** 47.52 — rows inserted, their key assigned where SQLite assigns it, answered as stored. */
     insert(rows: Inserted | readonly Inserted[]): Row[]
     /** 47.33 — rows upserted by key: inserted, or replacing the row with their key. */
     set(rows: Written | readonly Written[]): void
@@ -106,7 +106,7 @@ type TableOptions<Row> = {
     logged?: readonly (keyof Row & string)[] | undefined
 }
 
-/** 47.47 — the row a typed opener's table reads, and the row it writes. */
+/** 47.48 — the row a typed opener's table reads, and the row it writes. */
 type RowIn<Found, Name extends keyof Found> = Found[Name] extends {
     row: infer Row extends Record<string, unknown>
 }
@@ -123,7 +123,7 @@ type InsertedIn<Found, Name extends keyof Found> = Found[Name] extends {
     ? Inserted
     : never
 
-/** 47.48 — a row given by its caller, written: a column that may hold `null` may be left out. */
+/** 47.49 — a row given by its caller, written: a column that may hold `null` may be left out. */
 type WrittenAs<Row> = {
     [
         Column in keyof Row as null extends Row[Column] ? never : Column
@@ -171,7 +171,7 @@ export function table<Row extends Record<string, unknown>>(
         )
     logging(name, options?.logged)
     const acquire = typeof database === 'function' ? database : () => database
-    // 47.53 — nothing is opened here: the database, its change log and the table's watch wait for the
+    // 47.39 — nothing is opened here: the database, its change log and the table's watch wait for the
     // table's first use, so a module declaring tables can be imported without a file.
     const connection = preparedConnection(acquire, name, key)
     let readable:
@@ -182,7 +182,7 @@ export function table<Row extends Record<string, unknown>>(
     const read = selects<Row>(acquire, name)
     const writes = rowWrites<Row>(name, key)
     // 47.29, 47.34 — a write made here is heard at once: what read the table is refreshed now, and
-    // the watch's next look does not hear it again. 47.43 — save inside a transaction, whose commit
+    // the watch's next look does not hear it again. 47.44 — save inside a transaction, whose commit
     // the watch's next look hears, and whose rollback it never does.
     const wrote = (db: Database, count: number): number => {
         if (count === 0) return count
@@ -264,7 +264,7 @@ export function table<Row extends Record<string, unknown>>(
 }
 
 /**
- * 47.39 — a table as its database describes it: its columns, the codec each declared type names, and
+ * 47.40 — a table as its database describes it: its columns, the codec each declared type names, and
  * its primary key's columns in key order.
  */
 type Description = {
@@ -274,10 +274,10 @@ type Description = {
     primaryKey: string[]
 }
 
-/** 47.39 — each `Database`'s tables, described the first time each is reached through it. */
+/** 47.40 — each `Database`'s tables, described the first time each is reached through it. */
 const DESCRIBED = new WeakMap<Database, Map<string, Description>>()
 
-/** 47.39 — `name` as `db` holds it; 47.25 — a table it does not hold is refused. */
+/** 47.40 — `name` as `db` holds it; 47.25 — a table it does not hold is refused. */
 function describe(db: Database, name: string): Description {
     let tables = DESCRIBED.get(db)
     if (tables === undefined) {
@@ -331,7 +331,7 @@ function keyColumns(
 }
 
 /**
- * 47.42 — per table name, the columns its changes carry: the union of every `logged` asked for in this
+ * 47.43 — per table name, the columns its changes carry: the union of every `logged` asked for in this
  * process, or `undefined` once any `table` of it asked for every column.
  */
 const LOGGED = new Map<string, Set<string> | undefined>()
@@ -382,7 +382,7 @@ const COMPARISONS: Record<string, string> = {
  * 47.35, 47.36 — the rows of `name`, or those every column `match` names matches: one statement per
  * shape of match — its columns, the slots of each list and the comparisons named — each column
  * checked against the table's own; and 47.33 — the rows a match names deleted, by the same shapes.
- * 47.40 — the rows read with their coded columns decoded.
+ * 47.41 — the rows read with their coded columns decoded.
  */
 function selects<Row>(
     acquire: () => Database,
@@ -479,7 +479,7 @@ function keyOf(name: string, key: string, row: unknown): unknown {
 
 /**
  * 47.35, 47.36 — the condition `value` puts on `column`, its values pushed onto `values`, encoded as
- * the column's declared type says (47.41). NULL-SAFE as JSON is: a list holding `null` matches a
+ * the column's declared type says (47.42). NULL-SAFE as JSON is: a list holding `null` matches a
  * NULL, and `ne` is `IS NOT`, so a NULL is not a value `ne: 'won'` refuses. An empty list is no
  * value at all and matches no row.
  */
@@ -555,7 +555,7 @@ function pushed(condition: string, values: unknown[], value: unknown): string {
 
 /**
  * A value a list or a comparison holds, which is one value: no list or object nested in it; encoded
- * as its column's declared type says (47.41).
+ * as its column's declared type says (47.42).
  */
 function scalarOf(
     name: string,
@@ -579,7 +579,7 @@ const PREPARED = new WeakMap<Database, Map<string, string>>()
 
 /**
  * 47.25, 47.26 — the change log, and the table's triggers naming every column it has now, or the
- * columns 47.42 logs and its key: made again the first time each `Database` reaches the table, so a
+ * columns 47.43 logs and its key: made again the first time each `Database` reaches the table, so a
  * column a migration added is captured, and again where this process asks to log more.
  */
 function prepare(db: Database, name: string, key: string | undefined): void {
@@ -594,7 +594,7 @@ function prepare(db: Database, name: string, key: string | undefined): void {
         db.run(
             'CREATE INDEX IF NOT EXISTS abide_changes_tbl ON abide_changes (tbl, seq)',
         )
-        // 47.44 — how far another process has removed a table's changes, which a reader behind it
+        // 47.45 — how far another process has removed a table's changes, which a reader behind it
         // cannot read past.
         db.run(
             'CREATE TABLE IF NOT EXISTS abide_changes_removed (tbl TEXT PRIMARY KEY, through INTEGER NOT NULL)',
@@ -618,7 +618,7 @@ function prepare(db: Database, name: string, key: string | undefined): void {
         for (const column of logged) {
             if (!description.columns.has(column))
                 throw new Error(
-                    `abide: table ${name} has no column ${JSON.stringify(column)} to log. RULEBOOK 47.42.`,
+                    `abide: table ${name} has no column ${JSON.stringify(column)} to log. RULEBOOK 47.43.`,
                 )
             chosen.add(column)
         }
@@ -840,7 +840,7 @@ function heard(watch: Watch, connection: () => Database): void {
 
 /**
  * 47.27, 47.28 — the table's changes from the moment the stream is first read, in order, their coded
- * columns decoded (47.40); 47.44 — and an error where another process removed one it had still to
+ * columns decoded (47.41); 47.45 — and an error where another process removed one it had still to
  * read.
  */
 function changesOf<Row>(
@@ -886,7 +886,7 @@ function changesOf<Row>(
             readLog = log
         }
         if (reading.position === undefined) {
-            // 47.44 — a reader starts past what was removed, though nothing past it remains.
+            // 47.45 — a reader starts past what was removed, though nothing past it remains.
             reading.position = Math.max(lastChange(db, name), removedThrough())
             let readers = READING.get(name)
             if (readers === undefined) {
@@ -898,7 +898,7 @@ function changesOf<Row>(
         const through = removedThrough()
         if (through > reading.position)
             throw new Error(
-                `abide: table ${name}'s changes up to ${through} were removed before this reader, at ${reading.position}, read them; read the table again. RULEBOOK 47.44.`,
+                `abide: table ${name}'s changes up to ${through} were removed before this reader, at ${reading.position}, read them; read the table again. RULEBOOK 47.45.`,
             )
         const { coded } = describe(db, name)
         const rows = db
@@ -970,7 +970,7 @@ function changesOf<Row>(
 /**
  * 47.30, 47.33 — rows upserted by their key, or the columns they name updated on the row with their
  * key, each batch one transaction. One statement per shape of row, its columns checked and its SQL
- * written once: a batch of rows with the same columns runs one prepared statement. 47.41 — each value
+ * written once: a batch of rows with the same columns runs one prepared statement. 47.42 — each value
  * encoded as its column's declared type says.
  */
 function rowWrites<Row extends Record<string, unknown>>(
@@ -1055,7 +1055,7 @@ function rowWrites<Row extends Record<string, unknown>>(
         }
         return prepared
     }
-    /** Each row's statement run with its values, encoded per 47.41, in one transaction. */
+    /** Each row's statement run with its values, encoded per 47.42, in one transaction. */
     const each = (
         db: Database,
         rows: readonly Partial<Row>[],

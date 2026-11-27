@@ -46,7 +46,7 @@ export { type Config, config } from './config.ts'
 export type { ConfigField } from './configFields.ts'
 // 47 — the app's SQLite database, opened and migrated on first use.
 export { database } from './database.ts'
-// 47.47-47.49 — the rows of a database's tables, typed from its migrations.
+// 47.48-47.50 — the rows of a database's tables, typed from its migrations.
 export type { Tables } from './MigratedTables.ts'
 // 47.25-47.31 — a table's changes read out, and rows written in.
 export { type Sql } from './sql.ts'

@@ -6,7 +6,7 @@
 // them (47.37), its slots rounded so a call site prepares one statement per power of two of each
 // list's length, and a long list one value whatever its length (`boundList`).
 //
-// 47.40 — A ROW READ AS ITS COLUMNS ARE DECLARED: a column the statement reads straight from a table
+// 47.41 — A ROW READ AS ITS COLUMNS ARE DECLARED: a column the statement reads straight from a table
 // declared `BOOLEAN` or `JSON` is decoded, and a statement reading none such pays nothing for it.
 //
 // A QUERY AND NOTHING ELSE: a statement tracks nothing, so what reads one is refreshed by the tags it
@@ -25,7 +25,7 @@ export type Sql = <Row = Record<string, unknown>>(
     ...values: SqlValue[]
 ) => Row[]
 
-/** 47.32, 47.37, 47.52 — what `sql` binds: a value, a list of them, or a plain object as its JSON. */
+/** 47.32, 47.37, 47.53 — what `sql` binds: a value, a list of them, or a plain object as its JSON. */
 type SqlValue =
     | SQLQueryBindings
     | readonly SQLQueryBindings[]
@@ -66,7 +66,7 @@ export function sqlOver(acquire: () => Database): Sql {
         for (let at = 0; at < values.length; at += 1) {
             const value = values[at]
             if (Array.isArray(value)) shape += `${at}:${slotsOf(value.length)},`
-            // 47.52 — a plain object is bound as its JSON text.
+            // 47.53 — a plain object is bound as its JSON text.
             else if (isPlainData(value)) shape += `${at}:json,`
         }
         let prepared = perShape.get(shape)
@@ -84,7 +84,7 @@ export function sqlOver(acquire: () => Database): Sql {
     }
 }
 
-/** 47.40 — the columns a statement reads straight from a column declared `BOOLEAN` or `JSON`. */
+/** 47.41 — the columns a statement reads straight from a column declared `BOOLEAN` or `JSON`. */
 function codedOf(statement: Statement): CodedColumn[] {
     const coded: CodedColumn[] = []
     const names = statement.columnNames
@@ -111,7 +111,7 @@ function textOf(
     return text
 }
 
-/** 47.37, 47.52 — the values bound: each list's in its place, a plain object as its JSON. */
+/** 47.37, 47.53 — the values bound: each list's in its place, a plain object as its JSON. */
 function flattened(values: readonly SqlValue[]): SQLQueryBindings[] {
     const bound: SQLQueryBindings[] = []
     for (const value of values) {

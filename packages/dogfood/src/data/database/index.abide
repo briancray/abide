@@ -44,13 +44,13 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/migratedTables.test.ts',
             from: [
-                "test('a table is typed by the migrations that declare it — 47.47, 47.48'",
+                "test('a table is typed by the migrations that declare it — 47.48, 47.49'",
             ],
         },
         {
             path: 'packages/abide/tests/database.test.ts',
             from: [
-                "test('a migration rebuilds a referenced table without cascading, and a dangling reference is refused — 47.45, 47.7'",
+                "test('a migration rebuilds a referenced table without cascading, and a dangling reference is refused — 47.46, 47.7'",
             ],
         },
     ]}
