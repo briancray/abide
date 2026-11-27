@@ -109,21 +109,15 @@ const TEMPLATE_EXPRESSIONS: ReadonlySet<PositionKind> = new Set([
  * listener, a `bind:` operand or a key the value never renders, and `raw` is what the file binds.
  */
 const RAW_LOWERED: ReadonlySet<PositionKind> = new Set([...PROVABLE, 'prop'])
-/** Every span copied out of the template, where a function may declare a name of its own (31.1). */
-const EVERY_POSITION: ReadonlySet<PositionKind> = new Set<PositionKind>([
-    ...TEMPLATE_EXPRESSIONS,
-    'setup',
-    'head',
-    'tag',
-])
 
 /**
  * The classified reactive reads in one `.abide`'s shadow, and the warnings they earn.
  *
- * 31.3 — THE CHECKER'S OWN TREE ANSWERS BOTH QUESTIONS. Which names the file binds is every
- * `const`/`let`/`var` it declares, at any depth, and its imports, and which occurrences reach one
- * is the references to that symbol. A parameter, a row's item, a key, a member, a label and a
- * class field of the same spelling are other symbols, and are absent. What each reference DOES — a read, a write, an update, a shorthand — is read off its
+ * 31.3 — THE CHECKER'S OWN TREE ANSWERS BOTH QUESTIONS. Which names the file binds is its top-level
+ * `const`/`let`/`var` statements and its imports — an inner block's name is not the page's — and
+ * which occurrences reach one is the references to that symbol. A parameter, a row's item, a
+ * key, a member, a label and a class field of the same spelling are other symbols, and are
+ * absent. What each reference DOES — a read, a write, an update, a shorthand — is read off its
  * parents by `classifyRead`, so no token walk re-derives the grammar.
  *
  * Asked of one snapshot (`reactiveReads`), and every offset — a read's and a warning's — is the
@@ -190,18 +184,6 @@ export async function readsIn(
         if (isVariableStatement(node))
             for (const declaration of node.declarationList.declarations)
                 declaredNames(declaration, (name) => names.push(name))
-    // 31.1 HAS NO CARVE-OUT FOR DEPTH: `const inner = reactive(2)` inside an arrow, a function, a
-    // method or a block is read by name as the page's own are, a name per symbol whatever it
-    // shadows. Called rather than read through a record (`Read.declaredAt` -1), since no record
-    // ahead of a setup or at the module's foot has the function's scope.
-    const nestedFrom = names.length
-    const nested = (name: Node): number => names.push(name)
-    for (const statement of sourceFile.statements) {
-        if (statement.getStart() >= scriptsEnd) break
-        innerDeclarations(statement, nested)
-    }
-    for (const { node } of positions.nodesIn(sourceFile, EVERY_POSITION))
-        innerDeclarations(node, nested)
     refuseDeclared(sourceFile.statements, scriptsEnd, file)
     const members = memberAccesses(checker, abide, sourceFile)
     // 31.15 — the accesses read as a `Reactive` of their own, where a name's member path stops.
@@ -299,8 +281,7 @@ export async function readsIn(
             if (read === undefined) continue
             read.byValue = byValue[index] as boolean
             read.local = index >= topLevel
-            if (read.local && index < nestedFrom)
-                read.declaredAt = (names[index] as Node).getStart()
+            if (read.local) read.declaredAt = (names[index] as Node).getStart()
             named.push(read)
             located.push({ node, read })
             if (read.shape === 'value' || read.shape === 'shorthand')
@@ -1303,21 +1284,6 @@ function declaredNames(
     )
         return
     patternNames(name, visit)
-}
-
-/**
- * Each name a declaration below `root` binds — inside a function, a method, a block or a loop's
- * head — leaving out `root`'s own when it is a variable statement, which the caller has taken.
- */
-function innerDeclarations(root: Node, visit: (name: Node) => void): void {
-    const walk = (node: Node): void => {
-        if (isVariableDeclaration(node)) declaredNames(node, visit)
-        node.forEachChild(walk)
-    }
-    if (isVariableStatement(root))
-        for (const declaration of root.declarationList.declarations)
-            declaration.forEachChild(walk)
-    else walk(root)
 }
 
 /** Each identifier `name` binds: itself, or every name an object or array pattern destructures. */
