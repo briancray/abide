@@ -174,7 +174,9 @@ export function table<Row extends Record<string, unknown>>(
     // 47.53 — nothing is opened here: the database, its change log and the table's watch wait for the
     // table's first use, so a module declaring tables can be imported without a file.
     const connection = preparedConnection(acquire, name, key)
-    let readable: ReadableStream<Change<Row>> | undefined
+    let readable:
+        | { stream: ReadableStream<Change<Row>>; ended: () => boolean }
+        | undefined
     let writable: WritableStream<Row> | undefined
     // 47.38 — READ ON THE CONNECTION AS IT IS: a database refusing the change log is still read.
     const read = selects<Row>(acquire, name)
@@ -244,8 +246,10 @@ export function table<Row extends Record<string, unknown>>(
         readable: {
             get() {
                 connection()
-                readable ??= changesOf<Row>(connection, name)
-                return readable
+                // 47.27 — one stream while it runs; one cancelled or errored is followed by a new one.
+                if (readable === undefined || readable.ended())
+                    readable = changesOf<Row>(connection, name)
+                return readable.stream
             },
         },
         as: { value: () => called },
@@ -595,6 +599,13 @@ function prepare(db: Database, name: string, key: string | undefined): void {
         db.run(
             'CREATE TABLE IF NOT EXISTS abide_changes_removed (tbl TEXT PRIMARY KEY, through INTEGER NOT NULL)',
         )
+        // 47.57 — which log this is, so a reader can tell the file it reads from another.
+        db.run(
+            'CREATE TABLE IF NOT EXISTS abide_changes_log (id TEXT NOT NULL)',
+        )
+        db.query(
+            'INSERT INTO abide_changes_log (id) SELECT ? WHERE NOT EXISTS (SELECT 1 FROM abide_changes_log)',
+        ).run(crypto.randomUUID())
         tables = new Map()
         if (lasting) PREPARED.set(db, tables)
     }
@@ -835,8 +846,12 @@ function heard(watch: Watch, connection: () => Database): void {
 function changesOf<Row>(
     connection: () => Database,
     name: string,
-): ReadableStream<Change<Row>> {
+): { stream: ReadableStream<Change<Row>>; ended: () => boolean } {
     const reading: { position: number | undefined } = { position: undefined }
+    // 47.57 — the `Database` the position counts in, and the log it counts: an opener's next
+    // `Database` over the same log reads on, and one over another log cannot say where to.
+    let readOn: Database | undefined
+    let readLog: string | undefined
     let cancelled = false
     let wake: (() => void) | undefined
     const pending: Change<Row>[] = []
@@ -849,8 +864,30 @@ function changesOf<Row>(
             : (decodeRows([JSON.parse(text) as Row], coded)[0] as Row)
     const read = (): void => {
         const db = connection()
+        const removedThrough = (): number =>
+            (
+                db
+                    .query(
+                        'SELECT through FROM abide_changes_removed WHERE tbl = ?',
+                    )
+                    .get(name) as { through: number } | null
+            )?.through ?? 0
+        if (readOn !== db) {
+            const log = (
+                db.query('SELECT id FROM abide_changes_log').get() as {
+                    id: string
+                } | null
+            )?.id
+            if (readLog !== undefined && log !== readLog)
+                throw new Error(
+                    `abide: table ${name}'s reader was reading another file's changes; read the table again. RULEBOOK 47.57.`,
+                )
+            readOn = db
+            readLog = log
+        }
         if (reading.position === undefined) {
-            reading.position = lastChange(db, name)
+            // 47.44 — a reader starts past what was removed, though nothing past it remains.
+            reading.position = Math.max(lastChange(db, name), removedThrough())
             let readers = READING.get(name)
             if (readers === undefined) {
                 readers = new Set()
@@ -858,12 +895,10 @@ function changesOf<Row>(
             }
             readers.add(reading)
         }
-        const removed = db
-            .query('SELECT through FROM abide_changes_removed WHERE tbl = ?')
-            .get(name) as { through: number } | null
-        if (removed !== null && removed.through > reading.position)
+        const through = removedThrough()
+        if (through > reading.position)
             throw new Error(
-                `abide: table ${name}'s changes up to ${removed.through} were removed before this reader, at ${reading.position}, read them; read the table again. RULEBOOK 47.44.`,
+                `abide: table ${name}'s changes up to ${through} were removed before this reader, at ${reading.position}, read them; read the table again. RULEBOOK 47.44.`,
             )
         const { coded } = describe(db, name)
         const rows = db
@@ -890,7 +925,7 @@ function changesOf<Row>(
         READING.get(name)?.delete(reading)
         if (wake !== undefined) wake()
     }
-    return new ReadableStream<Change<Row>>(
+    const stream = new ReadableStream<Change<Row>>(
         {
             start: () => {
                 read()
@@ -929,6 +964,7 @@ function changesOf<Row>(
         },
         { highWaterMark: 0 },
     )
+    return { stream, ended: () => cancelled }
 }
 
 /**

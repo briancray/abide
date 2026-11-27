@@ -5313,7 +5313,8 @@ connection, in the transaction that made it, naming every column the table held 
 reached it through that `Database`.
 
 47.27 A `table`'s `readable` MUST hand on, in order, every change committed after it was first
-reached, each as the row after and the row before.
+reached, each as the row after and the row before, and reached after the stream it answered was
+cancelled or errored MUST answer a new one.
 
 47.28 A write rolled back MUST hand on no change.
 
@@ -5383,7 +5384,7 @@ columns `logged` names, with those every other `table` of that name in the proce
 refresh nothing at once, and its commit MUST refresh what 47.29 names on the watch's next look.
 
 47.44 A `table`'s `readable` MUST error, naming this clause, where another process removed a change
-it had still to read.
+it had still to read, and MUST NOT count as still to read a change removed before it was reached.
 
 47.45 The migrations `database` runs per 47.6 MUST run with foreign keys unenforced, and MUST throw
 per 47.7 where a row references a row that is not there once the last of them has run.
@@ -5425,6 +5426,9 @@ column's own does not admit.
 make them again at its next reach.
 
 47.56 A `table` MUST NOT record per 47.26 an update leaving every column of the row as it was.
+
+47.57 A `table`'s `readable` whose opener opens its database again MUST read on where the file holds
+the change log it was reading, and MUST error, naming this clause, where it holds another.
 
 # 48. Problem reports
 

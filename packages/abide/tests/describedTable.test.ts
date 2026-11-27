@@ -366,3 +366,64 @@ test('an update that leaves every column as it was records no change — 47.56',
         `amount ${change?.row?.amount} was ${change?.previous?.amount}`,
     ).toBe('amount 2 was 1')
 })
+
+// 47.27 — A READER LET GO IS FOLLOWED BY A NEW ONE: `readable` after a cancel hands on what came
+// after. THE REVERT: cache the first stream in the getter for good; the second `getReader` throws, the
+// stream locked and cancelled.
+test('readable after a cancelled reader is a new stream that reads on — 47.27', async () => {
+    const db = opener(
+        'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER)',
+    )
+    const deals = table(db, 'deals')
+    await taken(deals.readable, 0)
+    const reading = taken(deals.readable, 1)
+    deals.set({ id: 1, amount: 7 })
+    expect((await reading).map((change) => change.row?.amount)).toEqual([7])
+})
+
+// 47.57 — A READER FOLLOWS ITS OPENER: over the same file reopened it reads on, and over another
+// file it errors rather than read a log it has no place in. THE REVERT: drop the log check in
+// `changesOf`; the reader behind the old file's count hands on nothing until its deadline.
+test('a reader reads on across a reopen of its file, and errors over another file — 47.57', async () => {
+    const db = opener(
+        'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER)',
+    )
+    const deals = table(db, 'deals')
+    const reader = deals.readable.getReader()
+    deals.set({ id: 1, amount: 1 })
+    await reader.read()
+    db.close()
+    deals.set({ id: 2, amount: 2 })
+    const same = (await reader.read()).value?.row?.amount
+    db.close({ remove: true })
+    deals.set({ id: 3, amount: 3 })
+    let said = ''
+    try {
+        await reader.read()
+    } catch (thrown) {
+        said = (thrown as Error).message
+    }
+    expect({ same, other: said.includes('RULEBOOK 47.57') }).toEqual({
+        same: 2,
+        other: true,
+    })
+})
+
+// 47.44 — A READER STARTS PAST WHAT WAS REMOVED, though none of the log remains: it is not behind
+// what it never had to read. THE REVERT: start at the log's last change alone in `changesOf`; every
+// read errors with 47.44's message.
+test('a reader starting after every change was removed reads on — 47.44', async () => {
+    const db = opener(
+        'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER)',
+    )
+    const deals = table(db, 'deals')
+    deals.set({ id: 1, amount: 1 })
+    db().run("DELETE FROM abide_changes WHERE tbl = 'deals'")
+    db().run(
+        "INSERT INTO abide_changes_removed (tbl, through) SELECT 'deals', seq FROM sqlite_sequence WHERE name = 'abide_changes' ON CONFLICT (tbl) DO UPDATE SET through = excluded.through",
+    )
+    const fresh = table(db, 'deals', { logged: [] })
+    const reading = taken(fresh.readable, 1)
+    fresh.set({ id: 2, amount: 2 })
+    expect((await reading).map((change) => change.row?.amount)).toEqual([2])
+})
