@@ -39,6 +39,56 @@ export function applyPatch(root: unknown, ops: PatchOp[]): void {
     }
 }
 
+/**
+ * 18.49 — `ops` applied to a copy of `root`, answering the copy: each container a path runs through is
+ * copied the first time an op reaches it, so what `root` held is left as it was and every part no op
+ * writes is the one it held. A production the server diffed (18.41) is a new value there, and so here.
+ */
+export function patchedCopy(root: unknown, ops: PatchOp[]): unknown {
+    const holder: Container = { value: root }
+    const copied = new Set<object>()
+    for (const op of rooted(ops)) {
+        copyAlong(holder, op.path, copied)
+        if (op.op === 'move') copyAlong(holder, op.from, copied)
+        applyPatch(holder, [op])
+    }
+    return holder.value
+}
+
+/** Each container `pointer` runs through below `holder` replaced by a copy, where not one already. */
+function copyAlong(
+    holder: Container,
+    pointer: string,
+    copied: Set<object>,
+): void {
+    const steps = stepsOf(pointer)
+    let held: unknown = holder
+    for (let at = 0; at < steps.length - 1; at += 1) {
+        if (held === null || typeof held !== 'object') return
+        const key = keyIn(held, steps[at] as string)
+        if (!Object.hasOwn(held, key)) return
+        let child = (held as Container)[key]
+        if (child !== null && typeof child === 'object' && !copied.has(child)) {
+            child = Array.isArray(child) ? child.slice() : { ...child }
+            copied.add(child as object)
+            ;(held as Container)[key] = child
+        }
+        held = child
+    }
+}
+
+/** `ops` re-rooted under `/value`, for `applyPatch` to reach a root `replace` through a holder. */
+export function rooted(ops: PatchOp[]): PatchOp[] {
+    const under: PatchOp[] = []
+    for (const op of ops)
+        under.push({
+            ...op,
+            path: `/value${op.path}`,
+            ...('from' in op ? { from: `/value${op.from}` } : {}),
+        } as PatchOp)
+    return under
+}
+
 /** The unescaped steps of a JSON Pointer: `''` is the root, and `~1` is `/` and `~0` is `~`. */
 function stepsOf(pointer: string): string[] {
     if (pointer === '') return []

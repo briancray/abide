@@ -639,9 +639,13 @@ export function declare<Declared extends Method>(
         // A rung that handed `next` a context of its own making chose those args.
         const argsOf = (ctx: RpcContext): unknown =>
             SENT in ctx ? (ctx as { [SENT]: unknown })[SENT] : ctx.args()
+        // 16.121 — THE REQUEST IS READ WHEN A RUNG READS IT, so rungs that never do run in an
+        // `App.run` scope made without one (42.8).
         const contextOf = (args: unknown): RpcContext =>
             ({
-                request: RPC_SERVER.request(),
+                get request() {
+                    return RPC_SERVER.request()
+                },
                 args: argsOnce(gateOf(contract), args),
                 [SENT]: args,
             }) as RpcContext

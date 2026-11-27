@@ -56,6 +56,8 @@ export type ServerFrame = {
     version?: number | undefined
     base?: number | undefined
     ops?: PatchOp[] | undefined
+    /** 18.49 — a patch a production's diff (18.41) is among, taken as a new value. */
+    replaced?: boolean | undefined
     value?: unknown
     error?: Problem | undefined
     /**

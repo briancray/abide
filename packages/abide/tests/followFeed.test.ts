@@ -152,6 +152,42 @@ test('a replacement of another shape reaches a follower as the value, not a root
     }
 })
 
+// 18.49 — A PRODUCTION'S DIFF IS SENT MARKED AS ONE, and an `s.patch`'s writes are not: a copy takes
+// the first as a new value and writes the second into what it holds. THE REVERT: build every patch
+// frame with `replaced` false in `sendAll`; the `set`'s frame carries no mark, `[undefined, undefined]`.
+test("a set's diff reaches a follower marked as a replacement, and a patch's writes do not — 18.49", async () => {
+    const value = rpc((): { titles: string[] } => ({ titles: ['dune'] }), {
+        global: true,
+    })
+    const served = value as unknown as { address: string }
+    served.address = '/marked'
+    const frames: { op: string; replaced?: boolean }[] = []
+    const connection = muxOver(served).connect(
+        new Request('http://app.test/__abide/socket'),
+        {
+            send(text: string) {
+                frames.push(JSON.parse(text))
+            },
+            close() {},
+        },
+    )
+    await connection.message(
+        JSON.stringify({ op: 'sub', id: 1, address: served.address }),
+    )
+    value.set({ titles: ['dune', 'emma'] })
+    flushSync()
+    value.patch((shelf) => {
+        shelf.titles.push('gone')
+    })
+    flushSync()
+    expect(frames.map((frame) => frame.op)).toEqual(['value', 'patch', 'patch'])
+    expect(frames.slice(1).map((frame) => frame.replaced)).toEqual([
+        true,
+        undefined,
+    ])
+    connection.close()
+})
+
 // 7.10, 7.18, 13.4 — A TRIGGER OVER A TAG reaches the copies a value it names is feeding, as the
 // \`Rpc\`'s own does. THE REVERT: broadcast from the \`Rpc\`'s members alone; the tag's invalidate
 // sends no frame.

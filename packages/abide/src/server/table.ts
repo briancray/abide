@@ -81,8 +81,8 @@ export function table<Row extends Record<string, unknown>>(
             `abide: table ${name}'s key ${JSON.stringify(key)} is not an SQL identifier.`,
         )
     const acquire = typeof database === 'function' ? database : () => database
+    // 47.39 — nothing here opens the database: the watch stands from the first call or write.
     const connection = preparedConnection(acquire, name)
-    watchOf(database, connection, name)
     let readable: ReadableStream<Change<Row>> | undefined
     let writable: WritableStream<Row> | undefined
     // 47.38 — READ ON THE CONNECTION AS IT IS: a database refusing the change log is still read.
@@ -435,7 +435,8 @@ function watchOf(
     }
     const standing = watches.get(name)
     if (standing !== undefined) return standing
-    // 47.29 — the baseline taken where the table is named, so a write before the first look is heard.
+    // 47.29 — the baseline taken as the table is first called or written, so a write before the
+    // first look is heard.
     const watch: Watch = { name, seen: undefined, readers: new Set() }
     watches.set(name, watch)
     const watched = watches

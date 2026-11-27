@@ -1497,6 +1497,9 @@ that is an `rpc` already MUST be refused as it is declared.
 16.120 A call answering a promise MUST refuse with 16.49's refusal once its `signal` aborts, whether
 or not 16.48 ends the load it reached.
 
+16.121 A rung's `ctx.request` MUST be read from the scope when the rung reads it, so a call whose
+rungs never read it MUST run in a scope made without a request (42.8).
+
 # 17. Response helpers
 
 17.1 Every body helper MUST take `Values<T>`.
@@ -1674,6 +1677,11 @@ value.
 
 18.48 A client's subscription of 18.3 to a `GET` MUST end once its copy has had no reader for 60
 seconds, MUST NOT end before 30 seconds of none, and MUST leave the copy stale as it ends.
+
+18.49 A subscriber's copy of a `GET` sent writes that 18.41's patch is among MUST take what they make
+as a new value, leaving what a reader read from the copy before as it was and each part the writes do
+not reach as the one it held; sent 18.11's writes alone, it MUST write them into the value it holds,
+as 5.7 does.
 
 # 19. Mount paths and schemas
 
@@ -5361,6 +5369,9 @@ comparison other than `ne`, and for an array or an object nested where a value g
 `table` call and by `sql`, its stopped watch said once per database, and the writes made through its
 `table` MUST then be all that refresh what 47.29 names.
 
+47.39 `table` MUST NOT open its database as it declares the table, and MUST open it no sooner than
+the table it hands back is called, written through, or its `readable` or `writable` reached.
+
 # 48. Problem reports
 
 48.1 `report` MUST answer a `ReportDraft` holding among its `traces` the trace it was given, and the
@@ -7308,14 +7319,17 @@ MUST be a build error naming the file and the export.
 55.5 A call to an `async function*` export MUST answer an async generator running the export's
 generator one chunk for each chunk read, and returning what it returned.
 
-55.6 An `AbortSignal` among a call's arguments MUST reach the export as a signal aborted whenever, and
-from whenever, the one passed is.
+55.6 An abort of an `AbortSignal` among a call's arguments MUST end the call's thread at once,
+rejecting the call with that signal's reason, and a call made with one aborted already MUST start no
+thread; the export MUST be handed, in its place, a signal that never aborts.
 
 55.7 A consumer ending a stream before it is done MUST end the export's generator, its `finally`
 included.
 
 55.8 A thread MUST end where the signal `abortSignal` answers where its call was made aborts, 7.20's
-among them, rejecting its call with that abort.
+among them, rejecting its call with that abort, and a call made where that signal has aborted
+already MUST start no thread — save a call handed an `AbortSignal` among its arguments, which 55.6
+alone ends.
 
 55.9 A thread that fails outside its export MUST reject its call.
 

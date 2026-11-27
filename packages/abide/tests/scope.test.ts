@@ -629,6 +629,30 @@ test('a handler with rungs keys its value by the args as sent — 11.26, 11.67',
     expect(seen).toEqual(['abc', 'abc'])
 })
 
+// 16.121 — A RUNG THAT NEVER READS `ctx.request` RUNS IN A SCOPE MADE WITHOUT ONE, as `App.run`
+// makes it (42.8), and one that reads it is refused there by 22.1. THE REVERT: read the request
+// into the context as the call builds it, in `contextOf`; the first call throws 22.1's "request()
+// was called outside a request" rather than answering 'answered'.
+test('a rung that never reads the request runs where there is none — 16.121', async () => {
+    const answered = rpc(() => 'answered', {
+        middleware: [async (next) => next()],
+    })
+    const reading = rpc(() => 'answered', {
+        middleware: [
+            async (next, ctx) => {
+                ctx.request
+                return next()
+            },
+        ],
+    })
+    const results = await inScope(undefined, async () => [
+        await answered().catch((error: Error) => error.message),
+        await reading().catch((error: Error) => error.message),
+    ])
+    expect(results[0]).toBe('answered')
+    expect(results[1]).toContain('RULEBOOK 22.1')
+})
+
 // 16.18, 16.19 — `ctx.args()` ASKED AGAIN AFTER A REFUSAL IS REFUSED AGAIN, not handed nothing. A rung
 // may catch the refusal and ask a second time, and the answer kept for later asks is only one the
 // gate accepted. THE REVERT: mark the ask asked before validating, in `argsOnce`; the second ask

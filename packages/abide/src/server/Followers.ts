@@ -38,6 +38,8 @@ export class Frame {
     readonly version: number | undefined
     // The value, the patch's ops or the refusal, as JSON.
     readonly body: string | undefined
+    // 18.49 — a patch a production's diff is among, which a copy takes as a new value.
+    readonly replaced: boolean
     // What follows the id in the JSON, and the event's bytes, each written on first use.
     private tail: string | undefined = undefined
     private event: Uint8Array | undefined = undefined
@@ -47,11 +49,13 @@ export class Frame {
         base: number | undefined,
         version: number | undefined,
         body: string | undefined,
+        replaced = false,
     ) {
         this.op = op
         this.base = base
         this.version = version
         this.body = body
+        this.replaced = replaced
     }
 
     /** As `ServerFrame` JSON for `id`: `base` and `version` where it has them, then the body under its op's member. */
@@ -60,6 +64,7 @@ export class Frame {
             let tail = ''
             if (this.base !== undefined) tail += `,"base":${this.base}`
             if (this.version !== undefined) tail += `,"version":${this.version}`
+            if (this.replaced) tail += ',"replaced":true'
             if (this.body !== undefined)
                 tail += `,"${this.op === 'patch' ? 'ops' : this.op}":${this.body}`
             this.tail = `${tail}}`
@@ -396,9 +401,15 @@ function sendAll(serving: unknown, fed: Iterable<Follower>): void {
         const since = one.sent
         let frame = since === undefined ? undefined : patchFrames?.get(since)
         if (frame === undefined && since !== undefined) {
-            const ops = patchesSince(serving, since)
-            if (ops !== undefined) {
-                frame = new Frame('patch', since, version, JSON.stringify(ops))
+            const writes = patchesSince(serving, since)
+            if (writes !== undefined) {
+                frame = new Frame(
+                    'patch',
+                    since,
+                    version,
+                    JSON.stringify(writes.ops),
+                    writes.replaced,
+                )
                 patchFrames ??= new Map()
                 patchFrames.set(since, frame)
             }
