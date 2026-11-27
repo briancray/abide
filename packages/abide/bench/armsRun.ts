@@ -59,7 +59,7 @@ export function runArms(
         const names = Object.keys(kase.arms)
         const sampleOf = (name: string): Sample => ({
             ...(measured.samples[name] as Sample),
-            work: work?.[name],
+            work: work?.[name] ?? null,
         })
         const base = sampleOf(names[0] as string)
         const arms: Record<string, number> = {}
