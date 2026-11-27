@@ -549,6 +549,9 @@ export declare const TYPED_TABLES: unique symbol
 /** An opener whose migrations the checker read: `TablesOf` its migrations, held by type alone. */
 export type Typed<Tables> = { readonly [TYPED_TABLES]?: Tables | undefined }
 
+/** An opener whose migrations the checker read none of, or a function that is no opener. */
+export type Untyped = { readonly [TYPED_TABLES]?: undefined }
+
 /** 47.49 — the row of each table the database `Opener` opens, by name: `Tables<typeof db>['deals']`. */
 export type Tables<Opener> =
     Opener extends Typed<infer Found>

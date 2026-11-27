@@ -84,6 +84,14 @@ test('a table is typed by the migrations that declare it — 47.47, 47.48', () =
     // An insert may leave out the key SQLite assigns.
     const [inserted] = table(CRM, 'notes').insert({ body: 'first' })
     expect(inserted).toEqual({ id: 1, body: 'first' })
+    // Options keep the table typed, and name only its columns.
+    const logged = table(CRM, 'deals', { logged: ['stage'] })
+    same<Same<ReturnType<typeof logged.peek>[number]['stage'], string | null>>()
+    const refusedLogged = () => {
+        // @ts-expect-error logged names a column the table has
+        table(CRM, 'deals', { logged: ['nope'] })
+    }
+    void refusedLogged
     // A column narrowed keeps the table's name, its written row and its inserted row.
     type Detail = { calls: number }
     const narrowed = table(CRM, 'deals').as<{

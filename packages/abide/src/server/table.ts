@@ -34,7 +34,7 @@ import {
     decodeRows,
     encoded,
 } from './columnCodec.ts'
-import type { Typed, TYPED_TABLES } from './MigratedTables.ts'
+import type { Typed, Untyped } from './MigratedTables.ts'
 import { SQL_IDENTIFIER } from './SQL_IDENTIFIER.ts'
 
 const WATCH_LOG = namedLogger('abide:table')
@@ -142,18 +142,18 @@ type WrittenAs<Row> = {
 export function table<Row extends Record<string, unknown> = never>(
     database: Database | (() => Database),
     name: [Row] extends [never] ? never : string,
-    options?: TableOptions<Row>,
+    // Never inferred from: `logged` naming columns would otherwise make up a row to type the table by.
+    options?: NoInfer<TableOptions<Row>>,
 ): Table<Row, WrittenAs<Row>>
 export function table(
-    database:
-        Database | ((() => Database) & { readonly [TYPED_TABLES]?: undefined }),
+    database: Database | ((() => Database) & Untyped),
     name: string,
     options?: TableOptions<Record<string, unknown>>,
 ): Table<Record<string, unknown>>
 export function table<Found, Name extends keyof Found & string>(
     database: (() => Database) & Typed<Found>,
     name: Name,
-    options?: TableOptions<RowIn<Found, Name>>,
+    options?: NoInfer<TableOptions<RowIn<Found, Name>>>,
 ): Table<RowIn<Found, Name>, WrittenIn<Found, Name>, InsertedIn<Found, Name>>
 export function table<Row extends Record<string, unknown>>(
     database: Database | (() => Database),
