@@ -13,8 +13,8 @@ import {
     accordion,
     flushSync,
     listbox,
-    reactive,
     type Reactive,
+    reactive,
     sortableTable,
     tabs,
     toggleGroup,
@@ -60,7 +60,10 @@ test('every component picking by key is typed by its keys — 49.21', () => {
     const job = reactive<Job | undefined>(undefined)
     toggleGroup({ items: jobs, value: job })
     // @ts-expect-error — a key the items do not answer: numbers' value is no text.
-    toggleGroup({ items: [1, 2], value: reactive<string | undefined>(undefined) })
+    toggleGroup({
+        items: [1, 2],
+        value: reactive<string | undefined>(undefined),
+    })
     // @ts-expect-error — a record with no `id` names its key.
     toggleGroup({ items: [{ name: 'x' }] })
     const open: Reactive<number | undefined> = accordion({
@@ -75,8 +78,9 @@ test('every component picking by key is typed by its keys — 49.21', () => {
         children: () => [],
         label: () => 'four',
     }).expanded
-    const step: Reactive<number | undefined> = wizard({ steps: [1, 2, 3] })
-        .current
+    const step: Reactive<number | undefined> = wizard({
+        steps: [1, 2, 3],
+    }).current
     void [open, rows, nodes, step]
     expect(true).toBe(true)
 })

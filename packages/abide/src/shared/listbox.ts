@@ -80,7 +80,9 @@ export function listbox<
     Option,
     Multiple extends boolean = false,
     Key extends ItemKey = KeyOf<Option>,
->(given: ListboxOptions<Option, Multiple, Key>): Listbox<Option, Multiple, Key> {
+>(
+    given: ListboxOptions<Option, Multiple, Key>,
+): Listbox<Option, Multiple, Key> {
     // 49.11 — read where they are used; the id and whether it selects many are fixed for the life of
     // the parts.
     const options = () => live(given.options)

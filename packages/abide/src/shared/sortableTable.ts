@@ -4,7 +4,12 @@
 // that is mixed while some rows are picked. The app writes every cell.
 
 import type { Column } from './Column.ts'
-import { type ItemKey, type KeyOf, keyOfItem, type KeyOption } from './itemKey.ts'
+import {
+    type ItemKey,
+    type KeyOf,
+    keyOfItem,
+    type KeyOption,
+} from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 import { runOf } from './Selection.ts'

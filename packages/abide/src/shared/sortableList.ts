@@ -129,8 +129,9 @@ export function sortableList<
     options: SortableListOptions<Item, Multiple, Key>,
 ): SortableList<Item, Multiple, Key> {
     // Keys are held as `ItemKey` inside, and as `Key` at the surface.
-    const order = (options.order ??
-        reactive<readonly Key[]>([])) as Reactive<readonly ItemKey[]>
+    const order = (options.order ?? reactive<readonly Key[]>([])) as Reactive<
+        readonly ItemKey[]
+    >
     const keyOf = (item: Item): ItemKey =>
         keyOfItem(options.key as ((item: Item) => Key) | undefined, item)
     const labelOf = (item: Item) => writtenBy(options.label, item)
