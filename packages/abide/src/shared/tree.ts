@@ -32,11 +32,11 @@ export type TreeOptions<
     /** A node's children, in order; none, or an empty list, for a leaf. */
     children(node: Node): readonly Node[] | undefined
     /** The keys of the nodes expanded, where the app holds them: a `Reactive` to read and set. Held by the parts, none expanded, and handed back as `expanded`, where none is given. */
-    expanded?: Reactive<readonly NoInfer<Key>[]> | undefined
+    expanded?: Reactive<readonly Key[]> | undefined
     /** 51.98 — whether it selects many, each press changing the selection rather than replacing it. `false` by default. */
     multiple?: Multiple | undefined
     /** The key of the node picked, or every key picked where it selects many, where the app holds them: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<Picked<NoInfer<Key>, Multiple>> | undefined
+    selected?: Reactive<Picked<Key, Multiple>> | undefined
 } & KeyOption<Node, Key> &
     LabelOption<Node>
 

@@ -33,7 +33,7 @@ export type ToggleGroupOptions<
     /** Whether it picks many, each press adding its key or taking it out. `false` by default. */
     multiple?: Multiple | undefined
     /** The key picked, or every key picked where it picks many: a `Reactive` to read and set. Held by the parts, and handed back as `value`, where none is given. */
-    value?: Reactive<Picked<NoInfer<Key>, Multiple>> | undefined
+    value?: Reactive<Picked<Key, Multiple>> | undefined
     /** The group's accessible name; a function is read live. */
     label?: Live<string> | undefined
     /** Picking one, whether a click on the item picked unpicks it, leaving `value` `undefined`. `false` by default. */

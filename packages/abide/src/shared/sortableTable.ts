@@ -25,7 +25,7 @@ export type SortableTableOptions<Row, Key extends ItemKey = KeyOf<Row>> = {
     /** The column sorted by and its direction: hand it a `Reactive` to read and set the sort. */
     sort?: Reactive<Sort | undefined> | undefined
     /** The keys of the rows picked: hand it a `Reactive` to read and set the selection (51.72). */
-    selected?: Reactive<readonly NoInfer<Key>[] | undefined> | undefined
+    selected?: Reactive<readonly Key[] | undefined> | undefined
 } & KeyOption<Row, Key>
 
 /** One column's parts: its header cell, the button in it that sorts, and its body cells. */

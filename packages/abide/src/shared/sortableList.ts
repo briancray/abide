@@ -30,11 +30,11 @@ export type SortableListOptions<
     /** The items; a function is read live. */
     items: Live<readonly Item[]>
     /** The keys of the items in the order put: a `Reactive` to read and set. Held by the parts, and handed back as `order`, where none is given. */
-    order?: Reactive<readonly NoInfer<Key>[]> | undefined
+    order?: Reactive<readonly Key[]> | undefined
     /** Whether many may be selected, to move as one. `false` by default. */
     multiple?: Multiple | undefined
     /** The keys selected, as a `listbox`'s are. Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<Picked<NoInfer<Key>, Multiple>> | undefined
+    selected?: Reactive<Picked<Key, Multiple>> | undefined
     /** The lists sharing this name take each other's items, by a grip dragged or by Alt with ArrowLeft and ArrowRight. A function is read live. */
     group?: Live<string | undefined> | undefined
 } & KeyOption<Item, Key> &

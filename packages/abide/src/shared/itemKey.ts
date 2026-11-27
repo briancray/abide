@@ -22,20 +22,29 @@ export type KeyOf<Item> = Item extends string
         : string
 
 /**
- * `key`, optional where the item is its own key or carries an `id` that is: a string or a number, or a
- * record whose `id` is one of the `Key` the parts pick by.
+ * `key`, optional where the item's own key — itself, or its `id` — is of a kind with the `Key` the
+ * parts pick by: one assignable to the other, so a list of text picked as a union of words needs no
+ * `key`, and a list of numbers picked as text does.
  */
 export type KeyOption<Item, Key extends ItemKey = ItemKey> = [Item] extends [
-    Key | { id: Key },
+    ItemKey | { id: ItemKey },
 ]
-    ? {
-          /** What tells one item from another. Its `id`, or the item itself where it has none, by default. */
-          key?: ((item: Item) => Key) | undefined
-      }
-    : {
-          /** What tells one item from another. */
-          key: (item: Item) => Key
-      }
+    ? [KeyOf<Item>] extends [Key]
+        ? OptionalKey<Item, Key>
+        : [Key] extends [KeyOf<Item>]
+          ? OptionalKey<Item, Key>
+          : RequiredKey<Item, Key>
+    : RequiredKey<Item, Key>
+
+type OptionalKey<Item, Key> = {
+    /** What tells one item from another. Its `id`, or the item itself where it has none, by default. */
+    key?: ((item: Item) => Key) | undefined
+}
+
+type RequiredKey<Item, Key> = {
+    /** What tells one item from another. */
+    key: (item: Item) => Key
+}
 
 /** `label`, optional where the item is a string or a number and so reads as itself. */
 export type LabelOption<Item> = [Item] extends [string | number]

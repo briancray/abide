@@ -24,7 +24,7 @@ export type TabsOptions<Item, Key extends ItemKey = KeyOf<Item>> = {
     /** The tabs, in the order they render; a function is read live. */
     items: Live<readonly Item[]>
     /** The selected tab's key, where the app holds it: a `Reactive` to read and set the pick. Held by the parts, and handed back as `selected`, where none is given. A key no tab has selects the first. */
-    selected?: Reactive<NoInfer<Key> | undefined> | undefined
+    selected?: Reactive<Key | undefined> | undefined
 } & KeyOption<Item, Key>
 
 /** One tab's parts: its button, and the panel kept for it alone, hidden while another is selected. */

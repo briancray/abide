@@ -62,6 +62,16 @@ test('every component picking by key is typed by its keys — 49.21', () => {
     const text = reactive<string | undefined>(undefined)
     // @ts-expect-error — a key the items do not answer: numbers' value is no text.
     toggleGroup({ items: [1, 2], value: text })
+    // Text items picked as a union of their words need no `key`, and a `key` answering a number is
+    // picked by a number `value` — the two inferences the checker has to make together.
+    const sort = reactive<'amount' | 'idle'>('amount')
+    toggleGroup({ items: ['amount', 'idle'], value: sort })
+    const order = reactive<number | undefined>(undefined)
+    toggleGroup({
+        items: [{ id: 'a', order: 3 }],
+        key: (season) => season.order,
+        value: order,
+    })
     // @ts-expect-error — a record with no `id` names its key.
     toggleGroup({ items: [{ name: 'x' }] })
     const open: Reactive<number | undefined> = accordion({

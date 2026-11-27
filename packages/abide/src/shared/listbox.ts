@@ -30,7 +30,7 @@ export type ListboxOptions<
     /** 51.98 — whether it selects many, each press changing the selection rather than moving it. `false` by default. */
     multiple?: Multiple | undefined
     /** The keys selected, where the app holds them: a `Reactive` to read and set. Where it selects one, the key last moved to (51.104). Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<Picked<NoInfer<Key>, Multiple>> | undefined
+    selected?: Reactive<Picked<Key, Multiple>> | undefined
     /** Called with the active option when Enter is pressed, and with an option clicked where it selects one. */
     onpick?: ((option: Option) => void) | undefined
     /** Called when Escape is pressed. */

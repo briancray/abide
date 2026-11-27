@@ -33,7 +33,7 @@ export type CarouselOptions<Item, Key extends ItemKey = KeyOf<Item>> = {
     /** The items, in the order they render; a function is read live. */
     items: Live<readonly Item[]>
     /** The key of the item the carousel rests on, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. A key no item has rests on the first. */
-    selected?: Reactive<NoInfer<Key> | undefined> | undefined
+    selected?: Reactive<Key | undefined> | undefined
     /** Which edge of an item, or its center, lines up with the same place in the scroller: `'center'` by default, as `scroll-snap-align` names it. A function is read live. */
     align?: Live<'start' | 'center' | 'end'> | undefined
     /** How `scrollTo`, `reset`, `previous` and `next` scroll. `'smooth'` by default; a function is read live. */
