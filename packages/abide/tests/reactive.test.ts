@@ -42,6 +42,7 @@ import { SCOPING } from '#shared/reactive/scoping.ts'
 import { enterShare, leaveShare } from '#shared/reactive/share.ts'
 import { CLEAN } from '#shared/reactive/tracking.ts'
 import { collectWatches } from '#shared/reactive/watch.ts'
+import { reactiveOver } from '#shared/reactiveOver.ts'
 import type { Schema } from '#shared/Schema.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
 import { WORK } from '#shared/WORK.ts'
@@ -7468,6 +7469,29 @@ test('a body that peeks a value is not rerun by a write to it — 2.11', () => {
     flushSync()
     stop()
     expect(`runs: ${runs}, peeked: ${source.peek()}`).toBe('runs: 0, peeked: 2')
+})
+
+// 2.11 — AND A HEADLESS PART'S STAND-IN PEEKS AS A VALUE DOES: `tabs.selected`, `wizard.current` and
+// `calendar.month` are `reactiveOver` a read, handed to an app as its `Reactive`. THE REVERT: hand
+// `reactiveOver`'s `peek` the tracked `read`; `runs: 1` where `runs: 0` is due.
+test('a body that peeks a stand-in is not rerun by a write past it — 2.11', () => {
+    const source = reactive(1)
+    const standIn = reactiveOver(
+        () => source(),
+        (next: number) => source.set(next),
+    )
+    let runs = 0
+    const stop = watch(() => {
+        runs += 1
+        standIn.peek()
+    })
+    runs = 0
+    standIn.set(2)
+    flushSync()
+    stop()
+    expect(`runs: ${runs}, peeked: ${standIn.peek()}`).toBe(
+        'runs: 0, peeked: 2',
+    )
 })
 
 // 11.9 — A WRITE TO A DERIVED VALUE IS A WRITE, not a misuse: it stands until the next recompute

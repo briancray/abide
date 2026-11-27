@@ -4,14 +4,19 @@
 // function calls on a `Reactive` it is handed.
 
 import type { Reactive } from './reactive/index.ts'
+import { untracked } from './reactive/tracking.ts'
 
-/** `read` and `write` standing in for a `Reactive`: called and `peek`ed through `read`, `set` through `write`, which hands back the refusal of the write it makes (4.18). */
+/**
+ * `read` and `write` standing in for a `Reactive`: called through `read`, `peek`ed through it untracked
+ * so a peek joins no flow (2.11), and `set` through `write`, which hands back the refusal of the write
+ * it makes (4.18).
+ */
 export function reactiveOver<Value>(
     read: () => Value,
     write: (next: Value) => unknown,
 ): Reactive<Value> {
     return Object.assign(() => read(), {
-        peek: read,
+        peek: () => untracked(read, undefined, undefined),
         set: write,
     }) as unknown as Reactive<Value>
 }
