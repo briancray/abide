@@ -105,7 +105,7 @@ A property written `name?: T` in a signature takes `undefined` as it takes the p
 | Spelling | Branches | Meaning | Rules |
 | --- | --- | --- | --- |
 | `{#if cond}` | `{:else if cond}`, `{:else}` | Conditional markup. | 12.18, 32.12, 32.21, 32.63, 32.64, 32.65, 32.70, 41.24 |
-| `{#for item, index of list key expression}` | — | Repeats markup over a list, or over a cursor as it produces. | 12.18, 32.13, 32.14, 32.15, 32.22, 32.97, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 32.70, 32.111, 41.8, 41.14, 41.15 |
+| `{#for item, index of list key expression}` | — | Repeats markup over a list, or over a cursor as it produces, its item a name or a destructuring pattern. | 12.18, 32.116, 32.13, 32.14, 32.15, 32.22, 32.97, 32.29, 32.32, 32.33, 32.63, 32.64, 32.67, 32.70, 32.111, 41.8, 41.14, 41.15 |
 | `{#try}` | `{:pending}`, `{:catch e}`, `{:finally}` | A render-time boundary and a region. | 32.16, 32.56, 32.63, 32.64, 32.96 |
 
 ## Components and slots
@@ -560,7 +560,7 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
 | `toggleGroup` | `<Item, Multiple extends boolean = false>(options: ToggleGroupOptions<Item, Multiple>) => ToggleGroup<Item, Multiple>` | Toggle buttons over a set of items as parts an app spreads onto a group and a button per item of its own, picking one as a radio group does or picking many. | 51.110, 51.111, 51.112, 51.113, 51.114, 51.115, 49.2, 49.4, 49.5, 49.6 |
-| `ToggleGroupOptions` | `<Item, Multiple extends boolean = false>{ id?: string; items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; multiple?: Multiple; value?: Reactive<Picked<string, Multiple>>; label?: string \| (() => string) }` | The items in order, how each is told apart, whether it picks many, what it picks, and its accessible name. | 51.110, 51.115, 49.8, 49.10, 49.11, 49.16, 49.19 |
+| `ToggleGroupOptions` | `<Item, Multiple extends boolean = false>{ id?: string; items: readonly Item[] \| (() => readonly Item[]); key?: (item: Item) => string; multiple?: Multiple; value?: Reactive<Picked<string, Multiple>>; label?: string \| (() => string); deselectable?: boolean }` | The items in order, how each is told apart, whether it picks many, what it picks, its accessible name, and whether picking one can be unpicked. | 51.110, 51.112, 51.115, 49.8, 49.10, 49.11, 49.16, 49.19 |
 | `ToggleGroup` | `<Item, Multiple extends boolean = false>{ readonly id: string; readonly group: Record<string, unknown>; item(item: Item): Record<string, unknown>; readonly value: Reactive<Picked<string, Multiple>> }` | The group's part, an item's button, and what is picked. | 32.11, 51.110, 51.111, 49.3, 49.8, 49.9 |
 
 ## `disclosure`
@@ -1425,7 +1425,7 @@ type Reached = { readonly [REACHED]: true }
 | --- | --- | --- | --- |
 | `fetchAndHandle` | `<T = unknown>(url: string \| URL, options?: FetchOptions<T>) => Promise<T>` | A URL's body, read as its type says or as `as` names, asked once, on either side. | 54.7, 54.8, 54.9, 54.10, 54.24, 54.27, 54.23, 54.25, 54.26 |
 | `fetchAndHandle.isError` | `(error: unknown, name: 'FetchFailed') => error is FetchFailed` | Whether a caught failure is the refusal a fetch was refused with. | 54.37 |
-| `FetchOptions<T>` | `RequestInit & { as?: 'json' \| 'text' \| 'blob'; schema?: Schema<T> }` | `fetch`'s own options, with the reading and the gate beside them. | 54.8, 54.10 |
+| `FetchOptions<T>` | `RequestInit & { as?: 'json' \| 'text' \| 'blob' \| 'response'; schema?: Schema<T> }` | `fetch`'s own options, with the reading and the gate beside them. | 54.8, 54.10 |
 | `FetchFailed` | `Failed<'FetchFailed', { status: number \| null; reason: 'network' \| 'status' \| 'shape' }>` | The refusal a refused fetch rejects with. | 15.9, 15.19, 54.9, 54.10, 54.24, 54.27 |
 
 # Orchestration
@@ -1643,7 +1643,7 @@ rows a runner prints, and an adapter for an abide app.
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `mount` | `(component: Component) => Promise<Mounted>` | A bound component, rendered into the document's body and hydrated there. | 38.119, 38.121, 38.134, 38.207 |
+| `mount` | `(component: Component) => Promise<Mounted>` | A bound component, rendered into the document's body and hydrated there. | 38.119, 38.121, 38.134, 38.207, 38.235 |
 | `Mounted` | `{ stop(): void; [Symbol.dispose](): void }` | A component `mount` hydrated, until it is stopped. | 38.119 |
 
 ## `settled`

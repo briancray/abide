@@ -69,6 +69,10 @@ const service = Bun.serve({
                 headers: { 'content-type': 'image/png' },
             })
         if (pathname === '/plain-json') return new Response('{"deals":3}')
+        if (pathname === '/who')
+            return new Response('signed in', {
+                headers: { 'x-github-user': 'hopper' },
+            })
         if (pathname === '/feed') {
             await Bun.sleep(20)
             return new Response('{"deal":1}\n{"deal":2}\n', {
@@ -273,4 +277,18 @@ test('`as` reads the body as JSON, text or a Blob whatever its type says — 54.
         await settledFetch(at('/plain-json'), { as: 'json' }),
     ].map((body) => (body instanceof Blob ? 'Blob' : typeof body))
     expect(kinds).toEqual(['string', 'Blob', 'object'])
+})
+
+// 54.10 — `as: 'response'` HANDS BACK THE 2xx `Response` ITSELF, its body unread, for a header; outside
+// 2xx it still rejects with its `FetchFailed`. THE REVERT: read the body for `as: 'response'` as
+// `readBody` reads it, and `user: undefined, body unread: false` where `user: hopper, body unread: true`.
+test("`as: 'response'` answers the Response past the status check, its body unread — 54.10, 54.9", async () => {
+    const answer: Response = await fetchAndHandle(at('/who'), {
+        as: 'response',
+    })
+    expect(
+        `user: ${answer.headers?.get('x-github-user')}, body unread: ${answer.bodyUsed === false}`,
+    ).toBe('user: hopper, body unread: true')
+    const refused = await settledFetch(at('/missing'), { as: 'response' })
+    expect(`${refused.name} ${refused.data.status}`).toBe('FetchFailed 404')
 })

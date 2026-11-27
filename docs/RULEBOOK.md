@@ -2821,6 +2821,10 @@ last spread's that carries one where two do.
 
 32.115 A `<textarea>` with a `value={expr}` and text of its own MUST be a build error.
 
+32.116 A `{#for}` row's item MUST be bound as a `for…of` binds its declaration — a name, or an object or
+an array destructuring pattern, renamed, defaulted or nested — and each name it binds MUST be in scope
+in the row's body and its `key`.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
@@ -4045,6 +4049,14 @@ the answer of a body written in its place, and MUST leave every other `reactive`
 are an object literal written in place, spell a `timeout` as a `signal` of `AbortSignal.timeout` where
 the options name no `signal`, remove a `retries` of 0, and note by 38.226 each `retries`, `backoff`
 and `timeout` it leaves.
+
+38.235 Under `mount`, `route`'s `url`, `params`, `name` and `index` MUST be the document's address —
+its `url` without the fragment, `params` empty, `name` its pathname and `index` 0 for the server
+pass, per 23.29, and for the hydration its whole `url` and the `index` the standing `history` entry
+was written with, per 23.28. Where the document has no router, a router MUST stand from the first
+mount to the last one's stop that writes a `navigate` to a URL into `history` — a new entry, or the
+standing one where `replace` is set — and steps `history` for a number, per 30.38, and `route` MUST
+arrive at each entry it reaches before the `navigate` settles.
 
 # 39. Head and view transitions
 
@@ -6091,7 +6103,9 @@ value is `at`, and its `input` MUST move `at` to its value, kept from `0` to `du
 picking `rate`.
 
 51.135 On `playback`'s `root`, Space MUST press `play`, and ArrowLeft and ArrowRight MUST move `at`
-back and forward by `step`, kept from `0` to `duration`, as `hotkeys` binds them.
+back and forward by `step`, kept from `0` to `duration`, as `hotkeys` binds them — and MUST NOT
+where the press's target is in a control inside `root` other than `root` itself (a button, a field,
+a link, or an element whose `role` is a widget's), whose own keys the press is.
 
 51.136 `breadcrumbs`' `items` MUST be every crumb of `trail`, in order, where it holds no more than
 `max`, and otherwise its first crumb, an `overflow`, and its last `max` less one.
@@ -7054,9 +7068,9 @@ answered outside 2xx, carrying the status it was answered at, or null where none
 and MUST reject with nothing else but 54.8's abort.
 
 54.10 `fetchAndHandle` MUST read a 2xx body as 54.23, 54.25 and 54.26 say, save where `as` names a
-reading — `json` parsed as JSON, `text` as its text, `blob` as a `Blob`, whatever
-its type says — and MUST settle to a `FetchFailed` for the reason `shape` where its `schema` refuses
-what was read.
+reading — `json` parsed as JSON, `text` as its text, `blob` as a `Blob`, whatever its type says,
+and `response` the `Response` itself with its body unread — and MUST settle to a `FetchFailed` for
+the reason `shape` where its `schema` refuses what was read.
 
 ## Jobs
 

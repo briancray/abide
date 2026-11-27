@@ -138,6 +138,23 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
+    <Section level={3} title="Read a header the registry answers with">
+        <p><code>as: 'response'</code> hands back the <code>Response</code> itself once it is
+            2xx, its body unread, for what it carries beside the body. A status outside 2xx still
+            rejects with its <code>FetchFailed</code>.</p>
+        <Code language="ts" caption="server" code={`
+            import { fetchAndHandle, rpc } from '@abide/abide/server'
+
+            export default rpc(async ({ id }: { id: string }) => {
+                const answer = await fetchAndHandle(
+                    \`https://registry.example/companies/\${id}\`,
+                    { method: 'HEAD', as: 'response' },
+                )
+                return answer.headers.get('last-modified')
+            })
+        `} />
+    </Section>
+
     <Section level={3} title="Hold a registry answer for a minute">
         <p>A fetch keeps nothing. Hold an answer in a <code>memo</code> with a <code>ttl</code>:
             keyed by the company, so two asks at once are one request, and a busy answer is asked
