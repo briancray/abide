@@ -1443,7 +1443,6 @@ function readTag(
     // cannot survive: it binds to whatever is there, silently.
     if (!/[A-Za-z]/.test(source[at] ?? '')) return undefined
     while (at < source.length && /[\w:-]/.test(source[at] as string)) at += 1
-    if (at === nameStart) return undefined
     const name = source.slice(nameStart, at)
     const attributes: Attribute[] = []
 

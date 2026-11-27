@@ -1,6 +1,6 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
-import type { AbideFile } from './parseAbide.ts'
+import { type AbideFile, scriptBodies } from './parseAbide.ts'
 import { importStatements } from './splitImports.ts'
 import type { Body, InlineComponent, TemplateNode } from './TemplateNode.ts'
 import { isBlank, isIndented, NEWLINE_RUN, tokenize } from './tokenize.ts'
@@ -19,9 +19,7 @@ export function sameTemplate(before: AbideFile, after: AbideFile): boolean {
 
 function shapeOf(file: AbideFile): string {
     const parts: string[] = []
-    for (const code of file.modules) parts.push(blockShape(code))
-    for (const code of file.servers) parts.push(blockShape(code))
-    for (const code of file.scripts) parts.push(blockShape(code))
+    for (const code of scriptBodies(file)) parts.push(blockShape(code))
     for (const style of file.styles) parts.push(styleShape(style))
     parts.push(file.generics ?? '')
     nodesShape(file.head, parts)

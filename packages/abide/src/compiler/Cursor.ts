@@ -379,11 +379,12 @@ export function placeTemplate(nodes: TemplateNode[], cursor: Cursor): void {
     for (let at = 0; at < nodes.length; at += 1) {
         const node = nodes[at] as TemplateNode
         if (isTextish(node)) {
-            if (at > 0 && isTextish(nodes[at - 1] as TemplateNode)) continue
             let end = at
             while (end < nodes.length && isTextish(nodes[end] as TemplateNode))
                 end += 1
-            cursor.text(nodes.slice(at, end), isBlankRun(nodes, at))
+            const run = nodes.slice(at, end)
+            cursor.text(run, isBlankRun(run))
+            at = end - 1
             continue
         }
         if (node.kind === 'block') {

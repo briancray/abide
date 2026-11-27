@@ -41,7 +41,7 @@ export function isTextish(node: TemplateNode): boolean {
 }
 
 /**
- * Whether the text run starting at `from` can render as no node at all.
+ * Whether a text run can render as no node at all.
  *
  * 32.23 — every part is an expression, so a value that stringifies to '' writes nothing and the
  * parent holds one fewer child than every position after it in that parent assumes. One static
@@ -52,12 +52,9 @@ export function isTextish(node: TemplateNode): boolean {
  * of this rule is two answers to "how many nodes did the parser make here", and that disagreement
  * is exactly the defect row construction shipped once already.
  */
-export function isBlankRun(nodes: TemplateNode[], from: number): boolean {
-    for (let at = from; at < nodes.length; at += 1) {
-        const piece = nodes[at] as TemplateNode
-        if (!isTextish(piece)) return true
+export function isBlankRun(run: readonly TemplateNode[]): boolean {
+    for (const piece of run)
         if (piece.kind === 'text' && piece.text !== '') return false
-    }
     return true
 }
 
@@ -289,7 +286,7 @@ function staticBytes(lowerName: string, value: string): string | undefined {
  * anything the compiler said.
  *
  * THE AUTHOR'S OWN PLAIN `style=` OR `class=` IS A MEMBER OF THE GROUP, not an attribute beside
- * it. `isStyleProperty` answers only for the prefix, so `<div style="color: red"
+ * it. `directiveOf` answers only for the prefix, so `<div style="color: red"
  * style:width={w}>` wrote TWO `style=` attributes and a browser kept the first — the reactive
  * declaration dropped in silence, which is the loss the merge exists to stop, arriving by the one
  * spelling it did not cover.
@@ -305,20 +302,19 @@ export type MergeGroup = {
 
 // TWO GROUPS, ONE FRAME. What differs between them is the value alone, so the finding and the
 // ordering are written once and each way of making an element renders the value its own way.
-const MERGED = [
-    { name: 'style', is: isStyleProperty },
-    { name: 'class', is: isClassToggle },
-] as const
+const MERGED = ['style', 'class'] as const
 
 /** The element's `style` and `class` merge groups, each only where it has a directive. */
 function mergeGroupsOf(node: ElementNode): MergeGroup[] {
     const groups: MergeGroup[] = []
-    for (const kind of MERGED) {
-        const directives = node.attributes.filter(kind.is)
+    for (const name of MERGED) {
+        const directives = node.attributes.filter(
+            (attribute) => directiveOf(attribute) === name,
+        )
         if (directives.length === 0) continue
-        const plain = attributeOf(node, kind.name)
+        const plain = attributeOf(node, name)
         groups.push({
-            name: kind.name,
+            name,
             members: new Set(
                 plain === undefined ? directives : [plain, ...directives],
             ),
@@ -529,7 +525,8 @@ function valueBindOf(lowerName: string): ValueBind | undefined {
 }
 
 /**
- * Whether an attribute is a `style:prop` directive, setting ONE style property.
+ * Which merge group an attribute is a directive of: `style` for a `style:prop`, setting ONE style
+ * property, `class` for a `class:name`, toggling ONE class, or `undefined`.
  *
  * 32.10 — `style:prop` sets ONE style property and `class:name` ONE class. Read by `MERGED`
  * alone, so a directive is classified where its merge group is found. The prefix is matched on the
@@ -539,19 +536,12 @@ function valueBindOf(lowerName: string): ValueBind | undefined {
  * A BARE `style:` OR `class:` IS NOT ONE — the prefix with nothing after it names no property and
  * no class, so it stays an ordinary attribute and renders as the author wrote it.
  */
-function isStyleProperty(attribute: Attribute): boolean {
-    return (
-        attribute.lowerName.length > 6 &&
-        attribute.lowerName.startsWith('style:')
-    )
-}
-
-/** Whether an attribute is a `class:name` directive, toggling ONE class — see `isStyleProperty`. */
-function isClassToggle(attribute: Attribute): boolean {
-    return (
-        attribute.lowerName.length > 6 &&
-        attribute.lowerName.startsWith('class:')
-    )
+function directiveOf(attribute: Attribute): 'style' | 'class' | undefined {
+    const name = attribute.lowerName
+    const colon = name.indexOf(':')
+    if (colon === -1 || colon === name.length - 1) return undefined
+    const prefix = name.slice(0, colon)
+    return prefix === 'style' || prefix === 'class' ? prefix : undefined
 }
 
 /**
@@ -632,13 +622,9 @@ function explicitNames(node: ElementNode): string[] {
         if (attribute.name === '...') continue
         const lower = attribute.lowerName
         if (isEventName(lower)) continue
-        const name = isClassToggle(attribute)
-            ? 'class'
-            : isStyleProperty(attribute)
-              ? 'style'
-              : lower.startsWith('bind:')
-                ? boundProperty(lower)
-                : lower
+        const name =
+            directiveOf(attribute) ??
+            (lower.startsWith('bind:') ? boundProperty(lower) : lower)
         if (!names.includes(name)) names.push(name)
     }
     return names
