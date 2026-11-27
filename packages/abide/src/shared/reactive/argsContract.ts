@@ -54,6 +54,20 @@ export function gateOf(
 }
 
 /**
+ * 16.43 — `args` as they stand now, for an entry to keep: a copy where they are plain data, so a
+ * change the caller makes to its object after the call reaches no refresh, and `args` as given
+ * where they hold what no copy reproduces (a function, an instance).
+ */
+export function heldArgs<Args>(args: Args): Args {
+    if (!isPlainData(args)) return args
+    try {
+        return structuredClone(args)
+    } catch {
+        return args
+    }
+}
+
+/**
  * `args` with every member the face's parameter defaults filled where it is `undefined` (11.27).
  *
  * `args` itself where the face has no defaults or nothing was missing, so a caller that passed

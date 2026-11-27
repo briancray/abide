@@ -14,6 +14,7 @@ import {
     ARGS_GATE,
     canonicalKey,
     type Gated,
+    heldArgs,
     normalized,
     PARAMETER_DEFAULTS,
 } from './argsContract.ts'
@@ -443,8 +444,8 @@ export function createKeyed<
     }
 
     function reach(given: Args): Reactive<Stored, Accepted, Failures> {
-        const args = normalized(self, given)
-        const key = canonicalKey(args)
+        const normal = normalized(self, given)
+        const key = canonicalKey(normal)
         const standing = lifetime?.outlived(key) ? undefined : entries.get(key)
         // 1.8: reaching an instance that exists joins the standing work — 15.19, unless that work
         // failed transiently, which this reach runs again.
@@ -452,6 +453,10 @@ export function createKeyed<
             if (failedTransiently(standing)) standing.refresh()
             return standing
         }
+        // 16.43 — THE ARGS AS THEY WERE AT THE CALL, kept by the entry: the caller's object is
+        // theirs to change after, and a refresh that read it then would run the body for args its
+        // key does not name. Copied once per entry made, never per reach that joins one.
+        const args = heldArgs(normal)
         // 11.27's VALIDATE, ONCE PER ENTRY AND BEFORE IT IS FILED: a refused `Args` is answered by a
         // value holding the refusal (2.2) that no map keeps, so args nobody should have sent never
         // take a place among the entries — on a `global` value, a place nothing but `invalidate`
