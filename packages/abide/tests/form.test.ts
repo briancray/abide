@@ -444,3 +444,45 @@ test('a blank optional number posts as absent, and as null where null is declare
     expect(entry.issues).toBeUndefined()
     expect(reached).toEqual([{ company: '', miles: null }])
 })
+
+// 56.34, 56.35 — A CREATE FORM STARTS OVER: a call answered without a failure resets the `<form>`, so
+// each field reads as it rendered rather than as what it sent, and `onsuccess` is handed what the call
+// answered once it has. THE REVERT: drop the `resetOnSuccess` arm — the company field still holds what
+// was sent, and the form reads clean against it (56.19).
+test('resetOnSuccess starts the form over, and onsuccess is handed the answer — 56.34, 56.35', async () => {
+    const add = rpc((args: { company: string }) => ({ id: 7, ...args }), {
+        methods: ['POST'],
+    })
+    addressed(add, '/deals/create')
+    const answered: unknown[] = []
+    const deal = form(add, {
+        resetOnSuccess: true,
+        onsuccess: (value) =>
+            answered.push([value, valueOf(element, 'company')]),
+    })
+    const element = opened(deal, { company: undefined })
+    typed(element, 'company', 'Hopper & Co')
+    await submitted(element)
+    expect(valueOf(element, 'company')).toBe('')
+    expect(deal.dirty).toBe(false)
+    expect(answered).toEqual([[{ id: 7, company: 'Hopper & Co' }, '']])
+})
+
+// 56.13 — A FAILURE THAT NAMES NO FIELD IS THE FORM'S MESSAGE TOO: a 409 carries no issues, so before
+// this the form showed nothing and every app wrote its own line from `call.error()`. THE REVERT: answer
+// only the issues under `''` — `deal.message` reads `undefined`.
+test("a refusal with no issues shows as the form's own message — 56.13", async () => {
+    const taken = refuse.named('Taken', {
+        status: 409,
+        message: 'That name is taken.',
+    })
+    const name = rpc((_args: { company: string }) => taken(), {
+        methods: ['POST'],
+    })
+    addressed(name, '/deals/taken')
+    const deal = form(name)
+    await submitted(rendered(deal, { company: 'Hopper & Co' }))
+    expect(deal.message).toBe('That name is taken.')
+    expect(deal.error.hidden).toBe(false)
+    expect(deal.field('company').message).toBeUndefined()
+})

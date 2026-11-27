@@ -25,6 +25,7 @@ import {
     reactive,
     watch,
 } from './reactive/index.ts'
+import { untracked } from './reactive/tracking.ts'
 import type { ReadRpc } from './rpc.ts'
 import { runSchema } from './Schema.ts'
 
@@ -87,8 +88,30 @@ export type Form<Handler extends AnyRpc> = {
     readonly call: CallOf<Handler>
 }
 
+/** What a `form` does once a call it made answers without a failure. */
+export type FormOptions<Handler extends AnyRpc> = {
+    /** 56.34 — whether the `<form>` starts over, each field back to how it rendered, rather than keeping what it sent. `false` by default. */
+    resetOnSuccess?: boolean | undefined
+    /** 56.35 — called with what the call answered, once the fields have moved. */
+    onsuccess?:
+        | ((
+              value: Handler extends ReadRpc<
+                  infer Value,
+                  infer _Args,
+                  infer _Failures,
+                  infer _Produced
+              >
+                  ? Value
+                  : unknown,
+          ) => void)
+        | undefined
+}
+
 /** A form whose submit calls `handler` with its fields, checked first against its args' document. */
-export function form<Handler extends AnyRpc>(handler: Handler): Form<Handler> {
+export function form<Handler extends AnyRpc>(
+    handler: Handler,
+    options: FormOptions<Handler> = {},
+): Form<Handler> {
     const document = (handler as unknown as Record<symbol, JsonValue>)[
         ARGS_DOCUMENT
     ]
@@ -143,7 +166,13 @@ export function form<Handler extends AnyRpc>(handler: Handler): Form<Handler> {
         if (own !== undefined) return own ?? undefined
         return call.issues() as Record<string, string[]> | undefined
     }
-    const message = (name: string): string | undefined => issues()?.[name]?.[0]
+    // 56.13 — the whole form's message is also a failure that names no field: a 401, a 409.
+    const message = (name: string): string | undefined => {
+        const own = issues()?.[name]?.[0]
+        if (own !== undefined || name !== '' || issues() !== undefined)
+            return own
+        return call.error()?.message
+    }
 
     // 56.1 — the fields as a post carries them, coerced to the types the document declares (19.7).
     const argsOf = (element: HTMLFormElement): unknown => {
@@ -190,15 +219,23 @@ export function form<Handler extends AnyRpc>(handler: Handler): Form<Handler> {
         focusing = false
         focusFirst(refused)
     })
-    // 56.19 — a call answered without a failure moves the baseline to what it sent.
+    // 56.19 — a call answered without a failure moves the baseline to what it sent, or, 56.34, starts
+    // the form over; and 56.35 hands what it answered on once the fields have moved.
     watch(() => {
         sends()
         if (call.busy() || sent === undefined) return
         const kept = sent
         sent = undefined
         if (call.error() !== undefined || shown === undefined) return
-        for (const [field, value] of kept) adopt(field, value)
-        measure(shown)
+        if (options.resetOnSuccess === true) shown.reset()
+        else {
+            for (const [field, value] of kept) adopt(field, value)
+            measure(shown)
+        }
+        // Untracked, so what the app's callback reads is not this watch's to rerun on.
+        const onsuccess = options.onsuccess
+        if (onsuccess !== undefined)
+            untracked(onsuccess, call.peek() as never, undefined)
     })
 
     const submitted = (event: SubmitEvent): void => {

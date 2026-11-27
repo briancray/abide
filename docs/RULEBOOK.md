@@ -7237,8 +7237,9 @@ form's own `error` while the form has none.
 
 56.12 A `form` whose `<form>` holds a file in a field MUST throw at its submit, naming the field.
 
-56.13 A `form`'s `message` MUST be the first of its issues no field owns, those under `''`, and a
-`field`'s `message` the first of that field's.
+56.13 A `form`'s `message` MUST be the first of its issues no field owns, those under `''` — or, where
+it has no issues and its last call failed, that failure's message — and a `field`'s `message` the
+first of that field's.
 
 56.14 A `form`'s baseline for a field MUST be what a reset of its `<form>` restores the field to: its
 `value` attribute, its `checked` attribute, or the option its options' `selected` attributes choose.
@@ -7299,6 +7300,12 @@ write `value` back as the input's text, a text that is no number leaving `value`
 56.33 An `input` of `spinbutton`'s `input` MUST set `value` to the number its text holds where 56.32
 would keep that number as it is and would write back the text as it stands, and MUST otherwise leave
 both `value` and the text as they are until a `change`.
+
+56.34 Where `resetOnSuccess` is true, a call a `form` makes that answers without a failure MUST
+reset its `<form>` in place of 56.19, leaving each field's baseline as it was.
+
+56.35 A call a `form` makes that answers without a failure MUST call `onsuccess` with what it
+answered, once 56.19 or 56.34 has moved its fields.
 
 # 57. Pipes
 
