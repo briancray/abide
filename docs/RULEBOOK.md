@@ -5362,6 +5362,9 @@ comparison other than `ne`, and for an array or an object nested where a value g
 `table` call and by `sql`, its stopped watch said once per database, and the writes made through its
 `table` MUST then be all that refresh what 47.29 names.
 
+47.39 `table` MUST NOT open its database as it declares the table, and MUST open it no sooner than
+the table it hands back is called, written through, or its `readable` or `writable` reached.
+
 # 48. Problem reports
 
 48.1 `report` MUST answer a `ReportDraft` holding among its `traces` the trace it was given, and the

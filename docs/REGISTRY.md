@@ -1415,7 +1415,7 @@ type Reached = { readonly [REACHED]: true }
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `table` | `<Row extends Record<string, unknown>>(database: Database \| (() => Database), name: string, options?: { key?: keyof Row & string }) => Table<Row>` | A table of the app's `bun:sqlite` database: called, its rows; and a stream pair, its changes read out and rows upserted in, from `@abide/abide/server`. | 47.25, 47.26, 47.27, 47.28, 47.29, 47.30, 47.31, 47.35, 47.36, 47.38 |
+| `table` | `<Row extends Record<string, unknown>>(database: Database \| (() => Database), name: string, options?: { key?: keyof Row & string }) => Table<Row>` | A table of the app's `bun:sqlite` database: called, its rows; and a stream pair, its changes read out and rows upserted in, from `@abide/abide/server`. | 47.25, 47.26, 47.27, 47.28, 47.29, 47.30, 47.31, 47.35, 47.36, 47.38, 47.39 |
 | `Table` | `<Row>((match?: Match<Row>) => Row[]) & { set(rows: Row \| readonly Row[]): void; patch(rows: Partial<Row> \| readonly Partial<Row>[]): void; delete(match: Match<Row>): number; readonly readable: ReadableStream<Change<Row>>; readonly writable: WritableStream<Row> }` | What `table` hands back: its rows read by calling it, written and deleted by key, its changes, and the rows streamed in. | 47.25, 47.33, 47.34, 47.35, 47.36 |
 | `Match` | `<Row>{ [Column in keyof Row]?: ColumnMatch<Row[Column]> }` | The columns a `table` call matches, each by a `ColumnMatch`. | 47.35, 47.36 |
 | `ColumnMatch` | `<Value>Value \| null \| readonly (Value \| null)[] \| { gt?: Value; gte?: Value; lt?: Value; lte?: Value; ne?: Value \| null }` | What a `table` call matches one column against, all of it JSON. | 47.36 |

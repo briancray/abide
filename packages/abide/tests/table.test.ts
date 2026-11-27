@@ -46,6 +46,23 @@ test('table refuses a table the database does not hold — 47.25', () => {
     expect(said).toBe('refused')
 })
 
+// 47.39 — A TABLE DECLARED OPENS NOTHING, so a module declaring one at import time opens its database
+// only once the app's config names where. THE REVERT: stand the table's watch up in `table` itself
+// rather than at its first call or write; the opener is called at the declaration, 1 open where 0
+// are due.
+test('a table declared does not open its database until it is called — 47.39', () => {
+    const db = deals()
+    let opens = 0
+    const opener = () => {
+        opens += 1
+        return db
+    }
+    const pair = table<Deal>(opener, 'deals')
+    expect(`opens: ${opens}`).toBe('opens: 0')
+    expect(pair()).toEqual([])
+    expect(opens).toBeGreaterThan(0)
+})
+
 // 47.26, 47.27, 47.28 — EVERY COMMITTED WRITE, BY ANY STATEMENT, IS ONE CHANGE, IN ORDER; ONE ROLLED
 // BACK IS NONE. The writes here are raw SQL, not the pair's: the triggers are what capture them.
 // THE REVERT: capture in the pair's writable alone, and nothing raw SQL wrote is read.
