@@ -26,6 +26,8 @@ export type PromptOptions = {
     value?: string | undefined
     /** The input's placeholder. */
     placeholder?: string | undefined
+    /** Written onto the input: `{ maxlength: '60' }`, an `inputmode`, a `pattern` (50.83). */
+    input?: Record<string, string> | undefined
     /** Withdraws the prompt once it aborts, waiting or showing; it settles as one declined (50.43). */
     signal?: AbortSignal | undefined
     /** Whether it is shown modal, over an inert page. `false` leaves the page usable around it (50.44). Default `true`. */
@@ -47,6 +49,8 @@ export type Prompt = {
     mustType: string | undefined
     value: string
     placeholder: string | undefined
+    /** Written onto the input, `{}` where it was given none (50.83). */
+    input: Record<string, string>
     modal: boolean
     run: ((answer: string) => unknown) | undefined
     kind: 'confirm' | 'alert' | 'prompt'
@@ -103,6 +107,7 @@ export function queued(
         mustType: options.mustType,
         value: options.value ?? '',
         placeholder: options.placeholder,
+        input: options.input ?? {},
         modal: options.modal ?? true,
         run: options.run,
         kind,

@@ -9,8 +9,10 @@ import { installServer } from '#server/installServer.ts'
 import { inScope } from '#server/requestScope.ts'
 import { anchored } from '#shared/anchored.ts'
 import { place } from '#shared/place.ts'
+import { host as promptsHost } from '#shared/prompts/host.ts'
 import * as prompts from '#shared/prompts/index.ts'
 import { queue } from '#shared/prompts/queue.ts'
+import { collectWatches } from '#shared/reactive/watch.ts'
 import { toasts } from '#shared/toasts.ts'
 
 installServer()
@@ -280,6 +282,33 @@ test('a prompt starts from its value, and an empty one from nothing — 50.34', 
     ])
 })
 
+// THE REVERT: drop `...asked?.input` from the host's input part, and a rename asked of sixty characters
+// at most reads `maxlength` undefined where '60' is due.
+test("a prompt's input attributes are its input's, under the host's own — 50.83", () => {
+    const stops: (() => void)[] = []
+    const previous = collectWatches(stops)
+    const asked = promptsHost()
+    collectWatches(previous)
+    try {
+        void prompts.prompt({
+            title: 'Name the fork',
+            input: { maxlength: '60', 'data-prompts': 'mine' },
+        })
+        expect([
+            asked.input.maxlength,
+            asked.input['data-prompts'],
+            asked.input['aria-label'],
+        ]).toEqual(['60', 'input', 'Name the fork'])
+        void prompts.prompt('Name the pipeline')
+        queue.patch((waiting) => {
+            waiting.shift()
+        })
+        expect(asked.input.maxlength).toBeUndefined()
+    } finally {
+        for (const stop of stops) stop()
+    }
+})
+
 // THE REVERT: drop the `isServer` check from `queued`, and the request never settles: it holds a
 // prompt nobody can answer, which is the hang a server's `confirm` would be.
 test('confirm, alert, prompt and notify throw inside a request — 50.11, 50.16', async () => {
@@ -315,6 +344,7 @@ test('the notices and the prompts are one list per request — 11.32', async () 
                 mustType: undefined,
                 value: '',
                 placeholder: undefined,
+                input: {},
                 modal: true,
                 run: undefined,
                 kind: 'confirm',

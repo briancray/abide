@@ -381,8 +381,8 @@ then apply.
 6.1 An entry of a `memo` whose `ttl` runs out while something subscribes to it MUST be refreshed per
 7.4 and 7.5, and what lands MUST reach whatever subscribes to it.
 
-6.2 An entry of a `memo` whose `ttl` runs out while nothing subscribes to it MUST be released, and
-the next call with its `Args` MUST run the function afresh.
+6.2 An entry of a `memo` whose `ttl` runs out while nothing subscribes to it MUST be released, save
+as 6.6 keeps it, and the next call with its `Args` MUST run the function afresh.
 
 6.3 An entry's `ttl` MUST run from its reach, and again from each value that lands on it, a
 production or an `s.patch`.
@@ -391,6 +391,17 @@ production or an `s.patch`.
 
 6.5 An entry whose `ttl` is 0, and an entry of a mutation's (16.7), MUST be released per 6.2 whether
 or not anything subscribes to it.
+
+6.6 An entry of a `memo` declaring `staleIfError` whose `ttl` runs out while nothing subscribes to it,
+and that serves a value, MUST be kept rather than released, save one 6.5 releases.
+
+6.7 An entry 6.6 keeps that no call reaches for `staleIfError` milliseconds MUST be released per 6.2.
+
+6.8 A call reaching an entry 6.6 keeps MUST refresh that entry per 7.4 and 7.5 rather than run the
+function in a new one.
+
+6.9 A call reaching an entry 6.8 refreshes MUST answer what the refresh lands, and, where the
+refresh fails, what the entry held.
 
 # 7. Triggers
 
@@ -446,7 +457,7 @@ included, and MUST be one not aborted from then on.
 MUST answer a signal of that run's own.
 
 7.23 The signal 7.22 answers MUST abort where a new run of that value starts, where the value or its
-entry is released, and where its owner's signal aborts: 7.25's for a value filed in a request
+entry is released, where 16.48 or 16.59 ends its load, and where its owner's signal aborts: 7.25's for a value filed in a request
 (11.32), and 7.20's for any other, a `global` value's included.
 
 7.24 On a server, `abortSignal` called in work a `reactive` or `memo` run carries across an `await` MUST answer
@@ -724,7 +735,8 @@ process-local in a browser.
 
 11.34 `global: true` MUST place entries in a process-wide cache that outlives every request.
 
-11.35 A `global` `memo` MUST be bounded by its own `ttl` and by `invalidate`, and by nothing else.
+11.35 A `global` `memo` MUST be bounded by its own `ttl` and `staleIfError` and by `invalidate`, and by
+nothing else.
 
 11.36 An implementation MUST NOT evict a `global` entry on a size or a count limit.
 
@@ -748,7 +760,8 @@ values.
 
 11.44 The function form of `tags` MUST receive the value's `Args`.
 
-11.45 A `memo`'s `ttl` MUST be the life of each of its entries, which 6.1 and 6.2 end.
+11.45 A `memo`'s `ttl` MUST be the life of each of its entries, which 6.1 and 6.2 end, and
+`staleIfError` the time past it 6.6 keeps one.
 
 11.46 A `memo` MUST accept a `schema`, gating what its body produced.
 
@@ -842,11 +855,16 @@ as 4.3, 4.6 and 5.3 apply them to a `reactive`'s.
 11.80 `m.set` and `m.patch` MUST take the write alone only where the `memo` takes no `Args` at all,
 and MUST take `args` before it where its `Args` are optional.
 
-11.81 `reactive` given a `ttl`, a `throttle`, a `debounce`, `tags` or `global` MUST throw
-a `TypeError` at construction naming the `memo` that declares it.
+11.81 `reactive` given a `ttl`, a `staleIfError`, a `throttle`, a `debounce`, `tags` or `global` MUST
+throw a `TypeError` at construction naming the `memo` that declares it.
 
 11.82 A derived `reactive` a module declares on a server while the app's server blocks are imported
 MUST NOT run its body before every `onConfig` they call is filed.
+
+11.83 A `memo`'s call MUST take a `signal`, and 16.48, 16.49 and 16.62 MUST hold of it as of a
+handler's call.
+
+11.84 16.48 MUST NOT end a load of a `memo`'s entry that a call given a `signal` did not start.
 
 # 12. Effects
 
@@ -5706,6 +5724,9 @@ it and every `menu` it is a submenu of, returning focus to the trigger of the ou
 
 50.82 Tab in an open `menu` MUST close it and every `menu` it is a submenu of.
 
+50.83 `prompts.host`'s `input` part MUST carry each attribute the showing prompt's `input` names,
+under the attributes the host writes there itself.
+
 # 51. Lists and tables
 
 51.1 `listbox` MUST keep active the option a pointer holds active as 51.94 names, and otherwise the
@@ -6831,7 +6852,8 @@ alike.
 before it, and ask again for an answer to what is left.
 
 53.47 `chat` MUST show the messages `messages` holds, and MUST write every message it adds and
-every event it folds to `messages`.
+every event it folds to `messages`; while `messages` is failed, `failed` MUST be its failure's
+message in place of 53.36's, and `chat` MUST NOT send, as 53.34 does not while `disabled` is `true`.
 
 53.48 `pairing`'s `step` MUST be `slow` once it has been connecting for `slowAfter` milliseconds, and
 `pairing`'s `retry` MUST take it back to `connecting`.

@@ -115,6 +115,16 @@ export function host(): PromptsHost {
         settle(asked, answer)
     }
 
+    const typedInto = (event: Event): void => {
+        typed.set((event.currentTarget as HTMLInputElement).value)
+    }
+    // The field's own value follows what is typed, which a prompt moving on starts again.
+    const following = (field: HTMLInputElement) =>
+        watch(() => {
+            const text = typed() ?? ''
+            if (field.value !== text) field.value = text
+        })
+
     const shown = withPart(
         {
             role: 'alertdialog',
@@ -153,27 +163,22 @@ export function host(): PromptsHost {
         title: { 'data-prompts': 'title' },
         body: { 'data-prompts': 'body' },
         field: { 'data-prompts': 'field' },
-        input: {
-            'data-prompts': 'input',
-            autocomplete: 'off',
-            autofocus: true,
-            get 'aria-label'() {
-                const asked = current()
-                return asked?.mustType === undefined
-                    ? (asked?.title ?? asked?.body)
-                    : undefined
-            },
-            get placeholder() {
-                return current()?.placeholder
-            },
-            oninput: (event: Event) =>
-                typed.set((event.currentTarget as HTMLInputElement).value),
-            // The field's own value follows what is typed, which a prompt moving on starts again.
-            'bind:element': (field: HTMLInputElement) =>
-                watch(() => {
-                    const text = typed() ?? ''
-                    if (field.value !== text) field.value = text
-                }),
+        // 50.83 — the prompt's own attributes first, so the ones the host keeps are its to keep.
+        get input() {
+            const asked = current()
+            return {
+                ...asked?.input,
+                'data-prompts': 'input',
+                autocomplete: 'off',
+                autofocus: true,
+                'aria-label':
+                    asked?.mustType === undefined
+                        ? (asked?.title ?? asked?.body)
+                        : undefined,
+                placeholder: asked?.placeholder,
+                oninput: typedInto,
+                'bind:element': following,
+            }
         },
         get failed() {
             return failure()

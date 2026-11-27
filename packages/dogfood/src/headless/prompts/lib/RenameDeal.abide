@@ -4,7 +4,11 @@ import { prompts, reactive } from '@abide/abide'
 let deal = reactive('Engine renewal')
 
 async function rename() {
-    const name = await prompts.prompt({ title: 'Rename deal', value: deal })
+    const name = await prompts.prompt({
+        title: 'Rename deal',
+        value: deal,
+        input: { maxlength: '60' },
+    })
     if (name?.trim()) deal = name.trim()
 }
 </script>

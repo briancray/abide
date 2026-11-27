@@ -47,6 +47,7 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
             path: 'packages/abide/tests/overlays.test.ts',
             from: [
                 "test('confirm, alert, prompt and notify throw inside a request",
+                "test(\"a prompt's input attributes are its input's",
             ],
         },
         {
@@ -86,7 +87,8 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
 
     <Section level={3} title="Ask for a deal's new name">
         <p><code>prompts.prompt</code> settles with the text typed, or <code>undefined</code> when
-            declined. The input starts from <code>value</code>.</p>
+            declined. The input starts from <code>value</code>, and carries the attributes
+            <code>input</code> names, a <code>maxlength</code> here.</p>
         <Example code={renameDeal}><RenameDeal /></Example>
     </Section>
 
