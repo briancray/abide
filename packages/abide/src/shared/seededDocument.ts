@@ -3,7 +3,7 @@
 // from there before it is fetched. Not followed over the mux, which carries app handlers'
 // productions and has none of abide's own to send.
 
-import { answered, answerOf } from './answerOf.ts'
+import { answeredValue } from './answerOf.ts'
 import type { Failed } from './Failed.ts'
 import { mounted } from './mount.ts'
 import { rpcRequest } from './rpcRequest.ts'
@@ -24,12 +24,7 @@ export function seededDocument<Document>(
     | Failed<string, unknown>
     | Promise<Document | Failed<string, unknown>> {
     const request = rpcRequest('GET', mounted(address), args)
-    const answer = answerOf(request, false, undefined)
-    return (
-        answer instanceof Promise
-            ? answer.then((settled) => answered(settled, request))
-            : answered(answer, request)
-    ) as
+    return answeredValue(request) as
         | Document
         | Failed<string, unknown>
         | Promise<Document | Failed<string, unknown>>

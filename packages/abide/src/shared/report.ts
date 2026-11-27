@@ -7,7 +7,7 @@
 // server fills — a slot rather than an import, so the server's hooks stay out of a browser bundle.
 
 import { REPORT_ADDRESS, REPORT_LINES_ADDRESS } from './ADDRESSES.ts'
-import { answered, answerOf } from './answerOf.ts'
+import { answeredValue } from './answerOf.ts'
 import { isFailed, traceOf } from './Failed.ts'
 import { log, type LogRecord, tsvLine } from './log.ts'
 import { mounted } from './mount.ts'
@@ -132,8 +132,7 @@ export class ReportDraft {
             traces: report.traces,
             lines: pageLinesOf(lines),
         })
-        const answer = await answerOf(request, false, undefined)
-        const value = answered(answer, request)
+        const value = await answeredValue(request)
         if (isFailed(value)) throw value
     }
 }

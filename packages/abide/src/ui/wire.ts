@@ -20,6 +20,7 @@
 import {
     type Answer,
     answered,
+    answeredValue,
     answerFrom,
     answerOf,
     noAnswer,
@@ -330,9 +331,7 @@ function sendsMembers(
         const request = rpcRequest(verb, route, body, 'no-store')
         // Through `answerOf`, as every call is: a principal the member rotated reaches every tab
         // (26.24), and no answer is a 503 (16.79).
-        return Promise.resolve(answerOf(request, false, undefined)).then(
-            (answer) => answered(answer, request),
-        )
+        return Promise.resolve(answeredValue(request))
     }
     for (const member in faces) {
         const verb = faces[member] as Method

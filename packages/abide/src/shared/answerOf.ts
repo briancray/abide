@@ -205,6 +205,17 @@ export function answerFrom(
 }
 
 /**
+ * What a call of `request` answers as a value — `answered` over `answerOf` — settled at once where the
+ * page already holds its answer (41.25), and a promise of it otherwise.
+ */
+export function answeredValue(request: RpcRequest): unknown {
+    const answer = answerOf(request, false, undefined)
+    return answer instanceof Promise
+        ? answer.then((settled) => answered(settled, request))
+        : answered(answer, request)
+}
+
+/**
  * What a call's body hands back: the value, nothing (16.31), or the refusal it was answered with.
  *
  * The refusal (15.1) is rebuilt as the `Failed` the server returned. RETURNED, so the value refuses
