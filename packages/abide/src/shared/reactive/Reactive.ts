@@ -283,7 +283,9 @@ export type Reactive<
     set(
         value:
             | Accepted
-            | PromiseLike<Accepted>
+            // 11.69 — a promise that is no `Reactive`, as `Held` spells it: through this arm a
+            // `Reactive` of other failures was taken as any thenable is.
+            | (PromiseLike<Accepted> & { invalidate?: never | undefined })
             | Reactive<Accepted, unknown, Failures, unknown>,
         // Same reason as `watch` below — a `set` that returns nothing infers `void`, and 4.18's refusal is the other arm.
     ): void | Failures

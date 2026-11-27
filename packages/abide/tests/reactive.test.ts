@@ -26,7 +26,7 @@ import {
     refuse,
     watch,
 } from '#shared'
-import { holdUntil } from '#shared/Failed.ts'
+import { type Failed, holdUntil } from '#shared/Failed.ts'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { CELL } from '#shared/reactive/CELL.ts'
 import { cellOf } from '#shared/reactive/cellShape.ts'
@@ -7571,4 +7571,20 @@ test('a sink fill is batched by the turn, not by the production — 35.10', () =
     expect(
         `before the turn ends: ${beforeTheTurnEnds}, after: ${after}, filled: ${nameNode.data} ${titleNode.data}`,
     ).toBe('before the turn ends: 0, after: 2, filled: Ada landed')
+})
+
+// 11.69 — `set` TAKES ONLY A `Reactive` WHOSE FAILURES ARE THIS VALUE'S, in the types. THE REVERT: give
+// `set`'s promise arm back its bare `PromiseLike<Accepted>`; a `Reactive` of other failures passes
+// through it, and `bun run typecheck` reports the directive below unused.
+test("set refuses a Reactive whose failures are not this value's — 11.69", () => {
+    const held = reactive<number>(1)
+    // Typed alone: what is checked is the call, which is never made.
+    const moved = undefined as unknown as Reactive<
+        number,
+        number,
+        Failed<'Moved'>
+    >
+    // @ts-expect-error — `moved` carries `Moved`, which `held` does not.
+    const write = () => held.set(moved)
+    expect(typeof write).toBe('function')
 })

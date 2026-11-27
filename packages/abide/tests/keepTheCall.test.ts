@@ -429,7 +429,8 @@ gate(
     'a call kept through then is busy until the step ends, and holds what the step answered — 2.16, 2.17',
     { revert: handBackTheCall, worth: { busy: 'mid-step busy=false' } },
     async () => {
-        const saving = reactive<number>()
+        // 11.69 — what the step it is set to may refuse, it may refuse too.
+        const saving: Reactive<number, number, unknown> = reactive<number>()
         const busy: boolean[] = []
         using _busy = {
             [Symbol.dispose]: watch(() => {
