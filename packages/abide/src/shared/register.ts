@@ -4,6 +4,7 @@
 // the last (50.36). Membership is the only write, so a reader wakes on an
 // entry arriving or leaving and on nothing else.
 
+import { byDocumentOrder } from './byDocumentOrder.ts'
 import type { Reactive } from './reactive/Reactive.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
 
@@ -53,10 +54,6 @@ export function inGroup<
         if (entry.group() === group && entry.element() !== null)
             found.push(entry)
     return found.sort((a, b) =>
-        (a.element() as Element).compareDocumentPosition(
-            b.element() as Element,
-        ) & Node.DOCUMENT_POSITION_FOLLOWING
-            ? -1
-            : 1,
+        byDocumentOrder(a.element() as Element, b.element() as Element),
     )
 }

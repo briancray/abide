@@ -8,6 +8,7 @@ import { checkParts } from './checkParts.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
+import { stepOf } from './roving.ts'
 
 /** Which way the panel sizes, which edge its handle is on, and the bounds it keeps to. */
 export type ResizableOptions = {
@@ -83,11 +84,6 @@ export function resizable(options: ResizableOptions = {}): Resizable {
     const bound = (pixels: number): number =>
         Math.max(min(), Math.min(ceiling, Math.round(pixels)))
 
-    const keys =
-        across === 'x'
-            ? { grow: 'ArrowRight', shrink: 'ArrowLeft' }
-            : { grow: 'ArrowDown', shrink: 'ArrowUp' }
-
     return {
         id,
         // 53.80 — the one value written to `style`, the size computed from the drag (49.5).
@@ -150,8 +146,11 @@ export function resizable(options: ResizableOptions = {}): Resizable {
                 const step = live(options.step) ?? 10
                 let next: number | undefined
                 let keptFrom = collapsedFrom
-                if (event.key === keys.grow || event.key === keys.shrink) {
-                    const toward = event.key === keys.grow ? 1 : -1
+                const toward = stepOf(
+                    event.key,
+                    across === 'x' ? 'horizontal' : 'vertical',
+                )
+                if (toward !== 0) {
                     next = measure() + toward * sign * step
                 } else if (event.key === 'Home') {
                     measure()

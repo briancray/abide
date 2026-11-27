@@ -78,7 +78,7 @@ export type ChartOptions = {
 }
 
 /** A y gridline and its label. */
-export type ChartYTick = {
+type ChartYTick = {
     value: number
     y: number
     label: string
@@ -89,7 +89,7 @@ export type ChartYTick = {
 }
 
 /** An x position labeled at the plot's bottom edge. */
-export type ChartXTick = {
+type ChartXTick = {
     index: number
     x: number
     label: string
@@ -98,7 +98,7 @@ export type ChartXTick = {
 }
 
 /** One column of a series at one x. */
-export type ChartBar = {
+type ChartBar = {
     /** Stable across a redraw: `series:index`, so `{#for bar of plot.bars() key bar.key}` keeps each element. */
     key: string
     series: number
@@ -113,7 +113,7 @@ export type ChartBar = {
 }
 
 /** One series' mark: a line or an area as a path, or columns as bars. */
-export type ChartMark = {
+type ChartMark = {
     series: number
     label: string
     kind: 'line' | 'column' | 'area'
@@ -128,7 +128,7 @@ export type ChartMark = {
 }
 
 /** A present value of a series, where it stands. */
-export type ChartPoint = {
+type ChartPoint = {
     key: string
     series: number
     index: number
@@ -140,7 +140,7 @@ export type ChartPoint = {
 }
 
 /** What the readout reads at the x the crosshair stands at. */
-export type ChartReadout = {
+type ChartReadout = {
     index: number
     x: number
     /** The x, as `xFormat` writes it. */

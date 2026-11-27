@@ -93,7 +93,7 @@ export function playback(options: PlaybackOptions): Playback {
             return refused
         },
     )
-    const play = withPart(withPart({}, toggle({ pressed }).button), {
+    const play = withPart({}, toggle({ pressed }).button, {
         'data-playback': 'play',
         get 'aria-label'() {
             return playing() ? 'Pause' : 'Play'

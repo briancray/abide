@@ -6,6 +6,7 @@
 import { handFocus } from './handFocus.ts'
 import { type Live, live } from './live.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
+import { withPart } from './withPart.ts'
 
 /** How many pages there are, the one on, and where each lives. */
 export type PaginationOptions = {
@@ -118,19 +119,19 @@ export function pagination(options: PaginationOptions): Pagination {
     const link = (at: number): Record<string, unknown> => {
         let made = links.get(at)
         if (made === undefined) {
-            made = go(() => at, 'page')
-            // 51.127
-            Object.defineProperties(made, {
-                'aria-current': {
-                    enumerable: true,
-                    get: () => (on() === at ? 'page' : undefined),
+            made = withPart(
+                go(() => at, 'page'),
+                {
+                    // 51.127
+                    get 'aria-current'() {
+                        return on() === at ? 'page' : undefined
+                    },
+                    // 49.17
+                    get 'data-current'() {
+                        return on() === at ? '' : undefined
+                    },
                 },
-                // 49.17
-                'data-current': {
-                    enumerable: true,
-                    get: () => (on() === at ? '' : undefined),
-                },
-            })
+            )
             links.set(at, made)
         }
         return made

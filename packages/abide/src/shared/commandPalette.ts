@@ -192,7 +192,7 @@ export function commandPalette(
             },
         },
         // 49.18 — the listbox's own part, laid under the palette's.
-        listbox: withPart(withPart({}, list.listbox), {
+        listbox: withPart({}, list.listbox, {
             id: listId,
             'data-command-palette': 'listbox',
             get 'aria-label'() {

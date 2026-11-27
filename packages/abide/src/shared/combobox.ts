@@ -349,7 +349,7 @@ export function combobox<Item, Multiple extends boolean = false>(
                 })(element),
         },
         // 49.18 — the listbox's own part, with the id the input's `aria-controls` names.
-        listbox: withPart(withPart({}, list.listbox), {
+        listbox: withPart({}, list.listbox, {
             id: `${id}-listbox`,
             'data-combobox': 'listbox',
             // Its own listbox picks one at a time; the combobox's picks are many where it says so.

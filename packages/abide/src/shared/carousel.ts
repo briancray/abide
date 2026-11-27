@@ -521,7 +521,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
             return refused
         },
     )
-    const play = withPart(withPart({}, toggle({ pressed }).button), {
+    const play = withPart({}, toggle({ pressed }).button, {
         'data-carousel': 'play',
         'aria-controls': base,
         get 'aria-label'() {

@@ -274,7 +274,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
         let made = parts.get(key)
         if (made !== undefined) return made
         made = {
-            item: withPart(withPart({}, choices.option(entry)), {
+            item: withPart({}, choices.option(entry), {
                 'data-sortable-list': 'item',
                 get 'data-grabbed'() {
                     return grabbed().has(key) ? '' : undefined
@@ -389,7 +389,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
 
     return {
         // 51.150
-        list: withPart(withPart({}, choices.listbox), {
+        list: withPart({}, choices.listbox, {
             'data-sortable-list': 'list',
             tabindex: '0',
             get 'aria-activedescendant'() {

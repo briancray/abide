@@ -231,7 +231,7 @@ export function menu(options: MenuOptions = {}): Menu {
     // The popover's trigger with the menu's laid over it; a pointer entering is the popover's where
     // no groupmate is open.
     const rest = layer.trigger.onpointerenter as (event: PointerEvent) => void
-    const trigger = withPart(withPart({}, layer.trigger), {
+    const trigger = withPart({}, layer.trigger, {
         'data-menu': 'trigger',
         'aria-haspopup': 'menu',
         // 50.32, 50.77
@@ -273,7 +273,7 @@ export function menu(options: MenuOptions = {}): Menu {
     })
 
     // 50.38 — the popover's part with the menu's laid over it.
-    const list = withPart(withPart({}, layer.popover), {
+    const list = withPart({}, layer.popover, {
         'aria-labelledby': triggerId,
         role: 'menu',
         'data-menu': 'menu',
@@ -345,7 +345,7 @@ export function menu(options: MenuOptions = {}): Menu {
     return {
         id: menuId,
         trigger,
-        anchor: withPart(withPart({}, layer.anchor), { 'data-menu': 'anchor' }),
+        anchor: withPart({}, layer.anchor, { 'data-menu': 'anchor' }),
         menu: list,
         open,
     }

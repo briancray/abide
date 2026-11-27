@@ -54,7 +54,7 @@ export function drawer(options: DrawerOptions = {}): Drawer {
         axis: across,
         edge: side === 'start' || side === 'top' ? 'end' : 'start',
     })
-    const handle = withPart(withPart({}, sized.handle), {
+    const handle = withPart({}, sized.handle, {
         'data-drawer': 'handle',
     })
     if (options.stops !== undefined) {
@@ -114,11 +114,11 @@ export function drawer(options: DrawerOptions = {}): Drawer {
     }
     return {
         // 50.61
-        drawer: withPart(withPart(withPart({}, shown.dialog), sized.panel), {
+        drawer: withPart({}, shown.dialog, sized.panel, {
             'data-drawer': 'drawer',
             'data-side': side,
         }),
-        backdrop: withPart(withPart({}, shown.backdrop), {
+        backdrop: withPart({}, shown.backdrop, {
             'data-drawer': 'backdrop',
         }),
         handle,

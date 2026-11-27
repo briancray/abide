@@ -26,7 +26,7 @@ export type PieOptions = {
 }
 
 /** One slice drawn: a value missing, zero or below it is none (52.65). */
-export type PieSlice = {
+type PieSlice = {
     index: number
     label: string
     value: number

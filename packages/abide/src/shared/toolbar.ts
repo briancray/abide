@@ -9,6 +9,7 @@
 // the toolbar keeps the `tabindex` of the elements it was handed alone.
 
 import { BIND_ELEMENT } from './BIND_ELEMENT.ts'
+import { byDocumentOrder } from './byDocumentOrder.ts'
 import { isEditableTarget } from './isEditableTarget.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
@@ -50,12 +51,7 @@ export function toolbar(options: ToolbarOptions = {}): Toolbar {
     let current: HTMLElement | undefined
     const ordered = (): HTMLElement[] => {
         const listed = [...items]
-        listed.sort((one, other) =>
-            one.compareDocumentPosition(other) &
-            Node.DOCUMENT_POSITION_FOLLOWING
-                ? -1
-                : 1,
-        )
+        listed.sort(byDocumentOrder)
         return listed
     }
     // 51.186 — one item in the tab order, and every other out of it.

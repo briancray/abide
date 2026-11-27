@@ -46,7 +46,7 @@ export function clamp(options: ClampOptions = {}): Clamp {
     return {
         // 49.18 — the disclosure's region the button names, clamped rather than hidden. 51.122 — the
         // clamp's lines are the one value written to `style`, an option of the app's (49.5).
-        text: withPart(withPart({}, shown.region), {
+        text: withPart({}, shown.region, {
             hidden: undefined,
             'data-clamp': 'text',
             get style() {
@@ -61,7 +61,7 @@ export function clamp(options: ClampOptions = {}): Clamp {
                 resized(element, () => measure(element)),
         }),
         // 51.124
-        button: withPart(withPart({}, shown.button), {
+        button: withPart({}, shown.button, {
             'data-clamp': 'button',
         }),
         open,

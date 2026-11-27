@@ -43,11 +43,11 @@ export function lightbox<Item>(options: LightboxOptions<Item>): Lightbox<Item> {
     })
     return {
         // 50.65
-        dialog: withPart(withPart({}, shown.dialog), {
+        dialog: withPart({}, shown.dialog, {
             'data-lightbox': 'dialog',
             onkeydown: keys,
         }),
-        backdrop: withPart(withPart({}, shown.backdrop), {
+        backdrop: withPart({}, shown.backdrop, {
             'data-lightbox': 'backdrop',
         }),
         carousel: pictures,
