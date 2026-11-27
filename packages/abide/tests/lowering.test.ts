@@ -137,7 +137,7 @@ test('a write through a member typed as a Reactive is the member’s — 31.8, 3
         "buffer().values.set(__writePath(buffer().values(), [kind()], 'x'))",
     )
     expect(await ofProps("buffer.inner.v.a += 'x'")).toEndWith(
-        "buffer().inner.v.set(__writePath(buffer().inner.v(), [\"a\"], buffer().inner.v()[\"a\"] + ('x')))",
+        'buffer().inner.v.set(__writePath(buffer().inner.v(), ["a"], buffer().inner.v()["a"] + (\'x\')))',
     )
     expect(await ofProps('buffer.values = {}')).toEndWith(
         'buffer().values.set({})',
@@ -147,7 +147,7 @@ test('a write through a member typed as a Reactive is the member’s — 31.8, 3
     const ofBox = async (line: string): Promise<string> =>
         (await lower(`${BOX}${line}`)).slice(BOX.length)
     expect(await ofBox("box.values.a = 'x'")).toBe(
-        "box().values.set(__writePath(box().values(), [\"a\"], 'x'))",
+        'box().values.set(__writePath(box().values(), ["a"], \'x\'))',
     )
     // A member that is plain data is still the name's path (31.8).
     expect(await ofBox('box.other = 1')).toBe(
