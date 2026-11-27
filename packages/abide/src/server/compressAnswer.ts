@@ -16,7 +16,7 @@ import {
     type BrotliOptions,
     constants,
     gzip,
-} from 'node:zlib' // bun has no brotli, and no compression off the loop
+} from 'node:zlib' // bun's own brotli is `CompressionStream`, on the main thread — 1390 ms against zlib's pool's 300 ms over the docs bundle — and bun compresses nothing off the loop
 
 import {
     type Encoding,
@@ -27,7 +27,7 @@ import {
 // QUALITY 5, NOT 11. This runs per request, and the top brotli level is priced for a build that
 // runs once: on an 18 KB docs page 11 took 15,800 µs against 5's 150, for 15% fewer bytes. 5 is
 // already under gzip's size at twice gzip's 70 µs.
-const BROTLI_OPTIONS = { params: { [constants.BROTLI_PARAM_QUALITY]: 5 } }
+const REQUEST_QUALITY = 5
 
 // 38.68 — the bytes under which a JSON answer goes out as it is. Under it an answer saves tens of
 // bytes that leave in the same packet anyway, for 3–8 µs of a ~57 µs request; at 8 KB the same CPU
@@ -46,7 +46,10 @@ function compressed(
     encoding: Encoding,
 ): Uint8Array<ArrayBuffer> {
     return encoding === 'br'
-        ? (brotliCompressSync(bytes, BROTLI_OPTIONS) as Uint8Array<ArrayBuffer>)
+        ? (brotliCompressSync(
+              bytes,
+              brotliOptions(bytes, REQUEST_QUALITY),
+          ) as Uint8Array<ArrayBuffer>)
         : Bun.gzipSync(bytes)
 }
 
@@ -54,7 +57,7 @@ function compressedOffLoop(
     bytes: Uint8Array<ArrayBuffer>,
     encoding: Encoding,
 ): Promise<Uint8Array<ArrayBuffer>> {
-    if (encoding === 'br') return brotliOffLoop(bytes, BROTLI_OPTIONS)
+    if (encoding === 'br') return brotliOffLoop(bytes, REQUEST_QUALITY)
     return new Promise((resolve, reject) => {
         gzip(bytes, (error, result) => {
             if (error === null) resolve(result as Uint8Array<ArrayBuffer>)
@@ -63,21 +66,41 @@ function compressedOffLoop(
     })
 }
 
+/** The brotli that compresses `bytes` at `quality`, told their size. */
+function brotliOptions(
+    bytes: Uint8Array<ArrayBuffer>,
+    quality: number,
+): BrotliOptions {
+    return {
+        params: {
+            [constants.BROTLI_PARAM_QUALITY]: quality,
+            [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+        },
+    }
+}
+
 /**
- * `bytes` brotli-compressed off the main thread, at `options`: a request's answer at quality 5, a
- * build's files at 11 with their size hinted.
+ * `bytes` brotli-compressed off the main thread at `quality`: a request's answer at 5, a build's
+ * files at `BROTLI_MAX_QUALITY`.
  */
 export function brotliOffLoop(
     bytes: Uint8Array<ArrayBuffer>,
-    options: BrotliOptions,
+    quality: number,
 ): Promise<Uint8Array<ArrayBuffer>> {
     return new Promise((resolve, reject) => {
-        brotliCompress(bytes, options, (error, result) => {
-            if (error === null) resolve(result as Uint8Array<ArrayBuffer>)
-            else reject(error)
-        })
+        brotliCompress(
+            bytes,
+            brotliOptions(bytes, quality),
+            (error, result) => {
+                if (error === null) resolve(result as Uint8Array<ArrayBuffer>)
+                else reject(error)
+            },
+        )
     })
 }
+
+/** Brotli's top quality, what a build's files are compressed at once. */
+export const BROTLI_MAX_QUALITY: number = constants.BROTLI_MAX_QUALITY
 
 function answered(
     body: Uint8Array<ArrayBuffer>,

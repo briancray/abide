@@ -4,7 +4,6 @@
 
 import { mkdir, rename, rm } from 'node:fs/promises' // bun exposes no directory creation, rename or recursive directory removal of its own
 import { dirname, relative, resolve } from 'node:path' // bun exposes no path helpers of its own
-import { constants } from 'node:zlib' // brotli's parameters, for `brotliOffLoop` — bun's own brotli is `CompressionStream`, which compresses on the main thread: 1390 ms against zlib's pool's 300 ms over the docs bundle
 
 import { agentNoteFindings } from '#compiler/agentNotes.ts'
 import { paints } from '#compiler/appLayout.ts'
@@ -45,7 +44,7 @@ import { banner } from '#server/banner.ts'
 import { ENCODING_SUFFIX } from '#server/CLIENT_BUILD.ts'
 import { type ClientBundle, clientBundle } from '#server/clientBundle.ts'
 import { type Given, type Host, runCommands } from '#server/commands.ts'
-import { brotliOffLoop } from '#server/compressAnswer.ts'
+import { BROTLI_MAX_QUALITY, brotliOffLoop } from '#server/compressAnswer.ts'
 import { type AppPackage, packageUnder, shownName } from '#server/config.ts'
 import { appOnDisk, appRoot, enterApp, noAppHere } from '#server/createApp.ts'
 import { executableName } from '#server/executableName.ts'
@@ -710,12 +709,7 @@ async function precompressed(
     path: string,
     bytes: Uint8Array<ArrayBuffer>,
 ): Promise<void> {
-    const brotli = await brotliOffLoop(bytes, {
-        params: {
-            [constants.BROTLI_PARAM_QUALITY]: constants.BROTLI_MAX_QUALITY,
-            [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
-        },
-    })
+    const brotli = await brotliOffLoop(bytes, BROTLI_MAX_QUALITY)
     await Promise.all([
         Bun.write(path, bytes),
         Bun.write(path + ENCODING_SUFFIX.br, brotli),
