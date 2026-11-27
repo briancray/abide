@@ -6,7 +6,7 @@ import { abideImports } from './splitImports.ts'
 type Resolve = (specifier: string, from: string) => string | undefined
 
 /**
- * Which files are invoked as components: every source path another file imports.
+ * Which files are invoked as components: every source path another file imports, as a set.
  *
  * 32.17 — off ONE reading of every file's imports, each `.abide` specifier resolved once against
  * the file that wrote it. By PATH, not by file name: two `Row.abide` in two directories are two
@@ -19,7 +19,7 @@ type Resolve = (specifier: string, from: string) => string | undefined
 export function componentGraph(
     files: readonly { path: string; file: AbideFile }[],
     resolve: Resolve,
-): { invoked: Set<string> } {
+): Set<string> {
     const known = new Set<string>()
     for (const entry of files) known.add(entry.path)
     const invoked = new Set<string>()
@@ -30,7 +30,7 @@ export function componentGraph(
             resolve,
         ).values())
             if (known.has(target)) invoked.add(target)
-    return { invoked }
+    return invoked
 }
 
 /**

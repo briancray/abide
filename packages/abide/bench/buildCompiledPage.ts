@@ -67,7 +67,7 @@ export async function buildCompiledPage(
         const { answers } = await session.readsFor(files)
         // WHICH FILES ARE INVOKED IS THE BUILD'S KNOWLEDGE and already has a name, so a component
         // that itself invokes one is answered here rather than by a flag this file guesses.
-        const { invoked } = componentGraph(files, (specifier, from) =>
+        const invoked = componentGraph(files, (specifier, from) =>
             resolve(from, specifier),
         )
         const compilation: Compilation = {

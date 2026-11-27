@@ -121,7 +121,7 @@ async function appTree(session: TypeSession): Promise<{
     // markup for a row built in the browser. THE APP'S RESOLVER, not `Bun.resolveSync`: that asks
     // every plugin again, and a compilation an earlier file in this process served answers it from
     // the directory read as a file — `InvoiceDocument.abide` is then looked for one level up.
-    const graph = componentGraph(files, resolverIn())
+    const invoked = componentGraph(files, resolverIn())
     const { answers } = await session.readsFor(files)
     const compilation: Compilation = {
         files: {},
@@ -156,7 +156,7 @@ async function appTree(session: TypeSession): Promise<{
             emitClient(
                 file,
                 names,
-                graph.invoked.has(absolute) ? 'invoked' : 'none',
+                invoked.has(absolute) ? 'invoked' : 'none',
             ) || 'export default () => {}'
         const name = stem.slice(stem.lastIndexOf('/') + 1)
         // Bound by name, as a build's stand-ins are: the file's own `<script>` calls them, and the
