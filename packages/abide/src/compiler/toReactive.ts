@@ -13,10 +13,6 @@ import { type Token, tokenize } from './tokenize.ts'
 export function toReactive(text: string, path: string): string {
     return rewriteCode(text, path, {
         word: 'derived',
-        module: (code) => {
-            const name = reactiveAs([code])
-            return name === undefined ? code : renamed(code, name)
-        },
         // A PAGE'S SCRIPTS ARE ONE SCOPE: a nested per-arm `<script>` reads what the top-level one imports.
         scripts: (blocks) => {
             const name = reactiveAs(blocks)

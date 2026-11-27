@@ -14,10 +14,6 @@ import { reactiveAs } from './toReactive.ts'
 export function toHeldFunction(text: string, path: string): string {
     return rewriteCode(text, path, {
         word: 'reactive',
-        module: (code) => {
-            const name = reactiveAs([code])
-            return name === undefined ? code : wrapped(code, name)
-        },
         // A PAGE'S SCRIPTS ARE ONE SCOPE: a nested per-arm `<script>` reads what the top-level one imports.
         scripts: (blocks) => {
             const name = reactiveAs(blocks)

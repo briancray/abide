@@ -21,8 +21,7 @@ import { type Token, tokenize } from './tokenize.ts'
 export function toDerived(text: string, path: string): string {
     return rewriteCode(text, path, {
         word: 'computed',
-        module: (code) => migrated([code])[0] as string,
-        scripts: (blocks) => migrated(blocks),
+        scripts: migrated,
     })
 }
 

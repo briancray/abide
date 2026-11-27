@@ -3,6 +3,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import { COMPONENT_QUERY, TEXT_SUFFIX } from '#server/MODULE_QUERIES.ts'
 import { SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
+import type { Splice } from './rewriteCode.ts'
 import { isContextualKeyword, type Token, tokenize } from './tokenize.ts'
 
 /**
@@ -561,7 +562,7 @@ export function namedImports(
     text: string,
     statement: ImportStatement,
     names: string[],
-): { start: number; end: number; text: string } {
+): Splice {
     const open = text.indexOf('{', statement.start)
     const close = text.indexOf('}', open)
     const list = text.slice(open + 1, close)

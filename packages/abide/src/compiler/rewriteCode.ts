@@ -14,14 +14,29 @@ type Kind = 'ts' | 'abide' | 'md'
 export type CodeRewrite = {
     /** A word every file the rewrite changes holds, so a file without it is skipped unread. */
     word: string
-    /** A module, rewritten. */
-    module: (code: string) => string
-    /**
-     * An `.abide` file's script blocks in order, each rewritten — handed together, since a page's
-     * nested per-arm `<script>` reads what its top-level one imports. Each block as a `module` where
-     * it is not given.
-     */
-    scripts?: ((blocks: string[]) => string[]) | undefined
+} & (
+    | {
+          /** A module, rewritten. */
+          module: (code: string) => string
+          /**
+           * An `.abide` file's script blocks in order, each rewritten — handed together, since a page's
+           * nested per-arm `<script>` reads what its top-level one imports. Each block as a `module`
+           * where it is not given.
+           */
+          scripts?: ((blocks: string[]) => string[]) | undefined
+      }
+    | {
+          /** A module as `scripts` rewrites one block, where it is not given. */
+          module?: undefined
+          scripts: (blocks: string[]) => string[]
+      }
+)
+
+/** A module as `rewrite` rewrites one: its `module`, or its `scripts` over the one block. */
+function moduleOf(rewrite: CodeRewrite, code: string): string {
+    return rewrite.module === undefined
+        ? (rewrite.scripts([code])[0] as string)
+        : rewrite.module(code)
 }
 
 /** `text`, a file at `path`, with the code in it rewritten by `rewrite`. */
@@ -73,7 +88,7 @@ export function lineAround(text: string, at: number): string {
 
 function rewritten(text: string, kind: Kind, rewrite: CodeRewrite): string {
     if (!text.includes(rewrite.word)) return text
-    if (kind === 'ts') return samplesInModule(rewrite.module(text), rewrite)
+    if (kind === 'ts') return samplesInModule(moduleOf(rewrite, text), rewrite)
     if (kind === 'md')
         return replaceSpans(
             text,
@@ -86,7 +101,8 @@ function rewritten(text: string, kind: Kind, rewrite: CodeRewrite): string {
     const matches = [...text.matchAll(new RegExp(SCRIPT.source, 'gdi'))]
     const found = matches.map((match) => match[2] as string)
     const blocks =
-        rewrite.scripts?.(found) ?? found.map((block) => rewrite.module(block))
+        rewrite.scripts?.(found) ??
+        found.map((block) => moduleOf(rewrite, block))
     let out = ''
     let last = 0
     for (let index = 0; index < matches.length; index += 1) {
