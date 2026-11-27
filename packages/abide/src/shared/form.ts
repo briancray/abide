@@ -45,7 +45,7 @@ export type FieldName<Handler> =
 
 /** One field's parts and what is wrong with it: `<input {...deal.field('title').input}>`. */
 export type FormField = {
-    /** The field's attributes: the name it posts under, whether it is invalid, and its message's id. */
+    /** The field's attributes: the name it posts under, whether it is invalid, and its message's id while it has one. */
     readonly input: Record<string, unknown>
     /** The attributes of the element showing the field's message, hidden while it has none. */
     readonly error: Record<string, unknown>
@@ -308,7 +308,13 @@ export function form<Handler extends AnyRpc>(
                 get 'aria-invalid'() {
                     return message(name) === undefined ? undefined : 'true'
                 },
-                'aria-describedby': errorId(name),
+                // 56.9 — only while there is a message to name: a field whose error is never
+                // rendered, a hidden input's, names no element the document does not hold (49.7).
+                get 'aria-describedby'() {
+                    return message(name) === undefined
+                        ? undefined
+                        : errorId(name)
+                },
                 // 56.21
                 get 'data-changed'() {
                     return changed(name) ? '' : undefined

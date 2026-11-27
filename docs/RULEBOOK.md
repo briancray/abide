@@ -861,8 +861,8 @@ throw a `TypeError` at construction naming the `memo` that declares it.
 11.82 A derived `reactive` a module declares on a server while the app's server blocks are imported
 MUST NOT run its body before every `onConfig` they call is filed.
 
-11.83 A `memo`'s call MUST take a `signal`, and 16.48, 16.49 and 16.62 MUST hold of it as of a
-handler's call.
+11.83 A `memo`'s call MUST take a `signal`, and 16.48, 16.49, 16.62 and 16.120 MUST hold of it as
+of a handler's call.
 
 11.84 16.48 MUST NOT end a load of a `memo`'s entry that a call given a `signal` did not start.
 
@@ -1491,6 +1491,9 @@ declared.
 
 16.119 A `<script server>` importing abide's `rpc` MUST be a compile error, and `rpc` over a value
 that is an `rpc` already MUST be refused as it is declared.
+
+16.120 A call answering a promise MUST refuse with 16.49's refusal once its `signal` aborts, whether
+or not 16.48 ends the load it reached.
 
 # 17. Response helpers
 
@@ -7273,7 +7276,8 @@ that check finds.
 its `action`.
 
 56.9 The `input` of a `form`'s `field` MUST carry `aria-invalid="true"` while its field has a message,
-and MUST name the element its `error` writes the id of in `aria-describedby`.
+and MUST name the element its `error` writes the id of in `aria-describedby` while it does, and
+carry no `aria-describedby` while it does not.
 
 56.10 The `error` of a `form`'s `field` MUST be `hidden` while its field has no message, and the
 form's own `error` while the form has none.

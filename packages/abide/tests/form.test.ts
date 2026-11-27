@@ -197,6 +197,25 @@ test("a field's group carries its message and whether it is invalid — 49.9, 56
     expect(deal.field('amount').invalid).toBe(false)
 })
 
+// 56.9, 49.7 — A FIELD NAMES ITS MESSAGE'S ELEMENT ONLY WHILE IT HAS A MESSAGE, so a field whose error
+// element is never rendered — a hidden input's — names no element the document lacks. THE REVERT: write
+// `aria-describedby` as the error's id whatever the message — it reads the id before the submit, where
+// `undefined` is due.
+test('a field names its error in aria-describedby only while it has a message — 56.9', async () => {
+    const add = holding(
+        rpc((args: { company: string; amount: number }) => args, {
+            methods: ['POST'],
+        }),
+    )
+    addressed(add, '/deals/described')
+    const deal = form(add)
+    const company = deal.field('company')
+    expect(company.input['aria-describedby']).toBeUndefined()
+    await submitted(rendered(deal, { company: '', amount: '4' }))
+    expect(company.input['aria-describedby']).toBe(company.error.id)
+    expect(deal.field('amount').input['aria-describedby']).toBeUndefined()
+})
+
 // 56.4 — A REFUSAL NO FIELD OWNS IS THE WHOLE FORM'S: the server's `''` message shows as the form's
 // `message`, its element shown, while every field reads none. THE REVERT: have the form's `message`
 // answer nothing — `deal.message` reads `undefined` where the server's message is due.
