@@ -328,6 +328,16 @@ function declaredTypes(): Set<string> {
             /\[\s*([A-Z][A-Za-z0-9]*)\s+in\b/g,
         ))
             declared.add(match[1] ?? '')
+        // A GENERIC METHOD binds its own list where it is named — `as<Narrow>(): …` declares
+        // `Narrow` as a leading `<…>` would, for that member alone.
+        for (const match of (signature ?? '').matchAll(
+            /\b[a-z][A-Za-z0-9]*<([^<>()]*)>\(/g,
+        ))
+            for (const part of (match[1] ?? '').split(','))
+                declared.add(
+                    /^\s*(?:const\s+)?([A-Z][A-Za-z0-9]*)\b/.exec(part)?.[1] ??
+                        '',
+                )
     }
     return declared
 }
