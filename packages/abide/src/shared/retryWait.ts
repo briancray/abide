@@ -20,18 +20,22 @@ export function retryWait(
         : Math.max(step, notBefore - Date.now())
 }
 
-/** What a `backoff` option takes: the first wait, doubled per retry, or the wait before retry `retry`, from 1. */
-export type Backoff = number | ((retry: number) => number)
+/**
+ * What a `backoff` option takes: the first wait, doubled per retry, or the wait before retry `retry`,
+ * from 1, given what the attempt before it failed with — so a 429 can wait longer than a 503.
+ */
+export type Backoff = number | ((retry: number, failure: unknown) => number)
 
 /**
  * 57.10 — the milliseconds before retry `attempt + 1` under a `backoff` option: `retryWait` from the
- * number given, or from `floor` where none is, or what the function answers for that retry — and in
- * each case no sooner than `notBefore`.
+ * number given, or from `floor` where none is, or what the function answers for that retry and the
+ * failure before it — and in each case no sooner than `notBefore`.
  */
 export function backoffWait(
     backoff: Backoff | undefined,
     attempt: number,
     floor: number,
+    failure: unknown,
     notBefore?: number,
 ): number {
     if (typeof backoff !== 'function')
@@ -41,7 +45,7 @@ export function backoffWait(
             Number.POSITIVE_INFINITY,
             notBefore,
         )
-    const step = backoff(attempt + 1)
+    const step = backoff(attempt + 1, failure)
     return notBefore === undefined
         ? step
         : Math.max(step, notBefore - Date.now())

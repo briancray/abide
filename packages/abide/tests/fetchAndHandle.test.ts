@@ -21,6 +21,8 @@ const settledFetch = ((...given: Parameters<typeof fetchAndHandle>) =>
 
 // Every path the service answers, to how many times it was asked.
 const asked = new Map<string, number>()
+// When `/slow-down` was asked, each time.
+const answeredAt: number[] = []
 
 const service = Bun.serve({
     hostname: '127.0.0.1',
@@ -37,6 +39,15 @@ const service = Bun.serve({
             return count < 3
                 ? new Response('busy', { status: 503 })
                 : Response.json({ name: 'Hopper & Co' })
+        if (pathname === '/slow-down') {
+            answeredAt.push(Date.now())
+            return count === 1
+                ? new Response('later', {
+                      status: 429,
+                      headers: { 'retry-after': '1' },
+                  })
+                : Response.json({ name: 'Hopper & Co' })
+        }
         if (pathname === '/missing') return new Response('no', { status: 404 })
         if (pathname === '/no-route')
             return Response.json(
@@ -291,4 +302,14 @@ test("`as: 'response'` answers the Response past the status check, its body unre
     ).toBe('user: hopper, body unread: true')
     const refused = await settledFetch(at('/missing'), { as: 'response' })
     expect(`${refused.name} ${refused.data.status}`).toBe('FetchFailed 404')
+})
+
+// 57.10, 57.11, 15.23 — A THIRD PARTY'S `Retry-After` REACHES A PIPE THROUGH `fetchAndHandle`: the
+// `FetchFailed` a 429 rejects with carries the time it named, and the step's next attempt waits for
+// it, past a `backoff` of 1 ms. THE REVERT: drop the `holdUntil` in `refusedBy`, and the second ask
+// comes `held: false` — a millisecond after the first, not the second the service asked for.
+test("a pipe over fetchAndHandle waits out a 429's Retry-After — 57.10, 57.11, 15.23", async () => {
+    expect(await piped(at('/slow-down'))).toEqual({ name: 'Hopper & Co' })
+    const [first, second] = answeredAt as [number, number]
+    expect(`held: ${second - first >= 900}`).toBe('held: true')
 })

@@ -345,6 +345,35 @@ test('a pipe called with a signal ends on it alone, not on the run it was called
     ).toBe('told once its own signal aborts: true')
 })
 
+// 57.10 — A `backoff` FUNCTION IS HANDED WHAT THE ATTEMPT BEFORE FAILED WITH, beside the retry's number,
+// so a 429 can wait longer than a 503 or a throw. THE REVERT: call `backoff(attempt + 1)` alone in
+// `backoffWait`, and `waits: 1 undefined, 2 undefined` where `waits: 1 429, 2 Error` is due.
+test('a backoff function is handed the failure it waits after — 57.10', async () => {
+    const waits: string[] = []
+    let attempts = 0
+    const limited = pipe(
+        [
+            () => {
+                attempts += 1
+                if (attempts === 1) return refuse(429)
+                if (attempts === 2) throw new Error('reset')
+                return 'done'
+            },
+        ],
+        {
+            retries: 2,
+            backoff: (retry, failure) => {
+                waits.push(
+                    `${retry} ${isFailed(failure) ? failure.status : (failure as Error | undefined)?.name}`,
+                )
+                return 1
+            },
+        },
+    )
+    expect(await limited(undefined as never)).toBe('done')
+    expect(`waits: ${waits.join(', ')}`).toBe('waits: 1 429, 2 Error')
+})
+
 // 57.14 — A STREAM THAT FAILS AFTER IT YIELDED IS NOT MADE AGAIN: what it handed on cannot be taken
 // back. THE REVERT: retry the stream's later chunks, and `opened: 2`.
 test('a streaming step that fails after yielding is not tried again — 57.14', async () => {

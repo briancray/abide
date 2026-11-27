@@ -487,7 +487,13 @@ class Runner {
                 )
             // 57.10 — the one rule every retry is timed by.
             await sleep(
-                backoffWait(this.backoff, attempt, 250, notBefore),
+                backoffWait(
+                    this.backoff,
+                    attempt,
+                    250,
+                    failed ? failure : answer,
+                    notBefore,
+                ),
                 ended,
             )
         }

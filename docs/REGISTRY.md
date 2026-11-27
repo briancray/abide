@@ -90,7 +90,7 @@ A property written `name?: T` in a signature takes `undefined` as it takes the p
 | `bind:element={Reactive<Element> \| ((element: Element) => void \| Disposer) \| ((element: Element) => void \| Disposer)[]}` | A node reference. | 32.9, 32.38, 32.66, 32.68, 32.69 |
 | `class:name={cond}` | Toggles a class. | 32.10, 32.71 |
 | `style:prop={value}` | Sets one style property. | 32.10, 32.19, 32.71, 32.94 |
-| `{...expr}` | Spreads props or attributes. | 32.11, 32.37, 33.12, 33.13, 32.99, 32.109, 32.113, 32.114 |
+| `{...expr}` | Spreads props or attributes. | 32.11, 32.37, 33.12, 33.13, 32.99, 32.109, 32.113, 32.114, 32.117 |
 | static template text | What an author writes outside a slot, in body text and in an attribute value. | 32.27, 32.28 |
 
 ## `raw`
@@ -1446,7 +1446,7 @@ type Reached = { readonly [REACHED]: true }
 | `Pipe` | `Pipe<In, Out, Fanned extends boolean = false> = ((input: In, signal?: AbortSignal) => Promise<(Fanned extends true ? Out[] : Out) \| Failed<string, unknown>>) & { readonly readable: ReadableStream<Out \| Failed<string, unknown>>; readonly writable: WritableStream<In>; readonly status: Memo<PipeStatus>; stop(): Promise<void> }` | What `pipe` hands back: an async function answering its item or its refusal, and the stream pair. | 57.5, 57.13, 57.15, 57.16, 57.19, 57.20 |
 | `Pipe.status` | `Memo<PipeStatus>` | Where the pipe's items stand, one value for every caller. | 57.21 |
 | `Pipe.stop` | `() => Promise<void>` | The end of the pipe, and of every attempt in flight. | 57.18 |
-| `PipeOptions` | `<In = unknown>{ concurrency?: number; group?: (input: In) => string; ordered?: boolean; retries?: number; backoff?: number \| ((retry: number) => number); timeout?: number; paused?: Reactive<boolean> \| (() => boolean) }` | How many items run at once and in what groups, the order they leave in, each step's retries, their spacing and its deadline, and what holds the pipe. | 57.6, 57.7, 57.9, 57.10, 57.12, 57.16, 57.17 |
+| `PipeOptions` | `<In = unknown>{ concurrency?: number; group?: (input: In) => string; ordered?: boolean; retries?: number; backoff?: number \| ((retry: number, failure: unknown) => number); timeout?: number; paused?: Reactive<boolean> \| (() => boolean) }` | How many items run at once and in what groups, the order they leave in, each step's retries, their spacing and its deadline, and what holds the pipe. | 57.6, 57.7, 57.9, 57.10, 57.12, 57.16, 57.17 |
 | `PipeStatus` | `{ waiting: number; running: number; done: number; failed: number; paused: boolean }` | How many items wait, run, are done and failed, and whether the pipe is paused. | 57.21 |
 
 The aliases `pipe` reads its steps through — what one place in the steps holds, what a step hands on,
@@ -1694,7 +1694,7 @@ rows a runner prints, and an adapter for an abide app.
 
 | Name | Meaning | Rules |
 | --- | --- | --- |
-| `preload = ["@abide/harness/preload"]` | The `[test]` preload that registers a DOM with the measure lane's patches installed. | 43.4, 43.28, 43.35, 43.36, 43.37, 43.38, 43.39 |
+| `preload = ["@abide/harness/preload"]` | The `[test]` preload that registers a DOM with the measure lane's patches installed. | 43.4, 43.28, 43.35, 43.36, 43.37, 43.38, 43.39, 43.47 |
 
 ## `traceOp` — `@abide/harness/engine`
 

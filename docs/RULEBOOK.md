@@ -2846,6 +2846,10 @@ last spread's that carries one where two do.
 an array destructuring pattern, renamed, defaulted or nested — and each name it binds MUST be in scope
 in the row's body and its `key`.
 
+32.117 A member of an element's `{...expr}` whose read a `NotLanded` aborted MUST leave the attribute
+it last wrote in place, as 32.23 leaves a template expression, and MUST NOT keep the spread's other
+members from being written.
+
 # 33. Props
 
 33.1 `props` MUST be callable from a `<script>` block only, and calling it from a `<script module>`
@@ -4633,6 +4637,10 @@ name.
 
 43.46 `shares` and `batch` MUST read one frame from `THRESHOLDS`, and MUST NOT hold a frame of
 their own.
+
+43.47 Under `@abide/harness/preload`, an `<option>`'s `defaultSelected` MUST reflect its `selected`
+attribute, and a single `<select>` built from markup, parsed or cloned, MUST select the last option
+that attribute marks, or its first enabled option where none is marked.
 
 # 44. The assistant
 
@@ -7393,7 +7401,8 @@ be.
 
 57.10 A step's attempt made again under 57.9 MUST wait `backoff` milliseconds, 250 where none is
 given, doubled for each retry before it — or, where `backoff` is a function, what it answers given
-the retry's number counted from 1 — or the time the refusal's `Retry-After` names, in seconds or as an
+the retry's number counted from 1 and what the attempt before it failed with, the refusal it
+answered or what it threw — or the time the refusal's `Retry-After` names, in seconds or as an
 HTTP date, where that is later.
 
 57.11 A refusal with a `Retry-After` MUST keep its step from starting an attempt, for every item of
