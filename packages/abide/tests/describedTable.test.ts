@@ -258,3 +258,69 @@ test('the watch keeps every change a reader in this process has still to read �
     await reader.cancel()
     expect(`read: ${read}, last: ${last}`).toBe('read: 10100, last: 10100')
 })
+
+// 47.50 — A PEEK IS A READ NOTHING FOLLOWS: a value that peeked runs once, whatever the table does
+// after. THE REVERT: have `peek` call `readBy` as the call does; `runs: 2` where 1 is due.
+test('a peek reads the rows without the run that made it following them — 47.50', async () => {
+    const db = opener(
+        'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER NOT NULL)',
+    )
+    const deals = table(db, 'deals')
+    deals.set({ id: 1, amount: 10 })
+    let runs = 0
+    const count = keyedValue(() => {
+        runs += 1
+        return deals.peek().length
+    })()
+    expect(count()).toBe(1)
+    deals.set({ id: 2, amount: 20 })
+    await Bun.sleep(150)
+    expect(`count: ${count()}, runs: ${runs}`).toBe('count: 1, runs: 1')
+})
+
+// 47.51, 47.33 — AN INSERT IS ANSWERED AS STORED, its key assigned; a column left `undefined` is not
+// named, so a patch leaves it and an insert takes its default. THE REVERT: name every key of the row in
+// `statementFor`; the patch writes `notes` NULL where `"kept"` is due.
+test('an insert answers its rows as stored, and an undefined column is not written — 47.51, 47.33', () => {
+    const db = opener(
+        "CREATE TABLE deals (id INTEGER PRIMARY KEY, name TEXT NOT NULL, stage TEXT NOT NULL DEFAULT 'lead', notes JSON)",
+    )
+    const deals = table(db, 'deals')
+    const stored = deals.insert([
+        { name: 'Acme', notes: 'kept' },
+        { name: 'Globex', stage: undefined, notes: { calls: 1 } },
+    ])
+    deals.patch({ id: 1, name: 'Acme Co', notes: undefined })
+    expect({ stored, after: deals({ id: 1 }) }).toEqual({
+        stored: [
+            { id: 1, name: 'Acme', stage: 'lead', notes: 'kept' },
+            { id: 2, name: 'Globex', stage: 'lead', notes: { calls: 1 } },
+        ],
+        after: [{ id: 1, name: 'Acme Co', stage: 'lead', notes: 'kept' }],
+    })
+})
+
+// 47.52 — A PLAIN OBJECT BOUND IN SQL IS ITS JSON. THE REVERT: drop the `isPlainData` arm in
+// `flattened`; bun refuses the object as a binding.
+test('a plain object interpolated into sql is bound as its JSON — 47.52', () => {
+    const db = opener('CREATE TABLE deals (id INTEGER PRIMARY KEY, notes JSON)')
+    db.sql`INSERT INTO deals (id, notes) VALUES (1, ${{ calls: 3 }})`
+    expect(db.sql`SELECT notes FROM deals`).toEqual([{ notes: { calls: 3 } }])
+})
+
+// 47.53 — A TABLE DECLARED OPENS NOTHING until it is used. THE REVERT: call `watchOf` in `table`
+// itself; the opener has opened by the time the module declaring the table is read.
+test('declaring a table opens nothing until the table is used — 47.53', () => {
+    let opens = 0
+    opened += 1
+    const db = database(`described-${opened}`, {
+        migrations: ['CREATE TABLE deals (id INTEGER PRIMARY KEY)'],
+        open: () => {
+            opens += 1
+        },
+    })
+    const deals = table(db, 'deals')
+    const before = opens
+    deals.peek()
+    expect(`before: ${before}, after: ${opens}`).toBe('before: 0, after: 1')
+})

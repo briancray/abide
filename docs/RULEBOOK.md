@@ -5333,7 +5333,8 @@ never as text, MUST prepare one statement per call site per `Database` and per s
 what the statement reads or writes.
 
 47.33 A `table`'s `set` MUST upsert each row it is given by `key`, its `patch` MUST write the columns
-each row names onto the row with that row's `key` and leave the rest, and its `delete` MUST delete the
+each row names onto the row with that row's `key` and leave the rest — a column whose value is
+`undefined` named by neither — and its `delete` MUST delete the
 rows a `match` names and answer how many; each MUST write in one transaction, and MUST throw for a row
 carrying no value for a column of its key per 47.30, or a `delete` whose `match` names no column.
 
@@ -5346,7 +5347,8 @@ table does not hold.
 
 47.36 A `match` value MUST be JSON, and MUST match a column: a value by equality; `null` by IS NULL;
 an array by being one of its values, `null` among them matching a NULL and an empty array matching
-no row; and an object by meeting every one of `gt`, `gte`, `lt`, `lte` and `ne` it names, `ne`
+no row; and an object by meeting every one of `gt`, `gte`, `lt`, `lte`, `ne` and `like` it names, `like` as
+SQL's `LIKE` does, `ne`
 refusing only the value it names — `null` included, and no NULL it does not — and an object naming
 none matching every row. A `match` MUST throw for any other key in an object, for `null` given to a
 comparison other than `ne`, and for an array or an object nested where a value goes.
@@ -5390,16 +5392,30 @@ per 47.7 where a row references a row that is not there once the last of them ha
 and as an opener's `close` closes its `Database`, save where it opens `readonly`.
 
 47.47 The type `database` answers MUST carry, for each migration the checker reads as a string
-literal, the tables its `CREATE TABLE`, `ALTER TABLE` and `DROP TABLE` statements leave in order,
+literal, the tables its `CREATE TABLE`, `ALTER TABLE` and `DROP TABLE` statements leave in order, its
+`--` comments read as none,
 and a `table` of that opener named by none of them MUST be a type error where its row is not
 given.
 
 47.48 A column 47.47 types MUST be typed by its declared type — `boolean` for `BOOLEAN` or `BOOL`,
 `unknown` for `JSON`, and otherwise by the affinity SQLite gives the declared type — joined with
 `null` save where declared `NOT NULL` or `INTEGER PRIMARY KEY`; a row written MUST be allowed to
-leave out a column that may be NULL or has a default, save one of its primary key.
+leave out a column that may be NULL or has a default, save one of its primary key; a row inserted MUST
+be allowed to leave out its `INTEGER PRIMARY KEY` as well; and a row its caller gives `table` MUST be
+written leaving out any column whose type admits `null`.
 
 47.49 `Tables` of an opener's type MUST be the row each table 47.47 types reads, by table name.
+
+47.50 A `table`'s `peek` MUST answer what a call with the same `match` answers, and MUST NOT be
+followed by the run it is made in per 47.29.
+
+47.51 A `table`'s `insert` MUST insert each row it is given in one transaction, MUST NOT require its
+key, and MUST answer the rows as stored, their key as SQLite assigned it, decoded per 47.40.
+
+47.52 A plain object interpolated into `sql` MUST be bound as its JSON text.
+
+47.53 `table` MUST NOT open the database until the table it answers is called, written, peeked, or
+its `readable` or `writable` reached.
 
 # 48. Problem reports
 

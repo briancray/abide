@@ -12,6 +12,7 @@ export type ColumnMatch<Value> =
           lt?: Value | undefined
           lte?: Value | undefined
           ne?: Value | null | undefined
+          like?: string | undefined
       }
 
 /** 47.35 — the columns a `table` call matches, each by a `ColumnMatch`. */

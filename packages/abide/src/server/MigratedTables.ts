@@ -76,26 +76,49 @@ type Words<
       ? Out
       : [...Out, Text]
 
+/** `Text` with each `--` comment taken out, to the end of its line. */
+type Uncommented<
+    Text extends string,
+    Out extends string = '',
+> = Text extends `${infer Before}--${infer Comment}`
+    ? Comment extends `${string}\n${infer After}`
+        ? Uncommented<After, `${Out}${Before}\n`>
+        : `${Out}${Before}`
+    : `${Out}${Text}`
+
+/** `Text` past its leading whitespace. */
+type TrimmedStart<Text extends string> =
+    Text extends `${' ' | '\n' | '\t' | '\r'}${infer Rest}`
+        ? TrimmedStart<Rest>
+        : Text
+
 /**
- * The words of each statement, split at `;` BEFORE any word is read, so no recursion runs longer
- * than one statement does.
+ * A statement 47.47 folds: one that makes, alters or drops a table. Every other — an index, a
+ * trigger and the statements of its body, an insert — is passed over before a word of it is read,
+ * which is what keeps a schema of many triggers inside the checker's depth.
  */
+type Folded<Statement extends string> =
+    Uppercase<TrimmedStart<Statement>> extends
+        | `CREATE TABLE${string}`
+        | `CREATE TEMP${string}`
+        | `ALTER TABLE${string}`
+        | `DROP TABLE${string}`
+        ? true
+        : false
+
+/** The words of each statement 47.47 folds, split at `;` before any word is read. */
 type Statements<
     Text extends string,
     Out extends string[][] = [],
 > = Text extends `${infer Statement};${infer Rest}`
     ? Statements<
           Rest,
-          Words<Spaced<Statement>> extends infer Found extends string[]
-              ? Found extends []
-                  ? Out
-                  : [...Out, Found]
+          Folded<Statement> extends true
+              ? [...Out, Words<Spaced<Statement>>]
               : Out
       >
-    : Words<Spaced<Text>> extends infer Found extends string[]
-      ? Found extends []
-          ? Out
-          : [...Out, Found]
+    : Folded<Text> extends true
+      ? [...Out, Words<Spaced<Text>>]
       : Out
 
 /** An identifier with its quotes taken off. */
@@ -182,7 +205,12 @@ type HoldsWord<Tokens extends string[], Word extends string> = Tokens extends [
     : false
 
 /** A column as a migration declares it: its name, its value, whether a written row may leave it out. */
-type Column = { name: string; value: unknown; optional: boolean }
+type Column = {
+    name: string
+    value: unknown
+    optional: boolean
+    assigned: boolean
+}
 
 /**
  * 47.48 — one column definition, or `never` for a table constraint. NULL unless `NOT NULL`, or an
@@ -211,6 +239,9 @@ type ColumnOf<Tokens extends string[]> = Tokens extends [
                     : Holds<Rest, 'NOT', 'NULL'> extends true
                       ? HoldsWord<Rest, 'DEFAULT'>
                       : true
+                assigned: Declared extends 'INTEGER'
+                    ? HoldsWord<Rest, 'PRIMARY'>
+                    : false
             }
           : never
     : never
@@ -277,7 +308,12 @@ type Renamed<
 > = Columns extends [infer Head extends Column, ...infer Rest extends Column[]]
     ? [
           Head['name'] extends From
-              ? { name: To; value: Head['value']; optional: Head['optional'] }
+              ? {
+                    name: To
+                    value: Head['value']
+                    optional: Head['optional']
+                    assigned: Head['assigned']
+                }
               : Head,
           ...Renamed<Rest, From, To>,
       ]
@@ -450,7 +486,7 @@ type Migrated<
           Head extends string
               ? string extends Head
                   ? Tables
-                  : AppliedAll<Tables, Statements<Head>>
+                  : AppliedAll<Tables, Statements<Uncommented<Head>>>
               : Tables,
           Rest
       >
@@ -476,13 +512,33 @@ type WrittenOf<Columns extends Column[]> = {
     ]?: Found['value']
 }
 
-/** 47.47 — each table `Migrations` leave, by name: its row read, and its row written. */
+/** A row inserted: a row written whose `INTEGER PRIMARY KEY` SQLite may assign. */
+type InsertedOf<Columns extends Column[]> = {
+    [
+        Found in Columns[number] as Found['optional'] extends true
+            ? never
+            : Found['assigned'] extends true
+              ? never
+              : Found['name']
+    ]: Found['value']
+} & {
+    [
+        Found in Columns[number] as Found['optional'] extends true
+            ? Found['name']
+            : Found['assigned'] extends true
+              ? Found['name']
+              : never
+    ]?: Found['value']
+}
+
+/** 47.47 — each table `Migrations` leave, by name: its row read, written and inserted. */
 export type TablesOf<Migrations extends readonly unknown[]> =
     Migrated<{}, Migrations> extends infer Found extends Schema
         ? {
               [Name in keyof Found]: {
                   row: RowOf<Found[Name]>
                   written: Flat<WrittenOf<Found[Name]>>
+                  inserted: Flat<InsertedOf<Found[Name]>>
               }
           }
         : {}

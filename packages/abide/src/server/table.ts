@@ -61,7 +61,13 @@ export type { ColumnMatch, Match } from '#shared/Match.ts'
  * A table of the app's database: its rows read by calling it, rows written by key, its changes read
  * out and rows streamed in.
  */
-export type Table<Row, Written = Row> = ((match?: Match<Row>) => Row[]) & {
+export type Table<Row, Written = Row, Inserted = Written> = ((
+    match?: Match<Row>,
+) => Row[]) & {
+    /** 47.50 — the rows a call would answer, read without the run it is made in following them. */
+    peek(match?: Match<Row>): Row[]
+    /** 47.51 — rows inserted, their key assigned where SQLite assigns it, answered as stored. */
+    insert(rows: Inserted | readonly Inserted[]): Row[]
     /** 47.33 — rows upserted by key: inserted, or replacing the row with their key. */
     set(rows: Written | readonly Written[]): void
     /** 47.33 — the columns each row names written onto the row with its key; the rest are left. */
@@ -89,6 +95,22 @@ type WrittenIn<Found, Name extends keyof Found> = Found[Name] extends {
 }
     ? Written
     : never
+type InsertedIn<Found, Name extends keyof Found> = Found[Name] extends {
+    inserted: infer Inserted
+}
+    ? Inserted
+    : never
+
+/** 47.48 — a row given by its caller, written: a column that may hold `null` may be left out. */
+type WrittenAs<Row> = {
+    [
+        Column in keyof Row as null extends Row[Column] ? never : Column
+    ]: Row[Column]
+} & {
+    [
+        Column in keyof Row as null extends Row[Column] ? Column : never
+    ]?: Row[Column]
+}
 
 /**
  * A table of `database`: called, its rows, or those `match` names (47.35), a read that refreshes the
@@ -99,7 +121,7 @@ export function table<Row extends Record<string, unknown> = never>(
     database: Database | (() => Database),
     name: [Row] extends [never] ? never : string,
     options?: TableOptions<Row>,
-): Table<Row>
+): Table<Row, WrittenAs<Row>>
 export function table(
     database:
         Database | ((() => Database) & { readonly [TYPED_TABLES]?: undefined }),
@@ -110,7 +132,7 @@ export function table<Found, Name extends keyof Found & string>(
     database: (() => Database) & Typed<Found>,
     name: Name,
     options?: TableOptions<RowIn<Found, Name>>,
-): Table<RowIn<Found, Name>, WrittenIn<Found, Name>>
+): Table<RowIn<Found, Name>, WrittenIn<Found, Name>, InsertedIn<Found, Name>>
 export function table<Row extends Record<string, unknown>>(
     database: Database | (() => Database),
     name: string,
@@ -127,8 +149,9 @@ export function table<Row extends Record<string, unknown>>(
         )
     logging(name, options?.logged)
     const acquire = typeof database === 'function' ? database : () => database
+    // 47.53 — nothing is opened here: the database, its change log and the table's watch wait for the
+    // table's first use, so a module declaring tables can be imported without a file.
     const connection = preparedConnection(acquire, name, key)
-    watchOf(database, connection, name)
     let readable: ReadableStream<Change<Row>> | undefined
     let writable: WritableStream<Row> | undefined
     // 47.38 — READ ON THE CONNECTION AS IT IS: a database refusing the change log is still read.
@@ -179,9 +202,19 @@ export function table<Row extends Record<string, unknown>>(
         readBy(watchOf(database, connection, name))
         return rows
     }
+    const peek = (match?: Match<Row>): Row[] => read.rows(match)
+    const insert = (rows: Row | readonly Row[]): Row[] => {
+        const each = listOf(rows)
+        const db = connection()
+        const stored = writes.insert(db, each)
+        wrote(db, stored.length)
+        return stored
+    }
     return Object.defineProperties(called, {
         // 16.117 — read by `rpc` for its face.
         [SOURCE_KIND]: { value: { kind: 'table', name } },
+        peek: { value: peek },
+        insert: { value: insert },
         set: { value: set },
         patch: { value: patch },
         delete: { value: remove },
@@ -315,6 +348,7 @@ const COMPARISONS: Record<string, string> = {
     lt: '<',
     lte: '<=',
     ne: 'IS NOT',
+    like: 'LIKE',
 }
 
 /**
@@ -463,7 +497,7 @@ function conditionOf(
         const operator = COMPARISONS[comparison]
         if (operator === undefined)
             throw new Error(
-                `abide: table ${name}'s match on ${column} names ${JSON.stringify(comparison)}, which is none of gt, gte, lt, lte, ne. RULEBOOK 47.36.`,
+                `abide: table ${name}'s match on ${column} names ${JSON.stringify(comparison)}, which is none of gt, gte, lt, lte, ne, like. RULEBOOK 47.36.`,
             )
         const bound = value[comparison]
         if (bound === undefined) continue
@@ -891,14 +925,17 @@ function rowWrites<Row extends Record<string, unknown>>(
         db: Database,
         description: Description,
         row: Partial<Row>,
-        updating: boolean,
+        mode: Mode,
     ) => {
         if (db !== preparedOn) {
             statements.clear()
             preparedOn = db
         }
-        const columns = Object.keys(row)
-        const shape = `${updating ? 'u' : 'i'}:${columns.join(',')}`
+        // 47.33 — a column whose value is `undefined` is not named, as JSON leaves it out.
+        const columns: string[] = []
+        for (const column in row)
+            if (row[column] !== undefined) columns.push(column)
+        const shape = `${mode}:${columns.join(',')}`
         let prepared = statements.get(shape)
         // A cached shape's columns are identifiers, so no comma is in one: a row joining to the same
         // text with another count has a comma in a column, and is checked — and refused — afresh.
@@ -932,52 +969,93 @@ function rowWrites<Row extends Record<string, unknown>>(
             const target = keys.map((column) => `"${column}"`).join(', ')
             const where = keys.map((column) => `"${column}" = ?`).join(' AND ')
             // An update binds the columns it sets, then the key it names the row by.
-            const ordered = updating ? [...others, ...keys] : columns
+            const ordered = mode === 'update' ? [...others, ...keys] : columns
+            const inserted =
+                columns.length === 0
+                    ? `INSERT INTO ${name} DEFAULT VALUES`
+                    : `INSERT INTO ${name} (${quoted.join(', ')}) VALUES (${slots.join(', ')})`
             prepared = {
                 columns: ordered,
                 codecs: ordered.map((column) => description.codecs.get(column)),
                 statement: db.query(
-                    updating
+                    mode === 'update'
                         ? `UPDATE ${name} SET ${sets.join(', ')} WHERE ${where}`
-                        : `INSERT INTO ${name} (${quoted.join(', ')}) VALUES (${slots.join(', ')}) ON CONFLICT(${target}) ${conflict}`,
+                        : mode === 'insert'
+                          ? `${inserted} RETURNING *`
+                          : `${inserted} ON CONFLICT(${target}) ${conflict}`,
                 ),
             }
             statements.set(shape, prepared)
         }
         return prepared
     }
-    const written =
-        (updating: boolean) =>
-        (db: Database, rows: readonly Partial<Row>[]): void => {
-            const description = describe(db, name)
-            const keys = keyColumns(description, key).length
-            db.transaction(() => {
-                for (const row of rows) {
-                    // An update naming no column but its key changes nothing.
-                    if (updating && Object.keys(row).length <= keys) continue
-                    const { columns, codecs, statement } = statementFor(
-                        db,
-                        description,
-                        row,
-                        updating,
-                    )
-                    const values = new Array<unknown>(columns.length)
-                    for (let at = 0; at < columns.length; at += 1) {
-                        const value = row[columns[at] as string]
-                        const codec = codecs[at]
-                        values[at] =
-                            codec === undefined ? value : encoded(codec, value)
-                    }
-                    statement.run(...(values as never[]))
+    /** Each row's statement run with its values, encoded per 47.41, in one transaction. */
+    const each = (
+        db: Database,
+        rows: readonly Partial<Row>[],
+        mode: Mode,
+        ran: (
+            statement: ReturnType<Database['query']>,
+            values: unknown[],
+        ) => void,
+    ): void => {
+        const description = describe(db, name)
+        const keys = keyColumns(description, key).length
+        db.transaction(() => {
+            for (const row of rows) {
+                // An update naming no column but its key changes nothing.
+                if (mode === 'update' && definedCount(row) <= keys) continue
+                const { columns, codecs, statement } = statementFor(
+                    db,
+                    description,
+                    row,
+                    mode,
+                )
+                const values = new Array<unknown>(columns.length)
+                for (let at = 0; at < columns.length; at += 1) {
+                    const value = row[columns[at] as string]
+                    const codec = codecs[at]
+                    values[at] =
+                        codec === undefined ? value : encoded(codec, value)
                 }
-            })()
-        }
-    return { upsert: written(false), update: written(true) }
+                ran(statement, values)
+            }
+        })()
+    }
+    const run = (
+        statement: ReturnType<Database['query']>,
+        values: unknown[],
+    ) => {
+        statement.run(...(values as never[]))
+    }
+    return {
+        upsert: (db, rows) => each(db, rows, 'upsert', run),
+        update: (db, rows) => each(db, rows, 'update', run),
+        insert: (db, rows) => {
+            const stored: Row[] = []
+            each(db, rows, 'insert', (statement, values) => {
+                stored.push(statement.get(...(values as never[])) as Row)
+            })
+            return decodeRows(stored, describe(db, name).coded)
+        },
+    }
+}
+
+/** How a row is written: upserted by its key, updated by it, or inserted and answered. */
+type Mode = 'upsert' | 'update' | 'insert'
+
+/** How many of `row`'s columns hold a value: `undefined` is no value (47.33). */
+function definedCount(row: object): number {
+    let count = 0
+    for (const column in row)
+        if ((row as Record<string, unknown>)[column] !== undefined) count += 1
+    return count
 }
 
 type RowWrites<Row> = {
     upsert: (db: Database, rows: readonly Row[]) => void
     update: (db: Database, rows: readonly Partial<Row>[]) => void
+    insert: (db: Database, rows: readonly Partial<Row>[]) => Row[]
 }
 
 /** 47.30 — rows upserted by their key, a turn's writes one transaction. */

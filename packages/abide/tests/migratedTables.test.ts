@@ -37,7 +37,10 @@ const CRM = database('migrated-tables', {
         "ALTER TABLE companies ADD COLUMN domain TEXT NOT NULL DEFAULT ''",
         'DROP TABLE IF EXISTS stale',
         'ALTER TABLE tags RENAME TO dealTags',
-        `CREATE VIRTUAL TABLE dealSearch USING fts5(name);
+        `-- a comment; holding a semicolon, and CREATE TABLE ghost (id INTEGER)
+        CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL) -- a trailing one
+        ;
+        CREATE VIRTUAL TABLE dealSearch USING fts5(name);
          CREATE TRIGGER deals_search AFTER INSERT ON deals BEGIN
              INSERT INTO dealSearch (rowid, name) VALUES (NEW.id, NEW.name);
          END`,
@@ -65,7 +68,8 @@ test('a table is typed by the migrations that declare it — 47.47, 47.48', () =
     >()
     same<Same<Found['companies'], { id: string; domain: string }>>()
     same<Same<Found['dealTags'], { dealId: number; tag: string }>>()
-    same<Same<keyof Found, 'deals' | 'companies' | 'dealTags'>>()
+    same<Same<keyof Found, 'deals' | 'companies' | 'dealTags' | 'notes'>>()
+    same<Same<Found['notes'], { id: number; body: string }>>()
     const deals = table(CRM, 'deals')
     // A written row leaves out what may be NULL or has a default, never the key it is named by.
     deals.set({ id: 1, name: 'Acme', createdAt: '2026-11-27' })
@@ -77,6 +81,13 @@ test('a table is typed by the migrations that declare it — 47.47, 47.48', () =
         table(CRM, 'stale')
     }
     void refused
+    // An insert may leave out the key SQLite assigns.
+    const [inserted] = table(CRM, 'notes').insert({ body: 'first' })
+    expect(inserted).toEqual({ id: 1, body: 'first' })
+    // A row typed by its caller may leave out what may hold null.
+    table<{ id: number; detail: { calls: number } | null }>(CRM, 'deals').patch(
+        { id: 1 },
+    )
     // A table a function made is the caller's to type, as one of no typed opener is.
     const seeded = table<{ id: number }>(CRM, 'seeded')
     expect(seeded()).toEqual([])

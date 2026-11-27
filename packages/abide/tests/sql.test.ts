@@ -235,6 +235,7 @@ test('a table called matches a list, comparisons and null as JSON reads them —
         idsOf(deals({ stage: { ne: 'won' } })),
         idsOf(deals({ stage: { ne: null } })),
         idsOf(deals({ amount: {} })),
+        idsOf(deals({ stage: { like: 'w%' } })),
     ]
     expect(answers).toEqual([
         'd1,d2',
@@ -244,10 +245,11 @@ test('a table called matches a list, comparisons and null as JSON reads them —
         'd2,d3,d4',
         'd1,d2,d4',
         'd1,d2,d3,d4',
+        'd1',
     ])
     const refusals: string[] = []
     for (const match of [
-        { amount: { like: 4 } },
+        { amount: { between: 4 } },
         { amount: { gt: null } },
         { amount: [[40]] },
     ])

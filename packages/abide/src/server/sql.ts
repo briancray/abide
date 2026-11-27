@@ -14,6 +14,8 @@
 
 import type { Database, SQLQueryBindings, Statement } from 'bun:sqlite'
 
+import { isPlainData } from '#shared/isPlainData.ts'
+
 import { bindList, listText, slotsOf } from './boundList.ts'
 import { codecOf, type CodedColumn, decodeRows } from './columnCodec.ts'
 
@@ -57,6 +59,8 @@ export function sqlOver(acquire: () => Database): Sql {
         for (let at = 0; at < values.length; at += 1) {
             const value = values[at]
             if (Array.isArray(value)) shape += `${at}:${slotsOf(value.length)},`
+            // 47.52 — a plain object is bound as its JSON text.
+            else if (isPlainData(value)) shape += `${at}:json,`
         }
         let prepared = perShape.get(shape)
         if (prepared === undefined) {
@@ -100,7 +104,7 @@ function textOf(
     return text
 }
 
-/** 47.37 — the values bound, each list's in its place; a list nested in one is refused. */
+/** 47.37, 47.52 — the values bound: each list's in its place, a plain object as its JSON. */
 function flattened(
     values: readonly (SQLQueryBindings | readonly SQLQueryBindings[])[],
 ): SQLQueryBindings[] {
@@ -108,6 +112,7 @@ function flattened(
     for (const value of values) {
         if (Array.isArray(value))
             bindList(value, slotsOf(value.length), bound, refused)
+        else if (isPlainData(value)) bound.push(JSON.stringify(value))
         else bound.push(value as SQLQueryBindings)
     }
     return bound

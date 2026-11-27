@@ -59,6 +59,18 @@ import Section from '#src/lib/Section.abide'
             ],
         },
         {
+            path: 'packages/abide/tests/describedTable.test.ts',
+            from: [
+                "test('a peek reads the rows without the run that made it following them — 47.50'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/describedTable.test.ts',
+            from: [
+                "test('an insert answers its rows as stored, and an undefined column is not written — 47.51, 47.33'",
+            ],
+        },
+        {
             path: 'packages/abide/tests/rpcSources.test.ts',
             from: [
                 'test("a table\'s rpc is read by a match and written by key over the wire — 16.117"',
@@ -127,6 +139,28 @@ import Section from '#src/lib/Section.abide'
 
             const ambitious = targets({ target: { gte: 500_000 } })
             const picked = targets({ id: [3, 5, 8] })
+        `} />
+    </Section>
+
+    <Section level={3} title="Insert a target, and read back the id SQLite assigned">
+        <p><code>insert</code> leaves the key to SQLite and answers each row as it was stored,
+            its defaults filled in.</p>
+        <Code language="ts" caption="server" code={`
+            import { targets } from './targets.server.ts'
+
+            const [stored] = targets.insert({ target: 300_000 })
+            console.log(stored?.id, stored?.setAt)
+        `} />
+    </Section>
+
+    <Section level={3} title="Peek at the targets without the value following the table">
+        <p><code>peek</code> answers the same rows as a call, and the value that peeked is not
+            loaded again when the table changes.</p>
+        <Code language="ts" caption="server" code={`
+            import { memo } from '@abide/abide'
+            import { targets } from './targets.server.ts'
+
+            export const firstTarget = memo(() => targets.peek().at(0)?.target)
         `} />
     </Section>
 
