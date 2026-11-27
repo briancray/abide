@@ -22,6 +22,9 @@ const CAPABILITIES: readonly { line: string; tools: readonly string[] }[] = [
     { line: 'Start helper agents', tools: ['Agent', 'Task'] },
 ]
 const UNSHOWN = new Set(['TodoWrite', 'ExitPlanMode'])
+// Every built-in a line already names, or that is no line at all.
+const LISTED = new Set(UNSHOWN)
+for (const { tools } of CAPABILITIES) for (const tool of tools) LISTED.add(tool)
 
 /**
  * The lines naming what `tools` ask of this machine: one per capability their built-in tools give, in
@@ -40,10 +43,7 @@ export function requestedLines(tools: readonly string[]): string[] {
     for (const tool of tools) {
         const server = serverOf(tool)
         if (server === undefined) {
-            let named = UNSHOWN.has(tool)
-            for (const { tools: covered } of CAPABILITIES)
-                if (covered.includes(tool)) named = true
-            if (!named) lines.push(`Use ${tool}`)
+            if (!LISTED.has(tool)) lines.push(`Use ${tool}`)
             continue
         }
         const counted = servers.get(server) ?? 0
