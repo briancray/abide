@@ -10,13 +10,10 @@ import { putOwn } from '#shared/putOwn.ts'
 import { canonicalKey } from '#shared/reactive/argsContract.ts'
 import { keyedValue } from '#shared/reactive/index.ts'
 
+import type { ArmsCase } from './armsRun.ts'
+
 // Defeats dead-code elimination without allocating: every arm writes here.
 let sink: unknown
-
-export type SharedCase = {
-    name: string
-    arms: Record<string, () => void>
-}
 
 // ---- canonicalKey: three spellings of one level ----
 
@@ -83,7 +80,7 @@ function canonicalString(value: unknown): string {
     return `${out}}`
 }
 
-function keyCase(name: string, args: Record<string, unknown>): SharedCase {
+function keyCase(name: string, args: Record<string, unknown>): ArmsCase {
     const expected = canonicalKey(args)
     for (const made of [
         JSON.stringify(canonicalNull(args)),
@@ -121,7 +118,7 @@ function keyCase(name: string, args: Record<string, unknown>): SharedCase {
 // THE STANDING REACH, with and without a default to apply: a body with none pays a `null` test, one
 // whose caller wrote every member pays a walk that allocates nothing, and one whose caller left a
 // member out pays a copy of its args.
-function defaultsReachCase(): SharedCase {
+function defaultsReachCase(): ArmsCase {
     const plain = keyedValue((held: { page?: number }) => held.page)
     const defaulted = keyedValue(({ page = 1 }: { page?: number }) => page)
     const written = { page: 1 }
@@ -147,7 +144,7 @@ function defaultsReachCase(): SharedCase {
 // CONSTRUCTION reads a body's text once per function — a fresh closure per build, as a component's
 // keyed value is, so here the read is paid every time rather than remembered. Apart from the reach
 // arms, whose floor the garbage these make would otherwise raise.
-function defaultsBuildCase(): SharedCase {
+function defaultsBuildCase(): ArmsCase {
     return {
         name: 'keyed build — parameter defaults',
         arms: {
@@ -172,7 +169,7 @@ function validateCase(
     name: string,
     schema: Parameters<typeof validateJson>[0],
     value: unknown,
-): SharedCase {
+): ArmsCase {
     const gated = reactive<unknown>(value, { schema: jsonSchema(schema) })
     return {
         name,
@@ -188,7 +185,7 @@ function validateCase(
 }
 
 /** Every shared case: two canonicalKey shapes and three validateJson schemas. */
-export function sharedCases(): SharedCase[] {
+export function sharedCases(): ArmsCase[] {
     return [
         keyCase('canonicalKey — one flat level', { id: 42 }),
         keyCase('canonicalKey — two object levels', {

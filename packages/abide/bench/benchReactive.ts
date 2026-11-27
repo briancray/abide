@@ -14,7 +14,7 @@ import {
 import { formatArms, runArms } from './armsRun.ts'
 import { countExportedNames } from './countExportedNames.ts'
 import { countLines } from './countLines.ts'
-import { reactiveArmCases } from './reactiveCases.ts'
+import { reactiveCases } from './reactiveCases.ts'
 
 async function machinery(): Promise<void> {
     // GLOBBED, not listed: the hand-written list this replaced had fallen ten files behind the
@@ -44,7 +44,7 @@ console.log(
 )
 
 // The batcher's own two-second ceiling: bun's clock is fine enough to reach n inside it.
-console.log(formatArms(runArms(reactiveArmCases(), 2_000_000_000)))
+console.log(formatArms(runArms(reactiveCases(), 2_000_000_000)))
 
 /**
  * Ceiling on the mount-112 / mount-16 ratio; above it the subscribe path is not linear.

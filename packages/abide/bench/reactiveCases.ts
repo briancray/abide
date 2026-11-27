@@ -20,16 +20,14 @@ import { signal } from './signal.ts'
 // Defeats dead-code elimination without allocating: every read writes here.
 let sink: unknown
 
-/** One reactive bench case: a hand-written arm, an abide arm, and the work each does. */
-type Case = {
-    name: string
+/** One reactive bench case: a hand-written arm first, as the base, an abide arm, and the work each does. */
+type Case = ArmsCase & {
     /**
      * What the case is FOR. A benchmark case earns its place by DISTINGUISHING
      * implementations, not by being representative.
      */
     distinguishes: string
-    vanilla: () => void
-    abide: () => void
+    arms: { vanilla: () => void; abide: () => void }
     /**
      * Work counts, taken in a separate pass over the SAME closures the timer runs.
      *
@@ -99,8 +97,7 @@ function constructValue(): Case {
         name: 'construct a value',
         distinguishes:
             'the cost of MAKING a reactive value rather than using one — the op a table pays once per cell per row, and the one every other case here hides in its setup',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         // WHAT EACH ARM MADE, read back: the value the timed op built holds what it was given.
         work: () => {
             vanilla()
@@ -146,8 +143,7 @@ function constructDerived(): Case {
         // computes on the first `read`, where abide's first run is at construction (1.7).
         // Without the read the ratio is a construction against a construction plus a run, and
         // `work` counts 0 body runs against 1.
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'bodyRuns',
@@ -170,8 +166,7 @@ function readSettled(): Case {
         name: 'read a settled value',
         distinguishes:
             'the cost of a read that finds a landed value — the hottest path in the design, walked per template slot per row',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         // WHAT THE READ RETURNED, off the timed op. A read wakes nothing on either arm, so there
         // is no counter to move — the answer is the one thing the op produces.
         work: () => {
@@ -217,8 +212,7 @@ function writeChanged(): Case {
         name: 'write a value that changed',
         distinguishes:
             'the write path with one subscriber attached — both arms must wake, so this is cost with the work held equal',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'wakes',
@@ -269,8 +263,7 @@ function writeTenTimes(): Case {
         name: 'ten writes in one handler',
         distinguishes:
             'the batch: a turn that writes the same value ten times reaches its reader once, where an arm with nowhere to hold the intermediate values reaches it ten times',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'wakes',
@@ -311,8 +304,7 @@ function writeEqualObject(): Case {
         name: 'write a re-materialized equal value, default identity',
         distinguishes:
             'the write path with a fresh object and a reference compare on both arms — cost with the work held equal',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'wakes',
@@ -354,8 +346,7 @@ function writeEqualObjectStructural(): Case {
         name: 'write a re-materialized equal value, deepEqual declared',
         distinguishes:
             'the option an app passes where a reload rebuilds an equal payload — a deep walk per write against a wake per write',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'wakes',
@@ -413,8 +404,7 @@ function derived(): Case {
         name: 'write a source, then read what derives from it',
         distinguishes:
             'the recompute path — a dirty flag and a lazy read against a marked body pulled forward by the read',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'recomputes',
@@ -477,8 +467,7 @@ function derivedUnchanged(): Case {
         name: 'a source changes without changing what derives from it',
         distinguishes:
             'the identity gate on a recompute — a dirty flag wakes everything downstream, a production the identity gate collapses wakes nothing',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'downstreamWakes',
@@ -530,8 +519,7 @@ function appendToCappedArrayAndWalk(): Case {
         name: 'append to a capped array and walk it',
         distinguishes:
             'a channel kept as an array — a patch that must not cost more than the push it records, and the array walked by the consumer that wants it',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         // Both arms walk the same window, or the timings price two different jobs. Run past
         // the cap, so the window counted is the full one rather than a warm-up's.
         work: () => {
@@ -545,17 +533,6 @@ function appendToCappedArrayAndWalk(): Case {
             }
         },
     }
-}
-
-/**
- * Returns the dead-code-elimination sink every arm writes.
- *
- * `sink` exists to defeat dead-code elimination — every arm writes it, and an unread
- * write is exactly what an optimizer removes. Read once, so the linter does not read it
- * as dead, which it is not.
- */
-export function sinkValue(): unknown {
-    return sink
 }
 
 // ── GRAPH SHAPES ─────────────────────────────────────────────────────────────────
@@ -663,8 +640,7 @@ function fanOut(width: number): Case {
         name: `fan-out to ${width} readers, one read after the write`,
         distinguishes:
             'a write that must reach every reader against a read that wants one of them — both arms mark the fan and run the one node that is read, so what is left is the cost of a mark',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'bodyRuns',
@@ -719,8 +695,7 @@ function fanIn(width: number): Case {
         name: `fan-in from ${width} sources, one changes`,
         distinguishes:
             'the cursor protocol in steady state — a body whose source order never changes should mutate nothing, and one source moving should not re-subscribe the other nine',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'bodyRuns',
@@ -809,8 +784,7 @@ function layeredDag(width: number, depth: number): Case {
         name: `layered DAG ${width} wide x ${depth} deep, one base value changes`,
         distinguishes:
             'sharing at every level — a walk that guards the STACK rather than what it has VISITED re-walks each shared subgraph once per path, which is an asymptote rather than a constant',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'bodyRuns',
@@ -871,8 +845,7 @@ function chain(depth: number): Case {
         name: `chain ${depth} deep`,
         distinguishes:
             "depth with no sharing — the control against the DAG, so the DAG's extra cost is attributable to sharing rather than to size",
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'bodyRuns',
@@ -958,8 +931,7 @@ function alternatingSources(): Case {
         name: 'a body whose source alternates every run',
         distinguishes:
             'the cursor protocol when it always misses — a stable body mutates nothing, and this one detaches and re-subscribes on every single run',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         // The hand-written node subscribes to all three once and re-subscribes nothing, so
         // the edge rows DISAGREE, 0 against 1 — the hand-written arm is the superset
         // subscription somebody writes, and this is the re-subscription it never pays.
@@ -1028,8 +1000,7 @@ function repeatedReads(times: number): Case {
         name: `one source read ${times} times in one body`,
         distinguishes:
             'a duplicate in the source list — the cursor must match it each time and the reader must still be woken exactly once',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'bodyRuns',
@@ -1111,8 +1082,7 @@ function probeSettledDag(width: number, depth: number): Case {
         name: `probe a settled DAG ${width} wide x ${depth} deep`,
         distinguishes:
             'a probe walk over a SHARED graph — a guard that tracks the stack re-walks each shared subgraph once per path, where one that tracks what it visited walks each edge once',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         // THE ANSWER EACH ARM GAVE, taken from the timed op rather than written down: an
         // all-idle graph probes not-busy in both. How many nodes abide's walk VISITED has no
         // public counter — `WORK.descents` counts the mark walk, not this one — so the visit
@@ -1184,8 +1154,7 @@ function equalWriteAgainstCareless(width: number, fresh: boolean): Case {
         name,
         distinguishes:
             'what the gate BUYS rather than what it costs — abide skips the wake and this arm wakes every reader on a write that moved nothing, which is the version most people write first',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'wakes',
@@ -1264,8 +1233,7 @@ function mountReaders(width: number): Case {
         name: `mount ${width} readers on one value`,
         distinguishes:
             'the subscribe path, which every fan-out case builds in setup and never times — a dedup scanned per arriving reader against one scanned per value the body reads, which is the difference between quadratic in the reader count and flat',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         // BOTH ARMS HOLD THE SAME FAN while they are up, which is what makes the timings
         // comparable: an arm that subscribed fewer readers would be a cheaper different job.
         // A watch's mount IS its first run, so the abide count is taken in the body; the
@@ -1307,8 +1275,7 @@ function constructKeyed(): Case {
         name: 'construct a keyed value',
         distinguishes:
             'the cost of MAKING a keyed factory — its entry map and its statics — before any key is reached',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         work: () =>
             countedOver(
                 'built',
@@ -1348,8 +1315,7 @@ function reachKeyed(): Case {
         name: `reach a standing keyed entry among ${KEYED_WIDTH}`,
         distinguishes:
             'the reach that finds its entry already standing (1.8) — the key and the lookup, no entry built',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         // A FULL LAP OF THE TIMED REACHES, counting entries built during it: the factory's
         // runs for abide, the map's growth for the hand-written arm.
         work: () =>
@@ -1409,8 +1375,7 @@ function probeKeyed(): Case {
         name: `probe a keyed value of ${KEYED_WIDTH} entries, whole and by pattern`,
         distinguishes:
             'a keyed STATIC walking its entries — where the statics live is what this reaches first',
-        vanilla,
-        abide,
+        arms: { vanilla, abide },
         // WHAT THE PROBE ANSWERED, and what it BUILT doing so — a static walks the entries that
         // stand and builds none. How many entries abide's static walked has no public counter.
         work: () => {
@@ -1433,18 +1398,6 @@ function probeKeyed(): Case {
 }
 
 /** The reactive cases as the one runner takes them: the hand-written arm first, as the base. */
-export function reactiveArmCases(): ArmsCase[] {
-    const cases: ArmsCase[] = []
-    for (const kase of reactiveCases())
-        cases.push({
-            name: kase.name,
-            distinguishes: kase.distinguishes,
-            arms: { vanilla: kase.vanilla, abide: kase.abide },
-            work: kase.work,
-        })
-    return cases
-}
-
 export const reactiveCases = (): Case[] => [
     constructKeyed(),
     reachKeyed(),

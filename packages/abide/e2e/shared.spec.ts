@@ -4,7 +4,7 @@
 import { test } from '@playwright/test'
 
 import { openInjected } from '../../harness/scripts/buildInjectable.ts'
-import type { ArmsBench } from '../bench/armsRun.ts'
+import { type ArmsBench, formatArms } from '../bench/armsRun.ts'
 import { buildBench } from '../bench/buildBench.ts'
 import { BENCH_SIZING } from './BENCH_SIZING.ts'
 
@@ -23,6 +23,5 @@ test('shared allocations, current against candidate, in this engine', async ({
         BENCH_SIZING,
     )
     if (BENCH_SIZING) return
-    const { formatArms } = await import('../bench/armsRun.ts')
     console.log(`\n=== ${testInfo.project.name} ===\n${formatArms(rows)}`)
 })

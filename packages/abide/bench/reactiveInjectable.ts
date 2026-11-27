@@ -9,9 +9,9 @@
 // than assuming it, and a browser's is ~100 µs against bun's 41 ns.
 
 import { type ArmsBench, runArms } from './armsRun.ts'
-import { reactiveArmCases } from './reactiveCases.ts'
+import { reactiveCases } from './reactiveCases.ts'
 
 ;(
     globalThis as unknown as { __REACTIVE_BENCH__: ArmsBench }
 ).__REACTIVE_BENCH__ = (budget, sizing) =>
-    runArms(reactiveArmCases(), budget, sizing)
+    runArms(reactiveCases(), budget, sizing)
