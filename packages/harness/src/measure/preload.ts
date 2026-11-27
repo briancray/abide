@@ -4,6 +4,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator'
 
 import { install } from './install.ts'
+import { installFormReset } from './installFormReset.ts'
 import { installPopover } from './installPopover.ts'
 import { installSelect } from './installSelect.ts'
 
@@ -59,6 +60,7 @@ bridgeFiles()
 install()
 installPopover()
 installSelect()
+installFormReset()
 
 /**
  * 43.37, 43.38 — ONE `File` FOR BOTH HALVES. The wire's are bun's (43.28), and happy-dom takes only

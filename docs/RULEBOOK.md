@@ -4653,6 +4653,9 @@ their own.
 attribute, and a single `<select>` built from markup, parsed or cloned, MUST select the last option
 that attribute marks, or its first enabled option where none is marked.
 
+43.48 Under `@abide/harness/preload`, a `<form>`'s `reset()` MUST empty the files of every file input
+it holds, as the HTML reset algorithm does.
+
 # 44. The assistant
 
 44.1 `assistant` MUST answer only through a handler that yields it, and MUST NOT mount an address

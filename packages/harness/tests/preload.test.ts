@@ -254,3 +254,22 @@ test('an iframe under the preload loads no page — 43.39', async () => {
     frame.remove()
     expect(asked).toBe(0)
 })
+
+// 43.48 — A RESET EMPTIES A FILE INPUT, as the HTML reset algorithm does: a form starting over after
+// its call (56.34) leaves no file picked. THE REVERT: drop `installFormReset()` from
+// `measure/preload.ts`; the input still holds 1 file after the reset.
+test('a form reset empties its file inputs — 43.48', () => {
+    const form = document.createElement('form')
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.name = 'statement'
+    form.append(input)
+    document.body.append(form)
+    const picked = new DataTransfer()
+    picked.items.add(new File(['x'], 'statement.pdf'))
+    input.files = picked.files
+    expect(input.files?.length).toBe(1)
+    form.reset()
+    expect([input.files?.length, input.value]).toEqual([0, ''])
+    form.remove()
+})
