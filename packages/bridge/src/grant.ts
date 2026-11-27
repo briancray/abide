@@ -91,23 +91,26 @@ function userConfiguration(): string {
 
 /**
  * The MCP servers the visitor's Claude Code is configured with, by the name its tools carry: those of
- * each `--mcp-config` they passed — a file, or JSON written out — or, where they passed none, the user
- * scope of their Claude Code configuration. Read each time, so a server added since is found. 44.58.
+ * each `--mcp-config` they passed — a file, or JSON written out — and the user scope of their Claude
+ * Code configuration where `userScope` says, by default where they passed none. Read each time, so a
+ * server added since is found. 44.58.
  *
  * Throws where a source they named cannot be read.
  */
 export async function visitorServers(
     sources: string[] | undefined,
+    userScope: boolean = sources === undefined,
 ): Promise<Map<string, unknown>> {
     const servers = new Map<string, unknown>()
     const read: { mcpServers?: Record<string, unknown> }[] = []
-    if (sources === undefined) {
+    if (userScope) {
         // Claude Code rewrites this file while it runs, so a read caught mid-write is no servers rather
         // than a failed turn — the visitor named no source to be told about.
         try {
             read.push(await Bun.file(userConfiguration()).json())
         } catch {}
-    } else
+    }
+    if (sources !== undefined)
         for (const source of sources) {
             const written = source.trim()
             try {
@@ -190,7 +193,11 @@ export async function grantFor(
     let configured = new Map<string, unknown>()
     if (asksMcp)
         try {
-            configured = await visitorServers(sources)
+            // 44.58 — run full, the turn reads the user scope beside each `--mcp-config` (44.82).
+            configured = await visitorServers(
+                sources,
+                full || sources === undefined,
+            )
         } catch (thrown) {
             if (unreadable === undefined) throw thrown
             unreadable(messageOf(thrown))

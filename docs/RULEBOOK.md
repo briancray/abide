@@ -4808,8 +4808,8 @@ and once that signal aborts MUST end the conversation without waiting for the pr
 with `refuse.aborted` at status 499.
 
 44.58 A bridge MUST find the visitor's MCP servers, at each turn, in each `--mcp-config` the visitor
-passed after `--`, or where they passed none, in the user scope of their Claude Code configuration,
-and MUST NOT find the bridge's own server's name there.
+passed after `--`, and in the user scope of their Claude Code configuration where they passed none or
+the bridge runs `--full` (44.82), and MUST NOT find the bridge's own server's name there.
 
 44.59 A `BridgeStatus` MUST carry a command and a link whether or not a bridge is paired, and a bridge
 pairing by its code MUST take the place of the one paired.
