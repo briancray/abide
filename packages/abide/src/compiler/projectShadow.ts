@@ -751,7 +751,7 @@ type ${BIND_WRITES}Text<Value> = [Extract<Value, number>] extends [never] ? stri
 type ${BIND_WRITES}Option<Value> = [Extract<Value, string>] extends [never] ? ${BIND_WRITES}Text<Value> : Extract<Value, string> | ${BIND_WRITES}Number<Value>
 type ${BIND_WRITES}Options<Value> = Value extends readonly (infer Item)[] ? [Extract<Item, string>] extends [never] ? string[] : Extract<Item, string>[] : string[]
 type ${BIND_WRITES}Of<Kind, Value> = Kind extends 'boolean' ? boolean : Kind extends 'files' ? File[] : Kind extends 'number' ? number | undefined : Kind extends 'input' ? string | number | undefined : Kind extends 'option' ? ${BIND_WRITES}Option<Value> : Kind extends 'options' ? ${BIND_WRITES}Options<Value> : Kind extends 'select' ? ${BIND_WRITES}Option<Value> | ${BIND_WRITES}Options<Value> : ${BIND_WRITES}Text<Value>
-declare function ${BIND_WRITES}<Kind extends string>(kind: Kind): <Value>(value: { (): Value; set: (value: ${BIND_WRITES}Of<Kind, Value>) => unknown } | { get(): Value; set: (value: ${BIND_WRITES}Of<Kind, Value>) => unknown }) => void
+declare function ${BIND_WRITES}<Kind extends string>(kind: Kind): <Value>(value: { get(): Value; set: (value: ${BIND_WRITES}Of<Kind, Value>) => unknown }) => void
 declare function ${BOUND}<Value>(value: ${REACTIVE}<Value, any, any, any>): Value
 declare function ${BOUND}<Value>(value: { get(): Value; set(value: Value): unknown }): Value
 declare function __restValues<Accessors>(record: Accessors): { [Key in keyof Accessors]: NonNullable<Accessors[Key]> extends () => infer Value ? Value : never }
@@ -774,14 +774,14 @@ const ROWS_OF = '__rowsOf'
  * Ambient declaration of the helper that types a row's item from its subject.
  *
  * The item is read off the subject as `listOf` iterates it: what a `Reactive` read by
- * name hands back (31.1 lowers `rows` to `rows()`), or the subject itself. THE CALL IS THE FIRST
+ * name hands back (31.1 lowers `rows` to `rows.get()`), or the subject itself. THE READ IS THE FIRST
  * OVERLOAD because a `Reactive` is ALSO an `AsyncIterable` of what it produced (2.5, 2.6), and inferred
  * over one union the item came out as the row OR the whole list. Declared AFTER everything, so no
  * offset above it moves, and ambient, so there is nothing to emit. Where inference fails the item
  * is `unknown`, and a member of that is unprovable — the safe side.
  */
 const ROWS_OF_DECLARATION = `
-declare function ${ROWS_OF}<T>(subject: () => Iterable<T> | null | undefined): T[]
+declare function ${ROWS_OF}<T>(subject: { get(): Iterable<T> | null | undefined }): T[]
 declare function ${ROWS_OF}<T>(subject: Iterable<T> | AsyncIterable<T> | null | undefined): T[]
 `
 

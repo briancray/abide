@@ -68,7 +68,7 @@ function serverLines(traces: readonly string[]): LogRecord[] {
     if (traces.length === 0) return []
     const wanted = new Set(traces)
     const held = secrets()
-    const all = log.records()
+    const all = log.records.get()
     const lines: LogRecord[] = []
     for (
         let at = all.length - 1;

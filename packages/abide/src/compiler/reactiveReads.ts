@@ -276,8 +276,8 @@ async function fixedPoint(
 /**
  * 31.15 — whether the access that ends at `end` in the lowered program is typed as none of a
  * `Reactive`: a plain member there, which the projection's answer must read as one. A read the
- * lowering rewrote ends where its call does, `glance.view` as `…glance.view()`, so the access is the
- * one that call makes. An access the checker cannot type is nothing it can vouch for, and is left as
+ * lowering rewrote ends where its call does, `glance.view` as `…glance.view.get()`, so the access is
+ * the one that `get` is read off. An access the checker cannot type is nothing it can vouch for, and is left as
  * the projection answered.
  */
 async function isReleased(
@@ -294,8 +294,11 @@ async function isReleased(
         (isCallExpression(node.parent) || isAccess(node.parent))
     )
         node = node.parent
-    if (isCallExpression(node) && node.arguments.length === 0)
+    if (isCallExpression(node) && node.arguments.length === 0) {
         node = node.expression
+        if (isPropertyAccessExpression(node) && node.name.text === 'get')
+            node = node.expression
+    }
     if (!isAccess(node) || node.end > end) return false
     const type = await checker.getTypeAtLocation(node)
     return (

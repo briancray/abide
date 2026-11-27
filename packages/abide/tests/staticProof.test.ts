@@ -72,7 +72,7 @@ test('a member of a value typed any is bound — 14.2', async () => {
 import { reactive } from '@abide/abide'
 
 let n = reactive(1)
-const box: any = { get value() { return n() } }
+const box: any = { get value() { return n } }
 </script>
 
 <p id="out">{box.value}</p>

@@ -17,6 +17,7 @@ import {
 import type { Live } from './live.ts'
 import { madeId } from './madeId.ts'
 import type { PlaceOptions } from './place.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { type Disposer, watch } from './reactive/watch.ts'
 import { withPart } from './withPart.ts'
@@ -27,7 +28,7 @@ export type PopoverOptions = PlaceOptions &
         /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
         id?: string | undefined
         /** Whether the popover is open: hand it a `Reactive` to read and write it, and every way it closes writes `false` back. */
-        open?: Reactive<boolean> | undefined
+        open?: Bindable<boolean> | undefined
         /** 50.60 — whether Escape closes it. `true` by default; a function is read at each press. */
         escape?: Live<boolean> | undefined
         /** 50.60 — whether a press outside it and its trigger or anchor closes it. `true` by default; a function is read at each press. */
@@ -71,7 +72,7 @@ export function popoverLayer(options: PopoverOptions): PopoverParts & {
     /** Closes it; false where its `open` refused the write. */
     hide(): boolean
 } {
-    const open = options.open ?? reactive(false)
+    const open = bindable(options.open) ?? reactive(false)
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the ids are
     // rewritten together.
     const id = options.id ?? madeId('popover')
@@ -112,11 +113,11 @@ export function popoverLayer(options: PopoverOptions): PopoverParts & {
         'data-popover': part,
         'aria-controls': id,
         get 'aria-expanded'() {
-            return open() ? 'true' : 'false'
+            return open.get() ? 'true' : 'false'
         },
         // 49.17
         get 'data-open'() {
-            return open() ? '' : undefined
+            return open.get() ? '' : undefined
         },
         onpointerenter: opens.enter,
         onpointerleave: opens.leave,
@@ -145,14 +146,16 @@ export function popoverLayer(options: PopoverOptions): PopoverParts & {
             popover: 'manual',
             'data-popover': 'popover',
             get 'data-open'() {
-                return open() ? '' : undefined
+                return open.get() ? '' : undefined
             },
             onpointerenter: opens.enter,
             onpointerleave: opens.leave,
             onfocusout: opens.blurred,
             'bind:element': (element: Element): Disposer =>
                 watch(() => {
-                    const at = open() ? document.getElementById(anchorId) : null
+                    const at = open.get()
+                        ? document.getElementById(anchorId)
+                        : null
                     if (at === null) return
                     const floating = element as HTMLElement
                     const stop = anchored(at, floating, options)

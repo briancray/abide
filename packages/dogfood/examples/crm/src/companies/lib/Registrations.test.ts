@@ -23,6 +23,6 @@ test('while the registry is down, every caller is served its last answer', async
     while (registryAsked('noether-group') < 4 || entry.busy())
         await Bun.sleep(10)
     const { entry: later } = await read()
-    expect(later()).toEqual({ founded: 1906, employees: 140 })
+    expect(later.get()).toEqual({ founded: 1906, employees: 140 })
     expect(later.error()).toMatchObject({ name: 'FetchFailed' })
 })

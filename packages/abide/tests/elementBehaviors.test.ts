@@ -390,7 +390,7 @@ function picked(
 test('a pick through the input lands in files, filtered as a drop is — 53.57', () => {
     const byType = dropzone({ accept: 'image/*' })
     const input = picked(byType, [CONTRACT, PHOTO])
-    expect(byType.files().map((file) => file.name)).toEqual(['signing.png'])
+    expect(byType.files.get().map((file) => file.name)).toEqual(['signing.png'])
     expect(byType.rejected.map((file) => file.name)).toEqual([
         'ledger-audit.pdf',
     ])
@@ -406,14 +406,16 @@ test('a drop replaces the files, keeps one under multiple false, and one taking 
     const drop = hosted(zone, dropzone({ accept: '.pdf,image/*' }))
     drag(zone, 'drop', [CONTRACT, PHOTO])
     drag(zone, 'drop', [PHOTO])
-    expect(drop.files().map((file) => file.name)).toEqual(['signing.png'])
+    expect(drop.files.get().map((file) => file.name)).toEqual(['signing.png'])
     drag(zone, 'drop', [new File(['x'], 'notes.txt')])
-    expect(drop.files().map((file) => file.name)).toEqual(['signing.png'])
+    expect(drop.files.get().map((file) => file.name)).toEqual(['signing.png'])
     expect(drop.rejected.map((file) => file.name)).toEqual(['notes.txt'])
     drop.stop()
     const one = hosted(zone, dropzone({ multiple: false }))
     drag(zone, 'drop', [CONTRACT, PHOTO])
-    expect(one.files().map((file) => file.name)).toEqual(['ledger-audit.pdf'])
+    expect(one.files.get().map((file) => file.name)).toEqual([
+        'ledger-audit.pdf',
+    ])
     one.stop()
 })
 
@@ -444,7 +446,7 @@ test('a drop whose files are refused turns nothing away and calls nothing — 49
         }),
     )
     drag(zone, 'drop', [CONTRACT, new File(['x'], 'notes.txt')])
-    expect(drop.files()).toEqual([])
+    expect(drop.files.get()).toEqual([])
     expect(drop.rejected).toEqual([])
     expect(heard).toEqual([])
     drop.stop()
@@ -686,7 +688,7 @@ test('a scroller follows its bottom until the reader scrolls up, and the jump ta
         unseen: follow.jump['data-unseen'],
     })
     await line()
-    expect([log.scrollTop, follow.following(), jump()]).toEqual([
+    expect([log.scrollTop, follow.following.get(), jump()]).toEqual([
         140,
         true,
         { hidden: true, unseen: undefined },
@@ -696,7 +698,7 @@ test('a scroller follows its bottom until the reader scrolls up, and the jump ta
     log.dispatchEvent(new Event('scroll'))
     await line()
     // 53.59 — and the line that landed meanwhile shows the jump, unseen.
-    expect([log.scrollTop, follow.following(), jump()]).toEqual([
+    expect([log.scrollTop, follow.following.get(), jump()]).toEqual([
         0,
         false,
         { hidden: false, unseen: '' },
@@ -704,7 +706,7 @@ test('a scroller follows its bottom until the reader scrolls up, and the jump ta
     // 53.60 — the jump takes the reader down and follows again.
     ;(follow.jump.onclick as () => void)()
     await line()
-    expect([log.scrollTop, follow.following(), jump()]).toEqual([
+    expect([log.scrollTop, follow.following.get(), jump()]).toEqual([
         height,
         true,
         { hidden: true, unseen: undefined },

@@ -93,7 +93,7 @@ export async function buildCompiledPage(
                 `        const card = cards[at]`,
                 `        for (let k = 0; k < 3; k += 1) {`,
                 `            const node = card.children[k].firstChild`,
-                `            watch(() => setText(node, escapeless(spare()[0])))`,
+                `            watch(() => setText(node, escapeless(spare.get()[0])))`,
                 `        }`,
                 `    }`,
                 `}`,

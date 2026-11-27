@@ -30,19 +30,19 @@ const PAGE = `<script>
 import { onError, watch } from '@abide/abide'
 import Inner from './Inner.abide'
 
-const state = (globalThis as unknown as { errorState: { shown: () => boolean; fail: () => boolean; heard: string[]; mounting: boolean } }).errorState
+const state = (globalThis as unknown as { errorState: { shown: { get(): boolean }; fail: { get(): boolean }; heard: string[]; mounting: boolean } }).errorState
 // The server's render of this setup shares state with the mount, and its watch would throw too.
 const mounted = state.mounting
 onError((error) => state.heard.push(\`outer:\${(error as Error).message}\`))
 watch(() => {
-    state.fail()
+    state.fail.get()
     return () => {
         if (mounted) throw new Error('disposer')
     }
 })
 </script>
 
-<main>{#if state.shown()}<Inner/>{/if}</main>`
+<main>{#if state.shown.get()}<Inner/>{/if}</main>`
 
 const INNER = `<script>
 import { onError } from '@abide/abide'

@@ -27,10 +27,10 @@ const car = keyedValue(
 )
 // 13.7 — read, so a refresh reloads them rather than marking them.
 watch(() => {
-    cars()
-    boats()
-    car({ id: 1 })()
-    car({ id: 2 })()
+    cars.get()
+    boats.get()
+    car({ id: 1 }).get()
+    car({ id: 2 }).get()
 })
 
 const settled = async (): Promise<void> => {

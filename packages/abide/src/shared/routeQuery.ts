@@ -52,8 +52,8 @@ export function routeQuery<Defaults extends QueryDefaults>(
     return pairReactive(
         {
             get: () => {
-                const standing = address()
-                return queryRead(going() ?? standing, defaults)
+                const standing = address.get()
+                return queryRead(going.get() ?? standing, defaults)
             },
             set: (value) =>
                 queryWrite(
@@ -86,7 +86,7 @@ export function routeQueryMember<Default extends QueryDefaults[string]>(
     const whole = routeQuery(address, { [name]: fallback } as QueryDefaults)
     return pairReactive(
         {
-            get: () => (whole() as Record<string, unknown>)[name],
+            get: () => (whole.get() as Record<string, unknown>)[name],
             set: (value) =>
                 whole.set({ [name]: value } as Partial<QueryOf<QueryDefaults>>),
         },

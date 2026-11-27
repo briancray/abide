@@ -32,7 +32,7 @@ let warned = false
 /** 35.22 — the host that shows a name's elements: the last standing under it. */
 function showing(name: string): Standing | undefined {
     let last: Standing | undefined
-    for (const host of hosts()) if (host.name === name) last = host
+    for (const host of hosts.get()) if (host.name === name) last = host
     return last
 }
 
@@ -61,7 +61,7 @@ export function host(name: string): Record<string, unknown> {
                 // holds, and from the first element out of place every one after it is appended.
                 let moving = false
                 let previous: Element | undefined
-                for (const each of filled()) {
+                for (const each of filled.get()) {
                     if (each.name !== name || !holds) continue
                     if (
                         !moving &&

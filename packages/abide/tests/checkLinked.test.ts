@@ -141,8 +141,8 @@ function languageServer(): {
 const READER = `<script server>
 import { config } from '@abide/abide/server'
 
-const retries: number = config().RETRIES
-const wrong: string = config().RETRIES
+const retries: number = config.RETRIES
+const wrong: string = config.RETRIES
 </script>`
 
 // 27.13 — A PAGE CHECKED ALONE IS TYPED BY DEFAULTS IT NEVER IMPORTED, as the whole app's check types

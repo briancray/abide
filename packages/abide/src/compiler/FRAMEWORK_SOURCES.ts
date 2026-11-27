@@ -10,6 +10,8 @@ export const FRAMEWORK_SOURCES = {
     reactive: besideCompiler('../shared/reactive/Reactive.ts'),
     /** `Shared`, the type literal every handle `reactive.shared` hands back carries the symbol of (10.3). */
     share: besideCompiler('../shared/reactive/share.ts'),
+    /** `Bindable`, the `{ get, set }` pair a position holds a `Reactive` for as it does a `Reactive` (31.3). */
+    bindable: besideCompiler('../shared/reactive/bindable.ts'),
     /** `Selection`, beside the reactive barrel's other names (31.13). */
     selection: besideCompiler('../shared/reactive/index.ts'),
     /** `deepEqual`, the one `identity` a `GET`'s browser copy is handed by name (18.4). */

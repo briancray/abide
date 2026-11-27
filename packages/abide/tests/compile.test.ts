@@ -19,7 +19,7 @@ import { removeTemporaryModules, temporaryModule } from './temporaryModule.ts'
 
 const NAME = `import { config, rpc } from '@abide/abide/server'
 
-export default rpc(() => config().APP_NAME)
+export default rpc(() => config.get().APP_NAME)
 `
 
 const FAIL = `import { rpc } from '@abide/abide/server'
@@ -58,7 +58,7 @@ export const visits = reactive(0)
 const COUNTED = `<script>
 import { visits } from '#src/lib/visits.ts'
 
-visits.set(visits() + 1)
+visits.set(visits + 1)
 </script>
 
 <main id="visits">{visits}</main>`
@@ -275,7 +275,7 @@ test('run takes abide and the handlers from the executable, under its identity â
         `${where}/script.ts`,
         `import { config } from '@abide/abide/server'
 import name from '#src/identity/name.server.ts'
-console.log(JSON.stringify({ configured: config().APP_NAME, handler: await name(), args: process.argv.slice(2) }))
+console.log(JSON.stringify({ configured: config.get().APP_NAME, handler: await name(), args: process.argv.slice(2) }))
 `,
     )
     const ran = await spawned([`${where}/ledger`, 'run', 'script.ts', 'one'], {

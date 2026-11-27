@@ -53,7 +53,7 @@ test('a drawer opens as its dialog does, stands on its side, and its handle size
     expect(panel.open).toBe(true)
     panel.getBoundingClientRect = () => ({ width: 240, height: 600 }) as DOMRect
     send(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
-    expect(filters.size()).toBe(250)
+    expect(filters.size.get()).toBe(250)
     expect(filters.drawer.style).toBe('inline-size:250px')
     // On the end side, its handle stands on its start edge: moving right shrinks it.
     const notes = drawer()
@@ -61,7 +61,7 @@ test('a drawer opens as its dialog does, stands on its side, and its handle size
     right.panel.getBoundingClientRect = () =>
         ({ width: 240, height: 600 }) as DOMRect
     right.send(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
-    expect(notes.size()).toBe(230)
+    expect(notes.size.get()).toBe(230)
 })
 
 // THE REVERT: leave `backdrop` off the drawer's parts, and a drawer filling the screen has nothing
@@ -78,14 +78,14 @@ test("a drawer's backdrop is its dialog's, closing it where it is dismissible �
     const notes = drawer()
     notes.open.set(true)
     backdropClick(notes)
-    expect([notes.open(), notes.backdrop['data-drawer']]).toEqual([
+    expect([notes.open.get(), notes.backdrop['data-drawer']]).toEqual([
         false,
         'backdrop',
     ])
     const pinned = drawer({ dismissible: false })
     pinned.open.set(true)
     backdropClick(pinned)
-    expect(pinned.open()).toBe(true)
+    expect(pinned.open.get()).toBe(true)
 })
 
 // THE REVERT: drop `settle` from the handle's `pointerup`, and a drawer let go stays where it was dropped.
@@ -129,17 +129,17 @@ test('a drawer with stops let go settles at the nearest stop, a flick carries it
     expect(panel.getAttribute('data-side')).toBe('bottom')
     // Dragged up 150px over a second from 200: carried 22px on, 372, nearest 400 (half the viewport).
     drag(600, 450)
-    expect(peek.size()).toBe(400)
+    expect(peek.size.get()).toBe(400)
     // Dragged down 100px over a second: 300, carried to 285, nearest 200 (a quarter).
     drag(450, 550)
-    expect(peek.size()).toBe(200)
+    expect(peek.size.get()).toBe(200)
     // Flicked up 60px in 20ms: carried 450px on, to the full height.
     drag(550, 490, 20)
-    expect(peek.size()).toBe(800)
+    expect(peek.size.get()).toBe(800)
     // Dragged down to 60: nearer none than a quarter, so it closes.
     peek.size.set(200)
     drag(550, 690)
-    expect(peek.open()).toBe(false)
+    expect(peek.open.get()).toBe(false)
 })
 
 // THE REVERT: default `stops` to `[0.5, 1]` as a sheet once did, and a drawer let go at 250 jumps to 400.
@@ -162,7 +162,7 @@ test('a drawer with no stops let go rests where it was dropped — 50.64', () =>
     )
     send(new PointerEvent('pointermove', { clientX: 250, buttons: 1 }))
     send(new PointerEvent('pointerup', { clientX: 250 }))
-    expect([filters.size(), filters.open()]).toEqual([250, true])
+    expect([filters.size.get(), filters.open.get()]).toEqual([250, true])
 })
 
 // A press stamped at one instant, so a drag's speed carries it nowhere and the stop is the test's.
@@ -202,7 +202,7 @@ test('a drawer with stops follows a drag by a transform, and is sized once it is
     const styles: unknown[] = []
     for (const y of [580, 540, 480]) {
         send(still(new PointerEvent('pointermove', { clientY: y, buttons: 1 })))
-        sizes.push(sheet.size())
+        sizes.push(sheet.size.get())
         styles.push(sheet.drawer.style)
     }
     expect(sizes).toEqual([800, 800, 800])
@@ -215,7 +215,7 @@ test('a drawer with stops follows a drag by a transform, and is sized once it is
     expect(sheet.drawer['data-following']).toBe('')
     send(still(new PointerEvent('pointerup', { clientY: 480 })))
     // Let go at 320, nearest a half: sized there, and pushed no more.
-    expect([sheet.size(), sheet.drawer.style]).toEqual([
+    expect([sheet.size.get(), sheet.drawer.style]).toEqual([
         400,
         'block-size:400px',
     ])
@@ -231,7 +231,7 @@ test('a drawer with stops follows a drag by a transform, and is sized once it is
     )
     send(still(new PointerEvent('pointermove', { clientY: 300, buttons: 1 })))
     send(still(new PointerEvent('pointercancel', {})))
-    expect([sheet.size(), sheet.drawer.style]).toEqual([
+    expect([sheet.size.get(), sheet.drawer.style]).toEqual([
         400,
         'block-size:400px',
     ])
@@ -272,10 +272,10 @@ test('a tap on the handle of a drawer with stops stands it at the next stop, goi
             ),
         )
         send(still(new PointerEvent('pointerup', { clientY: 604 })))
-        sizes.push(sheet.size())
+        sizes.push(sheet.size.get())
     }
     expect(sizes).toEqual([400, 800, 200, 400])
-    expect(sheet.open()).toBe(true)
+    expect(sheet.open.get()).toBe(true)
 })
 
 // 50.85 — LET GO, IT IS PUSHED TO ITS STOP AND SIZED ONCE THE APP'S TRANSITION ON THAT PUSH ENDS, so
@@ -318,7 +318,7 @@ test('a drawer let go settles by its transition on the push, and is sized as it 
         expect(sheet.drawer['data-following']).toBe('')
         send(still(new PointerEvent('pointerup', { clientY: 480 })))
         expect([
-            sheet.size(),
+            sheet.size.get(),
             sheet.drawer.style,
             sheet.drawer['data-following'],
         ]).toEqual([
@@ -332,7 +332,7 @@ test('a drawer let go settles by its transition on the push, and is sized as it 
             }),
         )
         flushSync()
-        expect([sheet.size(), sheet.drawer.style]).toEqual([
+        expect([sheet.size.get(), sheet.drawer.style]).toEqual([
             400,
             'block-size:400px',
         ])

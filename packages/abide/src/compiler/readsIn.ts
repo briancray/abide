@@ -68,9 +68,9 @@ import { optionNamed, reactiveOptions } from './reactiveOptions.ts'
 import {
     type Abide,
     boundInitializer,
-    callReturnOf,
     isReactiveSymbol,
     isReactiveType,
+    readReturnOf,
     unionMembers,
     valueTypeOf,
 } from './reactiveTypes.ts'
@@ -547,7 +547,7 @@ async function steppedMember(
     }
     if (type === undefined) return undefined
     if (await isReactiveType(checker, abide, type, false))
-        type = await callReturnOf(checker, type)
+        type = await readReturnOf(checker, type)
     return type === undefined
         ? undefined
         : checker.getPropertyOfType(type, access.name.text)
@@ -614,11 +614,7 @@ async function warningsFor(
 }
 
 /** The shapes that are a read of the value, which is what tracking is about. */
-const READING: ReadonlySet<Read['shape']> = new Set([
-    'value',
-    'call',
-    'shorthand',
-])
+const READING: ReadonlySet<Read['shape']> = new Set(['value', 'shorthand'])
 
 const NULLISH =
     TypeFlags.Null |

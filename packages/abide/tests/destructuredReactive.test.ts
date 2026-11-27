@@ -40,11 +40,11 @@ renamed += 1
 deep = 'b'
 first = 2`)
     expect(lowered).toContain(
-        'const shown = status() + renamed() + deep() + maybe() + first() + step() + plain',
+        'const shown = status.get() + renamed.get() + deep.get() + maybe.get() + first.get() + step.get() + plain',
     )
     expect(lowered).toContain('step.set(3)')
-    expect(lowered).toContain('step.set(step() + 1)')
-    expect(lowered).toContain('renamed.set(renamed() + (1))')
+    expect(lowered).toContain('step.set(step.get() + 1)')
+    expect(lowered).toContain('renamed.set(renamed.get() + (1))')
     expect(lowered).toContain("deep.set('b')")
     expect(lowered).toContain('first.set(2)')
     // The pattern itself binds, and reads nothing.

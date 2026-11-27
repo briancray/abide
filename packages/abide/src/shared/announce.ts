@@ -72,7 +72,7 @@ function host(): AnnouncerHost {
             'data-announce': 'assertive',
         },
         said(politeness) {
-            const message = said()
+            const message = said.get()
             return shows() && message?.politeness === politeness
                 ? [message]
                 : []

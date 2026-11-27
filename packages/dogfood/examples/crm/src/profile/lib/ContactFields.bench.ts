@@ -7,12 +7,12 @@ function typing(length: number): () => void {
     // Two values a keystroke apart, differing in the last character.
     const keystrokes = [`${typed}b`, `${typed}c`]
     const email = reactive(keystrokes[0] as string)
-    email()
+    email.get()
     let at = 0
     return () => {
         at ^= 1
         email.set(keystrokes[at] as string)
-        email()
+        email.get()
     }
 }
 

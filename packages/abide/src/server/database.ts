@@ -50,7 +50,7 @@ const SCRATCH = /^abide-test-(\d+)-/
  *
  * `file` is a name (`'todos'` is `todos.sqlite` in `APP_DATA_DIR`), a path holding a `/` or a `.`
  * (relative to the working directory), or `':memory:'` — or a function returning one, called as the
- * file opens so it can read `config()`.
+ * file opens so it can read `config.get()`.
  *
  * 47.6 — `PRAGMA user_version` counts the migrations a file has applied, so each runs once, in
  * order, however many times the app boots. A function migration is for what SQL cannot say alone:

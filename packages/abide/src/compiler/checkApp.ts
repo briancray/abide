@@ -97,7 +97,7 @@ export async function checkSource(
                 // A component that cannot be read takes anything here.
             }
         }
-        // 27.13 — AND EVERY FILE FILING `onConfig`, quietly, so a page that only reads `config()`
+        // 27.13 — AND EVERY FILE FILING `onConfig`, quietly, so a page that only reads `config.get()`
         // is typed by defaults it never imported — as `checkApp`'s whole-app program types it. The
         // calls only name candidates; the checker decides which file.
         for (const other of layout.sources) {

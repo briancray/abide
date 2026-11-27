@@ -44,7 +44,7 @@ test('a refused selection leaves focus on the item it was on — 49.19', () => {
     )
     first.dispatchEvent(keydown)
     flushSync()
-    expect([view.selected(), document.activeElement?.id]).toEqual([
+    expect([view.selected.get(), document.activeElement?.id]).toEqual([
         ['a'],
         'refused-a',
     ])
@@ -57,7 +57,7 @@ test('a refused selection leaves focus on the item it was on — 49.19', () => {
         ),
     )
     flushSync()
-    expect([view.selected(), document.activeElement?.id]).toEqual([
+    expect([view.selected.get(), document.activeElement?.id]).toEqual([
         ['a'],
         'refused-a',
     ])

@@ -36,7 +36,7 @@ test('every onConfig composes, the deeper route over the root — 27.6, 37.7', a
     const root = onConfig(() => ({ LABEL: 'root', PORTS: 2 }))
     try {
         await config
-        const resolved = config()
+        const resolved = config.get()
         expect({
             label: resolved.LABEL,
             region: resolved.REGION,

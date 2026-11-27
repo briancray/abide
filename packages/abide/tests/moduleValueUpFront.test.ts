@@ -32,7 +32,7 @@ export const me = reactive(() => whoami())
 const CAN_EDIT = `import { reactive } from '@abide/abide'
 import { me } from './me.ts'
 
-export const canEdit = reactive(() => me.ready() && me().owner)
+export const canEdit = reactive(() => me.ready() && me.get().owner)
 `
 
 // The child's setup makes a call, so 41.28 builds it after the turn.
@@ -44,14 +44,14 @@ import { canEdit } from './canEdit.ts'
 const tick = reactive(() => getTick())
 </script>
 
-<b id="deferred">{canEdit() ? 'edit' : 'view'}</b><i>{tick.busy() ? 0 : tick()}</i>`
+<b id="deferred">{canEdit ? 'edit' : 'view'}</b><i>{tick.busy() ? 0 : tick}</i>`
 
 const PAGE = `<script>
 import Deferred from '../lib/Deferred.abide'
 import { canEdit } from '../lib/canEdit.ts'
 </script>
 
-<main><p id="inline">{canEdit() ? 'edit' : 'view'}</p><Deferred /></main>`
+<main><p id="inline">{canEdit ? 'edit' : 'view'}</p><Deferred /></main>`
 
 let stop = (): void => {}
 let base = ''

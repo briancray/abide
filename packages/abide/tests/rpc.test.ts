@@ -525,7 +525,7 @@ test('a value adopts an rpc call whose failures it carries — 11.60, 16.8', asy
     await contact
     contact.set(updatePhone({ phone: '2' }))
     await contact
-    expect(contact().phone).toBe('2')
+    expect(contact.get().phone).toBe('2')
 })
 
 test('an rpc carries its method and description', () => {

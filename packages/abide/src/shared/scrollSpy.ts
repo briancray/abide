@@ -61,7 +61,7 @@ export function scrollSpy<Item>(
     // 51.169 — the first section until anything is measured, on a server as in a browser.
     const current = reactive(() => {
         const first = items()[0]
-        return found() ?? (first === undefined ? undefined : keyOf(first))
+        return found.get() ?? (first === undefined ? undefined : keyOf(first))
     })
 
     let scroller: Scroller | undefined
@@ -209,7 +209,7 @@ export function scrollSpy<Item>(
         name: 'scroll-spy',
         host: { 'bind:element': bind, 'data-scroll-spy': 'host' },
         all: items,
-        current,
+        current: () => current.get(),
         keyOf,
         // 51.174
         jump: (item) => ({ href: `#${keyOf(item)}` }),

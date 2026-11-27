@@ -3,13 +3,14 @@
 // they have scrolled up — which the server writes hidden, since a page arrives following.
 
 import { type Live, live } from './live.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
 
 /** Whether the scroller is following, how near its bottom counts as at it, and how a jump scrolls. */
 export type AutoscrollOptions = {
     /** Whether the scroller is kept at its bottom: a `Reactive` to read it and to stop following from the app. Held by the parts, `true`, and handed back as `following`, where none is given. */
-    following?: Reactive<boolean> | undefined
+    following?: Bindable<boolean> | undefined
     /** Pixels from the bottom that still count as at it. `2` by default; a function is read live. */
     threshold?: Live<number> | undefined
     /** How `toBottom` scrolls. `'smooth'` by default; a function is read live. */
@@ -30,7 +31,7 @@ export type Autoscroll = {
 
 /** A scrolling element kept at its bottom as what it holds grows, until the reader scrolls up. */
 export function autoscroll(options: AutoscrollOptions = {}): Autoscroll {
-    const following = options.following ?? reactive(true)
+    const following = bindable(options.following) ?? reactive(true)
     const unseen = reactive(false)
     let scroller: Element | undefined
     // Set while a smooth jump is under way: the scrolls it makes on the way down are not the reader's.
@@ -90,17 +91,17 @@ export function autoscroll(options: AutoscrollOptions = {}): Autoscroll {
             'bind:element': bind,
             'data-autoscroll': 'host',
             get 'data-following'() {
-                return following() ? '' : undefined
+                return following.get() ? '' : undefined
             },
         },
         jump: {
             type: 'button',
             'data-autoscroll': 'jump',
             get hidden() {
-                return following()
+                return following.get()
             },
             get 'data-unseen'() {
-                return unseen() ? '' : undefined
+                return unseen.get() ? '' : undefined
             },
             onclick: toBottom,
         },

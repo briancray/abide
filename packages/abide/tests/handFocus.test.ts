@@ -47,7 +47,7 @@ test("pages' next stepping to the last page hands focus to previous — 49.15", 
     })
     nav.append(previous as HTMLElement, next as HTMLElement)
     click(next as HTMLElement)
-    expect([list.page(), document.activeElement]).toEqual([2, previous])
+    expect([list.page.get(), document.activeElement]).toEqual([2, previous])
 })
 
 // THE REVERT: drop the hand-off from `wizard`'s `next`, and the last step leaves focus nowhere.
@@ -58,12 +58,15 @@ test("wizard's next onto the last step hands focus to previous, and previous ont
         next: steps.next,
     })
     click(next as HTMLElement)
-    expect([steps.current(), document.activeElement]).toEqual([
+    expect([steps.current.get(), document.activeElement]).toEqual([
         'plan',
         previous,
     ])
     click(previous as HTMLElement)
-    expect([steps.current(), document.activeElement]).toEqual(['account', next])
+    expect([steps.current.get(), document.activeElement]).toEqual([
+        'account',
+        next,
+    ])
 })
 
 // THE REVERT: drop the hand-off from `spinbutton`'s buttons, and reaching a bound leaves the field's keys
@@ -75,5 +78,5 @@ test("spinbutton's button reaching its bound hands focus to its input — 49.15"
         increment: seats.increment,
     })
     click(increment as HTMLElement)
-    expect([seats.value(), document.activeElement]).toEqual([2, input])
+    expect([seats.value.get(), document.activeElement]).toEqual([2, input])
 })

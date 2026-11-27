@@ -28,7 +28,7 @@ let unfiled = 0
 
 export const held = memo(
     async () => {
-        if (config().SOME_SETTING === undefined) unfiled += 1
+        if (config.get().SOME_SETTING === undefined) unfiled += 1
         return 1
     },
     { global: true },
@@ -41,7 +41,7 @@ const FOLLOW = `import { reactive } from '@abide/abide'
 import getHeld from '#src/getHeld.server.ts'
 
 const followed = reactive(() => getHeld())
-export const followedValue = () => (followed.ready() ? followed() : undefined)
+export const followedValue = () => (followed.ready() ? followed.get() : undefined)
 `
 
 let stop = (): void => {}

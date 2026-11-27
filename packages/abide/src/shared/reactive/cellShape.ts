@@ -248,16 +248,14 @@ export const OWES_ABOVE: number = 1
 export const OWES_RELOAD: number = 2
 
 /**
- * A value's internal state record, apart from the callable an app holds.
+ * A value's internal state record, apart from the `Reactive` an app holds.
  *
- * THE INTERNAL FACE, AND A SECOND OBJECT. With the fields on the callable itself, every
- * one was a property added to a FUNCTION at construction, and that was most of what a
+ * THE INTERNAL FACE, AND A SECOND OBJECT. With the fields on the value itself — a FUNCTION then —
+ * every one was a property added to it at construction, and that was most of what a
  * value cost to make: moving them here took `construct a value` from 123 ns to 87 under
  * JSC and from 101 to 83 under V8, and a derived value's construction, a chain and a
- * layered DAG 7-13% with it. Nothing measured moved the other way. The callable captures
- * its record, so a read is one context load — the hand-written arm's one captured
- * variable — and a member reaches the record through `CELL`, one load ahead of what it
- * did before.
+ * layered DAG 7-13% with it. Nothing measured moved the other way. Every member, the read
+ * included, reaches the record through `CELL`.
  *
  * THE FIELD COUNT SITS ON A VM BOUNDARY AND IT IS NOT A LEVER. Both engines give an
  * object a fixed inline slot budget and spill the rest to an out-of-line store, and this
@@ -448,7 +446,7 @@ export class Cell {
      */
     declare owes: number
     /** The value this record is the state of — what `NotLanded` names as its source. */
-    declare callable: Reactive<unknown> | null
+    declare reactive: Reactive<unknown> | null
     /** `null` on every value whose body is not an async generator, which is nearly all. */
     declare stream: Stream | null
     /**
@@ -605,7 +603,7 @@ export class Cell {
         this.adopter = null
         this.enclosing = null
         this.opens = false
-        this.callable = null
+        this.reactive = null
         this.stream = streaming ? newStream(null) : null
         this.plain = false
         this.bareWrite = false
@@ -621,7 +619,7 @@ export class Cell {
 }
 
 /** What a member's `this` is, and the one way from the value an app holds to its record. */
-export type Callable = { [CELL]: Cell }
+export type HoldsCell = { [CELL]: Cell }
 
 /**
  * Throws where a value declares both `throttle` and `debounce`.
@@ -699,7 +697,7 @@ function comparatorFor(
 }
 
 /**
- * Recomputes `plain`, `bareWrite` and `simple` from the fields under them. Re-seating the callable on
+ * Recomputes `plain`, `bareWrite` and `simple` from the fields under them. Re-seating the value on
  * the prototype that goes with it is `seat`'s.
  *
  * THE THREE IN ONE PLACE. A second copy of this conjunction is the drift that would let one of the
@@ -726,10 +724,10 @@ export function simpleShape(cell: Cell): void {
  * app holds to the record, for a module that already value-imports `cellShape`.
  *
  * A module importing `cellShape` TYPE-ONLY (`elementKeyOf`, `watch`) spells
- * `(x as Callable)[CELL]` itself, which keeps `cellShape`'s value graph out of its own; the core's
+ * `(x as HoldsCell)[CELL]` itself, which keeps `cellShape`'s value graph out of its own; the core's
  * paths read `[CELL]` inline; and `producer.isStreaming` reads `?.[CELL]`, which this cast would
  * not allow.
  */
 export function cellOf(value: unknown): Cell {
-    return (value as Callable)[CELL]
+    return (value as HoldsCell)[CELL]
 }

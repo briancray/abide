@@ -205,7 +205,7 @@ test('a navigation lands where the server redirected it — 30.15, 30.17', async
     flushSync()
     expect(asked).toEqual(['/invoices/42'])
     expect(location.pathname).toBe('/invoices/7')
-    expect(route.params()).toEqual({ id: '7' })
+    expect(route.params.get()).toEqual({ id: '7' })
     expect(document.querySelector('#invoice h1')?.textContent).toBe('Invoice')
 })
 
@@ -259,7 +259,7 @@ test('a navigation whose chunks fail to load is left to the document — 30.27',
     flushSync()
     expect(left).toEndWith('/invoices/42')
     expect(history.length).toBe(entries)
-    expect(route.navigating()).toBe(false)
+    expect(route.navigating.get()).toBe(false)
     expect(document.querySelector('#home h1')?.textContent).toBe('Home')
 })
 
@@ -287,7 +287,7 @@ test('a navigation whose request fails while offline leaves the page standing �
     flushSync()
     expect(`left: '${left}'`).toBe("left: ''")
     expect(history.length).toBe(entries)
-    expect(route.navigating()).toBe(false)
+    expect(route.navigating.get()).toBe(false)
     expect(document.querySelector('#home h1')?.textContent).toBe('Home')
 })
 
@@ -308,7 +308,7 @@ test('the router fills route on hydration and on a navigation — 23.1, 23.2', a
                     release = () =>
                         done({
                             default: ((region, props) => {
-                                seen = route.params()
+                                seen = route.params.get()
                                 return (mounts.invoice as PageMount)(
                                     region,
                                     props,
@@ -325,21 +325,21 @@ test('the router fills route on hydration and on a navigation — 23.1, 23.2', a
         },
     ])
     await r.hydrate()
-    expect(route.name()).toBe('/')
-    expect(route.url().pathname).toBe('/')
-    expect(route.navigating()).toBe(false)
-    const before = route.url()
+    expect(route.name.get()).toBe('/')
+    expect(route.url.get().pathname).toBe('/')
+    expect(route.navigating.get()).toBe(false)
+    const before = route.url.get()
 
     const going = navigate('/invoices/7?tab=lines')
     await Promise.resolve()
-    expect(route.navigating()).toBe(true)
+    expect(route.navigating.get()).toBe(true)
     release()
     await going
-    expect(route.navigating()).toBe(false)
+    expect(route.navigating.get()).toBe(false)
     expect(seen).toEqual({ id: '7' })
-    expect(route.name()).toBe('/invoices/[id]')
-    expect(route.url().search).toBe('?tab=lines')
-    expect(route.url()).not.toBe(before)
+    expect(route.name.get()).toBe('/invoices/[id]')
+    expect(route.url.get().search).toBe('?tab=lines')
+    expect(route.url.get()).not.toBe(before)
 })
 
 // 23.2 — A NAVIGATION THAT THROWS IS STILL OVER. THE REVERT: clear `navigating` only on the paths
@@ -372,7 +372,7 @@ test('a page whose setup throws still ends the navigation — 23.2', async () =>
         thrown = error
     }
     expect((thrown as Error | undefined)?.message).toBe('setup failed')
-    expect(route.navigating()).toBe(false)
+    expect(route.navigating.get()).toBe(false)
 })
 
 // 15.16, 30.10 — AN ADDRESS THAT WILL NOT PERCENT-DECODE IS NO ROUTE, and the router leaves it to
@@ -444,7 +444,7 @@ const instances = ((globalThis as { instances?: { runs: number; disposed: number
 const counts = { runs: 0, disposed: 0 }
 instances.push(counts)
 watch(() => {
-    route.params()
+    route.params
     counts.runs += 1
     return () => {
         counts.disposed += 1
@@ -1279,7 +1279,7 @@ test('a layout reads what its page set up, hydrating without a mismatch — 41.2
 import { crumbs } from './crumbs.ts'
 </script>
 
-<div id="crumbed"><nav id="crumbs">{#for crumb of crumbs() key crumb}<a>{crumb}</a>{/for}</nav><slot/></div>`,
+<div id="crumbed"><nav id="crumbs">{#for crumb of crumbs.get() key crumb}<a>{crumb}</a>{/for}</nav><slot/></div>`,
         Leaf: `<script>
 import { crumbs } from './crumbs.ts'
 
@@ -1518,7 +1518,7 @@ test('a navigation that moves only the query keeps the page — 30.23, 30.24, 30
     expect(asked).toEqual([])
     expect(r.levels.scopeAt(-1)).toBe(scope)
     expect(document.querySelector('#home p')?.textContent).toBe('1')
-    expect(route.url().search).toBe('?genre=fantasy')
+    expect(route.url.get().search).toBe('?genre=fantasy')
     expect(location.search).toBe('?genre=fantasy')
     expect(scrolled).toEqual([])
 })
@@ -1541,7 +1541,7 @@ test('a navigation to another path of the same route asks, and keeps the page �
     expect(asked).toEqual(['/invoices/7'])
     expect(r.levels.scopeAt(-1)).toBe(scope)
     expect(document.querySelector('#invoice h1')).toBe(heading)
-    expect(route.params()).toEqual({ id: '7' })
+    expect(route.params.get()).toEqual({ id: '7' })
     expect(location.pathname).toBe('/invoices/7')
 })
 
@@ -1568,7 +1568,7 @@ test('back over a fragment of the standing page neither asks nor remounts, and m
     dispatchEvent(new PopStateEvent('popstate'))
     await Bun.sleep(0)
     flushSync()
-    expect(route.url().hash).toBe('#setup')
+    expect(route.url.get().hash).toBe('#setup')
 
     // And Back off it.
     history.replaceState(null, '', '/')
@@ -1579,8 +1579,8 @@ test('back over a fragment of the standing page neither asks nor remounts, and m
     expect(asked).toEqual([])
     expect(r.levels.scopeAt(-1)).toBe(scope)
     expect(document.querySelector('#home p')?.textContent).toBe('1')
-    expect(route.url().hash).toBe('')
-    expect(route.url().href).toBe(location.href)
+    expect(route.url.get().hash).toBe('')
+    expect(route.url.get().href).toBe(location.href)
     stop()
 })
 
@@ -1627,7 +1627,7 @@ test('a routed link with a fragment scrolls to its element, remounting nothing i
         expect(r.levels.scopeAt(-1)).toBe(scope)
         expect(location.hash).toBe('#install')
         // 30.33 — the address moved, and `route.url` with it.
-        expect(route.url().hash).toBe('#install')
+        expect(route.url.get().hash).toBe('#install')
         expect(scrolled).toEqual(['install'])
 
         scrolled.length = 0
@@ -1910,7 +1910,7 @@ import { watch } from '@abide/abide'
 import { tick } from './tick.ts'
 
 watch(() => {
-    tick()
+    tick.get()
     ;(globalThis as { innerRuns: number }).innerRuns += 1
     return () => {
         ;(globalThis as { innerDisposed: number }).innerDisposed += 1
@@ -2144,26 +2144,26 @@ test('route.index follows the entry the address bar stands at — 23.28', async 
     const r = router(await pages())
     await r.hydrate()
     flushSync()
-    expect(route.index()).toBe(0)
+    expect(route.index.get()).toBe(0)
     const stop = listenForRoutes(r)
     try {
         await navigate('/invoices/42')
-        expect(route.index()).toBe(1)
+        expect(route.index.get()).toBe(1)
         // A fragment link the browser pushed itself carries no index; the router stamps the next.
         history.pushState(null, '', '/invoices/42#lines')
         dispatchEvent(new PopStateEvent('popstate'))
-        await until(() => route.index() === 2)
-        expect(route.index()).toBe(2)
+        await until(() => route.index.get() === 2)
+        expect(route.index.get()).toBe(2)
         // A step back arrives at the index its entry was written with.
         await step({ index: 0, scroll: null }, '/')
-        expect(route.index()).toBe(0)
+        expect(route.index.get()).toBe(0)
     } finally {
         stop()
     }
     // A reload arrives at the index its entry carries.
     history.replaceState({ index: 4, scroll: null }, '', '/')
     await router(await pages()).hydrate()
-    expect(route.index()).toBe(4)
+    expect(route.index.get()).toBe(4)
 })
 
 // 30.38 — A STEP SETTLES ONCE IT HAS ARRIVED: the page it steps back to is mounted, and `route`
@@ -2180,7 +2180,7 @@ test('navigate by a number settles once the step has arrived — 30.38', async (
         expect(document.querySelector('#invoice')).not.toBeNull()
         await navigate(-1)
         expect(document.querySelector('#home h1')?.textContent).toBe('Home')
-        expect(route.index()).toBe(0)
+        expect(route.index.get()).toBe(0)
         expect(location.pathname).toBe('/')
         // FORWARD is the browser spec's (`e2e/routing.spec.ts`): happy-dom's `replaceState` drops
         // the entries after the one it writes, and the arrival writes the entry it arrives at.

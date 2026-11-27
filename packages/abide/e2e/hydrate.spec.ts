@@ -47,7 +47,7 @@ export const me = reactive(() => whoami())
     'lib/canEdit.ts': `import { reactive } from '@abide/abide'
 import { me } from './me.ts'
 
-export const canEdit = reactive(() => me.ready() && me().owner)
+export const canEdit = reactive(() => me.ready() && me.get().owner)
 `,
     'lib/Deferred.abide': `<script>
 import { reactive } from '@abide/abide'
@@ -57,13 +57,13 @@ import { canEdit } from './canEdit.ts'
 const value = reactive(() => getValue({ id: 'deferred' }))
 </script>
 
-<p id="deferred">{#if canEdit()}<b>edit</b>{:else}<i>view</i>{/if}{value.busy() ? '' : value().word}</p>`,
+<p id="deferred">{#if canEdit}<b>edit</b>{:else}<i>view</i>{/if}{value.busy() ? '' : value.word}</p>`,
     'owner/index.abide': `<script>
 import Deferred from '../lib/Deferred.abide'
 import { canEdit } from '../lib/canEdit.ts'
 </script>
 
-<main><p id="inline">{#if canEdit()}<b>edit</b>{:else}<i>view</i>{/if}</p><Deferred /></main>`,
+<main><p id="inline">{#if canEdit}<b>edit</b>{:else}<i>view</i>{/if}</p><Deferred /></main>`,
 }
 
 // EACH ARM'S BUTTON HAS A HANDLER OF ITS OWN, and the two are one element apiece, so no walk can
@@ -77,7 +77,7 @@ const value = reactive(() => ${handler}({ id: 'one' }))
 const pressed = reactive('')
 </script>
 
-<main>{#if value.busy()}<button id="act" class="cancel" onclick={() => pressed.set('cancel')}>cancel</button>{:else}<button id="act" class="buy" onclick={() => pressed.set('buy')}>buy {value().word}</button>{/if}<p id="pressed">{pressed()}</p></main>`
+<main>{#if value.busy()}<button id="act" class="cancel" onclick={() => pressed.set('cancel')}>cancel</button>{:else}<button id="act" class="buy" onclick={() => pressed.set('buy')}>buy {value.word}</button>{/if}<p id="pressed">{pressed}</p></main>`
 
 // 41.25, 41.27 — A MODULE'S VALUE WHOSE CALL IS ON ITS WAY WHEN THE PAGE'S MODULES IMPORT IT: one
 // the server painted settled (41.34 built it in setup, and `getValue` answers inside the turn), one
@@ -97,12 +97,12 @@ export const late = reactive(() => getSlow({ id: 'module' }))
 import { early } from '../lib/early.ts'
 </script>
 
-<main>{#if early.ready()}<p id="word">{early().word}</p>{:else}<p id="word">loading</p>{/if}</main>`,
+<main>{#if early.ready()}<p id="word">{early.word}</p>{:else}<p id="word">loading</p>{/if}</main>`,
     'late/index.abide': `<script>
 import { late } from '../lib/late.ts'
 </script>
 
-<main>{#if late.ready()}<p id="word">{late().word}</p>{:else}<p id="word">loading</p>{/if}</main>`,
+<main>{#if late.ready()}<p id="word">{late.word}</p>{:else}<p id="word">loading</p>{/if}</main>`,
 }
 
 let server: Subprocess | undefined

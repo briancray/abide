@@ -24,13 +24,26 @@ import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
 // read classifier (`readsIn`), which asks whether a name is a `Reactive`, and the handler reader
 // (`declaredExports`), which asks whether a handler's value nests one (16.39).
 
-/** What calling the `Reactive` a name holds hands back. */
+/** What the `get` of the `Reactive` a name holds hands back. */
 export async function valueTypeOf(
     checker: Checker,
     node: Node,
 ): Promise<Type | undefined> {
     const type = await checker.getTypeAtLocation(node)
-    return type === undefined ? undefined : callReturnOf(checker, type)
+    return type === undefined ? undefined : readReturnOf(checker, type)
+}
+
+/** What a `Reactive`'s `get` hands back: the value it holds. */
+export async function readReturnOf(
+    checker: Checker,
+    type: Type,
+): Promise<Type | undefined> {
+    const present = await checker.getNonNullableType(type)
+    if (present === undefined) return undefined
+    const get = await checker.getPropertyOfType(present, 'get')
+    if (get === undefined) return undefined
+    const read = await checker.getTypeOfSymbol(get)
+    return read === undefined ? undefined : callReturnOf(checker, read)
 }
 
 /** What calling `type` hands back, by its first call signature. */
@@ -102,6 +115,8 @@ export type Abide = {
     /** 23.9 — abide's `route`, as the file the checker names it. */
     route: string | undefined
     reactive: CheckedSymbol | undefined
+    /** 31.3 — `Bindable`'s `{ get, set }` pair, which a position may take beside a `Reactive`. */
+    pair: CheckedSymbol | undefined
     /** 10.3 — abide's `Shared`, the type a `reactive.shared` handle is. */
     shared: CheckedSymbol | undefined
     /**
@@ -130,6 +145,7 @@ export async function abideIn(project: Project): Promise<Abide> {
         methods,
         deepEqual,
         documents,
+        binds,
     ] = await Promise.all([
         project.program.getSourceFile(FRAMEWORK_SOURCES.reactive),
         project.program.getSourceFile(FRAMEWORK_SOURCES.share),
@@ -140,6 +156,7 @@ export async function abideIn(project: Project): Promise<Abide> {
         project.program.getSourceFile(FRAMEWORK_SOURCES.methods),
         project.program.getSourceFile(FRAMEWORK_SOURCES.deepEqual),
         project.program.getSourceFile(FRAMEWORK_SOURCES.jsonSchema),
+        project.program.getSourceFile(FRAMEWORK_SOURCES.bindable),
     ])
     let selection: CheckedSymbol | undefined
     for (const statement of selects?.statements ?? [])
@@ -152,13 +169,15 @@ export async function abideIn(project: Project): Promise<Abide> {
             )
             break
         }
-    const [reactive, shared] = await Promise.all([
+    const [reactive, shared, pair] = await Promise.all([
         literalSymbolOf(project, declares, 'Reactive'),
         literalSymbolOf(project, shares, 'Shared'),
+        literalSymbolOf(project, binds, 'Bindable'),
     ])
     return {
         route: route?.path,
         reactive,
+        pair,
         shared,
         selection,
         props: props?.path,
@@ -192,20 +211,27 @@ async function literalSymbolOf(
  * A union is `Reactive`-typed only where EVERY member is, `null` and `undefined` aside: `s.set`
  * takes `Accepted | Promise<Accepted> | Reactive<Accepted>`, and a position that also takes a
  * plain value is one where a read is what was meant. An intersection with a `Reactive` in it is
- * one. `lists` has `Reactive<X>[]` count too, being the shape a list of sources is declared as —
- * a parameter's question, and never a name's: a name holding an array is read as the array.
+ * one. `position` has `Reactive<X>[]` count too, being the shape a list of sources is declared as,
+ * and `Bindable`'s `{ get, set }` pair, which an option a headless component binds takes beside a
+ * `Reactive` (49.8) — a position's question, and never a name's: a name holding an array is read
+ * as the array, and a name holding a pair is no `Reactive` to call.
  */
 export async function isReactiveType(
     checker: Checker,
     abide: Abide,
     type: Type,
-    lists: boolean,
+    position: boolean,
 ): Promise<boolean> {
     if (abide.reactive === undefined) return false
     if (await isSelection(checker, abide, type)) return true
-    const reactive = abide.reactive
-    return everyPresentMember(type, (member) =>
-        isReactiveMember(checker, reactive, member, lists),
+    const { reactive, pair } = abide
+    return everyPresentMember(
+        type,
+        async (member) =>
+            (await isReactiveMember(checker, reactive, member, position)) ||
+            (position &&
+                pair !== undefined &&
+                (await member.getSymbol())?.id === pair.id),
     )
 }
 

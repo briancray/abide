@@ -134,7 +134,7 @@ test('an indented top-level onConfig in a handler file types Config — 27.13', 
     onConfig(() => ({ RETRIES: 3 }))
 
 export default rpc(() => {
-    const retries: number = config().RETRIES
+    const retries: number = config.get().RETRIES
     return retries
 })
 `,

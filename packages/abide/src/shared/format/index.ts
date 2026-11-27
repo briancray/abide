@@ -307,7 +307,7 @@ export function dateParts(
 ): Intl.DateTimeFormatPart[] {
     const {
         style = 'day',
-        timeZone: zone = timeZone() ?? visitorZone(),
+        timeZone: zone = timeZone.get() ?? visitorZone.get(),
         locale = LOCALE,
     } = options
     const time = instant(value, zone)

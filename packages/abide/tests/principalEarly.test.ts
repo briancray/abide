@@ -143,7 +143,7 @@ test('a seed painted settled is read settled, at once — 41.25, 41.27', () => {
     globals[EARLY_CALLS] = started
     try {
         expect(principal.authenticated.ready()).toBe(true)
-        expect(principal.authenticated()).toBe(true)
+        expect(principal.authenticated.get()).toBe(true)
         expect(HEALTH.report() as unknown).toEqual({
             version: '1',
             abide: '1',
@@ -182,7 +182,7 @@ test("a handler's answer that signed the caller in reloads the browser's princip
     const seen: boolean[] = []
     const stopWatching = watch(() => {
         if (principal.authenticated.ready())
-            seen.push(principal.authenticated())
+            seen.push(principal.authenticated.get())
     })
     try {
         expect(await principal.authenticated).toBe(false)
@@ -266,7 +266,7 @@ test('a read while the sign-in reload is in flight answers the previous document
         )
         let during: unknown
         try {
-            during = principal.authenticated()
+            during = principal.authenticated.get()
         } catch (thrown) {
             during = thrown
         }
@@ -300,8 +300,8 @@ test('a sign-in reloads every value the tab reads, serving the old one meanwhile
     })
     const seen: string[] = []
     const stopWatching = watch(() => {
-        if (inbox.ready()) seen.push(inbox())
-        if (principal.authenticated.ready()) principal.authenticated()
+        if (inbox.ready()) seen.push(inbox.get())
+        if (principal.authenticated.ready()) principal.authenticated.get()
     })
     const fetched: string[] = []
     const fetchedBefore = globalThis.fetch
@@ -329,7 +329,7 @@ test('a sign-in reloads every value the tab reads, serving the old one meanwhile
             false,
             undefined,
         )
-        expect(`loads: ${loads}, during: ${inbox()}`).toBe(
+        expect(`loads: ${loads}, during: ${inbox.get()}`).toBe(
             "loads: 2, during: nobody's",
         )
         landInbox()
@@ -377,8 +377,8 @@ test('a GET that signs in reloads the principal and nothing else — 26.24', asy
         return loads
     })
     const stopWatching = watch(() => {
-        if (verified.ready()) verified()
-        if (principal.authenticated.ready()) principal.authenticated()
+        if (verified.ready()) verified.get()
+        if (principal.authenticated.ready()) principal.authenticated.get()
     })
     try {
         await verified
@@ -401,7 +401,7 @@ test("another tab's sign-in reloads every value this tab reads — 26.24", async
         return loads
     })
     const stopWatching = watch(() => {
-        if (inbox.ready()) inbox()
+        if (inbox.ready()) inbox.get()
     })
     // Opens this tab's channel, as reading `principal` does.
     principalMembers()
@@ -443,7 +443,7 @@ test('a value painted settled is reloaded by a sign-in — 13.6, 26.24', async (
     )
     globals[EARLY_CALLS] = undefined
     const stopWatching = watch(() => {
-        if (contact.ready()) contact()
+        if (contact.ready()) contact.get()
     })
     const fetched: string[] = []
     const fetchedBefore = globalThis.fetch
@@ -462,7 +462,7 @@ test('a value painted settled is reloaded by a sign-in — 13.6, 26.24', async (
     }) as typeof fetch
     try {
         expect(
-            (contact() as { dealValue: string } | undefined)?.dealValue,
+            (contact.get() as { dealValue: string } | undefined)?.dealValue,
         ).toBe('admins only')
         await answerOf(
             rpcRequest('POST', '/session/signIn', {}),
@@ -499,8 +499,8 @@ test('a sign-in leaves a global value be — 26.24, 11.34', async () => {
         return ownLoads
     })
     const stopWatching = watch(() => {
-        if (shared.ready()) shared()
-        if (own.ready()) own()
+        if (shared.ready()) shared.get()
+        if (own.ready()) own.get()
     })
     const fetchedBefore = globalThis.fetch
     globalThis.fetch = (async () =>

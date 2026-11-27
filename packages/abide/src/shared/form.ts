@@ -144,7 +144,7 @@ export function form<Handler extends AnyRpc>(
             cell = reactive(differing.has(name))
             changedCells.set(name, cell)
         }
-        return cell()
+        return cell.get()
     }
     const published = (): void => {
         for (const [name, cell] of changedCells) cell.set(differing.has(name))
@@ -162,7 +162,7 @@ export function form<Handler extends AnyRpc>(
     const sends = reactive(0)
 
     const issues = (): Record<string, string[]> | undefined => {
-        const own = checked()
+        const own = checked.get()
         if (own !== undefined) return own ?? undefined
         return call.issues() as Record<string, string[]> | undefined
     }
@@ -230,7 +230,7 @@ export function form<Handler extends AnyRpc>(
     // 56.19 — a call answered without a failure moves the baseline to what it sent, or, 56.34, starts
     // the form over; and 56.35 hands what it answered on once the fields have moved.
     watch(() => {
-        sends()
+        sends.get()
         if (call.busy() || sent === undefined) return
         const kept = sent
         sent = undefined
@@ -295,7 +295,7 @@ export function form<Handler extends AnyRpc>(
         onreset: resetting,
         // 56.20
         get 'data-dirty'() {
-            return dirty() ? '' : undefined
+            return dirty.get() ? '' : undefined
         },
         'data-form': 'form',
     }
@@ -355,16 +355,16 @@ export function form<Handler extends AnyRpc>(
         reset: {
             type: 'reset',
             get disabled() {
-                return !dirty()
+                return !dirty.get()
             },
             'data-form': 'reset',
         },
         get dirty() {
-            return dirty()
+            return dirty.get()
         },
         // 56.17 — the args 56.1 reads, narrowed to the names that differ.
         get changes() {
-            edits()
+            edits.get()
             const narrowed: Record<string, unknown> = {}
             if (shown !== undefined && differing.size > 0) {
                 const args = argsOf(shown) as Record<string, unknown>

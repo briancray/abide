@@ -8,7 +8,7 @@ import { tokenize } from '#compiler/tokenize.ts'
 import { reactive } from '#shared'
 import { writePath } from '#shared/writePath.ts'
 
-import { clientOf, closeTyped, lower, refusal, typed } from './typed.ts'
+import { clientOf, closeTyped, lower, typed } from './typed.ts'
 
 afterAll(closeTyped)
 
@@ -28,25 +28,25 @@ const namesIn = (source: string, name: string): number =>
 
 // 31.1 — a name bound to a `Reactive` is read wherever it stands.
 test('a read by name becomes a call', async () => {
-    expect(await lower('n', N)).toBe('n()')
-    expect(await lower('n + 1', N)).toBe('n() + 1')
-    expect(await lower('n * n', N)).toBe('n() * n()')
-    expect(await lower('f(n, 2)', N)).toBe('f(n(), 2)')
+    expect(await lower('n', N)).toBe('n.get()')
+    expect(await lower('n + 1', N)).toBe('n.get() + 1')
+    expect(await lower('n * n', N)).toBe('n.get() * n.get()')
+    expect(await lower('f(n, 2)', N)).toBe('f(n.get(), 2)')
 })
 
 // 31.4 — assignment to such a name is a write.
 test('an assignment becomes a write', async () => {
     expect(await lower('n = 1', N)).toBe('n.set(1)')
-    expect(await lower('n = n + 1', N)).toBe('n.set(n() + 1)')
+    expect(await lower('n = n + 1', N)).toBe('n.set(n.get() + 1)')
     // A concise body RETURNS the write, so its value is read (see the test below).
     expect(await lower('() => n = n + 1', N)).toBe(
-        '() => ((__stored) => (n.set(__stored), __stored))(n() + 1)',
+        '() => ((__stored) => (n.set(__stored), __stored))(n.get() + 1)',
     )
     expect(await lower('() => { n = n + 1 }', N)).toBe(
-        '() => { n.set(n() + 1) }',
+        '() => { n.set(n.get() + 1) }',
     )
-    expect(await lower('n += 1', N)).toBe('n.set(n() + (1))')
-    expect(await lower('n -= step', N)).toBe('n.set(n() - (step))')
+    expect(await lower('n += 1', N)).toBe('n.set(n.get() + (1))')
+    expect(await lower('n -= step', N)).toBe('n.set(n.get() - (step))')
 })
 
 // 31.4 — A WRITE WHOSE VALUE IS READ IS WORTH WHAT IT STORED, as JavaScript's own is: `a = b = 0`
@@ -60,13 +60,12 @@ function written(lowered: string, names: string[]): unknown[] {
     const cells: unknown[] = []
     for (const _ of names) {
         let held: unknown = { count: 1 }
-        cells.push(
-            Object.assign(() => held, {
-                set(next: unknown): void {
-                    held = next
-                },
-            }),
-        )
+        cells.push({
+            get: () => held,
+            set(next: unknown): void {
+                held = next
+            },
+        })
     }
     return new Function(
         '__writePath',
@@ -91,7 +90,7 @@ test('a write used as a value is worth what it stored — 31.4', async () => {
     // Statement position is the short form it always was, a comma of statements included.
     expect(await lower('f()\na = 1, b = 2', A)).toBe('f()\na.set(1), b.set(2)')
     expect(await lower('s.count = 1', A)).toBe(
-        's.set(__writePath(s(), ["count"], 1))',
+        's.set(__writePath(s.get(), ["count"], 1))',
     )
 })
 
@@ -107,19 +106,19 @@ test('a member typed as a Reactive is read and written by name — 31.15', async
     const lowered = async (script: string): Promise<string> =>
         (await lower(`${PARTS}${script}`)).slice(PARTS.length)
     expect(await lowered("const shown = ask.open ? 'yes' : 'no'")).toBe(
-        "const shown = ask.open() ? 'yes' : 'no'",
+        "const shown = ask.open.get() ? 'yes' : 'no'",
     )
     expect(await lowered('const deep = !ask.inner.open')).toBe(
-        'const deep = !ask.inner.open()',
+        'const deep = !ask.inner.open.get()',
     )
     expect(await lowered('ask.open = true')).toBe('ask.open.set(true)')
     expect(await lowered('ask.inner.open = !ask.open')).toBe(
-        'ask.inner.open.set(!ask.open())',
+        'ask.inner.open.set(!ask.open.get())',
     )
     // 31.7 and 31.5 — the explicit forms, and the `Reactive`'s own members, are left alone.
     expect(
-        await lowered('ask.open.set(false); ask.open(); ask.open.peek()'),
-    ).toBe('ask.open.set(false); ask.open(); ask.open.peek()')
+        await lowered('ask.open.set(false); ask.open.get(); ask.open.peek()'),
+    ).toBe('ask.open.set(false); ask.open.get(); ask.open.peek()')
 })
 
 // 31.8, 31.15 — A WRITE THROUGH A MEMBER TYPED AS A `Reactive` IS THAT MEMBER'S: the name's own
@@ -134,10 +133,10 @@ test('a write through a member typed as a Reactive is the member’s — 31.8, 3
     const ofProps = async (line: string): Promise<string> =>
         (await lower(`${PROPS}${line}`)).slice(PROPS.length).trimStart()
     expect(await ofProps("buffer.values[kind] = 'x'")).toEndWith(
-        "buffer().values.set(__writePath(buffer().values(), [kind()], 'x'))",
+        "buffer().values.set(__writePath(buffer().values.get(), [kind()], 'x'))",
     )
     expect(await ofProps("buffer.inner.v.a += 'x'")).toEndWith(
-        'buffer().inner.v.set(__writePath(buffer().inner.v(), ["a"], buffer().inner.v()["a"] + (\'x\')))',
+        'buffer().inner.v.set(__writePath(buffer().inner.v.get(), ["a"], buffer().inner.v.get()["a"] + (\'x\')))',
     )
     expect(await ofProps('buffer.values = {}')).toEndWith(
         'buffer().values.set({})',
@@ -147,11 +146,11 @@ test('a write through a member typed as a Reactive is the member’s — 31.8, 3
     const ofBox = async (line: string): Promise<string> =>
         (await lower(`${BOX}${line}`)).slice(BOX.length)
     expect(await ofBox("box.values.a = 'x'")).toBe(
-        'box().values.set(__writePath(box().values(), ["a"], \'x\'))',
+        'box.get().values.set(__writePath(box.get().values.get(), ["a"], \'x\'))',
     )
     // A member that is plain data is still the name's path (31.8).
     expect(await ofBox('box.other = 1')).toBe(
-        'box.set(__writePath(box(), ["other"], 1))',
+        'box.set(__writePath(box.get(), ["other"], 1))',
     )
 })
 
@@ -166,10 +165,10 @@ test('a member reached through a read is read by name — 31.15', async () => {
     const lowered = async (line: string): Promise<string> =>
         (await lower(`${script}${line}`)).slice(script.length)
     expect(await lowered('const next = rows[at] + 1')).toBe(
-        'const next = rows[at()]() + 1',
+        'const next = rows[at.get()].get() + 1',
     )
     expect(await lowered('const shut = !box.lid')).toBe(
-        'const shut = !box().lid()',
+        'const shut = !box.get().lid.get()',
     )
 })
 
@@ -207,16 +206,16 @@ out.push(later)
         await lower(
             "import { reactive, type Reactive } from '@abide/abide'\nlet a = reactive(1)\nlet b = reactive(2)\na = b",
         ),
-    ).toEndWith('\na.set(b())')
+    ).toEndWith('\na.set(b.get())')
 })
 
 // 31.15 — A MEMBER IS TYPED AS THE PROGRAM RUNS: a reactive name in a literal's value is a read
 // (31.1), so `{ view }` holds the `View`, and an access of it is the plain member. As written, the
-// projection types it `Reactive<View>`, and the access lowered to `g().view()` — a call on a `View`.
+// projection types it `Reactive<View>`, and the access lowered to `g.get().view.get()` — a `get` on a `View`.
 // A member a type declares a `Reactive` is 31.3's hold, and one a read built a `Reactive` from is
 // one as it runs. THE REVERT: drop `membersOfReads` from `readsIn`'s suspects; all seven above the
-// 31.3 line lower with a call after the member (`g().view().x`, `g()[0]().x`), and the script throws
-// that `o.view` is not a function.
+// 31.3 line lower with a read after the member (`g.get().view.get().x`, `g.get()[0].get().x`), and
+// the script throws that `o.view.get` is not a function.
 const INFERRED =
     "import { memo, reactive, type Reactive } from '@abide/abide'\ntype View = { x: number }\nlet view = reactive<View>({ x: 1 })\n"
 test('a member a read built is the value it holds — 31.15', async () => {
@@ -226,57 +225,63 @@ test('a member a read built is the value it holds — 31.15', async () => {
         await lowered(
             'const g = reactive(() => ({ view }))\nconst a = g.view.x',
         ),
-    ).toBe('const g = reactive(() => ({ view: view() }))\nconst a = g().view.x')
+    ).toBe(
+        'const g = reactive(() => ({ view: view.get() }))\nconst a = g.get().view.x',
+    )
     expect(
         await lowered(
             'const g = reactive(() => ({ v: view }))\nconst a = g.v.x',
         ),
-    ).toBe('const g = reactive(() => ({ v: view() }))\nconst a = g().v.x')
+    ).toBe(
+        'const g = reactive(() => ({ v: view.get() }))\nconst a = g.get().v.x',
+    )
     expect(
         await lowered('const g = reactive(() => [view])\nconst a = g[0].x'),
-    ).toBe('const g = reactive(() => [view()])\nconst a = g()[0].x')
+    ).toBe('const g = reactive(() => [view.get()])\nconst a = g.get()[0].x')
     expect(
         await lowered(
             'const g = reactive(() => ({ inner: { view } }))\nconst a = g.inner.view.x',
         ),
     ).toBe(
-        'const g = reactive(() => ({ inner: { view: view() } }))\nconst a = g().inner.view.x',
+        'const g = reactive(() => ({ inner: { view: view.get() } }))\nconst a = g.get().inner.view.x',
     )
     expect(
         await lowered('const o = (() => ({ view }))()\nconst a = o.view.x'),
-    ).toBe('const o = (() => ({ view: view() }))()\nconst a = o.view.x')
+    ).toBe('const o = (() => ({ view: view.get() }))()\nconst a = o.view.x')
     expect(
         await lowered(
             'function glance() { return { view } }\nconst o = glance()\nconst a = o.view.x',
         ),
     ).toBe(
-        'function glance() { return { view: view() } }\nconst o = glance()\nconst a = o.view.x',
+        'function glance() { return { view: view.get() } }\nconst o = glance()\nconst a = o.view.x',
     )
     expect(
         await lowered(
             'const g = reactive(() => ({ view }))\nconst v = g.view\nconst a = v.x',
         ),
     ).toBe(
-        'const g = reactive(() => ({ view: view() }))\nconst v = g().view\nconst a = v.x',
+        'const g = reactive(() => ({ view: view.get() }))\nconst v = g.get().view\nconst a = v.x',
     )
     // 31.3 — declared a `Reactive`, by a binding's annotation or a parameter's, it is held.
     expect(
         await lowered(
             'const o: { view: Reactive<View> } = { view }\nconst a = o.view.x',
         ),
-    ).toBe('const o: { view: Reactive<View> } = { view }\nconst a = o.view().x')
+    ).toBe(
+        'const o: { view: Reactive<View> } = { view }\nconst a = o.view.get().x',
+    )
     expect(
         await lowered(
             'function f(p: { view: Reactive<View> }) { return p.view.x }',
         ),
-    ).toBe('function f(p: { view: Reactive<View> }) { return p.view().x }')
+    ).toBe('function f(p: { view: Reactive<View> }) { return p.view.get().x }')
     // A `Reactive` a read was handed to is one as it runs.
     expect(
         await lowered(
             'const store = { count: reactive(view.x) }\nconst a = store.count + 1',
         ),
     ).toBe(
-        'const store = { count: reactive(view().x) }\nconst a = store.count() + 1',
+        'const store = { count: reactive(view.get().x) }\nconst a = store.count.get() + 1',
     )
     expect(
         await ran(`${INFERRED}const o = (() => ({ view, v: view, list: [view] }))()
@@ -287,8 +292,8 @@ out.push(o.view.x, o.v.x, o.list[0].x)
     const client = await clientOf(
         `<script>${INFERRED}const g = reactive(() => ({ view }))</script>\n<p>{g.view.x}</p>`,
     )
-    expect(client).toContain('g().view.x')
-    expect(client).not.toContain('view().x')
+    expect(client).toContain('g.get().view.x')
+    expect(client).not.toContain('view.get().x')
 })
 
 // 31.21 — A READ OF WHAT MAY HOLD NO `Reactive` READS `undefined` THERE: an option a caller left out.
@@ -310,7 +315,7 @@ out.push(options.open ? 'given' : 'left out', open)
 
 // 31.7 — the explicit spelling keeps compiling, and is not rewritten twice.
 test('an explicit read or write is left alone', async () => {
-    expect(await lower('n()', N)).toBe('n()')
+    expect(await lower('n.get()', N)).toBe('n.get()')
     expect(await lower('n.set(2)', N)).toBe('n.set(2)')
     expect(await lower('n.peek()', N)).toBe('n.peek()')
 })
@@ -323,7 +328,7 @@ test('a string, a comment and a member are not the name', async () => {
     expect(await lower("'n is not a name'", N)).toBe("'n is not a name'")
     expect(await lower('obj.n', N)).toBe('obj.n')
     expect(await lower('`n in a template ${n}`', N)).toBe(
-        '`n in a template ${n()}`',
+        '`n in a template ${n.get()}`',
     )
     expect(await lower('other', N)).toBe('other')
     expect(await lower('notn + nn', N)).toBe('notn + nn')
@@ -362,7 +367,7 @@ test('an import clause is not rewritten', async () => {
         "import { n as m } from './x.ts'",
     )
     // A DYNAMIC import is an expression, and a reactive name in its argument is a read.
-    expect(await lower('import(n)', N)).toBe('import(n())')
+    expect(await lower('import(n)', N)).toBe('import(n.get())')
     // And the statement after an import is lowered as usual.
     expect(await lower("import { x } from './x.ts'\nn = 1", N)).toBe(
         "import { x } from './x.ts'\nn.set(1)",
@@ -373,13 +378,13 @@ test('an import clause is not rewritten', async () => {
 // shorthand case in `classifyRead`; `{ n }` lowers to `{ n() }`, which is a method with no body, and
 // the emitted module does not parse at all. Seven files in the example corpus hit this.
 test('an object shorthand keeps its key', async () => {
-    expect(await lower('f({ n })', N)).toBe('f({ n: n() })')
-    expect(await lower('f({ a, n })', N)).toBe('f({ a, n: n() })')
-    expect(await lower('f({ n, a })', N)).toBe('f({ n: n(), a })')
+    expect(await lower('f({ n })', N)).toBe('f({ n: n.get() })')
+    expect(await lower('f({ a, n })', N)).toBe('f({ a, n: n.get() })')
+    expect(await lower('f({ n, a })', N)).toBe('f({ n: n.get(), a })')
     // An explicit key is already a value position and is lowered as one.
-    expect(await lower('f({ k: n })', N)).toBe('f({ k: n() })')
+    expect(await lower('f({ k: n })', N)).toBe('f({ k: n.get() })')
     // A spread reads the whole value.
-    expect(await lower('f({ ...n })', N)).toBe('f({ ...n() })')
+    expect(await lower('f({ ...n })', N)).toBe('f({ ...n.get() })')
 })
 
 // 31.12 — a destructuring pattern BINDS. THE REVERT: take reads by SPELLING rather than the
@@ -390,7 +395,7 @@ test('a destructuring pattern is not a read', async () => {
     expect(await lower('const { a, n } = x', N)).toBe('const { a, n } = x')
     // And the read after it is still a read.
     expect(await lower('const { a } = x\nn + 1', N)).toBe(
-        'const { a } = x\nn() + 1',
+        'const { a } = x\nn.get() + 1',
     )
 })
 
@@ -399,14 +404,14 @@ test('a destructuring pattern is not a read', async () => {
 // scans as a name — 2 where 1 is due.
 test('a template literal only lowers its substitutions', async () => {
     expect(namesIn('`${n} and n`', 'n')).toBe(1)
-    expect(await lower('`${n} and n`', N)).toBe('`${n()} and n`')
-    expect(await lower('`n ${n} n`', N)).toBe('`n ${n()} n`')
-    expect(await lower('`${n} ${n}`', N)).toBe('`${n()} ${n()}`')
+    expect(await lower('`${n} and n`', N)).toBe('`${n.get()} and n`')
+    expect(await lower('`n ${n} n`', N)).toBe('`n ${n.get()} n`')
+    expect(await lower('`${n} ${n}`', N)).toBe('`${n.get()} ${n.get()}`')
     // An object inside a substitution still closes correctly.
     expect(await lower('`${f({ n })} tail n`', N)).toBe(
-        '`${f({ n: n() })} tail n`',
+        '`${f({ n: n.get() })} tail n`',
     )
-    expect(await lower('x = `a${n}b`', N)).toBe('x = `a${n()}b`')
+    expect(await lower('x = `a${n}b`', N)).toBe('x = `a${n.get()}b`')
 })
 
 // AN OBJECT KEY IS NOT A READ. THE REVERT: take reads by SPELLING rather than the
@@ -415,7 +420,7 @@ test('an object key is not a read', async () => {
     expect(await lower('f({ n: 1 })', N)).toBe('f({ n: 1 })')
     expect(await lower('f({ a: 1, n: 2 })', N)).toBe('f({ a: 1, n: 2 })')
     // A ternary's colon is not a key, and the name before it IS a read.
-    expect(await lower('a ? n : b', N)).toBe('a ? n() : b')
+    expect(await lower('a ? n : b', N)).toBe('a ? n.get() : b')
 })
 
 // A PARAMETER IS A BINDING — the third position where that is true, after an import clause and a
@@ -430,11 +435,11 @@ test('a parameter is not a read', async () => {
     expect(await lower('const f = (n) => 1', N)).toBe('const f = (n) => 1')
     expect(await lower('const f = n => 1', N)).toBe('const f = n => 1')
     // A call is not a parameter list, and its argument IS a read.
-    expect(await lower('f(n)', N)).toBe('f(n())')
-    expect(await lower('f(n, 2)', N)).toBe('f(n(), 2)')
+    expect(await lower('f(n)', N)).toBe('f(n.get())')
+    expect(await lower('f(n, 2)', N)).toBe('f(n.get(), 2)')
     // And an arrow that does not shadow still reads.
     expect(await lower('const f = (a) => n + a', N)).toBe(
-        'const f = (a) => n() + a',
+        'const f = (a) => n.get() + a',
     )
 })
 
@@ -480,7 +485,7 @@ test('a binding shadows the page value for the body it is bound in — 31.3', as
     // the page's own reads with it, and that failure is the silent one: the `Reactive` itself
     // rendered where its value was due.
     expect(await lower('const f = (n) => n\nconst total = n + 1', N)).toBe(
-        'const f = (n) => n\nconst total = n() + 1',
+        'const f = (n) => n\nconst total = n.get() + 1',
     )
     expect(await lower('{ let n = 2; use(n) }\nn = 3', N)).toBe(
         '{ let n = 2; use(n) }\nn.set(3)',
@@ -515,9 +520,13 @@ test('a position declared as a Reactive holds the Reactive — 31.3', async () =
             NM,
         ),
     ).toBe("function f(): import('@abide/abide').Reactive<any> { return n }")
-    expect(await lower('structuredClone(n)', NM)).toBe('structuredClone(n())')
-    expect(await lower('m.set(n)', NM)).toBe('m.set(n())')
-    expect(await lower('const r: number = n', NM)).toBe('const r: number = n()')
+    expect(await lower('structuredClone(n)', NM)).toBe(
+        'structuredClone(n.get())',
+    )
+    expect(await lower('m.set(n)', NM)).toBe('m.set(n.get())')
+    expect(await lower('const r: number = n', NM)).toBe(
+        'const r: number = n.get()',
+    )
 })
 
 // 31.5, 31.6 — A MEMBER THE VALUE DECLARES IS THE VALUE'S, and one only the `Reactive` declares is the
@@ -534,24 +543,28 @@ test("a member the value declares is the value's — 31.5, 31.6", async () => {
         await lowered(
             'const thing = reactive({ refresh: () => 1 })\nthing.refresh()',
         ),
-    ).toBe('const thing = reactive({ refresh: () => 1 })\nthing().refresh()')
+    ).toBe(
+        'const thing = reactive({ refresh: () => 1 })\nthing.get().refresh()',
+    )
     expect(
         await lowered(
             'const optional = reactive<{ refresh: () => number } | undefined>(undefined)\noptional?.refresh()',
         ),
     ).toBe(
-        'const optional = reactive<{ refresh: () => number } | undefined>(undefined)\noptional()?.refresh()',
+        'const optional = reactive<{ refresh: () => number } | undefined>(undefined)\noptional.get()?.refresh()',
     )
     expect(
         await lowered(
             "const m = reactive(new Map<string, number>())\nm.set('a', 1)",
         ),
-    ).toBe("const m = reactive(new Map<string, number>())\nm().set('a', 1)")
+    ).toBe("const m = reactive(new Map<string, number>())\nm.get().set('a', 1)")
     expect(
         await lowered(
             "const field = reactive({ error: 'x' })\nconst e = field.error",
         ),
-    ).toBe("const field = reactive({ error: 'x' })\nconst e = field().error")
+    ).toBe(
+        "const field = reactive({ error: 'x' })\nconst e = field.get().error",
+    )
     expect(await lowered('const n = reactive(1)\nn.refresh()')).toBe(
         'const n = reactive(1)\nn.refresh()',
     )
@@ -571,7 +584,27 @@ test('a position typed as a Selection holds the Reactive — 31.13', async () =>
         expect(await lower(`${free}${call}`, NM)).toBe(`${free}${call}`)
     // Beside a plain value's parameter, the same name still reads.
     expect(await lower(`${free}refresh(n); String(m)`, NM)).toBe(
-        `${free}refresh(n); String(m())`,
+        `${free}refresh(n); String(m.get())`,
+    )
+})
+
+// 31.3, 49.8 — A `Bindable` POSITION HOLDS THE `Reactive`: a headless option takes a `Reactive` or its
+// `{ get, set }` pair, and a name handed there is its `Reactive`, never its value — while a pair's own
+// `get` beside it still reads. THE REVERT: drop the pair arm of `isReactiveType`; the option lowers to
+// `toggle({ pressed: n() })` and the parts are handed a boolean where a write path was due.
+test('a position typed as a Bindable holds the Reactive — 31.3, 49.8', async () => {
+    const NM = new Set(['n', 'm'])
+    const parts = "import { toggle } from '@abide/abide'\n"
+    expect(await lower(`${parts}toggle({ pressed: n })`, NM)).toBe(
+        `${parts}toggle({ pressed: n })`,
+    )
+    expect(
+        await lower(
+            `${parts}toggle({ pressed: { get: () => n, set: (on) => { m = on } } })`,
+            NM,
+        ),
+    ).toBe(
+        `${parts}toggle({ pressed: { get: () => n.get(), set: (on) => { m.set(on) } } })`,
     )
 })
 
@@ -586,12 +619,14 @@ test('a position typed as a Selection holds the Reactive — 31.13', async () =>
 test('an imported Reactive is read and written by name — 31.1', async () => {
     const named = "import { onboarding } from './conversations.ts'\n"
     expect(await lower(`${named}const t = onboarding.text`)).toBe(
-        `${named}const t = onboarding().text`,
+        `${named}const t = onboarding.get().text`,
     )
     expect(await lower(`${named}onboarding = { text: 'hi' }`)).toBe(
         `${named}onboarding.set({ text: 'hi' })`,
     )
-    expect(await lower(`${named}onboarding()`)).toBe(`${named}onboarding()`)
+    expect(await lower(`${named}onboarding.get()`)).toBe(
+        `${named}onboarding.get()`,
+    )
     expect(await lower(`${named}onboarding.set({ text: 'hi' })`)).toBe(
         `${named}onboarding.set({ text: 'hi' })`,
     )
@@ -602,23 +637,23 @@ test('an imported Reactive is read and written by name — 31.1', async () => {
     // A default import and a renamed one are bindings of the same kind.
     const defaulted = "import count from './conversations.ts'\n"
     expect(await lower(`${defaulted}const d = count * 2`)).toBe(
-        `${defaulted}const d = count() * 2`,
+        `${defaulted}const d = count.get() * 2`,
     )
     const renamed = "import { onboarding as ob } from './conversations.ts'\n"
     expect(await lower(`${renamed}const t = ob.text`)).toBe(
-        `${renamed}const t = ob().text`,
+        `${renamed}const t = ob.get().text`,
     )
     // Through a module that only re-exports it, it is still the one `Reactive`.
     const through = "import { greeting } from './reexports.ts'\n"
     expect(await lower(`${through}const t = greeting.text`)).toBe(
-        `${through}const t = greeting().text`,
+        `${through}const t = greeting.get().text`,
     )
     // A NAMESPACE'S MEMBER IS NO NAME, but a member typed as a `Reactive` is read as one is
     // (31.15). And an import that is not a `Reactive` is left alone.
     const namespace = "import * as conversations from './conversations.ts'\n"
     expect(
         await lower(`${namespace}const t = conversations.onboarding.text`),
-    ).toBe(`${namespace}const t = conversations.onboarding().text`)
+    ).toBe(`${namespace}const t = conversations.onboarding.get().text`)
     const plain = "import { plain } from './conversations.ts'\n"
     expect(await lower(`${plain}const t = plain.text`)).toBe(
         `${plain}const t = plain.text`,
@@ -635,7 +670,7 @@ test('a value lowered by recursion keeps the shadow it stands in', async () => {
         'function f(n) { g.set(n + 1) }',
     )
     expect(await lower('function f(n) { g.a = n }', NG)).toBe(
-        'function f(n) { g.set(__writePath(g(), ["a"], n)) }',
+        'function f(n) { g.set(__writePath(g.get(), ["a"], n)) }',
     )
 })
 
@@ -660,7 +695,7 @@ test('a label, a class member and a declared name are not reads', async () => {
     )
     // A class member's INITIALIZER is still a read, and only a line break tells the two apart.
     expect(await lower('class C {\n  a =\n    n\n}', N)).toBe(
-        'class C {\n  a =\n    n()\n}',
+        'class C {\n  a =\n    n.get()\n}',
     )
 })
 
@@ -684,9 +719,9 @@ test('a write ends at the line break, not at the next semicolon', async () => {
 // call on the Reactive and reports `rows.join is not a function` at run time, with the page
 // rendering up to that line and stopping.
 test('a member reaches the value, and the API reaches the Reactive', async () => {
-    expect(await lower("n.join(', ')", N)).toBe("n().join(', ')")
-    expect(await lower('n.length', N)).toBe('n().length')
-    expect(await lower('n.map((x) => x)', N)).toBe('n().map((x) => x)')
+    expect(await lower("n.join(', ')", N)).toBe("n.get().join(', ')")
+    expect(await lower('n.length', N)).toBe('n.get().length')
+    expect(await lower('n.map((x) => x)', N)).toBe('n.get().map((x) => x)')
     // The `Reactive`'s own members are the API and pass through untouched (31.7).
     expect(await lower('n.set(2)', N)).toBe('n.set(2)')
     expect(await lower('n.peek()', N)).toBe('n.peek()')
@@ -747,9 +782,9 @@ test('a cast or a non-null assertion still ends at the line break', async () => 
 // option row, a form field, a JSON payload — then reads `undefined` off the Reactive itself, with
 // nothing thrown and nothing logged.
 test('a member the Reactive does not declare reaches the value', async () => {
-    expect(await lower('n.value', N)).toBe('n().value')
-    expect(await lower('n.args', N)).toBe('n().args')
-    expect(await lower('n.entries', N)).toBe('n().entries')
+    expect(await lower('n.value', N)).toBe('n.get().value')
+    expect(await lower('n.args', N)).toBe('n.get().args')
+    expect(await lower('n.entries', N)).toBe('n.get().entries')
 })
 
 // 31.5, 31.15 — A MEMBER THE NAME'S OWN TYPE ADDS IS THAT OBJECT'S: a ledger's `append` and a
@@ -768,20 +803,20 @@ test("a member the name's type adds reaches the Reactive — 31.5, 31.15", async
         'const f = calls.append',
     )
     expect(await lowered('const r = calls.status.running')).toBe(
-        'const r = calls.status().running',
+        'const r = calls.status.get().running',
     )
     expect(await lowered('const l = calls.length')).toBe(
-        'const l = calls().length',
+        'const l = calls.get().length',
     )
     expect(await lowered('const nm = calls.name')).toBe(
-        'const nm = calls().name',
+        'const nm = calls.get().name',
     )
 })
 
 // 31.5 — AND EVERY NAME THE `Reactive` DOES DECLARE IS THERE. The compiler may not import the
 // runtime, so the list is a copy; this is what holds the copy to the prototype `reactive()`
 // installs. THE REVERT: add a member to `MEMBERS` in `Reactive.ts` and not here; `n.thatMember`
-// then lowers to `n().thatMember` and reads the value's own property, which is `undefined`.
+// then lowers to `n.get().thatMember` and reads the value's own property, which is `undefined`.
 test('the member list is exactly what a Reactive carries', () => {
     const carried = Object.getOwnPropertyNames(
         Object.getPrototypeOf(reactive(0)),
@@ -796,15 +831,17 @@ test('the member list is exactly what a Reactive carries', () => {
 // `f(a, n: n(), b)` and `[1, n: n(), 2]` — 2 keys written where the grammar takes none, and
 // neither module parses.
 test('a shorthand is told from a comma list by its bracket', async () => {
-    expect(await lower('f(a, n, b)', N)).toBe('f(a, n(), b)')
+    expect(await lower('f(a, n, b)', N)).toBe('f(a, n.get(), b)')
     expect(await lower('const xs = [1, n, 2]', N)).toBe(
-        'const xs = [1, n(), 2]',
+        'const xs = [1, n.get(), 2]',
     )
-    expect(await lower('f(a, [n], b)', N)).toBe('f(a, [n()], b)')
+    expect(await lower('f(a, [n], b)', N)).toBe('f(a, [n.get()], b)')
     // And the shorthand it was written for still keeps its key.
-    expect(await lower('f({ a, n, b })', N)).toBe('f({ a, n: n(), b })')
+    expect(await lower('f({ a, n, b })', N)).toBe('f({ a, n: n.get(), b })')
     // A brace that opens a BLOCK is not a literal either, and a read there is just a read.
-    expect(await lower('function f() { n }', N)).toBe('function f() { n() }')
+    expect(await lower('function f() { n }', N)).toBe(
+        'function f() { n.get() }',
+    )
 })
 
 // `import.meta` IS AN EXPRESSION, NOT A DECLARATION. STRUCTURAL
@@ -848,21 +885,21 @@ test('a regular expression literal is not tokens', async () => {
 test('a write through a member path copies down the path', async () => {
     const U = new Set(['user', 'rows'])
     expect(await lower("user.name = 'x'", U)).toBe(
-        'user.set(__writePath(user(), ["name"], \'x\'))',
+        'user.set(__writePath(user.get(), ["name"], \'x\'))',
     )
     expect(await lower('user.a.b = v', U)).toBe(
-        'user.set(__writePath(user(), ["a", "b"], v))',
+        'user.set(__writePath(user.get(), ["a", "b"], v))',
     )
     // A COMPUTED SEGMENT IS AN EXPRESSION AND MAY ITSELF BE A READ.
     expect(await lower('rows[0] = 1', U)).toBe(
-        'rows.set(__writePath(rows(), [0], 1))',
+        'rows.set(__writePath(rows.get(), [0], 1))',
     )
     expect(await lower('rows[user] = 1', U)).toBe(
-        'rows.set(__writePath(rows(), [user()], 1))',
+        'rows.set(__writePath(rows.get(), [user.get()], 1))',
     )
     // An op-assign through a path READS the path first, the way `n += 1` reads `n`.
     expect(await lower('user.count += 1', U)).toBe(
-        'user.set(__writePath(user(), ["count"], user()["count"] + (1)))',
+        'user.set(__writePath(user.get(), ["count"], user.get()["count"] + (1)))',
     )
     // THE IMPORT GOES WITH THE CALL. A module emitting `__writePath` and not importing it is a
     // ReferenceError on the first write.
@@ -874,27 +911,27 @@ test('a write through a member path copies down the path', async () => {
 // A READ THROUGH A MEMBER PATH IS STILL A READ, which is the half the path walk must not take.
 test('a member path that is not assigned is left to the read paths', async () => {
     const U = new Set(['user', 'rows'])
-    expect(await lower('user.name', U)).toBe('user().name')
-    expect(await lower('rows[0]', U)).toBe('rows()[0]')
-    expect(await lower('user.a.b(1)', U)).toBe('user().a.b(1)')
+    expect(await lower('user.name', U)).toBe('user.get().name')
+    expect(await lower('rows[0]', U)).toBe('rows.get()[0]')
+    expect(await lower('user.a.b(1)', U)).toBe('user.get().a.b(1)')
     // 31.5 — the FIRST segment being a `Reactive` member is the API, never a path.
     expect(await lower('user.set = f', U)).toBe('user.set = f')
     expect(await lower('user.set(2)', U)).toBe('user.set(2)')
     // `==` is not `=`.
-    expect(await lower('user.name == 1', U)).toBe('user().name == 1')
+    expect(await lower('user.name == 1', U)).toBe('user.get().name == 1')
 })
 
-// 31.11 — `foo()` TAKES NO ARGUMENTS. THE REVERT: drop the `arguments` check from
-// `Lowering`'s `call` case; `count(5)` is then passed through as written and calls the read with a
-// value the read ignores — 3 silent no-ops where 3 compile errors are due, and an author who
-// wrote a write is given a read.
-test('an argument to a read by name is a compile error', async () => {
-    expect(await refusal(lower('n(5)', N))).toContain('31.11')
-    expect(await refusal(lower('n(x)', N))).toContain('31.11')
-    expect(await refusal(lower('const v = n(a, b)', N))).toContain('31.11')
-    // And the empty call is 31.7's explicit read, untouched.
-    expect(await lower('n()', N)).toBe('n()')
-    expect(await lower('n( )', N)).toBe('n( )')
+// 31.11 — A CALL ON A NAME CALLS THE VALUE IT HOLDS, arguments and all: the name is read (31.1) and
+// what it reads is called, so `format(5)` runs the function a `Reactive` holds. THE REVERT: classify
+// a callee name as written, as the explicit read it once was; the four calls below are left as
+// written, and each calls the `Reactive` object, which is no function.
+test('a call on a name calls the value it holds — 31.11', async () => {
+    expect(await lower('n(5)', N)).toBe('n.get()(5)')
+    expect(await lower('n(x)', N)).toBe('n.get()(x)')
+    expect(await lower('const v = n(a, b)', N)).toBe('const v = n.get()(a, b)')
+    expect(await lower('n()', N)).toBe('n.get()()')
+    // The explicit read is `get`, and is left as written (31.7).
+    expect(await lower('n.get()', N)).toBe('n.get()')
 })
 
 // 31.4 — THE SIXTEEN ASSIGNMENT OPERATORS ARE ONE MECHANISM, and a hand-written table of them
@@ -903,23 +940,23 @@ test('an argument to a read by name is a compile error', async () => {
 // `n() <op>= 1`, which is not a program in any grammar.
 test('every assignment operator is a write — 31.4', async () => {
     expect(await lower('n = 1', N)).toBe('n.set(1)')
-    expect(await lower('n += 1', N)).toBe('n.set(n() + (1))')
-    expect(await lower('n -= 1', N)).toBe('n.set(n() - (1))')
-    expect(await lower('n *= 2', N)).toBe('n.set(n() * (2))')
-    expect(await lower('n /= 2', N)).toBe('n.set(n() / (2))')
-    expect(await lower('n %= 2', N)).toBe('n.set(n() % (2))')
-    expect(await lower('n **= 2', N)).toBe('n.set(n() ** (2))')
-    expect(await lower('n &= 1', N)).toBe('n.set(n() & (1))')
-    expect(await lower('n |= 1', N)).toBe('n.set(n() | (1))')
-    expect(await lower('n ^= 1', N)).toBe('n.set(n() ^ (1))')
-    expect(await lower('n <<= 1', N)).toBe('n.set(n() << (1))')
+    expect(await lower('n += 1', N)).toBe('n.set(n.get() + (1))')
+    expect(await lower('n -= 1', N)).toBe('n.set(n.get() - (1))')
+    expect(await lower('n *= 2', N)).toBe('n.set(n.get() * (2))')
+    expect(await lower('n /= 2', N)).toBe('n.set(n.get() / (2))')
+    expect(await lower('n %= 2', N)).toBe('n.set(n.get() % (2))')
+    expect(await lower('n **= 2', N)).toBe('n.set(n.get() ** (2))')
+    expect(await lower('n &= 1', N)).toBe('n.set(n.get() & (1))')
+    expect(await lower('n |= 1', N)).toBe('n.set(n.get() | (1))')
+    expect(await lower('n ^= 1', N)).toBe('n.set(n.get() ^ (1))')
+    expect(await lower('n <<= 1', N)).toBe('n.set(n.get() << (1))')
     // `>` is never merged by the SCANNER, so a token walk saw `>>=` as three tokens; the
     // checker's tree holds it as one operator.
-    expect(await lower('n >>= 1', N)).toBe('n.set(n() >> (1))')
-    expect(await lower('n >>>= 1', N)).toBe('n.set(n() >>> (1))')
+    expect(await lower('n >>= 1', N)).toBe('n.set(n.get() >> (1))')
+    expect(await lower('n >>>= 1', N)).toBe('n.set(n.get() >>> (1))')
     // And a comparison is not an assignment, whichever way the scanner hands it over.
-    expect(await lower('n >= 1', N)).toBe('n() >= 1')
-    expect(await lower('n >> 1', N)).toBe('n() >> 1')
+    expect(await lower('n >= 1', N)).toBe('n.get() >= 1')
+    expect(await lower('n >> 1', N)).toBe('n.get() >> 1')
 })
 
 // A LOGICAL ASSIGNMENT SHORT-CIRCUITS, and no assertion on the emitted TEXT can see it: an
@@ -933,12 +970,13 @@ test('every assignment operator is a write — 31.4', async () => {
 function writesMade(lowered: string, value: unknown): number {
     let writes = 0
     let held = value
-    const n = Object.assign(() => held, {
+    const n = {
+        get: () => held,
         set(next: unknown): void {
             writes += 1
             held = next
         },
-    })
+    }
     // THE EMITTED PROGRAM IS THE SUBJECT: an assertion on its text cannot tell a write that
     // happened from one that was skipped.
     new Function('n', lowered)(n)
@@ -946,9 +984,9 @@ function writesMade(lowered: string, value: unknown): number {
 }
 
 test('a logical assignment writes only on the branch that writes', async () => {
-    expect(await lower('n ||= 1', N)).toBe('n() || n.set(1)')
-    expect(await lower('n &&= 1', N)).toBe('n() && n.set(1)')
-    expect(await lower('n ??= 1', N)).toBe('n() ?? n.set(1)')
+    expect(await lower('n ||= 1', N)).toBe('n.get() || n.set(1)')
+    expect(await lower('n &&= 1', N)).toBe('n.get() && n.set(1)')
+    expect(await lower('n ??= 1', N)).toBe('n.get() ?? n.set(1)')
     expect(writesMade(await lower('n ||= 1', N), 'held')).toBe(0)
     expect(writesMade(await lower('n ||= 1', N), '')).toBe(1)
     expect(writesMade(await lower('n &&= 1', N), '')).toBe(0)
@@ -958,7 +996,7 @@ test('a logical assignment writes only on the branch that writes', async () => {
     // A WRITE THROUGH A PATH SHORT-CIRCUITS TOO, and the path is read to decide it.
     const U = new Set(['user'])
     expect(await lower('user.count ||= 1', U)).toBe(
-        'user()["count"] || user.set(__writePath(user(), ["count"], 1))',
+        'user.get()["count"] || user.set(__writePath(user.get(), ["count"], 1))',
     )
 })
 
@@ -968,24 +1006,26 @@ test('a logical assignment writes only on the branch that writes', async () => {
 // the operand of an update is a call, which is a SyntaxError at parse and a ReferenceError where
 // it is not. The two member paths are the path walk's half of the same sentence and survive it.
 test('an increment and a decrement are writes — 31.4', async () => {
-    expect(await lower('n++', N)).toBe('n.set(n() + 1)')
-    expect(await lower('n--', N)).toBe('n.set(n() - 1)')
-    expect(await lower('++n', N)).toBe('n.set(n() + 1)')
-    expect(await lower('--n', N)).toBe('n.set(n() - 1)')
-    expect(await lower('{ n++ }', N)).toBe('{ n.set(n() + 1) }')
-    expect(await lower('if (x) n++', N)).toBe('if (x) n.set(n() + 1)')
-    expect(await lower('for (;; n++) {}', N)).toBe('for (;; n.set(n() + 1)) {}')
+    expect(await lower('n++', N)).toBe('n.set(n.get() + 1)')
+    expect(await lower('n--', N)).toBe('n.set(n.get() - 1)')
+    expect(await lower('++n', N)).toBe('n.set(n.get() + 1)')
+    expect(await lower('--n', N)).toBe('n.set(n.get() - 1)')
+    expect(await lower('{ n++ }', N)).toBe('{ n.set(n.get() + 1) }')
+    expect(await lower('if (x) n++', N)).toBe('if (x) n.set(n.get() + 1)')
+    expect(await lower('for (;; n++) {}', N)).toBe(
+        'for (;; n.set(n.get() + 1)) {}',
+    )
     // A LINE BREAK THAT ENDS A STATEMENT IS A STATEMENT, and the short form is what makes that
     // safe: JavaScript refuses to insert a semicolon in front of a `(`, so the value-preserving
     // form on this line would have emitted a call on `f()`'s result.
-    expect(await lower('f()\nn++', N)).toBe('f()\nn.set(n() + 1)')
+    expect(await lower('f()\nn++', N)).toBe('f()\nn.set(n.get() + 1)')
     // 31.8 — and through a member path it is the same copy-down write `+= 1` makes.
     const U = new Set(['user'])
     expect(await lower('user.count++', U)).toBe(
-        'user.set(__writePath(user(), ["count"], user()["count"] + (1)))',
+        'user.set(__writePath(user.get(), ["count"], user.get()["count"] + (1)))',
     )
     expect(await lower('++user.count', U)).toBe(
-        'user.set(__writePath(user(), ["count"], user()["count"] + (1)))',
+        'user.set(__writePath(user.get(), ["count"], user.get()["count"] + (1)))',
     )
 })
 
@@ -996,13 +1036,13 @@ test('an increment and a decrement are writes — 31.4', async () => {
 // `n.set(n() + 1)b`, which does not. 2 wrong rewrites, and only one of them is loud.
 test('an update belongs to the operand on its own line', async () => {
     expect(await lower('a++\nn = 1', N)).toBe('a++\nn.set(1)')
-    expect(await lower('n\n++b', N)).toBe('n()\n++b')
-    expect(await lower('a++\nn++', N)).toBe('a++\nn.set(n() + 1)')
+    expect(await lower('n\n++b', N)).toBe('n.get()\n++b')
+    expect(await lower('a++\nn++', N)).toBe('a++\nn.set(n.get() + 1)')
     // And a break in front of a prefix `++` is where the statement ends, so the name after it is
     // the operand it always was.
-    expect(await lower('a\n++n', N)).toBe('a\nn.set(n() + 1)')
+    expect(await lower('a\n++n', N)).toBe('a\nn.set(n.get() + 1)')
     expect(await lower('a + ++n', N)).toBe(
-        'a + ((__stored) => (n.set(__stored), __stored))(n() + (1))',
+        'a + ((__stored) => (n.set(__stored), __stored))(n.get() + (1))',
     )
 })
 
@@ -1012,17 +1052,18 @@ test('an update belongs to the operand on its own line', async () => {
 // own return — 4 values lost where the source names one.
 function updateValue(lowered: string, value: unknown): unknown {
     let held = value
-    const n = Object.assign(() => held, {
+    const n = {
+        get: () => held,
         set(next: unknown): void {
             held = next
         },
-    })
+    }
     return new Function('n', `let out\n${lowered}\nreturn out`)(n)
 }
 
 test('a postfix update is worth the value it read', async () => {
     expect(await lower('out = n++', N)).toBe(
-        'out = ((__previous) => (n.set(__previous + 1), __previous))(n())',
+        'out = ((__previous) => (n.set(__previous + 1), __previous))(n.get())',
     )
     expect(updateValue(await lower('out = n++', N), 7)).toBe(7)
     expect(updateValue(await lower('out = n--', N), 7)).toBe(7)
@@ -1038,12 +1079,12 @@ test('a postfix update is worth the value it read', async () => {
 // token before its brace is a `(` — while at the head of a SCRIPT the same brace is a block.
 test('an object literal opening a fragment expands its shorthand', async () => {
     const page = await typed('<p data-x={{n}}></p>', N)
-    expect(emitComponent(page.file, page.answer)).toContain('{n: n()}')
-    expect(await lower('{n}', N)).toBe('{n()}')
-    expect(await lower('x = { n }', N)).toBe('x = { n: n() }')
-    expect(await lower('n = { n }', N)).toBe('n.set({ n: n() })')
+    expect(emitComponent(page.file, page.answer)).toContain('{n: n.get()}')
+    expect(await lower('{n}', N)).toBe('{n.get()}')
+    expect(await lower('x = { n }', N)).toBe('x = { n: n.get() }')
+    expect(await lower('n = { n }', N)).toBe('n.set({ n: n.get() })')
     // A real block still reads as one.
-    expect(await lower('if (n) { n = 1 }', N)).toBe('if (n()) { n.set(1) }')
+    expect(await lower('if (n) { n = 1 }', N)).toBe('if (n.get()) { n.set(1) }')
 })
 
 // `for await (…)` puts a token between the keyword and the parenthesis. Read as a parameter
@@ -1059,9 +1100,9 @@ test('a for-await subject is lowered and does not shadow itself', async () => {
             'async function g() { for await (const c of n) { f(c) } }',
             N,
         ),
-    ).toBe('async function g() { for await (const c of n()) { f(c) } }')
+    ).toBe('async function g() { for await (const c of n.get()) { f(c) } }')
     expect(await lower('for (const c of n) { f(c) }', N)).toBe(
-        'for (const c of n()) { f(c) }',
+        'for (const c of n.get()) { f(c) }',
     )
 })
 
@@ -1070,7 +1111,7 @@ test('a for-await subject is lowered and does not shadow itself', async () => {
 test('a computed key in a pattern is read, not bound', async () => {
     expect(
         await lower('function g() { const { [n]: v } = o; return n }', N),
-    ).toBe('function g() { const { [n()]: v } = o; return n() }')
+    ).toBe('function g() { const { [n.get()]: v } = o; return n.get() }')
     // An array pattern's elements are still bindings.
     expect(await lower('function g() { const [n, b] = o; return n }', N)).toBe(
         'function g() { const [n, b] = o; return n }',
@@ -1081,7 +1122,7 @@ test('a computed key in a pattern is read, not bound', async () => {
 // bound and every read of it in the body was left as the `Reactive`.
 test('a generic type argument does not bind the name after its comma', async () => {
     expect(await lower('function f(a: Map<string, X>) { return n }', N)).toBe(
-        'function f(a: Map<string, X>) { return n() }',
+        'function f(a: Map<string, X>) { return n.get() }',
     )
 })
 
@@ -1092,19 +1133,19 @@ test('a division after a member named like a keyword still divides', async () =>
     expect(regexes('row.type / n / 2')).toBe(0)
     expect(regexes('row.in / n / 2')).toBe(0)
     expect(await lower('const q = row.type / n / 2', N)).toBe(
-        'const q = row.type / n() / 2',
+        'const q = row.type / n.get() / 2',
     )
     expect(await lower('const q = row.in / n / 2', N)).toBe(
-        'const q = row.in / n() / 2',
+        'const q = row.in / n.get() / 2',
     )
     expect(await lower('const half = row.type / n', N)).toBe(
-        'const half = row.type / n()',
+        'const half = row.type / n.get()',
     )
     expect(await lower('const half = row.count / n', N)).toBe(
-        'const half = row.count / n()',
+        'const half = row.count / n.get()',
     )
     expect(await lower('const half = row.get / n', N)).toBe(
-        'const half = row.get / n()',
+        'const half = row.get / n.get()',
     )
 })
 
@@ -1123,7 +1164,7 @@ test('an import binding named like a keyword is left whole', async () => {
 test('an `=` inside a default value does not end the default', async () => {
     expect(
         await lower('function g(render = (n = 1) => n) { return n }', N),
-    ).toBe('function g(render = (n = 1) => n) { return n() }')
+    ).toBe('function g(render = (n = 1) => n) { return n.get() }')
     // The inner arrow binds `n` itself, so its OWN body is not lowered.
     expect(await lower('const f = (n = 1) => n', N)).toBe(
         'const f = (n = 1) => n',
@@ -1138,7 +1179,7 @@ test('a division after a private name still divides', async () => {
     expect(regexes('this.#t / n / 2')).toBe(0)
     expect(
         await lower('class C { #t = 4\n f() { return this.#t / n } }', N),
-    ).toBe('class C { #t = 4\n f() { return this.#t / n() } }')
+    ).toBe('class C { #t = 4\n f() { return this.#t / n.get() } }')
 })
 
 // A BLOCK'S `}` DOES NOT END A VALUE — a function body's and a class body's neither — and a
@@ -1156,10 +1197,12 @@ test('a regex opening the statement after a block is not a division', async () =
             new Set(['query']),
         ),
     ).toBe(
-        'function clean(s) { return s.trim() }\n/[\'"]/.test(query()) && clean(query())',
+        'function clean(s) { return s.trim() }\n/[\'"]/.test(query.get()) && clean(query.get())',
     )
     // A value that genuinely ends in `)` still divides.
-    expect(await lower('x = f({ a: 1 }) / n', N)).toBe('x = f({ a: 1 }) / n()')
+    expect(await lower('x = f({ a: 1 }) / n', N)).toBe(
+        'x = f({ a: 1 }) / n.get()',
+    )
 })
 
 // A TAGGED TEMPLATE IS A CALL, so automatic semicolon insertion refuses to break in front of the
@@ -1206,8 +1249,10 @@ test('an optional chain is a member reach on both guards', async () => {
     expect(await lower('s?.ready()', new Set(['s']))).toBe('s?.ready()')
     // The value's own member still reads the value first — 31.6 is what tells the two apart,
     // and `?.` does not change which side of it a name falls on.
-    expect(await lower('s?.join(",")', new Set(['s']))).toBe('s()?.join(",")')
-    expect(await lower('obj?.n + n', new Set(['n']))).toBe('obj?.n + n()')
+    expect(await lower('s?.join(",")', new Set(['s']))).toBe(
+        's.get()?.join(",")',
+    )
+    expect(await lower('obj?.n + n', new Set(['n']))).toBe('obj?.n + n.get()')
 })
 
 // 19.11 — the shapes a scan of the tokens answered wrong, each of which emitted a module that does
@@ -1246,7 +1291,7 @@ test('a comma inside a type annotation is not a declarator separator', async () 
             new Set(['Row']),
         ),
     ).toBe(
-        'function load() { const cache: Map<string, Row> = new Map(); return Row() }',
+        'function load() { const cache: Map<string, Row> = new Map(); return Row.get() }',
     )
 })
 

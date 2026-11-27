@@ -8,6 +8,7 @@ import { checkParts } from './checkParts.ts'
 import { number } from './format/index.ts'
 import { type Live, live } from './live.ts'
 import { madeId } from './madeId.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { scrub, type ScrubPosition } from './scrub.ts'
 import { stepRounded } from './stepRounded.ts'
@@ -24,7 +25,7 @@ export type SliderOptions<Range extends boolean = false> = {
     /** 51.184 — whether it picks a range between two thumbs rather than one value. Read once. */
     range?: Range | undefined
     /** The value picked, or the low and the high end of the range, where the app holds it: a `Reactive` to read and set. Held by the parts, from `min` — or from `min` to `max` for a range — and handed back as `value`, where none is given. */
-    value?: Reactive<SliderValue<Range>> | undefined
+    value?: Bindable<SliderValue<Range>> | undefined
     /** What is picked, as the accessible name of the thumb, or of the group holding a range's two: `'Deal amount'`. */
     label: Live<string>
     /** The least value. 0 by default. */
@@ -84,7 +85,7 @@ export function slider<Range extends boolean = false>(
     const min = () => live(options.min) ?? 0
     const max = () => live(options.max) ?? 100
     const step = () => live(options.step) ?? 1
-    const value = (options.value ??
+    const value = (bindable(options.value) ??
         reactive<SliderValue<boolean>>(
             range ? [min(), max()] : min(),
         )) as Reactive<SliderValue<boolean>>
@@ -94,7 +95,7 @@ export function slider<Range extends boolean = false>(
         Math.max(0, Math.floor((max() - min()) / step())),
     )
     const indexOf = (each: number) =>
-        Math.min(last(), Math.max(0, Math.round((each - min()) / step())))
+        Math.min(last.get(), Math.max(0, Math.round((each - min()) / step())))
     const valueOf = (index: number) =>
         stepRounded(min() + index * step(), step(), min())
     // 51.90 — where a value stands along the track, as the share of its width from the left edge.
@@ -105,7 +106,7 @@ export function slider<Range extends boolean = false>(
 
     // A thumb's value, followed or as it stands: one thumb's is the value itself.
     const at = (which: number): number => {
-        const now = value()
+        const now = value.get()
         return typeof now === 'number' ? now : now[which as 0 | 1]
     }
     const ends = (): readonly number[] => {
@@ -117,7 +118,7 @@ export function slider<Range extends boolean = false>(
     const lowest = (which: number) =>
         which === 1 ? indexOf(ends()[0] as number) : 0
     const highest = (which: number) =>
-        range && which === 0 ? indexOf(ends()[1] as number) : last()
+        range && which === 0 ? indexOf(ends()[1] as number) : last.get()
 
     function position(which: number): ScrubPosition {
         return {
@@ -134,9 +135,9 @@ export function slider<Range extends boolean = false>(
     }
     const count = range ? 2 : 1
     const axis = {
-        count: () => last() + 1,
+        count: () => last.get() + 1,
         nearest: (fraction: number) =>
-            Math.round(Math.min(1, Math.max(0, fraction)) * last()),
+            Math.round(Math.min(1, Math.max(0, fraction)) * last.get()),
     }
     const positions: ScrubPosition[] = []
     const scrubs: ReturnType<typeof scrub>[] = []
@@ -180,7 +181,7 @@ export function slider<Range extends boolean = false>(
     function key(which: number, event: KeyboardEvent) {
         const moving = positions[which] as ScrubPosition
         const from = moving.peek() ?? 0
-        const big = Math.max(1, Math.round(last() / 10))
+        const big = Math.max(1, Math.round(last.get() / 10))
         const by =
             event.key === 'ArrowUp'
                 ? 1
@@ -251,7 +252,7 @@ export function slider<Range extends boolean = false>(
                 return range ? live(options.label) : undefined
             },
             get 'data-dragging'() {
-                return dragging() === -1 ? undefined : ''
+                return dragging.get() === -1 ? undefined : ''
             },
         },
         track: {

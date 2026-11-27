@@ -6,6 +6,7 @@
 
 import { hotkeys } from './hotkeys.ts'
 import { type Live, live } from './live.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { toggle } from './toggle.ts'
@@ -17,11 +18,11 @@ export type PlaybackOptions = {
     /** How long it runs, in milliseconds; a function is read live. */
     duration: Live<number>
     /** Where it is, in milliseconds from the start: a `Reactive` to read and set. Held by the parts, and handed back as `at`, where none is given. */
-    at?: Reactive<number> | undefined
+    at?: Bindable<number> | undefined
     /** Whether it is playing: a `Reactive` to read and set. Held by the parts, and handed back as `playing`, where none is given. */
-    playing?: Reactive<boolean> | undefined
+    playing?: Bindable<boolean> | undefined
     /** How fast it plays, `1` being real time: a `Reactive` to read and set. Held by the parts, and handed back as `rate`, where none is given. */
-    rate?: Reactive<number> | undefined
+    rate?: Bindable<number> | undefined
     /** The speeds its `toggleGroup` offers. `[0.5, 1, 2]` by default; a function is read live. */
     rates?: Live<readonly number[]> | undefined
     /** Whether it starts over at its end rather than stopping. `false` by default; a function is read live. */
@@ -67,16 +68,17 @@ function insideControl(event: KeyboardEvent): boolean {
 
 /** A clock moving `at` while `playing`, with a play button, a scrubber, speeds and keys. */
 export function playback(options: PlaybackOptions): Playback {
-    const at = options.at ?? reactive(0)
-    const playing = options.playing ?? reactive(false)
-    const rate = options.rate ?? reactive(1)
+    const at = bindable(options.at) ?? reactive(0)
+    const playing = bindable(options.playing) ?? reactive(false)
+    const rate = bindable(options.rate) ?? reactive(1)
     const duration = () => Math.max(0, live(options.duration))
     const move = (to: number): void =>
         at.set(Math.min(duration(), Math.max(0, to)))
 
     // 51.130, 51.131 — each frame, the time since the last times `rate`; at the end, round again or stop.
     watch(() => {
-        if (!playing() || globalThis.requestAnimationFrame === undefined) return
+        if (!playing.get() || globalThis.requestAnimationFrame === undefined)
+            return
         let frame = 0
         let last: number | undefined
         const tick = (now: number): void => {
@@ -102,7 +104,7 @@ export function playback(options: PlaybackOptions): Playback {
 
     // 51.132 — playing from the end starts over.
     const pressed = reactiveOver(
-        () => playing(),
+        () => playing.get(),
         (on: boolean) => {
             const fromEnd = on && (at.peek() ?? 0) >= duration()
             const refused = playing.set(on)
@@ -113,7 +115,7 @@ export function playback(options: PlaybackOptions): Playback {
     const play = withPart({}, toggle({ pressed }).button, {
         'data-playback': 'play',
         get 'aria-label'() {
-            return playing() ? 'Pause' : 'Play'
+            return playing.get() ? 'Pause' : 'Play'
         },
     })
 
@@ -149,7 +151,7 @@ export function playback(options: PlaybackOptions): Playback {
                 return String(duration())
             },
             get value() {
-                return String(Math.round(at()))
+                return String(Math.round(at.get()))
             },
             oninput: (event: Event) =>
                 move(Number((event.currentTarget as HTMLInputElement).value)),

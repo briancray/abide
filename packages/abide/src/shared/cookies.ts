@@ -40,12 +40,12 @@ export class Cookies implements Iterable<[string, string]> {
 
     /** The named cookie's value, or `null` — a read that tracks that name (22.4). */
     get(name: string): string | null {
-        this.versionOf(name)()
+        this.versionOf(name).get()
         return this.held.get(name) ?? null
     }
 
     has(name: string): boolean {
-        this.versionOf(name)()
+        this.versionOf(name).get()
         return this.held.has(name)
     }
 
@@ -88,12 +88,12 @@ export class Cookies implements Iterable<[string, string]> {
     }
 
     get size(): number {
-        this.every()
+        this.every.get()
         return this.held.size
     }
 
     toJSON(): Record<string, string> {
-        this.every()
+        this.every.get()
         return Object.fromEntries(this.held)
     }
 
@@ -108,24 +108,24 @@ export class Cookies implements Iterable<[string, string]> {
     }
 
     entries(): IterableIterator<[string, string]> {
-        this.every()
+        this.every.get()
         return this.held.entries()
     }
 
     keys(): IterableIterator<string> {
-        this.every()
+        this.every.get()
         return this.held.keys()
     }
 
     values(): IterableIterator<string> {
-        this.every()
+        this.every.get()
         return this.held.values()
     }
 
     forEach(
         callback: (value: string, key: string, map: Cookies) => void,
     ): void {
-        this.every()
+        this.every.get()
         for (const [key, value] of this.held) callback(value, key, this)
     }
 

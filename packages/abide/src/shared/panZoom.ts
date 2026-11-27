@@ -4,6 +4,7 @@
 // view is one `{ x, y, k }`, and the content's one style is the transform it computes (49.5).
 
 import { type Live, live } from './live.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import type { Disposer } from './reactive/watch.ts'
 
@@ -17,7 +18,7 @@ export type PanZoomView = {
 /** The bounds of its magnification, what a key moves it by, and its view. */
 export type PanZoomOptions = {
     /** Where it stands: a `Reactive` to read and set. Held by the parts, and handed back as `view`, where none is given. */
-    view?: Reactive<PanZoomView> | undefined
+    view?: Bindable<PanZoomView> | undefined
     /** The least magnification. `0.25` by default; a function is read live. */
     min?: Live<number> | undefined
     /** The most magnification. `8` by default; a function is read live. */
@@ -51,7 +52,7 @@ const WHEEL = 0.0015
 
 /** A surface panned and zoomed by its wheel, its pointers and its keys, as parts to spread. */
 export function panZoom(options: PanZoomOptions = {}): PanZoom {
-    const view = options.view ?? reactive<PanZoomView>(HOME)
+    const view = bindable(options.view) ?? reactive<PanZoomView>(HOME)
     const now = () => view.peek() ?? HOME
     let surface: Element | undefined
     const size = () => {
@@ -179,7 +180,7 @@ export function panZoom(options: PanZoomOptions = {}): PanZoom {
         content: {
             'data-pan-zoom': 'content',
             get style() {
-                const { x, y, k } = view() ?? HOME
+                const { x, y, k } = view.get() ?? HOME
                 // To a hundredth of a pixel, so a float's last digits do not write the attribute.
                 const at = (pixels: number) => Math.round(pixels * 100) / 100
                 return `transform:translate(${at(x)}px,${at(y)}px) scale(${Math.round(k * 10_000) / 10_000});transform-origin:0 0`

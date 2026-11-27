@@ -142,5 +142,5 @@ export function follow(time: number): Disposer {
 
 /** The time to write a label against: the clock's in a browser, the moment it is read on a server. */
 export function clock(): number {
-    return inBrowser() ? current() || Date.now() : Date.now()
+    return inBrowser() ? current.get() || Date.now() : Date.now()
 }

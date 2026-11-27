@@ -18,7 +18,7 @@ const PAGE = (label: string, param: string): string => `<script>
 import { route } from '@abide/abide'
 </script>
 
-<p>${label} {route.params().${param}}</p>
+<p>${label} {route.params.${param}}</p>
 `
 
 let app = ''
@@ -152,7 +152,7 @@ test('an alternation of literals types its param as their union — 23.9, 30.3',
         'tabs/TAB.param.ts': 'export const TAB = /new|edit/',
         'tabs/[tab=TAB].abide': `<script>
 import { route, url } from '@abide/abide'
-const tab: 'new' | 'edit' = route.params().tab
+const tab: 'new' | 'edit' = route.params.tab
 const other = url('/tabs/[tab=TAB]', { tab: 'view' })
 </script>
 <p>{tab} {other}</p>`,

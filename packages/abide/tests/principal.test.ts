@@ -10,18 +10,18 @@ import { RESOLVED } from '#src/lib/RESOLVED.server.ts'
 
 export const signIn = rpc(async ({ name }: { name: string }) => {
     await principal.set({ name, ticket: 'sealed' })
-    return principal.authenticated()
+    return principal.authenticated.get()
 }, { methods: ['POST'] })
 
 export const whoami = rpc(async () => ({
     authenticated: await principal.authenticated,
     resolved: await principal.resolved,
-    caller: principal.caller(),
+    caller: principal.caller.get(),
 }))
 
 export const signOut = rpc(() => {
     principal.clear()
-    return principal.authenticated()
+    return principal.authenticated.get()
 }, { methods: ['POST'] })
 
 export const resolutions = rpc(() => RESOLVED.count)
@@ -35,7 +35,7 @@ const PAGE = `<script>
 import { principal } from '@abide/abide'
 </script>
 
-<main>{principal.authenticated() ? 'in' : 'out'}</main>`
+<main>{principal.authenticated ? 'in' : 'out'}</main>`
 
 let app = ''
 let base = ''

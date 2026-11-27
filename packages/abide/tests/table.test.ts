@@ -131,10 +131,10 @@ test('a change refreshes every value that called the table — 47.29', async () 
         for (const deal of dealRows()) sum += deal.amount
         return sum
     })()
-    expect(`total: ${total()}`).toBe('total: 100')
+    expect(`total: ${total.get()}`).toBe('total: 100')
     db.run("INSERT INTO deals VALUES ('d2', 'Globex', 50)")
     // The watch looks every 50 ms: waited for, with a deadline, rather than slept a fixed time.
     const deadline = Date.now() + 2_000
-    while (total() !== 150 && Date.now() < deadline) await Bun.sleep(10)
-    expect(`total: ${total()}`).toBe('total: 150')
+    while (total.get() !== 150 && Date.now() < deadline) await Bun.sleep(10)
+    expect(`total: ${total.get()}`).toBe('total: 150')
 })

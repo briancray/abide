@@ -11,6 +11,7 @@ import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
 import { madeId } from './madeId.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 import { withPart } from './withPart.ts'
 
@@ -31,7 +32,7 @@ export type CommandPaletteOptions = {
     /** What the palette can do, in the order it lists them, each told apart by its `label`; a function is read live. */
     commands: Live<readonly Command[]>
     /** Whether the palette is showing: a `Reactive` to open it from a button of the app's own. One of the palette's own by default. */
-    open?: Reactive<boolean> | undefined
+    open?: Bindable<boolean> | undefined
     /** The binding that opens and shuts it, as `hotkeys` reads one. `'mod+k'` by default. */
     hotkey?: Live<string> | undefined
     /** The base the input's, the list's and each option's ids are derived from; unique on the page. */
@@ -82,7 +83,7 @@ export function commandPalette(
     const { commands, id = madeId('palette') } = options
     // 49.11 — read where they are used; the id is the ids' base, fixed for the life of the parts.
     const label = () => live(options.label) ?? 'Commands'
-    const open = options.open ?? reactive(false)
+    const open = bindable(options.open) ?? reactive(false)
     const commandsOf = () => live(commands)
     const inputId = `${id}-input`
     const listId = `${id}-listbox`
@@ -92,11 +93,11 @@ export function commandPalette(
     const query = reactive('')
 
     // 51.66, 51.107 — what the commands are narrowed by and their labels marked with.
-    const needles = reactive(() => needlesOf(query(), true))
+    const needles = reactive(() => needlesOf(query.get(), true))
 
     // 51.66 — a command is listed while every word typed is in its label or one of its keywords.
     const found = reactive(() => {
-        const words = needles()
+        const words = needles.get()
         const kept: Command[] = []
         for (const command of commandsOf())
             if (
@@ -119,7 +120,7 @@ export function commandPalette(
 
     const list = listbox({
         id,
-        options: () => found(),
+        options: () => found.get(),
         key: (command) => command.label,
         onpick: run,
     })
@@ -172,11 +173,11 @@ export function commandPalette(
             },
             // 51.71 — every command is listed again, the input emptied, each time the palette opens.
             get value() {
-                return query()
+                return query.get()
             },
             'bind:element': () =>
                 watch(() => {
-                    if (open()) query.set('')
+                    if (open.get()) query.set('')
                 }),
             oninput: (event: Event) =>
                 query.set((event.currentTarget as HTMLInputElement).value),
@@ -207,12 +208,12 @@ export function commandPalette(
             label: { 'data-command-palette': 'label' },
             key: { 'data-command-palette': 'key' },
             get runs() {
-                return labelRuns(command.label, needles(), MATCH)
+                return labelRuns(command.label, needles.get(), MATCH)
             },
         }),
         empty: { role: 'status', 'data-command-palette': 'empty' },
         get results() {
-            return found()
+            return found.get()
         },
         open,
     }

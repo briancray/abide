@@ -39,7 +39,7 @@ test('a panel per tab is hidden while another is selected, and kept — 51.34, 5
     }
     const hidden = () =>
         [...panels.values()].map((panel) => panel.hasAttribute('hidden'))
-    expect(view.selected()).toBe('details')
+    expect(view.selected.get()).toBe('details')
     expect(hidden()).toEqual([false, true])
     const notes = panels.get('notes') as HTMLElement
     notes.textContent = 'call back Friday'
@@ -63,18 +63,18 @@ test("tabs over records are told apart by each record's id, and a key replaces i
         { id: 'stage', label: 'Stage' },
     ]
     const view = tabs({ items: VIEWS })
-    expect(view.selected()).toBe('details')
+    expect(view.selected.get()).toBe('details')
     ;(
         view.tab(VIEWS[1] as (typeof VIEWS)[number]).button
             .onclick as () => void
     )()
-    expect(view.selected()).toBe('stage')
+    expect(view.selected.get()).toBe('stage')
     expect(
         view.tab(VIEWS[1] as (typeof VIEWS)[number]).button['aria-selected'],
     ).toBe('true')
 
     const byLabel = tabs({ items: VIEWS, key: (each) => each.label })
-    expect(byLabel.selected()).toBe('Details')
+    expect(byLabel.selected.get()).toBe('Details')
 })
 
 // THE REVERT: focus the tab whatever the write to `selected` answered, and the refused ArrowRight
@@ -97,7 +97,7 @@ test('a refused selection leaves focus on the tab it was on — 49.19', () => {
         new KeyboardEvent('keydown', { key: 'ArrowRight', cancelable: true }),
     )
     flushSync()
-    expect([view.selected(), document.activeElement?.id]).toEqual([
+    expect([view.selected.get(), document.activeElement?.id]).toEqual([
         'details',
         'refused-tab-details',
     ])

@@ -4,13 +4,14 @@
 // open with the failure's message, as a prompt's `run` does (50.45).
 
 import { messageOf } from './messageOf.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { isThenable } from './reactive/isThenable.ts'
 
 /** The value, and what saves an edit of it. */
 export type InlineEditOptions = {
     /** The value shown and edited: a `Reactive` to read and write it. Held by the parts, and handed back as `value`, where none is given. */
-    value?: Reactive<string> | undefined
+    value?: Bindable<string> | undefined
     /** Saves the text an edit ends with, before `value` takes it; a promise it hands back is waited on, and its rejection keeps the field open. */
     save?: ((text: string) => unknown) | undefined
 }
@@ -33,7 +34,7 @@ export type InlineEdit = {
 
 /** A value shown as a button that turns into a field, saving on Enter and leaving, undone by Escape. */
 export function inlineEdit(options: InlineEditOptions = {}): InlineEdit {
-    const value = options.value ?? reactive('')
+    const value = bindable(options.value) ?? reactive('')
     const editing = reactive(false)
     const busy = reactive(false)
     const error = reactive<string | undefined>(undefined)
@@ -68,7 +69,7 @@ export function inlineEdit(options: InlineEditOptions = {}): InlineEdit {
             type: 'button',
             'data-inline-edit': 'view',
             get hidden() {
-                return editing()
+                return editing.get()
             },
             onclick: () => {
                 error.set(undefined)
@@ -84,19 +85,19 @@ export function inlineEdit(options: InlineEditOptions = {}): InlineEdit {
         input: {
             'data-inline-edit': 'input',
             get hidden() {
-                return !editing()
+                return !editing.get()
             },
             get disabled() {
-                return busy()
+                return busy.get()
             },
             get 'aria-busy'() {
-                return busy() ? 'true' : undefined
+                return busy.get() ? 'true' : undefined
             },
             get 'aria-invalid'() {
-                return error() === undefined ? undefined : 'true'
+                return error.get() === undefined ? undefined : 'true'
             },
             get value() {
-                return value()
+                return value.get()
             },
             'bind:element': (element: HTMLInputElement) => {
                 // 56.24 — the field starts from the value, selected, each time an edit begins. The
@@ -130,10 +131,10 @@ export function inlineEdit(options: InlineEditOptions = {}): InlineEdit {
         editing,
         value,
         get busy() {
-            return busy()
+            return busy.get()
         },
         get error() {
-            return error()
+            return error.get()
         },
     }
 }

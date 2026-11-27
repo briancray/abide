@@ -2,12 +2,13 @@
 // app spreads onto a button of its own. What a `toggleGroup` that picks many is made of, one per key.
 
 import { type Live, live } from './live.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
 /** Whether the button is pressed, and whether it reads as a toggle button or a switch. */
 export type ToggleOptions = {
     /** Whether it is pressed: hand it a `Reactive` to read and write it. Held by the part, and handed back as `pressed`, where none is given. */
-    pressed?: Reactive<boolean> | undefined
+    pressed?: Bindable<boolean> | undefined
     /** `'switch'` for an on/off switch, read as `role="switch"` with `aria-checked`. `'button'` by default; a function is read live. */
     role?: Live<'button' | 'switch'> | undefined
 }
@@ -22,7 +23,7 @@ export type Toggle = {
 
 /** WAI-ARIA's toggle button, or its switch, as a part to spread on a button. */
 export function toggle(options: ToggleOptions = {}): Toggle {
-    const pressed = options.pressed ?? reactive(false)
+    const pressed = bindable(options.pressed) ?? reactive(false)
     const isSwitch = () => live(options.role) === 'switch'
     return {
         button: {
@@ -32,13 +33,17 @@ export function toggle(options: ToggleOptions = {}): Toggle {
                 return isSwitch() ? 'switch' : undefined
             },
             get 'aria-pressed'() {
-                return isSwitch() ? undefined : pressed() ? 'true' : 'false'
+                return isSwitch() ? undefined : pressed.get() ? 'true' : 'false'
             },
             get 'aria-checked'() {
-                return isSwitch() ? (pressed() ? 'true' : 'false') : undefined
+                return isSwitch()
+                    ? pressed.get()
+                        ? 'true'
+                        : 'false'
+                    : undefined
             },
             get 'data-pressed'() {
-                return pressed() ? '' : undefined
+                return pressed.get() ? '' : undefined
             },
             onclick: () => pressed.set(!pressed.peek()),
         },

@@ -7,6 +7,7 @@
 import { checkParts } from './checkParts.ts'
 import { type Live, live } from './live.ts'
 import { madeId } from './madeId.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { stepOf } from './roving.ts'
 
@@ -19,7 +20,7 @@ export type ResizableOptions = {
     /** The panel's edge the handle stands on: `'end'` grows it as the handle moves right or down, `'start'` as it moves left or up. `'end'` by default. */
     edge?: 'start' | 'end' | undefined
     /** The panel's size in pixels, or `undefined` for its own: a `Reactive` to read and set. Held by the parts, and handed back as `size`, where none is given. */
-    size?: Reactive<number | undefined> | undefined
+    size?: Bindable<number | undefined> | undefined
     /** The fewest pixels the panel keeps. `0` by default; a function is read live. */
     min?: Live<number> | undefined
     /** The most pixels the panel takes. Unbounded by default; a function is read live. */
@@ -48,7 +49,8 @@ export type Resizable = {
 export function resizable(options: ResizableOptions = {}): Resizable {
     const across = options.axis === 'y' ? 'y' : 'x'
     const sign = options.edge === 'start' ? -1 : 1
-    const size = options.size ?? reactive<number | undefined>(undefined)
+    const size =
+        bindable(options.size) ?? reactive<number | undefined>(undefined)
     const id = options.id ?? madeId('resizable')
     const panelId = `${id}-panel`
     if (process.env.NODE_ENV !== 'production') checkParts('resizable', id)
@@ -91,7 +93,7 @@ export function resizable(options: ResizableOptions = {}): Resizable {
             id: panelId,
             'data-resizable': 'panel',
             get style() {
-                const now = size()
+                const now = size.get()
                 return now === undefined
                     ? undefined
                     : `${across === 'x' ? 'inline-size' : 'block-size'}:${now}px`
@@ -108,7 +110,7 @@ export function resizable(options: ResizableOptions = {}): Resizable {
                 return live(options.label)
             },
             get 'aria-valuenow'() {
-                return size()
+                return size.get()
             },
             get 'aria-valuemin'() {
                 return min()
@@ -120,7 +122,7 @@ export function resizable(options: ResizableOptions = {}): Resizable {
                     : most
             },
             get 'data-dragging'() {
-                return dragging() ? '' : undefined
+                return dragging.get() ? '' : undefined
             },
             // 53.81 — captured, so the moves land on the handle wherever the pointer goes.
             onpointerdown: (event: PointerEvent) => {

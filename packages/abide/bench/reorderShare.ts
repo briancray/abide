@@ -55,11 +55,11 @@ const rows = reactive(
 )
 
 function reverse() {
-    rows.set([...rows()].reverse())
+    rows.set([...rows].reverse())
 }
 
 function swap() {
-    const next = [...rows()]
+    const next = [...rows]
     const held = next[1]
     next[1] = next[${ROWS - 2}]
     next[${ROWS - 2}] = held
@@ -77,7 +77,7 @@ function replace() {
 
 function append() {
     rows.set([
-        ...rows(),
+        ...rows,
         ...Array.from({ length: ${ROWS} }, (_, at) => ({
             id: ${ROWS} + at,
             label: 'new ' + at,

@@ -204,7 +204,7 @@ test('a notice lands at the end of the list and leaves it at its timeout — 50.
     const first = toasts.notify('Saved', { timeout: Infinity })
     const id = toasts.notify('Phone saved', { tone: 'success', timeout: 5 })
     expect(id).not.toBe(first)
-    expect(toasts.list().at(-1)).toEqual({
+    expect(toasts.list.get().at(-1)).toEqual({
         id,
         text: 'Phone saved',
         tone: 'success',
@@ -213,7 +213,7 @@ test('a notice lands at the end of the list and leaves it at its timeout — 50.
         expires: Infinity,
     })
     await Bun.sleep(20)
-    expect(toasts.list().map((toast) => toast.text)).toEqual(['Saved'])
+    expect(toasts.list.get().map((toast) => toast.text)).toEqual(['Saved'])
 })
 
 // THE REVERT: give an error the 3 s every other tone has, and its notice is gone at 3.5 s.
@@ -221,10 +221,10 @@ test("an error's notice outlasts every other tone's — 50.14", async () => {
     toasts.notify('Saved')
     toasts.notify('Not saved', { tone: 'error' })
     const started = Date.now()
-    while (toasts.list().length === 2 && Date.now() - started < 4000)
+    while (toasts.list.get().length === 2 && Date.now() - started < 4000)
         await Bun.sleep(100)
     await Bun.sleep(500)
-    expect(toasts.list().map((toast) => toast.text)).toEqual(['Not saved'])
+    expect(toasts.list.get().map((toast) => toast.text)).toEqual(['Not saved'])
 }, 6000)
 
 // THE REVERT: drop the `at === -1` return, and the second dismiss writes a fresh list.
@@ -232,9 +232,9 @@ test('dismiss takes one notice down, and leaves the list alone for one already g
     const first = toasts.notify('one', { timeout: Infinity })
     toasts.notify('two', { timeout: Infinity })
     toasts.dismiss(first)
-    const held = toasts.list()
+    const held = toasts.list.get()
     toasts.dismiss(first)
-    expect(toasts.list()).toBe(held)
+    expect(toasts.list.get()).toBe(held)
     expect(held.map((toast) => toast.text)).toEqual(['two'])
 })
 
@@ -259,11 +259,11 @@ test('a notice tells its onclose once, why it left — 50.42', async () => {
 test('a string is the body of the prompt confirm queues, behind the one before it — 50.5, 50.7', () => {
     void prompts.alert({ title: 'Saved' })
     void prompts.confirm('Delete Engine renewal?')
-    expect(queue().map((prompt) => prompt.title ?? prompt.body)).toEqual([
+    expect(queue.get().map((prompt) => prompt.title ?? prompt.body)).toEqual([
         'Saved',
         'Delete Engine renewal?',
     ])
-    expect(queue()[1]).toMatchObject({
+    expect(queue.get()[1]).toMatchObject({
         title: undefined,
         body: 'Delete Engine renewal?',
         confirm: 'OK',
@@ -276,7 +276,7 @@ test('a string is the body of the prompt confirm queues, behind the one before i
 test('a prompt starts from its value, and an empty one from nothing — 50.34', () => {
     void prompts.prompt({ title: 'Rename deal', value: 'Engine renewal' })
     void prompts.prompt('Name the pipeline')
-    expect(queue().map((prompt) => [prompt.kind, prompt.value])).toEqual([
+    expect(queue.get().map((prompt) => [prompt.kind, prompt.value])).toEqual([
         ['prompt', 'Engine renewal'],
         ['prompt', ''],
     ])
@@ -352,10 +352,10 @@ test('the notices and the prompts are one list per request — 11.32', async () 
             },
         ])
         await Bun.sleep(0)
-        expect(toasts.list()).toHaveLength(1)
+        expect(toasts.list.get()).toHaveLength(1)
     })
     await inScope(new Request('http://app/b'), async () => {
-        expect(toasts.list()).toEqual([])
-        expect(queue()).toEqual([])
+        expect(toasts.list.get()).toEqual([])
+        expect(queue.get()).toEqual([])
     })
 })

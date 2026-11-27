@@ -5,6 +5,7 @@
 // `memo` — a `memo`'s `ttl` refreshes only what something follows (6.1).
 
 import { isFailed } from '#shared/Failed.ts'
+import { live } from '#shared/live.ts'
 import { log } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
 import { appStopSignal } from '#shared/reactive/abortSignal.ts'
@@ -267,7 +268,7 @@ export function job<Input = undefined>(options: JobOptions<Input>): Job<Input> {
     const look = async (): Promise<void> => {
         if (stopping.signal.aborted) return
         // 54.31 — read in the look's body, so its turning false is a look of its own.
-        if (options.paused?.() === true) return
+        if (live(options.paused) === true) return
         if (!remembered) {
             remembered = true
             // 54.14 — WHAT THE STORE KEPT: the last run's end, result and error resume, and a process

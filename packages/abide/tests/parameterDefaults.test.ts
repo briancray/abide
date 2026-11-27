@@ -42,9 +42,9 @@ test('a trigger naming the default reaches the entry a call left to it — 11.29
         runs += 1
         return page
     })
-    pages({})()
+    pages({}).get()
     pages.refresh({ page: 1 })
-    pages({})()
+    pages({}).get()
     expect(`runs: ${runs}`).toBe('runs: 2')
 })
 

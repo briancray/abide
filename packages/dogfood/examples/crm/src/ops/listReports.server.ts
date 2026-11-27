@@ -5,11 +5,11 @@ import { onReport, rpc } from '@abide/abide/server'
 const received = new Map<string, string[]>()
 
 onReport((report) => {
-    const caller = principal.caller()
+    const caller = principal.caller.get()
     received.set(caller, [...(received.get(caller) ?? []), report.summary])
 })
 
 /** Answers at /ops/listReports: the summaries this browser has sent. */
-export default rpc(() => received.get(principal.caller()) ?? [], {
+export default rpc(() => received.get(principal.caller.get()) ?? [], {
     description: 'Lists the problem reports this browser sent.',
 })

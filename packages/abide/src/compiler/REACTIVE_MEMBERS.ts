@@ -20,6 +20,7 @@
  * exposes.
  */
 export const REACTIVE_MEMBERS: ReadonlySet<string> = new Set([
+    'get',
     'busy',
     'error',
     'invalidate',

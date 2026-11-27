@@ -21,9 +21,9 @@ import {
 import { armTimer, armWindow } from './armTimer.ts'
 import { CELL } from './CELL.ts'
 import {
-    type Callable,
     type Cell,
     cellOf,
+    type HoldsCell,
     refuseBothCaps,
 } from './cellShape.ts'
 import type { ArgsTuple } from './createMemo.ts'
@@ -175,7 +175,7 @@ class Lifetime {
         this.due = 0
     }
 
-    follow(key: string, entry: Callable, evict: () => void): void {
+    follow(key: string, entry: HoldsCell, evict: () => void): void {
         // 11.33: `Infinity` is the life of the scope, which no timer here can reach.
         if (this.ms === Number.POSITIVE_INFINITY) return
         const cell = entry[CELL]
@@ -292,7 +292,7 @@ class Lifetime {
                 return false
             }
         }
-        ;(cell.callable as Reactive<unknown>).refresh()
+        ;(cell.reactive as Reactive<unknown>).refresh()
         // A refresh that started no load — a store answering at once — landed already.
         if (!cell.loading) this.touch(follower.key, follower)
         return false
@@ -554,7 +554,7 @@ export function createKeyed<
         )
         entries.set(key, created)
         if (lifetime !== null)
-            lifetime.follow(key, created as unknown as Callable, () => {
+            lifetime.follow(key, created as unknown as HoldsCell, () => {
                 release(key, created)
             })
         if (starts !== null)

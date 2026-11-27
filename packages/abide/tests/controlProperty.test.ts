@@ -38,18 +38,18 @@ let text = reactive('first')
 let on = reactive(true)
 const field = {
     get value() {
-        return text()
+        return text
     },
 }
 const box = {
     type: 'checkbox',
     get checked() {
-        return on()
+        return on
     },
 }
 const choice = {
     get selected() {
-        return on()
+        return on
     },
 }
 ;(globalThis as any).__control = {
@@ -157,7 +157,7 @@ let amount = reactive(0)
 let spreadAmount = reactive(0)
 const field = {
     get value() {
-        return spreadAmount()
+        return spreadAmount
     },
     oninput: (event: Event) => {
         spreadAmount = Number((event.target as HTMLInputElement).value)
@@ -213,10 +213,10 @@ let draft = reactive('set')
 let tick = reactive(0)
 const field = {
     get value() {
-        return draft()
+        return draft
     },
     get title() {
-        return String(tick())
+        return String(tick)
     },
 }
 ;(globalThis as any).__control = {

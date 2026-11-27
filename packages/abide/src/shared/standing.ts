@@ -28,7 +28,7 @@ export function standing(host: string, logger: string) {
         stand(): () => boolean {
             const host = {}
             join(hosts, host)
-            return () => hosts().at(-1) === host
+            return () => hosts.get().at(-1) === host
         },
         /**
          * Warns once where a request is made with no host standing to show it — looked at a microtask

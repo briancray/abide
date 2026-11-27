@@ -84,6 +84,7 @@ import {
 } from './reactive/producer.ts'
 import { isStreamBody } from './reactive/Reactive.ts'
 import { builtHere, isForwarder } from './reactive/scoped.ts'
+import { SERVES_NO_REACTIVE } from './reactive/SERVED_BODIES.ts'
 import { checkArgs, refuse } from './refuse.ts'
 import { RPC_SERVER } from './RPC_SERVER.ts'
 import { rpcRequest } from './rpcRequest.ts'
@@ -918,6 +919,8 @@ export const rpc: Declare<true> = ((
         throw new Error(
             "abide: this value is an `rpc` already, answered at its own address. A <script server> exports bare values; import a server file's `rpc` where it is called instead. RULEBOOK 16.119.",
         )
+    // 16.109 — the server owns no `Reactive`, as a handler or as a value it serves.
+    if (isReactive(value)) throw new TypeError(SERVES_NO_REACTIVE)
     const { methods, address: _address, columns, ...rest } = options ?? {}
     const brand = brandOf(value)
     if (brand === undefined && typeof value === 'function') {

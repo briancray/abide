@@ -24,14 +24,14 @@ export type TooltipHost = {
 export function host(): TooltipHost {
     // 50.36 — this host, among the ones standing; the last shows the hint.
     const shows = hints.stand()
-    const open = reactive(() => (shows() ? shown() : undefined))
+    const open = reactive(() => (shows() ? shown.get() : undefined))
     // 50.86, 50.87 — rendered once per hint shown, however often the parts are read.
     const html = reactive(() => {
-        const tip = open()
+        const tip = open.get()
         return tip === undefined ? undefined : hintHtml(tip.text)
     })
     const text = reactive(() => {
-        const rendered = html()
+        const rendered = html.get()
         return rendered === undefined ? undefined : hintText(rendered)
     })
     const element = reactive<HTMLElement | undefined>(undefined)
@@ -39,8 +39,8 @@ export function host(): TooltipHost {
     const placed = reactive<Side>('top')
 
     watch(() => {
-        const popover = element()
-        const tip = open()
+        const popover = element.get()
+        const tip = open.get()
         if (popover === undefined || tip === undefined) return
         return anchored(
             tip.anchor,
@@ -66,10 +66,10 @@ export function host(): TooltipHost {
             'data-tooltip': 'hint',
             popover: 'manual',
             get 'data-open'() {
-                return open() === undefined ? undefined : ''
+                return open.get() === undefined ? undefined : ''
             },
             get 'data-side'() {
-                return placed()
+                return placed.get()
             },
             'bind:element': (popover: HTMLElement) => {
                 if (process.env.NODE_ENV !== 'production')
@@ -79,10 +79,10 @@ export function host(): TooltipHost {
             },
         },
         get html() {
-            return html()
+            return html.get()
         },
         get text() {
-            return text()
+            return text.get()
         },
     }
 }

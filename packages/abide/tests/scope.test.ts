@@ -49,16 +49,16 @@ test('a value built outside every request is one value per request — 11.32', a
     expect(runs).toBe(1)
 
     await inScope(new Request('http://app/a'), async () => {
-        visits.set(visits() + 5)
+        visits.set(visits.get() + 5)
         await Bun.sleep(0)
-        expect(visits()).toBe(5)
+        expect(visits.get()).toBe(5)
     })
     await inScope(new Request('http://app/b'), async () => {
-        expect(visits()).toBe(0)
+        expect(visits.get()).toBe(0)
     })
     expect(runs).toBe(3)
     // Outside a request it is the value built at import, which neither request wrote.
-    expect(visits()).toBe(0)
+    expect(visits.get()).toBe(0)
 })
 
 // 11.32 — A FRAMEWORK AMBIENT FIRST BUILT INSIDE A REQUEST BUILDS ITS HOME OUTSIDE IT. `principal`'s
@@ -69,16 +69,16 @@ test('a value built outside every request is one value per request — 11.32', a
 // `doubled` reads 10 where 2 is due, and 10 again where 6 is due after the write outside.
 test('an ambient first built inside a request derives its home outside it — 11.32', async () => {
     const base = ambient(1)
-    let doubled: (() => number) | undefined
+    let doubled: Reactive<number> | undefined
     await inScope(new Request('http://app/a'), async () => {
         base.set(5)
-        doubled = ambient(() => base() * 2)
-        expect(doubled()).toBe(10)
+        doubled = ambient(() => base.get() * 2)
+        expect(doubled.get()).toBe(10)
     })
-    expect(doubled!()).toBe(2)
+    expect(doubled!.get()).toBe(2)
     base.set(3)
     await Bun.sleep(0)
-    expect(doubled!()).toBe(6)
+    expect(doubled!.get()).toBe(6)
 })
 
 // 11.70 — A STORE BUILT AT IMPORT ON A SERVER IS NOT READ UNTIL ITS VALUE IS REACHED, so a store
@@ -100,7 +100,7 @@ test('a value with a store built outside every request reads it where it is reac
         'store reads at import: 0',
     )
     await inScope(new Request('http://app/a'), async () => {
-        expect(session()).toBe('/a')
+        expect(session.get()).toBe('/a')
     })
     expect(storeReads).toBe(1)
 })
@@ -117,7 +117,7 @@ test("a watch stops at its request's teardown, which a held body defers — 12.5
     let release = (): void => {}
     await inScope(new Request('http://app/a'), async () => {
         watch(() => {
-            level()
+            level.get()
             runs += 1
             return () => {
                 disposed += 1
@@ -147,7 +147,7 @@ test('a watch a bare render opened stops once its document is written — 12.5',
     let disposed = 0
     const component = (() => {
         watch(() => {
-            level()
+            level.get()
             runs += 1
             return () => {
                 disposed += 1
@@ -169,8 +169,8 @@ test("a value derived in a request lets go of a global at the request's teardown
     const level = processWide(0)
     for (const path of ['a', 'b'])
         await inScope(new Request(`http://app/${path}`), async () => {
-            const plus = reactive(() => level() + 1)
-            expect(plus()).toBe(1)
+            const plus = reactive(() => level.get() + 1)
+            expect(plus.get()).toBe(1)
             releaseScope(currentRequestScope() as RequestScope)
         })
     const readers = cellOf(level).readers
@@ -354,9 +354,9 @@ test('a body reruns under its own request, whichever request drained it — 11.3
     const quantity = reactive(1)
     const totals: Record<string, number> = {}
     const derive = (name: string) => (): void => {
-        const total = reactive(() => quantity() * 10)
+        const total = reactive(() => quantity.get() * 10)
         watch(() => {
-            totals[name] = total()
+            totals[name] = total.get()
         })
     }
     const a = held('a', derive('a'), () => quantity.set(3))
@@ -400,11 +400,11 @@ test('an effect a load aborted reruns under its own request, whichever request d
         inScope(new Request(`http://app/${name}`), async () => {
             tenant.set(name)
             watch(() => {
-                const who = tenant()
-                seen.push(`${name}:${who}:${profile()}`)
+                const who = tenant.get()
+                seen.push(`${name}:${who}:${profile.get()}`)
             })
             watch([profile], () => {
-                narrowed.push(`${name}:${tenant()}:${profile()}`)
+                narrowed.push(`${name}:${tenant.get()}:${profile.get()}`)
             })
             flushSync()
             await finished
@@ -450,7 +450,7 @@ test('a refresh by tag reaches the request it was made in and no other — 13.8'
     )
     const subscribe = (): void => {
         watch(() => {
-            stock()()
+            stock().get()
         })
     }
     const a = held('a', subscribe, () => {
@@ -487,12 +487,12 @@ test('a refresh by tag inside a request reaches a global value and its entries �
         },
         { tags: ['prices'], global: true },
     )
-    prices()
-    inScope(new Request('http://app/a'), () => price({ id: 1 })())
+    prices.get()
+    inScope(new Request('http://app/a'), () => price({ id: 1 }).get())
     loads = 0
     inScope(new Request('http://app/b'), () => refresh({ tags: ['prices'] }))
-    prices()
-    price({ id: 1 })()
+    prices.get()
+    price({ id: 1 }).get()
     expect(loads).toBe(2)
 })
 
@@ -512,7 +512,7 @@ test('a bare refresh reaches the request it was made in and no other — 13.8', 
     }
     const subscribe = (): void => {
         watch(() => {
-            stock()
+            stock.get()
         })
     }
     const a = held('a', reach, () => {

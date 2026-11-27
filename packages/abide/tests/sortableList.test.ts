@@ -137,7 +137,7 @@ test('picking many, the selection moves as one, by the keys or a drag — 51.147
     expect(ranks.list['aria-multiselectable']).toBe('true')
     click('Dune')
     click('Ulysses', { metaKey: true, ctrlKey: true })
-    expect(ranks.selected()).toEqual(['Dune', 'Ulysses'])
+    expect(ranks.selected.get()).toEqual(['Dune', 'Ulysses'])
     expect(ranks.item('Ulysses').item['aria-selected']).toBe('true')
     // Ulysses is active: Alt+ArrowDown moves both, gathered, a place on.
     key('ArrowDown', { altKey: true })
@@ -264,7 +264,7 @@ test('Alt with ArrowLeft and ArrowRight carries the active item into the list be
     const { ranked, pool } = grouped('keys')
     pool.list.focus()
     expect(pool.key('ArrowLeft', { altKey: true })).toBe(true)
-    expect([ranked.ranks.order(), pool.ranks.order()]).toEqual([
+    expect([ranked.ranks.order.get(), pool.ranks.order.get()]).toEqual([
         ['Ulysses', 'Dune', 'Emma'],
         ['Beloved'],
     ])
@@ -281,7 +281,7 @@ test('Alt with ArrowLeft and ArrowRight carries the active item into the list be
     ranked.key('ArrowRight', { altKey: true })
     expect(ranked.ranks.sorted).toEqual(['Ulysses', 'Emma'])
     expect(pool.ranks.sorted).toEqual(['Beloved', 'Dune'])
-    expect([ranked.ranks.selected(), pool.ranks.selected()]).toEqual([
+    expect([ranked.ranks.selected.get(), pool.ranks.selected.get()]).toEqual([
         undefined,
         'Dune',
     ])
@@ -311,7 +311,7 @@ test('a carry whose either order is refused leaves both lists, focus and the ann
         ['Dune', 'Emma'],
         ['Ulysses', 'Beloved'],
     ])
-    expect(kept.ranked.ranks.order()).toEqual([])
+    expect(kept.ranked.ranks.order.get()).toEqual([])
     expect(document.activeElement).toBe(kept.pool.list)
     expect(said.peek()).toBe(before)
 })
@@ -322,10 +322,10 @@ test('the items selected move into another list as one, selected there — 51.18
     const { ranked, pool } = grouped('selected', true)
     ranked.list.focus()
     ranked.key('ArrowDown', { shiftKey: true })
-    expect(ranked.ranks.selected()).toEqual(['Dune', 'Emma'])
+    expect(ranked.ranks.selected.get()).toEqual(['Dune', 'Emma'])
     ranked.key('ArrowRight', { altKey: true })
     expect(pool.ranks.sorted).toEqual(['Dune', 'Emma', 'Ulysses', 'Beloved'])
-    expect([ranked.ranks.selected(), pool.ranks.selected()]).toEqual([
+    expect([ranked.ranks.selected.get(), pool.ranks.selected.get()]).toEqual([
         [],
         ['Dune', 'Emma'],
     ])
@@ -360,10 +360,10 @@ test('a drag held over one place reads no key and writes no order', () => {
     })
     press(ranked.grips.get('Dune') as HTMLElement)
     move(50, 50)
-    const written = ranked.ranks.order()
+    const written = ranked.ranks.order.get()
     read = 0
     for (let frame = 0; frame < 10; frame += 1) move(50, 50 + frame)
     expect(read).toBe(0)
     letGo()
-    expect(ranked.ranks.order()).toBe(written)
+    expect(ranked.ranks.order.get()).toBe(written)
 })

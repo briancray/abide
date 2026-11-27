@@ -94,12 +94,12 @@ export function virtualList<Item>(
         const list = items()
         let from = 0
         let to = Math.min(list.length, initial)
-        if (measured()) {
-            const per = perRow()
+        if (measured.get()) {
+            const per = perRow.get()
             const rows = Math.ceil(list.length / per)
             const over = live(options.overscan) ?? 3
-            const start = Math.min(rows, Math.max(0, firstRow() - over))
-            const end = Math.min(rows, firstRow() + fits() + over)
+            const start = Math.min(rows, Math.max(0, firstRow.get() - over))
+            const end = Math.min(rows, firstRow.get() + fits.get() + over)
             from = start * per
             to = Math.min(list.length, end * per)
         }
@@ -114,9 +114,9 @@ export function virtualList<Item>(
     // 51.62 — the rows before `shown` and after it, as the host's block padding.
     const padding = reactive(() => {
         const list = items()
-        const entries = shown()
-        const per = measured() ? perRow() : 1
-        const size = rowSize()
+        const entries = shown.get()
+        const per = measured.get() ? perRow.get() : 1
+        const size = rowSize.get()
         const rows = Math.ceil(list.length / per)
         const first = entries[0]
         const last = entries.at(-1)
@@ -205,7 +205,7 @@ export function virtualList<Item>(
         host = element
         const style = (element as HTMLElement).style
         const stopPadding = watch(() => {
-            const { before, after } = padding()
+            const { before, after } = padding.get()
             style.paddingBlockStart = `${before}px`
             style.paddingBlockEnd = `${after}px`
         })
@@ -271,9 +271,9 @@ export function virtualList<Item>(
     // 51.64 — the section the first item in view stands in.
     const current = reactive(() => {
         const listed: VirtualListSection[] = []
-        for (const section of sectionList())
+        for (const section of sectionList.get())
             if (section.index !== -1) listed.push(section)
-        const first = measured() ? firstRow() * perRow() : 0
+        const first = measured.get() ? firstRow.get() * perRow.get() : 0
         return listed[lastAtOrBefore(listed, (section) => section.index, first)]
             ?.label
     })
@@ -307,13 +307,13 @@ export function virtualList<Item>(
             },
         }),
         get shown() {
-            return shown()
+            return shown.get()
         },
         sections: sections({
             name: 'virtual-list',
             host: { 'data-virtual-list': 'sections' },
-            all: sectionList,
-            current,
+            all: () => sectionList.get(),
+            current: () => current.get(),
             keyOf: (section) => section.label,
             // 51.96
             jump: (section) => ({

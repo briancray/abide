@@ -145,10 +145,10 @@ test('an option’s part carries its id and whether it is active, and a pointer 
         b['data-active'],
         c['data-active'],
     ]).toEqual(['true', 'false', undefined, ''])
-    expect([list.active, list.selected()]).toEqual(['c', 'b'])
+    expect([list.active, list.selected.get()]).toEqual(['c', 'b'])
     // The arrows step on from where the pointer rests, and the step selects.
     press(list.onkeydown, 'ArrowUp')
-    expect([list.active, list.selected()]).toEqual(['b', 'b'])
+    expect([list.active, list.selected.get()]).toEqual(['b', 'b'])
     ;(a.onpointermove as () => void)()
     // A key written to `selected` takes over from the pointer's.
     list.selected.set('c')
@@ -165,15 +165,15 @@ test('a click selects one, `mod` toggles, and Shift selects the run from the anc
     })
     expect(list.listbox['aria-multiselectable']).toBe('true')
     click(list.option('b'))
-    expect(list.selected()).toEqual(['b'])
+    expect(list.selected.get()).toEqual(['b'])
     click(list.option('c'), MOD)
-    expect(list.selected()).toEqual(['b', 'c'])
+    expect(list.selected.get()).toEqual(['b', 'c'])
     click(list.option('d'), { shiftKey: true })
-    expect(list.selected()).toEqual(['c', 'd'])
+    expect(list.selected.get()).toEqual(['c', 'd'])
     click(list.option('a'), { shiftKey: true })
-    expect(list.selected()).toEqual(['a', 'b', 'c'])
+    expect(list.selected.get()).toEqual(['a', 'b', 'c'])
     click(list.option('c'), MOD)
-    expect(list.selected()).toEqual(['a', 'b'])
+    expect(list.selected.get()).toEqual(['a', 'b'])
     const [a, d] = [list.option('a'), list.option('d')]
     expect([a['aria-selected'], a['data-selected']]).toEqual(['true', ''])
     expect([d['aria-selected'], d['data-selected']]).toEqual([
@@ -192,18 +192,18 @@ test('Space toggles, Shift with an arrow extends, and `mod+a` selects all — 51
         selected,
     })
     expect(press(list.onkeydown, ' ').defaultPrevented).toBe(true)
-    expect(selected()).toEqual(['a'])
+    expect(selected.get()).toEqual(['a'])
     press(list.onkeydown, 'ArrowDown')
-    expect([list.active, selected()]).toEqual(['b', ['a']])
+    expect([list.active, selected.get()]).toEqual(['b', ['a']])
     press(list.onkeydown, 'ArrowDown', { shiftKey: true })
-    expect(selected()).toEqual(['a', 'b', 'c'])
+    expect(selected.get()).toEqual(['a', 'b', 'c'])
     press(list.onkeydown, 'End', { shiftKey: true })
-    expect(selected()).toEqual(['a', 'b', 'c', 'd'])
+    expect(selected.get()).toEqual(['a', 'b', 'c', 'd'])
     press(list.onkeydown, ' ')
-    expect(selected()).toEqual(['a', 'b', 'c'])
+    expect(selected.get()).toEqual(['a', 'b', 'c'])
     selected.set([])
     expect(press(list.onkeydown, 'a', MOD).defaultPrevented).toBe(true)
-    expect(selected()).toEqual(['a', 'b', 'c', 'd'])
+    expect(selected.get()).toEqual(['a', 'b', 'c', 'd'])
 })
 
 // THE REVERT: hold the key moved to apart from `selected`, and the key written there makes nothing
@@ -220,9 +220,9 @@ test('selecting one, the selection is the key last moved to, and a click picks i
     expect(list.active).toBe('c')
     expect(list.listbox['aria-multiselectable']).toBe(undefined)
     press(list.onkeydown, 'ArrowUp')
-    expect(selected()).toBe('b')
+    expect(selected.get()).toBe('b')
     click(list.option('a'))
-    expect([list.active, selected(), picked]).toEqual(['a', 'a', ['a']])
+    expect([list.active, selected.get(), picked]).toEqual(['a', 'a', ['a']])
     // Space and `mod+a` are left alone: a list picking one is often a field's, where they type.
     expect(press(list.onkeydown, ' ').defaultPrevented).toBe(false)
     expect(press(list.onkeydown, 'a', MOD).defaultPrevented).toBe(false)
@@ -251,9 +251,9 @@ test('a refused write leaves the active option, the pointer and onpick as they s
     flushSync()
     expect(one.active).toBe('c')
     press(one.onkeydown, 'ArrowDown')
-    expect([one.selected(), one.active]).toEqual(['a', 'c'])
+    expect([one.selected.get(), one.active]).toEqual(['a', 'c'])
     click(one.option('b'))
-    expect([one.selected(), one.active, picked]).toEqual(['a', 'c', []])
+    expect([one.selected.get(), one.active, picked]).toEqual(['a', 'c', []])
 
     const many = listbox({
         options: ['x', 'y', 'z'],
@@ -267,7 +267,7 @@ test('a refused write leaves the active option, the pointer and onpick as they s
         }),
     })
     press(many.onkeydown, 'ArrowDown', { shiftKey: true })
-    expect([many.selected(), many.active]).toEqual([['x'], 'x'])
+    expect([many.selected.get(), many.active]).toEqual([['x'], 'x'])
     click(many.option('z'), { shiftKey: true })
-    expect([many.selected(), many.active]).toEqual([['x'], 'x'])
+    expect([many.selected.get(), many.active]).toEqual([['x'], 'x'])
 })

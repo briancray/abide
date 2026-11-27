@@ -95,15 +95,17 @@ export function principalMembers(): Members {
     members = {
         document,
         authenticated: ambient(
-            () => document().authenticated,
+            () => document.get().authenticated,
         ) as unknown as Reactive<boolean>,
-        expiresAt: ambient(() => document().expiresAt) as unknown as Reactive<
-            string | undefined
-        >,
-        error: ambient(() => document().error) as unknown as Reactive<
+        expiresAt: ambient(
+            () => document.get().expiresAt,
+        ) as unknown as Reactive<string | undefined>,
+        error: ambient(() => document.get().error) as unknown as Reactive<
             Failed<string, unknown> | undefined
         >,
-        resolved: ambient(() => document()) as unknown as Reactive<Principal>,
+        resolved: ambient(() =>
+            document.get(),
+        ) as unknown as Reactive<Principal>,
         // 26.5 — NEEDS NO RESOLUTION: read off its own cookie, apart from the document.
         caller: ambient(() =>
             PRINCIPAL.caller(),

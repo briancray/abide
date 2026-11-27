@@ -16,9 +16,9 @@ import { expect, test } from 'bun:test'
 
 import { measure } from '@abide/harness/abide'
 
-import { flushSync, reactive, watch } from '#shared'
+import { flushSync, type Reactive, reactive, watch } from '#shared'
 
-function bind(value: () => number, count: number): (() => void)[] {
+function bind(value: Reactive<number>, count: number): (() => void)[] {
     const list = document.createElement('ul')
     const stops: (() => void)[] = []
     for (let index = 0; index < count; index += 1) {
@@ -26,7 +26,7 @@ function bind(value: () => number, count: number): (() => void)[] {
         list.appendChild(node)
         stops.push(
             watch(() => {
-                node.data = String(value())
+                node.data = String(value.get())
             }),
         )
     }
@@ -38,7 +38,7 @@ function bind(value: () => number, count: number): (() => void)[] {
 // with nothing redundant about any of them.
 test('a write that changes nothing touches no node', () => {
     const value = reactive(1)
-    const stops = bind(value as unknown as () => number, 50)
+    const stops = bind(value, 50)
 
     const same = measure(() => {
         value.set(1)
@@ -69,7 +69,7 @@ test('a load starting touches no node', async () => {
     const answer = 1
     const value = reactive(() => Promise.resolve(answer))
     await value
-    const stops = bind(value as unknown as () => number, 50)
+    const stops = bind(value, 50)
 
     const refresh = measure(() => {
         value.refresh()
@@ -93,7 +93,7 @@ test('a load starting touches no node', async () => {
 // reads all three runs once per write instead of once per turn.
 test('a handler that writes many times reaches the page once — 12.10, 12.11', () => {
     const value = reactive(0)
-    const stops = bind(value as unknown as () => number, 1)
+    const stops = bind(value, 1)
     const ten = measure(() => {
         for (let step = 1; step <= 10; step += 1) value.set(step)
         flushSync()
@@ -115,13 +115,14 @@ test('a handler that writes many times reaches the page once — 12.10, 12.11', 
     for (const node of nodes) paragraph.appendChild(node)
     const watches = [
         watch(() => {
-            ;(nodes[0] as Text).data = first()
+            ;(nodes[0] as Text).data = first.get()
         }),
         watch(() => {
-            ;(nodes[1] as Text).data = second()
+            ;(nodes[1] as Text).data = second.get()
         }),
         watch(() => {
-            ;(nodes[2] as Text).data = `${first()} ${second()} ${total()}`
+            ;(nodes[2] as Text).data =
+                `${first.get()} ${second.get()} ${total.get()}`
         }),
     ]
     const together = measure(() => {

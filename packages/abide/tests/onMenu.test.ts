@@ -22,11 +22,11 @@ const PAGE = `<script>
 import { onMenu } from '@abide/abide'
 import Inner from './Inner.abide'
 
-const state = (globalThis as { menuState: { label: () => string; shown: () => boolean } }).menuState
-onMenu(() => [{ label: 'Outer', items: [{ label: state.label() }] }])
+const state = (globalThis as { menuState: { label: { get(): string }; shown: { get(): boolean } } }).menuState
+onMenu(() => [{ label: 'Outer', items: [{ label: state.label.get() }] }])
 </script>
 
-<main>{#if state.shown()}<Inner/>{/if}</main>`
+<main>{#if state.shown.get()}<Inner/>{/if}</main>`
 
 const INNER = `<script>
 import { onMenu } from '@abide/abide'

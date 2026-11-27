@@ -50,7 +50,7 @@ const rows = reactive([{ id: 'a' }, { id: 'b' }, { id: 'c' }])
     <li><input id={'i-' + row.id}/></li>
 {/for}
 </ul>
-<button id="go" onclick={() => rows.set([...rows()].reverse())}>reverse</button>`
+<button id="go" onclick={() => rows.set([...rows].reverse())}>reverse</button>`
 
 const compiled = await buildCompiledPage(PAGE_SOURCE)
 

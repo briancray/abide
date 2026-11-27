@@ -85,7 +85,7 @@ test("a package's component compiles with the app, on the app's abide, and is no
     expect(compiled.routes.map((route) => route.pattern)).toEqual(['/'])
     const badge = compiled.files['node_modules/kit/Badge.abide']
     // 31.3 — `count = count + 1` read by name, which only the checker could have answered.
-    expect(badge?.client).toContain('count.set(count() + 1)')
+    expect(badge?.client).toContain('count.set(count.get() + 1)')
     serveCompilation(root, compiled)
     const { default: Page } = await import(`${root}/index.abide?component`)
     const html = new TextDecoder().decode(await renderDocument(Page, SHELL))

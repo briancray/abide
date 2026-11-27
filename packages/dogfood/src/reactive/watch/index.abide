@@ -44,7 +44,9 @@ import saveNote from './lib/SaveNote.abide' with { type: 'text' }
 
             const stage = reactive('lead')
             const owner = reactive('ada')
-            watch(stage, () => log.info('stage', { stage: stage(), owner: owner() }))
+            watch(stage, () =>
+                log.info('stage', { stage: stage.get(), owner: owner.get() }),
+            )
             owner.set('grace') // no run
             stage.set('won') // runs
         `} />
@@ -56,7 +58,7 @@ import saveNote from './lib/SaveNote.abide' with { type: 'text' }
             import { reactive, watch } from '@abide/abide'
 
             const count = reactive(0)
-            const stop = watch(() => console.log(count()))
+            const stop = watch(() => console.log(count.get()))
             stop()
         `} />
     </Section>

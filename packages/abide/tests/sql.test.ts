@@ -59,7 +59,7 @@ function wonTotal(db: ReturnType<typeof crm>, deals?: Table<Deal>) {
     let seen: unknown
     const stop = watch(() => {
         try {
-            seen = read()
+            seen = read.get()
         } catch {}
     })
     flushSync()

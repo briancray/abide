@@ -1,7 +1,6 @@
 import { SERVER_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import type { CheckerAnswer } from './CheckerAnswer.ts'
-import type { Finding } from './Diagnostics.ts'
 import { FRAMEWORK_SOURCES } from './FRAMEWORK_SOURCES.ts'
 import { hookCalls } from './hookCalls.ts'
 import {
@@ -11,6 +10,7 @@ import {
     CHECKED_WRITE,
     Lowering,
     type Routed,
+    type ValueSource,
 } from './Lowering.ts'
 import type { AbideFile } from './parseAbide.ts'
 import { holdsReactive } from './PositionTable.ts'
@@ -35,19 +35,18 @@ import { abideImports } from './splitImports.ts'
 export type CheckedShadow = {
     text: string
     origins: Origin[]
-    /** What the lowering refused, at projection offsets (`Lowering.refusals`). */
-    refusals: Finding[]
 }
 
 /**
- * What `name` holds when it is read: what calling it hands back, and through a props accessor, what
- * calling that does. 31.1 — a name that may hold no `Reactive` is read `n?.()`, never through here,
- * so what it holds is its `Reactive`'s.
+ * What `name` holds when it is read: what its `get` hands back; through a props accessor handing back
+ * a cell, what that cell's `get` does; and a props accessor answering the value, what calling it does.
+ * 31.1 — a name that may hold no `Reactive` is read `n?.get()`, never through here.
  */
-function valueType(name: string, through: boolean): string {
-    return through
-        ? `ReturnType<ReturnType<typeof ${name}>>`
-        : `ReturnType<NonNullable<typeof ${name}>>`
+function valueType(name: string, source: ValueSource): string {
+    if (source === 'cell')
+        return `ReturnType<ReturnType<typeof ${name}>['get']>`
+    if (source === 'accessor') return `ReturnType<NonNullable<typeof ${name}>>`
+    return `ReturnType<NonNullable<typeof ${name}>['get']>`
 }
 
 /**
@@ -172,14 +171,13 @@ export function checkedShadow(
     // What each name read by name holds when it is read: what calling it hands back, and through a
     // props accessor, what calling what that hands back does.
     let values = ''
-    for (const [name, through] of lowering.values)
-        values += `    ${name}: ${valueType(name, through)}\n`
+    for (const [name, source] of lowering.values)
+        values += `    ${name}: ${valueType(name, source)}\n`
     text += `declare const ${CHECKED_VALUES}: {\n${values}}\n`
-    text += `declare function ${CHECKED_WRITE}<Cell extends { (): unknown; set(value: never): unknown }, Value>(cell: Cell, value: Value): Value extends ReturnType<Cell> ? Value : ReturnType<Cell>\n`
+    text += `declare function ${CHECKED_WRITE}<Cell extends { get(): unknown; set(value: never): unknown }, Value>(cell: Cell, value: Value): Value extends ReturnType<Cell['get']> ? Value : ReturnType<Cell['get']>\n`
     text += configDeclarations(lowering)
     return {
         ...pointAtCheckedModules(text, origins, scriptsEnd),
-        refusals: lowering.refusals,
     }
 }
 
@@ -204,8 +202,8 @@ function declareLocalRecords(
         const local = lowering.localValues.get(start)
         if (local === undefined) continue
         let record = `const ${CHECKED_VALUES}${start}: {\n`
-        for (const [name, through] of local)
-            record += `    ${name}: ${valueType(name, through)}\n`
+        for (const [name, source] of local)
+            record += `    ${name}: ${valueType(name, source)}\n`
         record += '} = null!\n'
         out += text.slice(from, at) + record
         from = at
@@ -225,7 +223,7 @@ function declareLocalRecords(
 }
 
 /**
- * 27.13 — WHAT EACH `onConfig` DEFAULTS IS DECLARED INTO `Config`, so `config().RETRIES` is the
+ * 27.13 — WHAT EACH `onConfig` DEFAULTS IS DECLARED INTO `Config`, so `config.get().RETRIES` is the
  * `number` its defaults return rather than the index's `unknown`. Each call is bound by the lowering
  * (`CHECKED_CONFIG`) and typed by `CHECKED_CONFIG_OF` as what its defaults return; an interface can
  * only extend a name, so each is aliased, and a union is narrowed to the keys every member has.

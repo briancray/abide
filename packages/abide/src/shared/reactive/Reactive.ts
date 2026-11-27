@@ -33,11 +33,11 @@ import { CALL_ENTRY } from './CALL_ENTRY.ts'
 import { CELL } from './CELL.ts'
 import {
     type Adoption,
-    type Callable,
     type Cap,
     Cell,
     cellOf,
     EMPTY_RING,
+    type HoldsCell,
     newStream,
     OWES_ABOVE,
     OWES_NOTHING,
@@ -218,7 +218,7 @@ type ElementOf<Stored> =
     NonNullable<Stored> extends readonly (infer Element)[] ? Element : unknown
 
 /**
- * The reactive value: a callable read, plus its probes, writes, triggers and cursors.
+ * The reactive value: its read, plus its probes, writes, triggers and cursors.
  *
  * `Produced` is the fourth parameter and RULEBOOK 1.2 is what it means: the unit the
  * producer yielded, which is `Stored` for every producer but a stream, and one chunk for a
@@ -235,9 +235,10 @@ export type Reactive<
      * Reads the value; throws where nothing has landed.
      *
      * RULEBOOK 2.2: throws where nothing has landed. Move 7 is what makes this `Stored`
-     * rather than `Stored | undefined` — the absence moved to `peek`.
+     * rather than `Stored | undefined` — the absence moved to `peek`. Spelled as a `{ get, set }`
+     * pair's read, so a `Reactive` is one wherever a pair is taken (32.6, 49.8).
      */
-    (): Stored
+    get(): Stored
     peek(): Stored | undefined
     busy(): boolean
     ready(): boolean
@@ -282,6 +283,16 @@ export type Reactive<
             | Reactive<Accepted, unknown, Failures, unknown>,
         // Same reason as `watch` below — a `set` that returns nothing infers `void`, and 4.18's refusal is the other arm.
     ): void | Failures
+    /**
+     * THE SAME WRITE, ITS VALUE ALONE — never the overload a call resolves to, since the one above
+     * takes everything this does. It is here for `Bindable` (49.8): a type checker reads the LAST
+     * overload when it infers from a `Reactive` handed where a `{ get, set }` pair is due, and
+     * compares one overload at a time when it asks whether it is one, so `Reactive<string>` is a
+     * `Bindable<string | undefined>` and infers its key. And a member with two signatures gives an
+     * object literal's `set` no contextual signature of its own, so a pair written in place of a
+     * `Reactive` has its `set` typed by the pair alone.
+     */
+    set(value: Accepted): void | Failures
     patch(mutate: (value: Stored) => void): void
     refresh(): void
     invalidate(): void
@@ -353,16 +364,16 @@ function seatOf(cell: Cell): object {
 }
 
 /**
- * Re-seats the callable on the prototype its state calls for, where that moved.
+ * Re-seats the value on the prototype its state calls for, where that moved.
  *
  * THE ONE WRITER OF A VALUE'S PROTOTYPE after construction, so the seat is derived rather than
  * remembered by each transition that moves it. A seat this file did not make — `pairReactive`'s —
  * is its owner's, and left alone.
  */
 function seat(cell: Cell): void {
-    const callable = cell.callable
-    if (callable === null) return
-    const now = Object.getPrototypeOf(callable)
+    const value = cell.reactive
+    if (value === null) return
+    const now = Object.getPrototypeOf(value)
     if (
         now !== MEMBER_PROTOTYPE &&
         now !== SIMPLE_PROTOTYPE &&
@@ -371,7 +382,7 @@ function seat(cell: Cell): void {
     )
         return
     const next = seatOf(cell)
-    if (next !== now) Object.setPrototypeOf(callable as object, next)
+    if (next !== now) Object.setPrototypeOf(value as object, next)
 }
 
 /**
@@ -854,7 +865,7 @@ export function rowItem(value: unknown): () => unknown {
             else track(cell, reader)
         }
         return cell.value
-    } as unknown as (() => unknown) & Callable
+    } as unknown as (() => unknown) & HoldsCell
     self[CELL] = cell
     return self
 }
@@ -1997,7 +2008,7 @@ function run(cell: Cell): void {
         return
     }
     // 9.6 — ON ANY RUN: `() => flag() ? rows() : 0` hands its generator back once the flag turns,
-    // and `() => log.read()` its `ReadableStream`. A `Reactive` is callable, so never one (1.6).
+    // and `() => log.read()` its `ReadableStream`. A `Reactive` iterates too, so never one (1.6).
     if (!primitive && isAsyncIterable(produced)) {
         promoteToStream(cell, produced)
         return
@@ -2544,7 +2555,7 @@ function toldAt(cell: Cell, index: number): unknown {
     if (stream === null) return CAUGHT_UP
     if (cell.schema === null && cell.transform === null)
         return index < stream.visible ? stream.chunks[index] : CAUGHT_UP
-    const held = MEMBERS.peek.call(cell.callable as unknown as Callable)
+    const held = MEMBERS.peek.call(cell.reactive as unknown as HoldsCell)
     return Array.isArray(held) && index < held.length ? held[index] : CAUGHT_UP
 }
 
@@ -2628,7 +2639,7 @@ function readIndirect(cell: Cell): unknown {
         // and a refusal that explains the absence.
         const failure = failureOf(cell)
         if (failure !== undefined) throw failure
-        throw new NotLanded(cell.callable as object, cell.label)
+        throw new NotLanded(cell.reactive as object, cell.label)
     }
     return cell.value
 }
@@ -3097,7 +3108,7 @@ function watchCell(
 function patchCell(cell: Cell, mutate: (value: unknown) => void): void {
     // 2.2: there is nothing to mutate where nothing has landed, and handing the callback
     // `undefined` failed inside the app's own code instead.
-    if (!cell.landed) throw new NotLanded(cell.callable as object, cell.label)
+    if (!cell.landed) throw new NotLanded(cell.reactive as object, cell.label)
     const stream = cell.stream
     if (stream === null) {
         const cap = cell.cap
@@ -3333,7 +3344,7 @@ function setThroughGates(cell: Cell, written: unknown): unknown {
     // 11.60: A `Reactive` WRITTEN IS ADOPTED, never stored — the same sentence 11.12 makes about
     // one a body hands back, and the brand is read before `then` for the same reason (1.6). It is
     // off the common write path rather than in front of it: a settled primitive never reaches this
-    // frame at all, and what does is a thenable or a callable.
+    // frame at all, and what does is a thenable or an object.
     if (isReactive(value)) {
         // 11.65 — a write that would close a cycle throws, as misuse rather than a refusal of data.
         const cycle = adopt(cell, cellOf(value))
@@ -3550,7 +3561,7 @@ function watchStore(cell: Cell, persisted: Persisted, cached: boolean): void {
     persisted.unwatch = watch(() => {
         rereadStore(cell, persisted)
     })
-    if (!cached && owning()) owned(() => unwatchStore(cell.callable))
+    if (!cached && owning()) owned(() => unwatchStore(cell.reactive))
 }
 
 /** Stops the store's `watch` on `value`, once (8.21). */
@@ -3808,7 +3819,31 @@ function readByAny(readers: Subscriber[]): boolean {
 }
 
 const MEMBERS = {
-    peek(this: Callable): unknown {
+    /**
+     * Reads the value (2.1, 2.2).
+     *
+     * TRACKING, WITH ITS COMMON ARM SPELLED OUT. A body reads the same values in the same order on
+     * almost every run, so the shape that matters is "the source at the cursor is the one we already
+     * had" — a pointer compare and an increment, with no call and no set operation. `track` is the
+     * divergence.
+     *
+     * ONE LOAD AND ONE BRANCH FOR THE WHOLE COMMON PATH. `direct` is the pull and the refusal
+     * answered at once — see its declaration. It stood as three tests and stripping them to one
+     * measured 2.39 ns -> 1.86 ns on a read and 4.03 ns -> 3.07 ns over a thousand values, which is
+     * memory traffic rather than branches.
+     */
+    get(this: HoldsCell): unknown {
+        const cell = this[CELL]
+        const reader = TRACKING.reader
+        if (reader !== null) {
+            const at = reader.cursor
+            if (reader.sources[at] === cell) reader.cursor = at + 1
+            else track(cell, reader)
+        }
+        if (cell.direct) return cell.value
+        return readIndirect(cell)
+    },
+    peek(this: HoldsCell): unknown {
         const cell = this[CELL]
         // PULLS, like a read. Under push-pull a write leaves every derived value it
         // reached unrun, so a `peek` that only read the field would answer with the
@@ -3817,18 +3852,18 @@ const MEMBERS = {
         if (!cell.servable) return undefined
         return heldValue(cell)
     },
-    busy(this: Callable): boolean {
+    busy(this: HoldsCell): boolean {
         return isBusy(this[CELL])
     },
-    ready(this: Callable): boolean {
+    ready(this: HoldsCell): boolean {
         return isReady(this[CELL])
     },
-    synced(this: Callable): boolean {
+    synced(this: HoldsCell): boolean {
         const cell = this[CELL]
         probe(cell)
         return syncedNow(cell)
     },
-    error(this: Callable): unknown {
+    error(this: HoldsCell): unknown {
         const cell = this[CELL]
         // 3.3 ON THE THIRD PROBE. `error` is a probe by the rulebook's own term, so a body
         // reading it subscribes the same way `busy` and `ready` do — without this edge
@@ -3837,7 +3872,7 @@ const MEMBERS = {
         probe(cell)
         return failureOf(cell)
     },
-    issues(this: Callable): unknown {
+    issues(this: HoldsCell): unknown {
         const cell = this[CELL]
         // 3.3 as `error` has it: the issues move exactly when the standing refusal does.
         probe(cell)
@@ -3853,7 +3888,7 @@ const MEMBERS = {
      * same one. Its first parameter is the error, as the member's is.
      */
     isError: isFailedNamed,
-    set(this: Callable, value: unknown): unknown {
+    set(this: HoldsCell, value: unknown): unknown {
         const cell = this[CELL]
         if (cell.body !== null) return setOverProducer(cell, value)
         cell.generation += 1
@@ -3873,30 +3908,30 @@ const MEMBERS = {
         }
         return setThroughGates(cell, value)
     },
-    patch(this: Callable, mutate: (value: unknown) => void): void {
+    patch(this: HoldsCell, mutate: (value: unknown) => void): void {
         const cell = this[CELL]
         patchCell(cell, mutate)
         writtenHere(cell)
     },
-    refresh(this: Callable): void {
+    refresh(this: HoldsCell): void {
         eachAdopted(this[CELL], refreshOne)
     },
-    invalidate(this: Callable): void {
+    invalidate(this: HoldsCell): void {
         eachAdopted(this[CELL], invalidateOne)
     },
     watch(
-        this: Callable,
+        this: HoldsCell,
         // `void`, not `undefined`: see `Effect` in `watch.ts`.
         effect: (value: unknown) => void | (() => void),
     ): () => void {
         return watchCell(this[CELL], effect)
     },
-    [Symbol.asyncIterator](this: Callable): AsyncIterator<unknown> {
+    [Symbol.asyncIterator](this: HoldsCell): AsyncIterator<unknown> {
         return producedRun(this[CELL])
     },
     // RULEBOOK 1.4 — a `Reactive` MUST be thenable. Banning it buys a discrimination rather than a semantics, and 16.4's in-process `Rpc` arm is what that discrimination would have cost. 1.6 is the guard that makes thenability safe — the brand is read before `then`.
     then(
-        this: Callable,
+        this: HoldsCell,
         onSettled?: (value: unknown) => unknown,
         onFailed?: (error: unknown) => unknown,
     ): unknown {
@@ -3911,10 +3946,10 @@ const MEMBERS = {
         return followUp(followed)
     },
     // 1.5 — BOTH ARE `then`, so each hands back the value 2.16 describes.
-    catch(this: Callable, onFailed: (error: unknown) => unknown): unknown {
+    catch(this: HoldsCell, onFailed: (error: unknown) => unknown): unknown {
         return MEMBERS.then.call(this, undefined, onFailed)
     },
-    finally(this: Callable, onSettled: () => void): unknown {
+    finally(this: HoldsCell, onSettled: () => void): unknown {
         return MEMBERS.then.call(
             this,
             (value: unknown) => {
@@ -3937,15 +3972,15 @@ const FOLLOWED_VALUE: unique symbol = Symbol('abide.followedValue')
 /** What `s.then` hands back: the step's promise, and the value built over it once reached. */
 type FollowUp = {
     [FOLLOWED]: Promise<unknown> | null
-    [FOLLOWED_VALUE]: Callable | null
+    [FOLLOWED_VALUE]: HoldsCell | null
 }
 
 /**
  * The `Reactive` `s.then` hands back over `followed`, the promise its handler's step settles.
  *
  * 2.16 — A VALUE, BUILT WHERE IT IS FIRST REACHED. `await s` calls `then` and drops what it hands
- * back, so building the value there put a cell, its callable and a reaction on every await;
- * unreached, this is one function over the promise. And reaching is the line 2.20 draws: a step
+ * back, so building the value there put a cell, its value and a reaction on every await;
+ * unreached, this is one object over the promise. And reaching is the line 2.20 draws: a step
  * nobody reached is still a promise nobody handled, so its failure is reported, and one that was
  * reached takes the promise in and the failure stands on `error` instead.
  *
@@ -3953,17 +3988,14 @@ type FollowUp = {
  * cannot be read synchronously, and reading it at once would be a reaction on every await again.
  */
 function followUp(followed: Promise<unknown>): unknown {
-    const read = function readFollowUp(): unknown {
-        return (followedValue(read) as unknown as () => unknown)()
-    } as unknown as FollowUp
-    Object.setPrototypeOf(read, FOLLOW_UP_PROTOTYPE)
+    const read = Object.create(FOLLOW_UP_PROTOTYPE) as FollowUp
     read[FOLLOWED] = followed
     read[FOLLOWED_VALUE] = null
     return read
 }
 
 /** The value `followUp` stands for, built over its promise the first time anything reaches it. */
-function followedValue(followUp: FollowUp): Callable {
+function followedValue(followUp: FollowUp): HoldsCell {
     let value = followUp[FOLLOWED_VALUE]
     if (value === null) {
         // UNTRACKED: the reach may be a read inside a body, and building the value is not one.
@@ -3978,14 +4010,14 @@ function followedValue(followUp: FollowUp): Callable {
     return value
 }
 
-function buildFollowed(followed: Promise<unknown>): Callable {
+function buildFollowed(followed: Promise<unknown>): HoldsCell {
     return createReactive(
         'then',
         null,
         undefined,
         followed,
         undefined,
-    ) as unknown as Callable
+    ) as unknown as HoldsCell
 }
 
 /**
@@ -4059,15 +4091,11 @@ const MEMBER_KEYS: readonly PropertyKey[] = Reflect.ownKeys(MEMBERS)
  * same objects either way; what changes is whether each instance carries its own slot
  * for them.
  *
- * Under `Function.prototype` so the value stays CALLABLE and `instanceof Function`
- * holds: callability is an internal slot, not something the prototype chain grants, but
- * `.call`, `.bind` and the rest are reached through it.
- *
  * THE BRAND MOVES HERE TOO, and 1.6's guard is unaffected: `isReactive` reads the
  * symbol, and an inherited read answers the same. The `defineProperty` it used to take
  * was another 24 ns per value for a non-enumerability nothing reads.
  *
- * IT IS NOT ONLY CONSTRUCTION. A function carrying 43 own properties is a big enough
+ * IT IS NOT ONLY CONSTRUCTION. An object carrying 43 own properties is a big enough
  * object that V8 stops tracking it with a map, and every access to every field pays for
  * that — so moving the members off the instance made the V8 numbers 1.7x on a read,
  * 2.3x on `ready` and 3.7x on a write with one watcher (44.3 ns -> 12.1 ns), none of which
@@ -4088,7 +4116,7 @@ export function brandedPrototype(
     overrides?: Record<PropertyKey, unknown>,
 ): Record<PropertyKey, unknown> {
     const prototype = Object.assign(
-        Object.create(Function.prototype) as Record<PropertyKey, unknown>,
+        Object.create(Object.prototype) as Record<PropertyKey, unknown>,
         MEMBERS,
         overrides,
     )
@@ -4105,7 +4133,7 @@ const MEMBER_PROTOTYPE = brandedPrototype()
  * named sources). A follow-up's and a server's forwarder (`scoped.ts`) are both one.
  */
 export function forwardingPrototype<Self>(
-    resolve: (self: Self) => Callable,
+    resolve: (self: Self) => HoldsCell,
 ): Record<PropertyKey, unknown> {
     const members: Record<PropertyKey, unknown> = {}
     for (const key of MEMBER_KEYS)
@@ -4142,7 +4170,7 @@ const FOLLOW_UP_PROTOTYPE = forwardingPrototype<FollowUp>(followedValue)
  * `ADOPTING_PROTOTYPE` instead, like any adoption.
  */
 const STREAM_PROTOTYPE = brandedPrototype({
-    set(this: Callable, written: unknown): unknown {
+    set(this: HoldsCell, written: unknown): unknown {
         const value = valueOfCall(written)
         const cell = this[CELL]
         // 11.60: a `Reactive` written is adopted, and on a stream that is a write following it.
@@ -4174,17 +4202,17 @@ const STREAM_PROTOTYPE = brandedPrototype({
  * would hand that source to the one it is leaving.
  */
 const ADOPTING_PROTOTYPE = brandedPrototype({
-    set(this: Callable, written: unknown): unknown {
+    set(this: HoldsCell, written: unknown): unknown {
         const value = valueOfCall(written)
         const adoption = this[CELL].adoption
         if (adoption === null || isReactive(value))
             return MEMBERS.set.call(this, value)
-        return (adoption.source.callable as Reactive<unknown>).set(value)
+        return (adoption.source.reactive as Reactive<unknown>).set(value)
     },
-    patch(this: Callable, mutate: (value: unknown) => void): void {
+    patch(this: HoldsCell, mutate: (value: unknown) => void): void {
         const adoption = this[CELL].adoption
         if (adoption === null) MEMBERS.patch.call(this, mutate)
-        else (adoption.source.callable as Reactive<unknown>).patch(mutate)
+        else (adoption.source.reactive as Reactive<unknown>).patch(mutate)
     },
 })
 
@@ -4208,7 +4236,7 @@ const ADOPTING_PROTOTYPE = brandedPrototype({
  * through to `MEMBERS.set`, which is unchanged.
  */
 const SIMPLE_PROTOTYPE = brandedPrototype({
-    set(this: Callable, value: unknown): unknown {
+    set(this: HoldsCell, value: unknown): unknown {
         const cell = this[CELL]
         if (
             cell.servable &&
@@ -4326,39 +4354,12 @@ export function createReactive<
         options as CellOptions<unknown, unknown, never> | undefined,
         streaming,
     )
-    // THE READ IS THE CALLABLE'S OWN BODY, not a call it makes. It stood as
-    // `return read(self)` and that was a second frame on the hottest path in the design —
-    // a template pays it per slot per row, and a recompute pays it once per source it
-    // reads plus once for itself.
-    //
-    // IT CAPTURES `cell` AND NOTHING ELSE. Every other local here is dead by the time it
-    // returns, so the scope it keeps alive is the one slot the read needs.
-    const self = function readValue(): unknown {
-        // TRACKING, WITH ITS COMMON ARM SPELLED OUT. A body reads the same values in the
-        // same order on almost every run, so the shape that matters is "the source at the
-        // cursor is the one we already had" — a pointer compare and an increment, with no
-        // call and no set operation. `track` is the divergence.
-        const reader = TRACKING.reader
-        if (reader !== null) {
-            const at = reader.cursor
-            if (reader.sources[at] === cell) reader.cursor = at + 1
-            else track(cell, reader)
-        }
-        // ONE LOAD AND ONE BRANCH FOR THE WHOLE COMMON PATH. `direct` is the pull and
-        // the refusal answered at once — see its declaration. It stood as
-        // three tests and stripping them to one measured 2.39 ns -> 1.86 ns on a read and
-        // 4.03 ns -> 3.07 ns over a thousand values, which is memory traffic rather than
-        // branches: a read walked four fields where the hand-written arm reads one
-        // captured variable.
-        if (cell.direct) return cell.value
-        return readIndirect(cell)
-    } as unknown as Callable
-    // BEFORE THE FIELD, not after: an engine keys its inline caches on the shape a
-    // property was added to, and re-pointing the prototype afterwards invalidates the
-    // transition the store just built.
-    Object.setPrototypeOf(self, seatOf(cell))
+    // A PLAIN OBJECT ON ITS SEAT, its one own field the cell; the read is the seat's `get`.
+    // `Object.create` puts the prototype on BEFORE the field, as an engine keys its inline caches
+    // on the shape a property was added to.
+    const self = Object.create(seatOf(cell)) as HoldsCell
     self[CELL] = cell
-    cell.callable = self as unknown as Reactive<unknown>
+    cell.reactive = self as unknown as Reactive<unknown>
     if (cell.tags !== null) tagCell(cell)
     if (cell.store !== null) fileProducer(cell)
     // 12.14 — A DERIVED VALUE IS ITS OWNER'S, as a watch is: built in a setup or a request, it

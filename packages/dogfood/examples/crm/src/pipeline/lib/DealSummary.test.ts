@@ -35,7 +35,7 @@ test('a chunk renders only the section still growing', async () => {
     let last = measure(() => {})
     for (const chunk of chunks.slice(1))
         last = measure(() => {
-            source.set(source() + chunk)
+            source.set(source.get() + chunk)
             flushSync()
         })
     // The heading closed with the first chunk, and is the node it was then.

@@ -645,7 +645,7 @@ test('a body is typed from the body, whatever schema gates it — 19.23, 19.24',
     const label = reactive(() => 'seats', {
         schema: jsonSchema({ type: 'string' }),
     })
-    const read: string = label()
+    const read: string = label.get()
     expect(read).toBe('seats')
 
     const standard: StandardSchemaV1<{ id: number }> = {
@@ -670,7 +670,7 @@ test('a body is typed from the body, whatever schema gates it — 19.23, 19.24',
 test('a bare jsonSchema leaves a value typed by its initial — 19.23', () => {
     const count = reactive(0, { schema: jsonSchema({ type: 'number' }) })
     count.set(5)
-    const read: number = count()
+    const read: number = count.get()
     expect(read).toBe(5)
     // @ts-expect-error — a number slot, so a string is no value of it.
     count.set('five')
@@ -680,7 +680,7 @@ test('a bare jsonSchema leaves a value typed by its initial — 19.23', () => {
         { schema: jsonSchema({ type: 'object' }) },
     )
     totals.set({ seats: 2 })
-    expect(totals().seats).toBe(2)
+    expect(totals.get().seats).toBe(2)
 })
 
 // 19.25 — A MEMBER LEFT `undefined` IS AN ABSENT ONE to `required`, `properties` and

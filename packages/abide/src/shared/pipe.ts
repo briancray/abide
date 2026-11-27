@@ -11,6 +11,7 @@
 
 import { type Failed, isFailed, refusedTransiently, retryAt } from './Failed.ts'
 import { isAsyncIterable } from './isAsyncIterable.ts'
+import { live } from './live.ts'
 import { messageOf } from './messageOf.ts'
 import { appStopSignal } from './reactive/abortSignal.ts'
 import {
@@ -199,7 +200,7 @@ class Runner {
         this.timeout = options.timeout
         const paused = options.paused
         this.pausedBy =
-            paused === undefined ? undefined : () => paused() === true
+            paused === undefined ? undefined : () => live(paused) === true
         this.lanes = new Map()
         this.heldUntil = []
         for (let index = 0; index < steps.length; index += 1)

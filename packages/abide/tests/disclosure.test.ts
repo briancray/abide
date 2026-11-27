@@ -43,7 +43,7 @@ test('a disclosure opens its region on a click, and names it — 51.116, 51.117,
     ]).toEqual(['terms-region', 'false', 'terms-region', 'until-found'])
     click(more.button)
     expect([
-        more.open(),
+        more.open.get(),
         more.button['aria-expanded'],
         more.region.hidden,
         more.region['data-open'],
@@ -56,7 +56,7 @@ test('find in page reaching a shut region opens it — 51.118', () => {
     const more = disclosure()
     ;(more.region.onbeforematch as () => void)()
     flushSync()
-    expect(more.open()).toBe(true)
+    expect(more.open.get()).toBe(true)
 })
 
 // THE REVERT: close a key only where many may be open, and closing the one key open writes an
@@ -65,12 +65,12 @@ test('find in page reaching a shut region opens it — 51.118', () => {
 test('an accordion opens one key at a time, and closing it leaves none — 51.120, 51.121', () => {
     const faq = accordion()
     click(faq.item('pricing').button)
-    expect(faq.open()).toBe('pricing')
+    expect(faq.open.get()).toBe('pricing')
     click(faq.item('billing').button)
-    expect(faq.open()).toBe('billing')
+    expect(faq.open.get()).toBe('billing')
     expect(faq.item('pricing').region.hidden).toBe('until-found')
     click(faq.item('billing').button)
-    expect(faq.open()).toBeUndefined()
+    expect(faq.open.get()).toBeUndefined()
     // A key's parts are built once: a render asking again gets the same ones.
     expect(faq.item('pricing')).toBe(faq.item('pricing'))
     // 49.3 — a key's parts are named for the accordion, beside the disclosure's they are.
@@ -86,9 +86,9 @@ test('an accordion opens one key at a time, and closing it leaves none — 51.12
     })
     click(many.item('a').button)
     click(many.item('b').button)
-    expect(many.open()).toEqual(['a', 'b'])
+    expect(many.open.get()).toEqual(['a', 'b'])
     click(many.item('a').button)
-    expect(many.open()).toEqual(['b'])
+    expect(many.open.get()).toEqual(['b'])
 })
 
 // THE REVERT: drop the measure from the text's binding, and `overflowing` stays false over text that
@@ -106,7 +106,7 @@ test('a clamp cuts its text to its lines, says when there is more, and its butto
     flushSync()
     expect(summary.overflowing).toBe(true)
     click(summary.button)
-    expect([summary.open(), summary.text.style]).toEqual([true, undefined])
+    expect([summary.open.get(), summary.text.style]).toEqual([true, undefined])
     // Open, it keeps the answer it had, so the button cutting it back stays.
     deliver?.([{ target: text }])
     expect(summary.overflowing).toBe(true)

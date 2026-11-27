@@ -36,7 +36,7 @@ export function instantAt(
         new Date(reading).toISOString().slice(0, wallClock.length) !== wallClock
     )
         return undefined
-    const zone = options.timeZone ?? timeZone() ?? visitorZone()
+    const zone = options.timeZone ?? timeZone.get() ?? visitorZone.get()
     // 52.103 — the reading by the offset a day before and a day after it: the same instant where no
     // change of offset falls between, two where the clocks read it twice, and none where they skip
     // it — and then the earlier offset's, which lands the length of the skip later.

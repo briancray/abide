@@ -32,9 +32,9 @@ const c = reactive(() => ticks({ n: 'c' }))
 </script>
 
 <main>
-    <p id="a">{a.ready() ? a().length : 0}</p>
-    <p id="b">{b.ready() ? b().length : 0}</p>
-    <p id="c">{c.ready() ? c().length : 0}</p>
+    <p id="a">{a.ready() ? a.length : 0}</p>
+    <p id="b">{b.ready() ? b.length : 0}</p>
+    <p id="c">{c.ready() ? c.length : 0}</p>
 </main>`
 
 let server: Subprocess | undefined

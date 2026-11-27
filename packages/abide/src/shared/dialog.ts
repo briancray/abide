@@ -7,12 +7,13 @@
 // usable around the dialog.
 
 import { type Live, live } from './live.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 
 /** Whether the dialog shows, and how it opens and closes. */
 export type DialogOptions = {
     /** Whether the dialog is showing: hand it a `Reactive` to read and write it, and every way it closes writes `false` back. One of the dialog's own by default. */
-    open?: Reactive<boolean> | undefined
+    open?: Bindable<boolean> | undefined
     /** Whether it opens modal, over an inert page, or beside the page with `show`. `true` by default. */
     modal?: Live<boolean> | undefined
     /** Whether Escape and a click on the backdrop, or on the element `backdrop` is spread on, close it. `true` by default. */
@@ -33,7 +34,7 @@ export type DialogParts = {
 
 /** A native `<dialog>` opened and closed by `open`, as a part to spread. */
 export function dialog(options: DialogOptions = {}): DialogParts {
-    const open = options.open ?? reactive(false)
+    const open = bindable(options.open) ?? reactive(false)
     const modal = () => live(options.modal) ?? true
     const dismissible = () => live(options.dismissible) ?? true
     const show = (element: HTMLDialogElement): void => {
@@ -54,11 +55,11 @@ export function dialog(options: DialogOptions = {}): DialogParts {
         dialog: {
             'data-dialog': 'dialog',
             get 'data-open'() {
-                return open() ? '' : undefined
+                return open.get() ? '' : undefined
             },
             'bind:element': (element: HTMLDialogElement) =>
                 watch(() => {
-                    const showing = open()
+                    const showing = open.get()
                     if (element.open === showing) return
                     if (!showing) return element.close()
                     element.returnValue = ''

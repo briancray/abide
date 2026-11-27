@@ -561,7 +561,7 @@ test('a server block importing what its <script> imports compiles as one binding
         'index.abide': `<script server>
 import { reactive, refuse } from '@abide/abide'
 
-export const count = ({ n }: { n: number }) => (n > 0 ? reactive(n)() : refuse(400))
+export const count = ({ n }: { n: number }) => (n > 0 ? reactive(n).get() : refuse(400))
 </script>
 
 <script>

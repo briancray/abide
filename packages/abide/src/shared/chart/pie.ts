@@ -144,7 +144,7 @@ export function pie(options: PieOptions): PieParts {
             },
         },
         get slices() {
-            return ring()
+            return ring.get()
         },
     }
 }

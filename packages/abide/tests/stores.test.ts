@@ -48,7 +48,7 @@ test('store.web keeps a value in localStorage and a new value restores it — 8.
         expires: null,
     })
     const second = reactive(1, { store: store.web<number>('count') })
-    expect(`restored: ${second()}`).toBe('restored: 7')
+    expect(`restored: ${second.get()}`).toBe('restored: 7')
     expect(`session: ${sessionStorage.getItem(`${APP}:count`)}`).toBe(
         'session: null',
     )
@@ -60,7 +60,7 @@ test('store.web keeps a value in sessionStorage where the area is session — 8.
     const again = reactive(1, {
         store: store.web<number>('tab', { area: 'session' }),
     })
-    expect(`restored: ${again()}`).toBe('restored: 3')
+    expect(`restored: ${again.get()}`).toBe('restored: 3')
 })
 
 // 8.23: NO WEB STORAGE, AS ON A SERVER, IS A STORE THAT IS NEVER THERE — the initial value lands
@@ -79,7 +79,7 @@ test('store.web is inert where there is no Web Storage — 8.23', () => {
         expect(`get: ${kept.get()}`).toBe('get: undefined')
         kept.set(4, KEPT_FOREVER)
         const value = reactive(2, { store: kept })
-        expect(`value: ${value()}`).toBe('value: 2')
+        expect(`value: ${value.get()}`).toBe('value: 2')
     } finally {
         Object.defineProperty(globalThis, 'localStorage', descriptor)
     }
@@ -92,7 +92,7 @@ test('store.web is inert where there is no Web Storage — 8.23', () => {
 test('store.web follows another document’s write through the storage event — 8.24', () => {
     const key = `${APP}:shared`
     const value = reactive(1, { store: store.web<number>('shared') })
-    expect(`before: ${value()}`).toBe('before: 1')
+    expect(`before: ${value.get()}`).toBe('before: 1')
     localStorage.setItem(key, JSON.stringify({ value: 5, expires: null }))
     dispatchEvent(
         new StorageEvent('storage', {
@@ -104,13 +104,13 @@ test('store.web follows another document’s write through the storage event —
         new StorageEvent('storage', { key, storageArea: sessionStorage }),
     )
     flushSync()
-    expect(`unrelated: ${value()}`).toBe('unrelated: 1')
+    expect(`unrelated: ${value.get()}`).toBe('unrelated: 1')
     localStorage.setItem(key, JSON.stringify({ value: 9, expires: null }))
     dispatchEvent(
         new StorageEvent('storage', { key, storageArea: localStorage }),
     )
     flushSync()
-    expect(`after: ${value()}`).toBe('after: 9')
+    expect(`after: ${value.get()}`).toBe('after: 9')
 })
 
 // 8.26: WHAT A VALUE'S `ttl` SAYS IS KEPT BESIDE IT. A restore after the deadline is a miss, and the
@@ -151,14 +151,14 @@ test('a shipped store’s schema turns a value it refuses into a miss — 8.27',
     const value = reactive(1, {
         store: store.web('count', { schema: isNumber }),
     })
-    expect(`value: ${value()}`).toBe('value: 1')
+    expect(`value: ${value.get()}`).toBe('value: 1')
 
     const db = new Database(':memory:')
     store.sqlite<string>(db, 'count').set('not a number', KEPT_FOREVER)
     const server = reactive(1, {
         store: store.sqlite(db, 'count', { schema: isNumber }),
     })
-    expect(`server: ${server()}`).toBe('server: 1')
+    expect(`server: ${server.get()}`).toBe('server: 1')
 })
 
 // 8.25: A ROW PER KEY IN A TABLE THE STORE MAKES, one connection per path however many stores name it.
@@ -171,7 +171,7 @@ test('store.sqlite keeps a value in a row of its table, made where missing — 8
                 table: 'kept',
             }),
         })
-        expect(first()).toEqual({ list: [1, 2] })
+        expect(first.get()).toEqual({ list: [1, 2] })
         // 8.42 — the file `database` opens for the path, 47.4's scratch under bun test.
         const row = kept()
             .query('SELECT value, expires FROM kept WHERE key = ?')
@@ -189,7 +189,7 @@ test('store.sqlite keeps a value in a row of its table, made where missing — 8
                 }),
             },
         )
-        expect(second()).toEqual({ list: [1, 2] })
+        expect(second.get()).toEqual({ list: [1, 2] })
         expect(`runs: ${runs}`).toBe('runs: 0')
         expect(() =>
             store.sqlite(path, 'doc', { table: 'kept; DROP TABLE kept' }),
@@ -238,14 +238,14 @@ test('a store re-reading unchanged text wakes no reader — 8.30', () => {
     let runs = 0
     const reader = reactive(() => {
         runs += 1
-        return value().wide
+        return value.get().wide
     })
-    expect(`read: ${reader()}, runs: ${runs}`).toBe('read: true, runs: 1')
+    expect(`read: ${reader.get()}, runs: ${runs}`).toBe('read: true, runs: 1')
     dispatchEvent(
         new StorageEvent('storage', { key, storageArea: localStorage }),
     )
     flushSync()
-    reader()
+    reader.get()
     expect(`runs after an echo: ${runs}`).toBe('runs after an echo: 1')
 })
 
@@ -309,7 +309,7 @@ test('store.cookies writes through cookies() with the ttl as Max-Age — 8.37, 8
         `${named}=${encodeURIComponent('{"value":"light","expires":null}')}`,
     )
     const theme = reactive('system', { store: store.cookies<string>('theme') })
-    expect(`rendered: ${theme()}`).toBe('rendered: light')
+    expect(`rendered: ${theme.get()}`).toBe('rendered: light')
 })
 
 // 8.39: A COOKIE A BROWSER WOULD DROP IS A WRITE THAT FAILS, not one that silently is not kept.
@@ -333,7 +333,7 @@ test('store.indexedDB is inert where there is no IndexedDB — 8.35', async () =
     await kept.set(4, KEPT_FOREVER)
     expect(`get: ${await kept.get()}`).toBe('get: undefined')
     const value = reactive(2, { store: kept })
-    expect(`value: ${value()}`).toBe('value: 2')
+    expect(`value: ${value.get()}`).toBe('value: 2')
 })
 
 /** A server-side jar over `header`, its `set-cookie` lines pushed onto `lines`. */

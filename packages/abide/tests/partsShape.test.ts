@@ -31,6 +31,7 @@ import {
     drawer,
     dropzone,
     type DropzoneParts,
+    flushSync,
     type Form,
     form,
     type FormField,
@@ -346,9 +347,9 @@ test('every element part names its element under the attribute its function is n
     expect(unnamed).toEqual([])
 })
 
-// A `Reactive` the parts read and write: called for its value, and set.
+// A `Reactive` the parts read and write: read through `get`, and set.
 const held = (value: unknown): boolean =>
-    typeof value === 'function' &&
+    typeof (value as { get?: unknown } | null)?.get === 'function' &&
     typeof (value as { set?: unknown }).set === 'function'
 
 // THE REVERT: hand back `combobox`'s parts without `value`, and `combobox.value` is named.
@@ -390,12 +391,12 @@ test('every option an app binds is optional and handed back, and every id is mad
         if (!held(value)) missing.push(name)
     expect(missing).toEqual([])
     // Each starts from its default, and a write is what is read.
-    expect(view.selected()).toBe('a')
+    expect(view.selected.get()).toBe('a')
     view.selected.set('b')
-    expect(view.selected()).toBe('b')
-    expect(thumbs.value()).toEqual([10, 40])
-    expect(box.value()).toBeUndefined()
-    expect(drop.files()).toEqual([])
+    expect(view.selected.get()).toBe('b')
+    expect(thumbs.value.get()).toEqual([10, 40])
+    expect(box.value.get()).toBeUndefined()
+    expect(drop.files.get()).toEqual([])
     // An id made where none was given, readable among the parts.
     expect(box.id).toMatch(/^combobox-/)
     expect(box.input.id).toBe(box.id)
@@ -404,6 +405,46 @@ test('every option an app binds is optional and handed back, and every id is mad
     expect(box.option('a').id).toBe(
         keys.idOf('a').replace(keys.id, `${box.id}`),
     )
+})
+
+// 49.8, 32.6 — A `{ get, set }` PAIR BINDS AN OPTION AS ITS `Reactive` DOES: the parts read through
+// `get` and write through `set`, and what they hand back is a `Reactive` over the pair — its value
+// what `get` answers, moving when what `get` reads does, not when the write lands. THE REVERT: drop the
+// `bindable` call in `toggleGroup` (or any one component) and the pair is called as a `Reactive`,
+// throwing where the parts first read it.
+test('every option an app binds takes a { get, set } pair — 49.8, 32.6', () => {
+    const source = reactive<string | undefined>('a')
+    const written: unknown[] = []
+    const pair = {
+        get: () => source.get(),
+        set: (key: string | undefined) => {
+            written.push(key)
+        },
+    }
+    const view = tabs({ items: ['a', 'b'], selected: pair })
+    expect(held(view.selected)).toBe(true)
+    expect(view.selected.get()).toBe('a')
+    view.selected.set('b')
+    flushSync()
+    // The write went through `set`, and the value stays `get`'s until the source moves.
+    expect(written).toEqual(['b'])
+    expect(view.selected.get()).toBe('a')
+    source.set('b')
+    flushSync()
+    expect(view.selected.get()).toBe('b')
+    const open = { get: () => true, set: () => {} }
+    const bound: Record<string, unknown> = {
+        'dialog.open': dialog({ open }).open,
+        'commandPalette.open': commandPalette({ commands: [COMMAND], open })
+            .open,
+        'menu.open': menu({ open }).open,
+        'autoscroll.following': autoscroll({ following: open }).following,
+    }
+    const unread: string[] = []
+    for (const [name, value] of Object.entries(bound))
+        if (!held(value) || (value as { get(): unknown }).get() !== true)
+            unread.push(name)
+    expect(unread).toEqual([])
 })
 
 // 33.5, 49.11 — AN OPTION HANDED AS AN ACCESSOR STAYS LIVE: a component hands its props over as

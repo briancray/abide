@@ -84,7 +84,7 @@ before writing code, rather than guessing from Svelte, Vue or React. It installs
   only to quiet a warning is the bug it named.
 
 - Export a `Reactive` itself, never wrapped in an object: an `.abide` file reads and writes it by
-  name (RULEBOOK 31.1), and one reached through a property is left to `x()` and `x.set(v)` (31.7).
+  name (RULEBOOK 31.1), and one reached through a property is left to `x.get()` and `x.set(v)` (31.7).
 
 - Model output and fetched HTML are untrusted. Never hand them to `raw()` (RULEBOOK 32.2)
   unsanitized.

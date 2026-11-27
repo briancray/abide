@@ -298,7 +298,7 @@ test('a pipe called in a memo body is told when the run is superseded — 57.13,
         { concurrency: 2 },
     )
     const q = reactive('a')
-    const found = reactive(() => search(q()))
+    const found = reactive(() => search(q.get()))
     found.peek()
     await turn()
     q.set('ab')
@@ -329,7 +329,7 @@ test('a pipe called with a signal ends on it alone, not on the run it was called
     )
     const shared = new AbortController()
     const q = reactive('a')
-    const found = reactive(() => lane(q(), shared.signal))
+    const found = reactive(() => lane(q.get(), shared.signal))
     found.peek()
     await turn()
     q.set('ab')

@@ -114,8 +114,8 @@ export function elementVisible(
     target?: unknown,
     options?: Margins & { root?: unknown; once?: boolean | undefined },
 ): Record<string, unknown> | VisibleObserved {
-    // 1.6 — a `Reactive` is a function, so the brand needs no read ahead of this one.
-    if (typeof target === 'function')
+    // 1.6 — the brand first: a `Reactive` target, or a function handing back the element.
+    if (isReactive(target) || typeof target === 'function')
         return {
             'data-element-visible': 'host',
             'bind:element': visibleBinding(target, options),
@@ -132,7 +132,7 @@ export function elementVisible(
             ),
         },
         get visible() {
-            return seen()
+            return seen.get()
         },
     }
 }
@@ -169,7 +169,7 @@ function visibleBinding(
         // wrong question first.
         let current: Root | undefined
         const unwatch = watchTracked(() => {
-            const next = ((root as () => Root | null | undefined)() ??
+            const next = ((root as Reactive<Root | null | undefined>).get() ??
                 undefined) as Root | undefined
             if (next === current) return
             if (current !== undefined) release(current, key, element)

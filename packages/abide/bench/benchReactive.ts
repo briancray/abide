@@ -116,7 +116,7 @@ function mountingIsLinear(): void {
             stops.push(
                 // A tracked read is a side effect, so there is nothing here to eliminate.
                 watch(() => {
-                    source()
+                    source.get()
                 }),
             )
         for (const stop of stops) stop()

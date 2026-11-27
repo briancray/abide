@@ -121,28 +121,28 @@ export function elementRect(
             'bind:element': rectBinding(write),
         },
         get x() {
-            return x()
+            return x.get()
         },
         get y() {
-            return y()
+            return y.get()
         },
         get top() {
-            return top()
+            return top.get()
         },
         get left() {
-            return left()
+            return left.get()
         },
         get right() {
-            return right()
+            return right.get()
         },
         get bottom() {
-            return bottom()
+            return bottom.get()
         },
         get width() {
-            return width()
+            return width.get()
         },
         get height() {
-            return height()
+            return height.get()
         },
     }
 }

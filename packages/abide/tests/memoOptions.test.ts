@@ -88,7 +88,7 @@ test('a write a memo identity calls a repeat wakes no reader — 11.79', async (
     ]()
     let wakes = 0
     const stop = watch(() => {
-        entry()
+        entry.get()
         wakes += 1
     })
     shelf.set({ id: 1, title: 'Dune' })
@@ -156,18 +156,18 @@ test("a derived keeps the answer it served while a memo's window holds the next 
         { debounce: 30 },
     )
     const query = reactive('ab')
-    const found = reactive(() => search(query()))
+    const found = reactive(() => search(query.get()))
     const stop = watch(() => {
-        found.ready() ? found() : undefined
+        found.ready() ? found.get() : undefined
     })
     await new Promise((done) => setTimeout(done, 80))
     query.set('abc')
     flushSync()
-    const inWindow = `${found.ready() ? found() : 'cleared'} ${found.busy()}`
+    const inWindow = `${found.ready() ? found.get() : 'cleared'} ${found.busy()}`
     await new Promise((done) => setTimeout(done, 40))
-    const inRun = found.ready() ? found() : 'cleared'
+    const inRun = found.ready() ? found.get() : 'cleared'
     await new Promise((done) => setTimeout(done, 40))
-    const settled = found.ready() ? found() : 'cleared'
+    const settled = found.ready() ? found.get() : 'cleared'
     stop()
     expect(`${inWindow}, ${inRun}, ${settled}`).toBe('AB true, cleared, ABC')
 })
@@ -262,7 +262,7 @@ test('a write a window holds behind another wakes no probe reader — 3.3, 5.15'
     const stop = watch(() => {
         let n: number | string = 'unlanded'
         try {
-            n = followed().n
+            n = followed.get().n
         } catch {}
         seen.push(`${followed.busy()} ${n}`)
     })

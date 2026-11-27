@@ -331,7 +331,7 @@ const late = reactive(() => Promise.resolve('north'))
 const part = {
     'data-part': 'region',
     get title() {
-        return late()
+        return late
     },
 }
 </script>
@@ -364,7 +364,7 @@ import { reactive } from '@abide/abide'
 
 let busy = reactive(false)
 let rows = reactive([{ id: 1, off: true }])
-const shown = reactive(() => ({ hidden: busy(), 'aria-hidden': busy() }))
+const shown = reactive(() => ({ hidden: busy, 'aria-hidden': busy }))
 
 function flip() {
     busy = !busy
@@ -747,7 +747,7 @@ let tone = reactive('calm')
 let rows = reactive([{ id: 'a', on: reactive(false) }, { id: 'b', on: reactive(true) }])
 </script>
 
-<main><ul>{#for row of rows key row.id}<li id={row.id} class="row active {tone}" class:active={row.on()}>x</li>{/for}</ul></main>`)
+<main><ul>{#for row of rows key row.id}<li id={row.id} class="row active {tone}" class:active={row.on}>x</li>{/for}</ul></main>`)
     const mountWork = measure(() => {
         mounted.mount()
         flushSync()

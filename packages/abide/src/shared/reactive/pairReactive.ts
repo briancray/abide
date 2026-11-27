@@ -6,7 +6,7 @@
 //
 // A PROTOTYPE, NOT A BRANCH in the core's `set`, for `brandedPrototype`'s reason: `seat`
 // leaves a seat it does not own alone, and the adoption path reaches this `set` through the
-// callable it adopted.
+// value it adopted.
 
 import { cellOf } from './cellShape.ts'
 import { reactive } from './index.ts'
@@ -39,10 +39,10 @@ export function pairReactive(
         () => pair.get(),
         identity === undefined ? undefined : { identity },
     )
-    const callable = cellOf(over).callable as unknown as {
+    const value = cellOf(over).reactive as unknown as {
         [PAIR]: Pair
     }
-    Object.setPrototypeOf(callable, PAIR_PROTOTYPE)
-    callable[PAIR] = pair
+    Object.setPrototypeOf(value, PAIR_PROTOTYPE)
+    value[PAIR] = pair
     return over as Reactive<unknown>
 }

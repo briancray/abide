@@ -12,11 +12,11 @@ import { config } from '#server/config.ts'
 import { onConfig } from '#server/hooks.ts'
 
 test('a read after filing or unfiling onConfig resolves under what is filed now — 27.10', () => {
-    expect(config().PROBE_DEFAULT).toBeUndefined()
+    expect(config.get().PROBE_DEFAULT).toBeUndefined()
     const unfile = onConfig(() => ({ PROBE_DEFAULT: 'filed' }))
-    expect(config().PROBE_DEFAULT).toBe('filed')
+    expect(config.get().PROBE_DEFAULT).toBe('filed')
     unfile()
-    expect(config().PROBE_DEFAULT).toBeUndefined()
+    expect(config.get().PROBE_DEFAULT).toBeUndefined()
 })
 
 declare module '#server/config.ts' {
@@ -34,7 +34,7 @@ test('onConfig sees what abide derives, and a declared field keeps its type — 
         PROBE_LIMIT: 25,
     }))
     try {
-        const resolved = config()
+        const resolved = config.get()
         const limit: number = resolved.PROBE_LIMIT
         expect(limit).toBe(25)
         expect(resolved.PROBE_CACHE).toBe(`${resolved.APP_DATA_DIR}/cache`)

@@ -12,6 +12,7 @@ import {
 } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { type Meter, meter } from './meter.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 
@@ -20,7 +21,7 @@ export type WizardOptions<Step, Key extends ItemKey = KeyOf<Step>> = {
     /** The steps, in order; a function is read live. */
     steps: Live<readonly Step[]>
     /** The key of the step on: a `Reactive` to read and set. Held by the parts, and handed back as `current`, where none is given. A key no step has is the first. */
-    current?: Reactive<Key | undefined> | undefined
+    current?: Bindable<Key | undefined> | undefined
     /** Whether a step is done enough to go on from. Every step is by default. */
     valid?: ((step: Step) => boolean) | undefined
 } & KeyOption<Step, Key>
@@ -45,13 +46,15 @@ export type Wizard<Step, Key extends ItemKey = KeyOf<Step>> = {
 export function wizard<Step, Key extends ItemKey = KeyOf<Step>>(
     options: WizardOptions<Step, Key>,
 ): Wizard<Step, Key> {
-    const picked = options.current ?? reactive<Key | undefined>(undefined)
+    const picked =
+        bindable(options.current) ?? reactive<Key | undefined>(undefined)
     const keyOf = (step: Step) =>
         keyOfItem(options.key as ((step: Step) => Key) | undefined, step)
     const steps = listedKeys(options.steps, keyOf)
     // 51.141 — a key no step has is the first.
-    const at = (): number => Math.max(0, steps().indexOf(picked() as Key))
-    const key = (index: number) => steps()[index]
+    const at = (): number =>
+        Math.max(0, steps.get().indexOf(picked.get() as Key))
+    const key = (index: number) => steps.get()[index]
     const go = (index: number): void => {
         const to = key(index)
         if (to !== undefined) picked.set(to)
@@ -79,11 +82,11 @@ export function wizard<Step, Key extends ItemKey = KeyOf<Step>>(
                     return key(at()) === step ? '' : undefined
                 },
                 get 'data-done'() {
-                    const index = steps().indexOf(step)
+                    const index = steps.get().indexOf(step)
                     return index !== -1 && index < at() ? '' : undefined
                 },
                 onclick: () => {
-                    const index = steps().indexOf(step)
+                    const index = steps.get().indexOf(step)
                     if (index !== -1 && index < at()) go(index)
                 },
             }
@@ -93,15 +96,15 @@ export function wizard<Step, Key extends ItemKey = KeyOf<Step>>(
             type: 'button',
             'data-wizard': 'next',
             get disabled() {
-                return at() >= steps().length - 1 || !valid(at())
+                return at() >= steps.get().length - 1 || !valid(at())
             },
             // 49.15 — on the last step, focus goes to `previous`.
             onclick: (event?: MouseEvent) => {
-                if (at() >= steps().length - 1 || !valid(at())) return
+                if (at() >= steps.get().length - 1 || !valid(at())) return
                 go(at() + 1)
                 handFocus(
                     event?.currentTarget,
-                    at() >= steps().length - 1,
+                    at() >= steps.get().length - 1,
                     () =>
                         nearest(
                             event?.currentTarget,
@@ -128,7 +131,7 @@ export function wizard<Step, Key extends ItemKey = KeyOf<Step>>(
         meter: meter({
             value: () => at() + 1,
             min: 0,
-            max: () => steps().length,
+            max: () => steps.get().length,
             label: 'Progress',
         }),
         current: reactiveOver(
@@ -136,7 +139,7 @@ export function wizard<Step, Key extends ItemKey = KeyOf<Step>>(
             (to: Key | undefined) => picked.set(to),
         ),
         get last() {
-            return at() >= steps().length - 1
+            return at() >= steps.get().length - 1
         },
     }
 }

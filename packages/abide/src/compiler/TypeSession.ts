@@ -89,7 +89,6 @@ export class TypeSession {
         scripts = true,
     ): Promise<{
         diagnoses: Diagnosis[]
-        refused: Set<string>
         lowered: LoweredFile[]
     }> {
         return diagnoseSources(this.host, sources, app, scripts)

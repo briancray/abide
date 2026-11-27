@@ -96,7 +96,7 @@ export function sections<Section>(of: {
             ...of.host,
             // 51.168
             get 'data-scrubbing'() {
-                return scrubbing() ? '' : undefined
+                return scrubbing.get() ? '' : undefined
             },
             // 51.167 — the jumps a press can reach, measured once; a disabled one is not among them.
             onpointerdown: (event: PointerEvent) => {

@@ -52,7 +52,7 @@ import { later } from '../lib/extra.ts'
 const READING = `<script server>
 import { config } from '@abide/abide/server'
 
-const retries = config().
+const retries = config.
 void retries
 </script>`
 
@@ -486,7 +486,7 @@ test('a page importing a deleted component says it cannot find it — 38.11', as
     expect(published.params).toMatchObject({ uri })
 }, 60_000)
 
-// 38.98, 27.13 — `config().` OFFERS WHAT AN `onConfig` IT NEVER IMPORTED DEFAULTS, beside what abide
+// 38.98, 27.13 — `config.` OFFERS WHAT AN `onConfig` IT NEVER IMPORTED DEFAULTS, beside what abide
 // derives. THE REVERT: drop the `textDocument/completion` case; the request is refused (-32601).
 test('a completion offers the fields onConfig declared — 38.98', async () => {
     const uri = Bun.pathToFileURL(`${app}/reading/index.abide`).href
@@ -502,7 +502,7 @@ test('a completion offers the fields onConfig declared — 38.98', async () => {
         },
     })
     const lines = READING.split('\n')
-    const line = lines.findIndex((text) => text.includes('config()'))
+    const line = lines.findIndex((text) => text.includes('config.'))
     send({
         id: 20,
         method: 'textDocument/completion',

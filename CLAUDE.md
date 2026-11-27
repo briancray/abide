@@ -55,7 +55,7 @@ is all there is.
 * valid typescript or javascript should always compile — in a `.abide`. what the compiler refuses
 is a numbered clause (RULEBOOK 34.3's top-level await is one), and where it cannot infer a type it
 reads rather than refuses — RULEBOOK 19.11
-* a reactive value is read and written BY NAME inside a `.abide` file, and the explicit `x()` / `x.set(v)`
+* a reactive value is read and written BY NAME inside a `.abide` file, and the explicit `x.get()` / `x.set(v)`
 spelling keeps compiling — the sugar is over it, never instead of it. RULEBOOK 31.1, 31.3 and 31.7
 * small and low level client bundle built from compiled .abide
 * prefer UNIFORMITY over a hard-coded exception, even where the uniform variant is inert. an

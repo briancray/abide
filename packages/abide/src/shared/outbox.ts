@@ -60,7 +60,7 @@ const SENDING = ambient<Matched | undefined>(undefined)
  * outbox at load.
  */
 export function anySending(): boolean {
-    return SENDING() !== undefined
+    return SENDING.get() !== undefined
 }
 
 /** 46.1 — shows the queue's line, oldest first. */
@@ -81,7 +81,7 @@ export function outbox<Chosen extends Handler = Handler>(
     handler?: Chosen,
     pattern?: Record<string, unknown>,
 ): QueuedCall<ValueOf<Chosen>>[] {
-    const line = LINE() as QueuedCall<ValueOf<Chosen>>[]
+    const line = LINE.get() as QueuedCall<ValueOf<Chosen>>[]
     if (handler === undefined) return line
     const named: QueuedCall<ValueOf<Chosen>>[] = []
     for (const call of line)

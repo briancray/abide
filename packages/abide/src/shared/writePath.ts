@@ -99,11 +99,11 @@ function copyOf(value: unknown, step: string | number): Level {
  * receiver that is not an array when the call runs, takes the call in place, waking nobody.
  */
 export function mutatePath<Result>(
-    target: { (): unknown; set(value: unknown): unknown },
+    target: { get(): unknown; set(value: unknown): unknown },
     path: readonly (string | number)[],
     mutate: (receiver: never) => Result,
 ): Result {
-    const value = target()
+    const value = target.get()
     let receiver = value
     let plain = true
     for (const step of path) {

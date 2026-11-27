@@ -118,19 +118,19 @@ async function landed(
         await new Promise((done) => queueMicrotask(() => done(undefined)))
         if (
             pair.status.ready() &&
-            pair.status()?.link === status.link &&
-            pair.status()?.paired === status.paired
+            pair.status.get()?.link === status.link &&
+            pair.status.get()?.paired === status.paired
         )
             return
     }
     await Bun.sleep(1)
-    expect(pair.status()).toEqual(status)
+    expect(pair.status.get()).toEqual(status)
 }
 
 test('reads the browser’s pairing off /__abide/pairing, naming no tools — 44.69', async () => {
     const { pair, dispose } = built()
     await landed(pair, UNPAIRED)
-    expect(pair.status()).toEqual(UNPAIRED)
+    expect(pair.status.get()).toEqual(UNPAIRED)
     expect(asked[0]?.url).toBe(PAIRING_ADDRESS)
     dispose()
 })
@@ -149,7 +149,7 @@ test('a pairing /__abide/pairing fails to answer fails its status with that fail
     const failure = pair.status.error() as { status?: number } | undefined
     let read: string
     try {
-        read = String(pair.status())
+        read = String(pair.status.get())
     } catch (thrown) {
         read = `threw ${(thrown as Error).name}`
     }
@@ -158,7 +158,7 @@ test('a pairing /__abide/pairing fails to answer fails its status with that fail
     ).toBe('failed true, status 503, read: undefined')
     pair.start()
     // 53.42 — a pairing that cannot be read is unavailable, whatever was clicked.
-    expect(pair.step()).toBe('unavailable')
+    expect(pair.step.get()).toBe('unavailable')
     dispose()
 })
 
@@ -179,7 +179,7 @@ test('a later read that fails keeps the status held, and the next answer clears 
             turn++
         )
             await Bun.sleep(0)
-        const failed = `held: ${pair.status()?.link}, failed: ${pair.status.error()?.status ?? 'none'}`
+        const failed = `held: ${pair.status.get()?.link}, failed: ${pair.status.error()?.status ?? 'none'}`
         globalThis.fetch = (async () =>
             Response.json({
                 ...UNPAIRED,
@@ -193,7 +193,7 @@ test('a later read that fails keeps the status held, and the next answer clears 
         )
             await Bun.sleep(0)
         expect(
-            `${failed}; then paired: ${pair.status()?.paired}, failed: ${pair.status.error()?.status ?? 'none'}`,
+            `${failed}; then paired: ${pair.status.get()?.paired}, failed: ${pair.status.error()?.status ?? 'none'}`,
         ).toBe(`held: ${LINK}, failed: 503; then paired: true, failed: none`)
     } finally {
         dispose()
@@ -262,10 +262,10 @@ test('a pairing is read again when its follow is refreshed, one read for every r
     const one = built()
     const two = built()
     await landed(one.pair, UNPAIRED)
-    expect(two.pair.status()).toEqual(UNPAIRED)
+    expect(two.pair.status.get()).toEqual(UNPAIRED)
     expect(asked).toHaveLength(1)
     await landed(one.pair, { ...UNPAIRED, paired: true })
-    expect(two.pair.status()?.paired).toBe(true)
+    expect(two.pair.status.get()?.paired).toBe(true)
     expect(asked).toHaveLength(2)
     one.dispose()
     expect(unfollowed).toBe(0)
@@ -277,20 +277,20 @@ test('a click that blurs the page offers the click again; one that does not offe
     const { pair, dispose } = built()
     // No status yet: nothing to open.
     pair.start()
-    expect(pair.step()).toBe('connecting')
+    expect(pair.step.get()).toBe('connecting')
     await landed(pair, UNPAIRED)
     jest.useFakeTimers()
     pair.start()
-    expect(pair.step()).toBe('waiting')
+    expect(pair.step.get()).toBe('waiting')
     expect(location.assign).toHaveBeenCalledWith(LINK)
     dispatchEvent(new Event('blur'))
     jest.advanceTimersByTime(2500)
-    expect(pair.step()).toBe('click')
+    expect(pair.step.get()).toBe('click')
     pair.start()
     jest.advanceTimersByTime(2499)
-    expect(pair.step()).toBe('waiting')
+    expect(pair.step.get()).toBe('waiting')
     jest.advanceTimersByTime(1)
-    expect(pair.step()).toBe('install')
+    expect(pair.step.get()).toBe('install')
     dispose()
 })
 
@@ -301,7 +301,7 @@ test('a click with a bridge already paired offers the click again — 44.71, 53.
     pair.start()
     jest.advanceTimersByTime(2500)
     // 53.42 — paired is the step, whatever the click offered.
-    expect(pair.step()).toBe('paired')
+    expect(pair.step.get()).toBe('paired')
     dispose()
 })
 
@@ -313,14 +313,14 @@ test('copyInstall copies the install command and holds copied — 44.72', async 
     jest.useFakeTimers()
     pair.start()
     jest.advanceTimersByTime(2500)
-    expect(pair.step()).toBe('install')
+    expect(pair.step.get()).toBe('install')
     await pair.copyInstall()
     expect(written).toEqual([UNPAIRED.install])
-    expect(pair.copied()).toBe(true)
+    expect(pair.copied.get()).toBe(true)
     jest.advanceTimersByTime(1200)
     // `copied` goes false `COPIED_FOR` after the copy (44.72), and `step` follows it at the end of that turn.
     flushSync()
-    expect(`${pair.copied()} ${pair.step()}`).toBe('false click')
+    expect(`${pair.copied.get()} ${pair.step.get()}`).toBe('false click')
     dispose()
 })
 
@@ -341,7 +341,7 @@ test('copyInstall copies on a page with no clipboard, through a selected textare
     }) as typeof document.execCommand
     try {
         await pair.copyInstall()
-        expect(`${copied.join()} copied: ${pair.copied()}`).toBe(
+        expect(`${copied.join()} copied: ${pair.copied.get()}`).toBe(
             `copy:${UNPAIRED.install} copied: true`,
         )
     } finally {
@@ -381,7 +381,7 @@ test("dispose stops the read, the blur listener, the wait and the copy's write b
     jest.useFakeTimers()
     pair.start()
     await pair.copyInstall()
-    expect(`${listening} ${pair.step()} ${pair.copied()}`).toBe(
+    expect(`${listening} ${pair.step.get()} ${pair.copied.get()}`).toBe(
         '1 waiting true',
     )
     dispose()
@@ -390,7 +390,7 @@ test("dispose stops the read, the blur listener, the wait and the copy's write b
     jest.advanceTimersByTime(5000)
     flushSync()
     expect(
-        `blur listeners: ${listeningAfter}, step: ${pair.step()}, copied: ${pair.copied()}, read aborted: ${asked[0]?.signal?.aborted}, unfollowed: ${unfollowed}`,
+        `blur listeners: ${listeningAfter}, step: ${pair.step.get()}, copied: ${pair.copied.get()}, read aborted: ${asked[0]?.signal?.aborted}, unfollowed: ${unfollowed}`,
     ).toBe(
         'blur listeners: 0, step: waiting, copied: true, read aborted: true, unfollowed: 1',
     )
@@ -457,7 +457,7 @@ test('/__abide/pairing grants no tool a request names — 44.74', async () => {
 // install with no `--` — `install: undefined`.
 test('onPairing’s arguments follow -- in the command and the install, per principal — 44.76, 44.74', async () => {
     const unfile = onPairing(() => {
-        const { id } = principal.resolved()
+        const { id } = principal.resolved.get()
         return [
             '--mcp-config',
             `/configs/${id}.json`,

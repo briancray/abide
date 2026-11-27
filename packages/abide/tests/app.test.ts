@@ -27,7 +27,7 @@ const IMPORTS = `import { config, cookies, request, response, rpc, trace } from 
 
 const HANDLERS: Record<string, string> = {
     'probe/settings.server.ts': `${IMPORTS}export default rpc(() => {
-    const resolved = config()
+    const resolved = config.get()
     return {
         limit: resolved.LIMIT,
         feature: resolved.FEATURE,
@@ -52,7 +52,7 @@ const HANDLERS: Record<string, string> = {
 
 export default rpc(async () => {
     const resolved = (await principal.resolved) as { authenticated: boolean; id?: string }
-    return \`\${resolved.authenticated} \${resolved.id} \${principal.caller()}\`
+    return \`\${resolved.authenticated} \${resolved.id} \${principal.caller.get()}\`
 })
 `,
     'probe/traced.server.ts': `${IMPORTS}export default rpc(() =>
@@ -134,7 +134,7 @@ const WHERE = `<script>
 import { busy, online, outbox, route } from '@abide/abide'
 </script>
 
-<main><p id="where">{route.name()}|{route.params().id}|{route.url().pathname}|{route.navigating()}|{online()}</p>
+<main><p id="where">{route.name}|{route.params.id}|{route.url.pathname}|{route.navigating}|{online}</p>
 <p id="named">{route.name.toUpperCase()}|{route.params.id}|{route.url.pathname}|{route.navigating ? 'moving' : 'still'}|{route.index + 1}</p>
 <p id="outbox">{outbox().map((call) => call.id).join(',') || 'none'}|{busy() ? 'sending' : 'idle'}</p></main>`
 
@@ -314,7 +314,7 @@ import { reactive, watch } from '@abide/abide'
 const shown = reactive(() => level())
 const tally = ((globalThis as { tally?: { runs: number; disposed: number } }).tally ??= { runs: 0, disposed: 0 })
 watch(() => {
-    shown()
+    shown
     tally.runs += 1
     return () => {
         tally.disposed += 1
@@ -386,7 +386,7 @@ const asked = await app.fetch(
 )
 const written = asked.headers.getSetCookie().filter((cookie) => cookie.startsWith('abide-')).length
 const who = \`\${await asked.json()} \${written}\`
-const ranAs = await app.run(() => principal.caller(), { caller: 'two-browser' })
+const ranAs = await app.run(() => principal.caller.get(), { caller: 'two-browser' })
 await app.stop()
 console.log(JSON.stringify({ own: await own.text(), exploded: \`\${exploded.status} \${exploded.statusText}\`, inRequest, outside, presumed, who, ranAs, marks }))
 `,

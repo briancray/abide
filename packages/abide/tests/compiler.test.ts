@@ -754,7 +754,7 @@ test('a for item shadows a reactive name of the same spelling', async () => {
         '<script>let rows = reactive([])</script>{#for row of rows}<li>{row}</li>{/for}',
         ['rows'],
     )
-    expect(subject).toContain('__listOf(__slotValue(() => rows()))')
+    expect(subject).toContain('__listOf(__slotValue(() => rows.get()))')
 })
 
 // A DEFAULT VALUE IS READ, NOT BOUND. The row's pattern binds `tone`, so the body's `{tone}` is the
@@ -769,14 +769,14 @@ test('a default value in a binding pattern is read, not bound — 31.10', async 
     )
     // `items` is typed `any`, so the row's `tone` is unproven and guarded (14.2) — but not read.
     expect(server).toContain('__escapeText(__slotValue(() => tone))')
-    expect(server).toContain('__escapeText(__slotValue(() => rows()))')
+    expect(server).toContain('__escapeText(__slotValue(() => rows.get()))')
     // A rename binds the right of the `:` and reads the left.
     const renamed = await serverOf(
         '{#for { id: rows } of items}<i>{rows}{tone}</i>{/for}',
         names,
     )
     expect(renamed).toContain('__escapeText(__slotValue(() => rows))')
-    expect(renamed).toContain('__escapeText(__slotValue(() => tone()))')
+    expect(renamed).toContain('__escapeText(__slotValue(() => tone.get()))')
 })
 
 // THE CLIENT HALF IS ITS OWN GATE, because the row's MARKUP and the row's BINDINGS are emitted by
@@ -803,7 +803,7 @@ test('a for row binds its item on the client too', async () => {
             '<script>let rows = reactive([])</script>{#for row of rows}<li>{row.name}</li>{/for}',
             ['rows'],
         ),
-    ).toContain('const ls0_subject = () => rows()')
+    ).toContain('const ls0_subject = () => rows.get()')
 })
 
 // AN INDEX AND A DESTRUCTURED ITEM BIND TOO, and a `key` key is inside the binding while the
@@ -840,7 +840,7 @@ test('an interpolated quoted attribute is one expression', async () => {
         'tone',
     ])
     expect(emitted).toContain(
-        '__attributeMarkup("class", __slotValue(() => `badge ${tone()}`))',
+        '__attributeMarkup("class", __slotValue(() => `badge ${tone.get()}`))',
     )
     expect(emitted).not.toContain('badge {tone}')
     // Several slots and the text between them.
@@ -882,7 +882,7 @@ test('an interpolated style lowers to one attribute per property', async () => {
         ['c', 'w'],
     )
     expect(emitted).toContain(
-        '"<div style=\\"" + __withDeclaration(__withDeclaration("", "color", __escapeStyleValue(__slotValue(() => `${c()}`))), "width", __escapeStyleValue(__slotValue(() => `${w()}px`)))',
+        '"<div style=\\"" + __withDeclaration(__withDeclaration("", "color", __escapeStyleValue(__slotValue(() => `${c.get()}`))), "width", __escapeStyleValue(__slotValue(() => `${w.get()}px`)))',
     )
     expect(inlineBuild(emitted).match(/style=\\"/g)).toHaveLength(1)
 
@@ -1146,7 +1146,7 @@ test('the raw spelling lowers to the framework’s own name, on both sides', asy
             "const snippet = reactive('<b>bold</b>')",
         ),
     )
-    expect(client).toContain('const __v1_0 = __raw(snippet())')
+    expect(client).toContain('const __v1_0 = __raw(snippet.get())')
 })
 
 // 32.25 — ONE RECOGNIZER FOR THE SPELLING (`rawCall`): a bare `raw` handed a spread is the
@@ -1446,7 +1446,7 @@ test('a class: directive binds one class and not the attribute', async () => {
         '<p class="badge" class:overdue={late}>x</p>',
         ['late'],
     )
-    expect(client).toContain('__setClass(__a0, "overdue", late())')
+    expect(client).toContain('__setClass(__a0, "overdue", late.get())')
     expect(client).not.toContain('__setAttribute')
 })
 
@@ -1466,7 +1466,7 @@ test('a default value holding an `=` is skipped whole — 31.10', async () => {
     )
     // `items` is typed `any`, so `tone` is unproven and guarded (14.2) — but not read.
     expect(server).toContain('__escapeText(__slotValue(() => tone))')
-    expect(server).toContain('__escapeText(__slotValue(() => rows()))')
+    expect(server).toContain('__escapeText(__slotValue(() => rows.get()))')
 })
 
 // THE TWO EMITTERS FILTER THE SAME `<head>`, and a tag name is ASCII case-INSENSITIVE. Only the
@@ -1478,7 +1478,7 @@ test('a default value holding an `=` is skipped whole — 31.10', async () => {
 test('an uppercase head is hoisted by both emitters', async () => {
     const source = '<HEAD><title>t</title></HEAD><p>{n}</p>'
     expect(await serverOf(source, ['n'])).toContain(
-        '__body = "<p>" + __markupRun(__RAW_WRITES.count, __escapeText(__slotValue(() => n()))) + "</p>"',
+        '__body = "<p>" + __markupRun(__RAW_WRITES.count, __escapeText(__slotValue(() => n.get()))) + "</p>"',
     )
     const client = await clientOf(source, ['n'])
     expect(client).toContain('const __c0 = __root.open.nextSibling\n')
@@ -1490,10 +1490,10 @@ test('an uppercase head is hoisted by both emitters', async () => {
 // and past the `safeUrl` 32.20 asks a URL attribute for.
 test('a slot in an unquoted attribute value is an expression', async () => {
     expect(await serverOf('<a href=/x/{id}>y</a>', ['id'])).toContain(
-        '__attributeMarkup("href", __slotValue(() => `/x/${id()}`))',
+        '__attributeMarkup("href", __slotValue(() => `/x/${id.get()}`))',
     )
     expect(await serverOf('<a class=badge-{tone}>y</a>', ['tone'])).toContain(
-        '__attributeMarkup("class", __slotValue(() => `badge-${tone()}`))',
+        '__attributeMarkup("class", __slotValue(() => `badge-${tone.get()}`))',
     )
     // A value with no slot in it stays a literal.
     expect(await serverOf('<a href=/plain>y</a>')).toContain(
@@ -1506,7 +1506,7 @@ test('a slot in an unquoted attribute value is an expression', async () => {
 // here; a value off the wire then writes a whole declaration list into the merged attribute.
 test('an interpolated style property cannot set a second one', async () => {
     expect(await serverOf('<div style:color={v}>x</div>', ['v'])).toContain(
-        '__escapeStyleValue(__slotValue(() => v()))',
+        '__escapeStyleValue(__slotValue(() => v.get()))',
     )
     expect(escapeStyleValue('red; position: fixed; top: 0')).toBe('red')
     // CUT BEFORE IT IS ESCAPED: the escaping writes a `;` into every `&quot;` and `&amp;`. THE
@@ -1516,7 +1516,7 @@ test('an interpolated style property cannot set a second one', async () => {
     )
     // A WHOLE `style={expr}` IS A DECLARATION LIST and keeps the attribute escaping.
     expect(await serverOf('<div style={s}>x</div>', ['s'])).toContain(
-        '__attributeMarkup("style", __slotValue(() => s()))',
+        '__attributeMarkup("style", __slotValue(() => s.get()))',
     )
 })
 
@@ -1527,7 +1527,7 @@ test('an interpolated style property cannot set a second one', async () => {
 test('a raw call lowers in an attribute value too', async () => {
     const emitted = await serverOf('<a href={raw(u)}>x</a>', ['u'])
     expect(emitted).toContain(
-        '__attributeMarkup("href", __slotValue(() => __raw(u())))',
+        '__attributeMarkup("href", __slotValue(() => __raw(u.get())))',
     )
     expect(emitted).toContain('raw as __raw')
 })
@@ -1700,7 +1700,7 @@ test('a class beside a class: directive writes its own tokens — 32.71', async 
         'c',
         'x',
     ])
-    expect(both).toContain('__setClassGroup(__a0, "on", c(), [x()])')
+    expect(both).toContain('__setClassGroup(__a0, "on", c.get(), [x.get()])')
     expect(both).not.toContain('__setAttribute(')
     // ALONE IT IS AN ORDINARY BINDING.
     expect(await clientOf('<div class={c}>t</div>', ['c'])).toContain(

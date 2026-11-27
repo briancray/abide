@@ -6,6 +6,7 @@ import { checkParts } from './checkParts.ts'
 import { handFocus } from './handFocus.ts'
 import { type Live, live } from './live.ts'
 import { madeId } from './madeId.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { stepRounded } from './stepRounded.ts'
 
@@ -14,7 +15,7 @@ export type SpinbuttonOptions = {
     /** The base the field's id is derived from; unique on the page. One is made where none is given. */
     id?: string | undefined
     /** The number: a `Reactive` to read and set. Held by the parts, and handed back as `value`, where none is given. */
-    value?: Reactive<number> | undefined
+    value?: Bindable<number> | undefined
     /** The least it takes. Unbounded by default; a function is read live. */
     min?: Live<number> | undefined
     /** The most it takes. Unbounded by default; a function is read live. */
@@ -39,7 +40,7 @@ export type Spinbutton = {
 
 /** WAI-ARIA's spin button: a field and its two buttons, as parts to spread. */
 export function spinbutton(options: SpinbuttonOptions = {}): Spinbutton {
-    const value = options.value ?? reactive(live(options.min) ?? 0)
+    const value = bindable(options.value) ?? reactive(live(options.min) ?? 0)
     const id = options.id ?? madeId('spinbutton')
     if (process.env.NODE_ENV !== 'production') checkParts('spinbutton', id)
     const step = () => live(options.step) ?? 1
@@ -68,7 +69,7 @@ export function spinbutton(options: SpinbuttonOptions = {}): Spinbutton {
         'aria-label': name,
         // 56.31
         get disabled() {
-            const at = value()
+            const at = value.get()
             return steps < 0 ? at <= min() : at >= max()
         },
         // 49.15 — at its bound, focus goes to the field, which holds the keys.
@@ -93,7 +94,7 @@ export function spinbutton(options: SpinbuttonOptions = {}): Spinbutton {
                 return live(options.label)
             },
             get 'aria-valuenow'() {
-                return value()
+                return value.get()
             },
             get 'aria-valuemin'() {
                 return bound('min')
@@ -102,7 +103,7 @@ export function spinbutton(options: SpinbuttonOptions = {}): Spinbutton {
                 return bound('max')
             },
             get value() {
-                return String(value())
+                return String(value.get())
             },
             // 56.30
             onkeydown: (event: KeyboardEvent) => {

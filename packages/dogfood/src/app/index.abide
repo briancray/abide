@@ -46,7 +46,7 @@ import Section from '#src/lib/Section.abide'
     <Section title="Settings resolve during the boot, and the environment wins">
         <p><a href={url('/app/on-config')}><code>onConfig</code></a> gives a default, and a
             deployment's environment overrides it.
-            <a href={url('/ambients/config')}><code>config()</code></a> reads the result. It is
+            <a href={url('/ambients/config')}><code>config</code></a> reads the result. It is
             resolved as the app boots rather than on the first request, so a setting a schema
             refuses keeps the app from starting. See
             <a href={url('/app/environment')}>Environment</a>.</p>
@@ -55,7 +55,7 @@ import Section from '#src/lib/Section.abide'
 
             onConfig(() => ({ RETRIES: 3 }))
 
-            export default rpc(reactive(() => ({ retries: config().RETRIES })))
+            export default rpc(reactive(() => ({ retries: config.get().RETRIES })))
         `} />
         <p>The CRM's <code>.env</code> sets <code>RETRIES=5</code>. Its retry count, asked when
             this page loaded:</p>

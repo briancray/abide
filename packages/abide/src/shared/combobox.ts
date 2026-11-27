@@ -16,6 +16,7 @@ import { listbox } from './listbox.ts'
 import { type Live, live } from './live.ts'
 import { madeId } from './madeId.ts'
 import { popoverOn } from './popover.ts'
+import { type Bindable, bindable } from './reactive/bindable.ts'
 import { busy, type Reactive, reactive, watch } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 import { openingEnd } from './roving.ts'
@@ -42,7 +43,7 @@ export type ComboboxOptions<Item, Multiple extends boolean = false> = {
     /** 51.55 — whether it picks many: a pick adds an item or takes it out again. `false` by default. */
     multiple?: Multiple | undefined
     /** The pick, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `value`, where none is given. */
-    value?: Reactive<Picked<Item, Multiple>> | undefined
+    value?: Bindable<Picked<Item, Multiple>> | undefined
 } & KeyOption<Item> &
     LabelOption<Item>
 
@@ -103,7 +104,7 @@ export function combobox<Item, Multiple extends boolean = false>(
     const key = (item: Item) => keyOfItem(options.key, item)
     const label = (item: Item) => writtenBy(options.label, item)
     const many = options.multiple === true
-    const value = (options.value ??
+    const value = (bindable(options.value) ??
         (many
             ? reactive<readonly Item[]>([])
             : reactive<Item | undefined>(undefined))) as Reactive<
@@ -114,18 +115,18 @@ export function combobox<Item, Multiple extends boolean = false>(
     const typed = reactive<string | undefined>(undefined)
     // 51.55 — the items picked, where it picks many; `undefined` where it picks one.
     const picks = reactive((): readonly Item[] | undefined =>
-        many ? ((value() ?? []) as readonly Item[]) : undefined,
+        many ? ((value.get() ?? []) as readonly Item[]) : undefined,
     )
     const query = reactive(() => {
-        const text = typed()
-        const one = value()
+        const text = typed.get()
+        const one = value.get()
         if (text !== undefined) return text
-        return picks() !== undefined || one === undefined
+        return picks.get() !== undefined || one === undefined
             ? ''
             : label(one as Item)
     })
     // 51.16, 51.106 — what the labels are narrowed by and marked with.
-    const needles = reactive(() => needlesOf(query(), false))
+    const needles = reactive(() => needlesOf(query.get(), false))
     const open = reactive(false)
     // 51.57 — what the open list is placed against.
     const input = reactive<HTMLInputElement | undefined>(undefined)
@@ -133,26 +134,27 @@ export function combobox<Item, Multiple extends boolean = false>(
     // 51.18 — the text the list is found for: the query, or under `debounce` the query once it has
     // stopped changing that long. A value the timer writes, rather than a window on the list, so the
     // list it held back keeps being served (51.19).
-    let searchedFor: () => string = query
+    let searchedFor: Reactive<string> = query
     if (debounce !== undefined) {
         const settled = reactive(query.peek() as string)
         watch(() => {
-            const text = query()
+            const text = query.get()
             const timer = setTimeout(() => settled.set(text), debounce)
             return () => clearTimeout(timer)
         })
         searchedFor = settled
     }
     // Whether a search is out, or held back until the typing stops.
-    const searching = (): boolean => busy(found) || searchedFor() !== query()
+    const searching = (): boolean =>
+        busy(found) || searchedFor.get() !== query.get()
 
     // Nothing is searched while the list is shut, and a search in flight keeps the last results listed.
     const found = reactive(() => {
-        if (!open()) return NOTHING as readonly Item[]
-        const text = searchedFor()
+        if (!open.get()) return NOTHING as readonly Item[]
+        const text = searchedFor.get()
         const search = options.search
         if (search !== undefined) return search(text)
-        const needle = needles()[0]
+        const needle = needles.get()[0]
         const kept: Item[] = []
         for (const item of live(options.options) ?? NOTHING)
             if (needle === undefined || needle.test(label(item)))
@@ -163,21 +165,21 @@ export function combobox<Item, Multiple extends boolean = false>(
     // 51.190 — what was typed, made an item where nothing listed or picked carries it as its label.
     const creating = reactive((): Item | undefined => {
         const create = options.create
-        if (create === undefined || !open()) return undefined
-        const text = typed()?.trim()
+        if (create === undefined || !open.get()) return undefined
+        const text = typed.get()?.trim()
         if (!text) return undefined
         const wanted = text.toLowerCase()
-        for (const item of found() as readonly Item[])
+        for (const item of found.get() as readonly Item[])
             if (label(item).toLowerCase() === wanted) return undefined
-        const one = value()
-        for (const item of picks() ??
+        const one = value.get()
+        for (const item of picks.get() ??
             (one === undefined ? NOTHING : [one as Item]))
             if (label(item).toLowerCase() === wanted) return undefined
         return create(text)
     })
     const listed = reactive((): readonly Item[] => {
-        const kept = found() as readonly Item[]
-        const extra = creating() as Item | undefined
+        const kept = found.get() as readonly Item[]
+        const extra = creating.get() as Item | undefined
         return extra === undefined ? kept : [...kept, extra]
     })
 
@@ -280,8 +282,8 @@ export function combobox<Item, Multiple extends boolean = false>(
     }
 
     const pickedKeys = reactive(() => {
-        const held = picks()
-        const one = value()
+        const held = picks.get()
+        const one = value.get()
         const keys = new Set<ItemKey>()
         if (held !== undefined) for (const each of held) keys.add(key(each))
         else if (one !== undefined) keys.add(key(one as Item))
@@ -293,10 +295,10 @@ export function combobox<Item, Multiple extends boolean = false>(
         root: {
             'data-combobox': 'root',
             get 'data-open'() {
-                return open() ? '' : undefined
+                return open.get() ? '' : undefined
             },
             get 'data-busy'() {
-                return open() && searching() ? '' : undefined
+                return open.get() && searching() ? '' : undefined
             },
         },
         input: {
@@ -307,21 +309,21 @@ export function combobox<Item, Multiple extends boolean = false>(
             autocomplete: 'off',
             'aria-autocomplete': 'list',
             get 'aria-expanded'() {
-                return open() ? 'true' : 'false'
+                return open.get() ? 'true' : 'false'
             },
             // 49.17
             get 'data-open'() {
-                return open() ? '' : undefined
+                return open.get() ? '' : undefined
             },
             get 'aria-controls'() {
-                return open() ? `${id}-listbox` : undefined
+                return open.get() ? `${id}-listbox` : undefined
             },
             get 'aria-activedescendant'() {
-                return open() ? list.activeId : undefined
+                return open.get() ? list.activeId : undefined
             },
             // 32.113 — the field's text, kept written into its property once it is typed in too.
             get value() {
-                return query()
+                return query.get()
             },
             oninput: (event: Event) =>
                 write((event.currentTarget as HTMLInputElement).value),
@@ -335,7 +337,7 @@ export function combobox<Item, Multiple extends boolean = false>(
         },
         // The list is open for the popup once there is an input to open it against.
         open: reactiveOver(
-            () => open() && input() !== undefined,
+            () => open.get() && input.get() !== undefined,
             (next: boolean) => open.set(next),
         ),
         popup: {
@@ -359,21 +361,21 @@ export function combobox<Item, Multiple extends boolean = false>(
             },
         }),
         get items() {
-            return listed() as readonly Item[]
+            return listed.get() as readonly Item[]
         },
         get creating() {
-            return creating() as Item | undefined
+            return creating.get() as Item | undefined
         },
         option: (item) =>
             withPart(list.option(item), {
                 'data-combobox': 'option',
                 get 'data-selected'() {
-                    return pickedKeys().has(key(item)) ? '' : undefined
+                    return pickedKeys.get().has(key(item)) ? '' : undefined
                 },
             }),
-        runs: (item) => labelRuns(label(item), needles(), MATCH),
+        runs: (item) => labelRuns(label(item), needles.get(), MATCH),
         get nothingFound() {
-            return !searching() && listed().length === 0
+            return !searching() && listed.get().length === 0
         },
         empty: { role: 'status', 'data-combobox': 'empty' },
         value: value as Reactive<Picked<Item, Multiple>>,

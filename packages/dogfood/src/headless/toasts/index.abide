@@ -127,7 +127,7 @@ import toneEdges from './lib/ToneEdges.abide' with { type: 'text' }
                 attributes: { 'data-track': 'deal-archived' },
                 action: { label: 'Undo', run: () => reopenDeal() },
                 onclose: (reason) => {
-                    if (reason === 'action') undos.set(undos() + 1)
+                    if (reason === 'action') undos.set(undos.get() + 1)
                 },
             })
         `} />

@@ -9,8 +9,8 @@ function logging(count: number): () => void {
     for (let at = 0; at < count; at += 1)
         opening.push({ id: at, contact: `Contact ${at}`, kind: 'Email' })
     const activity = reactive(opening)
-    const last = reactive(() => activity().at(-1))
-    last()
+    const last = reactive(() => activity.get().at(-1))
+    last.get()
     return () => {
         activity.patch((entries) => {
             entries.push({
@@ -20,7 +20,7 @@ function logging(count: number): () => void {
             })
             entries.shift()
         })
-        last()
+        last.get()
     }
 }
 
