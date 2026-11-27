@@ -164,7 +164,7 @@ function declared(
         .map(({ name, create }) => `const ${name} = reactive.shared(${create})`)
         .join('\n')
     if (!path.endsWith('.abide')) return afterImports(text, lines)
-    const scripts = [...text.matchAll(new RegExp(SCRIPT.source, 'gd'))]
+    const scripts = [...text.matchAll(new RegExp(SCRIPT.source, 'gdi'))]
     const module = scripts.find((match) => /\bmodule\b/.test(match[1] ?? ''))
     if (module !== undefined) {
         // Edited from the end, so each range is where the scan found it.

@@ -39,7 +39,7 @@ export function rewriteCode(
 }
 
 /** An `.abide` file's script block: its open tag, its code and its close tag. */
-export const SCRIPT = /(<script\b[^>]*>)([\s\S]*?)(<\/script>)/g
+export const SCRIPT = /(<script\b[^>]*>)([\s\S]*?)(<\/script\s*>)/gi
 
 /** One replacement a migration makes in a piece of code: `start` to `end` becomes `text`. */
 export type Splice = { start: number; end: number; text: string }
@@ -83,7 +83,7 @@ function rewritten(text: string, kind: Kind, rewrite: CodeRewrite): string {
         )
     // An `.abide` file: its script blocks are modules, and a code sample written in its markup — a
     // template literal handed to a prop — is a file of its own.
-    const matches = [...text.matchAll(new RegExp(SCRIPT.source, 'gd'))]
+    const matches = [...text.matchAll(new RegExp(SCRIPT.source, 'gdi'))]
     const found = matches.map((match) => match[2] as string)
     const blocks =
         rewrite.scripts?.(found) ?? found.map((block) => rewrite.module(block))

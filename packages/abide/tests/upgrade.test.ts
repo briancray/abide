@@ -918,6 +918,21 @@ const kept = options.computed
     expect(toDerived(own, 'src/own.ts')).toBe(own)
 })
 
+// 38.199 — A MIGRATION REWRITES EVERY SCRIPT BLOCK THE COMPILER READS, cased and closed however the
+// file writes it: `<SCRIPT>` and `</script >` are a block to `parseAbide`. THE REVERT: match the block
+// with a case-sensitive `<\/script>`; the page is handed back unchanged.
+test('abide upgrade rewrites a script block written in capitals — 38.199', () => {
+    const page = `<SCRIPT>
+import { computed } from '@abide/abide'
+const a = computed(() => 1)
+</SCRIPT >
+<p>{a}</p>
+`
+    expect(toDerived(page, 'src/index.abide')).toContain(
+        'const a = reactive.derived(() => 1)',
+    )
+})
+
 // 38.232, 38.233 — A FUNCTION `reactive` HELD IS HANDED BACK BY A BODY, and `reactive.derived` IS
 // `reactive`: a held function written in place or bound to the name handed is wrapped, and nothing
 // else — a value, and a `reactive.derived` body, which 38.233 then spells `reactive`. Another
