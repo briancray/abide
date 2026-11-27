@@ -36,6 +36,7 @@ import {
 
 import { positiveSetting } from './config.ts'
 import { currentRequestScope, heldByApp, holdScope } from './requestScope.ts'
+import { jsonLine } from './streamEvent.ts'
 
 const ENCODER = new TextEncoder()
 
@@ -206,8 +207,7 @@ function boundTranscript(
                 bytes +=
                     chunk instanceof Uint8Array
                         ? chunk.byteLength
-                        : ENCODER.encode(`${JSON.stringify(chunk)}\n`)
-                              .byteLength
+                        : ENCODER.encode(jsonLine(chunk)).byteLength
                 if (bytes > bound) {
                     over()
                     return

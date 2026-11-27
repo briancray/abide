@@ -20,6 +20,7 @@ import { reachOf, rpc } from '#shared/rpc.ts'
 
 import { callerOf, callerOrMint, mintCaller } from './callerOf.ts'
 import { config, positiveSetting } from './config.ts'
+import { cookieOf } from './cookieOf.ts'
 import { HOOKS, inOrder } from './hooks.ts'
 import { mountedOwn } from './mountHandlers.ts'
 import { type RequestScope, type Sealed, within } from './requestScope.ts'
@@ -247,11 +248,9 @@ export function signedInAs(): string {
 
 /** Who `request` is signed in as, as `signedInAs` says it, read off its own cookie alone. 16.98. */
 export function signedInBy(request: Request): string {
-    const header = request.headers.get('cookie')
+    const sealed = cookieOf(request, PRINCIPAL_COOKIE)
     return identityOf(
-        (header === null
-            ? undefined
-            : unseal(new Bun.CookieMap(header).get(PRINCIPAL_COOKIE))) ?? null,
+        (sealed === undefined ? undefined : unseal(sealed)) ?? null,
     )
 }
 

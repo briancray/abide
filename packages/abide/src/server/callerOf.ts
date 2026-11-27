@@ -1,6 +1,7 @@
 import { cookies } from '#shared/cookies.ts'
 import { randomToken } from '#shared/randomToken.ts'
 
+import { cookieOf } from './cookieOf.ts'
 import {
     currentRequestScope,
     type RequestScope,
@@ -37,9 +38,7 @@ export function callerOf(): string | undefined {
 
 /** The caller `request`'s `abide-caller` cookie names, or `undefined`; read off the request alone. */
 export function callerCookieOf(request: Request): string | undefined {
-    const header = request.headers.get('cookie')
-    if (header === null) return undefined
-    return new Bun.CookieMap(header).get(CALLER_COOKIE) ?? undefined
+    return cookieOf(request, CALLER_COOKIE)
 }
 
 /**

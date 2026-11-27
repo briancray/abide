@@ -10,6 +10,7 @@
 import { CONTINUE_KEY } from '#shared/CONTINUE_KEY.ts'
 
 import { park } from './parkedAnswers.ts'
+import { jsonLine } from './streamEvent.ts'
 
 // How long an early call waits on a stream's first chunk before handing what is left to the mux.
 const HANDOFF_MILLISECONDS = 1_000
@@ -118,9 +119,7 @@ export function handedOff(answer: Response, request: Request): Response {
             // 16.98 — filed under the caller and the sign-in of the request it answered.
             request,
         )
-        controller.enqueue(
-            ENCODER.encode(`${JSON.stringify({ [CONTINUE_KEY]: token })}\n`),
-        )
+        controller.enqueue(ENCODER.encode(jsonLine({ [CONTINUE_KEY]: token })))
         controller.close()
     }
 }

@@ -17,6 +17,7 @@ import {
 import {
     EVENT_STREAM_OPENER,
     heldBody,
+    jsonLine,
     refusalFrame,
     streamEvent,
 } from './streamEvent.ts'
@@ -271,7 +272,7 @@ export function bodyOf(
                         : ENCODER.encode(String(chunk)),
                 )
             else if (framing === 'jsonl')
-                controller.enqueue(ENCODER.encode(`${JSON.stringify(chunk)}\n`))
+                controller.enqueue(ENCODER.encode(jsonLine(chunk)))
             else
                 controller.enqueue(
                     ENCODER.encode(

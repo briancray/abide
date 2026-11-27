@@ -81,9 +81,14 @@ export function streamEvent(
     return `${name === undefined ? '' : `event: ${name}\n`}${id === undefined ? '' : `id: ${id}\n`}data: ${data}\n\n`
 }
 
+/** One jsonl frame: `value` as a line of JSON. */
+export function jsonLine(value: unknown): string {
+    return `${JSON.stringify(value)}\n`
+}
+
 /** A framed stream's last frame, as the server writes it for a refusal (16.68). */
 export function refusalFrame(problem: Problem, framing: Framed): string {
     return framing === 'jsonl'
-        ? `${JSON.stringify({ [REFUSAL_KEY]: problem })}\n`
+        ? jsonLine({ [REFUSAL_KEY]: problem })
         : streamEvent('refusal', undefined, JSON.stringify(problem))
 }

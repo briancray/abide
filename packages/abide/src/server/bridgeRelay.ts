@@ -37,6 +37,7 @@ import { bodyWithin } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
 import type { ProviderEvent, ToolAnswer } from './assistant.ts'
 import { callerOf } from './callerOf.ts'
+import { cookieOf } from './cookieOf.ts'
 import { fileIn } from './fileIn.ts'
 import { HOOKS, inOrder } from './hooks.ts'
 import { Inbox } from './Inbox.ts'
@@ -157,11 +158,7 @@ export function fromNativeWindow(): boolean {
 /** Whether `given` carries the native app's window credential. 44.79. */
 export function carriesWindowCredential(given: Request): boolean {
     if (LOCAL.secret === '') return false
-    const cookie = given.headers.get('cookie')
-    return (
-        cookie !== null &&
-        new Bun.CookieMap(cookie).get(NATIVE_COOKIE) === LOCAL.secret
-    )
+    return cookieOf(given, NATIVE_COOKIE) === LOCAL.secret
 }
 
 /** Whether the native app's own bridge stands for a request `local` says is from its window: Claude Code is found. */
