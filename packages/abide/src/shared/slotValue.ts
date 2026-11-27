@@ -41,6 +41,16 @@ export function slotValue(read: () => unknown): unknown {
     }
 }
 
+/**
+ * Whether `thrown` is a `NotLanded`, counted as a read `slotValue` aborted where it is — for a read
+ * guarded in place rather than through a thunk, a spread's member (32.117).
+ */
+export function abortedBy(thrown: unknown): boolean {
+    if (!(thrown instanceof NotLanded)) return false
+    aborted += 1
+    return true
+}
+
 /** How many reads `slotValue` has aborted, for `abortedSince`. */
 export function abortedReads(): number {
     return aborted

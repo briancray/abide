@@ -197,6 +197,38 @@ test('bind:group holds the radio chosen, or the boxes checked — 32.8', async (
     expect(input('s').getAttribute('group')).toBeNull()
 })
 
+// 32.117 — IN THE BROWSER, A MEMBER NOT LANDED KEEPS WHAT IT LAST WROTE, as a slot does (32.23), and
+// its siblings are still written. THE REVERT: drop the \`held\` loop from \`bindSpread\`; the title
+// written before is removed while the member is in flight — \`null\` where 'north' is due.
+test('a spread member in flight keeps its attribute, and its siblings are written — 32.117', async () => {
+    const { mount } = await renderPage(`<script>
+import { NotLanded, reactive } from '@abide/abide'
+
+let place = reactive<string | undefined>('north')
+let count = reactive(1)
+const part = {
+    get title() {
+        if (place === undefined) throw new NotLanded({}, 'place')
+        return place
+    },
+    get 'data-count'() {
+        return String(count)
+    },
+}
+</script>
+
+<p id="held" {...part}>p</p>
+<button id="lose" onclick={() => { place = undefined; count = 2 }}>lose</button>`)
+    mount()
+    const held = document.getElementById('held') as HTMLElement
+    expect(held.getAttribute('title')).toBe('north')
+    ;(document.getElementById('lose') as HTMLElement).click()
+    flushSync()
+    expect([held.getAttribute('title'), held.getAttribute('data-count')]).toEqual(
+        ['north', '2'],
+    )
+})
+
 const SPREAD = `<script>
 import { reactive } from '@abide/abide'
 

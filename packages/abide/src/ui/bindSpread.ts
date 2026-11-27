@@ -28,12 +28,20 @@ export function bindSpread(
     const control = isControl(tag)
     scope.watch(() => {
         const wanted: [string, EventListener][] = []
+        const held: string[] = []
         const next = new Set<string>()
-        for (const [name, text] of spreadEntries(read(), explicit, wanted)) {
+        for (const [name, text] of spreadEntries(
+            read(),
+            explicit,
+            wanted,
+            held,
+        )) {
             next.add(name)
             if (writeAttribute(element, name, text) && control)
                 controlProperty(element, tag, name, text)
         }
+        // 32.117 — a member not landed keeps what it last wrote.
+        for (const name of held) if (written.has(name)) next.add(name)
         for (const name of written)
             if (!next.has(name)) {
                 element.removeAttribute(name)

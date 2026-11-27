@@ -314,6 +314,40 @@ test('a mount into an empty region continues past a spread still in flight — 3
     expect(tips()).toEqual(['late/warm', 'late/cool'])
 })
 
+// 32.117 — AN ELEMENT SPREAD'S MEMBER IS A SLOT. A headless component's part reads its options in
+// getters (`listbox`'s `aria-activedescendant` reads its `options`), and a getter reading a value in
+// flight threw `NotLanded` out of `spreadEntries` — out of the server's render, where a text slot or a
+// `{#for}` subject over the same value waits. Aborted, the one member is absent and the rest are
+// written; the binding writes it once the value lands.
+//
+// THE REVERT: walk the value with `Object.entries` again and `render` throws `NotLanded: derived has
+// not landed` — no document, `#after` never rendered.
+test('a render continues past a spread member still in flight, and writes it once it lands — 32.117', async () => {
+    const { html, mount } = await renderPage(`<script>
+import { reactive } from '@abide/abide'
+
+const late = reactive(() => Promise.resolve('north'))
+const part = {
+    'data-part': 'region',
+    get title() {
+        return late()
+    },
+}
+</script>
+
+<main><p id="spread" {...part}>p</p><p id="after">after</p></main>`)
+    expect(html).toContain('<p id="after">after</p>')
+    const spread = () => document.querySelector('#spread')
+    expect(spread()?.getAttribute('data-part')).toBe('region')
+    expect(spread()?.hasAttribute('title')).toBe(false)
+
+    mount()
+    await Bun.sleep(0)
+    flushSync()
+    expect(spread()?.getAttribute('title')).toBe('north')
+    expect(spread()?.getAttribute('data-part')).toBe('region')
+})
+
 // 32.37 — `disabled="false"` IS A DISABLED BUTTON. A whole-value attribute was written as its text,
 // so `disabled={busy}` shipped every button disabled whatever `busy` held, and the docs' own cards
 // were written around it. Presence is the answer for an attribute HTML reads by presence; text for

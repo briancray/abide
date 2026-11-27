@@ -15,6 +15,7 @@
 import { attributeText, writtenMarkup } from './attributeText.ts'
 import { BIND_ELEMENT } from './BIND_ELEMENT.ts'
 import { isEventName } from './isEventName.ts'
+import { abortedBy } from './slotValue.ts'
 
 /** A `{...expr}` on a component, as one live prop accessor per key the value carries. */
 export function spreadProps(
@@ -40,17 +41,33 @@ const ATTRIBUTE_NAME = /^[^\s"'>/=]+$/
  * THE LISTENERS COME OUT OF THE SAME WALK, as `[event, listener]` pushed onto `listeners`: a
  * listener under `on<event>` that the element does not name explicitly. The server has nowhere to
  * put one and hands no array.
+ *
+ * A member a `NotLanded` aborted is pushed onto `held`, for the binding to leave as it last wrote it
+ * (32.23); the server's markup leaves it out, as a slot aborted on a first render writes nothing.
  */
 export function spreadEntries(
     value: unknown,
     explicit: readonly string[],
     listeners: [string, EventListener][] | null = null,
+    held: string[] | null = null,
 ): [string, string][] {
     const entries: [string, string][] = []
     if (value === null || typeof value !== 'object') return entries
-    for (const [name, member] of Object.entries(value)) {
+    for (const name of Object.keys(value)) {
         const lower = name.toLowerCase()
         if (explicit.includes(lower)) continue
+        // 32.117 — A MEMBER IS A SLOT: a getter reading what has not landed aborts its own attribute,
+        // as `slotValue` aborts an expression's, and never the spread's other members. The read
+        // subscribed before it threw, so the binding's rerun is the landing. The try costs nothing
+        // where nothing throws.
+        let member: unknown
+        try {
+            member = (value as Record<string, unknown>)[name]
+        } catch (thrown) {
+            if (!abortedBy(thrown)) throw thrown
+            held?.push(name)
+            continue
+        }
         // 32.4 — AN `on<event>` NAME IS NEVER MARKUP, whatever it holds: a string under `onclick`
         // written as an attribute is an inline handler, script compiled from data.
         if (isEventName(lower)) {
