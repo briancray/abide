@@ -10,7 +10,13 @@
 // from its worker (38.35), and a relayed body with no declared length goes out chunked.
 // BUN'S GZIP parts from zlib's past ~130 KB, which only the off-loop lane reaches — so that lane takes
 // zlib's, the loop keeps bun's, and the two make the same bytes.
-import { brotliCompress, brotliCompressSync, constants, gzip } from 'node:zlib' // bun has no brotli, and no compression off the loop
+import {
+    brotliCompress,
+    brotliCompressSync,
+    type BrotliOptions,
+    constants,
+    gzip,
+} from 'node:zlib' // bun has no brotli, and no compression off the loop
 
 import {
     type Encoding,
@@ -48,13 +54,28 @@ function compressedOffLoop(
     bytes: Uint8Array<ArrayBuffer>,
     encoding: Encoding,
 ): Promise<Uint8Array<ArrayBuffer>> {
+    if (encoding === 'br') return brotliOffLoop(bytes, BROTLI_OPTIONS)
     return new Promise((resolve, reject) => {
-        const settle = (error: Error | null, result: Uint8Array): void => {
+        gzip(bytes, (error, result) => {
             if (error === null) resolve(result as Uint8Array<ArrayBuffer>)
             else reject(error)
-        }
-        if (encoding === 'br') brotliCompress(bytes, BROTLI_OPTIONS, settle)
-        else gzip(bytes, settle)
+        })
+    })
+}
+
+/**
+ * `bytes` brotli-compressed off the main thread, at `options`: a request's answer at quality 5, a
+ * build's files at 11 with their size hinted.
+ */
+export function brotliOffLoop(
+    bytes: Uint8Array<ArrayBuffer>,
+    options: BrotliOptions,
+): Promise<Uint8Array<ArrayBuffer>> {
+    return new Promise((resolve, reject) => {
+        brotliCompress(bytes, options, (error, result) => {
+            if (error === null) resolve(result as Uint8Array<ArrayBuffer>)
+            else reject(error)
+        })
     })
 }
 

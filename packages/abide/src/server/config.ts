@@ -15,6 +15,7 @@ import { runSchema } from '#shared/Schema.ts'
 import { executableName } from './executableName.ts'
 import { type Env, HOOKS, inOrder } from './hooks.ts'
 import { packageDirectory } from './packageDirectory.ts'
+import { UNVERSIONED } from './UNVERSIONED.ts'
 import { withoutTrailingSlash } from './withoutTrailingSlash.ts'
 
 /** The fields of an app's `package.json` 27.3 derives from. */
@@ -167,7 +168,7 @@ export function derived(): Record<string, string> {
     return {
         ...ADDED,
         APP_NAME: name,
-        APP_VERSION: manifest.version ?? '0.0.0',
+        APP_VERSION: manifest.version ?? UNVERSIONED,
         // 36.4 — A PATH, and never created here: an app that wants the directory makes it, or opens a
         // `database` (47.2).
         APP_DATA_DIR: dataDirectory(name),
@@ -202,7 +203,7 @@ export function appIdentity(): { name: string; version: string } {
     const resolved = config.peek()
     return {
         name: String(resolved?.APP_NAME ?? 'app'),
-        version: String(resolved?.APP_VERSION ?? '0.0.0'),
+        version: String(resolved?.APP_VERSION ?? UNVERSIONED),
     }
 }
 

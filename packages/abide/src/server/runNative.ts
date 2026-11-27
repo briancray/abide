@@ -42,6 +42,7 @@ import { plainAnswer } from './plainAnswer.ts'
 import { type Component, renderDocument } from './render.ts'
 import { runCompiled } from './runCompiled.ts'
 import { type BuildParts, builtSources } from './servedApp.ts'
+import { UNVERSIONED } from './UNVERSIONED.ts'
 import { wakeWindow } from './wakeWindow.ts'
 
 /** What `abide native` read of the launcher's files, carried in the executable. */
@@ -111,7 +112,7 @@ async function openWindow(
     identity: AppOrigin['package'],
     published: Map<string, string>,
 ): Promise<void> {
-    const version = identity.version ?? '0.0.0'
+    const version = identity.version ?? UNVERSIONED
     const icon = await menuBarIcon(published)
     const thread = new Worker(Bun.main)
     const tell = (message: ToLauncher): void => thread.postMessage(message)
@@ -257,7 +258,7 @@ async function launch(
     keepLogFile(
         dataDirectory,
         executableName(origin.package.name),
-        origin.package.version ?? '0.0.0',
+        origin.package.version ?? UNVERSIONED,
     )
     if (failedToEnter !== undefined) throw failedToEnter.thrown
     const found = await path
@@ -399,7 +400,7 @@ async function launch(
         return new Response(launcherPage(props), { headers })
     }
 
-    const version = origin.package.version ?? '0.0.0'
+    const version = origin.package.version ?? UNVERSIONED
     // 38.142 — an app outside a `.app` has nothing to replace, and checks for nothing.
     const bundled = appOf(process.execPath)
     const updater =

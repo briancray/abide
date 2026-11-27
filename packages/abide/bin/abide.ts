@@ -4,7 +4,7 @@
 
 import { mkdir, rename, rm } from 'node:fs/promises' // bun exposes no directory creation, rename or recursive directory removal of its own
 import { dirname, relative, resolve } from 'node:path' // bun exposes no path helpers of its own
-import { brotliCompress, constants } from 'node:zlib' // bun's brotli is `CompressionStream`, which compresses on the main thread — 1390 ms against this pool's 300 ms over the docs bundle
+import { constants } from 'node:zlib' // brotli's parameters, for `brotliOffLoop` — bun's own brotli is `CompressionStream`, which compresses on the main thread: 1390 ms against zlib's pool's 300 ms over the docs bundle
 
 import { agentNoteFindings } from '#compiler/agentNotes.ts'
 import { paints } from '#compiler/appLayout.ts'
@@ -45,6 +45,7 @@ import { banner } from '#server/banner.ts'
 import { ENCODING_SUFFIX } from '#server/CLIENT_BUILD.ts'
 import { type ClientBundle, clientBundle } from '#server/clientBundle.ts'
 import { type Given, type Host, runCommands } from '#server/commands.ts'
+import { brotliOffLoop } from '#server/compressAnswer.ts'
 import { type AppPackage, packageUnder, shownName } from '#server/config.ts'
 import { appOnDisk, appRoot, enterApp, noAppHere } from '#server/createApp.ts'
 import { executableName } from '#server/executableName.ts'
@@ -57,6 +58,7 @@ import { realOrAsGiven } from '#server/realOrAsGiven.ts'
 import { DEFAULT_DOCUMENT, intoHead } from '#server/render.ts'
 import { runtimeRefusal } from '#server/runtimeRefusal.ts'
 import { serveDev } from '#server/serveDev.ts'
+import { UNVERSIONED } from '#server/UNVERSIONED.ts'
 import { publicKeyOf, publishUpdate, updateKey } from '#server/updateFeed.ts'
 import { workerBundles } from '#server/workerBundles.ts'
 import { escapeText } from '#shared/escapeText.ts'
@@ -300,7 +302,7 @@ async function nativeApp(
         out,
         updates,
         {
-            version: identity.version ?? '0.0.0',
+            version: identity.version ?? UNVERSIONED,
             required: values.required === true,
             notes,
         },
@@ -576,9 +578,12 @@ function infoPlist(
         ['CFBundlePackageType', '<string>APPL</string>'],
         [
             'CFBundleShortVersionString',
-            `<string>${identity.version ?? '0.0.0'}</string>`,
+            `<string>${identity.version ?? UNVERSIONED}</string>`,
         ],
-        ['CFBundleVersion', `<string>${identity.version ?? '0.0.0'}</string>`],
+        [
+            'CFBundleVersion',
+            `<string>${identity.version ?? UNVERSIONED}</string>`,
+        ],
         ['LSMinimumSystemVersion', '<string>13.0</string>'],
         ['NSHighResolutionCapable', '<true/>'],
         ['NSPrincipalClass', '<string>NSApplication</string>'],
@@ -705,20 +710,12 @@ async function precompressed(
     path: string,
     bytes: Uint8Array<ArrayBuffer>,
 ): Promise<void> {
-    const brotli = await new Promise<Uint8Array>((compressed, failed) =>
-        brotliCompress(
-            bytes,
-            {
-                params: {
-                    [constants.BROTLI_PARAM_QUALITY]:
-                        constants.BROTLI_MAX_QUALITY,
-                    [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
-                },
-            },
-            (thrown, result) =>
-                thrown === null ? compressed(result) : failed(thrown),
-        ),
-    )
+    const brotli = await brotliOffLoop(bytes, {
+        params: {
+            [constants.BROTLI_PARAM_QUALITY]: constants.BROTLI_MAX_QUALITY,
+            [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+        },
+    })
     await Promise.all([
         Bun.write(path, bytes),
         Bun.write(path + ENCODING_SUFFIX.br, brotli),

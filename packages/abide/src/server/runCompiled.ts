@@ -5,6 +5,7 @@
 import { type Host, runCommands } from './commands.ts'
 import { type AppHandle, type AppOrigin, bootApp } from './createApp.ts'
 import { type BuildParts, builtSources } from './servedApp.ts'
+import { UNVERSIONED } from './UNVERSIONED.ts'
 
 export async function runCompiled(
     origin: AppOrigin,
@@ -33,7 +34,7 @@ export async function runCompiled(
     }
     const host: Host = {
         name: process.execPath.slice(process.execPath.lastIndexOf('/') + 1),
-        version: origin.package.version ?? '0.0.0',
+        version: origin.package.version ?? UNVERSIONED,
         app: () => app,
         source: undefined,
     }

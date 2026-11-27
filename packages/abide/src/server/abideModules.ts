@@ -339,7 +339,7 @@ function addCompilation(
         handlerFiles.push(path)
     }
     for (const [name, text] of Object.entries(compilation.tables))
-        held.tables.set(`${root}/${VIRTUAL_DIRECTORY}/${name}`, text)
+        held.tables.set(tablePath(root, name), text)
     return handlerFiles
 }
 
