@@ -12,7 +12,13 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { isAbideSpecifier } from './hookCalls.ts'
-import { rewriteCode, SCRIPT, type Splice, spliced } from './rewriteCode.ts'
+import {
+    lineAround,
+    rewriteCode,
+    SCRIPT,
+    type Splice,
+    spliced,
+} from './rewriteCode.ts'
 import { importStatements, namedImports } from './splitImports.ts'
 import {
     argumentCommas,
@@ -349,12 +355,9 @@ function exportedHandlers(body: string): string {
         )
             at.push(token.start)
     }
-    let out = body
-    for (let index = at.length - 1; index >= 0; index -= 1) {
-        const start = at[index] as number
-        out = `${out.slice(0, start)}export ${out.slice(start)}`
-    }
-    return out
+    const edits: Splice[] = []
+    for (const start of at) edits.push({ start, end: start, text: 'export ' })
+    return spliced(body, edits)
 }
 
 /**
@@ -398,8 +401,6 @@ function bareExports(
             commas.length > 1 ||
             (commas.length === 1 && commas[0] !== close - 1)
         if (optioned) {
-            const lineStart = body.lastIndexOf('\n', token.start) + 1
-            const lineEnd = body.indexOf('\n', token.start)
             // The `GET` this migration narrowed (see `isReadAlone`): its options are the verb.
             const options = body
                 .slice(
@@ -408,7 +409,7 @@ function bareExports(
                 )
                 .trim()
             note(
-                body.slice(lineStart, lineEnd === -1 ? undefined : lineEnd),
+                lineAround(body, token.start),
                 options === "{ methods: ['GET'] }"
                     ? READ_ONLY((tokens[index + 2] as Token).text)
                     : OPTIONED,

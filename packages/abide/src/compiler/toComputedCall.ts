@@ -12,8 +12,8 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import { SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import { isAbideSpecifier } from './hookCalls.ts'
-import { rewriteCode } from './rewriteCode.ts'
-import { importStatements } from './splitImports.ts'
+import { rewriteCode, type Splice, spliced } from './rewriteCode.ts'
+import { importStatements, namedImports } from './splitImports.ts'
 import { closerOf, type Token, tokenize } from './tokenize.ts'
 
 /** 38.224 — `text`, a page at `path`, with each handler call a declaration holds wrapped in `computed`. */
@@ -72,7 +72,7 @@ function handlersIn(code: string): Set<string> {
 function wrapCalls(code: string, handlers: Set<string>): string {
     if (handlers.size === 0) return code
     const tokens = tokenize(code)
-    const edits: { start: number; end: number }[] = []
+    const edits: Splice[] = []
     for (let at = 0; at + 3 < tokens.length; at += 1) {
         const keyword = tokens[at] as Token
         if (
@@ -99,25 +99,21 @@ function wrapCalls(code: string, handlers: Set<string>): string {
                 .includes('\n')
         )
             continue
-        edits.push({ start: callee.start, end: (tokens[close] as Token).end })
+        const end = (tokens[close] as Token).end
+        edits.push({
+            start: callee.start,
+            end,
+            text: `computed(() => ${code.slice(callee.start, end)})`,
+        })
     }
-    let out = code
-    for (let index = edits.length - 1; index >= 0; index -= 1) {
-        const { start, end } = edits[index] as { start: number; end: number }
-        out = `${out.slice(0, start)}computed(() => ${out.slice(start, end)})${out.slice(end)}`
-    }
-    return out
+    return spliced(code, edits)
 }
 
 /** Which of `codes` imports from abide by name in braces, where `computed` can join it. */
 function abideImporter(codes: string[]): number | undefined {
     for (let index = 0; index < codes.length; index += 1)
         for (const statement of importStatements(codes[index] as string))
-            if (
-                !statement.typeOnly &&
-                isAbideSpecifier(statement.specifier) &&
-                statement.specifier === SHARED_SPECIFIER
-            )
+            if (!statement.typeOnly && statement.specifier === SHARED_SPECIFIER)
                 return index
     return undefined
 }
@@ -132,23 +128,8 @@ function withComputed(code: string): string {
         const open = code.indexOf('{', statement.start)
         const close = code.indexOf('}', open)
         if (open === -1 || close > statement.end) continue
-        names.push('computed')
-        names.sort((a, b) =>
-            a
-                .replace(/^type\s+/, '')
-                .localeCompare(b.replace(/^type\s+/, ''), 'en', {
-                    sensitivity: 'base',
-                }),
-        )
-        const list = code.slice(open + 1, close)
-        const multiline = list.includes('\n')
-        const indent = multiline
-            ? (/\n([ \t]*)\S/.exec(list)?.[1] ?? '    ')
-            : ''
-        const rendered = multiline
-            ? `{\n${names.map((name) => `${indent}${name},`).join('\n')}\n}`
-            : `{ ${names.join(', ')} }`
-        return code.slice(0, open) + rendered + code.slice(close + 1)
+        const list = namedImports(code, statement, [...names, 'computed'])
+        return spliced(code, [list])
     }
     return `import { computed } from '${SHARED_SPECIFIER}'\n${code}`
 }

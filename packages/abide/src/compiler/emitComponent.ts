@@ -158,7 +158,7 @@ ${privateExports(file.servers.join('\n'), SERVER_SPECIFIER)}${heldToAnnotations(
     const probes =
         !settles &&
         readsBareProbe(
-            lowering.abideImports,
+            lowering.frameworkBindings,
             `${head}\n${declared}\n${body.join('\n')}`,
         )
     const waits = !settles && !probes && holdsStatement(setup.body)

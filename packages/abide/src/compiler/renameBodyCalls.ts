@@ -10,7 +10,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { abideBindings, isAbideSpecifier, localOf } from './hookCalls.ts'
-import type { CodeRewrite } from './rewriteCode.ts'
+import { type CodeRewrite, type Splice, spliced } from './rewriteCode.ts'
 import {
     type ImportStatement,
     importStatements,
@@ -90,12 +90,10 @@ function renamedCalls(
             continue
         if (accepts(tokens, open + 1, text)) renames.push(token.start)
     }
-    let code = text
-    for (let index = renames.length - 1; index >= 0; index -= 1) {
-        const start = renames[index] as number
-        code = code.slice(0, start) + to + code.slice(start + from.length)
-    }
-    return { code, count: renames.length }
+    const edits: Splice[] = []
+    for (const start of renames)
+        edits.push({ start, end: start + from.length, text: to })
+    return { code: spliced(text, edits), count: renames.length }
 }
 
 /**

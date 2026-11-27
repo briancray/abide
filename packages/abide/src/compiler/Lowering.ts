@@ -99,7 +99,7 @@ export class Lowering {
      */
     readonly checking: boolean
     /** What the file's scripts import from abide: each local name to the name it imports (`abideBindings`). */
-    readonly abideImports: ReadonlyMap<string, string>
+    readonly frameworkBindings: ReadonlyMap<string, string>
     /**
      * Whether a script binds `raw` to abide's own `raw`, which a checked lowering then leaves a
      * template's `raw(x)` calling — the same function, and the import read where the author reads it.
@@ -157,8 +157,8 @@ export class Lowering {
         this.answer = answer
         this.holdsSlot = holdsNode(file.template, isSlot)
         this.checking = checking
-        this.abideImports = abideBindings(scriptBodies(file))
-        this.importsRaw = this.abideImports.get('raw') === 'raw'
+        this.frameworkBindings = abideBindings(scriptBodies(file))
+        this.importsRaw = this.frameworkBindings.get('raw') === 'raw'
         this.chunks = chunks
         this.routed = routed
     }

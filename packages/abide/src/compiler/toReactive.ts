@@ -6,7 +6,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { abideBindings, localOf } from './hookCalls.ts'
-import { rewriteCode } from './rewriteCode.ts'
+import { rewriteCode, type Splice, spliced } from './rewriteCode.ts'
 import { type Token, tokenize } from './tokenize.ts'
 
 /** 38.233 — `text`, a file at `path`, with abide's `reactive.derived` spelled `reactive`. */
@@ -35,7 +35,7 @@ export function reactiveAs(blocks: string[]): string | undefined {
 /** `code` with each `name.derived` that is not itself a member read as `name`. */
 function renamed(code: string, name: string): string {
     const tokens = tokenize(code)
-    const spans: { start: number; end: number }[] = []
+    const spans: Splice[] = []
     for (let at = 0; at < tokens.length; at += 1) {
         const token = tokens[at] as Token
         if (token.kind !== SyntaxKind.Identifier || token.text !== name)
@@ -47,12 +47,7 @@ function renamed(code: string, name: string): string {
             member?.text !== 'derived'
         )
             continue
-        spans.push({ start: token.end, end: member.end })
+        spans.push({ start: token.end, end: member.end, text: '' })
     }
-    let out = code
-    for (let index = spans.length - 1; index >= 0; index -= 1) {
-        const span = spans[index] as { start: number; end: number }
-        out = out.slice(0, span.start) + out.slice(span.end)
-    }
-    return out
+    return spliced(code, spans)
 }
