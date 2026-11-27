@@ -23,6 +23,7 @@
 // CALLBACK RETURNS — every op's value is copied then rather than at its write — and a write made
 // under one is not kept, since that copy already carries it.
 import { isPlainData } from '../isPlainData.ts'
+import { pointerToken } from '../pointerToken.ts'
 import type { PatchLog, PatchOp } from './patchLog.ts'
 import { markWritten, openPatch } from './patchMarks.ts'
 import { RESHAPING } from './RESHAPING.ts'
@@ -364,8 +365,7 @@ const snapshot = (raw: unknown): unknown =>
 /** A path as a JSON Pointer (RFC 6901): `''` for the root, `~` as `~0` and `/` as `~1`. */
 function pointerOf(path: (string | number)[]): string {
     let pointer = ''
-    for (const step of path)
-        pointer += `/${String(step).replaceAll('~', '~0').replaceAll('/', '~1')}`
+    for (const step of path) pointer += `/${pointerToken(step)}`
     return pointer
 }
 

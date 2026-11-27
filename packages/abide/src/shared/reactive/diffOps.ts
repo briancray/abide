@@ -4,6 +4,7 @@
 // moved is a `move`, and the rest stay where they stood — where by position, a row taken from the
 // front of a list would replace every row after it.
 
+import { pointerToken } from '../pointerToken.ts'
 import { deepEqual } from './deepEqual.ts'
 import type { PatchOp } from './patchLog.ts'
 
@@ -30,11 +31,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return prototype === Object.prototype || prototype === null
 }
 
-/** RFC 6901 — a property name as one token of a JSON Pointer. */
-function token(name: string | number): string {
-    return String(name).replaceAll('~', '~0').replaceAll('/', '~1')
-}
-
 function diffInto(
     ops: PatchOp[],
     path: string,
@@ -51,9 +47,12 @@ function diffInto(
     if (isRecord(before) && isRecord(after)) {
         for (const name of Object.keys(before))
             if (!(name in after))
-                ops.push({ op: 'remove', path: `${path}/${token(name)}` })
+                ops.push({
+                    op: 'remove',
+                    path: `${path}/${pointerToken(name)}`,
+                })
         for (const name of Object.keys(after)) {
-            const at = `${path}/${token(name)}`
+            const at = `${path}/${pointerToken(name)}`
             if (!(name in before))
                 ops.push({ op: 'add', path: at, value: after[name] })
             else diffInto(ops, at, before[name], after[name], null)

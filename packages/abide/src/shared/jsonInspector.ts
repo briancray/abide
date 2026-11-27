@@ -6,6 +6,7 @@
 import type { JsonValue } from './JsonValue.ts'
 import { type LabelRun, labelRuns, needlesOf } from './labelRuns.ts'
 import { type Live, live } from './live.ts'
+import { pointerToken } from './pointerToken.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
@@ -94,12 +95,6 @@ const kindOf = (value: JsonValue): JsonKind =>
           ? 'array'
           : (typeof value as JsonKind)
 
-// RFC 6901 — `~` and `/` in a key are written `~0` and `~1`.
-const tokenOf = (key: string | number): string =>
-    typeof key === 'number'
-        ? String(key)
-        : key.replaceAll('~', '~0').replaceAll('/', '~1')
-
 const keyText = (row: JsonRow): string =>
     row.key === undefined ? '' : String(row.key)
 
@@ -143,7 +138,7 @@ export function jsonInspector(options: JsonInspectorOptions): JsonInspector {
                         visit(
                             each,
                             name,
-                            `${pointer}/${tokenOf(name)}`,
+                            `${pointer}/${pointerToken(name)}`,
                             level + 1,
                         ),
                     )
