@@ -7,7 +7,13 @@
 import type { Params } from './matchRoute.ts'
 import { ambient } from './reactive/index.ts'
 import type { Reactive } from './reactive/Reactive.ts'
-import { type QueryDefaults, type QueryOf, routeQuery } from './routeQuery.ts'
+import {
+    type QueryDefaults,
+    type QueryMemberOf,
+    type QueryOf,
+    routeQuery,
+    routeQueryMember,
+} from './routeQuery.ts'
 
 /**
  * The current address: its `url`, `params`, pattern `name`, its `index` in this document's history,
@@ -26,13 +32,30 @@ export const route = {
     navigating: ambient(false),
     /**
      * 30.41 — the query as one value of the defaults' shape, written by navigating. A FUNCTION, not
-     * a sixth value: each caller names the members it owns (30.45).
+     * a sixth value: each caller names the members it owns (30.45). 30.49 — handed a name and its
+     * default, the one member as a `Reactive` of its own.
      */
-    query<Defaults extends QueryDefaults>(
+    query: query as RouteQuery,
+}
+
+/** `route.query`: the query as one value of its defaults' shape, or one member of it. */
+type RouteQuery = {
+    <Defaults extends QueryDefaults>(
         defaults: Defaults,
-    ): Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>> {
-        return routeQuery(route.url, defaults)
-    },
+    ): Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>>
+    <Default extends QueryDefaults[string]>(
+        name: string,
+        fallback: Default,
+    ): Reactive<QueryMemberOf<Default>>
+}
+
+function query(
+    asked: QueryDefaults | string,
+    fallback?: QueryDefaults[string],
+): unknown {
+    return typeof asked === 'string'
+        ? routeQueryMember(route.url, asked, fallback as QueryDefaults[string])
+        : routeQuery(route.url, asked)
 }
 
 /**

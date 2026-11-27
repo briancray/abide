@@ -1,19 +1,15 @@
 <script>
-import { reactive, route } from '@abide/abide'
+import { reactive, route, tabs } from '@abide/abide'
 
 const TABS = ['deals', 'notes']
 
-const query = route.query({ tab: 'deals' })
+const view = tabs({ items: TABS, selected: route.query('tab', 'deals') })
 let draft = reactive('')
 </script>
 
-<div class="tabs">
+<div class="tabs" {...view.list}>
     {#for name of TABS}
-        <button aria-pressed={query.tab === name}
-            onclick={() => {
-                query.tab = name
-            }}
-        >{name}</button>
+        <button {...view.tab(name).button}>{name}</button>
     {/for}
 </div>
 

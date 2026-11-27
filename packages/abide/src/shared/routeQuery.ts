@@ -68,6 +68,32 @@ export function routeQuery<Defaults extends QueryDefaults>(
     ) as unknown as Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>>
 }
 
+/** 30.41 — one member's value as `route.query` reads it, widened from its default's literal. */
+export type QueryMemberOf<Default extends QueryDefaults[string]> = QueryOf<{
+    member: Default
+}>['member']
+
+/**
+ * 30.49 — ONE MEMBER OF THE QUERY AS A `Reactive` OF ITS OWN, for a part that binds a value: read
+ * as `route.query({ [name]: fallback })` reads it, and a write that member's write, which leaves
+ * every other member of the address standing (30.45).
+ */
+export function routeQueryMember<Default extends QueryDefaults[string]>(
+    address: Reactive<URL>,
+    name: string,
+    fallback: Default,
+): Reactive<QueryMemberOf<Default>> {
+    const whole = routeQuery(address, { [name]: fallback } as QueryDefaults)
+    return pairReactive(
+        {
+            get: () => (whole() as Record<string, unknown>)[name],
+            set: (value) =>
+                whole.set({ [name]: value } as Partial<QueryOf<QueryDefaults>>),
+        },
+        deepEqual,
+    ) as unknown as Reactive<QueryMemberOf<Default>>
+}
+
 /** 30.41, 30.42 — each member the defaults name, parsed by its default's type. */
 function queryRead(
     address: URL,

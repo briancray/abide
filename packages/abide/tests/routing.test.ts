@@ -2213,6 +2213,36 @@ test('navigate(0) settles at once and does not reload — 30.39', async () => {
     }
 })
 
+const QUERY_MEMBER_HOME = `<script>
+import { route, toggleGroup } from '@abide/abide'
+
+let watch = route.query('watch', 0)
+const picker = toggleGroup({ items: [1, 2], value: watch })
+</script>
+
+<main id="home"><h1>Home</h1><p id="watch">{watch}</p>
+<div {...picker.group}><button id="two" {...picker.item(2)}>2</button></div>
+<button id="next" onclick={() => { watch = watch + 1 }}>next</button></main>`
+
+// 30.49 — ONE MEMBER AS A \`Reactive\` OF ITS OWN, handed to a part as its \`value\` and written by name:
+// read off the address as its default's type, and a write that member's alone. THE REVERT, run: answer
+// the whole record from \`routeQueryMember\`; \`#watch\` reads \`[object Object]\` and a press writes no
+// \`watch\`.
+test('route.query(name, fallback) is one member as a Reactive, read and written alone — 30.49', async () => {
+    history.replaceState(null, '', '/?keep=1&watch=1')
+    const r = router(await pages(undefined, QUERY_MEMBER_HOME))
+    await r.hydrate()
+    expect(document.querySelector('#watch')?.textContent).toBe('1')
+    click('#two')
+    expect(location.search).toBe('?keep=1&watch=2')
+    expect(document.querySelector('#watch')?.textContent).toBe('2')
+    expect(document.querySelector('#two')?.getAttribute('aria-checked')).toBe(
+        'true',
+    )
+    click('#next')
+    expect(location.search).toBe('?keep=1&watch=3')
+})
+
 const QUERY_HOME = `<script>
 import { route } from '@abide/abide'
 

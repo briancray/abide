@@ -209,7 +209,7 @@ A property written `name?: T` in a signature takes `undefined` as it takes the p
 | `route.name` | `Reactive<string>` | The resolution path, the same under any mount path. | 23.1, 23.6, 23.14, 31.15 |
 | `route.index` | `Reactive<number>` | The place of the entry the address bar stands at in the history this app's router wrote. | 23.1, 23.28, 23.29, 31.15 |
 | `route.navigating` | `Reactive<boolean>` | Whether a navigation is in flight. | 23.1, 31.15 |
-| `route.query` | `<Defaults extends Record<string, string \| number \| boolean \| readonly string[]>>(defaults: Defaults) => Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>>` | The address's query as one value of its defaults' shape. | 30.41, 30.42, 30.43, 30.44, 30.45, 30.46, 30.47, 30.48, 31.8 |
+| `route.query` | `<Defaults extends Record<string, string \| number \| boolean \| readonly string[]>>(defaults: Defaults) => Reactive<QueryOf<Defaults>, Partial<QueryOf<Defaults>>>`, or `(name: string, fallback: string \| number \| boolean \| readonly string[]) => Reactive<string \| number \| boolean \| string[]>` | The address's query as one value of its defaults' shape, or one member of it as a value of its own, typed as its default is. | 30.41, 30.42, 30.43, 30.44, 30.45, 30.46, 30.47, 30.48, 30.49, 31.8 |
 
 The alias `route.query` widens its defaults through is declared rather than listed, not being a
 name an app writes:

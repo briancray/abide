@@ -2379,6 +2379,11 @@ wake a reader of the value `route.query` answers.
 value `route.query` answers MUST read under 30.41, and a write to one MUST rewrite under 30.44, the
 address that `navigate` goes to, and `route.url` otherwise.
 
+30.49 `route.query` handed a name and a default MUST answer that one member as a `Reactive` of its
+own: read as `route.query` handed defaults naming that member alone reads it (30.41, 30.42), and
+written as a write to that value carrying the member alone (30.43-30.48), so a write leaves every
+other member of the address standing.
+
 # 31. Reading and writing by name
 
 31.1 Inside a `.abide` file a name bound to a `Reactive` MUST be read wherever 31.3 does not hold it.
