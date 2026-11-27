@@ -157,7 +157,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
     // 51.150 — the listbox over the items as put.
     const choices: Listbox<Item, Multiple> = listbox({
         ...options,
-        options: () => sorted(),
+        options: sorted,
     })
     const keys = (): string[] => (sorted.peek() ?? []).map(keyOf)
     // The selection as each of its two shapes, read by the one `multiple` says it is.

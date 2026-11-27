@@ -633,14 +633,10 @@ export function chart(options: ChartOptions): ChartParts {
     })
 
     // 52.26, 52.69 — the crosshair's x, picked by the pointer or the arrows.
-    const scrubbing = scrub(
-        { peek: () => hovered.peek(), set: (index) => hovered.set(index) },
-        {
-            count: () => plot().xs.length,
-            nearest: (fraction) =>
-                nearest(plot().xs, fraction * measuredWidth()),
-        },
-    )
+    const scrubbing = scrub(hovered, {
+        count: () => plot().xs.length,
+        nearest: (fraction) => nearest(plot().xs, fraction * measuredWidth()),
+    })
 
     // 52.38, 52.70 — a click picks the x nearest it, read again from the click's own position, and Enter
     // the x the crosshair stands at.

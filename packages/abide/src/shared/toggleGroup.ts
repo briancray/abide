@@ -68,17 +68,15 @@ export function toggleGroup<Item, Multiple extends boolean = false>(
     // 51.110 — picking many, a key's button is a `toggle`, pressed while the key is picked.
     const toggled = (key: string): Record<string, unknown> =>
         withPart(
-            withPart(
-                {},
-                toggle({
-                    pressed: reactiveOver(
-                        () => picks.has(key),
-                        (on: boolean) => {
-                            if (on !== picks.has(key)) picks.toggle(key)
-                        },
-                    ),
-                }).button,
-            ),
+            {},
+            toggle({
+                pressed: reactiveOver(
+                    () => picks.has(key),
+                    (on: boolean) => {
+                        if (on !== picks.has(key)) picks.toggle(key)
+                    },
+                ),
+            }).button,
             { id: itemId(key), 'data-toggle-group': 'item' },
         )
 

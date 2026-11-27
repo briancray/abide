@@ -1,6 +1,11 @@
 import { checkParts } from './checkParts.ts'
 import { hotkeys } from './hotkeys.ts'
-import { keyOfItem, type KeyOption } from './itemKey.ts'
+import {
+    keyOfItem,
+    type KeyOption,
+    listedKeys,
+    listedOrFirst,
+} from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
@@ -69,11 +74,7 @@ export function listbox<Option, Multiple extends boolean = false>(
     const chosen = many
         ? reactive<string | undefined>(undefined)
         : (selection.selected as Reactive<string | undefined>)
-    const order = () => {
-        const keys: string[] = []
-        for (const option of options()) keys.push(key(option))
-        return keys
-    }
+    const order = listedKeys(given.options, key)
     // 51.101 — `mod+a` as `hotkeys` reads it, only where it selects many.
     const selectAll = many
         ? hotkeys({ 'mod+a': () => selection.all(order) })
@@ -93,17 +94,12 @@ export function listbox<Option, Multiple extends boolean = false>(
     const active = reactive(() => {
         const moved = chosen()
         const pointer = pointed()
-        const wanted =
+        return listedOrFirst(
+            order(),
             pointer !== undefined && pointer.over === moved
                 ? pointer.key
-                : moved
-        let first: string | undefined
-        for (const option of options()) {
-            const each = key(option)
-            if (each === wanted) return each
-            first ??= each
-        }
-        return first
+                : moved,
+        )
     })
 
     const isSelected = (each: string): boolean =>
