@@ -22,6 +22,18 @@ import Section from '#src/lib/Section.abide'
                 "test('the caller reads what the component wrote, and the component what the caller set'",
             ],
         },
+        {
+            path: 'packages/abide/tests/testPreload.test.ts',
+            from: [
+                "test('a mounted component reads route at the document address, and navigates",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/lib/JumpTo.test.ts',
+            from: [
+                "test('an arrow and Enter run the command, and the palette shuts'",
+            ],
+        },
     ]}
 >
     <Section level={3} title="Click a component in a test and read what it rendered">
@@ -57,6 +69,25 @@ import Section from '#src/lib/Section.abide'
             stage.set('won')
             flushSync()
             expect(document.body.textContent).toContain('won')
+        `} />
+    </Section>
+
+    <Section level={3} title="Read where a component navigated">
+        <p>A mounted component stands at the document's address, and its <code>navigate</code>
+            writes the history as the router does, so the test reads <code>location</code>
+            afterward.</p>
+        <Code language="ts" caption="browser" code={`
+            import { expect, test } from 'bun:test'
+            import { flushSync } from '@abide/abide'
+            import { mount } from '@abide/abide/test'
+            import JumpTo from './JumpTo.abide'
+
+            test('Companies goes to the companies list', async () => {
+                using _jump = await mount(JumpTo({}))
+                document.querySelectorAll<HTMLElement>('[role=option]')[1]?.click()
+                flushSync()
+                expect(location.pathname).toBe('/companies')
+            })
         `} />
     </Section>
 </Doc>

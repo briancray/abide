@@ -274,6 +274,70 @@ test('the caller reads what the component wrote, and the component what the call
     )
 }, 90_000)
 
+// 38.235 — A MOUNTED COMPONENT STANDS AT THE DOCUMENT'S ADDRESS, and navigates through a router the
+// mount installs: its setup reads `route.url` in both halves — the server's without the fragment,
+// which no request carries — and a push, a replace and a step land in `history`, where the test reads
+// them back. THE REVERT: take `arrive` and `holdRouter` out of `testMount.ts`; the server pass's
+// setup throws "a <script> setup read a value that has not landed" — exit 1, `0 pass`.
+test('a mounted component reads route at the document address, and navigates — 38.235', async () => {
+    const cwd = temporaryModule({
+        'package.json': JSON.stringify({
+            name: 'route-fixture',
+            type: 'module',
+            imports: { '#src/*': './src/*' },
+        }),
+        'bunfig.toml': BUNFIG,
+        'src/index.abide': '<main>home</main>',
+        'src/lib/Where.abide': `<script>
+import { navigate, route } from '@abide/abide'
+
+;(globalThis as { seen?: string[] }).seen?.push(route.url().href)
+</script>
+
+<p id="at">{route.url.pathname}{route.url.search}{route.url.hash} {route.index} {route.name}</p>
+<button id="next" onclick={() => navigate('/next?page=2')}>next</button>
+<button id="swap" onclick={() => navigate('/swapped', { replace: true })}>swap</button>`,
+        'src/tests/Where.test.ts': `import { afterEach, expect, test } from 'bun:test'
+import { navigate } from '@abide/abide'
+import { mount } from '@abide/harness/abide'
+import Where from '../lib/Where.abide'
+
+const at = () => document.querySelector('#at')?.textContent
+const click = (id: string) => document.querySelector<HTMLButtonElement>(id)?.click()
+
+afterEach(() => history.replaceState(null, '', '/'))
+
+test('route is the address, and a navigation is the history', async () => {
+    history.replaceState(null, '', '/start#key')
+    const seen: string[] = []
+    ;(globalThis as { seen?: string[] }).seen = seen
+    {
+        using _where = await mount(Where({}))
+        expect(seen).toEqual([location.origin + '/start', location.origin + '/start#key'])
+        expect(at()).toBe('/start#key 0 /start')
+        const entries = history.length
+        click('#next')
+        expect(at()).toBe('/next?page=2 1 /next')
+        expect(location.pathname + location.search).toBe('/next?page=2')
+        expect(history.length).toBe(entries + 1)
+        click('#swap')
+        expect(at()).toBe('/swapped 1 /swapped')
+        expect(history.length).toBe(entries + 1)
+        await navigate(-1)
+        expect(at()).toBe('/start#key 0 /start')
+    }
+    expect(await navigate('/after').catch((error: Error) => error.message)).toContain('no router')
+})
+`,
+    })
+    const ran = await spawned(['bun', 'test', './src/tests/Where.test.ts'], {
+        cwd,
+    })
+    expect(`${ran.exitCode} ${ran.stderr.includes('1 pass')}`, ran.stderr).toBe(
+        '0 true',
+    )
+}, 90_000)
+
 // 12.5, 38.119 — THE SERVER PASS'S WATCH STOPS WITH IT. `mount` renders as a request does, and a
 // request's scope is torn down once its document is written: the watch the render opened runs its
 // disposer, and the one the hydration opened is the only one left live — until `stop` ends it too.

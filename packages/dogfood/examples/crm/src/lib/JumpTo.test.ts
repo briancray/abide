@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 
 import { flushSync } from '@abide/abide'
 import { mount } from '@abide/harness/abide'
@@ -13,6 +13,8 @@ const options = () =>
             '[role=option] [data-command-palette=label]',
         ),
     ].map((option) => option.textContent)
+
+afterEach(() => history.replaceState(null, '', '/'))
 
 function press(key: string, init: KeyboardEventInit = {}) {
     ;(document.activeElement ?? document.body).dispatchEvent(
@@ -71,8 +73,7 @@ test('typing lists the commands whose label or keywords hold every word', async 
 // 51.67, 51.68 — THE ARROWS MOVE THE ACTIVE COMMAND AND ENTER RUNS IT, the palette shut first. THE
 // REVERT: run without shutting — the dialog stays open over the page it went to.
 test('an arrow and Enter run the command, and the palette shuts', async () => {
-    const went: string[] = []
-    using _jump = await mount(JumpTo({ go: (address) => went.push(address) }))
+    using _jump = await mount(JumpTo({}))
     press('k', { ctrlKey: true })
     await Promise.resolve()
     expect(input().getAttribute('aria-activedescendant')).toBe(
@@ -84,7 +85,7 @@ test('an arrow and Enter run the command, and the palette shuts', async () => {
     )
     press('Enter')
     expect(dialog().open).toBe(false)
-    expect(went).toEqual(['/companies'])
+    expect(location.pathname).toBe('/companies')
     // Opened again, it lists every command afresh.
     press('k', { ctrlKey: true })
     expect(input().value).toBe('')
@@ -125,13 +126,12 @@ test('each word typed is marked in the labels it is in', async () => {
 })
 
 // THE REVERT: bind each command's `key` beside the palette's hotkey in `commandPalette`'s `hotkeys`
-// map, `[command.key]: { run: command.run }`, and pressing `n` on the page runs Add a deal — `went:
-// /deals` where `went: ` is due.
+// map, `[command.key]: { run: command.run }`, and pressing `n` on the page runs Add a deal — `at:
+// /deals` where `at: /` is due.
 test("a command's key is shown beside it and runs nothing — 51.70", async () => {
-    const went: string[] = []
-    using _jump = await mount(JumpTo({ go: (address) => went.push(address) }))
+    using _jump = await mount(JumpTo({}))
     press('n')
-    expect(`went: ${went.join()}`).toBe('went: ')
+    expect(`at: ${location.pathname}`).toBe('at: /')
     press('k', { ctrlKey: true })
     await Promise.resolve()
     expect(
@@ -145,5 +145,5 @@ test("a command's key is shown beside it and runs nothing — 51.70", async () =
     ).toEqual(['Add a deal'])
     press('k', { ctrlKey: true })
     press('n')
-    expect(`went: ${went.join()}`).toBe('went: ')
+    expect(`at: ${location.pathname}`).toBe('at: /')
 })

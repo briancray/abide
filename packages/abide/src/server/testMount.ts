@@ -5,8 +5,16 @@
 // AFTER WHAT THE BODY HOLDS, not over it: two components a test mounts together — a toast and the
 // list that shows it — each keep the markup their watches write to, and each one's stop takes away
 // what it added.
+//
+// 38.235 — AT THE DOCUMENT'S ADDRESS, as a page load is: `route` arrives at it for the server pass
+// with the fragment a server never receives taken off, and again whole for the hydration. Where
+// the document has no router, the mount installs one for as long as any mount stands — written to
+// `history`, so where a component navigated is `location`, `history.state` and `route`, read after
+// the navigation, and no spy records it a second time.
 
+import { CURRENT_ROUTER, type Navigable } from '#shared/CURRENT_ROUTER.ts'
 import { flushSync } from '#shared/reactive/Reactive.ts'
+import { arrive } from '#shared/route.ts'
 
 import { MOUNTABLE } from './MOUNTABLE.ts'
 import { type Component, render } from './render.ts'
@@ -40,6 +48,10 @@ export async function mount(component: Component): Promise<Mounted> {
         throw new Error(
             'abide: mount renders into a DOM, and this process has none. Preload `@abide/harness/preload` ahead of `@abide/abide/test` in bunfig.toml. RULEBOOK 38.119.',
         )
+    // 23.29 — a server's own index, at the address a request would have carried.
+    const served = new URL(location.href)
+    served.hash = ''
+    arrive(served.href, served.pathname, {}, 0)
     // 12.5 — the server pass's watches stop once its document is written, as any render's do.
     const html = new TextDecoder().decode(await render(component))
     // After the `<body …>` open tag, whatever attributes the component wrote onto it (35.15).
@@ -54,6 +66,8 @@ export async function mount(component: Component): Promise<Mounted> {
     const [{ default: hydrate }, { pageRegion, removeUntil }] =
         await Promise.all([mountable.client(), import('#ui/regions.ts')])
     const region = pageRegion(document.body, added[0] ?? null)
+    const held = holdRouter()
+    arrived()
     const scope = hydrate(region, mountable.accessors)
     flushSync()
     let stopped = false
@@ -61,9 +75,94 @@ export async function mount(component: Component): Promise<Mounted> {
         if (stopped) return
         stopped = true
         scope?.stop()
+        if (held) releaseRouter()
         // What hydration put between the anchors is not what was added, so the region goes by them.
         removeUntil(region.open, region.close.nextSibling)
         for (const node of added) node.parentNode?.removeChild(node)
     }
     return { stop, [Symbol.dispose]: stop }
+}
+
+/**
+ * The entry `history.state` holds — the client router's shape, so `route.index` reads the same
+ * under a mount as under it (23.28).
+ */
+type Entry = { index: number; scroll: null }
+
+function indexOfEntry(): number {
+    const state = history.state as Partial<Entry> | null
+    return typeof state?.index === 'number' ? state.index : 0
+}
+
+/**
+ * `route` at the document's address, and every effect that woke for it run.
+ *
+ * NO ROUTE TABLE IS READ: a mounted component is no page, so the address resolves to itself — a
+ * static route's literal is its pathname, and it matched no params.
+ */
+function arrived(): void {
+    arrive(location.href, location.pathname, {}, indexOfEntry())
+    flushSync()
+}
+
+// Every `step` waiting on the next `popstate`, settled together as the client router's are (30.38).
+const STEPPING: (() => void)[] = []
+
+function popped(): void {
+    arrived()
+    for (const settle of STEPPING.splice(0)) settle()
+}
+
+const MOUNT_ROUTER: Navigable = {
+    go(to, options) {
+        const target = new URL(to, location.href)
+        const full = `${target.pathname}${target.search}${target.hash}`
+        const index = indexOfEntry()
+        if (options.replace === true)
+            history.replaceState(
+                { index, scroll: null } satisfies Entry,
+                '',
+                full,
+            )
+        else
+            history.pushState(
+                { index: index + 1, scroll: null } satisfies Entry,
+                '',
+                full,
+            )
+        arrived()
+        return Promise.resolve()
+    },
+    step(by) {
+        // 30.39 — a step of none is over before it starts.
+        if (by === 0) return Promise.resolve()
+        return new Promise((settle) => {
+            STEPPING.push(settle)
+            history.go(by)
+        })
+    },
+}
+
+// The mounts standing on `MOUNT_ROUTER`: two mounted together share it, and the last stop removes it.
+let holders = 0
+
+/**
+ * Installs `MOUNT_ROUTER` where the document has no router, or counts one more mount on it; answers
+ * whether this mount holds it.
+ */
+function holdRouter(): boolean {
+    if (holders === 0) {
+        if (CURRENT_ROUTER.current !== null) return false
+        CURRENT_ROUTER.current = MOUNT_ROUTER
+        addEventListener('popstate', popped)
+    }
+    holders += 1
+    return true
+}
+
+function releaseRouter(): void {
+    holders -= 1
+    if (holders > 0) return
+    removeEventListener('popstate', popped)
+    if (CURRENT_ROUTER.current === MOUNT_ROUTER) CURRENT_ROUTER.current = null
 }
