@@ -393,7 +393,7 @@ type Declare<Writes extends boolean> = {
     // the call, and that candidate drops the `undefined` an optional parameter admits — so `rpc(tags)`
     // over `memo((args?: …) => …)` required its args.
     <
-        Over extends Memo<any, any, any, any> & { method?: never | undefined },
+        Over extends AnyMemo & { method?: never | undefined },
         Answers extends readonly unknown[] = unknown[],
         const Methods extends readonly Method[] = ['GET'],
     >(
@@ -523,6 +523,10 @@ type Answering<
 > = Verb extends Methods[number] ? Member : unknown
 
 /** 16.115-16.117 — a memo's or a value's `set` by `PUT` and `patch` by `PATCH`, its owner's writes (11.76). */
+/** Any memo: one answering a promise, or one streaming its chunks (`CallAnswer`). */
+// biome-ignore lint/suspicious/noExplicitAny: any memo at all, whatever it keeps, takes and refuses.
+type AnyMemo = Memo<any, any, any, any> | Memo<unknown[], any, any, unknown>
+
 /** A memo's four parameters, read off it whole (16.6). */
 type MemoOf<Over> =
     Over extends Memo<infer Value, infer Args, infer Failures, infer Produced>

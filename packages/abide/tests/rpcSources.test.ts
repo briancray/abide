@@ -355,4 +355,13 @@ test('an rpc over a memo with optional args is called without them — 16.6', as
     // @ts-expect-error a memo whose args are required still asks for them
     void (() => deal())
     expect(await deal({ id: 'd1' })).toBe('d1')
+    // A streaming memo is a memo too: its call answers its chunks, not a promise, and the overload
+    // that read only promise-answering memos turned it away as "not assignable to never".
+    const ticks = rpc(
+        memo(async function* () {
+            yield 'tick'
+        }),
+    )
+    const chunks: () => AsyncIterable<string> = () => ticks()
+    expect(typeof chunks).toBe('function')
 })
