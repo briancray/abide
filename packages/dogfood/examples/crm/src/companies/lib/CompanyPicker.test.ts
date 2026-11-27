@@ -26,7 +26,7 @@ function press(key: string) {
     flushSync()
 }
 
-test('typing searches, and Enter picks the active company', async () => {
+test('typing searches, and Enter picks the active company — 51.15, 51.22, 51.24, 51.25, 51.26, 51.32', async () => {
     using _picker = await mount(CompanyPicker({}))
     expect(document.querySelector('[role=listbox]')).toBeNull()
     await type('ar')
@@ -46,7 +46,7 @@ test('typing searches, and Enter picks the active company', async () => {
     )
 })
 
-test('the active company stays active while the list narrows', async () => {
+test('the active company stays active while the list narrows — 51.20', async () => {
     using _picker = await mount(CompanyPicker({}))
     // Both searches answered once, so the second `ar` lands inside `measure`.
     await type('ar')
@@ -86,7 +86,7 @@ test('Escape closes the list, and a second clears the pick', async () => {
     ]).toEqual(['', '—'])
 })
 
-test('a search in flight keeps the last companies listed', async () => {
+test('a search in flight keeps the last companies listed — 51.23, 51.31', async () => {
     using _picker = await mount(CompanyPicker({}))
     await type('a')
     input().value = 'zz'

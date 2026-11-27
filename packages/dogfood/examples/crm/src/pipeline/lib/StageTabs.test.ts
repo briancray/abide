@@ -34,7 +34,7 @@ test('the tabs share one panel, labelled by whichever is selected', async () => 
 })
 
 // THE REVERT: filter on a stage the tabs do not write, and the listing stays on the first tab's deals.
-test('the listing is the panel, and its rows follow the tab', async () => {
+test('the listing is the panel, and its rows follow the tab — 51.35', async () => {
     using _tabs = await mount(StageTabs({}))
     await settled()
     flushSync()

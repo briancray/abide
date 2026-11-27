@@ -91,7 +91,7 @@ test('a load starting touches no node', async () => {
 // The revert is `schedule()` becoming `drainPending()` in `cascade`: ten writes become ten
 // `.data` writes, and three values written together become five, because the binding that
 // reads all three runs once per write instead of once per turn.
-test('a handler that writes many times reaches the page once', () => {
+test('a handler that writes many times reaches the page once — 12.10, 12.11', () => {
     const value = reactive(0)
     const stops = bind(value as unknown as () => number, 1)
     const ten = measure(() => {

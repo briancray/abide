@@ -32,7 +32,7 @@ function option(name: string) {
 }
 
 // THE REVERT: read `value` as one item, and the second pick replaces the first.
-test('picking adds a contact, picking it again takes it out, and the list stays open', async () => {
+test('picking adds a contact, picking it again takes it out, and the list stays open — 51.33', async () => {
     using _picker = await mount(TeamPicker({}))
     await settled()
     type('a')

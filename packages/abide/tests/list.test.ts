@@ -440,7 +440,7 @@ function rename() {
 <ul id="list">{#for row of rows key row.id}<li data-id={row.id}><input id={'edit-' + row.id} />{row.name}</li>{/for}</ul>
 <button id="rename" onclick={rename}>rename</button>`
 
-test('a kept key over a new object keeps its row, its text updated and its focus held — 32.67', async () => {
+test('a kept key over a new object keeps its row, its text updated and its focus held — 32.67, 14.5', async () => {
     await mountPage(EDITED)
     const row = document.querySelector('#list li[data-id="grace"]') as Element
     const input = document.querySelector('#edit-grace') as HTMLInputElement

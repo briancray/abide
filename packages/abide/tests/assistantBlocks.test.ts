@@ -72,7 +72,7 @@ function blocked(sent: AssistantMessage[]) {
 // THE REVERT: yield only the events that write a block in `provider.claudeApi` (`message_start`,
 // `message_delta` and `message_stop` left out), and the usage — cache counts and all — and why the run
 // ended never reach a page: 8 events where 11 are due.
-test('provider.claudeApi yields every event the API streams, unchanged — 44.2, 44.11', async () => {
+test('provider.claudeApi yields every event the API streams, unchanged — 44.2, 44.11, 44.104', async () => {
     expect(await answered([{ role: 'user', content: 'my balance?' }])).toEqual(
         CITED_EVENTS,
     )

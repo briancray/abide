@@ -21,7 +21,7 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/harness/tests/report.test.ts',
             from: [
-                "test('the batcher throws in a parallel worker, and not outside one'",
+                "test('the batcher throws in a parallel worker, and not outside one — 43.25'",
             ],
         },
     ]}

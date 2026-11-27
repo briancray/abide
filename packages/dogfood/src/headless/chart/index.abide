@@ -99,7 +99,9 @@ import wonAgainstTarget from './lib/WonAgainstTarget.abide' with { type: 'text' 
         },
         {
             path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',
-            from: ["test('the crosshair reads each line at the nearest month'"],
+            from: [
+                "test('the crosshair reads each line at the nearest month — 52.28'",
+            ],
         },
         {
             path: 'packages/dogfood/examples/crm/src/reports/lib/WonRevenue.test.ts',

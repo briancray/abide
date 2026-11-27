@@ -25,7 +25,7 @@ import winChance from './lib/WinChance.abide' with { type: 'text' }
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/LikelyDeals.test.ts',
             from: [
-                "test('the keys step the thumb within min and max, the fill running from min to it'",
+                "test('the keys step the thumb within min and max, the fill running from min to it — 51.89'",
             ],
         },
         {

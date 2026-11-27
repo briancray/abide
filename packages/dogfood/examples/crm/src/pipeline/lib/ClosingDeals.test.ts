@@ -73,7 +73,7 @@ test('a re-sort moves the rows, building and rewriting none', async () => {
 
 // THE REVERT: sort every new column ascending, and the first press on Amount puts the smallest
 // deal on top.
-test('a first press on Amount sorts the largest deal first', async () => {
+test('a first press on Amount sorts the largest deal first — 51.53', async () => {
     using _deals = await mount(ClosingDeals({}))
     await settled()
     sortBy('Amount')

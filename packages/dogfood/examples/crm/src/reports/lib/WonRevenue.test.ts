@@ -47,7 +47,7 @@ test('won revenue is a line broken where a month has no total', async () => {
 // side with more of the plot, and describes the chart. THE REVERTS: open it on the `'top'` side a hint
 // defaults to — `data-side` reads 'top' where 'right' is due; and drop the `tip`'s binding — the
 // popover never opens.
-test('the crosshair reads each line at the nearest month', async () => {
+test('the crosshair reads each line at the nearest month — 52.28', async () => {
     using _chart = await mount(WonRevenue({}))
     const tip = () => document.querySelector('[role=tooltip]') as HTMLElement
     pointAt(1)

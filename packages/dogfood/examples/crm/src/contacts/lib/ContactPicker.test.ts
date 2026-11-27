@@ -57,7 +57,7 @@ test('narrowing keeps the rows still listed, and builds none', async () => {
     atMost(work, { nodesCreated: 0 })
 })
 
-test('Enter picks the active contact, and the input shows it', async () => {
+test('Enter picks the active contact, and the input shows it — 51.22', async () => {
     using _picker = await mount(ContactPicker({}))
     await settled()
     type('ka')

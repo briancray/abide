@@ -92,7 +92,7 @@ test("a number formatter takes Intl.NumberFormat's own options under their own n
 // THE REVERT: build the date formatter from its style alone, leaving out the caller's options —
 // `Nov 18, 2026, 3:04 PM` where `Wed, Nov 18, 2026, 3:04 PM` is due. Keeping `dateStyle` beneath a
 // named part throws instead.
-test("a date takes Intl.DateTimeFormat's own options under their own names — 52.112", () => {
+test("a date takes Intl.DateTimeFormat's own options under their own names — 52.112, 52.115", () => {
     const at = '2026-11-18T15:04:00Z'
     expect(date(at, { style: 'dateTime', weekday: 'short' })).toBe(
         'Wed, Nov 18, 2026, 3:04 PM',

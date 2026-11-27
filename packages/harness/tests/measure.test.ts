@@ -36,7 +36,7 @@ test('a known-n mutation counts exactly n', () => {
 // Reverted to one `nodesMoved` total, 2 fields become 1 and the 25x case becomes
 // invisible: moving a comment is 0.11 µs and moving an element with its subtree is
 // 2.8 µs, because only the element is in the reflow.
-test('moving a comment and moving an element land in different fields', () => {
+test('moving a comment and moving an element land in different fields — 43.2', () => {
     const parent = document.createElement('div')
     const marker = document.createComment('anchor')
     const element = document.createElement('span')
@@ -70,7 +70,7 @@ test('counts land in the discard between cases', () => {
 // THE RULE THE LIST CANNOT SUPPLY. Reverted — let it through — a reconcile written
 // with `node.normalize()` reports `elementsMoved: 0`, every RENDERER gate goes green,
 // and the lane has landed the failure it exists to issue.
-test('an uncounted mutator throws rather than reporting 0', () => {
+test('an uncounted mutator throws rather than reporting 0 — 43.3', () => {
     const parent = document.createElement('div')
     parent.appendChild(document.createTextNode('a'))
     parent.appendChild(document.createTextNode('b'))
@@ -89,7 +89,7 @@ test('an uncounted mutator throws rather than reporting 0', () => {
 // `removeChild` calls under happy-dom and 0 under Chromium. Reverted — drop the
 // re-entrancy guard — this reads 4 under bun and 2 under chromium, with the
 // byte-identical patch-set gate still passing.
-test('a textContent write counts its own removals once', () => {
+test('a textContent write counts its own removals once — 43.4', () => {
     const parent = document.createElement('div')
     parent.appendChild(document.createElement('b'))
     parent.appendChild(document.createElement('i'))
@@ -296,7 +296,7 @@ test('a published record missing a field throws naming it', () => {
 
 // Reverted — return the duration — a patched-DOM millisecond gets quoted as a result.
 // The interlock replaced the overhead measurement rather than deferring it.
-test('time() throws while the counters are armed', () => {
+test('time() throws while the counters are armed — 43.6', () => {
     expect(() =>
         measure(() => {
             time({ case: 'nested', arms: { one: () => {} } })

@@ -20,7 +20,7 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/assistantBlocks.test.ts',
             from: [
-                "test('provider.claudeApi yields every event the API streams, unchanged — 44.2, 44.11'",
+                "test('provider.claudeApi yields every event the API streams, unchanged — 44.2, 44.11, 44.104'",
             ],
         },
         {

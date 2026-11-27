@@ -29,7 +29,7 @@ test('the clock reports a measured resolution, not an assumed one', () => {
 //
 // Run in a child rather than in this process, because the mark is read at import and
 // the suite's own mode would otherwise decide which half of the gate ran.
-test('the batcher throws in a parallel worker, and not outside one', async () => {
+test('the batcher throws in a parallel worker, and not outside one — 43.25', async () => {
     const call = `batch({ case: 'c', arms: { one: () => { Math.sqrt(2) }, two: () => { Math.sqrt(3) } }, emulated: null, reps: 1, warmup: 1 })`
     const marked = await inAFreshProcess(`${IMPORTS}\n${call}`, '3')
     expect(marked.ok).toBe(false)
@@ -43,7 +43,7 @@ test('the batcher throws in a parallel worker, and not outside one', async () =>
 
 // Refusal 4. Reverted — predicate on `substrate === 'jsc' && unit === 'ms'` — a
 // build-time µs and a TTFB are refused and a `ns` spelling walks through.
-test('the batcher throws on a duration whose op touched an emulated DOM', async () => {
+test('the batcher throws on a duration whose op touched an emulated DOM — 43.12', async () => {
     // In a child, because the worker refusal is checked first and `bun run test` is
     // `--parallel` — the suite's own mode would otherwise decide which throw this saw.
     const run = await inAFreshProcess(
@@ -55,7 +55,7 @@ test('the batcher throws on a duration whose op touched an emulated DOM', async 
 
 // Refusal 3. Reverted — return the sample anyway — an empty body at n=1 comes back as
 // 0 ns and is quoted as a result.
-test('the batcher throws on a sample under 100x the clock', async () => {
+test('the batcher throws on a sample under 100x the clock — 43.12', async () => {
     const run = await inAFreshProcess(
         `${IMPORTS}\nbatch({ case: 'trivial', arms: { one: () => {}, two: () => {} }, emulated: null, n: 1, reps: 1, warmup: 0 })`,
     )
@@ -120,7 +120,7 @@ function sampleOf(over: Partial<Sample>): Sample {
 
 // Reverted — compare the numbers — 1.67x and 0.21x get averaged, which is a claim
 // about neither engine.
-test('ratio() throws across substrates', () => {
+test('ratio() throws across substrates — 43.10', () => {
     expect(() =>
         ratio(sampleOf({}), sampleOf({ arm: 'vanilla', substrate: 'v8' }), {
             floor: 0,
@@ -130,13 +130,13 @@ test('ratio() throws across substrates', () => {
 
 // Reverted — compare them — every ratio in the repo measures one arm against itself
 // and nothing about the output moves.
-test('ratio() refuses two samples with the same arm', () => {
+test('ratio() refuses two samples with the same arm — 43.10', () => {
     expect(() => ratio(sampleOf({}), sampleOf({}), { floor: 0 })).toThrow(
         /twice/,
     )
 })
 
-test('ratio() refuses two cases and two batch sizes', () => {
+test('ratio() refuses two cases and two batch sizes — 43.10', () => {
     expect(() =>
         ratio(sampleOf({}), sampleOf({ arm: 'vanilla', case: 'other' }), {
             floor: 0,

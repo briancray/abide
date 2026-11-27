@@ -67,7 +67,7 @@ console.log(JSON.stringify(pair))`)
 // that structural rather than a convention. Reverted — return the record bare — the
 // fractional `Object:3.09` reads as a count and gets `toBe(3)`d. An odd `reps` runs that many:
 // reverted to two equal halves, 401 runs 400.
-test('retainedPerRun() comes back tagged, with its rep count and its growth', async () => {
+test('retainedPerRun() comes back tagged, with its rep count and its growth — 43.17', async () => {
     const run = await inAFreshProcess(`
 import { retainedPerRun } from '${SERVER}'
 let ran = 0

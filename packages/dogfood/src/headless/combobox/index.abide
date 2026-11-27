@@ -32,11 +32,15 @@ import searchCompanies from './lib/SearchCompanies.abide' with { type: 'text' }
         },
         {
             path: 'packages/dogfood/examples/crm/src/companies/lib/CompanyPicker.test.ts',
-            from: ["test('typing searches, and Enter picks the active company'"],
+            from: [
+                "test('typing searches, and Enter picks the active company — 51.15, 51.22, 51.24, 51.25, 51.26, 51.32'",
+            ],
         },
         {
             path: 'packages/dogfood/examples/crm/src/companies/lib/CompanyPicker.test.ts',
-            from: ["test('a search in flight keeps the last companies listed'"],
+            from: [
+                "test('a search in flight keeps the last companies listed — 51.23, 51.31'",
+            ],
         },
         {
             path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPicker.test.ts',
@@ -45,7 +49,7 @@ import searchCompanies from './lib/SearchCompanies.abide' with { type: 'text' }
         {
             path: 'packages/dogfood/examples/crm/src/contacts/lib/TeamPicker.test.ts',
             from: [
-                "test('picking adds a contact, picking it again takes it out, and the list stays open'",
+                "test('picking adds a contact, picking it again takes it out, and the list stays open — 51.33'",
             ],
         },
         {

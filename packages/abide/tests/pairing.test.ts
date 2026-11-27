@@ -273,7 +273,7 @@ test('a pairing is read again when its follow is refreshed, one read for every r
     expect(unfollowed).toBe(1)
 })
 
-test('a click that blurs the page offers the click again; one that does not offers the install — 44.70, 44.71', async () => {
+test('a click that blurs the page offers the click again; one that does not offers the install — 44.70, 44.71, 53.42', async () => {
     const { pair, dispose } = built()
     // No status yet: nothing to open.
     pair.start()
@@ -294,7 +294,7 @@ test('a click that blurs the page offers the click again; one that does not offe
     dispose()
 })
 
-test('a click with a bridge already paired offers the click again — 44.71', async () => {
+test('a click with a bridge already paired offers the click again — 44.71, 53.42', async () => {
     const { pair, dispose } = built()
     await landed(pair, { ...UNPAIRED, paired: true })
     jest.useFakeTimers()

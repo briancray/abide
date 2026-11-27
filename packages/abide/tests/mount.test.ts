@@ -148,7 +148,7 @@ console.log(JSON.stringify(frames))
 // route with the mount taken off, and the browser's router arrives at `location`. THE REVERT: `arrive`
 // the request's own URL in `answerRequest`; the server renders `/invoices/4` and the browser hydrates
 // against `/docs/invoices/4`.
-test('a page reads the address it is served at — 16.10, 23.4', async () => {
+test('a page reads the address it is served at — 16.10, 23.4, 19.16', async () => {
     const html = await (await Bun.fetch(`${base}/docs/invoices/4`)).text()
     expect(html).toMatch(/id="at">(<!--[^>]*-->)?\/docs\/invoices\/4</)
 })

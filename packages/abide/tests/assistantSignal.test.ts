@@ -99,7 +99,7 @@ test('a request aborting ends a conversation whose provider is stuck — 44.57',
 // The run is in the first reader's request scope, as every `global` entry's is. THE REVERT: read the
 // request off that scope without asking `inGlobalRun`; the provider is handed the reader's signal,
 // and the reader leaving aborts it — `true` where `false` is due.
-test('a global handler streams a conversation its first reader leaving does not end — 44.57, 44.101', async () => {
+test('a global handler streams a conversation its first reader leaving does not end — 44.57, 44.101, 11.39', async () => {
     const { provider, handed } = stuckProvider()
     const implications = rpc(
         async function* ({ path }: { path: string }) {

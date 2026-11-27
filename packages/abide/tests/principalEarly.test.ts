@@ -213,7 +213,7 @@ declare module '#shared/principal.ts' {
 // REVERTS: declare `Principal` as a type alias again, and the merge above is a second declaration of
 // the name; type `resolved` as `Reactive<unknown>` again, and `.id` is read off `unknown` —
 // `bun run typecheck` refuses this file either way.
-test('a claim an app declares on Principal is typed where principal.resolved reads it', async () => {
+test('a claim an app declares on Principal is typed where principal.resolved reads it — 26.25', async () => {
     const fetchedBefore = globalThis.fetch
     globalThis.fetch = (async () =>
         new Response('{"authenticated":true,"id":7}', {

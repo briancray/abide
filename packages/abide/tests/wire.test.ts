@@ -624,7 +624,7 @@ test('the wire takes a call the page already started, and fetches after that —
 // and a copy still busy there has `{#if !s.busy()}` rebuild the region from its start. A stream
 // painted in flight stays in flight. THE REVERT: declare `streamed` as a marked copy's body again in
 // `wire`; the closed stream is busy at the reach, and its read throws `NotLanded`.
-test('a stream painted closed lands closed at the reach, and one painted in flight does not — 41.26, 41.33', async () => {
+test('a stream painted closed lands closed at the reach, and one painted in flight does not — 41.26, 41.33, 9.14', async () => {
     const window = globalThis as unknown as Record<string, unknown>
     const jsonl = (text: string) =>
         new Response(text, {

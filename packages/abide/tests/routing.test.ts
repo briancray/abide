@@ -412,7 +412,7 @@ test("a shell's own body markup stays outside the page region — 41.9", async (
 // 12.13 through the router: the page it replaced owned a scope, and the router is the only thing
 // that can remove its nodes. THE REVERT: drop the `this.stopFrom(kept)` call from `LevelChain.replace` —
 // the old page's binding goes on waking for every write into nodes no longer in the document.
-test('the page a navigation replaced stops its bindings — 12.13', async () => {
+test('the page a navigation replaced stops its bindings — 12.13, 30.12', async () => {
     history.replaceState(null, '', '/')
     const mounts = await pages()
     const r = router(mounts)

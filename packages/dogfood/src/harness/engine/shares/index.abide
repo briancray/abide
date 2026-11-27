@@ -20,12 +20,14 @@ import Section from '#src/lib/Section.abide'
         },
         {
             path: 'packages/harness/tests/engine.test.ts',
-            from: ["test('an op under one frame has an observed ceiling of zero'"],
+            from: [
+                "test('an op under one frame has an observed ceiling of zero — 43.14'",
+            ],
         },
         {
             path: 'packages/harness/tests/engine.test.ts',
             from: [
-                "test('a layer running outside the op is a throw, not a smaller fraction'",
+                "test('a layer running outside the op is a throw, not a smaller fraction — 43.13'",
             ],
         },
     ]}

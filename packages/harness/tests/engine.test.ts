@@ -46,7 +46,7 @@ test('shares() prices the layer against the whole op somebody waits on', () => {
 // quantized, so removing 4.3% of an op that is going to be rounded up to the next
 // frame boundary changes observed latency by exactly zero. Reverted to one `ceiling`
 // "which is what gets written down", a 4.3% CPU share is quoted as 4.3% of the wait.
-test('an op under one frame has an observed ceiling of zero', () => {
+test('an op under one frame has an observed ceiling of zero — 43.14', () => {
     const answer = shares(
         traceOf([
             ['click-to-paint', 0, 7_800_000],
@@ -76,7 +76,7 @@ test('an op over the threshold reports both ceilings', () => {
 // CONTAINMENT IS CHECKED, not assumed. Reverted — sum every measure of that name — a second flush or
 // an idle pass outside the op comes back as a SMALLER fraction, which is the wrong
 // direction and reads as good news.
-test('a layer running outside the op is a throw, not a smaller fraction', () => {
+test('a layer running outside the op is a throw, not a smaller fraction — 43.13', () => {
     expect(() =>
         shares(
             traceOf([

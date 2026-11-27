@@ -147,7 +147,7 @@ test('a static component nothing invokes emits no client module', async () => {
 // THE REVERT: make `unlandable` answer `lowered` unconditionally, so `emitNode`'s expression arm
 // emits `escapeText(...)` directly — `render` throws `NotLanded: reactive has not landed` and this
 // test reports no document at all rather than a document with one empty slot.
-test('a render continues past a value still in flight — 41.4, 32.23', async () => {
+test('a render continues past a value still in flight — 41.4, 32.23, 14.12, 35.7', async () => {
     const { html, mount } = await renderPage(`<script>
 import { reactive } from '@abide/abide'
 
@@ -225,7 +225,7 @@ const rows = reactive(() => Promise.resolve(['north', 'south']))
 // THE REVERT: make `unlandable` answer `lowered` unconditionally and `render` throws
 // `NotLanded: reactive has not landed` — no document at all, on a page whose static markup is
 // most of it. This test then reports nothing rendered rather than a page with two empty values.
-test('a render continues past an unlanded attribute and style — 41.4', async () => {
+test('a render continues past an unlanded attribute and style — 41.4, 35.8, 35.11', async () => {
     const { html, mount } = await renderPage(`<script>
 import { reactive } from '@abide/abide'
 

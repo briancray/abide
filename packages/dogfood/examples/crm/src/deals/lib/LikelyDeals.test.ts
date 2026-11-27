@@ -39,7 +39,7 @@ test('one thumb is a slider named by the label, bounded by min and max', async (
 
 // 51.86, 51.87, 51.90 — THE KEYS STEP THE THUMB to the ends and no further, and the fill runs from
 // `min` to it. THE REVERT: keep the fill's `left` at the value, and it spans nothing.
-test('the keys step the thumb within min and max, the fill running from min to it', async () => {
+test('the keys step the thumb within min and max, the fill running from min to it — 51.89', async () => {
     using _deals = await mount(LikelyDeals({}))
     press('PageUp')
     expect(thumb().getAttribute('aria-valuenow')).toBe('60')

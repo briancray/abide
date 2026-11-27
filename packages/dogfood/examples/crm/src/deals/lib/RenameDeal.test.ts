@@ -32,7 +32,7 @@ test('the input starts from the deal name', async () => {
 })
 
 // THE REVERT: settle with `typed` on any close, and Cancel renames.
-test('Rename takes the text typed, and Cancel keeps the old name', async () => {
+test('Rename takes the text typed, and Cancel keeps the old name — 50.33', async () => {
     using _deal = await mount(RenameDeal({}))
     await ask()
     input().value = 'Engine renewal 2027'

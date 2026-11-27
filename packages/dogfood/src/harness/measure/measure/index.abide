@@ -20,7 +20,7 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/harness/tests/measure.test.ts',
             from: [
-                "test('moving a comment and moving an element land in different fields'",
+                "test('moving a comment and moving an element land in different fields — 43.2'",
             ],
         },
         {

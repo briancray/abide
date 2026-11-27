@@ -77,7 +77,7 @@ test('an anchor ignores indentation, and the slice drops its margin', () => {
 // Several anchors are one fence, in FILE order whatever order they were asked for, and a
 // gap between them is marked. Silently closing a gap would print a file that does not
 // exist — two lines shown adjacent that are forty apart.
-test('several anchors join into one slice, and a gap is shown', () => {
+test('several anchors join into one slice, and a gap is shown — 40.16', () => {
     // Relative indentation is the FILE's, kept — the `<input>` is nested inside a label
     // forty lines down, and re-indenting it flat would print a file that does not exist.
     // The elision marker takes the indent of the run it introduces.

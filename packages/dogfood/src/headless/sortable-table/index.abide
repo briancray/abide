@@ -33,7 +33,9 @@ import sortedByClose from './lib/SortedByClose.abide' with { type: 'text' }
         },
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/ClosingDeals.test.ts',
-            from: ["test('a first press on Amount sorts the largest deal first'"],
+            from: [
+                "test('a first press on Amount sorts the largest deal first — 51.53'",
+            ],
         },
         {
             path: 'packages/dogfood/examples/crm/src/companies/lib/CompanyTable.test.ts',

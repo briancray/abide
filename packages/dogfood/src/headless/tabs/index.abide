@@ -44,7 +44,9 @@ import underlineSelected from './lib/UnderlineSelected.abide' with { type: 'text
         },
         {
             path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageTabs.test.ts',
-            from: ["test('the listing is the panel, and its rows follow the tab'"],
+            from: [
+                "test('the listing is the panel, and its rows follow the tab — 51.35'",
+            ],
         },
         {
             path: 'packages/abide/tests/tabs.test.ts',

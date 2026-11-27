@@ -13,12 +13,14 @@ import Section from '#src/lib/Section.abide'
     tests={[
         {
             path: 'packages/harness/tests/report.test.ts',
-            from: ["test('the batcher throws on a sample under 100x the clock'"],
+            from: [
+                "test('the batcher throws on a sample under 100x the clock — 43.12'",
+            ],
         },
         {
             path: 'packages/harness/tests/report.test.ts',
             from: [
-                "test('the batcher throws in a parallel worker, and not outside one'",
+                "test('the batcher throws in a parallel worker, and not outside one — 43.25'",
             ],
         },
     ]}

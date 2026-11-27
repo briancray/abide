@@ -23,7 +23,7 @@ import stageEntries from './lib/StageEntries.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/reactive.test.ts',
             from: [
-                "test('reactive given a body is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3'",
+                "test('reactive given a body is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3, 11.25'",
             ],
         },
         {

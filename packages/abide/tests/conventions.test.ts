@@ -94,7 +94,7 @@ test('framework code imports by seam, never through its own public specifier', a
 // spec runs in a bun worker too (`bunx --bun playwright test`), so the browser specs are in the globs.
 // THE REVERT: write one `Bun.spawn[S]ync(` into any test; it is named here, and an
 // `exec[S]ync(` or `execFile[S]ync(` is too.
-test('no test waits on a child process synchronously', async () => {
+test('no test waits on a child process synchronously — 43.24', async () => {
     const offenders: string[] = []
     for (const pattern of [
         'abide/tests/**/*.ts',

@@ -121,7 +121,7 @@ function wakes<Value>(value: {
     }
 }
 
-test('a value form lands at construction and reads as ready', () => {
+test('a value form lands at construction and reads as ready — 3.9', () => {
     const total = reactive(41)
     expect(total.ready()).toBe(true)
     expect(total.busy()).toBe(false)
@@ -130,7 +130,7 @@ test('a value form lands at construction and reads as ready', () => {
 })
 
 // RULEBOOK 2.10, move 6. The throw is what lets move 7 type the read as `Stored`.
-test('a read throws NotLanded where nothing has landed, and peek does not', () => {
+test('a read throws NotLanded where nothing has landed, and peek does not — 2.10', () => {
     const pending = reactive(new Promise<number>(() => {}))
     expect(pending.ready()).toBe(false)
     expect(pending.busy()).toBe(true)
@@ -139,7 +139,7 @@ test('a read throws NotLanded where nothing has landed, and peek does not', () =
 })
 
 // The trigger named by the state it produces: busy AND ready.
-test('refresh keeps serving while it reloads', async () => {
+test('refresh keeps serving while it reloads — 2.1', async () => {
     let answer = 1
     const held = reactive(() => Promise.resolve(answer))
     await held
@@ -156,7 +156,7 @@ test('refresh keeps serving while it reloads', async () => {
 // SERVED UNTIL A READ OR A PROBE RUNS THE PRODUCER (7.16, 7.17). A probe answers about the value a
 // read would serve (3.2), so asking runs the producer the mark owes — the held value stops being
 // served (7.8) and, over an async body, the first load starts again — and the read agrees with it.
-test('invalidate keeps serving until a probe or a read runs the producer', async () => {
+test('invalidate keeps serving until a probe or a read runs the producer — 7.7', async () => {
     const answer = 1
     const held = reactive(() => Promise.resolve(answer))
     await held
@@ -229,7 +229,7 @@ test('a guard over an aborted body comes back when the reload lands what was hel
 // when its source's is, so `busy` is true whether or not anything asks. Note the body
 // never reruns here — 7.4 keeps serving, the value does not change, 11.5 gives no
 // recompute — so nothing but a walk of the source list can report it.
-test('busy propagates through a derived value while its source refreshes', async () => {
+test('busy propagates through a derived value while its source refreshes — 11.21', async () => {
     const answer = 1
     const invoice = reactive(() => Promise.resolve(answer))
     await invoice
@@ -341,7 +341,7 @@ test('a watched derived value reruns on the write, not on a later read', async (
 // 11.1, 11.2, 11.3 — THE NAME IS THE FORM, never the body's parameters: a `memo` whose function
 // declares none is kept on `undefined`, and runs once for every call of `m()`, each call answering a
 // promise of its value. THE REVERT: build a keyed value per call in `memo`; `runs: 2` after the second.
-test('reactive given a body is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3', async () => {
+test('reactive given a body is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3, 11.25', async () => {
     const unkeyed = reactive(() => 7)
     expect(unkeyed()).toBe(7)
 
@@ -2805,7 +2805,7 @@ test('a held value goes on being served, and the window reads as busy', async ()
     expect(query.busy()).toBe(false)
 })
 
-test('the identity gate compares against the last production, not the last release', async () => {
+test('the identity gate compares against the last production, not the last release — 9.3', async () => {
     const query = pacedValue<number>(undefined, { throttle: WINDOW })
     query.set(1)
     query.set(2)
@@ -4476,7 +4476,7 @@ test('s.isError takes the error and the name, in that order', () => {
 //
 // THE REVERT: passing `value` instead of `checked` to `transform` in `accept` reports
 // `stored: 7` against `stored: 3` — the untrimmed string measured, spaces and all.
-test('a schema runs before transform, and transform gets what it returned', () => {
+test('a schema runs before transform, and transform gets what it returned — 4.13', () => {
     const order: string[] = []
     const trimmed = reactive<string, number>(undefined, {
         schema: (value: unknown) => {
@@ -4833,7 +4833,7 @@ test('a body handing back a Reactive adopts it rather than streaming it — 9.6,
 // materialization per chunk hands the reader the same array.
 //
 // THE REVERT is materializing in `acceptChunk` rather than in the read: `transforms: 100`.
-test('a stream materializes its accumulation on the read, not per chunk', async () => {
+test('a stream materializes its accumulation on the read, not per chunk — 4.8', async () => {
     const feed = streamOf<number>()
     let transforms = 0
     const rows = reactive(feed.body, {
@@ -6449,7 +6449,7 @@ test('a store watch stops with the owner that built its value, keyed or not — 
 // nothing, where the eager one sent a request for each.
 //
 // THE REVERT is `invalidateOne` starting the producer itself: `runs at the call: 2`.
-test('invalidate runs nothing until the next read, which runs fresh', () => {
+test('invalidate runs nothing until the next read, which runs fresh — 7.2', () => {
     let answer = 1
     let runs = 0
     const held = reactive(() => {

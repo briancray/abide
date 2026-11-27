@@ -93,7 +93,7 @@ test('a restated capability is restated identically', async () => {
 })
 
 // A page nobody can reach is a page nobody reads, and a `SITE` entry with no page renders nothing.
-test('every docs page is in SITE, and every SITE entry has its page', async () => {
+test('every docs page is in SITE, and every SITE entry has its page — 40.7', async () => {
     const listed = new Set<string>()
     for (const page of await docsPages()) listed.add(page.file)
     const orphans: string[] = []

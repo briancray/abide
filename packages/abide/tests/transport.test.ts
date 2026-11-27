@@ -520,7 +520,7 @@ test('a GET over a global value answers a max-age its ttl derives — 21.8, 21.9
 // A value built at boot is already older than its first request, so the numbers are read as a drop
 // rather than against the `ttl`. THE REVERT: answer `ttl / 1000` in `answerOutcome` rather than the
 // deadline less now; every answer reads `max-age=60`, and the second is no lower than the first.
-test('a GET over a global value answers the life its production has left — 21.8', async () => {
+test('a GET over a global value answers the life its production has left — 21.8, 21.16', async () => {
     const maxAge = async (name: string) =>
         Number(
             /max-age=(\d+)/.exec(

@@ -200,7 +200,7 @@ test("a field's group carries its message and whether it is invalid — 49.9, 56
 // 56.4 — A REFUSAL NO FIELD OWNS IS THE WHOLE FORM'S: the server's `''` message shows as the form's
 // `message`, its element shown, while every field reads none. THE REVERT: have the form's `message`
 // answer nothing — `deal.message` reads `undefined` where the server's message is due.
-test("a refusal no field owns shows as the form's own message — 56.4", async () => {
+test("a refusal no field owns shows as the form's own message — 56.4, 56.13", async () => {
     const book = rpc(
         (args: { company: string }) =>
             args.company === 'open'

@@ -508,7 +508,7 @@ test('const holding undefined constrains nothing', () => {
 //
 // THE REVERT: have `issuesOf` return `found` whatever the value. Every scalar arm below then reads
 // `{ '': [...] }` — `data[0]` undefined, the card's status line blank.
-test('a scalar refusal is the bare list in every schema form, an object one stays keyed', () => {
+test('a scalar refusal is the bare list in every schema form, an object one stays keyed — 19.19', () => {
     const standard: StandardSchemaV1<string> = {
         '~standard': {
             version: 1,

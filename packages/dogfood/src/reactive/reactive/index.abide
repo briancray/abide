@@ -29,7 +29,9 @@ import seatTotal from './lib/SeatTotal.abide' with { type: 'text' }
     tests={[
         {
             path: 'packages/abide/tests/reactive.test.ts',
-            from: ["test('a value form lands at construction and reads as ready'"],
+            from: [
+                "test('a value form lands at construction and reads as ready — 3.9'",
+            ],
         },
         {
             path: 'packages/abide/tests/reactive.test.ts',
@@ -40,7 +42,7 @@ import seatTotal from './lib/SeatTotal.abide' with { type: 'text' }
         {
             path: 'packages/abide/tests/reactive.test.ts',
             from: [
-                "test('reactive given a body is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3'",
+                "test('reactive given a body is unkeyed and memo keyed, whatever the body declares — 11.1, 11.2, 11.3, 11.25'",
             ],
         },
         {

@@ -40,7 +40,7 @@ import renameDeal from './lib/RenameDeal.abide' with { type: 'text' }
         {
             path: 'packages/dogfood/examples/crm/src/deals/lib/RenameDeal.test.ts',
             from: [
-                "test('Rename takes the text typed, and Cancel keeps the old name'",
+                "test('Rename takes the text typed, and Cancel keeps the old name — 50.33'",
             ],
         },
         {
