@@ -15,7 +15,7 @@ test('a failed call is reported from its trace, and the report is what was shown
     await expect(fields.locator('strong').first()).toHaveText(/^[0-9a-f]{32}$/)
     const trace = await fields.locator('strong').first().textContent()
     await section.getByRole('button', { name: 'Report this' }).click()
-    const dialog = page.locator('dialog.abide-report')
+    const dialog = page.locator('dialog[data-report="dialog"]')
     await expect(dialog).toBeVisible()
     const summary = `Statements do not send ${Date.now()}`
     await dialog.getByLabel('What went wrong').fill(summary)

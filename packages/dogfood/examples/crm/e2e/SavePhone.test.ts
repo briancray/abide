@@ -11,7 +11,7 @@ test("a refused save's report holds the trace of the call that failed", async ({
     await row.getByLabel("Ada's phone").fill('12')
     await row.getByRole('button', { name: 'Save' }).click()
     await page.locator('[data-notices=action]', { hasText: 'Report' }).click()
-    const dialog = page.locator('dialog.abide-report')
+    const dialog = page.locator('dialog[data-report="dialog"]')
     await expect(dialog).toBeVisible()
     await expect(dialog.locator('pre')).toContainText(/- traces: [0-9a-f]{32}/)
 })
