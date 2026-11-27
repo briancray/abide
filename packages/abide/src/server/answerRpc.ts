@@ -7,7 +7,7 @@
 
 import { collapsed } from '#shared/coerceArgs.ts'
 import { type Failed, isFailed } from '#shared/Failed.ts'
-import { framingOf } from '#shared/framing.ts'
+import { essenceOf, framingOf } from '#shared/framing.ts'
 import { isAsyncIterable } from '#shared/isAsyncIterable.ts'
 import { isRecord } from '#shared/isRecord.ts'
 import { mounted as underMount } from '#shared/mount.ts'
@@ -338,10 +338,10 @@ function preflight(found: Mounted, origin: string, request: Request): Response {
 }
 
 function isForm(request: Request): boolean {
-    const type = request.headers.get('content-type') ?? ''
+    const type = essenceOf(request.headers.get('content-type'))
     return (
-        type.startsWith('application/x-www-form-urlencoded') ||
-        type.startsWith('multipart/form-data')
+        type === 'application/x-www-form-urlencoded' ||
+        type === 'multipart/form-data'
     )
 }
 

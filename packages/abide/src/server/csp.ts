@@ -5,6 +5,7 @@
 // THE NONCE IS MINTED BY WHICHEVER ASKS FIRST — a page reading `csp.nonce` while it renders, or this
 // rung writing a document's header — so the two agree, and an answer that is not a document mints none.
 
+import { essenceOf } from '#shared/framing.ts'
 import type { Rung } from '#shared/Middleware.ts'
 import { randomToken } from '#shared/randomToken.ts'
 
@@ -69,9 +70,7 @@ export function cspRung(
     return async (next) => {
         const answer = await next()
         // 29.2.
-        if (
-            answer.headers.get('content-type')?.startsWith('text/html') === true
-        )
+        if (essenceOf(answer.headers.get('content-type')) === 'text/html')
             answer.headers.set('content-security-policy', written(nonce()))
         return answer
     }

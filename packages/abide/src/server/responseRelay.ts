@@ -5,6 +5,8 @@
 // of, so the protocol is read in one file and runs in one test process (`responseRelay.test.ts`).
 // What `serveDev` and `devWorker` keep is the processes and the sockets.
 
+import { essenceOf } from '#shared/framing.ts'
+
 import { plainAnswer } from './plainAnswer.ts'
 import type { ReceivedFrom } from './requestScope.ts'
 
@@ -138,9 +140,8 @@ export function serveOver(
         }
         bodies.set(ask.id, {
             reader: body.getReader(),
-            html: (response.headers.get('content-type') ?? '').startsWith(
-                'text/html',
-            ),
+            html:
+                essenceOf(response.headers.get('content-type')) === 'text/html',
         })
     }
 

@@ -2,6 +2,8 @@
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
+import { cspRung } from '#server/csp.ts'
+import { inScope } from '#server/requestScope.ts'
 import { documentNonce } from '#shared/csp.ts'
 
 import { serveApp } from './builtApp.ts'
@@ -118,6 +120,25 @@ test('csp.nonce is the nonce in the header, and a non-document carries no policy
     expect(await second.text()).not.toBe(nonce)
     const json = await Bun.fetch(`${base}/totals/getTotal`)
     expect(json.headers.get('content-security-policy')).toBeNull()
+})
+
+// 29.2 — A DOCUMENT IS AN HTML ANSWER HOWEVER ITS TYPE IS CASED: a media type is case-insensitive, so
+// `Text/HTML; charset=utf-8` is a document as `text/html` is. THE REVERT: test the raw header with
+// `startsWith('text/html')` in `cspRung`; the answer carries no policy.
+test('an answer typed Text/HTML carries the policy — 29.2', async () => {
+    const rung = cspRung(undefined)
+    const answer = await inScope(new Request('http://app/'), () =>
+        rung(
+            async () =>
+                new Response('<p>hi</p>', {
+                    headers: { 'content-type': 'Text/HTML; charset=utf-8' },
+                }),
+            { request: new Request('http://app/') },
+        ),
+    )
+    expect(answer.headers.get('content-security-policy')).toContain(
+        'script-src',
+    )
 })
 
 // 29.3, 29.11 — `csp` IS ONE NAME ON BOTH SIDES. A page that hydrates imports it from `@abide/abide`, the
