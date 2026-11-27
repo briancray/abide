@@ -343,7 +343,7 @@ type Refreshed = readonly (
  * overload, rather than a plain one that would drop the options it was built with.
  */
 // 16.117 — and a source's stream, which a table, a pipe and a ledger take their own signature by.
-export type Plain = {
+type Plain = {
     invalidate?: never | undefined
     writable?: never | undefined
 }
@@ -352,7 +352,7 @@ export type Plain = {
  * What narrows a trigger on an `Rpc` beside its pattern: `caller`, the `principal.caller` of the one
  * browser whose followed copies it reaches (18.37) — `true` for the one making this request (18.39).
  */
-export type TriggerOptions = { caller?: string | true | undefined }
+type TriggerOptions = { caller?: string | true | undefined }
 
 /** A handler's options: `RpcOptions` for a mutation, less `refreshes` for a `GET` (16.92). */
 type OptionsOf<
@@ -1114,10 +1114,7 @@ function readOf(
               }
     }
     if (kind === 'ledger')
-        return async function* (from?: {
-            from?: number | undefined
-            cursor?: string | undefined
-        }): AsyncGenerator<unknown> {
+        return async function* (from?: LedgerFrom): AsyncGenerator<unknown> {
             const read = value as (
                 from?: number | { cursor: string },
             ) => ReadableStream<unknown>

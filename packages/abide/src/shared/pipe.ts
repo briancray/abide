@@ -15,7 +15,6 @@ import { messageOf } from './messageOf.ts'
 import { appStopSignal } from './reactive/abortSignal.ts'
 import {
     abortSignal,
-    isReactive,
     type Memo,
     memo,
     type Reactive,
@@ -519,9 +518,9 @@ class Runner {
             input,
             signal,
         )
-        // 1.6 — a `Reactive` is thenable and iterable: its value is the step's answer, read first.
-        if (isReactive(answer)) answer = await answer
-        else if (isThenable(answer)) answer = await answer
+        // A `Reactive` is thenable and iterable (1.4): its value is the step's answer, settled here
+        // ahead of the iterable check, as a promise's is.
+        if (isThenable(answer)) answer = await answer
         if (isAsyncIterable(answer)) {
             const iterator = answer[Symbol.asyncIterator]()
             const first = await iterator.next()

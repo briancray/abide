@@ -26,7 +26,7 @@ export type RpcRequest = {
  * 16.114 — the longest URL a `GET` is sent at: past it, the call is a `QUERY` carrying its args in its
  * body, which no proxy or server between the two ends refuses for its length.
  */
-export const LONGEST_URL = 2_048
+const LONGEST_URL = 2_048
 
 /**
  * Whether a method carries its args in the URL.
