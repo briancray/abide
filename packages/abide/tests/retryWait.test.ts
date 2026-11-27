@@ -1,6 +1,6 @@
 // 18.33, 46.8, 54.10 — EVERY RETRY IS TIMED BY ONE RULE: the browser's `RetryTimer` (the outbox and the
 // socket mux) and the server's `fetchAndHandle` wait what `retryWait` says — the floor doubled per retry,
-// and never sooner than a `Retry-After`. Neither test waits: the timer and the sleep are recorded.
+// and never sooner than a `Retry-After`. Neither test waits: each timer is recorded.
 
 import { afterAll, afterEach, expect, spyOn, test } from 'bun:test'
 
@@ -36,13 +36,17 @@ afterEach(() => {
     for (const spy of spies.splice(0)) spy.mockRestore()
 })
 
-/** The waits `fetchAndHandle` sleeps between attempts, slept as nothing. */
+/** The waits `fetchAndHandle` sleeps between attempts — a timer, on either side — slept as nothing. */
 function sleptBy(): number[] {
     const slept: number[] = []
-    const spy = spyOn(Bun, 'sleep').mockImplementation(((wait: number) => {
+    const spy = spyOn(globalThis, 'setTimeout').mockImplementation(((
+        run: () => void,
+        wait: number,
+    ) => {
         slept.push(wait)
-        return Promise.resolve()
-    }) as typeof Bun.sleep)
+        queueMicrotask(run)
+        return 0
+    }) as unknown as typeof setTimeout)
     spies.push(spy)
     return slept
 }
