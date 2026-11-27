@@ -54,7 +54,8 @@ export function scrollSpy<Item>(
     options: ScrollSpyOptions<Item>,
 ): Sections<Item> {
     const items = () => live(options.items)
-    const keyOf = (item: Item) => keyOfItem(options.key, item)
+    // A section's key is its element's id, so it is text.
+    const keyOf = (item: Item) => String(keyOfItem(options.key, item))
     // The key the last scroll found current; none until the first measurement.
     const found = reactive<string | undefined>(undefined)
     // 51.169 — the first section until anything is measured, on a server as in a browser.

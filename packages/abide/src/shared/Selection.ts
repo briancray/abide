@@ -4,6 +4,7 @@
 // on — to it.
 
 import { isApplePlatform } from './isApplePlatform.ts'
+import type { ItemKey } from './itemKey.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
 /** What a pick holds: every one picked where it picks many, else the one picked or none. */
@@ -11,14 +12,14 @@ export type Picked<Item, Multiple extends boolean> = Multiple extends true
     ? readonly Item[]
     : Item | undefined
 
-const NONE: ReadonlySet<string> = new Set()
+const NONE: ReadonlySet<ItemKey> = new Set()
 
 /** 51.74, 51.100 — every key of `order` from `from` to `to`, either way round, or `undefined` where either is not listed. */
-export function runOf(
-    order: readonly string[],
-    from: string,
-    to: string,
-): string[] | undefined {
+export function runOf<Key extends ItemKey>(
+    order: readonly Key[],
+    from: Key,
+    to: Key,
+): Key[] | undefined {
     const start = order.indexOf(from)
     const end = order.indexOf(to)
     if (start === -1 || end === -1) return undefined
@@ -27,47 +28,47 @@ export function runOf(
 
 /** The keys a `listbox` or a `tree` holds selected, and the gestures that change them. */
 export class Selection {
-    readonly selected: Reactive<Picked<string, boolean>>
+    readonly selected: Reactive<Picked<ItemKey, boolean>>
     readonly many: boolean
     // The keys selected as a set, read once per item an attribute asks about; only where it picks many.
-    readonly keys: Reactive<ReadonlySet<string>>
+    readonly keys: Reactive<ReadonlySet<ItemKey>>
     // 51.100 — where a range runs from.
-    anchor: string | undefined = undefined
+    anchor: ItemKey | undefined = undefined
 
     constructor(
-        selected: Reactive<Picked<string, boolean>> | undefined,
+        selected: Reactive<Picked<ItemKey, boolean>> | undefined,
         many: boolean,
     ) {
         this.many = many
         this.selected =
             selected ??
             ((many
-                ? reactive<readonly string[]>([])
-                : reactive<string | undefined>(undefined)) as Reactive<
-                Picked<string, boolean>
+                ? reactive<readonly ItemKey[]>([])
+                : reactive<ItemKey | undefined>(undefined)) as Reactive<
+                Picked<ItemKey, boolean>
             >)
-        const held = this.selected as Reactive<readonly string[] | undefined>
+        const held = this.selected as Reactive<readonly ItemKey[] | undefined>
         this.keys = reactive(() => (many ? new Set(held() ?? []) : NONE))
     }
 
     /** Whether `key` is selected, read live. */
-    has(key: string): boolean {
+    has(key: ItemKey): boolean {
         return this.many
             ? this.keys().has(key)
-            : (this.selected as Reactive<string | undefined>)() === key
+            : (this.selected as Reactive<ItemKey | undefined>)() === key
     }
 
     /** The keys selected, in the order they were. */
-    list(): readonly string[] {
+    list(): readonly ItemKey[] {
         const now = this.selected()
-        if (this.many) return (now as readonly string[] | undefined) ?? []
-        return now === undefined ? [] : [now as string]
+        if (this.many) return (now as readonly ItemKey[] | undefined) ?? []
+        return now === undefined ? [] : [now as ItemKey]
     }
 
     // 49.19 — each gesture answers whether its write landed, and moves the anchor only where it did.
 
     /** Selects `key` alone. */
-    pick(key: string): boolean {
+    pick(key: ItemKey): boolean {
         if (this.selected.set(this.many ? [key] : key) !== undefined)
             return false
         this.anchor = key
@@ -75,10 +76,10 @@ export class Selection {
     }
 
     /** Adds `key` to the selection, or takes it out where it is in it already. */
-    toggle(key: string): boolean {
+    toggle(key: ItemKey): boolean {
         if (!this.many) return this.pick(key)
         const now =
-            (this.selected.peek() as readonly string[] | undefined) ?? []
+            (this.selected.peek() as readonly ItemKey[] | undefined) ?? []
         const kept = now.filter((each) => each !== key)
         if (
             this.selected.set(
@@ -92,9 +93,9 @@ export class Selection {
 
     /** 51.100 — selects the run of `order` from the anchor to `to`, the anchor being `from` where there is none listed. */
     extend(
-        from: string | undefined,
-        to: string,
-        order: () => readonly string[],
+        from: ItemKey | undefined,
+        to: ItemKey,
+        order: () => readonly ItemKey[],
     ): boolean {
         if (!this.many) return this.pick(to)
         const list = order()
@@ -110,16 +111,16 @@ export class Selection {
     }
 
     /** 51.101 — selects every key of `order`, where it picks many. */
-    all(order: () => readonly string[]): boolean {
+    all(order: () => readonly ItemKey[]): boolean {
         return this.many && this.selected.set([...order()]) === undefined
     }
 
     /** 51.99 — a press on `key`: Shift extends to it from `from`, `mod` toggles it, and a bare press picks it alone. */
     press(
-        key: string,
+        key: ItemKey,
         event: MouseEvent,
-        from: string | undefined,
-        order: () => readonly string[],
+        from: ItemKey | undefined,
+        order: () => readonly ItemKey[],
     ): boolean {
         if (event.shiftKey) return this.extend(from, key, order)
         if (isApplePlatform() ? event.metaKey : event.ctrlKey)

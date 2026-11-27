@@ -3,6 +3,7 @@
 // `disclosure`, open while `open` holds the key, carrying `data-accordion` beside `data-disclosure`.
 
 import { type Disclosure, disclosure } from './disclosure.ts'
+import type { ItemKey } from './itemKey.ts'
 import { randomToken } from './randomToken.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
@@ -10,53 +11,60 @@ import type { Picked } from './Selection.ts'
 import { withPart } from './withPart.ts'
 
 /** Which keys are open, and whether many may be at once. */
-export type AccordionOptions<Multiple extends boolean = false> = {
+export type AccordionOptions<
+    Multiple extends boolean = false,
+    Key extends ItemKey = string,
+> = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
     id?: string | undefined
     /** Whether any number may be open at once. `false` by default: opening one closes the one open. */
     multiple?: Multiple | undefined
     /** The key open, or every key open where many may be: a `Reactive` to read and set. Held by the parts, and handed back as `open`, where none is given. */
-    open?: Reactive<Picked<string, Multiple>> | undefined
+    open?: Reactive<Picked<Key, Multiple>> | undefined
 }
 
 /** The parts `accordion` hands back: `<button {...faq.item('pricing').button}>`. */
-export type Accordion<Multiple extends boolean = false> = {
+export type Accordion<
+    Multiple extends boolean = false,
+    Key extends ItemKey = string,
+> = {
     /** The base its parts' ids are derived from. */
     readonly id: string
     /** A key's button and region: a `disclosure`'s parts. */
-    item(key: string): Disclosure
+    item(key: Key): Disclosure
     /** The key open, or every key open where many may be; written, it opens and closes. */
-    readonly open: Reactive<Picked<string, Multiple>>
+    readonly open: Reactive<Picked<Key, Multiple>>
 }
 
 /** WAI-ARIA's accordion: a disclosure per key, at most one open unless `multiple`. */
-export function accordion<Multiple extends boolean = false>(
-    options: AccordionOptions<Multiple> = {},
-): Accordion<Multiple> {
+export function accordion<
+    Multiple extends boolean = false,
+    Key extends ItemKey = string,
+>(options: AccordionOptions<Multiple, Key> = {}): Accordion<Multiple, Key> {
     const many = options.multiple === true
     const open = (options.open ??
         (many
-            ? reactive<readonly string[]>([])
-            : reactive<string | undefined>(undefined))) as Reactive<
-        Picked<string, boolean>
+            ? reactive<readonly Key[]>([])
+            : reactive<Key | undefined>(undefined))) as Reactive<
+        Picked<Key, boolean>
     >
     const base = options.id ?? `accordion-${randomToken(4, 'hex')}`
-    const isOpen = (key: string): boolean => {
+    const isOpen = (key: Key): boolean => {
         const now = open()
         return many
-            ? ((now as readonly string[]) ?? []).includes(key)
+            ? ((now as readonly Key[]) ?? []).includes(key)
             : now === key
     }
     // 51.121 — picking one, opening a key is the only key open, and closing it leaves none.
-    const write = (key: string, on: boolean): unknown => {
+    const write = (key: Key, on: boolean): unknown => {
         if (!many) return open.set(on ? key : undefined)
-        const now = (open.peek() as readonly string[] | undefined) ?? []
+        const now = (open.peek() as readonly Key[] | undefined) ?? []
         const kept = now.filter((each) => each !== key)
         return open.set(on ? [...kept, key] : kept)
     }
     // 51.120 — each key's parts built once and kept, so a render asking again builds nothing.
-    const items = new Map<string, Disclosure>()
-    const item = (key: string): Disclosure => {
+    const items = new Map<Key, Disclosure>()
+    const item = (key: Key): Disclosure => {
         let made = items.get(key)
         if (made === undefined) {
             made = disclosure({
@@ -76,6 +84,6 @@ export function accordion<Multiple extends boolean = false>(
     return {
         id: base,
         item,
-        open: open as Reactive<Picked<string, Multiple>>,
+        open: open as Reactive<Picked<Key, Multiple>>,
     }
 }

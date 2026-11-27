@@ -119,6 +119,8 @@ export type { JsonValue } from './JsonValue.ts'
 export { type Listbox, type ListboxOptions, listbox } from './listbox.ts'
 export type { LabelRun } from './labelRuns.ts'
 export type { Picked } from './Selection.ts'
+// 49.21 — what a headless component's items are told apart by, kept as it is.
+export type { ItemKey, KeyOf } from './itemKey.ts'
 export { isServer } from './isServer.ts'
 export { jsonSchema } from './jsonSchema.ts'
 export { type Logger, type LogRecord, log, type Span } from './log.ts'

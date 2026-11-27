@@ -5468,6 +5468,11 @@ focus for that gesture, and MUST NOT call a callback it was handed for that gest
 
 49.20 49.19 MUST NOT hold the `save` `inlineEdit` calls before it writes `value` (56.25).
 
+49.21 A headless component that picks, opens or orders its items by key MUST hold each key as its
+`key` answers it — the item itself, or its `id`, where none is given — a number as a number, MUST
+compare keys as they are held, and MUST write a key as text only into an element's id or another
+attribute.
+
 # 50. Dialogs, toasts and popovers
 
 50.1 `dialog`'s part MUST hold the `<dialog>` it is spread on open while `open` is true, with
@@ -6151,7 +6156,7 @@ where `at` is at `duration` MUST set `at` to `0` first.
 51.133 `playback`'s `scrubber` part MUST be an `<input type="range">` from `0` to `duration` whose
 value is `at`, and its `input` MUST move `at` to its value, kept from `0` to `duration`.
 
-51.134 `playback`'s `toggleGroup` MUST be a `toggleGroup` over `rates`, each key the rate as text,
+51.134 `playback`'s `toggleGroup` MUST be a `toggleGroup` over `rates`, each key the rate itself,
 picking `rate`.
 
 51.135 On `playback`'s `root`, Space MUST press `play`, and ArrowLeft and ArrowRight MUST move `at`

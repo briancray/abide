@@ -4,7 +4,7 @@
 // that is mixed while some rows are picked. The app writes every cell.
 
 import type { Column } from './Column.ts'
-import { keyOfItem, type KeyOption } from './itemKey.ts'
+import { type ItemKey, type KeyOf, keyOfItem, type KeyOption } from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { type Reactive, reactive, watch } from './reactive/index.ts'
 import { runOf } from './Selection.ts'
@@ -12,7 +12,7 @@ import type { Sort } from './Sort.ts'
 import { cellText, sortRows } from './sortRows.ts'
 
 /** The rows and columns of a sortable table, how a row is told apart, and its sort and selection. */
-export type SortableTableOptions<Row> = {
+export type SortableTableOptions<Row, Key extends ItemKey = KeyOf<Row>> = {
     /** The rows, in the order they show while no column is sorted. */
     rows: Live<readonly Row[]>
     /** The columns: what each sorts by, shows and lines up on. */
@@ -20,8 +20,8 @@ export type SortableTableOptions<Row> = {
     /** The column sorted by and its direction: hand it a `Reactive` to read and set the sort. */
     sort?: Reactive<Sort | undefined> | undefined
     /** The keys of the rows picked: hand it a `Reactive` to read and set the selection (51.72). */
-    selected?: Reactive<readonly string[] | undefined> | undefined
-} & KeyOption<Row>
+    selected?: Reactive<readonly NoInfer<Key>[] | undefined> | undefined
+} & KeyOption<Row, Key>
 
 /** One column's parts: its header cell, the button in it that sorts, and its body cells. */
 export type SortableTableColumn = {
@@ -46,7 +46,7 @@ export type SortableTableRow = {
 }
 
 /** The parts `sortableTable` hands back, each spread onto an element: `<tr {...deals.row(deal).row}>`. */
-export type SortableTableParts<Row> = {
+export type SortableTableParts<Row, Key extends ItemKey = KeyOf<Row>> = {
     /** The table. */
     readonly table: Record<string, unknown>
     /** The rows in the order the sort names: what a keyed `{#for}` walks. */
@@ -65,18 +65,21 @@ export type SortableTableParts<Row> = {
     /** The column sorted by and its direction, read and set. */
     readonly sort: Reactive<Sort | undefined>
     /** The keys of the rows picked, read and set. */
-    readonly selected: Reactive<readonly string[] | undefined>
+    readonly selected: Reactive<readonly Key[] | undefined>
 }
 
 /** A table sorted by its headers and picked by its rows, as parts to spread onto markup of one's own. */
-export function sortableTable<Row>(
-    options: SortableTableOptions<Row>,
-): SortableTableParts<Row> {
-    // 49.11 — read where it is used.
-    const key = (row: Row) => keyOfItem(options.key, row)
+export function sortableTable<Row, Key extends ItemKey = KeyOf<Row>>(
+    options: SortableTableOptions<Row, Key>,
+): SortableTableParts<Row, Key> {
+    // 49.11 — read where it is used. Keys are held as `ItemKey` inside, and as `Key` at the surface.
+    const key = (row: Row): ItemKey =>
+        keyOfItem(options.key as ((row: Row) => Key) | undefined, row)
     const sort = options.sort ?? reactive<Sort | undefined>(undefined)
-    const selected =
-        options.selected ?? reactive<readonly string[] | undefined>(undefined)
+    const selected = (options.selected ??
+        reactive<readonly Key[] | undefined>(undefined)) as Reactive<
+        readonly ItemKey[] | undefined
+    >
     const rows = () => live(options.rows)
     const columns = () => live(options.columns)
 
@@ -115,11 +118,11 @@ export function sortableTable<Row>(
     const some = () =>
         !every() && sorted().some((row) => picked().has(key(row)))
     // The row a click last checked or cleared, which a Shift-click runs a range from (51.74).
-    let anchor: string | undefined
+    let anchor: ItemKey | undefined
 
     function toggle(row: Row, event: MouseEvent) {
         const order = sorted.peek() as readonly Row[]
-        const holding = picked.peek() as Set<string>
+        const holding = picked.peek() as Set<ItemKey>
         const checked = !holding.has(key(row))
         // 51.74 — Shift runs from the last row clicked, the run checked or cleared with this one.
         const keys = (event.shiftKey && anchor !== undefined
@@ -213,6 +216,6 @@ export function sortableTable<Row>(
             },
         },
         sort,
-        selected,
+        selected: selected as Reactive<readonly Key[] | undefined>,
     }
 }

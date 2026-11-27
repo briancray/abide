@@ -80,7 +80,7 @@ export function virtualList<Item>(
     const initial = options.initial ?? 40
     const estimate = options.estimate ?? 48
     const items = () => live(options.items)
-    const keyOf = (item: Item) => keyOfItem(options.key, item)
+    const keyOf = (item: Item) => String(keyOfItem(options.key, item))
 
     // What the measurements say: items a row holds, a row's height with its gap, the first row in view
     // and how many fit — and whether there is anything measured yet.

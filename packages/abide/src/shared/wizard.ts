@@ -3,24 +3,30 @@
 // its own. Going on waits on `valid`; going back is always open, to any step done.
 
 import { handFocus, nearest } from './handFocus.ts'
-import { keyOfItem, type KeyOption, listedKeys } from './itemKey.ts'
+import {
+    type ItemKey,
+    type KeyOf,
+    keyOfItem,
+    type KeyOption,
+    listedKeys,
+} from './itemKey.ts'
 import { type Live, live } from './live.ts'
 import { type Meter, meter } from './meter.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { reactiveOver } from './reactiveOver.ts'
 
 /** The steps, how each is told apart, the one on, and whether the one on may be left forward. */
-export type WizardOptions<Step> = {
+export type WizardOptions<Step, Key extends ItemKey = KeyOf<Step>> = {
     /** The steps, in order; a function is read live. */
     steps: Live<readonly Step[]>
     /** The key of the step on: a `Reactive` to read and set. Held by the parts, and handed back as `current`, where none is given. A key no step has is the first. */
-    current?: Reactive<string | undefined> | undefined
+    current?: Reactive<NoInfer<Key> | undefined> | undefined
     /** Whether a step is done enough to go on from. Every step is by default. */
     valid?: ((step: Step) => boolean) | undefined
-} & KeyOption<Step>
+} & KeyOption<Step, Key>
 
 /** The parts `wizard` hands back: `<li {...signup.step('plan')}>`, `<button {...signup.next}>`. */
-export type Wizard<Step> = {
+export type Wizard<Step, Key extends ItemKey = KeyOf<Step>> = {
     /** A step's marker in the list of steps: current, done or ahead, and a way back where done. */
     step(step: Step): Record<string, unknown>
     /** The button going on to the step after, disabled on the last or where `valid` refuses. */
@@ -30,18 +36,21 @@ export type Wizard<Step> = {
     /** How far it has come: a `meter`'s parts, of the step on among the steps (49.18). */
     readonly meter: Meter
     /** The key of the step on, the first where none is; written, it goes there. */
-    readonly current: Reactive<string | undefined>
+    readonly current: Reactive<Key | undefined>
     /** Whether the step on is the last. */
     get last(): boolean
 }
 
 /** A task taken in steps, with next and previous, the steps' markers and a meter of progress. */
-export function wizard<Step>(options: WizardOptions<Step>): Wizard<Step> {
-    const picked = options.current ?? reactive<string | undefined>(undefined)
-    const keyOf = (step: Step) => keyOfItem(options.key, step)
+export function wizard<Step, Key extends ItemKey = KeyOf<Step>>(
+    options: WizardOptions<Step, Key>,
+): Wizard<Step, Key> {
+    const picked = options.current ?? reactive<Key | undefined>(undefined)
+    const keyOf = (step: Step) =>
+        keyOfItem(options.key as ((step: Step) => Key) | undefined, step)
     const steps = listedKeys(options.steps, keyOf)
     // 51.141 — a key no step has is the first.
-    const at = (): number => Math.max(0, steps().indexOf(picked() as string))
+    const at = (): number => Math.max(0, steps().indexOf(picked() as Key))
     const key = (index: number) => steps()[index]
     const go = (index: number): void => {
         const to = key(index)
@@ -124,7 +133,7 @@ export function wizard<Step>(options: WizardOptions<Step>): Wizard<Step> {
         }),
         current: reactiveOver(
             () => key(at()),
-            (to: string | undefined) => picked.set(to),
+            (to: Key | undefined) => picked.set(to),
         ),
         get last() {
             return at() >= steps().length - 1

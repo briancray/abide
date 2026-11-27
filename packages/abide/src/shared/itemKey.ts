@@ -2,21 +2,39 @@
 // a record carrying an `id` is told apart by it, so a headless component over such items takes `key` and
 // `label` as options it may leave out; over any other item the type asks for them, since `String` of an
 // object is `[object Object]` for every one. 49.8.
+//
+// A KEY IS KEPT AS IT IS (49.21): a number stays a number, so what a component picks is typed as its
+// items' keys and compared exactly, and is text only where it becomes an element's id.
 
 import { type Live, live } from './live.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 
-/** `key`, optional where the item is a string or a number, its own key, or carries an `id`, which is. */
-export type KeyOption<Item> = [Item] extends [
-    string | number | { id: string | number },
+/** What tells one item from another: a string or a number, compared as it is and written as text only into an id. */
+export type ItemKey = string | number
+
+/** The key an item answers where no `key` is given: the item itself, or its `id`. */
+export type KeyOf<Item> = Item extends string
+    ? string
+    : Item extends number
+      ? number
+      : Item extends { id: ItemKey }
+        ? Item['id']
+        : string
+
+/**
+ * `key`, optional where the item is its own key or carries an `id` that is: a string or a number, or a
+ * record whose `id` is one of the `Key` the parts pick by.
+ */
+export type KeyOption<Item, Key extends ItemKey = ItemKey> = [Item] extends [
+    Key | { id: Key },
 ]
     ? {
           /** What tells one item from another. Its `id`, or the item itself where it has none, by default. */
-          key?: ((item: Item) => string) | undefined
+          key?: ((item: Item) => Key) | undefined
       }
     : {
           /** What tells one item from another. */
-          key: (item: Item) => string
+          key: (item: Item) => Key
       }
 
 /** `label`, optional where the item is a string or a number and so reads as itself. */
@@ -39,32 +57,34 @@ export function writtenBy<Item>(
 }
 
 /** What tells `item` apart: what `given` answers, else its `id`, else the item itself — read each call (49.11). */
-export function keyOfItem<Item>(
-    given: ((item: Item) => string) | undefined,
+export function keyOfItem<Item, Key extends ItemKey>(
+    given: ((item: Item) => Key) | undefined,
     item: Item,
-): string {
+): Key {
     if (given !== undefined) return given(item)
-    return typeof item === 'object' && item !== null
-        ? String((item as unknown as { id: unknown }).id)
-        : String(item)
+    return (
+        typeof item === 'object' && item !== null
+            ? (item as unknown as { id: Key }).id
+            : item
+    ) as Key
 }
 
 /** The keys of `items` in order, as `keyOf` tells each apart: one computed every part reads (49.16). */
-export function listedKeys<Item>(
+export function listedKeys<Item, Key extends ItemKey>(
     items: Live<readonly Item[]>,
-    keyOf: (item: Item) => string,
-): Reactive<readonly string[]> {
-    return reactive((): readonly string[] => {
-        const written: string[] = []
+    keyOf: (item: Item) => Key,
+): Reactive<readonly Key[]> {
+    return reactive((): readonly Key[] => {
+        const written: Key[] = []
         for (const item of live(items)) written.push(keyOf(item))
         return written
     })
 }
 
 /** `wanted` where `listed` holds it, else the first listed: what a key no item has stands for. */
-export function listedOrFirst(
-    listed: readonly string[],
-    wanted: string | undefined,
-): string | undefined {
+export function listedOrFirst<Key extends ItemKey>(
+    listed: readonly Key[],
+    wanted: Key | undefined,
+): Key | undefined {
     return wanted !== undefined && listed.includes(wanted) ? wanted : listed[0]
 }

@@ -8,6 +8,8 @@ import { checkParts } from './checkParts.ts'
 import { resized } from './element/resized.ts'
 import { handFocus } from './handFocus.ts'
 import {
+    type ItemKey,
+    type KeyOf,
     keyOfItem,
     type KeyOption,
     type LabelOption,
@@ -25,13 +27,13 @@ import { toggle } from './toggle.ts'
 import { withPart } from './withPart.ts'
 
 /** The items, how each is told apart and named, the one the carousel rests on, and how it scrolls. */
-export type CarouselOptions<Item> = {
+export type CarouselOptions<Item, Key extends ItemKey = KeyOf<Item>> = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
     id?: string | undefined
     /** The items, in the order they render; a function is read live. */
     items: Live<readonly Item[]>
     /** The key of the item the carousel rests on, where the app holds it: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. A key no item has rests on the first. */
-    selected?: Reactive<string | undefined> | undefined
+    selected?: Reactive<NoInfer<Key> | undefined> | undefined
     /** Which edge of an item, or its center, lines up with the same place in the scroller: `'center'` by default, as `scroll-snap-align` names it. A function is read live. */
     align?: Live<'start' | 'center' | 'end'> | undefined
     /** How `scrollTo`, `reset`, `previous` and `next` scroll. `'smooth'` by default; a function is read live. */
@@ -42,11 +44,11 @@ export type CarouselOptions<Item> = {
     autoplay?: Live<number | undefined> | undefined
     /** Whether it is playing: a `Reactive` to read and set. Held by the parts, and handed back as `playing`, where none is given — starting true where `autoplay` is given. */
     playing?: Reactive<boolean> | undefined
-} & KeyOption<Item> &
+} & KeyOption<Item, Key> &
     LabelOption<Item>
 
 /** The parts `carousel` hands back: `<ul {...view.host}>`, `<li {...view.item(item)}>`. */
-export type Carousel<Item> = {
+export type Carousel<Item, Key extends ItemKey = KeyOf<Item>> = {
     /** The base its parts' ids are derived from. */
     readonly id: string
     /** The scroller's part: what rests it on the selection and follows what a scroll aligns. */
@@ -62,11 +64,11 @@ export type Carousel<Item> = {
     /** Whether it is playing; written, it plays or pauses. */
     readonly playing: Reactive<boolean>
     /** The key of the item aligned in the scroller. */
-    get current(): string | undefined
+    get current(): Key | undefined
     /** The key of the item the carousel rests on, read and set. */
-    readonly selected: Reactive<string | undefined>
+    readonly selected: Reactive<Key | undefined>
     /** Scrolls the item a key names to its aligned place in the scroller. */
-    scrollTo(key: string): void
+    scrollTo(key: Key): void
     /** Scrolls back to the item the carousel rests on. */
     reset(): void
 }
@@ -161,24 +163,28 @@ function landing(
 }
 
 /** A scroll-snap carousel resting on a selection, as parts to spread. */
-export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
-    // 49.11 — read where they are used.
-    const keyOf = (item: Item) => keyOfItem(options.key, item)
+export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
+    options: CarouselOptions<Item, Key>,
+): Carousel<Item, Key> {
+    // 49.11 — read where they are used. Keys are held as `ItemKey` inside, and as `Key` at the surface.
+    const keyOf = (item: Item): ItemKey =>
+        keyOfItem(options.key as ((item: Item) => Key) | undefined, item)
     const labelOf = (item: Item) => writtenBy(options.label, item)
     const behavior = () => live(options.behavior) ?? 'smooth'
     const align = () => live(options.align) ?? 'center'
     const keys = listedKeys(options.items, keyOf)
-    const selected = options.selected ?? reactive<string | undefined>(undefined)
+    const selected = (options.selected ??
+        reactive<Key | undefined>(undefined)) as Reactive<ItemKey | undefined>
     // 53.61 — a key no item has rests on the first.
-    const resting = reactive((): string | undefined =>
+    const resting = reactive((): ItemKey | undefined =>
         listedOrFirst(keys(), selected()),
     )
     // 53.63 — what a scroll writes, and replaced by the resting item whenever that moves.
-    const current = reactive((): string | undefined => resting())
+    const current = reactive((): ItemKey | undefined => resting())
     const base = options.id ?? `carousel-${randomToken(4, 'hex')}`
     if (process.env.NODE_ENV !== 'production') checkParts('carousel', base)
 
-    const elements = new Map<string, Element>()
+    const elements = new Map<ItemKey, Element>()
     // Bumped as an item's element comes and goes, so the resting element is looked up again.
     let bindings = 0
     const bound = reactive(bindings)
@@ -192,12 +198,12 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     const shown = reactive(false)
     // The key a scroll the parts made is on its way to: what the scroll passes on the way is not
     // current, until it arrives or the scrolling ends.
-    let heading: string | undefined
+    let heading: ItemKey | undefined
 
     // 53.67 — where a scroll to each item leaves the scroller, to the pixel, measured as the layout
     // changes rather than as a button reads it: items the scroller cannot tell apart, since it ends
     // before it aligns them, share one. None while there is no scroller with a box to measure.
-    const stops = reactive<ReadonlyMap<string, string> | undefined>(undefined)
+    const stops = reactive<ReadonlyMap<ItemKey, string> | undefined>(undefined)
     let measuring = 0
     const measure = (): void => {
         measuring = 0
@@ -212,7 +218,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
             return
         }
         const port = snapportOf(host, align())
-        const measured = new Map<string, string>()
+        const measured = new Map<ItemKey, string>()
         for (const [key, item] of elements) {
             const to = landing(host, port, item.getBoundingClientRect())
             measured.set(key, `${Math.round(to.left)} ${Math.round(to.top)}`)
@@ -240,9 +246,9 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     })
     // Whether a scroll to either leaves the scroller in the same place.
     const together = (
-        one: string,
-        other: string | undefined,
-        measured: ReadonlyMap<string, string> | undefined,
+        one: ItemKey,
+        other: ItemKey | undefined,
+        measured: ReadonlyMap<ItemKey, string> | undefined,
     ): boolean => {
         if (one === other) return true
         if (other === undefined || measured === undefined) return false
@@ -252,7 +258,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
 
     // 53.99 — every rect read before the one write.
     const alignTo = (
-        key: string,
+        key: ItemKey,
         target: Element,
         how: ScrollBehavior,
     ): void => {
@@ -276,7 +282,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         scroller.scrollTo({ left: to.left, top: to.top, behavior: how })
     }
 
-    function scrollTo(key: string): void {
+    function scrollTo(key: ItemKey): void {
         current.set(key)
         const target = elements.get(key)
         if (target !== undefined) alignTo(key, target, behavior())
@@ -288,9 +294,9 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     }
 
     // 53.64 — the item whose aligned point is nearest where the scroller aligns one.
-    const nearest = (element: Element): string | undefined => {
+    const nearest = (element: Element): ItemKey | undefined => {
         const port = snapportOf(element, align())
-        let closest: string | undefined
+        let closest: ItemKey | undefined
         let distance = Number.POSITIVE_INFINITY
         for (const [key, item] of elements) {
             const inner = item.getBoundingClientRect()
@@ -306,7 +312,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
     }
 
     // 53.66 — the item the snap target is, holds, or sits inside.
-    const snapped = (target: Element): string | undefined => {
+    const snapped = (target: Element): ItemKey | undefined => {
         for (const [key, item] of elements)
             if (
                 item === target ||
@@ -319,7 +325,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
 
     // 53.65 — what a scroll passes on its way to where the parts scrolled is not current; 53.100 — an
     // item left where the current one leaves the scroller does not replace it.
-    const arrive = (key: string | undefined): void => {
+    const arrive = (key: ItemKey | undefined): void => {
         if (key === undefined) return
         const measured = stops.peek()
         if (heading !== undefined) {
@@ -387,7 +393,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
             const target = restingElement()
             if (target === undefined) return
             alignTo(
-                resting.peek() as string,
+                resting.peek() as ItemKey,
                 target,
                 rested ? behavior() : 'instant',
             )
@@ -414,10 +420,10 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
 
     // 53.67 — the first key `step` reaches from the current one that a scroll to would move the
     // scroller, past an end to the other where `loop` holds, and never the current one itself.
-    const beside = (step: number): string | undefined => {
+    const beside = (step: number): ItemKey | undefined => {
         const listed = keys()
         const from = current()
-        const at = listed.indexOf(from as string)
+        const at = listed.indexOf(from as ItemKey)
         if (at === -1) return undefined
         const measured = stops()
         const loops = live(options.loop) === true
@@ -428,7 +434,7 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
                 if (!loops) return undefined
                 to = (to + listed.length) % listed.length
             }
-            const key = listed[to] as string
+            const key = listed[to] as ItemKey
             if (!together(key, from, measured)) return key
         }
         return undefined
@@ -569,9 +575,9 @@ export function carousel<Item>(options: CarouselOptions<Item>): Carousel<Item> {
         play,
         playing,
         get current() {
-            return current()
+            return current() as Key | undefined
         },
-        selected,
+        selected: selected as Reactive<Key | undefined>,
         scrollTo,
         reset,
     }

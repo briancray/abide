@@ -5,6 +5,7 @@
 // opens one. Bound to an array, it picks many: each pick adds an item or takes it out again.
 
 import {
+    type ItemKey,
     keyOfItem,
     type KeyOption,
     type LabelOption,
@@ -281,7 +282,7 @@ export function combobox<Item, Multiple extends boolean = false>(
     const pickedKeys = reactive(() => {
         const held = picks()
         const one = value()
-        const keys = new Set<string>()
+        const keys = new Set<ItemKey>()
         if (held !== undefined) for (const each of held) keys.add(key(each))
         else if (one !== undefined) keys.add(key(one as Item))
         return keys

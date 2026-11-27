@@ -7,12 +7,14 @@
 
 import { announce } from './announce.ts'
 import {
+    type ItemKey,
+    type KeyOf,
     keyOfItem,
     type KeyOption,
     type LabelOption,
     writtenBy,
 } from './itemKey.ts'
-import { type Listbox, listbox } from './listbox.ts'
+import { type Listbox, listbox, type ListboxOptions } from './listbox.ts'
 import { type Live, live } from './live.ts'
 import { type Reactive, reactive } from './reactive/index.ts'
 import { inGroup, join } from './register.ts'
@@ -20,18 +22,22 @@ import type { Picked } from './Selection.ts'
 import { withPart } from './withPart.ts'
 
 /** The items, how each is told apart and read out, their order, what is selected, and the lists it trades items with. */
-export type SortableListOptions<Item, Multiple extends boolean = false> = {
+export type SortableListOptions<
+    Item,
+    Multiple extends boolean = false,
+    Key extends ItemKey = KeyOf<Item>,
+> = {
     /** The items; a function is read live. */
     items: Live<readonly Item[]>
     /** The keys of the items in the order put: a `Reactive` to read and set. Held by the parts, and handed back as `order`, where none is given. */
-    order?: Reactive<readonly string[]> | undefined
+    order?: Reactive<readonly NoInfer<Key>[]> | undefined
     /** Whether many may be selected, to move as one. `false` by default. */
     multiple?: Multiple | undefined
     /** The keys selected, as a `listbox`'s are. Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<Picked<string, Multiple>> | undefined
+    selected?: Reactive<Picked<NoInfer<Key>, Multiple>> | undefined
     /** The lists sharing this name take each other's items, by a grip dragged or by Alt with ArrowLeft and ArrowRight. A function is read live. */
     group?: Live<string | undefined> | undefined
-} & KeyOption<Item> &
+} & KeyOption<Item, Key> &
     LabelOption<Item>
 
 /** One item's parts: the item, a `listbox` option, and the grip that drags it. */
@@ -43,7 +49,11 @@ export type SortableItem = {
 }
 
 /** The parts `sortableList` hands back: `<ol {...ranks.list}>`, `<li {...ranks.item(book).item}>`. */
-export type SortableList<Item, Multiple extends boolean = false> = {
+export type SortableList<
+    Item,
+    Multiple extends boolean = false,
+    Key extends ItemKey = KeyOf<Item>,
+> = {
     /** The list's attributes: a `listbox`, in the tab order, its keys and Alt with the arrows. */
     readonly list: Record<string, unknown>
     /** An item's parts. */
@@ -51,9 +61,9 @@ export type SortableList<Item, Multiple extends boolean = false> = {
     /** The items in the order put. */
     get sorted(): readonly Item[]
     /** The keys of the items in the order put; written, it puts them in that order. */
-    readonly order: Reactive<readonly string[]>
+    readonly order: Reactive<readonly Key[]>
     /** The keys selected, as the `listbox` holds them. */
-    readonly selected: Reactive<Picked<string, Multiple>>
+    readonly selected: Reactive<Picked<Key, Multiple>>
 }
 
 // 51.178-51.183 — every list standing, so a group finds its lists: one list per request on a server, as
@@ -62,29 +72,29 @@ type Member = {
     group(): string | undefined
     /** The element its `list` part is spread on, whose place in the document orders its group. */
     element(): Element | null
-    readonly order: Reactive<readonly string[]>
+    readonly order: Reactive<readonly ItemKey[]>
     /** The item of `key` among its own `items`. */
-    find(key: string): unknown
+    find(key: ItemKey): unknown
     /** Places `block` after `before` of its items, answering whether the write landed. */
-    place(block: readonly string[], before: number): boolean
+    place(block: readonly ItemKey[], before: number): boolean
     /** Takes `block` out of its order and its selection, handing back those of them that were selected — `undefined`, and nothing changed, where the order's write is refused. */
-    leave(block: readonly string[]): string[] | undefined
+    leave(block: readonly ItemKey[]): ItemKey[] | undefined
     /** Makes the first of `block`, placed here, active, and `picked` selected. */
-    enter(block: readonly string[], picked: readonly string[]): void
-    grab(held: ReadonlySet<string>): void
+    enter(block: readonly ItemKey[], picked: readonly ItemKey[]): void
+    grab(held: ReadonlySet<ItemKey>): void
     /** The middle of each of its items not `held`, top to bottom, as they stand. */
-    middles(held: ReadonlySet<string>): number[]
-    say(block: readonly string[], what: string): void
+    middles(held: ReadonlySet<ItemKey>): number[]
+    say(block: readonly ItemKey[], what: string): void
 }
 const members = reactive<readonly Member[]>([])
-const NONE: ReadonlySet<string> = new Set()
+const NONE: ReadonlySet<ItemKey> = new Set()
 
 // 51.178 — out of one list's order and into the other's, the selection going with them (51.182).
 // 49.19 — both orders' writes land or neither: the target's first, put back where the source's is refused.
 function carry(
     from: Member,
     to: Member,
-    block: readonly string[],
+    block: readonly ItemKey[],
     before: number,
 ): boolean {
     const was = to.order.peek() ?? []
@@ -111,20 +121,27 @@ function nameOf(list: Element | null): string {
 }
 
 /** A listbox reordered by Alt and the arrows or by dragging a grip, the selection moving as one. */
-export function sortableList<Item, Multiple extends boolean = false>(
-    options: SortableListOptions<Item, Multiple>,
-): SortableList<Item, Multiple> {
-    const order = options.order ?? reactive<readonly string[]>([])
-    const keyOf = (item: Item) => keyOfItem(options.key, item)
+export function sortableList<
+    Item,
+    Multiple extends boolean = false,
+    Key extends ItemKey = KeyOf<Item>,
+>(
+    options: SortableListOptions<Item, Multiple, Key>,
+): SortableList<Item, Multiple, Key> {
+    // Keys are held as `ItemKey` inside, and as `Key` at the surface.
+    const order = (options.order ??
+        reactive<readonly Key[]>([])) as Reactive<readonly ItemKey[]>
+    const keyOf = (item: Item): ItemKey =>
+        keyOfItem(options.key as ((item: Item) => Key) | undefined, item)
     const labelOf = (item: Item) => writtenBy(options.label, item)
     const many = options.multiple === true
-    const grabbed = reactive<ReadonlySet<string>>(NONE)
+    const grabbed = reactive<ReadonlySet<ItemKey>>(NONE)
     const group = (): string | undefined => live(options.group)
     // 51.145, 51.179 — the order put, then any item it does not name, in the order given; in a group, a
     // key it names is found among another list's items too, and an item another list names is that
     // list's.
     const sorted = reactive((): Item[] => {
-        const byKey = new Map<string, Item>()
+        const byKey = new Map<ItemKey, Item>()
         for (const item of live(options.items)) byKey.set(keyOf(item), item)
         const named = group()
         const mates: Member[] = []
@@ -147,7 +164,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
             for (const item of byKey.values()) placed.push(item)
             return placed
         }
-        const elsewhere = new Set<string>()
+        const elsewhere = new Set<ItemKey>()
         for (const mate of mates)
             for (const key of mate.order() ?? []) elsewhere.add(key)
         for (const [key, item] of byKey)
@@ -155,22 +172,22 @@ export function sortableList<Item, Multiple extends boolean = false>(
         return placed
     })
     // 51.150 — the listbox over the items as put.
-    const choices: Listbox<Item, Multiple> = listbox({
-        ...options,
+    const choices: Listbox<Item, Multiple, ItemKey> = listbox({
+        ...(options as unknown as ListboxOptions<Item, Multiple, ItemKey>),
         options: sorted,
     })
-    const keys = (): string[] => (sorted.peek() ?? []).map(keyOf)
+    const keys = (): ItemKey[] => (sorted.peek() ?? []).map(keyOf)
     // The selection as each of its two shapes, read by the one `multiple` says it is.
     const pickedMany = choices.selected as unknown as Reactive<
-        readonly string[]
+        readonly ItemKey[]
     >
     const pickedOne = choices.selected as unknown as Reactive<
-        string | undefined
+        ItemKey | undefined
     >
-    const picked = (): readonly string[] => pickedMany.peek() ?? []
+    const picked = (): readonly ItemKey[] => pickedMany.peek() ?? []
 
     // 51.147 — the selection where the item taken is in it, else that item alone, in the order put.
-    const moving = (taken: string): string[] => {
+    const moving = (taken: ItemKey): ItemKey[] => {
         if (!many) return [taken]
         const selected = new Set(picked())
         return selected.has(taken)
@@ -178,14 +195,14 @@ export function sortableList<Item, Multiple extends boolean = false>(
             : [taken]
     }
     // The items placed together, `before` of the others ahead of them.
-    const place = (block: readonly string[], before: number): boolean => {
+    const place = (block: readonly ItemKey[], before: number): boolean => {
         const held = new Set(block)
         const rest = keys().filter((key) => !held.has(key))
         rest.splice(Math.max(0, Math.min(rest.length, before)), 0, ...block)
         return order.set(rest) === undefined
     }
     // How many of the others stand ahead of `key` as the list is now.
-    const ahead = (key: string, block: readonly string[]): number => {
+    const ahead = (key: ItemKey, block: readonly ItemKey[]): number => {
         const held = new Set(block)
         let count = 0
         for (const each of keys()) {
@@ -195,9 +212,9 @@ export function sortableList<Item, Multiple extends boolean = false>(
         return count
     }
     // 51.149
-    const say = (block: readonly string[], what: string): void => {
+    const say = (block: readonly ItemKey[], what: string): void => {
         const listed = keys()
-        const first = listed.indexOf(block[0] as string) + 1
+        const first = listed.indexOf(block[0] as ItemKey) + 1
         if (block.length === 1) {
             const item = sorted.peek()?.find((each) => keyOf(each) === block[0])
             if (item !== undefined)
@@ -211,7 +228,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
         )
     }
 
-    const elements = new Map<string, Element>()
+    const elements = new Map<ItemKey, Element>()
     let listElement: Element | null = null
     const self: Member = {
         group,
@@ -235,15 +252,15 @@ export function sortableList<Item, Multiple extends boolean = false>(
                     pickedOne.set(undefined)
                 return []
             }
-            const gone: string[] = []
-            const kept: string[] = []
+            const gone: ItemKey[] = []
+            const kept: ItemKey[] = []
             for (const key of picked()) (held.has(key) ? gone : kept).push(key)
             if (gone.length !== 0) pickedMany.set(kept)
             return gone
         },
         // 51.182 — the first of them active here, and those that were selected selected here.
         enter: (block, selected) => {
-            choices.activate(block[0] as string)
+            choices.activate(block[0] as ItemKey)
             if (many && selected.length !== 0)
                 pickedMany.set([...picked(), ...selected])
         },
@@ -268,7 +285,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
             : inGroup(members, named)
     }
 
-    const parts = new Map<string, SortableItem>()
+    const parts = new Map<ItemKey, SortableItem>()
     const item = (entry: Item): SortableItem => {
         const key = keyOf(entry)
         let made = parts.get(key)
@@ -382,7 +399,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
         const to = standing[standing.indexOf(self) + step]
         if (to === undefined || to === self) return
         const block = moving(taken)
-        if (!carry(self, to, block, ahead(block[0] as string, block))) return
+        if (!carry(self, to, block, ahead(block[0] as ItemKey, block))) return
         ;(to.element() as HTMLElement).focus()
         to.say(block, `moved to ${nameOf(to.element())}`)
     }
@@ -421,7 +438,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
                 const others = keys().length - block.length
                 const before = Math.max(
                     0,
-                    Math.min(others, ahead(block[0] as string, block) + step),
+                    Math.min(others, ahead(block[0] as ItemKey, block) + step),
                 )
                 if (place(block, before)) say(block, 'moved')
             },
@@ -430,7 +447,7 @@ export function sortableList<Item, Multiple extends boolean = false>(
         get sorted() {
             return sorted()
         },
-        order,
-        selected: choices.selected,
+        order: order as Reactive<readonly Key[]>,
+        selected: choices.selected as Reactive<Picked<Key, Multiple>>,
     }
 }

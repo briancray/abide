@@ -4,6 +4,8 @@
 
 import { checkParts } from './checkParts.ts'
 import {
+    type ItemKey,
+    type KeyOf,
     keyOfItem,
     type KeyOption,
     listedKeys,
@@ -16,14 +18,14 @@ import { reactiveOver } from './reactiveOver.ts'
 import { roving } from './roving.ts'
 
 /** The tabs, how each is told apart, and the one selected. */
-export type TabsOptions<Item> = {
+export type TabsOptions<Item, Key extends ItemKey = KeyOf<Item>> = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
     id?: string | undefined
     /** The tabs, in the order they render; a function is read live. */
     items: Live<readonly Item[]>
     /** The selected tab's key, where the app holds it: a `Reactive` to read and set the pick. Held by the parts, and handed back as `selected`, where none is given. A key no tab has selects the first. */
-    selected?: Reactive<string | undefined> | undefined
-} & KeyOption<Item>
+    selected?: Reactive<NoInfer<Key> | undefined> | undefined
+} & KeyOption<Item, Key>
 
 /** One tab's parts: its button, and the panel kept for it alone, hidden while another is selected. */
 export type TabParts = {
@@ -34,7 +36,7 @@ export type TabParts = {
 }
 
 /** The parts `tabs` hands back, each spread onto an element: `<button {...view.tab('notes').button}>`. */
-export type Tabs<Item> = {
+export type Tabs<Item, Key extends ItemKey = KeyOf<Item>> = {
     /** The base its parts' ids are derived from. */
     readonly id: string
     /** The tab list's attributes and its keyboard. */
@@ -44,27 +46,31 @@ export type Tabs<Item> = {
     /** The attributes of the one panel every tab shows in, holding whichever is selected. */
     readonly panel: Record<string, unknown>
     /** The key of the tab selected, the first tab's where none is picked; written, it picks one. */
-    readonly selected: Reactive<string | undefined>
+    readonly selected: Reactive<Key | undefined>
 }
 
 /** WAI-ARIA's tabs: a list of tabs and the panels they show, as parts to spread. */
-export function tabs<Item>(options: TabsOptions<Item>): Tabs<Item> {
-    const keyOf = (item: Item) => keyOfItem(options.key, item)
+export function tabs<Item, Key extends ItemKey = KeyOf<Item>>(
+    options: TabsOptions<Item, Key>,
+): Tabs<Item, Key> {
+    const keyOf = (item: Item) =>
+        keyOfItem(options.key as ((item: Item) => Key) | undefined, item)
     const keysOf = listedKeys(options.items, keyOf)
-    const picked = options.selected ?? reactive<string | undefined>(undefined)
+    const picked = options.selected ?? reactive<Key | undefined>(undefined)
     // 51.34 — a key no tab has selects the first.
-    const current = reactive((): string | undefined =>
-        listedOrFirst(keysOf(), picked()),
-    )
+    // A computed over a generic key reads back as `Awaited` of it, which the key is.
+    const current = reactive((): Key | undefined =>
+        listedOrFirst(keysOf() as readonly Key[], picked() as Key | undefined),
+    ) as unknown as () => Key | undefined
     // Hydration runs setup again (41.6), and every attribute naming one is bound to it, so the ids
     // are rewritten together.
     const base = options.id ?? `tabs-${randomToken(4, 'hex')}`
-    const tabId = (key: string) => `${base}-tab-${encodeURIComponent(key)}`
-    const panelId = (key: string) => `${base}-panel-${encodeURIComponent(key)}`
+    const tabId = (key: Key) => `${base}-tab-${encodeURIComponent(key)}`
+    const panelId = (key: Key) => `${base}-panel-${encodeURIComponent(key)}`
     if (process.env.NODE_ENV !== 'production') checkParts('tabs', base)
 
     // 51.38 — a key that selects moves focus with it.
-    const select = (key: string): void => {
+    const select = (key: Key): void => {
         if (picked.set(key) === undefined)
             globalThis.document?.getElementById(tabId(key))?.focus()
     }
@@ -77,7 +83,7 @@ export function tabs<Item>(options: TabsOptions<Item>): Tabs<Item> {
             const key =
                 listed[
                     roving(event.key, 'horizontal', () => [
-                        listed.indexOf(current() as string),
+                        listed.indexOf(current() as Key),
                         listed.length,
                     ])
                 ]
@@ -143,7 +149,7 @@ export function tabs<Item>(options: TabsOptions<Item>): Tabs<Item> {
 
     const selected = reactiveOver(
         () => current(),
-        (key: string | undefined) => picked.set(key),
+        (key: Key | undefined) => picked.set(key),
     )
     return { id: base, list, tab, panel, selected }
 }

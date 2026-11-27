@@ -6,32 +6,38 @@
 import { type Carousel, carousel, type CarouselOptions } from './carousel.ts'
 import { dialog } from './dialog.ts'
 import { hotkeys } from './hotkeys.ts'
+import type { ItemKey, KeyOf } from './itemKey.ts'
 import type { Reactive } from './reactive/index.ts'
 import { withPart } from './withPart.ts'
 
 /** The items, how each is told apart, the one it rests on, and whether it is showing. */
-export type LightboxOptions<Item> = CarouselOptions<Item> & {
+export type LightboxOptions<
+    Item,
+    Key extends ItemKey = KeyOf<Item>,
+> = CarouselOptions<Item, Key> & {
     /** Whether it is showing: a `Reactive` to read and write it. One of its own by default. */
     open?: Reactive<boolean> | undefined
 }
 
 /** The dialog's parts, the carousel's, whether it is showing, and what opens it on an item. */
-export type Lightbox<Item> = {
+export type Lightbox<Item, Key extends ItemKey = KeyOf<Item>> = {
     /** The `<dialog>`'s part: `dialog`'s, with the arrow keys stepping the carousel. */
     readonly dialog: Record<string, unknown>
     /** An element inside the `<dialog>` standing for its backdrop: `dialog`'s. */
     readonly backdrop: Record<string, unknown>
     /** The carousel inside the `<dialog>`, handed back whole. */
-    readonly carousel: Carousel<Item>
+    readonly carousel: Carousel<Item, Key>
     /** Whether it is showing — the `open` it was handed, or one of its own. */
     readonly open: Reactive<boolean>
     /** Opens it resting on the item `key` names. */
-    show(key: string): void
+    show(key: Key): void
 }
 
 /** A carousel in a dialog, stepped by the arrow keys, opened on the item picked. */
-export function lightbox<Item>(options: LightboxOptions<Item>): Lightbox<Item> {
-    const pictures = carousel(options)
+export function lightbox<Item, Key extends ItemKey = KeyOf<Item>>(
+    options: LightboxOptions<Item, Key>,
+): Lightbox<Item, Key> {
+    const pictures = carousel<Item, Key>(options)
     const shown = dialog(options)
     // 50.66 — an arrow is a press on the carousel's own button, disabled at its end as that one is.
     const press = (part: Record<string, unknown>) => () => {
@@ -53,7 +59,7 @@ export function lightbox<Item>(options: LightboxOptions<Item>): Lightbox<Item> {
         carousel: pictures,
         open: shown.open,
         // 50.67 — 49.19, both writes land or neither: a refused opening puts the pick back.
-        show: (key: string) => {
+        show: (key: Key) => {
             const before = pictures.selected.peek()
             if (pictures.selected.set(key) !== undefined) return
             if (shown.open.set(true) !== undefined)

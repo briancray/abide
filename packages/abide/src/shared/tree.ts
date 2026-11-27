@@ -6,6 +6,8 @@
 import { checkParts } from './checkParts.ts'
 import { hotkeys } from './hotkeys.ts'
 import {
+    type ItemKey,
+    type KeyOf,
     keyOfItem,
     type KeyOption,
     type LabelOption,
@@ -18,7 +20,11 @@ import { roving, typeahead } from './roving.ts'
 import { type Picked, Selection } from './Selection.ts'
 
 /** The nodes, how each is told apart and named, and which are open and picked. */
-export type TreeOptions<Node, Multiple extends boolean = false> = {
+export type TreeOptions<
+    Node,
+    Multiple extends boolean = false,
+    Key extends ItemKey = KeyOf<Node>,
+> = {
     /** The base the ids its parts write are derived from; unique on the page. One is made where none is given. */
     id?: string | undefined
     /** The top level's nodes, in the order they render; a function is read live. */
@@ -26,12 +32,12 @@ export type TreeOptions<Node, Multiple extends boolean = false> = {
     /** A node's children, in order; none, or an empty list, for a leaf. */
     children(node: Node): readonly Node[] | undefined
     /** The keys of the nodes expanded, where the app holds them: a `Reactive` to read and set. Held by the parts, none expanded, and handed back as `expanded`, where none is given. */
-    expanded?: Reactive<readonly string[]> | undefined
+    expanded?: Reactive<readonly NoInfer<Key>[]> | undefined
     /** 51.98 — whether it selects many, each press changing the selection rather than replacing it. `false` by default. */
     multiple?: Multiple | undefined
     /** The key of the node picked, or every key picked where it selects many, where the app holds them: a `Reactive` to read and set. Held by the parts, and handed back as `selected`, where none is given. */
-    selected?: Reactive<Picked<string, Multiple>> | undefined
-} & KeyOption<Node> &
+    selected?: Reactive<Picked<NoInfer<Key>, Multiple>> | undefined
+} & KeyOption<Node, Key> &
     LabelOption<Node>
 
 /** One node's parts: its item, the group holding its children, whether it is expanded, and the toggle. */
@@ -47,7 +53,11 @@ export type TreeNode = {
 }
 
 /** The parts `tree` hands back, each spread onto an element: `<li {...view.node(node).item}>`. */
-export type Tree<Node, Multiple extends boolean = false> = {
+export type Tree<
+    Node,
+    Multiple extends boolean = false,
+    Key extends ItemKey = KeyOf<Node>,
+> = {
     /** The base its parts' ids are derived from. */
     readonly id: string
     /** The tree's attributes and its keyboard. */
@@ -57,9 +67,9 @@ export type Tree<Node, Multiple extends boolean = false> = {
     /** The nodes that show, in order: each root, and the children of every expanded node that shows. */
     get shown(): readonly Node[]
     /** The keys of the nodes expanded, read and set. */
-    readonly expanded: Reactive<readonly string[]>
+    readonly expanded: Reactive<readonly Key[]>
     /** The key of the node picked, or every key picked where it selects many, read and set. */
-    readonly selected: Reactive<Picked<string, Multiple>>
+    readonly selected: Reactive<Picked<Key, Multiple>>
 }
 
 // Where a node stands: its depth from 1, how many siblings it has counting itself, its place among
@@ -68,23 +78,28 @@ type Placed = {
     level: number
     setsize: number
     posinset: number
-    parent: string | undefined
+    parent: ItemKey | undefined
     branch: boolean
 }
 
 /** WAI-ARIA's tree: nested nodes the keys rove and expand, as parts to spread. */
-export function tree<Node, Multiple extends boolean = false>(
-    options: TreeOptions<Node, Multiple>,
-): Tree<Node, Multiple> {
+export function tree<
+    Node,
+    Multiple extends boolean = false,
+    Key extends ItemKey = KeyOf<Node>,
+>(options: TreeOptions<Node, Multiple, Key>): Tree<Node, Multiple, Key> {
     // 49.11 — read where they are used; whether it selects many is fixed for the life of the parts.
     const children = (node: Node) => options.children(node)
-    const key = (node: Node) => keyOfItem(options.key, node)
+    // Keys are held as `ItemKey` inside, and as `Key` at the surface.
+    const key = (node: Node): ItemKey =>
+        keyOfItem(options.key as ((node: Node) => Key) | undefined, node)
     const label = (node: Node) => writtenBy(options.label, node)
     const rootsOf = () => live(options.roots)
-    const expanded = options.expanded ?? reactive<readonly string[]>([])
+    const expanded = (options.expanded ??
+        reactive<readonly Key[]>([])) as Reactive<readonly ItemKey[]>
     const many = options.multiple === true
     const selection = new Selection(
-        options.selected as Reactive<Picked<string, boolean>> | undefined,
+        options.selected as Reactive<Picked<ItemKey, boolean>> | undefined,
         many,
     )
     const typedTo = typeahead()
@@ -93,14 +108,14 @@ export function tree<Node, Multiple extends boolean = false>(
     // is expanded change.
     const walked = reactive(() => {
         const open = new Set(expanded())
-        const placed = new Map<string, Placed>()
-        const shown: string[] = []
+        const placed = new Map<ItemKey, Placed>()
+        const shown: ItemKey[] = []
         const shownNodes: Node[] = []
         const labels: string[] = []
         const walk = (
             nodes: readonly Node[],
             level: number,
-            parent: string | undefined,
+            parent: ItemKey | undefined,
             showing: boolean,
         ): void => {
             for (let index = 0; index < nodes.length; index += 1) {
@@ -128,8 +143,8 @@ export function tree<Node, Multiple extends boolean = false>(
 
     // 51.79 — the item in the page's tab order: the one focused last, else the first one picked, else
     // the first.
-    const focused = reactive<string | undefined>(undefined)
-    const current = reactive((): string | undefined => {
+    const focused = reactive<ItemKey | undefined>(undefined)
+    const current = reactive((): ItemKey | undefined => {
         const { shown } = walked()
         const wanted = focused()
         if (wanted !== undefined && shown.includes(wanted)) return wanted
@@ -146,13 +161,13 @@ export function tree<Node, Multiple extends boolean = false>(
         : undefined
 
     const base = options.id ?? `tree-${randomToken(4, 'hex')}`
-    const itemId = (each: string) => `${base}-${encodeURIComponent(each)}`
+    const itemId = (each: ItemKey) => `${base}-${encodeURIComponent(each)}`
     if (process.env.NODE_ENV !== 'production') checkParts('tree', base)
-    const focus = (each: string): void => {
+    const focus = (each: ItemKey): void => {
         focused.set(each)
         globalThis.document?.getElementById(itemId(each))?.focus()
     }
-    const setOpen = (each: string, open: boolean): void => {
+    const setOpen = (each: ItemKey, open: boolean): void => {
         const now = expanded.peek() ?? []
         if (now.includes(each) === open) return
         expanded.set(open ? [...now, each] : now.filter((one) => one !== each))
@@ -171,7 +186,7 @@ export function tree<Node, Multiple extends boolean = false>(
             )
             const at =
                 within === null || within === undefined
-                    ? shown.indexOf(current() as string)
+                    ? shown.indexOf(current() as ItemKey)
                     : shown.findIndex((one) => itemId(one) === within.id)
             const each = shown[at]
             const place = each === undefined ? undefined : placed.get(each)
@@ -308,7 +323,7 @@ export function tree<Node, Multiple extends boolean = false>(
         get shown() {
             return walked().shownNodes
         },
-        expanded,
-        selected: selection.selected as Reactive<Picked<string, Multiple>>,
+        expanded: expanded as Reactive<readonly Key[]>,
+        selected: selection.selected as Reactive<Picked<Key, Multiple>>,
     }
 }
