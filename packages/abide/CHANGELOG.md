@@ -1,5 +1,16 @@
 # @abide/abide
 
+## 0.146.0
+
+### Minor Changes
+
+- 14d5634: APP_ORIGINS lists more origins the app answers at, a bare host taking APP_URL's scheme, and the own origin is the request's where listed — 36.2, 36.24, 36.25 ([`55ebf06`](https://github.com/briancray/abide/commit/55ebf06e0339d2be8ea7f056aae144bd0af8235f))
+
+### Patch Changes
+
+- Updated dependencies [14d5634]
+  - @abide/bridge@0.9.3
+
 ## 0.145.0
 
 ### Minor Changes
