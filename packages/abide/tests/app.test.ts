@@ -434,6 +434,40 @@ console.log(JSON.stringify(marks))
     ).toEqual(['before start', 'after start', 'held', 'stopped'])
 }, 30_000)
 
+// 42.3 — AN APP IS ANSWERED BEFORE IT IS SERVED: `createApp` boots it and `App.fetch` answers, and
+// no socket is bound until `listen`. `PORT` names a port nothing holds, which a `Bun.serve` given no
+// port would bind, so an app that bound one is reached there. THE REVERT: `await app.listen()` in
+// `createApp` before it returns; `served` reads 200 where `refused` is due.
+test('createApp answers fetch with no socket bound until listen — 42.3', async () => {
+    const probe = Bun.listen({
+        hostname: '127.0.0.1',
+        port: 0,
+        socket: { data() {} },
+    })
+    const port = probe.port
+    probe.stop(true)
+    await Bun.write(
+        `${app}/lib/unbound.ts`,
+        `import { createApp } from '@abide/abide/server'
+
+const app = await createApp()
+const fetched = await app.fetch(new Request('http://app.test/own'))
+const served = await fetch('http://127.0.0.1:${port}/own').then(
+    (answer) => answer.status,
+    () => 'refused',
+)
+await app.stop()
+console.log(JSON.stringify({ fetched: await fetched.text(), served }))
+`,
+    )
+    expect(
+        await lastLinePrinted<Record<string, unknown>>(
+            ['bun', `${app}/lib/unbound.ts`],
+            { cwd: app, env: { ...process.env, PORT: String(port) } },
+        ),
+    ).toEqual({ fetched: 'own route for GET', served: 'refused' })
+}, 30_000)
+
 // 37.6 — A THROWING `onStart` FAILS HARD: `abide start` exits rather than serving. THE REVERT: catch
 // around `compose(HOOKS.starts, …)` in `bootApp`; the command prints an address and serves.
 test('a throwing onStart stops the server starting — 37.6', async () => {

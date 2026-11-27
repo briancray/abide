@@ -37,6 +37,8 @@ async function answer(request: Request): Promise<Response> {
     const url = new URL(request.url)
     ran.set(url.pathname, (ran.get(url.pathname) ?? 0) + 1)
     const n = url.searchParams.get('n') ?? ''
+    // 16.95 — a stream whose head never comes.
+    if (url.pathname.endsWith('/headless')) return new Promise(() => {})
     if (url.pathname.endsWith('/bytes'))
         return new Response(new Uint8Array([1, 2]), {
             headers: { 'content-type': 'application/octet-stream' },
@@ -344,4 +346,61 @@ test('a parked answer is refused to another browser presenting its token — 16.
     expect(await taken.text()).toBe('{"at":1}\n')
     // Taken once.
     expect((takeParked(claim('ada', token)) as Response).status).toBe(404)
+})
+
+// 16.95 — THE SOCKET CLOSING UNDER TWO STREAMS: one still waiting on its head is no answer at all, and
+// refuses as a call reaching no server does (16.79); one whose head and first chunk landed fails the
+// stream it was reading. Closed from the server's side, on an origin of its own so no other test's
+// mux is the one closed. THE REVERT: settle `noAnswer()` alone in `MuxStream.lost`; the stream past
+// its head reads busy and unfailed where an error is due. Error the body alone and `headless` reads
+// no status where 503 is due.
+test('a stream whose mux closes is refused before its head and errored after it — 16.95', async () => {
+    const origin = 'http://stream-mux-lost.test'
+    const loopback = globalThis.WebSocket
+    const sockets: { readyState: number; onclose: (() => void) | null }[] = []
+    globalThis.WebSocket = class extends (loopback as unknown as new (
+        url: string,
+    ) => object) {
+        constructor(url: string) {
+            super(url)
+            sockets.push(this as unknown as (typeof sockets)[number])
+        }
+    } as unknown as typeof WebSocket
+    try {
+        const headless = reachOf(
+            wire('GET', `${origin}/headless`, { stream: true }),
+        ) as Copy
+        const headed = reachOf(
+            wire('GET', `${origin}/ticks`, { stream: true }),
+            {
+                n: 'lost',
+            },
+        ) as Copy
+        for (let turns = 0; turns < 200 && !answering.has('lost'); turns += 1)
+            await Bun.sleep(1)
+        answering.get('lost')?.send('{"at":1}\n')
+        expect(await landed(headed)).toEqual([{ at: 1 }])
+        expect(sockets.length).toBe(1)
+        const socket = sockets[0] as (typeof sockets)[number]
+        socket.readyState = 3
+        socket.onclose?.()
+        for (
+            let turns = 0;
+            turns < 200 &&
+            (headless.error() === undefined || headed.error() === undefined);
+            turns += 1
+        )
+            await Bun.sleep(1)
+        flushSync()
+        expect({
+            headless: (headless.error() as { status?: number } | undefined)
+                ?.status,
+            headed: {
+                busy: headed.busy(),
+                failed: headed.error() !== undefined,
+            },
+        }).toEqual({ headless: 503, headed: { busy: false, failed: true } })
+    } finally {
+        globalThis.WebSocket = loopback
+    }
 })

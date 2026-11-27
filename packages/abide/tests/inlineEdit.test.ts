@@ -157,3 +157,35 @@ test('Enter whose text the value refuses stays in the field, focus where it was 
         input,
     ])
 })
+
+// THE REVERT: write `value` first and return where it is refused, before `save` is called; `saved`
+// reads `[]` where `['']` is due.
+test('Enter whose text the value refuses still calls save with it — 49.20', async () => {
+    const value = reactive<string>('Engine renewal', {
+        schema: {
+            '~standard': {
+                version: 1,
+                vendor: 'test',
+                validate: (text: unknown) =>
+                    text === ''
+                        ? { issues: [{ message: 'needs a name' }] }
+                        : { value: text as string },
+            },
+        },
+    })
+    const saved: string[] = []
+    const { name, view, type } = standing({
+        value,
+        save: (text) => {
+            saved.push(text)
+        },
+    })
+    view.click()
+    await settle()
+    await type('', 'Enter')
+    expect([saved, name.value(), name.editing()]).toEqual([
+        [''],
+        'Engine renewal',
+        true,
+    ])
+})

@@ -9,7 +9,7 @@ import type {
     AssistantEvent,
     AssistantMessage,
 } from '@abide/abide'
-import { flushSync, reactive } from '@abide/abide'
+import { chat, flushSync, reactive } from '@abide/abide'
 import { mount, settled } from '@abide/harness/abide'
 
 import { attachContactCard } from './attachContactCard.ts'
@@ -633,6 +633,188 @@ test('a question sent while a file is still being taken waits for it', async () 
     expect(stream.asked[0]?.[0]?.content).toEqual([
         { type: 'text', text: 'Who is on this card?' },
         PNG_BLOCK,
+    ])
+    stream.end()
+    await settled()
+})
+
+// A conversation with a tool call in it: words as a string, an answer that calls a tool between two
+// runs of words, and the person's next turn carrying the call's result before their own words.
+const CALLED: AssistantMessage[] = [
+    { role: 'user', content: 'Who is Grace?' },
+    {
+        role: 'assistant',
+        content: [
+            { type: 'text', text: 'Looking her up.' },
+            { type: 'tool_use', id: 'call_1', name: 'crm_search', input: {} },
+            { type: 'text', text: 'Grace Hopper, at Hopper & Co.' },
+        ],
+    },
+    {
+        role: 'user',
+        content: [
+            {
+                type: 'tool_result',
+                tool_use_id: 'call_1',
+                content: [{ type: 'text', text: '{"hits":1}' }],
+            },
+            { type: 'text', text: 'And her company?' },
+        ],
+    },
+]
+
+// THE REVERT: drop the `tool_result` check from `chat`'s message `blocks`, and the person's turn
+// lists the call's result among its blocks — `['tool_result', 'text']` where `['text']` is due.
+test("a message's blocks show in order, words held as a string as one, and no tool_result among them — 53.24", async () => {
+    const stream = fed()
+    using _chat = await mount(Chat({ ask: stream.ask, messages: CALLED }))
+    const shown = [...document.querySelectorAll('[data-chat=message]')].map(
+        (message) =>
+            [
+                ...message.querySelectorAll(
+                    '[data-chat=text], [data-chat=tool]',
+                ),
+            ].map((block) =>
+                block.getAttribute('data-chat') === 'tool'
+                    ? 'a tool'
+                    : block.textContent?.trim(),
+            ),
+    )
+    expect(shown).toEqual([
+        ['Who is Grace?'],
+        ['Looking her up.', 'a tool', 'Grace Hopper, at Hopper & Co.'],
+        ['And her company?'],
+    ])
+    const talk = chat({ ask: stream.ask, messages: reactive(CALLED) })
+    const kinds = CALLED.map((message, index) =>
+        talk.message(message, index).blocks.map((block) => block.type),
+    )
+    expect(kinds).toEqual([['text'], ['text', 'tool_use', 'text'], ['text']])
+})
+
+// THE REVERT: keep the first `message_delta`'s `stop_reason` in `chat` — `stop = stop ??
+// event.delta.stop_reason` — and the answer that called a tool and then ended reads `data-stop:
+// tool_use` where `data-stop: end_turn` is due.
+test("stop_reason is the latest answer's last message_delta's — 53.27", async () => {
+    const stream = fed()
+    using _chat = await mount(Chat({ ask: stream.ask }))
+    const section = () => document.querySelector('section')
+    const stopped = (stop_reason: string) =>
+        stream.push({
+            type: 'message_delta',
+            delta: { stop_reason, stop_sequence: null },
+            usage: { output_tokens: 0 },
+        })
+    type('Find Grace.')
+    press({})
+    stream.start()
+    stream.say('Looking.')
+    stopped('tool_use')
+    stopped('end_turn')
+    stream.end()
+    await settled()
+    flushSync()
+    expect(`data-stop: ${section()?.getAttribute('data-stop')}`).toBe(
+        'data-stop: end_turn',
+    )
+    // The next answer starts from none, and ends with none where it carried no `message_delta`.
+    type('And Ada?')
+    press({})
+    stream.start()
+    stream.end()
+    await settled()
+    flushSync()
+    expect(section()?.getAttribute('data-stop')).toBeNull()
+})
+
+// THE REVERT: write the outcome onto the answer as it ends in `chat` — `messages.patch((all) => {
+// Object.assign(all.at(-1) as object, { stop_reason: stop }) })` beside `outcome.set` — and the next
+// question asks with an answer carrying `stop_reason` — `assistant: content, role, stop_reason` where
+// `assistant: content, role` is due.
+test("permissions, stop_reason and failed are the parts' own, never written to the messages — 53.30", async () => {
+    const stream = fed()
+    using _chat = await mount(Chat({ ask: stream.ask, permit: () => {} }))
+    type('Export my contacts.')
+    press({})
+    stream.start()
+    stream.say('Exporting.')
+    stream.push({
+        type: 'permission',
+        id: 'p1',
+        name: 'Bash',
+        input: { command: 'ls' },
+    })
+    stream.push({
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 0 },
+    })
+    stream.end()
+    await settled()
+    flushSync()
+    expect(document.querySelector('section')?.getAttribute('data-stop')).toBe(
+        'end_turn',
+    )
+    expect(document.querySelectorAll('[data-chat=permission]')).toHaveLength(1)
+    type('Thanks.')
+    press({})
+    const fields = (stream.asked[1] ?? []).map(
+        (message) =>
+            `${message.role}: ${Object.keys(message).sort().join(', ')}`,
+    )
+    expect(fields).toEqual([
+        'user: content, role',
+        'assistant: content, role',
+        'user: content, role',
+    ])
+    stream.end()
+    await settled()
+})
+
+// THE REVERT: drop `options.permit === undefined ||` from `chat`'s permission buttons, and a chat
+// handed no `permit` offers buttons that answer nothing — `without permit: false, false` where
+// `true, true` is due.
+test('permission buttons are disabled without permit, and once the prompt is answered — 53.38', async () => {
+    const buttons = () =>
+        [
+            ...document.querySelectorAll<HTMLButtonElement>(
+                '[data-chat=permission] button',
+            ),
+        ].map((button) => button.disabled)
+    const asked = async (
+        permit?: (answer: { id: string; allow: boolean }) => void,
+    ) => {
+        const stream = fed()
+        const mounted = await mount(Chat({ ask: stream.ask, permit }))
+        type('Export my contacts.')
+        press({})
+        stream.push({
+            type: 'permission',
+            id: 'p1',
+            name: 'Bash',
+            input: { command: 'ls' },
+        })
+        await arrived()
+        return { stream, mounted }
+    }
+    {
+        const { stream, mounted } = await asked()
+        using _chat = mounted
+        expect(`without permit: ${buttons().join(', ')}`).toBe(
+            'without permit: true, true',
+        )
+        stream.end()
+        await settled()
+    }
+    const answers: { id: string; allow: boolean }[] = []
+    const { stream, mounted } = await asked((answer) => answers.push(answer))
+    using _chat = mounted
+    expect(buttons()).toEqual([false, false])
+    document.querySelector<HTMLButtonElement>('[data-chat=deny]')?.click()
+    flushSync()
+    expect([answers, buttons()]).toEqual([
+        [{ id: 'p1', allow: false }],
+        [true, true],
     ])
     stream.end()
     await settled()

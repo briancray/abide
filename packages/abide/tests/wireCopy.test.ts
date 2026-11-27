@@ -397,3 +397,42 @@ test('a copy given a debounce sends one request for the keys a page reaches insi
     expect(`requests: ${loads - before}`).toBe('requests: 1')
     stop()
 })
+
+// 16.27 — A VALUE'S SCHEMA STAYS WITH THE VALUE. A mutation's `args` document is written into its
+// wrapper (19.28) for a `form` to check before sending; a source's `reactive` declaring a schema the
+// build could read just as well — the same `jsonSchema` over a literal — hands its copy no schema,
+// since that schema gates the server's value and runs there. THE REVERT (the clause is an absence,
+// so this one is planted where the build would make it): in `declaredCopy`, carry a `schema` option's
+// `jsonSchema` literal into the copy record; the `shelf` line holds 7731 where it is due nowhere.
+test("a source's copy carries no schema its value declares, where a mutation's args are carried — 16.27", async () => {
+    const app = appFixture({
+        'index.abide': '<main>home</main>',
+        'gated/lib/handlers.server.ts': `import { jsonSchema } from '@abide/abide'
+import { reactive, rpc } from '@abide/abide/server'
+
+export const shelf = rpc(
+    reactive([{ id: 'a' }], {
+        key: 'id',
+        schema: jsonSchema<{ id: string }[]>({ type: 'array', minItems: 7731 }),
+    }),
+)
+export const rename = rpc(({ name }: { name: string }) => name, {
+    methods: ['POST'],
+    args: jsonSchema<{ name: string }>({ type: 'object', properties: { name: { type: 'string', minLength: 4417 } } }),
+})
+`,
+    })
+    const built = await buildApp(app)
+    expect(built.exitCode).toBe(0)
+    const wrapper =
+        (await builtCompilation(app)).handlers['gated/lib/handlers.server.ts']
+            ?.client ?? ''
+    const line = (name: string): string =>
+        wrapper.split('\n').find((each) => each.includes(`const ${name} =`)) ??
+        ''
+    expect(line('rename')).toContain('4417')
+    expect({ shelf: line('shelf'), schema: wrapper.includes('7731') }).toEqual({
+        shelf: expect.stringContaining('{"key":"id"}') as unknown as string,
+        schema: false,
+    })
+})

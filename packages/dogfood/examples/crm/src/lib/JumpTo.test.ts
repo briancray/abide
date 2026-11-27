@@ -123,3 +123,27 @@ test('each word typed is marked in the labels it is in', async () => {
         dialog().querySelectorAll('[data-command-palette=match]'),
     ).toHaveLength(0)
 })
+
+// THE REVERT: bind each command's `key` beside the palette's hotkey in `commandPalette`'s `hotkeys`
+// map, `[command.key]: { run: command.run }`, and pressing `n` on the page runs Add a deal — `went:
+// /deals` where `went: ` is due.
+test("a command's key is shown beside it and runs nothing — 51.70", async () => {
+    const went: string[] = []
+    using _jump = await mount(JumpTo({ go: (address) => went.push(address) }))
+    press('n')
+    expect(`went: ${went.join()}`).toBe('went: ')
+    press('k', { ctrlKey: true })
+    await Promise.resolve()
+    expect(
+        [...dialog().querySelectorAll('kbd[data-command-palette=key]')].map(
+            (key) =>
+                key
+                    .closest('[role=option]')
+                    ?.querySelector('[data-command-palette=label]')
+                    ?.textContent,
+        ),
+    ).toEqual(['Add a deal'])
+    press('k', { ctrlKey: true })
+    press('n')
+    expect(`went: ${went.join()}`).toBe('went: ')
+})

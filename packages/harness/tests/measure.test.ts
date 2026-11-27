@@ -4,6 +4,7 @@
 
 import { expect, test } from 'bun:test'
 
+import { measure as measureAbide } from '@abide/harness/abide'
 import { gate } from '@abide/harness/gate'
 import {
     measure,
@@ -13,6 +14,9 @@ import {
     type PublishedWork,
     time,
 } from '@abide/harness/measure'
+
+// `install` is the preload's, and not a name the package exports.
+import { install } from '../src/measure/install.ts'
 
 function row(): HTMLElement {
     const element = document.createElement('li')
@@ -98,6 +102,44 @@ test('a textContent write counts its own removals once — 43.4', () => {
     })
     expect(work.elementsMoved).toBe(2)
     expect(work.nodesCreated).toBe(0)
+})
+
+/** Every patched member's live accessors and value, read off the prototype chain it was patched on. */
+function patchedMembers(): unknown[][] {
+    const members: unknown[][] = []
+    for (const entry of patchSet()) {
+        const [interfaceName, member] = entry.split('.') as [string, string]
+        let walk: object | null = (
+            globalThis as unknown as Record<string, { prototype: object }>
+        )[interfaceName]?.prototype as object
+        let descriptor: PropertyDescriptor | undefined
+        while (walk && !descriptor) {
+            descriptor = Object.getOwnPropertyDescriptor(walk, member)
+            walk = Object.getPrototypeOf(walk)
+        }
+        members.push([descriptor?.get, descriptor?.set, descriptor?.value])
+    }
+    return members
+}
+
+// THE PATCHES GO IN ONCE. The preload installs them and a second `install()` — a second preload,
+// a browser init script beside the import — is a no-op rather than a wrapper around the wrapper.
+// The re-entrancy guard above keeps a doubled patch's COUNTS right, so the counts cannot gate this:
+// what moves is the member itself.
+// THE REVERT: drop `if (installed.length > 0) return` from `install()`; 56 members read rewrapped where 0 is due.
+test('a second install leaves every patched member as the first installed it — 43.4', () => {
+    const before = patchedMembers()
+    install()
+    const after = patchedMembers()
+    let rewrapped = 0
+    for (let index = 0; index < before.length; index += 1) {
+        const [get, set, value] = before[index] as unknown[]
+        const [getAfter, setAfter, valueAfter] = after[index] as unknown[]
+        if (get !== getAfter || set !== setAfter || value !== valueAfter)
+            rewrapped += 1
+    }
+    expect(patchSet().length).toBe(before.length)
+    expect(rewrapped).toBe(0)
 })
 
 test('a textContent write with a value creates exactly one text node', () => {
@@ -264,6 +306,25 @@ test('a source that published nothing reads as absent, not as zero', () => {
         const work = measure(() => document.createElement('div'))
         expect(work.nodesCreated).toBe(1)
         expect(publishedBy(work, 'subject', ['wakes'])).toBeNull()
+    } finally {
+        publish(standing)
+    }
+})
+
+// THE ADAPTER'S ABSENT HALF. abide's three counters are `null` where abide published no record —
+// a lane that loaded the adapter in a process abide's runtime never reached — and never `0`, which
+// is the row saying the op woke nobody about counters nothing was wired to.
+// THE REVERT: default the adapter's missing record to `{ wakes: 0, bindingRuns: 0, descents: 0 }`; it reports [0, 0, 0] where [null, null, null] is due.
+test("the abide adapter reports abide's counters absent where abide published none — 43.23", () => {
+    const standing = publish({})
+    try {
+        const work = measureAbide(() => document.createElement('div'))
+        expect(work.nodesCreated).toBe(1)
+        expect([work.wakes, work.bindingRuns, work.descents]).toEqual([
+            null,
+            null,
+            null,
+        ])
     } finally {
         publish(standing)
     }

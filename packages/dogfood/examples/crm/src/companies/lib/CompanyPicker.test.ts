@@ -1,9 +1,10 @@
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 
 import { flushSync } from '@abide/abide'
 import { measure, mount, settled } from '@abide/harness/abide'
 import { atMost } from '@abide/harness/gate'
 
+import searchCompanies from '../searchCompanies.server.ts'
 import CompanyPicker from './CompanyPicker.abide'
 
 const input = () => document.querySelector('input') as HTMLInputElement
@@ -123,4 +124,44 @@ test('a press on an empty search field opens nothing, and with text lists what i
         'Hopper & Co · Arlington',
         'Langley Research · Hampton',
     ])
+})
+
+// THE REVERT: drop `if (!open()) return NOTHING` from `combobox`'s `found`, and the picker searches
+// for '' as it mounts, shut — `searches while shut: 1` where `0` is due.
+test('nothing is searched while the list is shut — 51.17', async () => {
+    // `searchCompanies` sleeps 150 ms once per search it answers, so its sleeps count its calls —
+    // once the answers earlier tests left are dropped, since one already held is not asked again.
+    searchCompanies.invalidate()
+    using sleep = spyOn(Bun, 'sleep')
+    const searches = () => sleep.mock.calls.filter(([ms]) => ms === 150).length
+    using _picker = await mount(CompanyPicker({}))
+    flushSync()
+    await Bun.sleep(0)
+    flushSync()
+    expect(document.querySelector('[data-open]')).toBeNull()
+    expect(`searches while shut: ${searches()}`).toBe('searches while shut: 0')
+    await type('ar')
+    expect(searches()).toBe(1)
+    press('Escape')
+    await Bun.sleep(0)
+    flushSync()
+    expect(`searches while shut: ${searches() - 1}`).toBe(
+        'searches while shut: 0',
+    )
+})
+
+// THE REVERT: drop the Home/End return at the top of `combobox`'s `keydown`, and End moves the active
+// company to the last — `[true, false]` where the first stays active — and is prevented.
+test('Home and End move the caret, never the active company — 51.21', async () => {
+    using _picker = await mount(CompanyPicker({}))
+    await type('ar')
+    const prevented: boolean[] = []
+    for (const key of ['End', 'Home']) {
+        const event = new KeyboardEvent('keydown', { key, cancelable: true })
+        input().dispatchEvent(event)
+        flushSync()
+        prevented.push(event.defaultPrevented)
+        expect(options().map((option) => option.active)).toEqual([true, false])
+    }
+    expect(prevented).toEqual([false, false])
 })

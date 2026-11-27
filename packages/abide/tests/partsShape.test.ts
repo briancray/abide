@@ -746,3 +746,37 @@ test("a component built on another merges that one's part or hands its parts bac
         if (!isPart(part, component)) missing.push(`${name}: data-${component}`)
     expect(missing).toEqual([])
 })
+
+// THE REVERT: give `tabs`'s list part a `class: 'tabs'`; `tabs.list` is named where `[]` is due.
+test('no element part carries a class — 49.2', () => {
+    const classed: string[] = []
+    for (const [name, part] of Object.entries(elementParts()))
+        if (
+            typeof part === 'object' &&
+            part !== null &&
+            ('class' in part || 'className' in part)
+        )
+            classed.push(name)
+    expect(classed).toEqual([])
+})
+
+// THE REVERT: write a `src/shared/parts.css`; it is listed where `[]` is due. `scaffold/` is the new
+// app's own stylesheet, copied into it, and not one abide ships.
+test('nothing the package ships is a stylesheet — 49.4', async () => {
+    const root = new URL('..', import.meta.url).pathname
+    const { files } = (await Bun.file(`${root}package.json`).json()) as {
+        files: string[]
+    }
+    const stylesheets: string[] = []
+    for (const path of new Bun.Glob('**/*.{css,scss,sass,less}').scanSync({
+        cwd: root,
+        onlyFiles: true,
+    })) {
+        const shipped = files.some(
+            (listed) => path === listed || path.startsWith(`${listed}/`),
+        )
+        if (shipped && !path.startsWith('scaffold/')) stylesheets.push(path)
+    }
+    expect(files).toContain('src')
+    expect(stylesheets).toEqual([])
+})

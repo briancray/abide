@@ -46,6 +46,7 @@ import type { Schema } from '#shared/Schema.ts'
 import { UNEXPECTED } from '#shared/UNEXPECTED.ts'
 import { WORK } from '#shared/WORK.ts'
 import { writePath } from '#shared/writePath.ts'
+import { setText } from '#ui/setText.ts'
 
 import { deferredLoads } from './deferredLoads.ts'
 import { warningsWhile } from './warningsWhile.ts'
@@ -7418,4 +7419,156 @@ test('a handle hands back what create answers, and throws outside an instance �
     } finally {
         leaveShare(previous)
     }
+})
+
+// 2.11 — A PEEK IS NOT A READ: it pulls the value current (2.10) and leaves no edge behind, so a
+// body that peeked is not woken by the write it peeked past. THE REVERT: have `MEMBERS.peek` call
+// `track(cell, TRACKING.reader)` as the read does; `runs: 1` where `runs: 0` is due.
+test('a body that peeks a value is not rerun by a write to it — 2.11', () => {
+    const source = reactive(1)
+    let runs = 0
+    const stop = watch(() => {
+        runs += 1
+        source.peek()
+    })
+    runs = 0
+    source.set(2)
+    flushSync()
+    stop()
+    expect(`runs: ${runs}, peeked: ${source.peek()}`).toBe('runs: 0, peeked: 2')
+})
+
+// 11.9 — A WRITE TO A DERIVED VALUE IS A WRITE, not a misuse: it stands until the next recompute
+// (11.8) and nobody is told off for it. THE REVERT: have `writtenHere` — where every write over a
+// body lands, the `simple` short write's included — `console.warn` that the value is derived;
+// `warnings: 1` where `warnings: 0` is due.
+test('a write to a derived value warns nothing — 11.9', () => {
+    const source = reactive(2)
+    const doubled = reactive(() => source() * 2)
+    expect(doubled()).toBe(4)
+    const said = warningsWhile(() => {
+        doubled.set(10)
+        flushSync()
+    })
+    expect(`warnings: ${said.length}, held: ${doubled()}`).toBe(
+        'warnings: 0, held: 10',
+    )
+})
+
+// 11.10 — A SETTLED WRITE IS A VALUE, NOT A LOAD: the derived value is not busy for it, stays ready,
+// and it serves the write at once. (`synced` does move — 3.10 — so a guard over the probes together
+// is woken by it; 11.10 is about the load's probes.) THE REVERT: absorb a settled write over a body
+// as a load — `absorb(cell, Promise.resolve(value), false)` at the head of `setThroughGates`, with
+// `cell.body === null` added to `SIMPLE_PROTOTYPE.set`'s short arm so the write reaches it;
+// `busy: true` serving 4 where `busy: false` serving 10 is due.
+test('a settled write to a derived value moves no probe — 11.10', () => {
+    const source = reactive(2)
+    const doubled = reactive(() => source() * 2)
+    expect(doubled()).toBe(4)
+    doubled.set(10)
+    expect(
+        `busy: ${doubled.busy()}, ready: ${doubled.ready()}, error: ${doubled.error()}, held: ${doubled()}`,
+    ).toBe('busy: false, ready: true, error: undefined, held: 10')
+})
+
+// 11.11 — AN UNSETTLED WRITE IS A LOAD (4.2): busy while it is in flight, still serving what it held
+// (2.1), and the settled value once it lands — never the promise stored as the value. THE REVERT: in
+// `setThroughGates`, `accept(cell, value)` in place of `absorb(cell, value, false)`; `busy: false`
+// and the promise held where `busy: true` serving 4 is due.
+test('an unsettled write to a derived value is a load — 11.11', async () => {
+    const source = reactive(2)
+    const doubled = reactive(() => source() * 2)
+    expect(doubled()).toBe(4)
+    let settle = (_value: number): void => {}
+    doubled.set(
+        new Promise<number>((resolve) => {
+            settle = resolve
+        }),
+    )
+    const inFlight = `busy: ${doubled.busy()}, ready: ${doubled.ready()}, held: ${typeof doubled.peek()} ${doubled.peek()}`
+    settle(10)
+    await doubled
+    expect(`${inFlight} | busy: ${doubled.busy()}, held: ${doubled()}`).toBe(
+        'busy: true, ready: true, held: number 4 | busy: false, held: 10',
+    )
+})
+
+// 11.36 — A `global` CACHE IS BOUNDED BY ITS `ttl` AND `invalidate` ALONE (11.35), so however many
+// keys it is reached with, the first is still held and reaching it again runs nothing. THE REVERT:
+// cap `reach` in `Keyed.ts` — `release` the oldest entry once `entries.size` passes 1000; `runs:
+// 5001, entries: 1000` where `runs: 5000, entries: 5000` is due.
+test('a global memo evicts no entry for how many it holds — 11.36', () => {
+    let runs = 0
+    const record = keyedValue(
+        ({ id }: { id: number }) => {
+            runs += 1
+            return id * 2
+        },
+        { global: true },
+    )
+    for (let id = 0; id < 5000; id += 1) record({ id })
+    expect(record({ id: 0 })()).toBe(0)
+    expect(`runs: ${runs}, entries: ${record.entries.size}`).toBe(
+        'runs: 5000, entries: 5000',
+    )
+})
+
+// 11.55 — KEYS THAT DIFFER ONLY IN CASE ARE TWO KEYS, and nothing is said about it: `'Ada'` and
+// `'ada'` are different values, so the canonical key (11.24) tells them apart and the reach runs
+// each once, quietly. THE REVERT: have `reach` in `Keyed.ts` `console.warn` where a filed key
+// equals the new one but for case; `warnings: 1` where `warnings: 0` is due.
+test('two keys that differ only in case warn nothing — 11.55', () => {
+    let runs = 0
+    const greeting = keyedValue(({ name }: { name: string }) => {
+        runs += 1
+        return `hello ${name}`
+    })
+    const said = warningsWhile(() => {
+        greeting({ name: 'Ada' })
+        greeting({ name: 'ada' })
+    })
+    expect(
+        `warnings: ${said.length}, runs: ${runs}, entries: ${greeting.entries.size}`,
+    ).toBe('warnings: 0, runs: 2, entries: 2')
+})
+
+// 35.10 — A SINK IS FILLED ONCE PER TURN, however many productions the turn makes. Two values a
+// render left in flight (35.7), each under the binding a slot holds (`setText` over the read), land
+// in ONE turn — their thenables settled by hand, back to back — and one of them is written again in
+// the same turn: three productions, two sinks, and the fills wait for the turn to end. THE REVERT:
+// have `schedule` in `Reactive.ts` call `flush()` in place of `queueMicrotask(flush)`; `before the
+// turn ends: 3, after: 3` where `before the turn ends: 0, after: 2` is due.
+test('a sink fill is batched by the turn, not by the production — 35.10', () => {
+    const settles: ((value: string) => void)[] = []
+    const inFlight = (): PromiseLike<string> => ({
+        then(onSettled) {
+            settles.push(onSettled as (value: string) => void)
+            return undefined as never
+        },
+    })
+    const name = reactive(inFlight())
+    const title = reactive(inFlight())
+    const nameNode = document.createTextNode('')
+    const titleNode = document.createTextNode('')
+    const stops = [
+        watch(() => {
+            setText(nameNode, name())
+        }),
+        watch(() => {
+            setText(titleNode, title())
+        }),
+    ]
+    expect(`busy: ${name.busy()}, ready: ${name.ready()}`).toBe(
+        'busy: true, ready: false',
+    )
+    const runsBefore = WORK.bindingRuns
+    for (const settle of settles) settle('landed')
+    name.set('Ada')
+    const beforeTheTurnEnds = WORK.bindingRuns - runsBefore
+    flushSync()
+    const after = WORK.bindingRuns - runsBefore
+    for (const stop of stops) stop()
+    expect(
+        `before the turn ends: ${beforeTheTurnEnds}, after: ${after}, filled: ${nameNode.data} ${titleNode.data}`,
+    ).toBe('before the turn ends: 0, after: 2, filled: Ada landed')
 })

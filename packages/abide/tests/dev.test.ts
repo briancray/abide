@@ -11,6 +11,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { spawned } from '@abide/harness/gate'
 
+import { appUrl } from '#server/remote.ts'
 import { decodeMappings, segmentAt } from '#server/sourceMappings.ts'
 
 import { addressOf, BIN } from './builtApp.ts'
@@ -690,6 +691,38 @@ test('a dev server given a taken port does not move off it — 38.64', async () 
         expect(pinned.stderr).toContain('EADDRINUSE')
     } finally {
         release?.()
+    }
+}, 30_000)
+
+// 36.1 — `PORT` IS 3000 WHERE NOTHING NAMES ONE, AND THE FLAG OUTRANKS IT. `PORT` names a port this
+// file holds, so a command that took it would die on EADDRINUSE (38.64); `--port 0` names any free
+// one. THE REVERT: listen on `process.env.PORT` ahead of `options.port` in `serveDev`; the command
+// exits on EADDRINUSE and prints no address. Default `DEFAULT_PORT` to 3001 and the local app is
+// called at `localhost:3001` where 3000 is due.
+test('PORT defaults to 3000, and --port overrides it — 36.1', async () => {
+    const named = process.env.PORT
+    delete process.env.PORT
+    try {
+        expect(appUrl(undefined)).toBe('http://localhost:3000')
+    } finally {
+        if (named !== undefined) process.env.PORT = named
+    }
+    const held = Bun.listen({ hostname: '::', port: 0, socket: { data() {} } })
+    const flagged = Bun.spawn(
+        ['bun', BIN, 'dev', '--root', app, '--port', '0'],
+        {
+            stdout: 'pipe',
+            stderr: 'pipe',
+            env: { ...withoutPort(), PORT: String(held.port) },
+        },
+    )
+    try {
+        const port = Number(new URL(await addressOf(flagged)).port)
+        expect(port).toBeGreaterThan(0)
+        expect(port).not.toBe(held.port)
+    } finally {
+        flagged.kill()
+        held.stop(true)
     }
 }, 30_000)
 

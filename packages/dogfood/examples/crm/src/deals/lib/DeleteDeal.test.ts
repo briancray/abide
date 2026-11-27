@@ -192,3 +192,35 @@ test('a question shows in one dialog where two Prompts stand', async () => {
     open[0]?.querySelector<HTMLButtonElement>('[data-prompts=cancel]')?.click()
     expect(await asked).toBe(false)
 })
+
+// THE REVERT: have `prompts.alert` settle only where its button closed it — `queued(...).then((answer)
+// => answer === undefined ? new Promise(() => {}) : undefined)` — and the alert Escape closed reads
+// `escape: pending` where `escape: settled` is due.
+test('an alert settles however it closes — 50.9', async () => {
+    using _deals = await mount(DeleteDeal({}))
+    const closed = async (close: () => void) => {
+        let state = 'pending'
+        void prompts.alert('Saved.').then(() => {
+            state = 'settled'
+        })
+        flushSync()
+        expect(dialog().open).toBe(true)
+        close()
+        await settled()
+        flushSync()
+        return state
+    }
+    const pressed = await closed(() =>
+        dialog()
+            .querySelector<HTMLButtonElement>('[data-prompts=confirm]')
+            ?.click(),
+    )
+    const escaped = await closed(() => {
+        if (dialog().dispatchEvent(new Event('cancel', { cancelable: true })))
+            dialog().close()
+    })
+    expect([`button: ${pressed}`, `escape: ${escaped}`]).toEqual([
+        'button: settled',
+        'escape: settled',
+    ])
+})

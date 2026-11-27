@@ -8,7 +8,7 @@ import { rm } from 'node:fs/promises' // bun has no recursive remove of its own
 
 import { spawned } from '@abide/harness/gate'
 
-import { rpc } from '#server'
+import { assistant, type Provider, rpc } from '#server'
 
 import bridgePackage from '../../bridge/package.json' with { type: 'json' }
 import { SILENCE_MILLISECONDS } from '../../bridge/src/bridge.ts'
@@ -1294,6 +1294,36 @@ test('a transcript that does not end on a user turn is refused — 44.3', async 
     expect(answer.status).toBe(400)
     expect(await answer.text()).toContain('44.3')
 }, 30_000)
+
+// 44.39 — ONE SHAPE FOR EVERY PROVIDER: a turn written as a string reaches a `Provider` as the one text
+// piece it stands for, and a turn written as pieces as those pieces. A provider an app wrote records
+// the turns it is handed. THE REVERT: push a string turn's `content` as written in `converse`; the
+// first and last turns read as strings where one text piece each is due.
+test('a provider is handed every turn as its pieces, a string as one text piece — 44.39', async () => {
+    const handed: unknown[] = []
+    const recording: Provider = {
+        async *run(turns) {
+            handed.push(...turns)
+        },
+    }
+    const pieces = [{ type: 'text' as const, text: 'the total is $731' }]
+    for await (const _ of assistant(
+        [
+            { role: 'user', content: 'what is the total?' },
+            { role: 'assistant', content: pieces },
+            { role: 'user', content: 'and the fee?' },
+        ],
+        recording,
+    ));
+    expect(handed).toEqual([
+        {
+            role: 'user',
+            content: [{ type: 'text', text: 'what is the total?' }],
+        },
+        { role: 'assistant', content: pieces },
+        { role: 'user', content: [{ type: 'text', text: 'and the fee?' }] },
+    ])
+})
 
 // The Messages API's own blocks: a picture, and a statement as a PDF.
 const SNAPSHOT = {

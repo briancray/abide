@@ -5,6 +5,7 @@
 import { afterEach, expect, test } from 'bun:test'
 
 import { rpc } from '#server'
+import { installServer } from '#server/installServer.ts'
 import { reactive } from '#shared'
 import { reachOf } from '#shared/rpc.ts'
 import { RPC_SERVER } from '#shared/RPC_SERVER.ts'
@@ -205,4 +206,17 @@ test('a computed adopting a call that times out refuses once — 16.107, 16.59',
     expect(
         `busy: ${answer.busy()}, status: ${(answer.error() as { status?: number } | undefined)?.status}, runs: ${runs}`,
     ).toBe('busy: false, status: 504, runs: 1')
+})
+
+// 16.22 — UNBOUNDED UNLESS SOMEONE BOUNDS IT: a handler naming no `timeout`, on a server whose
+// environment names no `ABIDE_RPC_TIMEOUT`, has no clock on its load at all. Read off the two
+// places a bound could come from, since no wait a test can afford tells "none" from "a long one".
+// THE REVERT: hand `positiveSetting('ABIDE_RPC_TIMEOUT', …)` a fallback of 30_000 in
+// `installServer`; `environment` reports 30000 where undefined is due.
+test('a handler and an environment naming no timeout leave its load unbounded — 16.22', () => {
+    installServer()
+    expect({
+        environment: RPC_SERVER.timeout(),
+        handler: rpc(() => 'answered').timeout,
+    }).toEqual({ environment: undefined, handler: undefined })
 })

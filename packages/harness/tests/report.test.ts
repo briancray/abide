@@ -87,6 +87,36 @@ console.log('n=' + done.n + ' floor=' + done.floor)`,
     expect(run.output).toMatch(/n=\d+ floor=/)
 })
 
+// A/B/A/B, NEVER IN BLOCKS. The arms are told apart by the order their bodies were called in, not
+// by a clock: each body appends to a run-length record, and a batch of `n` calls is one run, so an
+// interleaved batcher leaves its last `warmup + reps` runs of `two` at exactly `n` each, where a
+// blocked one leaves a single run of every rep at once. In a child, because the batcher refuses a
+// parallel worker (43.18).
+// THE REVERT: swap the rep loop and the lane loop in `batch()`'s timed pass, so each lane runs all its reps in a block; the last runs of `two` read [64, 512, 4096, 7192] at n=1798 — the probe runs, then one run of 4n — where [n, n, n, n] is due.
+test('the batcher interleaves its arms rep by rep rather than running one in a block — 43.8', async () => {
+    const run = await inAFreshProcess(
+        `${IMPORTS}
+const runs = []
+const called = (name) => {
+    const last = runs[runs.length - 1]
+    if (last !== undefined && last[0] === name) last[1] += 1
+    else runs.push([name, 1])
+}
+const done = batch({
+    case: 'order',
+    arms: { one: () => { called('one'); Math.sqrt(2) }, two: () => { called('two'); Math.sqrt(3) } },
+    emulated: null,
+    reps: 3,
+    warmup: 1,
+})
+const two = runs.filter((entry) => entry[0] === 'two').map((entry) => entry[1])
+console.log('n=' + done.n + ' two=' + JSON.stringify(two.slice(-4)))`,
+    )
+    expect(run.ok).toBe(true)
+    const n = Number(/n=(\d+)/.exec(run.output)?.[1])
+    expect(run.output).toContain(`two=${JSON.stringify([n, n, n, n])}`)
+})
+
 // THE FRAME IS A PAGE'S. Under bun nothing waits on a paint, so a whole op timed once on a
 // 41 ns clock is a reading. Reverted — tag any n=1 sample under 16.7 ms — this reads `true`,
 // and every bun-side render bench divided by hand to get round `ratio()`.

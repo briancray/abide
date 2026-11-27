@@ -100,3 +100,25 @@ test('each row carries its stage, and a click on it picks the deal', async () =>
         second.children[0]?.textContent,
     )
 })
+
+// THE REVERT: drop `data-sort` from `sortableTable`'s `header` part, and no header carries it — `[]`
+// where `['Closes: ascending']` is due.
+test("the sorted column's header carries the direction as data-sort, and no other does — 51.52", async () => {
+    using _deals = await mount(ClosingDeals({}))
+    await settled()
+    // Each header carrying `data-sort`, and what it carries.
+    const sorted = () => {
+        const carrying: string[] = []
+        for (const header of document.querySelectorAll('thead th')) {
+            const direction = header.getAttribute('data-sort')
+            if (direction !== null)
+                carrying.push(`${header.textContent?.trim()}: ${direction}`)
+        }
+        return carrying
+    }
+    expect(sorted()).toEqual(['Closes: ascending'])
+    sortBy('Closes')
+    expect(sorted()).toEqual(['Closes: descending'])
+    sortBy('Stage')
+    expect(sorted()).toEqual(['Stage: ascending'])
+})
