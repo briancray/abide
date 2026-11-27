@@ -243,11 +243,14 @@ test("a refusal no field owns shows as the form's own message — 56.4, 56.13", 
 // takes none. THE REVERT: answer a field's own issues alone — `positions` reads `undefined` where
 // 'must be positive' is due.
 test('a field takes the first issue beneath its name as its message — 56.36', async () => {
+    type Statement = { positions: { shares: number }[]; positionsNote: string }
     const record = rpc(
-        (_args: { positions: string; positionsNote: string }) =>
-            refuse.validation<{ positions: string; positionsNote: string }>({
-                'positions.0.shares': ['must be positive'],
-            }),
+        (args: Statement) =>
+            args.positionsNote === 'saved'
+                ? args
+                : refuse.validation<Statement>({
+                      'positions.0.shares': ['must be positive'],
+                  }),
         { methods: ['POST'] },
     )
     addressed(record, '/accounts/positions')
