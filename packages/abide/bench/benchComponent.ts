@@ -34,7 +34,7 @@ const SIZES = [10, 100, 1000]
 async function main(): Promise<void> {
     const { compile, close } = await openBenchCompiler()
     try {
-        const card = await compile('Card', abideCardSource())
+        const card = abideCardSource()
         console.log(
             'A COMPONENT PER ROW — against the same row written inline, and the page written by hand\n',
         )
@@ -47,7 +47,7 @@ async function main(): Promise<void> {
             const nested = await compile(
                 'Page',
                 abideComponentSource().replace('CARDS', JSON.stringify(list)),
-                { 'Card.ts': card.module },
+                { Card: card },
             )
             // 32.42 — AN INLINE COMPONENT IN THE ROW, declared alone and then invoked: a function
             // declared per row, closing over it.
@@ -73,16 +73,16 @@ async function main(): Promise<void> {
                         void vanillaMarkup(list)
                     },
                     inline: (): void => {
-                        void inline.render().body
+                        void inline().body
                     },
                     component: (): void => {
-                        void nested.render().body
+                        void nested().body
                     },
                     declared: (): void => {
-                        void declared.render().body
+                        void declared().body
                     },
                     invoked: (): void => {
-                        void invoked.render().body
+                        void invoked().body
                     },
                 },
                 emulated: emulatedDom(),
@@ -105,8 +105,8 @@ async function main(): Promise<void> {
                 `              inline component: ${perRow(alone, size)} ns a row declared alone (${times(alone, flat, measured.floor)}), ${perRow(called, size)} ns a row invoked (${times(called, flat, measured.floor)})`,
             )
             if (size === SIZES[SIZES.length - 1]) {
-                bytes(inline.render().body, nested.render().body, size)
-                keptByRender(inline.render, nested.render, size)
+                bytes(inline().body, nested().body, size)
+                keptByRender(inline, nested, size)
             }
         }
     } finally {

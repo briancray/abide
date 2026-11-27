@@ -1,8 +1,8 @@
 // A `.abide` source compiled and imported as the server component it emits — what the render and
-// component benches time. One checker session per run:
-// opening one is seconds, and every compile after it is not.
+// component benches time — built as `buildCompiledPage` builds a page (`servedFiles`), so a page with
+// a component in it is compiled the way the build compiles one. One checker session per run.
 
-import { emitComponent, parseAbide, TypeSession } from '@abide/abide/compiler'
+import { TypeSession } from '@abide/abide/compiler'
 
 // The emitted modules go where the tests write theirs, by the tests' own helper — see
 // `serveDocsApp.ts` for why a bench reaches into `tests/`.
@@ -10,6 +10,7 @@ import {
     removeTemporaryModules,
     temporaryModule,
 } from '../tests/temporaryModule.ts'
+import { servedFiles } from './buildCompiledPage.ts'
 
 const REPO = new URL('../../../', import.meta.url).pathname
 
@@ -23,8 +24,8 @@ export async function openBenchCompiler(): Promise<{
     compile: (
         name: string,
         source: string,
-        beside?: Record<string, string>,
-    ) => Promise<{ module: string; render: Render }>
+        components?: Record<string, string>,
+    ) => Promise<Render>
     close: () => void
 }> {
     const session = await TypeSession.open(
@@ -32,28 +33,25 @@ export async function openBenchCompiler(): Promise<{
     )
     return {
         /**
-         * Compiles `source` as `name` and returns the emitted module and its imported render.
+         * Compiles `source` as `name`, with the `.abide` `components` it imports by name, and returns
+         * its imported render.
          *
-         * ITS OWN DIR PER CALL, because an import path is cached: a second `Page.ts` at a path
+         * ITS OWN DIR PER CALL, because an import path is cached: a second `Page.abide` at a path
          * already imported hands back the first size's module.
          */
-        async compile(name, source, beside = {}) {
-            const file = parseAbide(source)
-            const reads = await session.reads(
-                `${REPO}packages/abide/tests/fixtures/typed/src/${name}.abide`,
-                file,
+        async compile(name, source, components = {}) {
+            const scratch = temporaryModule({})
+            await servedFiles(
+                session,
+                scratch,
+                [[name, source], ...Object.entries(components)],
+                name,
+                false,
             )
-            // A component import is emitted as the file's `?component` face, which only abide's
-            // module loader resolves; here the sibling is the emitted module written `beside`.
-            const module = emitComponent(file, reads).replace(
-                /\.abide\?component'/g,
-                ".ts'",
-            )
-            const dir = temporaryModule({ ...beside, [`${name}.ts`]: module })
-            const loaded = (await import(`${dir}/${name}.ts`)) as {
-                default: Render
-            }
-            return { module, render: loaded.default }
+            const loaded = (await import(
+                `${scratch}/${name}.abide?component`
+            )) as { default: Render }
+            return loaded.default
         },
         close() {
             session.close()

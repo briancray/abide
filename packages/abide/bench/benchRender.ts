@@ -44,18 +44,14 @@ async function main(): Promise<void> {
     try {
         for (const size of SIZES) {
             const list = cards(size)
-            const Component = (
-                await compile(
-                    'Unrolled',
-                    abideSource(size).replace('CARDS', JSON.stringify(list)),
-                )
-            ).render
-            const Loop = (
-                await compile(
-                    'Loop',
-                    abideLoopSource().replace('CARDS', JSON.stringify(list)),
-                )
-            ).render
+            const Component = await compile(
+                'Unrolled',
+                abideSource(size).replace('CARDS', JSON.stringify(list)),
+            )
+            const Loop = await compile(
+                'Loop',
+                abideLoopSource().replace('CARDS', JSON.stringify(list)),
+            )
 
             const measured = batch({
                 case: `render ${size} cards`,

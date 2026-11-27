@@ -51,51 +51,13 @@ export async function buildCompiledPage(
         // THE PAGE IS ONE OF THE FILES, not a case beside them: same parse, same snapshot, same
         // emit pair. Its shadow goes at the `browser.abide` fixture because that is the one the
         // checker has already opened; a component's goes at its own name beside it.
-        const named: [string, string][] = [
-            ['Page', source],
-            ...Object.entries(components),
-        ]
-        const files = named.map(([name, text]) => ({
-            name,
-            path: `${REPO}packages/abide/tests/fixtures/typed/src/${
-                name === 'Page' ? 'browser' : name
-            }.abide`,
-            file: parseAbide(text),
-        }))
-        // ONE SNAPSHOT FOR EVERY FILE, which is what `bin/abide.ts` takes. `reads` per file adds
-        // each to the project's root set on its own, and `TypeSession` prices that at 25x.
-        const { answers } = await session.readsFor(files)
-        // WHICH FILES ARE INVOKED IS THE BUILD'S KNOWLEDGE and already has a name, so a component
-        // that itself invokes one is answered here rather than by a flag this file guesses.
-        const invoked = componentGraph(files, (specifier, from) =>
-            resolve(from, specifier),
+        const compilation = await servedFiles(
+            session,
+            scratch,
+            [['Page', source], ...Object.entries(components)],
+            'browser',
+            true,
         )
-        const compilation: Compilation = {
-            files: {},
-            handlers: {},
-            tables: {},
-            workers: {},
-        }
-        let at = 0
-        for (const entry of files) {
-            const names = answers[at]
-            at += 1
-            const client = emitClient(
-                entry.file,
-                names,
-                invoked.has(entry.path) ? 'invoked' : 'none',
-            )
-            compilation.files[`${entry.name}.abide`] = {
-                server: emitComponent(entry.file, names),
-                client: client === '' ? 'export default () => {}\n' : client,
-                sheet: undefined,
-                serverMappings: undefined,
-                clientMappings: undefined,
-            }
-            // Where an import of it resolves to; what answers it is the compilation.
-            writeFileSync(`${scratch}/${entry.name}.abide`, '')
-        }
-        serveCompilation(scratch, compilation)
         writeFileSync(
             `${scratch}/entry.ts`,
             // `flushSync` is exposed beside `mount` because a drain is batched to the end of a
@@ -170,6 +132,65 @@ export async function buildCompiledPage(
         session.close()
         rmSync(scratch, { recursive: true, force: true })
     }
+}
+
+/**
+ * `named` — `.abide` sources by the name each is imported as — compiled and served below `scratch`,
+ * as the build serves them (`abideModules`): `Name.abide?component` is the server render, and
+ * `Name.abide` the mount where `clients` asks for one. The first is checked at the fixture `first`
+ * names, every other at its own name beside it.
+ */
+export async function servedFiles(
+    session: TypeSession,
+    scratch: string,
+    named: readonly (readonly [string, string])[],
+    first: string,
+    clients: boolean,
+): Promise<Compilation> {
+    const files = named.map(([name, text], at) => ({
+        name,
+        path: `${REPO}packages/abide/tests/fixtures/typed/src/${
+            at === 0 ? first : name
+        }.abide`,
+        file: parseAbide(text),
+    }))
+    // ONE SNAPSHOT FOR EVERY FILE, which is what `bin/abide.ts` takes. `reads` per file adds
+    // each to the project's root set on its own, and `TypeSession` prices that at 25x.
+    const { answers } = await session.readsFor(files)
+    // WHICH FILES ARE INVOKED IS THE BUILD'S KNOWLEDGE and already has a name, so a component
+    // that itself invokes one is answered here rather than by a flag this file guesses.
+    const invoked = componentGraph(files, (specifier, from) =>
+        resolve(from, specifier),
+    )
+    const compilation: Compilation = {
+        files: {},
+        handlers: {},
+        tables: {},
+        workers: {},
+    }
+    let at = 0
+    for (const entry of files) {
+        const names = answers[at]
+        at += 1
+        const client = clients
+            ? emitClient(
+                  entry.file,
+                  names,
+                  invoked.has(entry.path) ? 'invoked' : 'none',
+              )
+            : ''
+        compilation.files[`${entry.name}.abide`] = {
+            server: emitComponent(entry.file, names),
+            client: client === '' ? 'export default () => {}\n' : client,
+            sheet: undefined,
+            serverMappings: undefined,
+            clientMappings: undefined,
+        }
+        // Where an import of it resolves to; what answers it is the compilation.
+        writeFileSync(`${scratch}/${entry.name}.abide`, '')
+    }
+    serveCompilation(scratch, compilation)
+    return compilation
 }
 
 /**
