@@ -116,6 +116,50 @@ test('the preload opens and closes a popover — 43.36', () => {
     host.remove()
 })
 
+// 43.47 — A SELECT LANDS ON THE OPTION ITS MARKUP MARKS, and an option says which one that is: a
+// form reads a select's baseline off `defaultSelected` (56.14). THE REVERT: drop `installSelect()`
+// from `measure/preload.ts`; `selectedIndex` reads 1 for markup marking the third option, -1 for
+// the same select cloned out of a `<template>`, and `defaultSelected` is undefined.
+test('a select built from markup lands on the option it marks — 43.47', () => {
+    const markup =
+        '<select><option>a</option><option>b</option><option selected>c</option><option>d</option></select>'
+    const host = document.createElement('div')
+    host.innerHTML = markup
+    document.body.append(host)
+    const parsed = host.querySelector('select') as HTMLSelectElement
+    const template = document.createElement('template')
+    template.innerHTML = markup
+    host.append(template.content.cloneNode(true))
+    const cloned = host.querySelectorAll('select')[1] as HTMLSelectElement
+    const landed = [parsed, cloned].map((select) => [
+        select.selectedIndex,
+        select.value,
+        [...select.options].map((option) => option.defaultSelected),
+    ])
+    expect(landed).toEqual([
+        [2, 'c', [false, false, true, false]],
+        [2, 'c', [false, false, true, false]],
+    ])
+    // A pick moves the selection and leaves the mark; a reset goes back to the mark.
+    const form = document.createElement('form')
+    form.append(parsed)
+    host.append(form)
+    parsed.value = 'a'
+    expect([parsed.selectedIndex, parsed.options[2]?.defaultSelected]).toEqual([
+        0,
+        true,
+    ])
+    form.reset()
+    expect(parsed.selectedIndex).toBe(2)
+    // Marking an option through `defaultSelected` writes the attribute.
+    const first = parsed.options[0] as HTMLOptionElement
+    first.defaultSelected = true
+    expect(first.hasAttribute('selected')).toBe(true)
+    first.defaultSelected = false
+    expect(first.hasAttribute('selected')).toBe(false)
+    host.remove()
+})
+
 // 43.37 — A FILE A TEST BUILDS IS ONE THE DOM TAKES: a test picks files on an `<input type="file">`
 // through a `DataTransfer`, and the component reads them with a `FileReader` or hands them to the
 // wire. THE REVERT: drop `bridgeFiles()` from `measure/preload.ts`; `items.add` throws "parameter 1

@@ -5,6 +5,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator'
 
 import { install } from './install.ts'
 import { installPopover } from './installPopover.ts'
+import { installSelect } from './installSelect.ts'
 
 // A child spawned with this env would paint its output in ANSI off a pipe (bun's console, and
 // abide's own log under RULEBOOK 36.9), and the suites compare that output as text. A terminal
@@ -57,6 +58,7 @@ for (const name of WIRE) Object.assign(globalThis, { [name]: native[name] })
 bridgeFiles()
 install()
 installPopover()
+installSelect()
 
 /**
  * 43.37, 43.38 — ONE `File` FOR BOTH HALVES. The wire's are bun's (43.28), and happy-dom takes only
