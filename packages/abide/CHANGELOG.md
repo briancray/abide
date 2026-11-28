@@ -1,5 +1,15 @@
 # @abide/abide
 
+## 0.150.0
+
+### Minor Changes
+
+- b53569b: `select`: WAI-ARIA's select-only combobox as headless parts — a trigger that is never typed in, a popup list in the top layer, a letter moving to the item it starts, `multiple` picking many, and `name` submitting the pick with a form through `input` (RULEBOOK 51.193-51.204).
+
+### Patch Changes
+
+- 3dc9d1e: `combobox`: Escape on an open list, and leaving the field, drop the text typed since the last pick, so the input shows the pick again (51.26, 51.27, 51.29).
+
 ## 0.149.0
 
 ### Minor Changes
