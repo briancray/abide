@@ -37,8 +37,10 @@ const YEAR_END = Date.UTC(2027, 0, 1)
 
 // 52.102, 52.103 — THE REVERT: answer the reading by the offset after it alone, and a skipped half
 // hour in New York lands an hour early, and a repeated one on its later instant.
-test("every wall clock of a year names the instant Temporal's compatible names", () => {
-    for (const zone of ZONES)
+// A test per zone, so each year's sweep has a timeout of its own under a loaded `--parallel`.
+test.each(ZONES)(
+    "every wall clock of a year in %s names the instant Temporal's compatible names",
+    (zone) => {
         for (
             let reading = YEAR_START;
             reading < YEAR_END;
@@ -57,7 +59,8 @@ test("every wall clock of a year names the instant Temporal's compatible names",
                     answered: expected,
                 })
         }
-})
+    },
+)
 
 // 52.103 — THE TWO THE WHOLE YEAR COMES DOWN TO, said outright: New York skips 2:30 on March 8th
 // and reads 1:30 twice on November 1st.
