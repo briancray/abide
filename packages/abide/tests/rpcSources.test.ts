@@ -1,6 +1,6 @@
 // 16.117, 16.118 — AN `rpc` OVER A SOURCE ANSWERS ITS WHOLE FACE: its call reads it by `GET`, and each
-// write is a member sent by its own verb — a memo's `set`, `patch` and `refresh`, a table's `set`,
-// `patch` and `delete`, a job's `run`, a pipe's `push`, a ledger's `append` — in process on the server
+// write is a member sent by its own verb — a memo's `set`, `patch` and `refresh`, a table's `upsert`,
+// `update` and `delete`, a job's `run`, a pipe's `push`, a ledger's `append` — in process on the server
 // and over the wire from a browser's copy.
 
 import { afterEach, expect, test } from 'bun:test'
@@ -124,7 +124,9 @@ test("an rpc's members are typed by the verbs it answers — 16.111, 16.117", ()
     // @ts-expect-error a ledger read alone
     void notes.append
     expect(
-        [written.patch, settable.set, deals.set].map((member) => typeof member),
+        [written.patch, settable.set, deals.upsert].map(
+            (member) => typeof member,
+        ),
     ).toEqual(['function', 'function', 'function'])
 })
 
@@ -168,7 +170,7 @@ test("a table's rpc is read by a match and written by key over the wire — 16.1
         ...writes.map((each) => each.split(' ')[0]),
     ]).toEqual(['200', '200', '200', '200'])
     expect(ids()).toBe('d2:won:40,d3:lead:7')
-    await deals.set({ id: 'd4', stage: 'won', amount: 1 })
+    await deals.upsert({ id: 'd4', stage: 'won', amount: 1 })
     expect((await deals({ stage: 'won' })).map((row) => row.id)).toEqual([
         'd2',
         'd4',
@@ -326,14 +328,14 @@ test("a browser's copy of a source sends each member by its verb — 16.117", as
         })
     }) as unknown as typeof fetch
     const copy = wire(['GET', 'PUT', 'PATCH', 'DELETE'], '/crm/deals', {
-        faces: { set: 'PUT', patch: 'PATCH', delete: 'DELETE' },
+        faces: { upsert: 'PUT', update: 'PATCH', delete: 'DELETE' },
     }) as unknown as {
-        set(rows: unknown): Promise<unknown>
-        patch(rows: unknown): Promise<unknown>
+        upsert(rows: unknown): Promise<unknown>
+        update(rows: unknown): Promise<unknown>
         delete(match: unknown): Promise<unknown>
     }
-    await copy.set({ id: 'd3', stage: 'lead' })
-    await copy.patch({ id: 'd3', stage: 'won' })
+    await copy.upsert({ id: 'd3', stage: 'lead' })
+    await copy.update({ id: 'd3', stage: 'won' })
     expect(await copy.delete({ id: 'd3' })).toBe(1)
     expect(sent).toEqual([
         'PUT /crm/deals {"given":[{"id":"d3","stage":"lead"}]}',

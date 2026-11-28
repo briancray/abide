@@ -121,7 +121,7 @@ test("a table's write refreshes its rpc at once — 47.26, 47.31", async () => {
     // Past the watch's first look, so the runs counted are the write's alone.
     await Bun.sleep(120)
     const before = won.runs()
-    deals.set({ id: 'd3', stage: 'won', amount: 5 })
+    deals.upsert({ id: 'd3', stage: 'won', amount: 5 })
     await Bun.sleep(0)
     await Bun.sleep(0)
     const atOnce = won.seen()
@@ -155,7 +155,7 @@ test("a change to a table refreshes no value for carrying the table's name as a 
     await until(() => won.seen() === 100)
     await Bun.sleep(120)
     const before = won.runs()
-    deals.set({ id: 'd3', stage: 'won', amount: 5 })
+    deals.upsert({ id: 'd3', stage: 'won', amount: 5 })
     const other = new Database(db().filename)
     other.run("INSERT INTO deals VALUES ('d4', 'won', 40)")
     other.close()
@@ -165,18 +165,18 @@ test("a change to a table refreshes no value for carrying the table's name as a 
     expect(`${won.seen()} in ${won.runs() - before} runs`).toBe('100 in 0 runs')
 })
 
-// 47.30 — A TABLE IS WRITTEN BY KEY: `set` upserts, `patch` writes only the columns a row names, and
+// 47.30 — A TABLE IS WRITTEN BY KEY: `upsert` inserts or replaces, `update` writes only the columns a row names, and
 // `delete` removes what a match names, answering how many. A row without its key, and a delete naming
-// no column, are refused. THE REVERT: write `patch` through `upsert`; the patched row's `amount` is
+// no column, are refused. THE REVERT: write `update` through the upsert statement; the updated row's `amount` is
 // refused NOT NULL where `d2:won:40` is due.
-test('a table is set, patched and deleted by key — 47.30', () => {
+test('a table is upserted, updated and deleted by key — 47.30', () => {
     const db = crm()
     const deals = table<Deal>(db, 'deals')
-    deals.set([
+    deals.upsert([
         { id: 'd3', stage: 'lead', amount: 7 },
         { id: 'd1', stage: 'won', amount: 110 },
     ])
-    deals.patch({ id: 'd2', stage: 'won' })
+    deals.update({ id: 'd2', stage: 'won' })
     const removed = deals.delete({ id: ['d3'] })
     expect(
         db.sql<Deal>`SELECT * FROM deals ORDER BY id`
@@ -186,8 +186,8 @@ test('a table is set, patched and deleted by key — 47.30', () => {
     expect(removed).toBe(1)
     const refusals: string[] = []
     for (const write of [
-        () => deals.set({ stage: 'won', amount: 1 } as never),
-        () => deals.patch({ stage: 'won' } as never),
+        () => deals.upsert({ stage: 'won', amount: 1 } as never),
+        () => deals.update({ stage: 'won' } as never),
         () => deals.delete({}),
     ])
         try {

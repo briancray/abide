@@ -171,14 +171,14 @@ test('a change refreshes the GET of an rpc over the table — 47.26', async () =
 test('a value that called the table is not refreshed by its changes — 47.48', async () => {
     const db = deals()
     const dealRows = table<Deal>(db, 'deals')
-    dealRows.set({ id: 'd1', name: 'Acme', amount: 10 })
+    dealRows.upsert({ id: 'd1', name: 'Acme', amount: 10 })
     let runs = 0
     const count = keyedValue(() => {
         runs += 1
         return dealRows().length
     })()
     expect(count.get()).toBe(1)
-    dealRows.set({ id: 'd2', name: 'Globex', amount: 20 })
+    dealRows.upsert({ id: 'd2', name: 'Globex', amount: 20 })
     db.run("INSERT INTO deals VALUES ('d3', 'Initech', 30)")
     await Bun.sleep(150)
     expect(`count: ${count.get()}, runs: ${runs}`).toBe('count: 1, runs: 1')

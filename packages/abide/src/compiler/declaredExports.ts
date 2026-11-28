@@ -645,7 +645,8 @@ type SourceKind = keyof typeof SOURCE_MEMBERS
 
 /**
  * 16.117 — the members each source's TYPE answers by, which tell its kind apart without running it: a
- * memo's owner writes and triggers with no address (an `Rpc` has `url`), a table's rows written by key,
+ * memo's owner writes and triggers with no address (an `Rpc` has `url`), a table's rows upserted and
+ * updated by key,
  * a job's run and status, a pipe's streams and status, a ledger's appends.
  */
 const KIND_MEMBERS: readonly [
@@ -656,7 +657,11 @@ const KIND_MEMBERS: readonly [
     ['ledger', ['append', 'writable'], []],
     ['pipe', ['status', 'readable', 'writable', 'stop'], []],
     ['job', ['status', 'run', 'stop'], ['writable']],
-    ['table', ['set', 'patch', 'delete', 'readable', 'writable'], ['status']],
+    [
+        'table',
+        ['upsert', 'update', 'delete', 'readable', 'writable'],
+        ['status'],
+    ],
     ['memo', ['set', 'patch', 'refresh', 'invalidate', 'readable'], ['url']],
 ]
 

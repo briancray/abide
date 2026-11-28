@@ -32,7 +32,9 @@ import Section from '#src/lib/Section.abide'
         },
         {
             path: 'packages/abide/tests/sql.test.ts',
-            from: ["test('a table is set, patched and deleted by key — 47.30'"],
+            from: [
+                "test('a table is upserted, updated and deleted by key — 47.30'",
+            ],
         },
         {
             path: 'packages/abide/tests/describedTable.test.ts',
@@ -125,7 +127,7 @@ import Section from '#src/lib/Section.abide'
             })
             const deals = table(crm, 'deals')
 
-            deals.set({ id: 1, won: true, notes: { calls: 2 } })
+            deals.upsert({ id: 1, won: true, notes: { calls: 2 } })
             deals({ won: true })
         `} />
     </Section>
@@ -161,27 +163,27 @@ import Section from '#src/lib/Section.abide'
             import { targets } from './targets.server.ts'
 
             crmDatabase().transaction(() => {
-                targets.patch({ id: 3, target: 450_000 })
+                targets.update({ id: 3, target: 450_000 })
                 targets.delete({ id: [7, 8] })
             })()
         `} />
     </Section>
 
     <Section level={3} title="Write the targets by key">
-        <p><code>set</code> upserts rows by <code>key</code>, <code>patch</code> writes only the
+        <p><code>upsert</code> inserts or replaces rows by <code>key</code>, <code>update</code> writes only the
             columns a row names, and <code>delete</code> removes the rows a match names. The
             table's <code>rpc</code> reads it again at once.</p>
         <Code language="ts" caption="server" code={`
             import { targets } from '../pipeline/lib/targets.server.ts'
 
-            targets.patch({ id: 3, target: 450_000 })
+            targets.update({ id: 3, target: 450_000 })
             targets.delete({ id: [7, 8] })
         `} />
     </Section>
 
     <Section level={3} title="Give the browser the table by its rpc">
         <p>An <code>rpc</code> over a table answers its rows for a match by <code>GET</code>, and
-            its <code>set</code>, <code>patch</code> and <code>delete</code> by <code>PUT</code>,
+            its <code>upsert</code>, <code>update</code> and <code>delete</code> by <code>PUT</code>,
             <code>PATCH</code> and <code>DELETE</code> — the same calls on the server and in the
             browser. Any commit to the table, from any connection, sends the new rows to every
             browser reading the <code>GET</code>. <code>columns</code> keeps the rest of the row on

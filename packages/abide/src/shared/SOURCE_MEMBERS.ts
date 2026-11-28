@@ -16,7 +16,7 @@ export const SOURCE_MEMBERS = {
     },
     table: {
         written: true,
-        members: { set: 'PUT', patch: 'PATCH', delete: 'DELETE' },
+        members: { upsert: 'PUT', update: 'PATCH', delete: 'DELETE' },
     },
     job: { written: true, members: { run: 'POST' } },
     pipe: { written: true, members: { push: 'POST' } },

@@ -1489,7 +1489,7 @@ or load the value again where the answer is a refusal.
 the memo's value, the table's rows for a `match`, the job's or the pipe's `status`, the ledger's
 entries from a position or a cursor — and each other verb it answers (16.111) by one member, the same member on the
 server and on a browser's copy: a memo's `set` by `PUT`, `patch` by `PATCH` and `refresh` by `POST`; a
-table's `set` by `PUT`, `patch` by `PATCH` and `delete` by `DELETE`; a job's `run`, a pipe's `push`
+table's `upsert` by `PUT`, `update` by `PATCH` and `delete` by `DELETE`; a job's `run`, a pipe's `push`
 and a ledger's `append` by `POST`; and a memo whose entries live a request MUST answer `GET` alone.
 
 16.118 `columns` MUST make a table's `rpc` read its rows with those columns alone, and MUST refuse at
@@ -5358,13 +5358,13 @@ never as text, MUST prepare one statement per call site per `Database` and per s
 47.34 binds, MUST answer, at once, the rows the statement returns, and MUST refresh nothing by
 what the statement reads or writes.
 
-47.30 A `table`'s `set` MUST upsert each row it is given by `key`, its `patch` MUST write the columns
+47.30 A `table`'s `upsert` MUST upsert each row it is given by `key`, its `update` MUST write the columns
 each row names onto the row with that row's `key` and leave the rest — a column whose value is
 `undefined` named by neither — and its `delete` MUST delete the
 rows a `match` names and answer how many; each MUST write in one transaction, and MUST throw for a row
 carrying no value for a column of its key per 47.27, or a `delete` whose `match` names no column.
 
-47.31 A write through a `table`'s `set`, `patch` or `delete` MUST refresh what 47.26 names at once,
+47.31 A write through a `table`'s `insert`, `upsert`, `update` or `delete` MUST refresh what 47.26 names at once,
 save as 47.41 states, and 47.26's watch MUST NOT refresh it again for that write.
 
 47.32 A `table` called MUST answer every row of the table, or with `match` the rows whose every
@@ -5400,7 +5400,7 @@ database, once per `Database` it reaches the table through.
 MUST be `true` or `false` where the column is declared `BOOLEAN` or `BOOL`, and its text parsed as
 JSON where the column is declared `JSON` and the value is text; NULL MUST be read as `null`.
 
-47.39 A value written by a `table`'s `set`, `patch` or `writable`, or matched by a `table` call or
+47.39 A value written by a `table`'s `upsert`, `update` or `writable`, or matched by a `table` call or
 its `delete`, MUST be bound as its JSON text where its column is declared `JSON` and the value is
 not `null`.
 
@@ -5408,7 +5408,7 @@ not `null`.
 columns `logged` names, with those every other `table` of that name in the process names; once a
 `table` of that name is given no `logged`, every column MUST be recorded per 47.23.
 
-47.41 A write through a `table`'s `set`, `patch` or `delete` made inside an open transaction MUST
+47.41 A write through a `table`'s `insert`, `upsert`, `update` or `delete` made inside an open transaction MUST
 refresh nothing at once, and its commit MUST refresh what 47.26 names on the watch's next look.
 
 47.42 A `table`'s `readable` MUST error, naming this clause, where another process removed a change

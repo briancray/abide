@@ -40,7 +40,7 @@ async function taken<Row>(
 }
 
 // 47.27, 47.37 — THE KEY IS THE TABLE'S OWN: a table keyed by `slug`, and one keyed by two columns,
-// upserted with no `key` said. THE REVERT: default the key to `id` in `keyColumns`; the first `set`
+// upserted with no `key` said. THE REVERT: default the key to `id` in `keyColumns`; the first `upsert`
 // throws `carries no id` where the upsert is due.
 test("a write upserts by the table's own primary key, one column or several — 47.27, 47.30, 47.37", () => {
     const db = opener(
@@ -48,21 +48,21 @@ test("a write upserts by the table's own primary key, one column or several — 
         'CREATE TABLE tags (dealId INTEGER NOT NULL, tag TEXT NOT NULL, note TEXT, PRIMARY KEY (dealId, tag))',
     )
     const stages = table(db, 'stages')
-    stages.set({ slug: 'won', label: 'Won' })
-    stages.set({ slug: 'won', label: 'Closed won' })
+    stages.upsert({ slug: 'won', label: 'Won' })
+    stages.upsert({ slug: 'won', label: 'Closed won' })
     const tags = table(db, 'tags')
-    tags.set([
+    tags.upsert([
         { dealId: 1, tag: 'hot', note: null },
         { dealId: 1, tag: 'big', note: null },
     ])
-    tags.patch({ dealId: 1, tag: 'hot', note: 'called twice' })
+    tags.update({ dealId: 1, tag: 'hot', note: 'called twice' })
     expect({ stages: stages(), tags: tags({ note: { ne: null } }) }).toEqual({
         stages: [{ slug: 'won', label: 'Closed won' }],
         tags: [{ dealId: 1, tag: 'hot', note: 'called twice' }],
     })
     let said = ''
     try {
-        tags.set({ dealId: 2 } as never)
+        tags.upsert({ dealId: 2 } as never)
     } catch (thrown) {
         said = (thrown as Error).message
     }
@@ -77,13 +77,13 @@ test('a BOOLEAN and a JSON column are read and written as what they declare — 
     )
     const deals = table(db, 'deals')
     const reading = taken(deals.readable, 2)
-    deals.set({
+    deals.upsert({
         id: 1,
         won: true,
         notes: { calls: 2, tags: ['hot'] },
         amount: 5,
     })
-    deals.set({ id: 2, won: false, notes: 'plain', amount: null })
+    deals.upsert({ id: 2, won: false, notes: 'plain', amount: null })
     const changes = await reading
     const viaSql = db.sql`SELECT d.id, d.won, d.notes, d.won + 0 AS score FROM deals d ORDER BY d.id`
     expect({
@@ -161,8 +161,8 @@ test('a table given logged records its key and those columns alone — 47.40', a
     )
     const files = table(db, 'files', { logged: ['mediaId'] })
     const reading = taken(files.readable, 2)
-    files.set({ id: 1, mediaId: 7, probe: { streams: [1, 2, 3] } })
-    files.patch({ id: 1, mediaId: 8 })
+    files.upsert({ id: 1, mediaId: 7, probe: { streams: [1, 2, 3] } })
+    files.update({ id: 1, mediaId: 8 })
     const changes = await reading
     expect(changes.map(({ row, previous }) => ({ row, previous }))).toEqual([
         { row: { id: 1, mediaId: 7 }, previous: undefined },
@@ -191,7 +191,7 @@ test('a write inside a transaction refreshes once it commits, and not at all whe
     let seenInside: number | undefined
     try {
         db().transaction(() => {
-            deals.set({ id: 2, amount: 50 })
+            deals.upsert({ id: 2, amount: 50 })
             flushSync()
             seenInside = total
             throw new Error('rolled back')
@@ -199,7 +199,7 @@ test('a write inside a transaction refreshes once it commits, and not at all whe
     } catch {}
     await Bun.sleep(150)
     db().transaction(() => {
-        deals.set({ id: 3, amount: 25 })
+        deals.upsert({ id: 3, amount: 25 })
     })()
     await until(() => total === 125)
     stop()
@@ -218,10 +218,10 @@ test('a reader behind changes another process removed errors rather than skip th
     )
     const deals = table(db, 'deals')
     const reader = deals.readable.getReader()
-    deals.set({ id: 1, amount: 1 })
+    deals.upsert({ id: 1, amount: 1 })
     expect((await reader.read()).value?.row).toEqual({ id: 1, amount: 1 })
-    deals.set({ id: 2, amount: 2 })
-    deals.set({ id: 3, amount: 3 })
+    deals.upsert({ id: 2, amount: 2 })
+    deals.upsert({ id: 3, amount: 3 })
     // Another process's watch trimmed past this reader.
     const other = new Database(db().filename)
     other.run("DELETE FROM abide_changes WHERE tbl = 'deals'")
@@ -244,7 +244,7 @@ test('the watch keeps every change a reader in this process has still to read �
     const db = opener('CREATE TABLE ticks (id INTEGER PRIMARY KEY)')
     const ticks = table(db, 'ticks')
     const reader = ticks.readable.getReader()
-    ticks.set({ id: 0 })
+    ticks.upsert({ id: 0 })
     await reader.read()
     db().run(
         'WITH RECURSIVE n(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM n WHERE id < 10100) INSERT INTO ticks SELECT id FROM n',
@@ -264,7 +264,7 @@ test('the watch keeps every change a reader in this process has still to read �
 
 // 47.49, 47.30 — AN INSERT IS ANSWERED AS STORED, its key assigned; a column left `undefined` is not
 // named, so a patch leaves it and an insert takes its default. THE REVERT: name every key of the row in
-// `statementFor`; the patch writes `notes` NULL where `"kept"` is due.
+// `statementFor`; the update writes `notes` NULL where `"kept"` is due.
 test('an insert answers its rows as stored, and an undefined column is not written — 47.49, 47.30', () => {
     const db = opener(
         "CREATE TABLE deals (id INTEGER PRIMARY KEY, name TEXT NOT NULL, stage TEXT NOT NULL DEFAULT 'lead', notes JSON)",
@@ -274,7 +274,7 @@ test('an insert answers its rows as stored, and an undefined column is not writt
         { name: 'Acme', notes: 'kept' },
         { name: 'Globex', stage: undefined, notes: { calls: 1 } },
     ])
-    deals.patch({ id: 1, name: 'Acme Co', notes: undefined })
+    deals.update({ id: 1, name: 'Acme Co', notes: undefined })
     expect({ stored, after: deals({ id: 1 }) }).toEqual({
         stored: [
             { id: 1, name: 'Acme', stage: 'lead', notes: 'kept' },
@@ -319,7 +319,7 @@ test('a table first reached in a transaction that rolls back still logs its chan
     const deals = table(db, 'deals')
     try {
         db().transaction(() => {
-            deals.set({ id: 1, amount: 1 })
+            deals.upsert({ id: 1, amount: 1 })
             throw new Error('rolled back')
         })()
     } catch {}
@@ -340,11 +340,11 @@ test('an update that leaves every column as it was records no change — 47.53',
         'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER)',
     )
     const deals = table(db, 'deals')
-    deals.set({ id: 1, amount: 1 })
+    deals.upsert({ id: 1, amount: 1 })
     const reading = taken(deals.readable, 1)
     db.sql`INSERT INTO deals (id, amount) VALUES (1, 1) ON CONFLICT (id) DO UPDATE SET amount = amount`
     db.sql`UPDATE deals SET amount = amount WHERE id = 1`
-    deals.patch({ id: 1, amount: 2 })
+    deals.update({ id: 1, amount: 2 })
     const [change] = await reading
     expect(
         `amount ${change?.row?.amount} was ${change?.previous?.amount}`,
@@ -361,7 +361,7 @@ test('readable after a cancelled reader is a new stream that reads on — 47.24'
     const deals = table(db, 'deals')
     await taken(deals.readable, 0)
     const reading = taken(deals.readable, 1)
-    deals.set({ id: 1, amount: 7 })
+    deals.upsert({ id: 1, amount: 7 })
     expect((await reading).map((change) => change.row?.amount)).toEqual([7])
 })
 
@@ -374,13 +374,13 @@ test('a reader reads on across a reopen of its file, and errors over another fil
     )
     const deals = table(db, 'deals')
     const reader = deals.readable.getReader()
-    deals.set({ id: 1, amount: 1 })
+    deals.upsert({ id: 1, amount: 1 })
     await reader.read()
     db.close()
-    deals.set({ id: 2, amount: 2 })
+    deals.upsert({ id: 2, amount: 2 })
     const same = (await reader.read()).value?.row?.amount
     db.close({ remove: true })
-    deals.set({ id: 3, amount: 3 })
+    deals.upsert({ id: 3, amount: 3 })
     let said = ''
     try {
         await reader.read()
@@ -401,13 +401,13 @@ test('a reader starting after every change was removed reads on — 47.42', asyn
         'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER)',
     )
     const deals = table(db, 'deals')
-    deals.set({ id: 1, amount: 1 })
+    deals.upsert({ id: 1, amount: 1 })
     db().run("DELETE FROM abide_changes WHERE tbl = 'deals'")
     db().run(
         "INSERT INTO abide_changes_removed (tbl, through) SELECT 'deals', seq FROM sqlite_sequence WHERE name = 'abide_changes' ON CONFLICT (tbl) DO UPDATE SET through = excluded.through",
     )
     const fresh = table(db, 'deals', { logged: [] })
     const reading = taken(fresh.readable, 1)
-    fresh.set({ id: 2, amount: 2 })
+    fresh.upsert({ id: 2, amount: 2 })
     expect((await reading).map((change) => change.row?.amount)).toEqual([2])
 })

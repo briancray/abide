@@ -72,11 +72,11 @@ test('a table is typed by the migrations that declare it — 47.45, 47.46', () =
     same<Same<Found['notes'], { id: number; body: string }>>()
     const deals = table(CRM, 'deals')
     // A written row leaves out what may be NULL or has a default, never the key it is named by.
-    deals.set({ id: 1, name: 'Acme', createdAt: '2026-11-27' })
+    deals.upsert({ id: 1, name: 'Acme', createdAt: '2026-11-27' })
     // Checked, never run: each is refused by the checker, and would throw if it ran.
     const refused = () => {
         // @ts-expect-error a written row carries its key
-        deals.set({ name: 'Globex', createdAt: '2026-11-27' })
+        deals.upsert({ name: 'Globex', createdAt: '2026-11-27' })
         // @ts-expect-error a table the migrations never declared
         table(CRM, 'stale')
     }
@@ -109,16 +109,17 @@ test('a table is typed by the migrations that declare it — 47.45, 47.46', () =
         // @ts-expect-error a narrowing is a type the column already admits
         table(CRM, 'deals').as<{ amount: string }>()
         // @ts-expect-error a narrowed table still writes only what its column narrows to
-        narrowed.patch({ id: 1, stage: 'lost' })
+        narrowed.update({ id: 1, stage: 'lost' })
     }
     void refusedNarrowing
     // A plain object binds in sql as its JSON (47.50), typed as one.
     CRM.sql`UPDATE deals SET detail = ${{ calls: 5 }} WHERE id = ${fresh?.id ?? 0}`
     expect(narrowed({ id: fresh?.id ?? 0 })[0]?.detail).toEqual({ calls: 5 })
     // A row typed by its caller may leave out what may hold null.
-    table<{ id: number; detail: { calls: number } | null }>(CRM, 'deals').patch(
-        { id: 1 },
-    )
+    table<{ id: number; detail: { calls: number } | null }>(
+        CRM,
+        'deals',
+    ).update({ id: 1 })
     // A table a function made is the caller's to type, as one of no typed opener is.
     const seeded = table<{ id: number }>(CRM, 'seeded')
     expect(seeded()).toEqual([])

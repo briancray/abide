@@ -64,9 +64,9 @@ export type Table<Row, Written = Row, Inserted = Written> = ((
     /** 47.49 — rows inserted, their key assigned where SQLite assigns it, answered as stored. */
     insert(rows: Inserted | readonly Inserted[]): Row[]
     /** 47.30 — rows upserted by key: inserted, or replacing the row with their key. */
-    set(rows: Written | readonly Written[]): void
+    upsert(rows: Written | readonly Written[]): void
     /** 47.30 — the columns each row names written onto the row with its key; the rest are left. */
-    patch(rows: Partial<Row> | readonly Partial<Row>[]): void
+    update(rows: Partial<Row> | readonly Partial<Row>[]): void
     /** 47.30 — the rows `match` names deleted, and how many there were. */
     delete(match: Match<Row>): number
     readonly readable: ReadableStream<Change<Row>>
@@ -190,14 +190,14 @@ export function table<Row extends Record<string, unknown>>(
         for (const row of rows)
             for (const column of columns) keyOf(name, column, row)
     }
-    const set = (rows: Row | readonly Row[]): void => {
+    const upsert = (rows: Row | readonly Row[]): void => {
         const each = listOf(rows)
         const db = connection()
         keyed(db, each)
         writes.upsert(db, each)
         wrote(db, each.length)
     }
-    const patch = (rows: Partial<Row> | readonly Partial<Row>[]): void => {
+    const update = (rows: Partial<Row> | readonly Partial<Row>[]): void => {
         const each = listOf(rows)
         const db = connection()
         keyed(db, each)
@@ -243,8 +243,8 @@ export function table<Row extends Record<string, unknown>>(
             },
         },
         insert: { value: insert },
-        set: { value: set },
-        patch: { value: patch },
+        upsert: { value: upsert },
+        update: { value: update },
         delete: { value: remove },
         // 47.22 — reached, the table is prepared, and a table the database does not hold throws here.
         readable: {

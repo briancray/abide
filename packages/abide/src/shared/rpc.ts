@@ -429,13 +429,13 @@ type Declare<Writes extends boolean> = {
         Answering<
             Methods,
             'PUT',
-            { set(rows: Row | readonly Row[]): Promise<unknown> }
+            { upsert(rows: Row | readonly Row[]): Promise<unknown> }
         > &
         Answering<
             Methods,
             'PATCH',
             {
-                patch(
+                update(
                     rows: Partial<Row> | readonly Partial<Row>[],
                 ): Promise<unknown>
             }
@@ -540,10 +540,10 @@ type HeldWrites<Methods extends readonly Method[], Args, Value> = Answering<
     Pick<Memo<Value, Args>, 'set'>
 > &
     Answering<Methods, 'PATCH', Pick<Memo<Value, Args>, 'patch'>>
-/** 16.117 — a table as `rpc` reads it: called for rows, and written by key. */
+/** 16.117 — a table as `rpc` reads it: called for rows, and upserted and updated by key. */
 type TableFace<Row> = ((match?: Match<Row>) => Row[]) & {
-    set(rows: Row | readonly Row[]): void
-    patch(rows: Partial<Row> | readonly Partial<Row>[]): void
+    upsert(rows: Row | readonly Row[]): void
+    update(rows: Partial<Row> | readonly Partial<Row>[]): void
     delete(match: Match<Row>): number
     readonly writable: WritableStream<Row>
 }
