@@ -47,6 +47,12 @@ import searchCompanies from './lib/SearchCompanies.abide' with { type: 'text' }
             from: ["test('Escape shuts, then clears, then is left to the page'"],
         },
         {
+            path: 'packages/dogfood/examples/crm/src/contacts/lib/ContactPicker.test.ts',
+            from: [
+                "test('leaving the field shuts the list, and it shows the pick again'",
+            ],
+        },
+        {
             path: 'packages/dogfood/examples/crm/src/contacts/lib/TeamPicker.test.ts',
             from: [
                 "test('picking adds a contact, picking it again takes it out, and the list stays open — 51.33'",

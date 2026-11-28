@@ -71,8 +71,11 @@ test('Enter picks the active contact, and the input shows it — 51.22', async (
     ]).toEqual(['Katherine Johnson', 'Langley Research'])
 })
 
-// THE REVERT: hand every Escape to the list, and the third one is prevented, so a `<dialog>`
-// holding the picker never cancels.
+// 51.27, 51.28 — THE FIRST ESCAPE SHUTS THE LIST AND DROPS WHAT WAS TYPED, so the field shows the
+// contact picked again; the second clears the pick; the third is the page's. THE REVERTS: leave the
+// typed text standing on the first, and the field reads `kat` beside Katherine Johnson's company;
+// hand every Escape to the list, and the third is prevented, so a `<dialog>` holding the picker
+// never cancels.
 test('Escape shuts, then clears, then is left to the page', async () => {
     using _picker = await mount(ContactPicker({}))
     await settled()
@@ -87,11 +90,34 @@ test('Escape shuts, then clears, then is left to the page', async () => {
         flushSync()
         return event.defaultPrevented
     }
+    input().dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }),
+    )
+    flushSync()
+    type('kat')
     expect(escape()).toBe(true)
     expect(document.querySelector('[role=listbox]')).toBeNull()
+    expect(input().value).toBe('Katherine Johnson')
     expect(escape()).toBe(true)
-    expect(input().value).toBe('')
+    expect([
+        input().value,
+        document.querySelector('strong')?.textContent,
+    ]).toEqual(['', '—'])
     expect(escape()).toBe(false)
+})
+
+// 51.29 — LEAVING THE FIELD SHUTS THE LIST AND DROPS WHAT WAS TYPED: what it shows is what it holds.
+// THE REVERT: shut the list on blur and keep the text — the field reads `gr` with no contact picked.
+test('leaving the field shuts the list, and it shows the pick again', async () => {
+    using _picker = await mount(ContactPicker({}))
+    await settled()
+    type('gr')
+    input().dispatchEvent(new FocusEvent('blur'))
+    flushSync()
+    expect([document.querySelector('[role=listbox]'), input().value]).toEqual([
+        null,
+        '',
+    ])
 })
 
 function key(name: string, alt = false) {

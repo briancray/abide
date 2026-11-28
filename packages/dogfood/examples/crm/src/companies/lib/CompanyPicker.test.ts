@@ -116,7 +116,15 @@ test('a press on an empty search field opens nothing, and with text lists what i
     flushSync()
     expect(document.querySelector('[data-open]')).toBeNull()
     await type('ar')
-    press('Escape')
+    // Alt+ArrowUp shuts the list and keeps the text, where Escape would drop it (51.27, 51.93).
+    input().dispatchEvent(
+        new KeyboardEvent('keydown', {
+            key: 'ArrowUp',
+            altKey: true,
+            cancelable: true,
+        }),
+    )
+    flushSync()
     expect(document.querySelector('[data-open]')).toBeNull()
     input().click()
     await settled()

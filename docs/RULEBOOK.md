@@ -5950,16 +5950,18 @@ on Home and End.
 
 51.25 A pick in a `combobox` MUST shut its list.
 
-51.26 `combobox`'s input MUST hold the text typed in it since the last pick, and the `label` of
-`value` where none has been typed.
+51.26 `combobox`'s input MUST hold the text typed in it that no pick, 51.27 or 51.29 has dropped,
+and the `label` of `value` where it holds none.
 
-51.27 `combobox` MUST shut its list on Escape where the list is open.
+51.27 `combobox` MUST shut its list on Escape where the list is open, and MUST drop the text typed
+since the last pick as it does.
 
 51.28 `combobox` MUST clear `value` and the typed text on Escape where its list is shut and its
 input holds text, and MUST NOT prevent the default of an Escape where its list is shut and its
 input is empty.
 
-51.29 `combobox` MUST shut its list when its input loses focus.
+51.29 `combobox` MUST shut its list when its input loses focus, and MUST drop the text typed since
+the last pick as it does.
 
 51.30 `combobox` MUST write `data-open` on its `root` part while its list is open.
 

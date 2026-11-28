@@ -111,7 +111,7 @@ export function combobox<Item, Multiple extends boolean = false>(
         Item | undefined | readonly Item[]
     >
 
-    // What was typed since the last pick; the input shows the pick's label while nothing has been.
+    // What was typed since the last pick or shut (51.26); the input shows the pick's label while nothing has been.
     const typed = reactive<string | undefined>(undefined)
     // 51.55 — the items picked, where it picks many; `undefined` where it picks one.
     const picks = reactive((): readonly Item[] | undefined =>
@@ -220,8 +220,15 @@ export function combobox<Item, Multiple extends boolean = false>(
         value.set((picks.peek() ?? []).filter((each) => key(each) !== removed))
     }
 
+    // 51.27, 51.29 — typed text is only ever a query, so shutting the list drops it and the input
+    // shows the pick again.
+    function shut() {
+        typed.set(undefined)
+        open.set(false)
+    }
+
     function dismiss() {
-        if (open.peek()) open.set(false)
+        if (open.peek()) shut()
         else {
             // 51.55 — what is picked into an array is taken out one at a time, never by Escape.
             if (
@@ -329,7 +336,7 @@ export function combobox<Item, Multiple extends boolean = false>(
                 write((event.currentTarget as HTMLInputElement).value),
             onkeydown: keydown,
             onclick: press,
-            onblur: () => open.set(false),
+            onblur: shut,
             'bind:element': (element: HTMLInputElement) => {
                 input.set(element)
                 return () => input.set(undefined)
