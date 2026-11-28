@@ -18,7 +18,7 @@ import type { Failed } from './Failed.ts'
 import { hotkeys } from './hotkeys.ts'
 import { isSendable } from './isSendable.ts'
 import { type Live, live } from './live.ts'
-import { MessageAccumulator } from './MessageAccumulator.ts'
+import { answersCall, MessageAccumulator } from './MessageAccumulator.ts'
 import { messageOf } from './messageOf.ts'
 import { type Bindable, bindable } from './reactive/bindable.ts'
 import { reactive } from './reactive/index.ts'
@@ -29,8 +29,16 @@ import { wordsOf } from './wordsOf.ts'
 type Text = Extract<AssistantContent, { type: 'text' }>
 type Image = Extract<AssistantContent, { type: 'image' }>
 type Document = Extract<AssistantContent, { type: 'document' }>
-type ToolUse = Extract<AssistantContent, { type: 'tool_use' }>
-type ToolResult = Extract<AssistantContent, { type: 'tool_result' }>
+// A call the model made — to an app's tool, a server tool or an MCP server's — and what answered it.
+type Call = Extract<
+    AssistantContent,
+    { type: 'tool_use' | 'server_tool_use' | 'mcp_tool_use' }
+>
+type Answered = Extract<AssistantContent, { tool_use_id: string }>
+type Thinking = Extract<
+    AssistantContent,
+    { type: 'thinking' | 'redacted_thinking' }
+>
 
 /** A permission prompt Claude Code asks the page, and the visitor's answer, `undefined` while it waits. */
 export type ChatPermission = {
@@ -130,17 +138,22 @@ export type ChatParts = {
     image(image: Image): Record<string, unknown>
     /** A document block's element: `data-chat="document"`, its `title` the file's name. */
     document(document: Document): Record<string, unknown>
-    /** 53.25 — a tool call's elements, with `data-status`, and the result its call was answered with. */
-    tool(call: ToolUse): {
+    /** 53.25 — a call's elements, with `data-status`, and the block its call was answered with: an app's tool's, a server tool's or an MCP server's. */
+    tool(call: Call): {
         readonly tool: Record<string, unknown>
         readonly name: Record<string, unknown>
         readonly input: Record<string, unknown>
         readonly result: Record<string, unknown>
         readonly status: 'running' | 'done' | 'failed'
-        /** The `tool_result` block answering the call, `undefined` while it runs. */
-        readonly toolResult: ToolResult | undefined
+        /** The block answering the call — a `tool_result`, or a server tool's or an MCP server's result — `undefined` while it runs. */
+        readonly toolResult: Answered | undefined
         /** What it answered, in words, `undefined` while it runs. */
         readonly answer: string | undefined
+    }
+    /** 53.110 — a thinking block's element, with `data-status`: `running` until the block is signed. */
+    thinking(block: Thinking): {
+        readonly thinking: Record<string, unknown>
+        readonly status: 'running' | 'done'
     }
     /** 53.109 — every call in the conversation to `handler`, in order, each typed by the handler: live while it streams. */
     calls<Input, Value>(
@@ -222,6 +235,28 @@ function blocksOf(message: AssistantMessage | undefined): AssistantContent[] {
     return typeof message.content === 'string'
         ? [{ type: 'text', text: message.content }]
         : message.content
+}
+
+/**
+ * Whether `answered` says its call failed: an app's tool or an MCP server's by `is_error`, and a
+ * server tool's by answering an error, which the API sends as content naming an `error_code`.
+ */
+function refused(answered: Answered): boolean {
+    if (answered.is_error === true) return true
+    const content = answered.content
+    return (
+        typeof content === 'object' &&
+        content !== null &&
+        !Array.isArray(content) &&
+        'error_code' in content
+    )
+}
+
+/** `content` where words can be read from it — a string or a list of blocks — and none otherwise: a server tool's error is an object. */
+function wordedOf(content: unknown): Parameters<typeof wordsOf>[0] {
+    return typeof content === 'string' || Array.isArray(content)
+        ? (content as Parameters<typeof wordsOf>[0])
+        : undefined
 }
 
 /** Whether `message` is what the person wrote, rather than what tools answered in their turn. */
@@ -442,15 +477,13 @@ export function chat(options: ChatOptions): ChatParts {
         await options.permit?.({ id, allow })
     }
 
-    // The result answering the call `id`, read from the messages after it.
-    function resultOf(id: string): ToolResult | undefined {
+    // The block answering the call `id`: an app's tool answers in the user message after it, a server
+    // tool and an MCP server in the model's own.
+    function resultOf(id: string): Answered | undefined {
         for (const message of messages.get())
-            if (message.role === 'user' && typeof message.content !== 'string')
+            if (typeof message.content !== 'string')
                 for (const block of message.content)
-                    if (
-                        block.type === 'tool_result' &&
-                        block.tool_use_id === id
-                    )
+                    if (answersCall(block) && block.tool_use_id === id)
                         return block
         return undefined
     }
@@ -527,8 +560,7 @@ export function chat(options: ChatOptions): ChatParts {
                 get blocks() {
                     const shownBlocks: AssistantContent[] = []
                     for (const block of blocksOf(message))
-                        if (block.type !== 'tool_result')
-                            shownBlocks.push(block)
+                        if (!answersCall(block)) shownBlocks.push(block)
                     return shownBlocks
                 },
                 get streaming() {
@@ -552,7 +584,7 @@ export function chat(options: ChatOptions): ChatParts {
             const status =
                 toolResult === undefined
                     ? 'running'
-                    : toolResult.is_error === true
+                    : refused(toolResult)
                       ? 'failed'
                       : 'done'
             return {
@@ -565,7 +597,25 @@ export function chat(options: ChatOptions): ChatParts {
                 answer:
                     toolResult === undefined
                         ? undefined
-                        : wordsOf(toolResult.content),
+                        : wordsOf(wordedOf(toolResult.content)),
+            }
+        },
+        thinking(block) {
+            // 53.110 — a block is signed as it ends, and one never signed is left out once the answer settles.
+            const status = () =>
+                block.type === 'thinking' && !block.signature
+                    ? ('running' as const)
+                    : ('done' as const)
+            return {
+                thinking: {
+                    'data-chat': 'thinking',
+                    get 'data-status'() {
+                        return status()
+                    },
+                },
+                get status() {
+                    return status()
+                },
             }
         },
         // 53.109

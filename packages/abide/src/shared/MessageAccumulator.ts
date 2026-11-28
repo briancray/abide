@@ -43,6 +43,27 @@ export function deliveredValue(
     return delivered.has(block) ? { value: delivered.get(block) } : undefined
 }
 
+/** Whether `block` is a call the model made: to an app's tool, a server tool or an MCP server. */
+export function makesCall(
+    block: AssistantContent,
+): block is Extract<
+    AssistantContent,
+    { type: 'tool_use' | 'server_tool_use' | 'mcp_tool_use' }
+> {
+    return (
+        block.type === 'tool_use' ||
+        block.type === 'server_tool_use' ||
+        block.type === 'mcp_tool_use'
+    )
+}
+
+/** Whether `block` answers a call: a `tool_result`, or a server tool's or an MCP server's result. */
+export function answersCall(
+    block: AssistantContent,
+): block is Extract<AssistantContent, { tool_use_id: string }> {
+    return 'tool_use_id' in block && typeof block.tool_use_id === 'string'
+}
+
 /** Folds an answer's events, one at a time, into the messages they amount to. */
 export class MessageAccumulator {
     /** Where in the messages the answer begins: what `settle` reads from. */
@@ -136,8 +157,9 @@ export class MessageAccumulator {
     }
 
     /**
-     * Leaves out of the answer what the API would refuse sent back: a tool call that never answered —
-     * the turn cap reached, or the answer stopped while it ran — a thinking block no signature
+     * Leaves out of the answer what the API would refuse sent back: a call that never answered — an
+     * app's tool's, a server tool's or an MCP server's, the turn cap reached or the answer stopped
+     * while it ran — a thinking block no signature
      * reached, and a message left with nothing in it. 44.105.
      */
     settle(messages: AssistantMessage[]): void {
@@ -147,8 +169,7 @@ export class MessageAccumulator {
             const content = (messages[at] as AssistantMessage).content
             if (typeof content !== 'string')
                 for (const block of content)
-                    if (block.type === 'tool_result')
-                        answered.add(block.tool_use_id)
+                    if (answersCall(block)) answered.add(block.tool_use_id)
         }
         for (let at = messages.length - 1; at >= this.start; at--) {
             const message = messages[at] as AssistantMessage
@@ -160,7 +181,7 @@ export class MessageAccumulator {
             const kept: AssistantContent[] = []
             for (const block of message.content)
                 if (
-                    block.type === 'tool_use'
+                    makesCall(block)
                         ? answered.has(block.id)
                         : block.type !== 'thinking' || Boolean(block.signature)
                 )

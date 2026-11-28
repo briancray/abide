@@ -663,7 +663,7 @@ const CALLED: AssistantMessage[] = [
     },
 ]
 
-// THE REVERT: drop the `tool_result` check from `chat`'s message `blocks`, and the person's turn
+// THE REVERT: drop the `answersCall` check from `chat`'s message `blocks`, and the person's turn
 // lists the call's result among its blocks — `['tool_result', 'text']` where `['text']` is due.
 test("a message's blocks show in order, words held as a string as one, and no tool_result among them — 53.24", async () => {
     const stream = fed()
@@ -690,6 +690,204 @@ test("a message's blocks show in order, words held as a string as one, and no to
         talk.message(message, index).blocks.map((block) => block.type),
     )
     expect(kinds).toEqual([['text'], ['text', 'tool_use', 'text'], ['text']])
+})
+
+// Three web searches the API ran in one answer — one answered, one answered with an error, one still
+// running — and a call to an MCP server that failed, each result in the model's own turn.
+const SEARCHED: AssistantMessage[] = [
+    { role: 'user', content: 'What does Hopper & Co. charge?' },
+    {
+        role: 'assistant',
+        content: [
+            {
+                type: 'server_tool_use',
+                id: 'srvtoolu_1',
+                name: 'web_search',
+                input: { query: 'Hopper & Co. pricing' },
+            },
+            {
+                type: 'web_search_tool_result',
+                tool_use_id: 'srvtoolu_1',
+                content: [
+                    {
+                        type: 'web_search_result',
+                        url: 'https://hopper.example/pricing',
+                        title: 'Pricing',
+                        encrypted_content: 'abc',
+                    },
+                ],
+            },
+            {
+                type: 'server_tool_use',
+                id: 'srvtoolu_2',
+                name: 'web_search',
+                input: { query: 'Hopper & Co. discounts' },
+            },
+            {
+                type: 'web_search_tool_result',
+                tool_use_id: 'srvtoolu_2',
+                content: {
+                    type: 'web_search_tool_result_error',
+                    error_code: 'max_uses_exceeded',
+                },
+            },
+            {
+                type: 'mcp_tool_use',
+                id: 'mcptoolu_1',
+                name: 'lookup',
+                server_name: 'billing',
+                input: { company: 'Hopper & Co.' },
+            },
+            {
+                type: 'mcp_tool_result',
+                tool_use_id: 'mcptoolu_1',
+                is_error: true,
+                content: [{ type: 'text', text: 'billing is down' }],
+            },
+            {
+                type: 'server_tool_use',
+                id: 'srvtoolu_3',
+                name: 'web_search',
+                input: { query: 'Hopper & Co. contract' },
+            },
+        ],
+    },
+]
+
+// 53.24, 53.25 — A SERVER TOOL'S CALL READS ITS STATUS FROM ITS RESULT, which the API writes into
+// the model's own turn, and that result is shown through its call rather than as a block of its
+// own. THE REVERTS: look for a call's result in user messages alone in `chat`'s `resultOf`, and every
+// search reads `running`; read `failed` from `is_error` alone, and the search answered with an error
+// reads `done`, and from `error_code` alone, and the MCP call that failed reads `done`; keep
+// `tool_result` the only block `blocks` leaves out, and the answer lists every result among its
+// blocks.
+test('a web search reads as running until its result arrives, and failed where the result is an error — 53.24, 53.25', async () => {
+    const stream = fed()
+    using _chat = await mount(Chat({ ask: stream.ask, messages: SEARCHED }))
+    expect(
+        [...document.querySelectorAll('[data-chat=tool]')].map((call) =>
+            call.getAttribute('data-status'),
+        ),
+    ).toEqual(['done', 'failed', 'failed', 'running'])
+    const talk = chat({ ask: stream.ask, messages: reactive(SEARCHED) })
+    expect(
+        talk
+            .message(SEARCHED[1] as AssistantMessage, 1)
+            .blocks.map((block) => block.type),
+    ).toEqual([
+        'server_tool_use',
+        'server_tool_use',
+        'mcp_tool_use',
+        'server_tool_use',
+    ])
+})
+
+// 44.105, 53.28 — A CALL NOTHING ANSWERED IS LEFT OUT once the answer ends, a server tool's as an
+// app's tool's: a search stopped while it ran would read `running` for good, and go back to the API
+// with no result. THE REVERT: drop only an unanswered `tool_use` in `MessageAccumulator`'s
+// `settle`, and the stopped search stays in the answer, still `running`.
+test('a web search stopped before its result arrives is left out of the answer — 44.105, 53.28', async () => {
+    const stream = fed()
+    using _chat = await mount(Chat({ ask: stream.ask }))
+    type('What does Hopper & Co. charge?')
+    press({})
+    stream.start()
+    stream.say('Searching.')
+    stream.push({ type: 'content_block_stop', index: 0 })
+    stream.push({
+        type: 'content_block_start',
+        index: 1,
+        content_block: {
+            type: 'server_tool_use',
+            id: 'srvtoolu_1',
+            name: 'web_search',
+            input: {},
+        },
+    })
+    await arrived()
+    const calls = () => document.querySelectorAll('[data-chat=tool]')
+    expect(calls()[0]?.getAttribute('data-status')).toBe('running')
+    ;(document.querySelector('[data-chat=stop]') as HTMLButtonElement).click()
+    await settled()
+    flushSync()
+    expect(calls()).toHaveLength(0)
+    expect(
+        document.querySelectorAll('[data-chat=message]')[1]?.textContent,
+    ).toContain('Searching.')
+})
+
+// 53.110 — A THINKING BLOCK IS RUNNING UNTIL IT IS SIGNED, which the API does as the block ends, so
+// a page shows the model thinking while it does and a line once it has. THE REVERT: read `done` in
+// `chat`'s `thinking` part whatever the block holds, and the line reads `thought it through` while
+// the model is still thinking.
+test('a thinking block reads as thinking until it is signed — 53.110', async () => {
+    const stream = fed()
+    using _chat = await mount(Chat({ ask: stream.ask }))
+    type('Who should I call first?')
+    press({})
+    stream.push({
+        type: 'message_start',
+        message: {
+            id: 'msg_1',
+            type: 'message',
+            role: 'assistant',
+            model: 'claude-opus-5-5',
+            content: [],
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: 0, output_tokens: 0 },
+        },
+    })
+    stream.push({
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'thinking', thinking: '', signature: '' },
+    })
+    stream.push({
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'thinking_delta', thinking: 'Grace replied last.' },
+    })
+    await arrived()
+    const line = () => document.querySelector('[data-chat=thinking]')
+    expect(line()?.getAttribute('data-status')).toBe('running')
+    expect(line()?.textContent).toBe('thinking…')
+    stream.push({
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'signature_delta', signature: 'sig' },
+    })
+    stream.push({ type: 'content_block_stop', index: 0 })
+    await arrived()
+    expect(line()?.getAttribute('data-status')).toBe('done')
+    expect(line()?.textContent).toBe('thought it through')
+    stream.end()
+    await settled()
+})
+
+// 53.110 — A REDACTED THINKING BLOCK IS DONE from the start: it carries its reasoning encrypted and
+// is never signed. THE REVERT: read `running` in `chat`'s `thinking` part for any block with no
+// `signature`, and the redacted block reads `thinking…` for good.
+test('a redacted thinking block reads as done — 53.110', async () => {
+    const stream = fed()
+    using _chat = await mount(
+        Chat({
+            ask: stream.ask,
+            messages: [
+                { role: 'user', content: 'Who should I call first?' },
+                {
+                    role: 'assistant',
+                    content: [
+                        { type: 'redacted_thinking', data: 'opaque' },
+                        { type: 'text', text: 'Grace.' },
+                    ],
+                },
+            ],
+        }),
+    )
+    const line = document.querySelector('[data-chat=thinking]')
+    expect(line?.getAttribute('data-status')).toBe('done')
+    expect(line?.textContent).toBe('thought it through')
 })
 
 // THE REVERT: keep the first `message_delta`'s `stop_reason` in `chat` — `stop = stop ??

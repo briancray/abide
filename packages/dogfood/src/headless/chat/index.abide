@@ -49,6 +49,28 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
         },
         {
             path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: [
+                "test('a web search reads as running until its result arrives, and failed where the result is an error — 53.24, 53.25'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: [
+                "test('a thinking block reads as thinking until it is signed — 53.110'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: ["test('a redacted thinking block reads as done — 53.110'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
+            from: [
+                "test('a web search stopped before its result arrives is left out of the answer — 44.105, 53.28'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/assistant/lib/Chat.test.ts',
             from: ["test('a permission prompt is answered through permit'"],
         },
         {
@@ -192,12 +214,34 @@ import askTheAssistant from './lib/AskTheAssistant.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Show a tool call as a line of its own">
-        <p>A <code>tool_use</code> block's element carries <code>data-status</code>:
-            <code>running</code> until its result arrives, then <code>done</code> or
-            <code>failed</code>. What it says is yours.</p>
+        <p>A call is a <code>tool_use</code> block for your own tool, a
+            <code>server_tool_use</code> for one the API runs, like web search, and an
+            <code>mcp_tool_use</code> for an MCP server's. Each one's element carries
+            <code>data-status</code>: <code>running</code> until its result arrives, then
+            <code>done</code> or <code>failed</code>. The result is never a block of its own in
+            the transcript, and what the line says is yours.</p>
         <Code language="abide" caption="abide" code={`
-            {#if block.type === 'tool_use'}
+            {#if block.type === 'tool_use' ||
+                block.type === 'server_tool_use' ||
+                block.type === 'mcp_tool_use'}
                 <span {...talk.tool(block).tool}>used {block.name}</span>
+            {/if}
+        `} />
+    </Section>
+
+    <Section level={3} title="Show that the model is thinking">
+        <p>A <code>thinking</code> block's element carries <code>data-status</code>:
+            <code>running</code> until the block is signed, then <code>done</code>. A
+            <code>redacted_thinking</code> block is <code>done</code> from the start. Current
+            models send a thinking block with no words unless the request asks for a summary,
+            so a line saying the model is thinking is often all there is to show.</p>
+        <Code language="abide" caption="abide" code={`
+            {#if block.type === 'thinking' || block.type === 'redacted_thinking'}
+                {#if talk.thinking(block).status === 'running'}
+                    <span {...talk.thinking(block).thinking}>thinking…</span>
+                {:else}
+                    <span {...talk.thinking(block).thinking}>thought it through</span>
+                {/if}
             {/if}
         `} />
     </Section>

@@ -5100,8 +5100,9 @@ assistant message, a `content_block_start` puts its block, as it came, after the
 `thinking_delta` and a `signature_delta` fill a thinking block, and a block's `input_json_delta`
 events, read as JSON at its `content_block_stop`, are its `input` — or the words written, where they
 are not JSON. A `tool_result` event MUST go into the user message after the run, every result of one
-run in one message. A `tool_use` no `tool_result` answers, a thinking block left with no signature,
-and an assistant message left with nothing in it, MUST be left out.
+run in one message. A call nothing answers — a `tool_use`, a `server_tool_use` or an `mcp_tool_use`
+no block names by its id — a thinking block left with no signature, and an assistant message left
+with nothing in it, MUST be left out.
 
 44.106 A call's value MUST be the `value` of the `tool_result` event its `tool_result` block was
 folded from (44.49), kept beside the block, which MUST carry nothing the Messages API does not take;
@@ -6953,10 +6954,13 @@ is absent or refuses, laying every string its value holds on the `copy` event un
 `copiedFor` milliseconds after the last.
 
 53.24 `chat` MUST show a message's blocks in order — words a message holds as a string as one
-text block — and MUST NOT show its `tool_result` blocks among them.
+text block — and MUST NOT show among them a block answering a call: a `tool_result`, or a server
+tool's or an MCP server's result.
 
-53.25 `chat`'s `tool` part for a `tool_use` block MUST read its status from the `tool_result`
-block naming its id: `running` before there is one, `failed` where it is an error, `done` otherwise.
+53.25 `chat`'s `tool` part for a call — a `tool_use`, a `server_tool_use` or an `mcp_tool_use`
+block — MUST read its status from the block answering its id, in whichever message holds it:
+`running` before there is one, `failed` where it is an error — its `is_error` true, or its content
+an error naming an `error_code` — and `done` otherwise.
 
 53.26 `chat` MUST hold a `permission` event as one of its `permissions`, its `allowed`
 `undefined`, until the next answer starts.
@@ -7231,6 +7235,9 @@ is true MUST be held, and made once every call has settled.
 53.109 `chat`'s `calls` of an `Rpc` MUST be the calls 44.51 finds in its messages for that `Rpc`, in
 order, each with its `tool_use` block's `input` as it stands, the value 44.106 reads, whether its
 result is an error, and `streaming` while an answer streams and no `tool_result` answers it.
+
+53.110 `chat`'s `thinking` part for a thinking block MUST carry `data-status` `running` while the
+block has no signature and `done` once it has one, and for a redacted thinking block `done`.
 
 # 54. Guards, fetches and jobs
 

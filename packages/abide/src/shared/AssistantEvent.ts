@@ -98,8 +98,14 @@ export type AssistantContent =
       }
     | { type: 'redacted_thinking'; data: string; [field: string]: unknown }
     | {
+          type: 'server_tool_use' | 'mcp_tool_use'
+          id: string
+          name: string
+          input: unknown
+          [field: string]: unknown
+      }
+    | {
           type:
-              | 'server_tool_use'
               | 'web_search_tool_result'
               | 'web_fetch_tool_result'
               | 'code_execution_tool_result'
@@ -107,12 +113,13 @@ export type AssistantContent =
               | 'text_editor_code_execution_tool_result'
               | 'tool_search_tool_result'
               | 'advisor_tool_result'
-              | 'mcp_tool_use'
               | 'mcp_tool_result'
-              | 'compaction'
-              | 'fallback'
+          tool_use_id: string
+          content?: unknown
+          is_error?: boolean | undefined
           [field: string]: unknown
       }
+    | { type: 'compaction' | 'fallback'; [field: string]: unknown }
 
 /** One turn of a conversation, as the Messages API takes it: its words, or its blocks in order. */
 export type AssistantMessage = {

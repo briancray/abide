@@ -1,6 +1,7 @@
 <script>
 // THE CRM'S CONVERSATION, its markup over `chat`'s parts: an answer as the CRM's markdown, a tool
-// call as one line, Ask again under an answer that ended, a question that failed put back to edit,
+// call — the CRM's own, or a server tool's like web search — as one line, the model's thinking as
+// a line until it is done, Ask again under an answer that ended, a question that failed put back to edit,
 // and a prompt Claude Code asks permission with.
 import {
     type AssistantMessage,
@@ -64,8 +65,14 @@ function putBack() {
                             <img {...talk.image(block)} alt="an image you sent">
                         {:else if block.type === 'document'}
                             <span {...talk.document(block)} class="status">{block.title ?? 'a document'}</span>
-                        {:else if block.type === 'tool_use'}
+                        {:else if block.type === 'tool_use' ||
+                            block.type === 'server_tool_use' ||
+                            block.type === 'mcp_tool_use'}
                             <span {...talk.tool(block).tool} class="status">used {block.name.split('_').at(-1)}</span>
+                        {:else if block.type === 'thinking' || block.type === 'redacted_thinking'}
+                            <span {...talk.thinking(block).thinking} class="status">{talk.thinking(block).status === 'running'
+                                ? 'thinking…'
+                                : 'thought it through'}</span>
                         {/if}
                     {/for}
                     {#if talk.message(message, index).ends &&
