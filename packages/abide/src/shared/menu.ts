@@ -1,4 +1,4 @@
-// 50.28-50.32, 50.37-50.40, 50.57, 50.58, 50.77-50.82 — A BUTTON AND THE ACTIONS IT OPENS: WAI-ARIA's
+// 50.28-50.32, 50.37-50.40, 50.57, 50.58, 50.77-50.82, 50.88 — A BUTTON AND THE ACTIONS IT OPENS: WAI-ARIA's
 // menu button, as parts an app spreads onto elements of its own. The menu opens in a `popover` of its
 // own (50.37): the popover places it, shows it and closes it on a press outside, and the menu is the
 // keyboard over its items and what a pick does. Each part is the popover's with the menu's laid over it,
@@ -32,6 +32,8 @@ export type Menu = {
     readonly anchor: Record<string, unknown>
     /** The menu's attributes and listeners; its children carrying a menu item role are its items. */
     readonly menu: Record<string, unknown>
+    /** A menu item's attributes: an action, whose pick closes the menu. */
+    readonly item: Record<string, unknown>
     /** Whether the menu is open — the `open` it was handed, or one of its own. */
     readonly open: Reactive<boolean>
 }
@@ -347,6 +349,8 @@ export function menu(options: MenuOptions = {}): Menu {
         trigger,
         anchor: withPart({}, layer.anchor, { 'data-menu': 'anchor' }),
         menu: list,
+        // 50.88
+        item: { role: 'menuitem', 'data-menu': 'item' },
         open,
     }
 }

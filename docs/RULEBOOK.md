@@ -5887,6 +5887,8 @@ does.
 gone, a new line where a line break or a rule stands or a block, a list item or a table row ends, a
 space where a table cell ends, and each character reference read as its character.
 
+50.88 A `menu`'s `item` part MUST carry `role="menuitem"` and `data-menu="item"`.
+
 # 51. Lists and tables
 
 51.1 `listbox` MUST keep active the option a pointer holds active as 51.94 names, and otherwise the

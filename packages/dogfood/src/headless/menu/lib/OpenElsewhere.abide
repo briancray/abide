@@ -9,7 +9,7 @@ const move = menu({ open: choosing })
     Choose a stage
 </button>
 <div {...move.menu}>
-    <button role="menuitem">lead</button>
-    <button role="menuitem">won</button>
+    <button {...move.item}>lead</button>
+    <button {...move.item}>won</button>
 </div>
 <p>{choosing ? 'choosing' : 'closed'}</p>

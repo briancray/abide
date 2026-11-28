@@ -6,6 +6,6 @@ const move = menu()
 
 <button type="button" {...move.trigger}>Move to…</button>
 <div {...move.menu} class="m-0 flex-col rounded-lg open:flex">
-    <button role="menuitem">lead</button>
-    <button role="menuitem">won</button>
+    <button {...move.item}>lead</button>
+    <button {...move.item}>won</button>
 </div>

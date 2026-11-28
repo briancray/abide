@@ -20,7 +20,7 @@ const owners = menu({ group: bar.id, side: 'right' })
     p-tight open:flex"
 >
     {#for next of STAGES}
-        <button role="menuitem" onclick={() => (stage = next)}>{next}</button>
+        <button {...stages.item} onclick={() => (stage = next)}>{next}</button>
     {/for}
 </div>
 <div
@@ -28,7 +28,7 @@ const owners = menu({ group: bar.id, side: 'right' })
     class="m-0 flex-col gap-hair rounded-lg border border-rule bg-raised
     p-tight open:flex"
 >
-    <button role="menuitem">Ada</button>
-    <button role="menuitem">Grace</button>
+    <button {...owners.item}>Ada</button>
+    <button {...owners.item}>Grace</button>
 </div>
 <p class="status">{stage}</p>

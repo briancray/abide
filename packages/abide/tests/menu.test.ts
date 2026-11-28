@@ -1,4 +1,4 @@
-// 50.28-50.39, 50.55-50.57 — `menu` and the popover it opens in, given the popover's rest and leave. The parts are spread by hand here, as
+// 50.28-50.39, 50.55-50.57, 50.88 — `menu` and the popover it opens in, given the popover's rest and leave. The parts are spread by hand here, as
 // 32.11 spreads them: an attribute per string, a listener per `on<event>`, and the element handed to
 // `bind:element`. What a template does with them is the CRM's tests'.
 
@@ -299,4 +299,15 @@ test('an arrow switch whose close is refused leaves the one menu open and unmark
         first.parts.menu['data-to'],
         second.parts.menu['data-from'],
     ]).toEqual([undefined, undefined])
+})
+
+test('the item part is an action: a menuitem, and its pick closes the menu — 50.88, 50.31', () => {
+    const { parts, list, isOpen } = standing()
+    expect(parts.item).toEqual({ role: 'menuitem', 'data-menu': 'item' })
+    list.replaceChildren(spread(document.createElement('button'), parts.item))
+    parts.open.set(true)
+    flushSync()
+    ;(list.firstElementChild as HTMLElement).click()
+    flushSync()
+    expect(isOpen()).toBe(false)
 })

@@ -16,16 +16,16 @@ const move = menu({ side: 'right' })
     class="m-0 flex-col gap-hair rounded-lg border border-rule bg-raised
     p-tight open:flex"
 >
-    <button role="menuitem" {...move.trigger}>Move to</button>
+    <button {...actions.item} {...move.trigger}>Move to</button>
     <div
         {...move.menu}
         class="m-0 flex-col gap-hair rounded-lg border border-rule bg-raised
         p-tight open:flex"
     >
         {#for next of STAGES}
-            <button role="menuitem" onclick={() => (stage = next)}>{next}</button>
+            <button {...move.item} onclick={() => (stage = next)}>{next}</button>
         {/for}
     </div>
-    <button role="menuitem" onclick={() => (archived = true)}>Archive</button>
+    <button {...actions.item} onclick={() => (archived = true)}>Archive</button>
 </div>
 <p class="status">{stage}{archived ? ', archived' : ''}</p>

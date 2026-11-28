@@ -4,6 +4,7 @@
 
 import { type Live, live } from './live.ts'
 import { type Menu, menu } from './menu.ts'
+import { withPart } from './withPart.ts'
 
 /** The trail, where each crumb leads, how many show before the middle folds, and the nav's name. */
 export type BreadcrumbsOptions<Crumb> = {
@@ -79,10 +80,11 @@ export function breadcrumbs<Crumb>(
         }),
         // 51.139
         menu: folds,
-        menuItem: (crumb) => ({
-            role: 'menuitem',
-            'data-breadcrumbs': 'item',
-            href: options.href(crumb),
-        }),
+        // 49.18 — the menu's action item, its link the crumb's.
+        menuItem: (crumb) =>
+            withPart({}, folds.item, {
+                'data-breadcrumbs': 'item',
+                href: options.href(crumb),
+            }),
     }
 }

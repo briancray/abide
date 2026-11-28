@@ -85,16 +85,16 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
     ]}
 >
     <Section level={3} title="Move a deal to another stage from a menu">
-        <p>Spread <code>trigger</code> on a button and <code>menu</code> on the element holding
-            the items. Each child carrying <code>role="menuitem"</code> is an item. A disabled
+        <p>Spread <code>trigger</code> on a button, <code>menu</code> on the element holding
+            the items, and <code>item</code> on each item. A disabled
             one is passed over by the arrow keys, and a pick runs its own <code>onclick</code>,
             closes the menu and hands focus back to the button.</p>
         <Example code={moveStage}><MoveStage /></Example>
     </Section>
 
     <Section level={3} title="Open a submenu from an item">
-        <p>Spread a second menu's <code>trigger</code> on an item carrying
-            <code>role="menuitem"</code>, and that menu is a submenu of the one holding the item.
+        <p>Spread a second menu's <code>trigger</code> on one of the first menu's
+            items, and that menu is a submenu of the one holding the item.
             Give it <code>side: 'right'</code>, and ArrowRight opens it while ArrowLeft closes it,
             back to its item. A pick in it closes every menu and hands focus to the first
             button.</p>

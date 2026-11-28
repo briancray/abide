@@ -21,7 +21,7 @@ const move = menu()
     p-tight open:flex"
 >
     {#for next of STAGES}
-        <button role="menuitem" onclick={() => (stage = next)}>{next}</button>
+        <button {...move.item} onclick={() => (stage = next)}>{next}</button>
     {/for}
 </div>
 <p class="status">{stage}</p>

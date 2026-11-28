@@ -10,7 +10,7 @@ const move = menu()
 <div {...move.menu}>
     {#for next of STAGES}
         <button
-            role="menuitem"
+            {...move.item}
             disabled={next === stage}
             onclick={() => (stage = next)}
         >{next}</button>

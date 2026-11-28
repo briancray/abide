@@ -448,9 +448,9 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 
 | Name | Signature | Meaning | Rules |
 | --- | --- | --- | --- |
-| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as parts an app spreads onto elements of its own: a trigger and the menu it opens in a `popover`. | 50.28, 50.29, 50.30, 50.31, 50.32, 50.37, 50.38, 50.39, 50.40, 50.57, 50.58, 50.78, 50.79, 50.80, 50.81, 50.82, 49.2, 49.4, 49.5, 49.6 |
+| `menu` | `(options?: MenuOptions) => Menu` | WAI-ARIA's menu button as parts an app spreads onto elements of its own: a trigger, the menu it opens in a `popover`, and its items. | 50.28, 50.29, 50.30, 50.31, 50.32, 50.37, 50.38, 50.39, 50.40, 50.57, 50.58, 50.78, 50.79, 50.80, 50.81, 50.82, 50.88, 49.2, 49.4, 49.5, 49.6 |
 | `MenuOptions` | `PopoverOptions & { group?: string \| (() => string \| undefined) }` | Where the menu opens and what opens and closes it, as a `popover` takes them, and the group it switches within. | 50.37, 50.77, 49.8, 49.10, 49.11, 50.57 |
-| `Menu` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the menu's, and whether the menu is open. | 32.11, 50.37, 50.38, 49.3, 49.8, 49.9, 49.17 |
+| `Menu` | `{ readonly id: string; readonly trigger: Record<string, unknown>; readonly anchor: Record<string, unknown>; readonly menu: Record<string, unknown>; readonly item: Record<string, unknown>; readonly open: Reactive<boolean> }` | The base of its ids, the trigger's part, the anchor's, the menu's, an action item's, and whether the menu is open. | 32.11, 50.37, 50.38, 50.88, 49.3, 49.8, 49.9, 49.17 |
 
 ## `toolbar`
 

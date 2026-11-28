@@ -6,6 +6,6 @@ const more = menu({ align: 'end' })
 
 <button type="button" aria-label="More" {...more.trigger}>⋯</button>
 <div {...more.menu}>
-    <button role="menuitem">Archive</button>
-    <button role="menuitem">Duplicate</button>
+    <button {...more.item}>Archive</button>
+    <button {...more.item}>Duplicate</button>
 </div>

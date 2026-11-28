@@ -21,7 +21,7 @@ const views = menu({ group: bar.id })
     p-tight open:flex"
 >
     {#for next of STAGES}
-        <button role="menuitem" onclick={() => (stage = next)}>{next}</button>
+        <button {...stages.item} onclick={() => (stage = next)}>{next}</button>
     {/for}
 </div>
 <div

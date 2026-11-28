@@ -15,13 +15,13 @@ const people = menu(HOVER)
     class="transition-transform transition-discrete duration-150
         data-[from=start]:starting:open:-translate-x-4
         data-[from=end]:starting:open:translate-x-4">
-    <button role="menuitem">New deal</button>
-    <button role="menuitem">Pipeline</button>
+    <button {...deals.item}>New deal</button>
+    <button {...deals.item}>Pipeline</button>
 </div>
 <div {...people.menu}
     class="transition-transform transition-discrete duration-150
         data-[from=start]:starting:open:-translate-x-4
         data-[from=end]:starting:open:translate-x-4">
-    <button role="menuitem">New contact</button>
-    <button role="menuitem">Companies</button>
+    <button {...people.item}>New contact</button>
+    <button {...people.item}>Companies</button>
 </div>

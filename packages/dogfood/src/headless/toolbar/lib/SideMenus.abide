@@ -16,11 +16,11 @@ const view = menu({ group: bar.id, side: 'right' })
 </nav>
 <div {...deal.menu} class="m-0 flex-col rounded-lg border border-rule
     bg-raised p-tight open:flex">
-    <button role="menuitem">Rename</button>
-    <button role="menuitem">Archive</button>
+    <button {...deal.item}>Rename</button>
+    <button {...deal.item}>Archive</button>
 </div>
 <div {...view.menu} class="m-0 flex-col rounded-lg border border-rule
     bg-raised p-tight open:flex">
-    <button role="menuitem">Board</button>
-    <button role="menuitem">List</button>
+    <button {...view.item}>Board</button>
+    <button {...view.item}>List</button>
 </div>
