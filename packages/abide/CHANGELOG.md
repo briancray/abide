@@ -1,5 +1,27 @@
 # @abide/abide
 
+## 0.148.0
+
+### Minor Changes
+
+- 8313b5e: chart: the root fills its container's width (`width="100%"`) and stands at the `height` option, carries no `viewBox`, and never writes its measurement back onto itself, so a server-rendered chart paints its left edge and labels where the measured one will. `measured`, and `data-measured` on the root, say whether the root has been measured yet — for an app that draws its marks only once it has, or hides them until then with `[data-chart="root"]:not([data-measured])`.
+- 5b14089: A `table`'s change log is now a ledger's log. The triggers write to `abide_table_log`, and a table's `readable` is a ledger read of it (RULEBOOK 47.42). A file a release before this one prepared has its old `abide_changes` tables and triggers dropped the first time a `table` reaches it.
+  
+  `store.sqlite` gains a `watch` (58.18): a ledger kept there now hears an append another connection or process commits within about 50 ms, where before it heard nothing until its next read. Its numbering also carries on past a trim that let every entry go (58.2); before, such a trim restarted the numbers at 1.
+  
+  A ledger read errors with a 410 where entries it hadn't read were let go even when nothing newer has been appended yet (58.15), and where its store answers from another file's log (58.17, through `LogStore`'s new optional `origin`).
+
+### Patch Changes
+
+- 97b7ccb: one Migration module for a migration's shape and its notes ([`0b1a413`](https://github.com/briancray/abide/commit/0b1a41396d1c829782ed43ead936cb12f4b68f72))
+- 97b7ccb: a call's answer carries its entry through callAnswer alone ([`260bc89`](https://github.com/briancray/abide/commit/260bc892ad218f0b56ff2b330fe2ec360130a254))
+- 97b7ccb: a list roving 'both' ways steps on either pair of arrows ([`30ff10f`](https://github.com/briancray/abide/commit/30ff10f07622b1cb2e59d21d15067ba1246a215a))
+- 97b7ccb: the native app's window is one module ([`3648b28`](https://github.com/briancray/abide/commit/3648b2822868928fd1dfa34f2ffacecb82ca0a6d))
+- 97b7ccb: one owner-write face for memo and rpc; a wire copy is declared, not marked ([`7009df3`](https://github.com/briancray/abide/commit/7009df3621ad6904b9fd5f1c2c5b6522807be4ce))
+- 97b7ccb: one patch chain for a served value's versions ([`72377b2`](https://github.com/briancray/abide/commit/72377b25b2f4346d41bdc35a3df0c940e1c61584))
+- 97b7ccb: 21.3's private, no-store is UNCACHED, spelled once ([`ba3c4dd`](https://github.com/briancray/abide/commit/ba3c4dd9657f58634811c91d884aa9fce566ecbd))
+- 6e3ea1a: a lightbox's arrow key stepping onto its first or last picture hands focus to the other button, as a click does, so the keys keep working
+
 ## 0.147.0
 
 ### Minor Changes
