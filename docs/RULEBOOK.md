@@ -6872,6 +6872,14 @@ positions, spread evenly from the first to the last.
 
 52.121 `chart` declaring `xZero` MUST take zero into the range of its x positions.
 
+52.122 `chart`'s root part MUST carry `width="100%"`, and `height` as the `height` option, 240
+where it gives none, and MUST carry no `viewBox`; `chart` MUST draw at one unit per CSS pixel from the
+top-left of the root's box, at `width` by `height` until the root is measured and at its measured size
+after.
+
+52.123 `chart`'s `measured` MUST answer `false` until its root part is first measured, and `true`
+from then on, and its root part MUST carry `data-measured` while `measured` holds.
+
 # 53. Keys, element behaviors and chat
 
 53.1 `hotkeys` MUST run at most one binding per `keydown`: the first, in the order the bindings are

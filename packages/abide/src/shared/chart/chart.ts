@@ -74,9 +74,9 @@ export type ChartOptions = {
               | undefined
           >
         | undefined
-    /** The width drawn at before the root is measured. 600 by default. */
+    /** The width drawn at before the root is measured — what a server-rendered page paints (52.122). 600 by default. */
     width?: number | undefined
-    /** The height drawn at before the root is measured. 240 by default. */
+    /** The root's height where the app's CSS gives it none, and the height drawn at before it is measured (52.122). 240 by default. */
     height?: number | undefined
     /** Called with the x position nearest a click, or the crosshair's on Enter, where `disabled` does not hold for it (52.38, 52.70). */
     onpick?: ((index: number) => void) | undefined
@@ -179,6 +179,8 @@ export type ChartParts = {
     readonly id: string
     /** The root, an `<svg>` or any element: its size, measured (52.24), its name, focus, and the pointer and keys that move the crosshair (52.26, 52.69). */
     readonly root: Record<string, unknown>
+    /** Whether the root has been measured — false on a server-rendered page until it hydrates (52.123). */
+    readonly measured: boolean
     /** The x of `value`, in the units of the `x` option: a time between two positions, say (52.78). */
     x(value: number): number
     /** The y of `value`. */
@@ -221,16 +223,22 @@ export function chart(options: ChartOptions): ChartParts {
     // 49.11 — read where they are used.
     const xFormat = (value: number) => (options.xFormat ?? number)(value)
     const yFormat = (value: number) => (options.yFormat ?? number)(value)
-    const size = reactive({
+    const guess = {
         width: options.width ?? 600,
         height: options.height ?? 240,
-    })
+    }
+    // 52.123 — undefined until the root is first measured, so a measurement equal to the guess still
+    // tells `measured` the root has one.
+    const size = reactive<{ width: number; height: number } | undefined>(
+        undefined,
+    )
+    const drawnSize = () => size.get() ?? guess
     const hovered = reactive(-1)
     // 52.116 — whether the root is bound to an `<svg>`, whose marks are placed by their attributes
     // alone: the vars are a `style` per mark that no rule reads there, 45% of a redraw.
     const svgRoot = reactive(false)
     // The width the root was last measured at, read without following it.
-    const measuredWidth = () => size.peek()?.width ?? 0
+    const measuredWidth = () => (size.peek() ?? guess).width
 
     const plot = reactive(() => {
         const series = live(options.series)
@@ -239,7 +247,7 @@ export function chart(options: ChartOptions): ChartParts {
         const xZero = live(options.xZero) === true
         const bounds = live(options.bounds)
         const given = live(options.x)
-        const { width, height } = size.get()
+        const { width, height } = drawnSize()
         const vars = !svgRoot.get()
         const placed = stackSeries(series, {
             stack: live(options.stack) === true,
@@ -814,19 +822,16 @@ export function chart(options: ChartOptions): ChartParts {
         id: base,
         root: {
             'data-chart': 'root',
-            get width() {
-                return size.get().width
-            },
-            get height() {
-                return size.get().height
-            },
-            get viewBox() {
-                const { width, height } = size.get()
-                return `0 0 ${width} ${height}`
-            },
+            // 52.122 — the root fills its container's width and stands `height` tall, where the app's
+            // CSS sizes it no other way; the measurement is never written back onto the box it measured.
+            width: '100%',
+            height: guess.height,
             role: 'img',
             get 'aria-label'() {
                 return live(options.label)
+            },
+            get 'data-measured'() {
+                return size.get() === undefined ? undefined : ''
             },
             get 'data-hovering'() {
                 return readout.get() === undefined ? undefined : ''
@@ -841,6 +846,9 @@ export function chart(options: ChartOptions): ChartParts {
             onfocusout: scrubbing.leave,
             onkeydown: key,
             onclick: (event: MouseEvent) => pick(scrubbing.indexAt(event)),
+        },
+        get measured() {
+            return size.get() !== undefined
         },
         x: (value) => plot.get().toX(value),
         y: (value) => plot.get().toY(value),

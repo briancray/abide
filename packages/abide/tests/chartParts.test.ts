@@ -281,3 +281,47 @@ test('xZero takes zero into the x range, with a line down the plot there', () =>
     })
     expect(drawn(true, { x: [1, 6] }).x(1)).toBe(0)
 })
+
+// 52.122 — THE ROOT FILLS ITS CONTAINER AND THE GUESS DRAWS WHERE THE MEASURED DRAWING WILL, so a
+// server-rendered root paints its left edge and its labels in place and only its x grows once measured.
+// THE REVERTS: hand back `viewBox: 0 0 width height` — the browser's `xMidYMid meet` shrinks the guess
+// and centres it, and the key is on the root; write the measured width back as `width` — 600, and a
+// root with no CSS of its own never grows past its guess.
+// 52.123 — `measured`, and `data-measured` on the root, stand from the first measurement, even one equal to the guess. THE REVERT: seed
+// the size with the guess — the equal measurement is not written, and `measured` stays false.
+test("a chart's root fills its container, carries no viewBox, and answers measured once measured", () => {
+    const plot = chart({
+        label: 'Won',
+        series: () => [{ label: 'Won', values: [1, 2] }],
+        height: 224,
+    })
+    expect('viewBox' in plot.root).toBe(false)
+    expect(plot.root.width).toBe('100%')
+    expect(plot.root.height).toBe(224)
+    expect(plot.measured).toBe(false)
+    // The shared observer is made on the first observe and dropped once it observes nothing (32.98),
+    // so a stand-in installed here is the one asked, and every earlier test has unbound its root.
+    let deliver: ((entries: unknown[]) => void) | undefined
+    const real = globalThis.ResizeObserver
+    globalThis.ResizeObserver = class {
+        constructor(delivered: (entries: unknown[]) => void) {
+            deliver = delivered
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+    } as unknown as typeof ResizeObserver
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    const stop = (plot.root['bind:element'] as (element: Element) => () => void)(svg)
+    try {
+        expect(plot.measured).toBe(false)
+        expect(plot.root['data-measured']).toBeUndefined()
+        deliver?.([{ target: svg, contentRect: { width: 600, height: 224 } }])
+        expect(plot.measured).toBe(true)
+        expect(plot.root['data-measured']).toBe('')
+        expect(plot.root.width).toBe('100%')
+    } finally {
+        stop()
+        globalThis.ResizeObserver = real
+    }
+})
