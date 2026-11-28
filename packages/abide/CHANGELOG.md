@@ -1,5 +1,12 @@
 # @abide/abide
 
+## 0.149.0
+
+### Minor Changes
+
+- 04c822b: `menu` hands back an `item` part for an action's menu item, carrying `role="menuitem"` and `data-menu="item"` (RULEBOOK 50.88). `breadcrumbs.menuItem` is built on it.
+- cf3f82d: `toggle` and `toggleGroup` mark an item that is on with `data-checked` in place of `data-pressed` (RULEBOOK 51.109, 51.111) — the state `aria-checked` names on a switch and a radio. `aria-pressed` and `aria-checked` are unchanged.
+
 ## 0.148.0
 
 ### Minor Changes
