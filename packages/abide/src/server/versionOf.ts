@@ -9,7 +9,7 @@
 // where this one starts.
 //
 // 18.11 — A VERSION ONLY PATCHES MOVED TO keeps what they wrote, and the versions they were written
-// over, back through the last `RECENT_PATCHES` of them, so a follower standing anywhere on that chain
+// over, back through the last `WINDOW` of them (`patchChain`), so a follower standing anywhere on that chain
 // is sent the writes since rather than the value — a reconnect a few lines behind a log, or a burst a
 // slow tab missed. A production that replaced the value is a step too, as the diff from the value it
 // replaced (18.41); only one whose diff is the value whole breaks the chain.
@@ -21,27 +21,18 @@ import { writtenAt } from '#shared/reactive/patchMarks.ts'
 import { servedCellOf } from '#shared/reactive/producer.ts'
 import type { Reactive } from '#shared/reactive/Reactive.ts'
 
-import { chainOf, type DurableChain, type WritesSince } from './durableChain.ts'
+import { chainOf, type DurableChain } from './durableChain.ts'
+import { MemoryChain, type WritesSince } from './patchChain.ts'
 
 let next = Date.now() * 1000
-
-// How many patch steps back a follower can still be sent writes from. Trimmed in bulk at twice this,
-// so a write appends rather than shifting the chain.
-const RECENT_PATCHES = 64
-
-/**
- * One step along the chain: the version it was written over, what it wrote, and whether a production
- * replaced the value there (18.41) rather than an `s.patch` writing into it.
- */
-type Step = { from: number; ops: PatchOp[]; replaced: boolean }
 
 type Stamp = {
     ordinal: number
     held: unknown
     patched: number
     version: number
-    // The patch steps that led to this version, oldest first — empty where a production broke them.
-    recent: Step[]
+    // The changes that led to this version — none where a change that is the value whole broke them.
+    recent: MemoryChain
 }
 
 const STAMPS = new WeakMap<object, Stamp>()
@@ -109,13 +100,15 @@ export function versionOf(value: unknown): number {
                   : { ops },
             held,
         )
-    // The chain carries on from the stamp this replaces, whose array it takes over.
-    const recent = ops === null || stamp === undefined ? [] : stamp.recent
-    if (ops !== null && stamp !== undefined) {
-        recent.push({ from: stamp.version, ops, replaced })
-        if (recent.length >= RECENT_PATCHES * 2)
-            recent.splice(0, recent.length - RECENT_PATCHES)
-    }
+    // The chain carries on from the stamp this replaces, which it takes over.
+    const recent =
+        ops === null || stamp === undefined ? new MemoryChain() : stamp.recent
+    if (ops !== null && stamp !== undefined)
+        recent.keep(
+            stamp.version,
+            version,
+            replaced ? { ops, replaced: true } : { ops },
+        )
     STAMPS.set(cell, {
         ordinal: cell.ordinal,
         held,
@@ -139,21 +132,5 @@ export function patchesSince(
     // 18.43 — a value kept in a log is sent what the log holds past `since`, across restarts.
     const chain = durableOf(cell, value)
     if (chain !== null) return chain.since(since)
-    const recent = STAMPS.get(cell)?.recent
-    if (recent === undefined) return undefined
-    for (let at = 0; at < recent.length; at += 1) {
-        if ((recent[at] as Step).from !== since) continue
-        const last = recent[at] as Step
-        if (at === recent.length - 1)
-            return { ops: last.ops, replaced: last.replaced }
-        const ops: PatchOp[] = []
-        let replaced = false
-        for (let step = at; step < recent.length; step += 1) {
-            const one = recent[step] as Step
-            if (one.replaced) replaced = true
-            for (const op of one.ops) ops.push(op)
-        }
-        return { ops, replaced }
-    }
-    return undefined
+    return STAMPS.get(cell)?.recent.since(since)
 }

@@ -17,29 +17,20 @@ import { applyPatch, rooted } from '#shared/applyPatch.ts'
 import type { Logged, LogStore } from '#shared/ledger.ts'
 import { deepEqual } from '#shared/reactive/deepEqual.ts'
 import { isThenable } from '#shared/reactive/isThenable.ts'
-import { holdLog, type PatchOp } from '#shared/reactive/patchLog.ts'
+import { holdLog } from '#shared/reactive/patchLog.ts'
 import { produceInto } from '#shared/reactive/producer.ts'
 import { type Reactive, unwatchStore } from '#shared/reactive/Reactive.ts'
 
-/**
- * One record of a served value's log: what a change wrote, or the value whole — `replaced` where the
- * writes are a production's diff (18.41) rather than an `s.patch`'s.
- */
-type Record = {
-    ops?: PatchOp[] | undefined
-    snapshot?: unknown
-    replaced?: true | undefined
-}
+import {
+    type ChainRecord,
+    type Kept,
+    WINDOW,
+    writesFrom,
+    type WritesSince,
+} from './patchChain.ts'
 
-/** The writes past a version, and whether a production replaced the value among them (18.49). */
-export type WritesSince = { ops: PatchOp[]; replaced: boolean }
-
-/** A record and the number it stands at. */
-type Kept = { seq: number; record: Record }
-
-// How many records past the last snapshot before another is written, and how many are kept behind it
-// for a follower a few changes back: the window a follower may stand anywhere in (18.44).
-const WINDOW = 64
+// A log's records are numbered one after another, so each was written over the number before it.
+// `WINDOW` is also how many records past the last snapshot before another is written (18.44).
 
 // 18.45 — how often a log is asked whether another process appended to it, and how long a log that failed is left before it is written to again.
 const HEAR_EVERY = 1_000
@@ -73,7 +64,7 @@ function readFrom(
                 return
             }
             for (const { seq, entry } of page)
-                into.push({ seq, record: entry as Record })
+                into.push({ seq, from: seq - 1, record: entry as ChainRecord })
             readFrom(
                 log,
                 (page[page.length - 1] as Logged<unknown>).seq,
@@ -97,7 +88,7 @@ function logOf(store: unknown): LogStore | undefined {
 }
 
 /** `ops` applied to `value`, answering what it becomes. */
-function applied(value: unknown, record: Record): unknown {
+function applied(value: unknown, record: ChainRecord): unknown {
     if (record.snapshot !== undefined) return structuredClone(record.snapshot)
     const holder = { value }
     applyPatch(holder, rooted(record.ops ?? []))
@@ -151,7 +142,7 @@ export class DurableChain {
     }
 
     /** Names `record` by the number after the last, keeps it, and writes it behind (18.46). */
-    append(record: Record, held: unknown): number {
+    append(record: ChainRecord, held: unknown): number {
         this.name(record)
         if (this.sinceSnapshot >= WINDOW)
             this.name({ snapshot: structuredClone(held) })
@@ -159,9 +150,9 @@ export class DurableChain {
         return this.last
     }
 
-    name(record: Record): void {
+    name(record: ChainRecord): void {
         this.last += 1
-        const kept = { seq: this.last, record }
+        const kept = { seq: this.last, from: this.last - 1, record }
         this.keep(kept)
         this.pending.push(kept)
     }
@@ -302,27 +293,7 @@ export class DurableChain {
         if (!this.opened || since > this.last || this.abandoned.has(since))
             return undefined
         if (since === this.last) return { ops: [], replaced: false }
-        const records = this.records
-        let from = -1
-        for (let at = records.length - 1; at >= 0; at -= 1)
-            if ((records[at] as Kept).seq === since + 1) {
-                from = at
-                break
-            }
-        if (from === -1) return undefined
-        const ops: PatchOp[] = []
-        let replaced = false
-        for (let at = from; at < records.length; at += 1) {
-            const record = (records[at] as Kept).record
-            if (record.snapshot !== undefined) {
-                replaced = true
-                ops.push({ op: 'replace', path: '', value: record.snapshot })
-            } else {
-                if (record.replaced === true) replaced = true
-                for (const op of record.ops ?? []) ops.push(op)
-            }
-        }
-        return { ops, replaced }
+        return writesFrom(this.records, since)
     }
 
     /**
