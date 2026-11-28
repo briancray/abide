@@ -127,21 +127,22 @@ test('a global production already held answers as Cached — 21.15', async () =>
 test("a handler's work before its first await is its own time — 21.15", async () => {
     expect(
         (await timings(`${RPC}/primed?n=1`)).get('Direct'),
-    ).toBeGreaterThanOrEqual(50)
+    ).toBeGreaterThanOrEqual(45)
 })
 
 // 21.20, 21.21 — THE REVERT: drop the `handled` split in `answerRpc`; `Direct` reads the rung's
 // 100 ms and the body's together, and `Middleware` only the app rung's 50. NO CEILING ON A
 // DURATION: a loaded machine runs every sleep long, so the split is read as a RELATION — the rungs'
 // two sleeps against the body's one, about 150 to 100 as it stands and 50 to 200 reverted — and a
-// slow run stretches the rungs' two sleeps as it does the body's one.
+// slow run stretches the rungs' two sleeps as it does the body's one. A floor sits 10% under its
+// sleep, as the 45 for 50 above does: a timer can wake early, and CI read 94.8 for the body's 100.
 test("a handler's rungs are Middleware, and Direct is its body alone — 21.20, 21.21", async () => {
     const metrics = await timings(`${RPC}/guarded`)
     const direct = metrics.get('Direct') ?? 0
     const rungs = metrics.get('Middleware') ?? 0
-    expect(direct).toBeGreaterThanOrEqual(95)
+    expect(direct).toBeGreaterThanOrEqual(90)
     // The app's 50 and the handler's 100.
-    expect(rungs).toBeGreaterThanOrEqual(145)
+    expect(rungs).toBeGreaterThanOrEqual(135)
     expect(rungs).toBeGreaterThan(direct)
 })
 
