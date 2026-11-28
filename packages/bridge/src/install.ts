@@ -118,11 +118,12 @@ function appleScriptString(text: string): string {
     return `"${text.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
 }
 
-/** The applet's source: a link opened starts the handler with it, in the background. */
+/** The applet's source: a link opened runs the handler with it, the applet waiting on it. */
 function appletSource(bun: string, directory: string): string {
     const handler = appleScriptString(handlerIn(directory))
+    // Not backgrounded: macOS answers a LAN connection by the responsible app's Local Network grant, and refuses it once the applet has quit.
     return `on open location theURL
-\tdo shell script quoted form of ${appleScriptString(bun)} & " " & quoted form of ${handler} & " " & quoted form of theURL & " > /dev/null 2>&1 &"
+\tdo shell script quoted form of ${appleScriptString(bun)} & " " & quoted form of ${handler} & " " & quoted form of theURL & " > /dev/null 2>&1"
 end open location
 
 on run
