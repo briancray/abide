@@ -1,5 +1,11 @@
 # @abide/bridge
 
+## 0.9.5
+
+### Patch Changes
+
+- 0e7d1f2: the applet stays open and backgrounds the handler, so the next link is taken while a bridge runs ([`e750526`](https://github.com/briancray/abide/commit/e7505264bc090824a536246b8f36b0dae8b5505d))
+
 ## 0.9.4
 
 ### Patch Changes
