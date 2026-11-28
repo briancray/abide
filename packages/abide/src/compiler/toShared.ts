@@ -10,6 +10,7 @@ import { SyntaxKind } from 'typescript/unstable/ast'
 import { SHARED_SPECIFIER } from '#shared/SPECIFIERS.ts'
 
 import { isAbideSpecifier } from './hookCalls.ts'
+import type { AppNote as Note } from './Migration.ts'
 import {
     lineAround,
     SCRIPT,
@@ -24,8 +25,6 @@ import {
     namedImports,
 } from './splitImports.ts'
 import { argumentCommas, closerOf, type Token, tokenize } from './tokenize.ts'
-
-type Note = (path: string, line: string, message: string) => void
 
 /** One `reactive.share(…)` call: where it stands in its file, its key, and its `create`. */
 type Call = {

@@ -11,6 +11,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { abideBindings, localOf } from './hookCalls.ts'
+import type { Note } from './Migration.ts'
 import {
     lineAround,
     rewriteCode,
@@ -24,9 +25,6 @@ import {
     type Token,
     tokenize,
 } from './tokenize.ts'
-
-/** A line a migration changed what it does and could not rewrite, and what to do about it. */
-export type Note = (line: string, message: string) => void
 
 const CAUGHT = `.catch((failed) => fetchAndHandle.isError(failed, 'FetchFailed') ? failed : Promise.reject(failed))`
 

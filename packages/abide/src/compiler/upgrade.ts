@@ -4,10 +4,11 @@
 // app already moved finds nothing left to move.
 
 import { withoutRestatedNotes } from './agentNotes.ts'
+import type { Migration, Note } from './Migration.ts'
 import { toComputed } from './toComputed.ts'
 import { toComputedCall } from './toComputedCall.ts'
 import { toDerived } from './toDerived.ts'
-import { type Note, toFetchAndHandle } from './toFetchAndHandle.ts'
+import { toFetchAndHandle } from './toFetchAndHandle.ts'
 import { toFetchOptions } from './toFetchOptions.ts'
 import { toHeldFunction } from './toHeldFunction.ts'
 import { toJob } from './toJob.ts'
@@ -26,22 +27,6 @@ export type Edit = { path: string; before: string; after: string | null }
 
 /** 38.226 — a line a migration changed the meaning of and left for the app to decide. */
 export type UpgradeNote = { path: string; line: number; message: string }
-
-/**
- * One release's change to the app under `directory`: the text of each file it changes, by path
- * relative to `directory`. `read` answers what earlier migrations left of a file, and `undefined`
- * where there is none; `sources` is every file of the app's own its code is written in.
- */
-type Migration = {
-    version: string
-    migrate: (
-        read: (path: string) => Promise<string | undefined>,
-        sources: () => Promise<string[]>,
-        note: (path: string, line: string, message: string) => void,
-        // 38.231 — a file it moves, so a note an earlier migration made of it names where it went.
-        move: (from: string, to: string) => void,
-    ) => Promise<Record<string, string | null>>
-}
 
 // What an app's code is written in, outside what it installs or builds.
 const SOURCES = new Bun.Glob('**/*.{ts,tsx,js,mjs,abide,md}')

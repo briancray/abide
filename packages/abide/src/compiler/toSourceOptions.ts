@@ -13,6 +13,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { abideBindings } from './hookCalls.ts'
+import type { Note } from './Migration.ts'
 import {
     lineAround,
     rewriteCode,
@@ -20,7 +21,6 @@ import {
     spliced,
     splicedOffset,
 } from './rewriteCode.ts'
-import type { Note } from './toFetchAndHandle.ts'
 import {
     afterTypeArguments,
     argumentCommas,

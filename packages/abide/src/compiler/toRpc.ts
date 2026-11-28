@@ -13,6 +13,7 @@
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { isAbideSpecifier } from './hookCalls.ts'
+import type { AppNote as Note } from './Migration.ts'
 import {
     lineAround,
     rewriteCode,
@@ -32,8 +33,6 @@ import {
     type Token,
     tokenize,
 } from './tokenize.ts'
-
-type Note = (path: string, line: string, message: string) => void
 
 const VERBS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 

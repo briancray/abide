@@ -8,11 +8,10 @@ import { posix } from 'node:path' // Bun has no path joiner of its own; `posix` 
 import { SyntaxKind } from 'typescript/unstable/ast'
 
 import { isAbideSpecifier } from './hookCalls.ts'
+import type { AppNote as Note } from './Migration.ts'
 import { lineAround } from './rewriteCode.ts'
 import { importStatements } from './splitImports.ts'
 import { type Token, tokenize } from './tokenize.ts'
-
-type Note = (path: string, line: string, message: string) => void
 
 const HANDLERS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 
