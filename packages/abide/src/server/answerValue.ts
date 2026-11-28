@@ -21,6 +21,7 @@ import {
     refusalFrame,
     streamEvent,
 } from './streamEvent.ts'
+import { UNCACHED } from './UNCACHED.ts'
 
 const ENCODER = new TextEncoder()
 
@@ -107,7 +108,7 @@ function isIterable(value: unknown): value is Iterable<unknown> {
  */
 export function sseHeaders(headers: Headers): void {
     headers.set('content-type', 'text/event-stream')
-    headers.set('cache-control', 'private, no-store')
+    headers.set('cache-control', UNCACHED)
     headers.set('x-accel-buffering', 'no')
 }
 

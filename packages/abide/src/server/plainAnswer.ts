@@ -1,3 +1,5 @@
+import { UNCACHED } from './UNCACHED.ts'
+
 /**
  * A plain-text answer at `status`, never stored.
  *
@@ -12,7 +14,7 @@ export function plainAnswer(message: string, status: number): Response {
         status,
         headers: {
             'content-type': 'text/plain; charset=utf-8',
-            'cache-control': 'private, no-store',
+            'cache-control': UNCACHED,
             'x-content-type-options': 'nosniff',
         },
     })

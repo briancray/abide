@@ -57,6 +57,7 @@ import {
     within,
     writtenStatus,
 } from './requestScope.ts'
+import { UNCACHED } from './UNCACHED.ts'
 
 // One row of the server's table the compiler writes (`SERVER_TABLE`). The loader is a dynamic import
 // so a page's markup is off the boot path until an address asks for it, which is the same reason
@@ -387,7 +388,7 @@ async function answerMatched(
     if (request.headers.has(NAVIGATION_HEADER))
         return new Response(null, {
             status: 204,
-            headers: { 'cache-control': 'private, no-store' },
+            headers: { 'cache-control': UNCACHED },
         })
 
     // 35.19 — A REQUEST THAT CANNOT DISPLAY A PAGE, such as the `/favicon.ico` a browser asks every
@@ -398,7 +399,7 @@ async function answerMatched(
     if (destination !== null && !PAGE_DESTINATIONS.has(destination))
         return new Response(null, {
             status: 404,
-            headers: { 'cache-control': 'private, no-store' },
+            headers: { 'cache-control': UNCACHED },
         })
 
     // 33.4 — a prop is an ACCESSOR, which is the contract `renderComponent` renders a child under

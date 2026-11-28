@@ -44,6 +44,7 @@ import {
     type ToRelay,
 } from './responseRelay.ts'
 import { appSources, serveApp } from './servedApp.ts'
+import { UNCACHED } from './UNCACHED.ts'
 import { withAbideSources } from './withAbideSources.ts'
 
 // The reload client, which the worker serves and every document it answers loads.
@@ -337,7 +338,7 @@ function failedDocument(why: string): Response {
             // 21.1, 21.3 — this answers where no app stands to stamp it.
             headers: {
                 'content-type': 'text/html; charset=utf-8',
-                'cache-control': 'private, no-store',
+                'cache-control': UNCACHED,
                 'x-content-type-options': 'nosniff',
             },
         },

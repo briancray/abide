@@ -15,6 +15,7 @@ import { leavePageRender } from './PageRender.ts'
 import { prefers } from './prefers.ts'
 import { boundPage, renderDocument } from './render.ts'
 import { currentRequestScope } from './requestScope.ts'
+import { UNCACHED } from './UNCACHED.ts'
 
 /** What a page's failure is painted from: the error pages, and the document they go into. */
 export type ErrorPages = Pick<AppSources, 'errors' | 'errorDocument'>
@@ -28,7 +29,7 @@ export type ErrorPages = Pick<AppSources, 'errors' | 'errorDocument'>
 export function handlerHeaders(): Headers {
     return new Headers({
         'content-type': 'application/json',
-        'cache-control': 'private, no-store',
+        'cache-control': UNCACHED,
         vary: 'origin',
     })
 }

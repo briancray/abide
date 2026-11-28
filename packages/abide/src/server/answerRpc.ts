@@ -43,6 +43,7 @@ import {
     writtenStatus,
 } from './requestScope.ts'
 import type { Outcome } from './seedBuffer.ts'
+import { UNCACHED } from './UNCACHED.ts'
 import { versionOf } from './versionOf.ts'
 
 /**
@@ -361,7 +362,7 @@ async function navigated(
         return answerFailure(pages, pathname, failureOf(outcome.error), request)
     if (isFailed(outcome.value))
         return answerFailure(pages, pathname, outcome.value, request)
-    const headers = new Headers({ 'cache-control': 'private, no-store' })
+    const headers = new Headers({ 'cache-control': UNCACHED })
     const written = currentRequestScope()?.response
     const status = written?.status ?? 200
     if (
