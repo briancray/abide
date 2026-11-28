@@ -1,5 +1,12 @@
 # @abide/abide
 
+## 0.146.2
+
+### Patch Changes
+
+- Updated dependencies [d28b8f4]
+  - @abide/bridge@0.9.4
+
 ## 0.146.1
 
 ### Patch Changes
