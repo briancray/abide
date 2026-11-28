@@ -1,4 +1,4 @@
-// 47.37 — A LIST BOUND IN A STATEMENT. A short list is a `?` per value, its slots rounded up to a power
+// 47.34 — A LIST BOUND IN A STATEMENT. A short list is a `?` per value, its slots rounded up to a power
 // of two and the last value repeated into the rest — `IN` reads a repeat as nothing new — so one call
 // site prepares at most one statement per power of two rather than one per length. A long list is ONE
 // value, its JSON, read back by `json_each`: one statement whatever its length, and never past the
@@ -9,7 +9,7 @@ import type { SQLQueryBindings } from 'bun:sqlite'
 /** The longest list bound a `?` per value; a longer one is bound as its JSON. */
 const SLOTTED_AT_MOST = 1024
 
-/** 47.37 — an empty list: a subquery answering no row, which `IN` matches nothing and `NOT IN` all. */
+/** 47.34 — an empty list: a subquery answering no row, which `IN` matches nothing and `NOT IN` all. */
 const NO_ROWS = '(SELECT NULL WHERE 0)'
 
 const AS_JSON = '(SELECT value FROM json_each(?))'

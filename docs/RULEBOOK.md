@@ -5329,56 +5329,48 @@ called with, inside 47.7's transaction.
 47.21 An opener called at any point of its own open but 47.20's MUST throw, and MUST NOT open a
 second `Database`.
 
-47.22 An opener's `changed` MUST increase where another connection, in this process or another, has
-committed to the file since the `Database` the opener holds was last checked, checking it every 1000
-milliseconds, and MUST NOT increase for a write made through that `Database`.
-
-47.23 An opener's `changed` MUST be checked only while something reads it or asks its probes.
-
-47.24 Checking an opener's `changed` MUST NOT open its `Database`.
-
-47.25 A `table` called, and its `readable` and `writable` reached, MUST throw where the database
+47.22 A `table` called, and its `readable` and `writable` reached, MUST throw where the database
 holds no table of that name.
 
-47.26 `table` MUST record each insert, update and delete made to the table, by any statement and any
+47.23 `table` MUST record each insert, update and delete made to the table, by any statement and any
 connection, in the transaction that made it, naming every column the table held when `table` first
 reached it through that `Database`.
 
-47.27 A `table`'s `readable` MUST hand on, in order, every change committed after it was first
+47.24 A `table`'s `readable` MUST hand on, in order, every change committed after it was first
 reached, each as the row after and the row before, and reached after the stream it answered was
 cancelled or errored MUST answer a new one.
 
-47.28 A write rolled back MUST hand on no change.
+47.25 A write rolled back MUST hand on no change.
 
-47.29 A change to a table `table` was called for MUST refresh every value whose last run called a
-`table` of it, as `refresh` over those values does, and MUST refresh no value for its `tags`.
+47.26 A change to a table MUST refresh the `GET` of every `rpc` over a `table` of it whose `GET` has
+run, as `refresh` over that `rpc` does, and MUST refresh no value for its `tags`.
 
-47.30 Rows written to a `table`'s `writable` MUST be upserted by its key — `key` where given, else
-the primary key 47.40 reads, else `id` where the table declares none — and the rows written in one
+47.27 Rows written to a `table`'s `writable` MUST be upserted by its key — `key` where given, else
+the primary key 47.37 reads, else `id` where the table declares none — and the rows written in one
 turn MUST be committed in one transaction.
 
-47.31 `table` MUST keep no more than the last 10000 changes of a table its watch has passed, save
+47.28 `table` MUST keep no more than the last 10000 changes of a table its watch has passed, save
 every change a `readable` of that table open in the same process has still to read.
 
-47.32 An opener's `sql`, called as a tag, MUST bind every value interpolated as a parameter and
+47.29 An opener's `sql`, called as a tag, MUST bind every value interpolated as a parameter and
 never as text, MUST prepare one statement per call site per `Database` and per shape of each list
-47.37 binds, MUST answer, at once, the rows the statement returns, and MUST refresh nothing by
+47.34 binds, MUST answer, at once, the rows the statement returns, and MUST refresh nothing by
 what the statement reads or writes.
 
-47.33 A `table`'s `set` MUST upsert each row it is given by `key`, its `patch` MUST write the columns
+47.30 A `table`'s `set` MUST upsert each row it is given by `key`, its `patch` MUST write the columns
 each row names onto the row with that row's `key` and leave the rest — a column whose value is
 `undefined` named by neither — and its `delete` MUST delete the
 rows a `match` names and answer how many; each MUST write in one transaction, and MUST throw for a row
-carrying no value for a column of its key per 47.30, or a `delete` whose `match` names no column.
+carrying no value for a column of its key per 47.27, or a `delete` whose `match` names no column.
 
-47.34 A write through a `table`'s `set`, `patch` or `delete` MUST refresh what 47.29 names at once,
-save as 47.44 states, and 47.29's watch MUST NOT refresh it again for that write.
+47.31 A write through a `table`'s `set`, `patch` or `delete` MUST refresh what 47.26 names at once,
+save as 47.41 states, and 47.26's watch MUST NOT refresh it again for that write.
 
-47.35 A `table` called MUST answer every row of the table, or with `match` the rows whose every
-column `match` names the value given matches per 47.36, and MUST throw for a column the
+47.32 A `table` called MUST answer every row of the table, or with `match` the rows whose every
+column `match` names the value given matches per 47.33, and MUST throw for a column the
 table does not hold.
 
-47.36 A `match` value MUST be JSON, and MUST match a column: a value by equality; `null` by IS NULL;
+47.33 A `match` value MUST be JSON, and MUST match a column: a value by equality; `null` by IS NULL;
 an array by being one of its values, `null` among them matching a NULL and an empty array matching
 no row; and an object by meeting every one of `gt`, `gte`, `lt`, `lte`, `ne` and `like` it names, `like` as
 SQL's `LIKE` does, `ne`
@@ -5386,80 +5378,79 @@ refusing only the value it names — `null` included, and no NULL it does not �
 none matching every row. A `match` MUST throw for any other key in an object, for `null` given to a
 comparison other than `ne`, and for an array or an object nested where a value goes.
 
-47.37 An array interpolated into `sql`, and a list a `table`'s `match` names, MUST be bound as a
+47.34 An array interpolated into `sql`, and a list a `table`'s `match` names, MUST be bound as a
 parenthesized list of its values whatever its length, written `IN ${ids}` with no parentheses of the
 author's own; an empty array MUST be a list of no row, so `IN` matches nothing and `NOT IN`
 everything; an array nested in one MUST throw; and lists of up to 1024 values whose lengths round up
 to one power of two, and lists longer than 1024, MUST each share one statement per call site per
 `Database`.
 
-47.38 A database refusing 47.26's change log, a read-only one among them, MUST still be read by a
+47.35 A database refusing 47.23's change log, a read-only one among them, MUST still be read by a
 `table` call and by `sql`, its stopped watch said once per database, and the writes made through its
-`table` MUST then be all that refresh what 47.29 names.
+`table` MUST then be all that refresh what 47.26 names.
 
-47.39 `table` MUST NOT open its database as it declares the table, and MUST open it no sooner than
-the table it hands back is called, peeked, written through, or its `readable` or `writable` reached.
+47.36 `table` MUST NOT open its database as it declares the table, and MUST open it no sooner than
+the table it hands back is called, written through, or its `readable` or `writable` reached.
 
-47.40 A `table` MUST read the table's columns, the type each declares and its primary key from the
+47.37 A `table` MUST read the table's columns, the type each declares and its primary key from the
 database, once per `Database` it reaches the table through.
 
-47.41 A value read by a `table` call, by a `table`'s `readable`, or by `sql` straight from a column,
+47.38 A value read by a `table` call, by a `table`'s `readable`, or by `sql` straight from a column,
 MUST be `true` or `false` where the column is declared `BOOLEAN` or `BOOL`, and its text parsed as
 JSON where the column is declared `JSON` and the value is text; NULL MUST be read as `null`.
 
-47.42 A value written by a `table`'s `set`, `patch` or `writable`, or matched by a `table` call or
+47.39 A value written by a `table`'s `set`, `patch` or `writable`, or matched by a `table` call or
 its `delete`, MUST be bound as its JSON text where its column is declared `JSON` and the value is
 not `null`.
 
-47.43 A `table` given `logged` MUST record in each change only its key's columns per 47.30 and the
+47.40 A `table` given `logged` MUST record in each change only its key's columns per 47.27 and the
 columns `logged` names, with those every other `table` of that name in the process names; once a
-`table` of that name is given no `logged`, every column MUST be recorded per 47.26.
+`table` of that name is given no `logged`, every column MUST be recorded per 47.23.
 
-47.44 A write through a `table`'s `set`, `patch` or `delete` made inside an open transaction MUST
-refresh nothing at once, and its commit MUST refresh what 47.29 names on the watch's next look.
+47.41 A write through a `table`'s `set`, `patch` or `delete` made inside an open transaction MUST
+refresh nothing at once, and its commit MUST refresh what 47.26 names on the watch's next look.
 
-47.45 A `table`'s `readable` MUST error, naming this clause, where another process removed a change
+47.42 A `table`'s `readable` MUST error, naming this clause, where another process removed a change
 it had still to read, and MUST NOT count as still to read a change removed before it was reached.
 
-47.46 The migrations `database` runs per 47.6 MUST run with foreign keys unenforced, and MUST throw
+47.43 The migrations `database` runs per 47.6 MUST run with foreign keys unenforced, and MUST throw
 per 47.7 where a row references a row that is not there once the last of them has run.
 
-47.47 `database` MUST run `PRAGMA optimize`, its analysis limited, once 47.6's migrations have run,
+47.44 `database` MUST run `PRAGMA optimize`, its analysis limited, once 47.6's migrations have run,
 and as an opener's `close` closes its `Database`, save where it opens `readonly`.
 
-47.48 The type `database` answers MUST carry, for each migration the checker reads as a string
+47.45 The type `database` answers MUST carry, for each migration the checker reads as a string
 literal, the tables its `CREATE TABLE`, `ALTER TABLE` and `DROP TABLE` statements leave in order, its
 `--` comments read as none,
 and a `table` of that opener named by none of them MUST be a type error where its row is not
 given.
 
-47.49 A column 47.48 types MUST be typed by its declared type — `boolean` for `BOOLEAN` or `BOOL`,
+47.46 A column 47.45 types MUST be typed by its declared type — `boolean` for `BOOLEAN` or `BOOL`,
 `unknown` for `JSON`, and otherwise by the affinity SQLite gives the declared type — joined with
 `null` save where declared `NOT NULL` or `INTEGER PRIMARY KEY`; a row written MUST be allowed to
 leave out a column that may be NULL or has a default, save one of its primary key; a row inserted MUST
 be allowed to leave out its `INTEGER PRIMARY KEY` as well; and a row its caller gives `table` MUST be
 written leaving out any column whose type admits `null`.
 
-47.50 `Tables` of an opener's type MUST be the row each table 47.48 types reads, by table name.
+47.47 `Tables` of an opener's type MUST be the row each table 47.45 types reads, by table name.
 
-47.51 A `table`'s `peek` MUST answer what a call with the same `match` answers, and MUST NOT be
-followed by the run it is made in per 47.29.
+47.48 A `table` called MUST NOT make the run it is called in refresh on a change to the table.
 
-47.52 A `table`'s `insert` MUST insert each row it is given in one transaction, MUST NOT require its
-key, and MUST answer the rows as stored, their key as SQLite assigned it, decoded per 47.41.
+47.49 A `table`'s `insert` MUST insert each row it is given in one transaction, MUST NOT require its
+key, and MUST answer the rows as stored, their key as SQLite assigned it, decoded per 47.38.
 
-47.53 A plain object interpolated into `sql` MUST be bound as its JSON text.
+47.50 A plain object interpolated into `sql` MUST be bound as its JSON text.
 
-47.54 A `table`'s `as` MUST answer that same table, and its type MUST type each column its type
+47.51 A `table`'s `as` MUST answer that same table, and its type MUST type each column its type
 argument names as that argument types it, in the row read, written and inserted, refusing a type the
 column's own does not admit.
 
-47.55 A `table` whose change log and triggers 47.26 made inside a transaction that rolled back MUST
+47.52 A `table` whose change log and triggers 47.23 made inside a transaction that rolled back MUST
 make them again at its next reach.
 
-47.56 A `table` MUST NOT record per 47.26 an update leaving every column of the row as it was.
+47.53 A `table` MUST NOT record per 47.23 an update leaving every column of the row as it was.
 
-47.57 A `table`'s `readable` whose opener opens its database again MUST read on where the file holds
+47.54 A `table`'s `readable` whose opener opens its database again MUST read on where the file holds
 the change log it was reading, and MUST error, naming this clause, where it holds another.
 
 # 48. Problem reports

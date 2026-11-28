@@ -1,4 +1,4 @@
-// 47.48-47.50 — A DATABASE'S TABLES TYPED FROM ITS MIGRATIONS: the checker folds every `CREATE TABLE`,
+// 47.45-47.47 — A DATABASE'S TABLES TYPED FROM ITS MIGRATIONS: the checker folds every `CREATE TABLE`,
 // `ALTER TABLE` and `DROP TABLE` in order, and a `table` of the opener is typed by what they leave.
 // These are the checker's tests: `bun run typecheck` is what fails them, and the runtime half only
 // proves the rows read match the types claimed.
@@ -48,7 +48,7 @@ const CRM = database('migrated-tables', {
     ],
 })
 
-test('a table is typed by the migrations that declare it — 47.48, 47.49', () => {
+test('a table is typed by the migrations that declare it — 47.45, 47.46', () => {
     type Found = Tables<typeof CRM>
     same<
         Same<
@@ -86,7 +86,7 @@ test('a table is typed by the migrations that declare it — 47.48, 47.49', () =
     expect(inserted).toEqual({ id: 1, body: 'first' })
     // Options keep the table typed, and name only its columns.
     const logged = table(CRM, 'deals', { logged: ['stage'] })
-    same<Same<ReturnType<typeof logged.peek>[number]['stage'], string | null>>()
+    same<Same<ReturnType<typeof logged>[number]['stage'], string | null>>()
     const refusedLogged = () => {
         // @ts-expect-error logged names a column the table has
         table(CRM, 'deals', { logged: ['nope'] })
@@ -112,7 +112,7 @@ test('a table is typed by the migrations that declare it — 47.48, 47.49', () =
         narrowed.patch({ id: 1, stage: 'lost' })
     }
     void refusedNarrowing
-    // A plain object binds in sql as its JSON (47.53), typed as one.
+    // A plain object binds in sql as its JSON (47.50), typed as one.
     CRM.sql`UPDATE deals SET detail = ${{ calls: 5 }} WHERE id = ${fresh?.id ?? 0}`
     expect(narrowed({ id: fresh?.id ?? 0 })[0]?.detail).toEqual({ calls: 5 })
     // A row typed by its caller may leave out what may hold null.
@@ -136,7 +136,7 @@ test('a table is typed by the migrations that declare it — 47.48, 47.49', () =
     })
 })
 
-test('a string the checker sees only as a string types no table — 47.48', () => {
+test('a string the checker sees only as a string types no table — 47.45', () => {
     const migration: string = 'CREATE TABLE notes (id INTEGER PRIMARY KEY)'
     const untyped = database('migrated-untyped', { migrations: [migration] })
     same<Same<Tables<typeof untyped>, never>>()

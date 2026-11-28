@@ -1,12 +1,12 @@
-// 47.29, 47.32-47.38 — SQL AS A TAG, A TABLE CALLED AND WRITTEN BY KEY: every interpolation a bound
-// parameter, one statement per call site, a match as JSON — and what called a table refreshed by its
+// 47.26, 47.29-47.35 — SQL AS A TAG, A TABLE CALLED AND WRITTEN BY KEY: every interpolation a bound
+// parameter, one statement per call site, a match as JSON — and a table's `rpc` refreshed by its
 // changes, at once for a write through the table and on the watch's next look for any other, while
 // what reads it through `sql` is refreshed by its own tags alone.
 
 import { Database } from 'bun:sqlite'
 import { expect, test } from 'bun:test'
 
-import { database, type Table, table } from '#server'
+import { database, rpc, type Table, table } from '#server'
 import { flushSync, memo, reactive, watch } from '#shared'
 
 type Deal = { id: string; stage: string; amount: number }
@@ -34,41 +34,43 @@ async function until(done: () => boolean): Promise<void> {
 }
 
 /**
- * A global memo totalling the won deals, followed by a watch: read by calling the table, or through
- * `sql` and tagged with the table's name.
+ * The won deals totalled, followed by a watch: read through the `GET` of an `rpc` over the table, or
+ * by a global memo reading `sql` and tagged with the table's name. `runs` counts the values handed on.
  */
 function wonTotal(db: ReturnType<typeof crm>, deals?: Table<Deal>) {
     let runs = 0
+    const served = deals === undefined ? undefined : rpc(deals)
     const total = memo(
-        () => {
-            runs += 1
-            if (deals === undefined)
-                return (
-                    db.sql<{
-                        total: number
-                    }>`SELECT SUM(amount) AS total FROM deals WHERE stage = 'won'`[0]
-                        ?.total ?? 0
-                )
-            let sum = 0
-            for (const deal of deals({ stage: 'won' })) sum += deal.amount
-            return sum
-        },
+        () =>
+            db.sql<{
+                total: number
+            }>`SELECT SUM(amount) AS total FROM deals WHERE stage = 'won'`[0]
+                ?.total ?? 0,
         { global: true, tags: ['deals'] },
     )
-    const read = reactive(() => total())
+    const read = reactive(() =>
+        served === undefined ? total() : served({ stage: 'won' }),
+    )
     let seen: unknown
     const stop = watch(() => {
         try {
-            seen = read.get()
+            const value = read.get()
+            runs += 1
+            if (!Array.isArray(value)) seen = value
+            else {
+                let sum = 0
+                for (const deal of value as Deal[]) sum += deal.amount
+                seen = sum
+            }
         } catch {}
     })
     flushSync()
     return { runs: () => runs, seen: () => seen, stop }
 }
 
-// 47.32 — A VALUE IS NEVER TEXT. THE REVERT: splice each value into the text in `sqlOver`; the quote
+// 47.29 — A VALUE IS NEVER TEXT. THE REVERT: splice each value into the text in `sqlOver`; the quote
 // ends the literal and the statement fails, `refused` where the value itself is due.
-test('sql binds every interpolated value as a parameter — 47.32', () => {
+test('sql binds every interpolated value as a parameter — 47.29', () => {
     const db = crm()
     const sneaky = "x' OR '1'='1"
     let answered: string
@@ -85,9 +87,9 @@ test('sql binds every interpolated value as a parameter — 47.32', () => {
     expect(echoed[0]?.v).toBe(sneaky)
 })
 
-// 47.32 — ONE STATEMENT PER CALL SITE. THE REVERT: drop the `PREPARED` lookup in `sqlOver`; the loop
+// 47.29 — ONE STATEMENT PER CALL SITE. THE REVERT: drop the `PREPARED` lookup in `sqlOver`; the loop
 // prepares 3 where 1 is due.
-test('sql prepares one statement per call site — 47.32', () => {
+test('sql prepares one statement per call site — 47.29', () => {
     const db = crm()
     const connection = db()
     const prepare = connection.prepare.bind(connection)
@@ -108,10 +110,10 @@ test('sql prepares one statement per call site — 47.32', () => {
     )
 })
 
-// 47.29, 47.34 — A WRITE THROUGH THE TABLE REFRESHES WHAT CALLED IT AT ONCE, the watch's next look
-// not hearing it again. THE REVERT: drop the `heard` call in the table's `wrote`; the total is still
+// 47.26, 47.31 — A WRITE THROUGH THE TABLE REFRESHES ITS `rpc` AT ONCE, the watch's next look not
+// hearing it again. THE REVERT: drop the `heard` call in the table's `wrote`; the total is still
 // `100` on the turn after the write, where `105` is due, and reaches it only on the watch's next look.
-test("a table's write refreshes what called the table at once — 47.29, 47.34", async () => {
+test("a table's write refreshes its rpc at once — 47.26, 47.31", async () => {
     const db = crm()
     const deals = table<Deal>(db, 'deals')
     const won = wonTotal(db, deals)
@@ -128,10 +130,10 @@ test("a table's write refreshes what called the table at once — 47.29, 47.34",
     expect(`${atOnce} runs: ${won.runs() - before}`).toBe('105 runs: 1')
 })
 
-// 47.29 — A COMMIT ANOTHER CONNECTION MAKES REFRESHES WHAT CALLED THE TABLE on the watch's next look:
-// the change log is written by the table's triggers, whoever wrote. THE REVERT: drop `refreshCells`
+// 47.26 — A COMMIT ANOTHER CONNECTION MAKES REFRESHES THE TABLE'S `rpc` on the watch's next look: the
+// change log is written by the table's triggers, whoever wrote. THE REVERT: drop the followers' call
 // from `changed`; the total stands at `100`.
-test('a commit by another connection refreshes what called the table — 47.29', async () => {
+test("a commit by another connection refreshes the table's rpc — 47.26", async () => {
     const db = crm()
     const won = wonTotal(db, table<Deal>(db, 'deals'))
     await until(() => won.seen() === 100)
@@ -143,10 +145,10 @@ test('a commit by another connection refreshes what called the table — 47.29',
     expect(won.seen()).toBe(140)
 })
 
-// 47.29 — A TABLE'S NAME IS NO TAG: a value reading it through `sql` and tagged with its name is
+// 47.26 — A TABLE'S NAME IS NO TAG: a value reading it through `sql` and tagged with its name is
 // refreshed by neither a write through the table nor another connection's commit. THE REVERT: put
 // `refresh({ tags: [watch.name] })` back in `changed`; the total moves to `145` in `2` runs.
-test("a change to a table refreshes no value for carrying the table's name as a tag — 47.29", async () => {
+test("a change to a table refreshes no value for carrying the table's name as a tag — 47.26", async () => {
     const db = crm()
     const deals = table<Deal>(db, 'deals')
     const won = wonTotal(db)
@@ -163,11 +165,11 @@ test("a change to a table refreshes no value for carrying the table's name as a 
     expect(`${won.seen()} in ${won.runs() - before} runs`).toBe('100 in 0 runs')
 })
 
-// 47.33 — A TABLE IS WRITTEN BY KEY: `set` upserts, `patch` writes only the columns a row names, and
+// 47.30 — A TABLE IS WRITTEN BY KEY: `set` upserts, `patch` writes only the columns a row names, and
 // `delete` removes what a match names, answering how many. A row without its key, and a delete naming
 // no column, are refused. THE REVERT: write `patch` through `upsert`; the patched row's `amount` is
 // refused NOT NULL where `d2:won:40` is due.
-test('a table is set, patched and deleted by key — 47.33', () => {
+test('a table is set, patched and deleted by key — 47.30', () => {
     const db = crm()
     const deals = table<Deal>(db, 'deals')
     deals.set([
@@ -192,7 +194,7 @@ test('a table is set, patched and deleted by key — 47.33', () => {
             write()
         } catch (thrown) {
             refusals.push(
-                (thrown as Error).message.includes('RULEBOOK 47.33')
+                (thrown as Error).message.includes('RULEBOOK 47.30')
                     ? 'refused'
                     : String(thrown),
             )
@@ -218,11 +220,11 @@ function pipeline() {
     })
 }
 
-// 47.36 — A MATCH IS JSON: a list is one of its values, an object comparisons met together, and both
+// 47.33 — A MATCH IS JSON: a list is one of its values, an object comparisons met together, and both
 // as JSON reads them about `null` — a list holding it matches a NULL, and `ne` refuses no NULL it was
 // not given. THE REVERT: have `conditionOf` treat every value as `= ?`; the first list throws
 // `expected 1 values, received 2` where `d1,d2` is due.
-test('a table called matches a list, comparisons and null as JSON reads them — 47.36', () => {
+test('a table called matches a list, comparisons and null as JSON reads them — 47.33', () => {
     const deals = table<{ id: string; stage: string | null; amount: number }>(
         pipeline(),
         'deals',
@@ -257,7 +259,7 @@ test('a table called matches a list, comparisons and null as JSON reads them —
             deals(match as never)
         } catch (thrown) {
             refusals.push(
-                (thrown as Error).message.includes('RULEBOOK 47.36')
+                (thrown as Error).message.includes('RULEBOOK 47.33')
                     ? 'refused'
                     : 'other',
             )
@@ -265,11 +267,11 @@ test('a table called matches a list, comparisons and null as JSON reads them —
     expect(refusals).toEqual(['refused', 'refused', 'refused'])
 })
 
-// 47.37 — A LIST INTERPOLATED IS A LIST BOUND: two lists of two share a statement, and a list of three
+// 47.34 — A LIST INTERPOLATED IS A LIST BOUND: two lists of two share a statement, and a list of three
 // rounds to another. An empty list is no row, so `IN` matches nothing and `NOT IN` everything. THE
 // REVERT: drop the slots from the cache key in `sqlOver`; the list of three meets the two-slot
 // statement and throws `expected 2 values, received 4` where `d1,d2,d3` is due.
-test('sql binds a list interpolated as one, a statement per shape — 47.37', () => {
+test('sql binds a list interpolated as one, a statement per shape — 47.34', () => {
     const db = pipeline()
     const connection = db()
     const prepare = connection.prepare.bind(connection)
@@ -294,12 +296,12 @@ test('sql binds a list interpolated as one, a statement per shape — 47.37', ()
     )
 })
 
-// 47.38 — A DATABASE THAT REFUSES THE CHANGE LOG IS STILL READ: opened read-only, a table called and
+// 47.35 — A DATABASE THAT REFUSES THE CHANGE LOG IS STILL READ: opened read-only, a table called and
 // a statement through `sql` both answer, and its stopped watch is said once for the database rather
 // than once per table. THE REVERT: read a called table on the connection that makes the change log
 // (`selects<Row>(connection, name)`); the call throws `attempt to write a readonly database`. AND
 // drop `WARNED`; the two tables say it `said: 2`.
-test('a read-only database is read, its stopped watch said once — 47.38', async () => {
+test('a read-only database is read, its stopped watch said once — 47.35', async () => {
     opened += 1
     const name = `sql-${opened}`
     const migrations = [
@@ -312,7 +314,7 @@ test('a read-only database is read, its stopped watch said once — 47.38', asyn
     const warn = console.warn
     let said = 0
     console.warn = (...args: unknown[]) => {
-        if (String(args[0]).includes('RULEBOOK 47.38')) said += 1
+        if (String(args[0]).includes('RULEBOOK 47.35')) said += 1
     }
     try {
         const deals = table<{ id: string; stage: string }>(readOnly, 'deals')

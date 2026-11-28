@@ -7,13 +7,13 @@ import { targets } from './lib/targets.server.ts'
 export const getTarget = rpc(
     memo(
         async () => {
-            // 47.29 — called, the table reads this again after any committed change, whoever wrote it.
             const newest = targets().at(-1)
             // Slowed, so the wait is on screen.
             await Bun.sleep(300)
             return newest?.target ?? null
         },
-        { global: true },
+        // 16.89 — read again when `setTarget` refreshes the tag.
+        { global: true, tags: ['targets'] },
     ),
     { description: "Reads the team's target for the quarter." },
 )

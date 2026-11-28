@@ -3755,11 +3755,6 @@ export function refreshCallerHeld(): void {
     refreshAll(held, null)
 }
 
-/** 13.7's refresh over `cells` alone, as a sweep over them: the runs 47.29's table call reached. */
-export function refreshCells(cells: Cell[]): void {
-    refreshAll(cells, null)
-}
-
 /**
  * 13.7 — EVERY MARK BEFORE ANY RELOAD. A reload runs its body as it starts, and a memo that body calls
  * reads nothing to be tracked by (11.6): left unmarked until later in the same sweep, it would answer
@@ -3805,7 +3800,7 @@ function markIn(cell: Cell, tags: string[] | null): void {
 
 /**
  * Whether anything reads `value`, or asks its probes — what a source that costs only while it is
- * followed (47.22's poll) asks before it does the work.
+ * followed asks before it does the work.
  */
 export function isSubscribed(value: unknown): boolean {
     return subscribed(cellOf(value))

@@ -82,20 +82,17 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section title="Call the table, and a value follows it whoever wrote the row">
+    <Section title="Serve the table, and a browser follows it whoever wrote the row">
         <p>A tag is refreshed by the CRM's own write, and misses a row the <code>sqlite3</code>
-            shell or a second server commits. Call the table with
-            <a href={url('/data/table')}><code>table</code></a> instead, and a value whose run called
-            it loads again after any committed change. The rows are the same for everyone, so the
-            value is <code>global</code>.</p>
+            shell or a second server commits. Serve the table itself with an <code>rpc</code>
+            over <a href={url('/data/table')}><code>table</code></a> instead, and every browser
+            reading it is sent the rows after any committed change. Calling the table is a plain
+            read, so a value built from its rows keeps a tag.</p>
         <Code language="ts" caption="server" code={`
-            import { memo } from '@abide/abide'
             import { rpc } from '@abide/abide/server'
             import { targets } from './lib/targets.server.ts'
 
-            export const getTarget = rpc(
-                memo(async () => targets().at(-1)?.target ?? null, { global: true }),
-            )
+            export const listTargets = rpc(targets, { columns: ['id', 'target'] })
         `} />
     </Section>
 

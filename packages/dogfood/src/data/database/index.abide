@@ -26,31 +26,31 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/sql.test.ts',
             from: [
-                "test('sql binds every interpolated value as a parameter — 47.32'",
+                "test('sql binds every interpolated value as a parameter — 47.29'",
             ],
         },
         {
             path: 'packages/abide/tests/sql.test.ts',
             from: [
-                'test("a change to a table refreshes no value for carrying the table\'s name as a tag — 47.29"',
+                'test("a change to a table refreshes no value for carrying the table\'s name as a tag — 47.26"',
             ],
         },
         {
             path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                "test('a list of any length is bound in one statement per shape — 47.37'",
+                "test('a list of any length is bound in one statement per shape — 47.34'",
             ],
         },
         {
             path: 'packages/abide/tests/migratedTables.test.ts',
             from: [
-                "test('a table is typed by the migrations that declare it — 47.48, 47.49'",
+                "test('a table is typed by the migrations that declare it — 47.45, 47.46'",
             ],
         },
         {
             path: 'packages/abide/tests/database.test.ts',
             from: [
-                "test('a migration rebuilds a referenced table without cascading, and a dangling reference is refused — 47.46, 47.7'",
+                "test('a migration rebuilds a referenced table without cascading, and a dangling reference is refused — 47.43, 47.7'",
             ],
         },
     ]}
@@ -178,18 +178,17 @@ import Section from '#src/lib/Section.abide'
     </Section>
 
     <Section level={3} title="Refresh pages when a script writes the database file">
-        <p><code>changed</code> counts commits from other connections, such as the
-            <code>sqlite3</code> shell or a second server, and never the opener's own. On the
-            server a bare <code>refresh</code> reloads every <code>global</code> value and every
-            value a browser follows.</p>
+        <p>A <code>table</code>'s change log hears every commit, from the <code>sqlite3</code>
+            shell or a second server too. An <code>rpc</code> over the table refreshes by itself.
+            Anything else that reads the table is refreshed from its <code>readable</code>, here by
+            the tag <code>getTarget</code> carries.</p>
         <Code language="ts" caption="server" code={`
-            import { refresh, watch } from '@abide/abide'
-            import { crmDatabase } from './lib/crmDatabase.server.ts'
+            import { refresh } from '@abide/abide'
+            import { targets } from './lib/targets.server.ts'
 
-            watch(() => {
-                crmDatabase.changed()
-                refresh()
-            })
+            targets.readable.pipeTo(
+                new WritableStream({ write: () => refresh({ tags: ['targets'] }) }),
+            )
         `} />
     </Section>
 </Doc>

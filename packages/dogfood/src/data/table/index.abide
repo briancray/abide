@@ -15,59 +15,59 @@ import Section from '#src/lib/Section.abide'
         {
             path: 'packages/abide/tests/table.test.ts',
             from: [
-                "test('a table reads every committed change in order, and none rolled back — 47.26, 47.27, 47.28'",
+                "test('a table reads every committed change in order, and none rolled back — 47.23, 47.24, 47.25'",
             ],
         },
         {
             path: 'packages/abide/tests/sql.test.ts',
             from: [
-                'test("a table\'s write refreshes what called the table at once — 47.29, 47.34"',
+                'test("a table\'s write refreshes its rpc at once — 47.26, 47.31"',
             ],
         },
         {
             path: 'packages/abide/tests/sql.test.ts',
             from: [
-                "test('a table called matches a list, comparisons and null as JSON reads them — 47.36'",
+                "test('a table called matches a list, comparisons and null as JSON reads them — 47.33'",
             ],
         },
         {
             path: 'packages/abide/tests/sql.test.ts',
-            from: ["test('a table is set, patched and deleted by key — 47.33'"],
+            from: ["test('a table is set, patched and deleted by key — 47.30'"],
         },
         {
             path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                'test("a write upserts by the table\'s own primary key, one column or several — 47.30, 47.33, 47.40"',
+                'test("a write upserts by the table\'s own primary key, one column or several — 47.27, 47.30, 47.37"',
             ],
         },
         {
             path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                "test('a BOOLEAN and a JSON column are read and written as what they declare — 47.41, 47.42'",
+                "test('a BOOLEAN and a JSON column are read and written as what they declare — 47.38, 47.39'",
             ],
         },
         {
             path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                "test('a table given logged records its key and those columns alone — 47.43'",
+                "test('a table given logged records its key and those columns alone — 47.40'",
             ],
         },
         {
             path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                "test('a write inside a transaction refreshes once it commits, and not at all where it rolls back — 47.44'",
+                "test('a write inside a transaction refreshes once it commits, and not at all where it rolls back — 47.41'",
+            ],
+        },
+        {
+            path: 'packages/abide/tests/table.test.ts',
+            from: [
+                "test('a value that called the table is not refreshed by its changes — 47.48'",
             ],
         },
         {
             path: 'packages/abide/tests/describedTable.test.ts',
             from: [
-                "test('a peek reads the rows without the run that made it following them — 47.51'",
-            ],
-        },
-        {
-            path: 'packages/abide/tests/describedTable.test.ts',
-            from: [
-                "test('an insert answers its rows as stored, and an undefined column is not written — 47.52, 47.33'",
+                "test('an insert answers its rows as stored, and an undefined column is not written — 47.49, 47.30'",
             ],
         },
         {
@@ -79,16 +79,16 @@ import Section from '#src/lib/Section.abide'
     ]}
 >
     <Section level={3} title="Read the targets by calling the table">
-        <p>A table called answers its rows. A value whose run called it loads again after any
-            write to it — whichever code made it, and whatever connection. The rows are the same
-            for everyone, so the value is <code>global</code>, and every browser reading it is
-            sent them as they change.</p>
+        <p>A table called answers its rows, and that is all it does. A value that read them is
+            not loaded again when the table changes, so it carries a tag that the write refreshes,
+            as <code>getTarget</code> does.</p>
         <Code language="ts" caption="server" code={`
             import { memo } from '@abide/abide'
             import { targets } from '../pipeline/lib/targets.server.ts'
 
             export const target = memo(() => targets().at(-1)?.target, {
                 global: true,
+                tags: ['targets'],
             })
         `} />
     </Section>
@@ -153,20 +153,9 @@ import Section from '#src/lib/Section.abide'
         `} />
     </Section>
 
-    <Section level={3} title="Peek at the targets without the value following the table">
-        <p><code>peek</code> answers the same rows as a call, and the value that peeked is not
-            loaded again when the table changes.</p>
-        <Code language="ts" caption="server" code={`
-            import { memo } from '@abide/abide'
-            import { targets } from './targets.server.ts'
-
-            export const firstTarget = memo(() => targets.peek().at(0)?.target)
-        `} />
-    </Section>
-
     <Section level={3} title="Write inside a transaction, and refresh once it commits">
-        <p>A write made inside a transaction refreshes what called the table once the transaction
-            commits, and never where it rolls back.</p>
+        <p>A write made inside a transaction refreshes the table's <code>rpc</code> once the
+            transaction commits, and never where it rolls back.</p>
         <Code language="ts" caption="server" code={`
             import { crmDatabase } from './crmDatabase.server.ts'
             import { targets } from './targets.server.ts'
@@ -180,8 +169,8 @@ import Section from '#src/lib/Section.abide'
 
     <Section level={3} title="Write the targets by key">
         <p><code>set</code> upserts rows by <code>key</code>, <code>patch</code> writes only the
-            columns a row names, and <code>delete</code> removes the rows a match names. What
-            called the table reads it again at once.</p>
+            columns a row names, and <code>delete</code> removes the rows a match names. The
+            table's <code>rpc</code> reads it again at once.</p>
         <Code language="ts" caption="server" code={`
             import { targets } from '../pipeline/lib/targets.server.ts'
 
@@ -194,7 +183,9 @@ import Section from '#src/lib/Section.abide'
         <p>An <code>rpc</code> over a table answers its rows for a match by <code>GET</code>, and
             its <code>set</code>, <code>patch</code> and <code>delete</code> by <code>PUT</code>,
             <code>PATCH</code> and <code>DELETE</code> — the same calls on the server and in the
-            browser. <code>columns</code> keeps the rest of the row on the server.</p>
+            browser. Any commit to the table, from any connection, sends the new rows to every
+            browser reading the <code>GET</code>. <code>columns</code> keeps the rest of the row on
+            the server.</p>
         <Code language="ts" caption="server" code={`
             import { rpc } from '@abide/abide/server'
             import { targets } from './lib/targets.server.ts'

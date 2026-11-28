@@ -2,9 +2,6 @@ import { Database, type DatabaseOptions } from 'bun:sqlite'
 import { mkdirSync, readdirSync, rmSync } from 'node:fs' // bun exposes no directory creation or listing, nor synchronous removal, of its own
 import { dirname, resolve } from 'node:path' // bun exposes no path resolution of its own
 
-import { processWide, type Reactive } from '#shared/reactive/index.ts'
-import { isSubscribed } from '#shared/reactive/producer.ts'
-
 import { config, derived } from './config.ts'
 import { onStop } from './hooks.ts'
 import { isRunning } from './isRunning.ts'
@@ -21,9 +18,6 @@ const PATH = /[/.]/
 const IN_MEMORY = ':memory:'
 
 const BUSY_TIMEOUT = 5000
-
-/** 47.22 — how often `changed` asks the file whether another connection committed, while followed. */
-const CHANGED_EVERY = 1000
 
 /** 47.17 — what SQLite keeps beside a WAL file, removed with it. */
 const BESIDE = ['', '-wal', '-shm']
@@ -73,7 +67,7 @@ export function database<
     let scratchFor: string | undefined
     // 47.16, 47.17.
     const close = (closing?: { remove?: boolean | undefined }): void => {
-        // 47.47 — what this connection's queries taught the planner, kept for the next open.
+        // 47.44 — what this connection's queries taught the planner, kept for the next open.
         if (opened !== undefined && options?.readonly !== true)
             try {
                 opened.run('PRAGMA optimize')
@@ -126,66 +120,19 @@ export function database<
         }
         return opened
     }
-    // 47.22 — WHAT ANOTHER CONNECTION COMMITTED, counted. `PRAGMA data_version` moves on a connection
-    // when any other one commits to the file, and never for its own writes; asked of the connection
-    // the opener holds, and never opening one.
-    //
-    // 47.23 — ASKED ONLY WHILE SOMETHING FOLLOWS IT. A read runs the body, which arms the clock once
-    // the reader has subscribed, and ticks at once; a tick finding no one following stops it and marks
-    // the value, so the next read runs the body and arms it again.
-    let outside = 0
-    let seenOn: Database | undefined
-    let seenVersion = 0
-    let clock: ReturnType<typeof setInterval> | undefined
-    const tick = (): void => {
-        if (!isSubscribed(changed)) {
-            clearInterval(clock)
-            clock = undefined
-            changed.invalidate()
-            return
-        }
-        const held = opened
-        if (held === undefined) return
-        // `safeIntegers` reads it as a bigint.
-        const version = Number(
-            (
-                held.query('PRAGMA data_version').get() as {
-                    data_version: number | bigint
-                }
-            ).data_version,
-        )
-        const moved = seenOn === held && version !== seenVersion
-        seenOn = held
-        seenVersion = version
-        if (!moved) return
-        outside += 1
-        changed.refresh()
-    }
-    const follow = (): void => {
-        if (clock !== undefined) return
-        clock = setInterval(tick, CHANGED_EVERY)
-        clock.unref()
-        tick()
-    }
-    const changed: Reactive<number> = processWide(() => {
-        queueMicrotask(follow)
-        return outside
-    })
     return Object.assign(opener, {
         close,
-        changed,
         sql: sqlOver(opener),
     }) as Opener & TypedBy<TablesOf<Migrations>>
 }
 
-/** What `database` hands back: the opener, its `close`, its `changed` and its `sql`. */
+/** What `database` hands back: the opener, its `close` and its `sql`. */
 type Opener = (() => Database) & {
     close: (options?: { remove?: boolean | undefined }) => void
-    changed: Reactive<number>
     sql: Sql
 }
 
-/** 47.48 — an opener carries the tables its migrations leave, where the checker read any. */
+/** 47.45 — an opener carries the tables its migrations leave, where the checker read any. */
 type TypedBy<Found> = keyof Found extends never ? unknown : Typed<Found>
 
 function checked(file: unknown): string {
@@ -248,7 +195,7 @@ function open(
         // 47.7 — ONE TRANSACTION, so a throw leaves the file at the version it opened at.
         let running = applied
         migrationsBegin(db)
-        // 47.46 — FOREIGN KEYS ARE CHECKED ONCE, AT THE END. A migration rebuilding a table — made anew,
+        // 47.43 — FOREIGN KEYS ARE CHECKED ONCE, AT THE END. A migration rebuilding a table — made anew,
         // copied, the old one dropped and the new renamed — would otherwise cascade the drop into every
         // table referencing it. The pragma is a no-op inside a transaction, so it is set around it.
         db.run('PRAGMA foreign_keys = OFF')
@@ -266,7 +213,7 @@ function open(
                 const first = broken[0]
                 if (first !== undefined)
                     throw new Error(
-                        `${broken.length} row(s) reference rows that are not there, the first in ${first.table} referencing ${first.parent}. RULEBOOK 47.46.`,
+                        `${broken.length} row(s) reference rows that are not there, the first in ${first.table} referencing ${first.parent}. RULEBOOK 47.43.`,
                     )
                 db.run(`PRAGMA user_version = ${migrations.length}`)
             })()
@@ -286,7 +233,7 @@ function open(
 }
 
 /**
- * 47.47 — the query planner's statistics brought up to date after a migration changed the schema:
+ * 47.44 — the query planner's statistics brought up to date after a migration changed the schema:
  * analysed where missing or stale, bounded so a large table is sampled rather than read. A file
  * already current is not written as it opens (47.18), so its statistics wait for the `close`.
  */

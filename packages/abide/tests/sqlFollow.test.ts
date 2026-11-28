@@ -1,6 +1,5 @@
-// 47.29, 16.117, 18.3 — A TABLE IS FOLLOWED THROUGH WHAT CALLED IT: a write through its `rpc`, or a
-// commit another connection makes, reaches a browser following the table's own `rpc` and every
-// `global` `GET` whose run called the table.
+// 47.26, 16.117, 18.3 — A TABLE IS FOLLOWED THROUGH ITS OWN `rpc`: a write through it, or a commit
+// another connection makes, reaches a browser following the table's `GET`.
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 
@@ -22,11 +21,6 @@ const db = database(${JSON.stringify(FILE)}, {
 })
 const dealRows = table<{ id: string; stage: string }>(db, 'deals')
 export const deals = rpc(dealRows)
-
-export const won = rpc(
-    () => dealRows({ stage: 'won' }).map((row) => row.id).sort(),
-    { global: true },
-)
 
 // 47.4 — the file the server opened, a scratch one under test, which another connection opens too.
 export const where = rpc(() => db().filename)
@@ -64,28 +58,29 @@ function landed(held: unknown, frames: Record<string, unknown>[]) {
     return sent?.op === 'value' ? sent.value : patched(held, sent)
 }
 
-// 47.29, 16.117 — A WRITE THROUGH THE TABLE'S `rpc` REACHES A FOLLOWER OF A `GET` THAT CALLED IT, at
-// once. THE REVERT: drop `refreshCells` from `changed` in table.ts; the follower is sent no frame where
+// 47.26, 47.31, 16.117 — A WRITE THROUGH THE TABLE'S `rpc` REACHES A FOLLOWER OF ITS `GET`, at once.
+// THE REVERT: drop the followers' call from `changed` in table.ts; the follower is sent no frame where
 // `["d1"] -> ["d1","d2"]` is due.
-test("a write through a table's rpc reaches a follower of a GET that called the table — 47.29, 16.117", async () => {
-    const frames = await client(`const answered = await get('won')
+test("a write through a table's rpc reaches a follower of its GET — 47.26, 16.117", async () => {
+    const frames = await client(`const answered = await get('deals?stage=won')
 const version = Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, ''))
 frames.push({ op: 'answered', value: await answered.json() })
-send({ op: 'sub', id: 1, address: '/crm/won', version })
+send({ op: 'sub', id: 1, address: '/crm/deals', args: { stage: 'won' }, version })
 await settled()
 await fetch(base + '/crm/deals', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ given: [{ id: 'd2', stage: 'won' }] }) })
 await until((frames) => frames.some((frame) => frame.op === 'patch' || frame.op === 'value'))
 `)
-    const held = frames[0]?.value
+    const held = frames[0]?.value as { id: string }[]
+    const ids = (rows: { id: string }[]) => rows.map((row) => row.id).sort()
     expect(
-        `${JSON.stringify(held)} -> ${JSON.stringify(landed(held, frames))}`,
+        `${JSON.stringify(ids(held))} -> ${JSON.stringify(ids(landed(held, frames) as { id: string }[]))}`,
     ).toBe('["d1"] -> ["d1","d2"]')
 })
 
-// 47.26, 16.117 — ANOTHER CONNECTION'S COMMIT IS HEARD THROUGH THE TABLE'S TRIGGERS AND ITS WATCH, and
+// 47.23, 16.117 — ANOTHER CONNECTION'S COMMIT IS HEARD THROUGH THE TABLE'S TRIGGERS AND ITS WATCH, and
 // a follower of the table's own `rpc` for a match is sent its rows as they now stand. THE REVERT: give
 // a table's read no tag in `readOptions`; the follower is sent no frame where `d3` is due.
-test("a commit by another connection reaches a follower of a table's rpc — 47.26, 16.117", async () => {
+test("a commit by another connection reaches a follower of a table's rpc — 47.23, 16.117", async () => {
     const frames = await client(`const answered = await get('deals?stage=won')
 const version = Number(String(answered.headers.get('etag')).replace(/[^0-9]/g, ''))
 frames.push({ op: 'answered', value: await answered.json() })

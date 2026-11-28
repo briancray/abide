@@ -1,4 +1,4 @@
-// 47.40-47.42 — A COLUMN IS READ AS ITS DECLARED TYPE SAYS. SQLite keeps the type a `CREATE TABLE`
+// 47.37-47.39 — A COLUMN IS READ AS ITS DECLARED TYPE SAYS. SQLite keeps the type a `CREATE TABLE`
 // writes for a column verbatim, so `BOOLEAN` and `JSON` are the schema telling the reader what a value
 // in that column is; every other declared type is read as SQLite hands it over.
 
@@ -8,7 +8,7 @@ export type ColumnCodec = 'boolean' | 'json'
 /** A column of a row read, and what its values are. */
 export type CodedColumn = { column: string; codec: ColumnCodec }
 
-/** 47.40 — the codec a declared type names: `BOOLEAN` or `BOOL`, and `JSON`, in any case. */
+/** 47.37 — the codec a declared type names: `BOOLEAN` or `BOOL`, and `JSON`, in any case. */
 export function codecOf(
     declared: string | null | undefined,
 ): ColumnCodec | undefined {
@@ -20,7 +20,7 @@ export function codecOf(
 }
 
 /**
- * 47.41 — a value read from a coded column: a boolean from SQLite's integer, a JSON column's text
+ * 47.38 — a value read from a coded column: a boolean from SQLite's integer, a JSON column's text
  * parsed. A `JSON` column's affinity is NUMERIC, so a number written as JSON is stored as the number,
  * and a value that is not text is already what it says. NULL is `null` either way.
  */
@@ -32,7 +32,7 @@ export function decoded(codec: ColumnCodec, value: unknown): unknown {
 }
 
 /**
- * 47.42 — a value written to a coded column: JSON text for a `JSON` column, `null` and `undefined`
+ * 47.39 — a value written to a coded column: JSON text for a `JSON` column, `null` and `undefined`
  * left as they are. A boolean binds as SQLite's 1 and 0 on its own.
  */
 export function encoded(codec: ColumnCodec, value: unknown): unknown {
@@ -41,7 +41,7 @@ export function encoded(codec: ColumnCodec, value: unknown): unknown {
     return value
 }
 
-/** 47.41 — each row's coded columns decoded in place: its shape is unchanged, only values replaced. */
+/** 47.38 — each row's coded columns decoded in place: its shape is unchanged, only values replaced. */
 export function decodeRows<Row>(
     rows: Row[],
     coded: readonly CodedColumn[],

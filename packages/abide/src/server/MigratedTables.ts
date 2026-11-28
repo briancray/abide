@@ -1,4 +1,4 @@
-// 47.48-47.50 — A DATABASE'S TABLES, TYPED FROM ITS MIGRATIONS. The SQL a migration list writes is the
+// 47.45-47.47 — A DATABASE'S TABLES, TYPED FROM ITS MIGRATIONS. The SQL a migration list writes is the
 // one place a table's columns are declared, so the checker reads it the way SQLite does: every
 // `CREATE TABLE`, `ALTER TABLE` and `DROP TABLE` folded in order into the tables they leave, each
 // column typed by its declared type's affinity and its `NOT NULL`. Nothing is generated and nothing is
@@ -9,7 +9,7 @@
 // string the checker sees only as `string`, adds no table; a statement it does not parse is passed
 // over; and a `table` of a name the fold does not hold is typed by the caller, as it always was.
 
-/** 47.49 — a value's type, by the affinity SQLite gives its column's declared type. */
+/** 47.46 — a value's type, by the affinity SQLite gives its column's declared type. */
 type ValueOf<Declared extends string> = Declared extends 'BOOLEAN' | 'BOOL'
     ? boolean
     : Declared extends 'JSON'
@@ -93,7 +93,7 @@ type TrimmedStart<Text extends string> =
         : Text
 
 /**
- * A statement 47.48 folds: one that makes, alters or drops a table. Every other — an index, a
+ * A statement 47.45 folds: one that makes, alters or drops a table. Every other — an index, a
  * trigger and the statements of its body, an insert — is passed over before a word of it is read,
  * which is what keeps a schema of many triggers inside the checker's depth.
  */
@@ -106,7 +106,7 @@ type Folded<Statement extends string> =
         ? true
         : false
 
-/** The words of each statement 47.48 folds, split at `;` before any word is read. */
+/** The words of each statement 47.45 folds, split at `;` before any word is read. */
 type Statements<
     Text extends string,
     Out extends string[][] = [],
@@ -213,9 +213,9 @@ type Column = {
 }
 
 /**
- * 47.49 — one column definition, or `never` for a table constraint. NULL unless `NOT NULL`, or an
+ * 47.46 — one column definition, or `never` for a table constraint. NULL unless `NOT NULL`, or an
  * `INTEGER PRIMARY KEY`, which is the row's id; left out of a written row where it may be NULL or has
- * a default, save a primary key, which a write names its row by (47.33).
+ * a default, save a primary key, which a write names its row by (47.30).
  */
 type ColumnOf<Tokens extends string[]> = Tokens extends [
     infer Name extends string,
@@ -332,7 +332,7 @@ type DroppedName<Tokens extends string[]> = Tokens extends [
       ? Unquoted<Name>
       : never
 
-/** 47.48 — `Tables` as one statement leaves them; a statement it does not parse leaves them be. */
+/** 47.45 — `Tables` as one statement leaves them; a statement it does not parse leaves them be. */
 type Applied<Tables extends Schema, Tokens extends string[]> = Tokens extends [
     infer Verb extends string,
     ...infer Rest extends string[],
@@ -531,7 +531,7 @@ type InsertedOf<Columns extends Column[]> = {
     ]?: Found['value']
 }
 
-/** 47.48 — each table `Migrations` leave, by name: its row read, written and inserted. */
+/** 47.45 — each table `Migrations` leave, by name: its row read, written and inserted. */
 export type TablesOf<Migrations extends readonly unknown[]> =
     Migrated<{}, Migrations> extends infer Found extends Schema
         ? {
@@ -552,7 +552,7 @@ export type Typed<Tables> = { readonly [TYPED_TABLES]?: Tables | undefined }
 /** An opener whose migrations the checker read none of, or a function that is no opener. */
 export type Untyped = { readonly [TYPED_TABLES]?: undefined }
 
-/** 47.50 — the row of each table the database `Opener` opens, by name: `Tables<typeof db>['deals']`. */
+/** 47.47 — the row of each table the database `Opener` opens, by name: `Tables<typeof db>['deals']`. */
 export type Tables<Opener> =
     Opener extends Typed<infer Found>
         ? {

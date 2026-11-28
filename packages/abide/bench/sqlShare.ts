@@ -1,4 +1,4 @@
-// 47.32 — WHAT THE `sql` TAG COSTS OVER THE VANILLA ARM: a statement the app prepared once by hand and
+// 47.29 — WHAT THE `sql` TAG COSTS OVER THE VANILLA ARM: a statement the app prepared once by hand and
 // ran with `.all()`, against `opener.sql` at one call site, outside every run and inside a memo
 // entry's run. Each pair is one `batch()` (43.7, 43.11): interleaved, sized past the clock, the
 // first arm its own A/A control, and the ratio claimed only outside that floor.

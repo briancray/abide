@@ -1,16 +1,16 @@
-// 47.32 — SQL AS A TAG.
+// 47.29 — SQL AS A TAG.
 //
 // A statement is written once per call site: the strings of a tagged template are one array for as
 // long as the module lives, so the array is the key of the statement prepared for it, and every
 // value interpolated is a parameter bound to it — never text. An array interpolated is a list of
-// them (47.37), its slots rounded so a call site prepares one statement per power of two of each
+// them (47.34), its slots rounded so a call site prepares one statement per power of two of each
 // list's length, and a long list one value whatever its length (`boundList`).
 //
-// 47.41 — A ROW READ AS ITS COLUMNS ARE DECLARED: a column the statement reads straight from a table
+// 47.38 — A ROW READ AS ITS COLUMNS ARE DECLARED: a column the statement reads straight from a table
 // declared `BOOLEAN` or `JSON` is decoded, and a statement reading none such pays nothing for it.
 //
-// A QUERY AND NOTHING ELSE: a statement tracks nothing, so what reads one is refreshed by the tags it
-// declares, refreshed by whoever writes — only a table called is followed by its changes (47.29).
+// A QUERY AND NOTHING ELSE: a statement tracks nothing, as a table called tracks nothing (47.48), so
+// what reads one is refreshed by the tags it declares, refreshed by whoever writes.
 
 import type { Database, SQLQueryBindings, Statement } from 'bun:sqlite'
 
@@ -25,7 +25,7 @@ export type Sql = <Row = Record<string, unknown>>(
     ...values: SqlValue[]
 ) => Row[]
 
-/** 47.32, 47.37, 47.53 — what `sql` binds: a value, a list of them, or a plain object as its JSON. */
+/** 47.29, 47.34, 47.50 — what `sql` binds: a value, a list of them, or a plain object as its JSON. */
 type SqlValue =
     | SQLQueryBindings
     | readonly SQLQueryBindings[]
@@ -36,7 +36,7 @@ type SqlValue =
 type Prepared = { statement: Statement; coded: CodedColumn[] }
 
 /**
- * 47.32, 47.37 — what each call site's statement is on each `Database`, per the slots of the lists
+ * 47.29, 47.34 — what each call site's statement is on each `Database`, per the slots of the lists
  * handed it (`''` where it is handed none).
  */
 const PREPARED = new WeakMap<
@@ -44,7 +44,7 @@ const PREPARED = new WeakMap<
     WeakMap<Database, Map<string, Prepared>>
 >()
 
-/** 47.32 — the `sql` tag over the `Database` `acquire` hands back. */
+/** 47.29 — the `sql` tag over the `Database` `acquire` hands back. */
 export function sqlOver(acquire: () => Database): Sql {
     return <Row>(
         strings: TemplateStringsArray,
@@ -66,7 +66,7 @@ export function sqlOver(acquire: () => Database): Sql {
         for (let at = 0; at < values.length; at += 1) {
             const value = values[at]
             if (Array.isArray(value)) shape += `${at}:${slotsOf(value.length)},`
-            // 47.53 — a plain object is bound as its JSON text.
+            // 47.50 — a plain object is bound as its JSON text.
             else if (isPlainData(value)) shape += `${at}:json,`
         }
         let prepared = perShape.get(shape)
@@ -84,7 +84,7 @@ export function sqlOver(acquire: () => Database): Sql {
     }
 }
 
-/** 47.41 — the columns a statement reads straight from a column declared `BOOLEAN` or `JSON`. */
+/** 47.38 — the columns a statement reads straight from a column declared `BOOLEAN` or `JSON`. */
 function codedOf(statement: Statement): CodedColumn[] {
     const coded: CodedColumn[] = []
     const names = statement.columnNames
@@ -97,7 +97,7 @@ function codedOf(statement: Statement): CodedColumn[] {
     return coded
 }
 
-/** 47.37 — the statement's text: a `?` per value, and a list's slots per array. */
+/** 47.34 — the statement's text: a `?` per value, and a list's slots per array. */
 function textOf(
     strings: TemplateStringsArray,
     values: readonly SqlValue[],
@@ -111,7 +111,7 @@ function textOf(
     return text
 }
 
-/** 47.37, 47.53 — the values bound: each list's in its place, a plain object as its JSON. */
+/** 47.34, 47.50 — the values bound: each list's in its place, a plain object as its JSON. */
 function flattened(values: readonly SqlValue[]): SQLQueryBindings[] {
     const bound: SQLQueryBindings[] = []
     for (const value of values) {
@@ -124,5 +124,5 @@ function flattened(values: readonly SqlValue[]): SQLQueryBindings[] {
 }
 
 function refused(reason: string): never {
-    throw new Error(`abide: sql was handed ${reason}. RULEBOOK 47.37.`)
+    throw new Error(`abide: sql was handed ${reason}. RULEBOOK 47.34.`)
 }

@@ -906,8 +906,15 @@ const ONE_VERB: readonly Method[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 /** 16.117 — a kind of addressable value whose writes are members of its face. */
 type SourceKind = keyof typeof SOURCE_MEMBERS
 
-/** What a source answers its kind by, and a table's name (`SOURCE_KIND`). */
-type SourceBrand = { kind: SourceKind; name?: string | undefined }
+/**
+ * What a source answers its kind by, and a table's name and the way its changes are followed
+ * (`SOURCE_KIND`).
+ */
+type SourceBrand = {
+    kind: SourceKind
+    name?: string | undefined
+    follow?: ((heard: () => void) => void) | undefined
+}
 
 /**
  * A value, a function or a source given an address: one name over the verbs the value answers by
@@ -951,7 +958,8 @@ export const rpc: Declare<true> = ((
     // read, which refuses it (16.92).
     const { refreshes: _writes, ...read } = rest
     const main = declare('GET')(
-        readOf(kind, value, brand, columns) as never,
+        // 47.26 — a table's change refreshes this `GET`, which `main` is by the time one is heard.
+        readOf(kind, value, brand, columns, () => main.refresh()) as never,
         readOptions(
             kind,
             verbs.length === 1 ? rest : read,
@@ -960,6 +968,7 @@ export const rpc: Declare<true> = ((
     ) as unknown as Record<string, unknown> & {
         methods: readonly Method[]
         [FACES]: Partial<Record<Method, unknown>>
+        refresh(): void
         (args?: unknown): unknown
     }
     main.methods = verbs
@@ -1092,12 +1101,19 @@ function readOf(
     value: unknown,
     brand: SourceBrand | undefined,
     columns: readonly string[] | undefined,
+    refresh: () => void,
 ): unknown {
     if (kind === 'memo') return value
     if (kind === 'job' || kind === 'pipe')
         return (value as { status: unknown }).status
     if (kind === 'table') {
-        const rows = value as (match?: unknown) => Record<string, unknown>[]
+        const table = value as (match?: unknown) => Record<string, unknown>[]
+        // 47.26 — THE TABLE TELLS ITS OWN `rpc`, as a memo's write reaches the `GET` serving it: each
+        // run follows again, so a watch the app's stop ended is begun again by the next read.
+        const rows = (match?: unknown): Record<string, unknown>[] => {
+            brand?.follow?.(refresh)
+            return table(match)
+        }
         return columns === undefined
             ? (match?: Record<string, unknown>) => rows(match)
             : (match?: Record<string, unknown>) => {
