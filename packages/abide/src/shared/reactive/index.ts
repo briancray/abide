@@ -19,7 +19,8 @@ import { RPC_SERVER } from '../RPC_SERVER.ts'
 import type { Schema } from '../Schema.ts'
 import type { CALL_ENTRY } from './CALL_ENTRY.ts'
 import {
-    KEYED_OF,
+    isMemo,
+    keyedOf,
     type Memo,
     type MemoOptions,
     memoOver,
@@ -27,7 +28,6 @@ import {
 import { DECLARED_TAGS } from './DECLARED_TAGS.ts'
 import { isReactive } from './isReactive.ts'
 import { createKeyed, isKeyed, type Keyed } from './Keyed.ts'
-import { MEMO_BRAND } from './MEMO_BRAND.ts'
 import { NO_INITIAL } from './NO_INITIAL.ts'
 import {
     busyOver,
@@ -532,7 +532,7 @@ export function handlerValue(body: unknown, options: unknown): unknown {
     if (isReactive(body)) throw new TypeError(SERVES_NO_REACTIVE)
     if (isKeyed(body)) return body
     // 16.6 — a memo handed in is served as the keyed value it is a face over.
-    const memoed = (body as { [KEYED_OF]?: unknown } | null)?.[KEYED_OF]
+    const memoed = keyedOf(body)
     if (memoed !== undefined) return memoed
     if (typeof body !== 'function') return reactive(body, options as undefined)
     // 16.109 — and on the run that answers one: the entry would adopt it (11.12), which is the
@@ -570,7 +570,7 @@ function isBodyGiven(first: unknown): boolean {
         typeof first === 'function' &&
         !isReactive(first) &&
         !isKeyed(first) &&
-        (first as { [MEMO_BRAND]?: true | undefined })[MEMO_BRAND] !== true
+        !isMemo(first)
     )
 }
 

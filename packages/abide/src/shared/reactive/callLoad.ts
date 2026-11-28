@@ -102,11 +102,7 @@ export function callLoad(
         // was handed. One this reach's own run produced — a fresh value's first run, a `Keyed`
         // entry its reach already ran again — is this call's answer, and running it again here ran
         // a body that refuses synchronously twice per call.
-        let again = false
-        if (attended?.abandoned) {
-            attended.abandoned = false
-            again = loadOf(reached) === undefined
-        }
+        const again = leftBehind(attended, reached)
         // Keyed by the cell: an unkeyed handler's forwarder is one for every request's instance.
         const cell = isReactive(reached) ? cellOf(reached) : undefined
         if (
@@ -150,12 +146,9 @@ export function attendCall(
     started: boolean,
 ): void {
     let attended = ATTENDED.get(reached)
-    if (attended?.abandoned) {
-        attended.abandoned = false
-        if (loadOf(reached) === undefined) {
-            ;(reached as { refresh(): void }).refresh()
-            started = true
-        }
+    if (leftBehind(attended, reached)) {
+        ;(reached as { refresh(): void }).refresh()
+        started = true
     }
     const load = loadOf(reached)
     if (load === undefined) return
@@ -166,6 +159,16 @@ export function attendCall(
         ATTENDED.set(reached, attended)
     }
     attend(attended, signal)
+}
+
+/**
+ * 16.62 — whether this call reached a value whose last load 16.48 ended with nothing since, which it
+ * then runs again: the callers of the aborted load stopped waiting, and this one has not. Read once.
+ */
+function leftBehind(attended: Attended | undefined, reached: unknown): boolean {
+    if (attended?.abandoned !== true) return false
+    attended.abandoned = false
+    return loadOf(reached) === undefined
 }
 
 /** Files a call's signal, or its pin, against the load it reached (16.48). */

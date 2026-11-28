@@ -8,11 +8,11 @@ import { expect, test } from 'bun:test'
 import { database, store } from '#server'
 import { patchesSince, versionOf } from '#server/versionOf.ts'
 import { flushSync, memo } from '#shared'
-import { KEYED_OF } from '#shared/reactive/createMemo.ts'
+import { keyedOf } from '#shared/reactive/createMemo.ts'
 import type { Reactive } from '#shared/reactive/Reactive.ts'
 
 const entryOf = (made: unknown): Reactive<unknown> =>
-    (made as { [KEYED_OF]: () => Reactive<unknown> })[KEYED_OF]()
+    (keyedOf(made) as () => Reactive<unknown>)()
 
 // THE REVERT: mint versions from the process counter in `versionOf` whatever the store; the reopened
 // memo's version is a new number, and `patches since` the old one is `undefined`.

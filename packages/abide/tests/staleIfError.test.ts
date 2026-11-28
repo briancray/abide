@@ -7,10 +7,10 @@ import { expect, test } from 'bun:test'
 
 import { memo, reactive } from '#shared'
 import { CALL_ENTRY } from '#shared/reactive/CALL_ENTRY.ts'
-import { KEYED_OF } from '#shared/reactive/createMemo.ts'
+import { keyedOf } from '#shared/reactive/createMemo.ts'
 
 const entriesOf = (value: unknown): number =>
-    (value as { [KEYED_OF]: { entries: Map<string, unknown> } })[KEYED_OF]
+    (keyedOf(value) as { entries: Map<string, unknown> })
         .entries.size
 const entryOf = (answer: object): unknown =>
     (answer as { [CALL_ENTRY]?: unknown })[CALL_ENTRY]

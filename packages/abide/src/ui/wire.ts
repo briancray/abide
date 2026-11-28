@@ -43,7 +43,7 @@ import {
 } from '#shared/reactive/parameterDefaults.ts'
 import type { PatchOp } from '#shared/reactive/patchLog.ts'
 import { closedRun, standIn } from '#shared/reactive/producer.ts'
-import { declare, type Method, STREAMING_COPY, WIRE_COPY } from '#shared/rpc.ts'
+import { declare, type Method } from '#shared/rpc.ts'
 import { rpcRequest } from '#shared/rpcRequest.ts'
 import { startedEarly, takeLandedCall } from '#shared/takeEarlyCall.ts'
 
@@ -264,11 +264,10 @@ export function wire(
         (value as (args: unknown) => { refresh(): void })(args)
     // Typed as the body either way: `declare` reads which arm off the brand (16.5), and its types
     // keep a built value off the arms that build one.
-    const rpc = declare(method)(value as typeof produce)
     // 16.32 — a call of a copy whose handler streams answers its chunks, as the server's call does.
-    if (options?.stream === true)
-        (rpc as unknown as { [STREAMING_COPY]: () => void })[STREAMING_COPY]()
-    ;(rpc as unknown as { [WIRE_COPY]: () => void })[WIRE_COPY]()
+    const rpc = declare(method, { streams: options?.stream === true })(
+        value as typeof produce,
+    )
     // 16.9 — the address `rpc.url` and `rpc.raw` build on.
     rpc.address = address
     rpc.methods = methods

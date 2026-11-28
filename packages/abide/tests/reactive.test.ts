@@ -493,7 +493,7 @@ test('a memo called with args its gate refuses rejects with the refusal — 11.2
 
 // 11.76 — A MEMO'S ENTRY IS WRITTEN BY ITS OWNER: `set` replaces the value for a key and `patch`
 // mutates it in place, each reaching a derived `reactive` that adopted the key, and neither running the
-// function. THE REVERT: drop `patch` from `memoOver`'s face; the call throws, `entries: 1,2` stays `1`.
+// function. THE REVERT: drop `patch` from `ownerWrites`; the call throws, `entries: 1,2` stays `1`.
 test('a memo entry is set and patched by its owner, and a reader follows — 11.76', async () => {
     let runs = 0
     const feed = memo((_args: { account: string }) => {

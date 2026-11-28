@@ -8,7 +8,7 @@ import { expect, test } from 'bun:test'
 import { rpc, store } from '#server'
 import { flushSync, isFailed, memo, reactive, refuse, watch } from '#shared'
 import type { CALL_ENTRY } from '#shared/reactive/CALL_ENTRY.ts'
-import { KEYED_OF } from '#shared/reactive/createMemo.ts'
+import { keyedOf } from '#shared/reactive/createMemo.ts'
 import type { Reactive } from '#shared/reactive/Reactive.ts'
 
 // THE REVERT: drop `schema` and `transform` from what `memo` hands `keyedValue`; the call answers the
@@ -83,9 +83,7 @@ test('a write a memo identity calls a repeat wakes no reader — 11.79', async (
         identity: (shelved: { id: number }) => shelved.id,
     })
     await shelf()
-    const entry = (shelf as unknown as { [KEYED_OF]: () => Reactive<unknown> })[
-        KEYED_OF
-    ]()
+    const entry = (keyedOf(shelf) as () => Reactive<unknown>)()
     let wakes = 0
     const stop = watch(() => {
         entry.get()

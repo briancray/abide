@@ -45,12 +45,12 @@ import { callLoad } from './reactive/callLoad.ts'
 import {
     type ArgsTuple,
     type CallAnswer,
+    isMemo,
     type KeptIn,
-    KEYED_OF,
+    keyedOf,
     type Memo,
     type MemoOptions,
-    readableOf,
-    writeOf,
+    ownerWrites,
 } from './reactive/createMemo.ts'
 import { DECLARED_TAGS } from './reactive/DECLARED_TAGS.ts'
 import {
@@ -72,14 +72,11 @@ import {
 } from './reactive/index.ts'
 import { isReactive } from './reactive/isReactive.ts'
 import { isThenable } from './reactive/isThenable.ts'
-import { MEMO_BRAND } from './reactive/MEMO_BRAND.ts'
 import { MUTATION } from './reactive/MUTATION.ts'
 import type { PatchOp } from './reactive/patchLog.ts'
 import {
     chunksOfStream,
     nameLoad,
-    patchInto,
-    produceInto,
     streamingOrSettled,
 } from './reactive/producer.ts'
 import { isStreamBody } from './reactive/Reactive.ts'
@@ -581,9 +578,13 @@ const UNREACHED = {
     invalidate: (): void => undefined,
 }
 
-/** Builds the handler declarer for one method, which `rpc` builds on for each verb it answers. */
+/**
+ * Builds the handler declarer for one method, which `rpc` builds on for each verb it answers — or, given
+ * `copy`, a browser's copy of one, whose value is the wire's and which streams where the build says.
+ */
 export function declare<Declared extends Method>(
     method: Declared,
+    copy?: { streams: boolean },
 ): Declare<Declared extends 'GET' ? false : true> {
     return ((handler: unknown, options?: RpcOptions): unknown => {
         // 16.92 — for a caller the types did not reach.
@@ -614,13 +615,14 @@ export function declare<Declared extends Method>(
         )
         const keyed = isKeyed(value)
         // 16.32 — a handler whose body is an async generator answers its chunks; a browser's copy is
-        // told so by the build (`streamingCopy`), since its body is the wire's.
-        let wireCopy = false
-        let streams =
-            typeof handler === 'function' &&
-            !isReactive(handler) &&
-            !isKeyed(handler) &&
-            isStreamBody(handler as (args: never) => unknown)
+        // told so by the build, since its body is the wire's.
+        const streams =
+            copy !== undefined
+                ? copy.streams
+                : typeof handler === 'function' &&
+                  !isReactive(handler) &&
+                  !isKeyed(handler) &&
+                  isStreamBody(handler as (args: never) => unknown)
         // 19.7 — the handler's `args` gate and its parameter defaults, on the `Rpc` too, for the
         // wire to coerce and key by. 11.27, 11.29 — THE DEFAULTS ARE APPLIED AT THE CALL rather than
         // left to the value's own reach: a value behind rungs is keyed ahead of the handler's, and
@@ -766,14 +768,6 @@ export function declare<Declared extends Method>(
             builtHere(value) ? built : UNREACHED
         const rpc = Object.assign(call, contract, {
             [REACH_CALL]: reachCall,
-            // 16.32 — the build's word that a browser's copy streams, its body being the wire's.
-            [STREAMING_COPY]: (): void => {
-                streams = true
-            },
-            // A browser's copy of the handler, whose value is the wire's rather than its own.
-            [WIRE_COPY]: (): void => {
-                wireCopy = true
-            },
             method,
             methods: [method] as readonly Method[],
             description: options?.description,
@@ -846,20 +840,13 @@ export function declare<Declared extends Method>(
         // The handler's own value takes the owner's write as what it produced, and its followers are
         // sent it; a browser's copy takes it as a write to this page's copy, not synced until the
         // server's answer (3.10).
-        members.set = (...given: unknown[]): void => {
-            const [args, written] = writeOf(given)
-            const entry = reach(args) as Reactive<unknown>
-            if (!wireCopy) produceInto(entry, written)
-            else entry.set(written)
-        }
-        members.patch = (...given: unknown[]): void => {
-            const [args, mutate] = writeOf(given)
-            const entry = reach(args) as Reactive<unknown>
-            if (!wireCopy) patchInto(entry, mutate as (value: unknown) => void)
-            else entry.patch(mutate as (value: unknown) => void)
-        }
-        members.readable = (args?: unknown): ReadableStream<unknown> =>
-            readableOf(reach(args) as Reactive<unknown>)
+        Object.assign(
+            members,
+            ownerWrites(
+                reach as (args: unknown) => Reactive<unknown>,
+                copy !== undefined,
+            ),
+        )
         members.outbox = (pattern?: unknown): QueuedCall[] =>
             outbox(rpc as never, pattern as Record<string, unknown> | undefined)
         // 21.8, 18.5 — a `GET` over a `global` value, the value it is serving for some args: a cache
@@ -949,8 +936,7 @@ export const rpc: Declare<true> = ((
     // 16.117 — what the source writes by: none, for a memo whose entries live a request (11.32), as a
     // write to one would land in a value no later request reads.
     const members: Record<string, Method> =
-        kind === 'memo' &&
-        isForwarder((value as Record<symbol, unknown>)[KEYED_OF])
+        kind === 'memo' && isForwarder(keyedOf(value))
             ? {}
             : SOURCE_MEMBERS[kind].members
     const verbs = sourceVerbs(members, methods, SOURCE_MEMBERS[kind].written)
@@ -1044,8 +1030,7 @@ function brandOf(value: unknown): SourceBrand | undefined {
         (typeof value !== 'object' && typeof value !== 'function')
     )
         return undefined
-    if ((value as Record<symbol, unknown>)[MEMO_BRAND] === true)
-        return { kind: 'memo' }
+    if (isMemo(value)) return { kind: 'memo' }
     return (value as Record<symbol, SourceBrand | undefined>)[SOURCE_KIND]
 }
 
@@ -1331,12 +1316,6 @@ function refreshEach(
     if (tags !== undefined) refresh({ tags })
     if (failed !== undefined) throw failed.failure
 }
-
-/** The member a browser's copy is told it streams through, since its body is the wire's (16.32). */
-export const STREAMING_COPY = Symbol('abide.streamingCopy')
-
-/** The member a browser's copy is marked through: an owner's write to it is this page's (11.76). */
-export const WIRE_COPY = Symbol('abide.wireCopy')
 
 /** The handler's value for `args`, as `rpc` reached it: what abide's own callers hold (`REACH_CALL`). */
 export function reachOf(

@@ -12,11 +12,11 @@ import { store } from '#server'
 import { patchesSince, versionOf } from '#server/versionOf.ts'
 import { flushSync, memo } from '#shared'
 import type { Logged, LogStore } from '#shared/ledger.ts'
-import { KEYED_OF } from '#shared/reactive/createMemo.ts'
+import { keyedOf } from '#shared/reactive/createMemo.ts'
 import type { Reactive } from '#shared/reactive/Reactive.ts'
 
 const entryOf = (made: unknown): Reactive<unknown> =>
-    (made as { [KEYED_OF]: () => Reactive<unknown> })[KEYED_OF]()
+    (keyedOf(made) as () => Reactive<unknown>)()
 
 /** One log two processes share, every answer a turn late, and a watch each append wakes. */
 function sharedLog() {

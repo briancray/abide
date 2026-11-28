@@ -22,7 +22,6 @@ import { attendCall } from './callLoad.ts'
 import { cellOf } from './cellShape.ts'
 import type { Kept, Shaping } from './index.ts'
 import type { Keyed } from './Keyed.ts'
-import { MEMO_BRAND } from './MEMO_BRAND.ts'
 import { isStreaming, loadOf, patchInto, produceInto } from './producer.ts'
 import type { Reactive, Sourced, Store } from './Reactive.ts'
 
@@ -123,16 +122,18 @@ export type Written<Args, What> = [Args] extends [undefined]
     ? [written: What] | [args: Args, written: What]
     : [args: Args, written: What]
 
-/**
- * A write's args and what it writes: `(args, written)`, or `(written)` alone for a memo whose args are
- * absent — the one-argument spelling a call without args has (11.76, 11.80).
- */
-export function writeOf(given: unknown[]): [args: unknown, written: unknown] {
-    return given.length === 1 ? [undefined, given[0]] : [given[0], given[1]]
+/** The keyed value each memo is a face over, which is also what tells a memo from any other function. */
+const KEYED = new WeakMap<object, unknown>()
+
+/** Whether `value` is a `memo`'s face (16.117), the arm `rpc` and `reactive` read off it. */
+export function isMemo(value: unknown): boolean {
+    return typeof value === 'function' && KEYED.has(value)
 }
 
-/** The member a handler reads the keyed value a memo is a face over through (16.6). */
-export const KEYED_OF = Symbol('abide.keyedOf')
+/** 16.6 — the keyed value a memo is a face over, which a handler handed the memo serves. */
+export function keyedOf(memo: unknown): unknown {
+    return typeof memo === 'function' ? KEYED.get(memo) : undefined
+}
 
 /** The memo over `keyed`, whose function streams where `streams` says (9.6). */
 export function memoOver<Args, Value>(
@@ -140,8 +141,8 @@ export function memoOver<Args, Value>(
     streams: boolean,
 ): Memo<Value, Args> & Gated<Args> {
     const face = keyed as Keyed<Value, Args, Value, never> & Gated<Args>
-    const entryOf = (args: Args): Reactive<Value> =>
-        (keyed as (args: Args) => Reactive<Value>)(args)
+    const entryOf = (args: unknown): Reactive<unknown> =>
+        (keyed as (args: unknown) => Reactive<unknown>)(args)
     // 11.2, 11.75 — the promise of the entry's value, or its stream: a cursor of this caller's own
     // over the one run, from its start.
     const call = (
@@ -156,7 +157,7 @@ export function memoOver<Args, Value>(
             standing = face.entries.get(canonicalKey(normalized(face, args)))
             before = standing === undefined ? undefined : loadOf(standing)
         }
-        const entry = entryOf(args as Args)
+        const entry = entryOf(args)
         const cell = cellOf(entry)
         // A settled entry no call ended has no load to attend: two reads, and nothing filed.
         if (signal !== undefined || cell.loading || cell.failure !== undefined)
@@ -169,39 +170,65 @@ export function memoOver<Args, Value>(
             )
         return answerOfCall(entry, streams || isStreaming(entry), signal)
     }
-    return Object.assign(call, {
-        [MEMO_BRAND]: true,
-        [KEYED_OF]: keyed,
+    const memo = Object.assign(call, ownerWrites(entryOf, false), {
         [ARGS_GATE]: face[ARGS_GATE],
         [PARAMETER_DEFAULTS]: face[PARAMETER_DEFAULTS],
         invalidate: (pattern?: Partial<Args>): void => face.invalidate(pattern),
         refresh: (pattern?: Partial<Args>): void => face.refresh(pattern),
-        // 11.76 — the owner's writes, standing until the next write, `ttl`, `refresh` or `invalidate`.
-        // AN OWNER'S WRITE IS A PRODUCTION: the memo's value has no source but its function and its
-        // owner, so what the owner writes is what the entry produced (`synced` stays true, 3.11).
+    })
+    KEYED.set(memo, keyed)
+    return memo as unknown as Memo<Value, Args> & Gated<Args>
+}
+
+/**
+ * 11.76, 11.77 — AN OWNER'S WRITES AND FOLLOW over the entries `entryOf` reaches: a memo's, and a
+ * handler's, which is a memo with an address (16.6) reached past every rung, since the owner is no
+ * caller. Each write stands until the next write, `ttl`, `refresh` or `invalidate`.
+ *
+ * AN OWNER'S WRITE IS A PRODUCTION: the value has no source but its function and its owner, so what
+ * the owner writes is what the entry produced (`synced` stays true, 3.11). A browser's `copy` of a
+ * handler is the one exception — its value is the wire's, so the write is this page's own, not synced
+ * until the server answers (3.10).
+ */
+export function ownerWrites(
+    entryOf: (args: unknown) => Reactive<unknown>,
+    copy: boolean,
+): {
+    set(...given: unknown[]): void
+    patch(...given: unknown[]): void
+    readable(args?: unknown): ReadableStream<unknown>
+} {
+    return {
         set: (...given: unknown[]): void => {
             const [args, value] = writeOf(given)
-            produceInto(entryOf(args as Args) as Reactive<unknown>, value)
+            const entry = entryOf(args)
+            if (copy) entry.set(value)
+            else produceInto(entry, value)
         },
         patch: (...given: unknown[]): void => {
             const [args, mutate] = writeOf(given)
-            patchInto(
-                entryOf(args as Args) as Reactive<unknown>,
-                mutate as (value: unknown) => void,
-            )
+            const entry = entryOf(args)
+            if (copy) entry.patch(mutate as (value: unknown) => void)
+            else patchInto(entry, mutate as (value: unknown) => void)
         },
-        readable: (args?: Args): ReadableStream<Value> =>
-            readableOf(entryOf(args as Args)),
-    }) as unknown as Memo<Value, Args> & Gated<Args>
+        readable: (args?: unknown): ReadableStream<unknown> =>
+            readableOf(entryOf(args)),
+    }
+}
+
+/**
+ * A write's args and what it writes: `(args, written)`, or `(written)` alone for a memo whose args are
+ * absent — the one-argument spelling a call without args has (11.76, 11.80).
+ */
+function writeOf(given: unknown[]): [args: unknown, written: unknown] {
+    return given.length === 1 ? [undefined, given[0]] : [given[0], given[1]]
 }
 
 /**
  * 11.77 — the entry's value now, then its value after each change, each a copy of its own: a reader
  * keeping one is not handed a value a later patch mutates under it.
  */
-export function readableOf<Value>(
-    entry: Reactive<Value>,
-): ReadableStream<Value> {
+function readableOf<Value>(entry: Reactive<Value>): ReadableStream<Value> {
     let stop: (() => void) | undefined
     return new ReadableStream<Value>({
         start: (controller) => {
