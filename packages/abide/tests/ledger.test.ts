@@ -184,6 +184,36 @@ test('a ledger in store.sqlite keeps a row per entry, and its cursors — 58.9',
     ).toBe('rows: 2, kept: 1,2, resumed: Email')
 })
 
+// 58.2 — IN `store.sqlite` THE NUMBERS CARRY ON PAST A TRIM that let every entry go, so a reader past
+// them is not handed a number it has read. THE REVERT: drop `_trimmed` from `lastSql`, and `next: 1`.
+test('store.sqlite numbers on past a trim that let every entry go — 58.2', async () => {
+    const kept = store.sqlite(new Database(':memory:'), 'trimmed')
+    const log = ledger<string>({ store: kept })
+    for (const entry of ['a', 'b', 'c']) await log.append(entry)
+    kept.trim(3)
+    expect(`next: ${await log.append('d')}`).toBe('next: 4')
+})
+
+// 58.18 — `store.sqlite` HEARS WHAT ANOTHER CONNECTION APPENDS: a read waiting past the last entry is
+// handed one appended through another `Database` on the file. THE REVERT: drop `watch` from
+// `sqliteLog`; the read waits out its deadline.
+test("a ledger in store.sqlite hears another connection's append — 58.18", async () => {
+    const file = `${Bun.env.TMPDIR ?? '/tmp'}/abide-ledger-watch-${crypto.randomUUID()}.sqlite`
+    const reading = new Database(file)
+    const writing = new Database(file)
+    const here = ledger<string>({ store: store.sqlite(reading, 'feed') })
+    const there = ledger<string>({ store: store.sqlite(writing, 'feed') })
+    await there.append('first')
+    const heard = taken(here(1), 1)
+    await Bun.sleep(10)
+    await there.append('second')
+    const entries = await Promise.race([heard, Bun.sleep(1_000).then(() => [])])
+    reading.close()
+    writing.close()
+    await Bun.file(file).delete()
+    expect(entries.map((logged) => logged.entry)).toEqual(['second'])
+})
+
 // 58.10, 58.11 — `retain` KEEPS THE LAST ENTRIES AND LETS THE REST GO, and keeping none is refused.
 // THE REVERT: drop the trim, and the read from 0 starts at 1.
 test('retain keeps the last entries, and under one is refused — 58.10, 58.11', async () => {

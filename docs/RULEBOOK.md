@@ -5411,8 +5411,10 @@ columns `logged` names, with those every other `table` of that name in the proce
 47.41 A write through a `table`'s `insert`, `upsert`, `update` or `delete` made inside an open transaction MUST
 refresh nothing at once, and its commit MUST refresh what 47.26 names on the watch's next look.
 
-47.42 A `table`'s `readable` MUST error, naming this clause, where another process removed a change
-it had still to read, and MUST NOT count as still to read a change removed before it was reached.
+47.42 A `table`'s `readable` MUST be a read of its change log as a `ledger` reads one (58.5), and so
+MUST error per 58.15 where another process removed a change it had still to read and per 58.17 where
+its opener opens a file holding another log, read on across a reopen of the same file, and MUST NOT
+count as still to read a change removed before it was reached.
 
 47.43 The migrations `database` runs per 47.6 MUST run with foreign keys unenforced, and MUST throw
 per 47.7 where a row references a row that is not there once the last of them has run.
@@ -5450,9 +5452,6 @@ column's own does not admit.
 make them again at its next reach.
 
 47.53 A `table` MUST NOT record per 47.23 an update leaving every column of the row as it was.
-
-47.54 A `table`'s `readable` whose opener opens its database again MUST read on where the file holds
-the change log it was reading, and MUST error, naming this clause, where it holds another.
 
 # 48. Problem reports
 
@@ -7649,11 +7648,19 @@ server.
 58.14 Where `ttl` is given, an entry MUST be let go once `ttl` milliseconds have passed since it was
 appended, and a read MUST NOT hand on an entry let go.
 
-58.15 A read that would hand on an entry numbered more than one past the last it handed on MUST
-error with a refusal at status 410 naming the entries it missed; a read from 0, or from a cursor
-never moved, MUST start at the oldest entry kept.
+58.15 A read that would hand on an entry numbered more than one past the last it handed on, or that
+finds no entry kept past its position while the last number is past it, MUST error with a refusal at
+status 410 naming the entries it missed; a read from 0, or from a cursor never moved, MUST start at
+the oldest entry kept.
 
 58.16 An entry a `ledger` lets go MUST take the key it was appended under with it.
+
+58.17 A read whose store answers through its `origin` from another log than the one the read began
+on MUST error with a refusal at status 410 naming this clause.
+
+58.18 `store.sqlite`'s `watch` MUST call what it is handed once a commit on any connection has moved
+its log's last number, looked for every 50 milliseconds from the log's first use while the app runs,
+and MUST number on past every entry a trim let go (58.2).
 
 # 59. Options
 

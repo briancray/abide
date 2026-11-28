@@ -1,11 +1,11 @@
 // 47.22-47.28 — A TABLE AS A STREAM PAIR: its changes read out, and rows written in.
 //
 // THE CHANGES ARE CAPTURED IN THE WRITER'S TRANSACTION. Triggers on the table append each insert,
-// update and delete to `abide_changes` as part of the statement that made it, so whoever wrote the
+// update and delete to `abide_table_log` as part of the statement that made it, so whoever wrote the
 // row — this pair, an ORM, raw SQL, another process, a foreign key's cascade — a committed write is
-// one change and a rolled back one is none. bun:sqlite has no update hook, so the changes are read by
-// a look at the log's last number, which is an index read; a look that finds nothing new costs that
-// alone.
+// one change and a rolled back one is none. The log is a ledger's (58.9): the triggers append to it,
+// `readable` is a ledger read of it, and the one poll every log in SQLite is watched by (58.18) is
+// how a commit another connection makes is heard.
 //
 // A TABLE IS DESCRIBED BY ITS DATABASE (47.37): its columns, the type each declares and its primary
 // key are read from the file once per connection, so the key a write upserts by is the table's own and
@@ -17,10 +17,9 @@
 import type { Database } from 'bun:sqlite'
 
 import { isPlainData } from '#shared/isPlainData.ts'
+import { type Ledger, ledger } from '#shared/ledger.ts'
 import { namedLogger } from '#shared/log.ts'
 import type { Match } from '#shared/Match.ts'
-import { appStopSignal } from '#shared/reactive/abortSignal.ts'
-import { unrefTimer } from '#shared/reactive/unrefTimer.ts'
 import { SOURCE_KIND } from '#shared/SOURCE_KIND.ts'
 
 import { bindList, listText, slotsOf } from './boundList.ts'
@@ -33,11 +32,17 @@ import {
 } from './columnCodec.ts'
 import type { Typed, Untyped } from './MigratedTables.ts'
 import { SQL_IDENTIFIER } from './SQL_IDENTIFIER.ts'
+import {
+    lastSql,
+    logTables,
+    type SqliteLog,
+    sqliteLog,
+} from './stores/sqliteLog.ts'
 
 const WATCH_LOG = namedLogger('abide:table')
 
-/** 47.24 — how often a reader or the table's watch looks for changes past the last it saw. */
-const LOOK_EVERY = 50
+/** 47.23 — the tables a table's change log is kept in: `abide_table_log` and those beside it. */
+const CHANGE_LOG = 'abide_table'
 
 /** 47.28 — the changes kept per table once every look has passed them. */
 const CHANGES_KEPT = 10_000
@@ -182,7 +187,8 @@ export function table<Row extends Record<string, unknown>>(
     const wrote = (db: Database, count: number): number => {
         if (count === 0) return count
         const watch = watchOf(database, connection, name)
-        if (!db.inTransaction || watch.broken) heard(watch, connection)
+        if (watch.broken) changed(watch)
+        else if (!db.inTransaction) watch.log.look()
         return count
     }
     const keyed = (db: Database, rows: readonly Partial<Row>[]): void => {
@@ -252,7 +258,11 @@ export function table<Row extends Record<string, unknown>>(
                 connection()
                 // 47.24 — one stream while it runs; one cancelled or errored is followed by a new one.
                 if (readable === undefined || readable.ended())
-                    readable = changesOf<Row>(connection, name)
+                    readable = changesOf<Row>(
+                        watchOf(database, connection, name),
+                        connection,
+                        name,
+                    )
                 return readable.stream
             },
         },
@@ -592,24 +602,20 @@ function prepare(db: Database, name: string, key: string | undefined): void {
     const lasting = !db.inTransaction
     let tables = PREPARED.get(db)
     if (tables === undefined) {
-        db.run(
-            'CREATE TABLE IF NOT EXISTS abide_changes (seq INTEGER PRIMARY KEY AUTOINCREMENT, tbl TEXT NOT NULL, op TEXT NOT NULL, row TEXT, previous TEXT)',
-        )
-        db.run(
-            'CREATE INDEX IF NOT EXISTS abide_changes_tbl ON abide_changes (tbl, seq)',
-        )
-        // 47.42 — how far another process has removed a table's changes, which a reader behind it
-        // cannot read past.
-        db.run(
-            'CREATE TABLE IF NOT EXISTS abide_changes_removed (tbl TEXT PRIMARY KEY, through INTEGER NOT NULL)',
-        )
-        // 47.54 — which log this is, so a reader can tell the file it reads from another.
-        db.run(
-            'CREATE TABLE IF NOT EXISTS abide_changes_log (id TEXT NOT NULL)',
-        )
-        db.query(
-            'INSERT INTO abide_changes_log (id) SELECT ? WHERE NOT EXISTS (SELECT 1 FROM abide_changes_log)',
-        ).run(crypto.randomUUID())
+        logTables(db, CHANGE_LOG)
+        // The change log a release before this one kept, and the triggers writing to it.
+        const stale = db
+            .query(
+                "SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'abide\\_changes\\_%' ESCAPE '\\'",
+            )
+            .all() as { name: string }[]
+        for (const trigger of stale) db.run(`DROP TRIGGER "${trigger.name}"`)
+        for (const old of [
+            'abide_changes',
+            'abide_changes_removed',
+            'abide_changes_log',
+        ])
+            db.run(`DROP TABLE IF EXISTS ${old}`)
         tables = new Map()
         if (lasting) PREPARED.set(db, tables)
     }
@@ -645,51 +651,38 @@ function prepare(db: Database, name: string, key: string | undefined): void {
         ['update', 'UPDATE', changing, objectOf('NEW'), objectOf('OLD')],
         ['delete', 'DELETE', '', 'NULL', objectOf('OLD')],
     ]
+    // 58.2 — numbered one past the log's last, kept or let go, as an append through the log numbers it.
+    const next = `${lastSql(CHANGE_LOG, `'${name}'`)} + 1`
+    const now = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)"
     db.transaction(() => {
         for (const [op, event, when, row, previous] of triggers) {
-            db.run(`DROP TRIGGER IF EXISTS abide_changes_${name}_${op}`)
+            db.run(`DROP TRIGGER IF EXISTS ${CHANGE_LOG}_${name}_${op}`)
             db.run(
-                `CREATE TRIGGER abide_changes_${name}_${op} AFTER ${event} ON ${name} ${when} BEGIN INSERT INTO abide_changes (tbl, op, row, previous) VALUES ('${name}', '${op}', ${row}, ${previous}); END`,
+                `CREATE TRIGGER ${CHANGE_LOG}_${name}_${op} AFTER ${event} ON ${name} ${when} BEGIN INSERT INTO ${CHANGE_LOG}_log (log, seq, at, key, entry) VALUES ('${name}', ${next}, ${now}, NULL, json_object('op', '${op}', 'row', ${row}, 'previous', ${previous})); END`,
             )
         }
     })()
     if (lasting) tables.set(name, signature)
 }
 
-function lastChange(db: Database, name: string): number {
-    const found = db
-        .query('SELECT MAX(seq) AS last FROM abide_changes WHERE tbl = ?')
-        .get(name) as { last: number | null }
-    return found.last ?? 0
-}
-
-/** Calls `look` every `LOOK_EVERY` ms until the app stops or `stopped` says so. */
-function looking(
-    look: () => void,
-    stopped: () => boolean,
-    ended?: () => void,
-): void {
-    const stopping = appStopSignal()
-    const timer = setInterval(() => {
-        if (stopped() || stopping.aborted) {
-            clearInterval(timer)
-            ended?.()
-            return
-        }
-        look()
-    }, LOOK_EVERY)
-    unrefTimer(timer)
-}
-
 /**
- * 47.26 — one table's watch: its name, the last change it has passed, what each change is told to —
- * the refresh of each `rpc` over the table — and whether it has stopped (47.35).
+ * 47.26 — one table's watch: its change log, what each change is told to — the refresh of each `rpc`
+ * over the table — whether it has stopped (47.35), the ledger its `readable`s read (47.24), and how
+ * far each of them has read, which the watch keeps the log for (47.28).
  */
 type Watch = {
-    name: string
-    seen: number | undefined
+    log: SqliteLog
     followers: Set<() => void>
     broken: boolean
+    changes: Ledger<Logged> | undefined
+    readers: Set<{ position: number }>
+}
+
+/** 47.23 — one change as the triggers log it: a row as JSON, `null` where there is none. */
+type Logged = {
+    op: 'insert' | 'update' | 'delete'
+    row: Record<string, unknown> | null
+    previous: Record<string, unknown> | null
 }
 
 /** 47.26 — per database or opener, each table's watch. */
@@ -698,21 +691,7 @@ const WATCHED = new WeakMap<object, Map<string, Watch>>()
 /** 47.35 — the databases whose stopped watch has been said. */
 const WARNED = new WeakSet<object>()
 
-/**
- * 47.28 — per table name, how far each `readable` open in this process has read, which the watch
- * keeps the log for.
- */
-const READING = new Map<string, Set<{ position: number | undefined }>>()
-
-/** 47.28 — the change before the first one an open `readable` of `name` has still to read. */
-function keptFor(name: string): number {
-    let least = Number.POSITIVE_INFINITY
-    for (const reading of READING.get(name) ?? [])
-        if (reading.position !== undefined && reading.position < least)
-            least = reading.position
-    return least
-}
-
+/** 47.26 — `name`'s watch over `owner`, made at its first use and begun again after the app's stop. */
 function watchOf(
     owner: object,
     connection: () => Database,
@@ -724,206 +703,107 @@ function watchOf(
         WATCHED.set(owner, watches)
     }
     const standing = watches.get(name)
-    if (standing !== undefined) return standing
-    // 47.26 — the baseline taken as the table is first used, so a write before the first look is heard.
+    if (standing !== undefined) {
+        if (!standing.broken) standing.log.resume()
+        return standing
+    }
     const watch: Watch = {
-        name,
-        seen: undefined,
+        log: sqliteLog(connection, CHANGE_LOG, () => name),
         followers: new Set(),
         broken: false,
+        changes: undefined,
+        readers: new Set(),
     }
     watches.set(name, watch)
-    const watched = watches
     try {
-        watch.seen = lastChange(connection(), name)
-    } catch {}
-    looking(
-        () => {
-            let db: Database
-            try {
-                db = connection()
-            } catch (thrown) {
-                // 47.35 — a database refusing the change log, read-only among them: said once per
-                // database, and the writes made through its `table` are then all that refresh.
-                watch.broken = true
-                if (!WARNED.has(owner)) {
-                    WARNED.add(owner)
-                    WATCH_LOG.warning(
-                        `the watch of ${name} stopped: only writes made through its table refresh its rpc. RULEBOOK 47.35.`,
-                        thrown,
-                    )
-                }
-                return
-            }
-            const last = lastChange(db, name)
-            if (watch.seen === undefined) {
-                watch.seen = last
-                return
-            }
-            if (last === watch.seen) return
-            watch.seen = last
-            changed(watch)
-            // 47.28 — the last changes kept, and every one a reader here has still to read.
-            const through = Math.min(last - CHANGES_KEPT, keptFor(name))
-            if (through > 0) {
-                const removed = db
-                    .query(
-                        'DELETE FROM abide_changes WHERE tbl = ? AND seq <= ?',
-                    )
-                    .run(name, through)
-                if (removed.changes > 0)
-                    db.query(
-                        'INSERT INTO abide_changes_removed (tbl, through) VALUES (?1, ?2) ON CONFLICT (tbl) DO UPDATE SET through = MAX(through, ?2)',
-                    ).run(name, through)
-            }
-        },
-        () => watch.broken,
-        // The app stopped: the next `table` call for this name watches again.
-        () => watched.delete(name),
-    )
+        connection()
+    } catch (thrown) {
+        // 47.35 — a database refusing the change log, read-only among them: said once per database,
+        // and the writes made through its `table` are then all that refresh.
+        watch.broken = true
+        if (!WARNED.has(owner)) {
+            WARNED.add(owner)
+            WATCH_LOG.warning(
+                `the watch of ${name} stopped: only writes made through its table refresh its rpc. RULEBOOK 47.35.`,
+                thrown,
+            )
+        }
+        return watch
+    }
+    watch.log.watch?.(() => changed(watch))
+    // 47.26 — the baseline taken as the table is first used, so a write before the first look is heard.
+    watch.log.resume()
     return watch
 }
 
-/** 47.26 — a change to the watched table, told to each `rpc` over it. */
+/** 47.26 — a change to the watched table, told to each `rpc` over it; 47.28 — and the log kept short. */
 function changed(watch: Watch): void {
     for (const heard of watch.followers) heard()
-}
-
-/** 47.31 — a write made here, heard now, so the watch's next look does not hear it again. */
-function heard(watch: Watch, connection: () => Database): void {
-    try {
-        watch.seen = lastChange(connection(), watch.name)
-    } catch {}
-    changed(watch)
+    if (watch.broken) return
+    let least = Number.POSITIVE_INFINITY
+    for (const reader of watch.readers)
+        if (reader.position < least) least = reader.position
+    const through = Math.min(watch.log.last() - CHANGES_KEPT, least)
+    if (through > 0) watch.log.trim(through)
 }
 
 /**
- * 47.24, 47.25 — the table's changes from the moment the stream is first read, in order, their coded
- * columns decoded (47.38); 47.42 — and an error where another process removed one it had still to
- * read.
+ * 47.24, 47.25 — the table's changes from the moment the stream is reached, in order, their coded
+ * columns decoded (47.38): a read of the ledger the log is (58.5), so a reader another process trimmed
+ * past (58.15) or one over another file's log (58.17) errors.
  */
 function changesOf<Row>(
+    watch: Watch,
     connection: () => Database,
     name: string,
 ): { stream: ReadableStream<Change<Row>>; ended: () => boolean } {
-    const reading: { position: number | undefined } = { position: undefined }
-    // 47.54 — the `Database` the position counts in, and the log it counts: an opener's next
-    // `Database` over the same log reads on, and one over another log cannot say where to.
-    let readOn: Database | undefined
-    let readLog: string | undefined
-    let cancelled = false
-    let wake: (() => void) | undefined
-    const pending: Change<Row>[] = []
+    const reading = { position: watch.log.last() }
+    watch.readers.add(reading)
+    watch.changes ??= ledger<Logged>({ store: watch.log })
+    const source = watch.changes(reading.position).getReader()
+    let ended = false
+    const done = (): void => {
+        ended = true
+        watch.readers.delete(reading)
+    }
     const rowOf = (
-        text: string | null,
+        row: Record<string, unknown> | null,
         coded: CodedColumn[],
     ): Row | undefined =>
-        text === null
-            ? undefined
-            : (decodeRows([JSON.parse(text) as Row], coded)[0] as Row)
-    const read = (): void => {
-        const db = connection()
-        const removedThrough = (): number =>
-            (
-                db
-                    .query(
-                        'SELECT through FROM abide_changes_removed WHERE tbl = ?',
-                    )
-                    .get(name) as { through: number } | null
-            )?.through ?? 0
-        if (readOn !== db) {
-            const log = (
-                db.query('SELECT id FROM abide_changes_log').get() as {
-                    id: string
-                } | null
-            )?.id
-            if (readLog !== undefined && log !== readLog)
-                throw new Error(
-                    `abide: table ${name}'s reader was reading another file's changes; read the table again. RULEBOOK 47.54.`,
-                )
-            readOn = db
-            readLog = log
-        }
-        if (reading.position === undefined) {
-            // 47.42 — a reader starts past what was removed, though nothing past it remains.
-            reading.position = Math.max(lastChange(db, name), removedThrough())
-            let readers = READING.get(name)
-            if (readers === undefined) {
-                readers = new Set()
-                READING.set(name, readers)
-            }
-            readers.add(reading)
-        }
-        const through = removedThrough()
-        if (through > reading.position)
-            throw new Error(
-                `abide: table ${name}'s changes up to ${through} were removed before this reader, at ${reading.position}, read them; read the table again. RULEBOOK 47.42.`,
-            )
-        const { coded } = describe(db, name)
-        const rows = db
-            .query(
-                'SELECT seq, op, row, previous FROM abide_changes WHERE tbl = ? AND seq > ? ORDER BY seq LIMIT 256',
-            )
-            .all(name, reading.position) as {
-            seq: number
-            op: Change<Row>['op']
-            row: string | null
-            previous: string | null
-        }[]
-        for (const change of rows) {
-            reading.position = change.seq
-            pending.push({
-                op: change.op,
-                row: rowOf(change.row, coded),
-                previous: rowOf(change.previous, coded),
-            })
-        }
-    }
-    const done = (): void => {
-        cancelled = true
-        READING.get(name)?.delete(reading)
-        if (wake !== undefined) wake()
-    }
+        row === null ? undefined : (decodeRows([row], coded)[0] as Row)
     const stream = new ReadableStream<Change<Row>>(
         {
-            start: () => {
-                read()
-                looking(
-                    () => {
-                        if (wake !== undefined) wake()
-                    },
-                    () => cancelled,
-                )
-            },
             pull: async (controller) => {
-                for (;;) {
-                    if (cancelled) return
-                    if (pending.length === 0)
-                        try {
-                            read()
-                        } catch (thrown) {
-                            done()
-                            controller.error(thrown)
-                            return
-                        }
-                    const next = pending.shift()
-                    if (next !== undefined) {
-                        controller.enqueue(next)
-                        return
-                    }
-                    await new Promise<void>((woke) => {
-                        wake = () => {
-                            wake = undefined
-                            woke()
-                        }
-                    })
+                let next: Awaited<ReturnType<typeof source.read>>
+                try {
+                    next = await source.read()
+                } catch (thrown) {
+                    done()
+                    controller.error(thrown)
+                    return
                 }
+                if (next.done) {
+                    done()
+                    controller.close()
+                    return
+                }
+                reading.position = next.value.seq
+                const { coded } = describe(connection(), name)
+                const { op, row, previous } = next.value.entry
+                controller.enqueue({
+                    op,
+                    row: rowOf(row, coded),
+                    previous: rowOf(previous, coded),
+                })
             },
-            cancel: done,
+            cancel: async () => {
+                done()
+                await source.cancel()
+            },
         },
         { highWaterMark: 0 },
     )
-    return { stream, ended: () => cancelled }
+    return { stream, ended: () => ended }
 }
 
 /**

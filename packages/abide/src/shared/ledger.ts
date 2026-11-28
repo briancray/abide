@@ -34,6 +34,8 @@ export type LogStore = {
     position: (cursor: string, seq?: number) => number | Promise<number>
     trim: (through: number) => void | Promise<void>
     watch?: ((changed: () => void) => () => void) | undefined
+    // 58.17 — which log the store answers from, where it can be another's: a file reopened as another.
+    origin?: (() => string | Promise<string>) | undefined
     // 18.46 — an append made only where `expected` is still the last number, answering the new one,
     // or `undefined` where another writer appended first.
     appendAt: (
@@ -158,6 +160,7 @@ export function ledger<Entry>(options?: LedgerOptions<Entry>): Ledger<Entry> {
                   ? 0
                   : undefined
         let delivered: number | undefined
+        let origin: string | undefined
         let buffered: Logged<unknown>[] = []
         let cancelled = false
         let wake: (() => void) | undefined
@@ -173,7 +176,34 @@ export function ledger<Entry>(options?: LedgerOptions<Entry>): Ledger<Entry> {
                         if (cancelled) return
                         if (buffered.length === 0) {
                             await expire()
+                            // 58.17 — a position counts in one log; another's numbers say nothing of it.
+                            if (log.origin !== undefined) {
+                                const now = await log.origin()
+                                if (origin !== undefined && now !== origin) {
+                                    controller.error(
+                                        refuse(
+                                            410,
+                                            `a ledger's store answers from another log than this read began on; read it again. RULEBOOK 58.17.`,
+                                        ),
+                                    )
+                                    return
+                                }
+                                origin = now
+                            }
                             buffered = await log.since(position)
+                            // 58.15 — nothing kept past the position, though the log numbers past it.
+                            if (buffered.length === 0 && position > 0) {
+                                const last = await (known ??= log.last())
+                                if (last > position) {
+                                    controller.error(
+                                        refuse(
+                                            410,
+                                            `a ledger let entries ${position + 1} to ${last} go before this read reached them. RULEBOOK 58.15.`,
+                                        ),
+                                    )
+                                    return
+                                }
+                            }
                         }
                         const next = buffered.shift()
                         if (next !== undefined) {

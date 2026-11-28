@@ -210,8 +210,7 @@ test('a write inside a transaction refreshes once it commits, and not at all whe
 
 // 47.28, 47.42 — A READER IS NEVER HANDED A GAP: the watch keeps what a reader here has still to read,
 // and a reader behind a removal another process made errors rather than skipping. THE REVERT: drop the
-// `abide_changes_removed` test in `changesOf`; the reader hands on the change past the gap as if it
-// were next.
+// check after `since` in the ledger's read; the reader waits on, its gap never said.
 test('a reader behind changes another process removed errors rather than skip them — 47.42', async () => {
     const db = opener(
         'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER)',
@@ -224,9 +223,9 @@ test('a reader behind changes another process removed errors rather than skip th
     deals.upsert({ id: 3, amount: 3 })
     // Another process's watch trimmed past this reader.
     const other = new Database(db().filename)
-    other.run("DELETE FROM abide_changes WHERE tbl = 'deals'")
+    other.run("DELETE FROM abide_table_log WHERE log = 'deals'")
     other.run(
-        "INSERT INTO abide_changes_removed (tbl, through) VALUES ('deals', 1000) ON CONFLICT (tbl) DO UPDATE SET through = 1000",
+        "INSERT INTO abide_table_trimmed (log, through) VALUES ('deals', 1000) ON CONFLICT (log) DO UPDATE SET through = 1000",
     )
     other.close()
     let said = ''
@@ -235,7 +234,7 @@ test('a reader behind changes another process removed errors rather than skip th
     } catch (thrown) {
         said = (thrown as Error).message
     }
-    expect(said).toContain('RULEBOOK 47.42')
+    expect(said).toContain('RULEBOOK 58.15')
 })
 
 // 47.28 — THE LOG IS KEPT FOR A READER HERE: past the 10000 kept, a reader still behind reads every
@@ -365,10 +364,10 @@ test('readable after a cancelled reader is a new stream that reads on — 47.24'
     expect((await reading).map((change) => change.row?.amount)).toEqual([7])
 })
 
-// 47.54 — A READER FOLLOWS ITS OPENER: over the same file reopened it reads on, and over another
-// file it errors rather than read a log it has no place in. THE REVERT: drop the log check in
-// `changesOf`; the reader behind the old file's count hands on nothing until its deadline.
-test('a reader reads on across a reopen of its file, and errors over another file — 47.54', async () => {
+// 47.42, 58.17 — A READER FOLLOWS ITS OPENER: over the same file reopened it reads on, and over another
+// file it errors rather than read a log it has no place in. THE REVERT: drop the `origin` check in the
+// ledger's read; the reader behind the old file's count hands on nothing until its deadline.
+test('a reader reads on across a reopen of its file, and errors over another file — 47.42, 58.17', async () => {
     const db = opener(
         'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER)',
     )
@@ -387,27 +386,31 @@ test('a reader reads on across a reopen of its file, and errors over another fil
     } catch (thrown) {
         said = (thrown as Error).message
     }
-    expect({ same, other: said.includes('RULEBOOK 47.54') }).toEqual({
+    expect({ same, other: said.includes('RULEBOOK 58.17') }).toEqual({
         same: 2,
         other: true,
     })
 })
 
-// 47.42 — A READER STARTS PAST WHAT WAS REMOVED, though none of the log remains: it is not behind
-// what it never had to read. THE REVERT: start at the log's last change alone in `changesOf`; every
-// read errors with 47.42's message.
+// 47.42, 58.2 — A READER STARTS PAST WHAT WAS REMOVED, though none of the log remains: it is not behind
+// what it never had to read. THE REVERT: drop `_trimmed` from `lastSql`; the change after is numbered 1
+// again, and the reader, past it, waits out its deadline.
 test('a reader starting after every change was removed reads on — 47.42', async () => {
     const db = opener(
         'CREATE TABLE deals (id INTEGER PRIMARY KEY, amount INTEGER)',
     )
     const deals = table(db, 'deals')
     deals.upsert({ id: 1, amount: 1 })
-    db().run("DELETE FROM abide_changes WHERE tbl = 'deals'")
     db().run(
-        "INSERT INTO abide_changes_removed (tbl, through) SELECT 'deals', seq FROM sqlite_sequence WHERE name = 'abide_changes' ON CONFLICT (tbl) DO UPDATE SET through = excluded.through",
+        "INSERT INTO abide_table_trimmed (log, through) SELECT 'deals', MAX(seq) FROM abide_table_log WHERE log = 'deals' ON CONFLICT (log) DO UPDATE SET through = excluded.through",
     )
+    db().run("DELETE FROM abide_table_log WHERE log = 'deals'")
     const fresh = table(db, 'deals', { logged: [] })
     const reading = taken(fresh.readable, 1)
     fresh.upsert({ id: 2, amount: 2 })
-    expect((await reading).map((change) => change.row?.amount)).toEqual([2])
+    const changes = await Promise.race([
+        reading,
+        Bun.sleep(1_000).then(() => [] as Change<{ amount: number }>[]),
+    ])
+    expect(changes.map((change) => change.row?.amount)).toEqual([2])
 })
