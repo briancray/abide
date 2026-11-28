@@ -312,7 +312,9 @@ test("a chart's root fills its container, carries no viewBox, and answers measur
         disconnect() {}
     } as unknown as typeof ResizeObserver
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-    const stop = (plot.root['bind:element'] as (element: Element) => () => void)(svg)
+    const stop = (
+        plot.root['bind:element'] as (element: Element) => () => void
+    )(svg)
     try {
         expect(plot.measured).toBe(false)
         expect(plot.root['data-measured']).toBeUndefined()
