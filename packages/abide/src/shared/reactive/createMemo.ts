@@ -17,7 +17,7 @@ import {
     normalized,
     PARAMETER_DEFAULTS,
 } from './argsContract.ts'
-import type { CALL_ENTRY } from './CALL_ENTRY.ts'
+import type { CALL_ENTRY } from './callAnswer.ts'
 import { attendCall } from './callLoad.ts'
 import { cellOf } from './cellShape.ts'
 import type { Kept, Shaping } from './index.ts'

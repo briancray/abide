@@ -29,7 +29,7 @@ import { UNEXPECTED } from '../UNEXPECTED.ts'
 import { WORK } from '../WORK.ts'
 import { BODY_RUN, endRun } from './abortSignal.ts'
 import { armWindow } from './armTimer.ts'
-import { CALL_ENTRY } from './CALL_ENTRY.ts'
+import { entryOfAnswer } from './callAnswer.ts'
 import { CELL } from './CELL.ts'
 import {
     type Adoption,
@@ -1958,16 +1958,14 @@ function run(cell: Cell): void {
     // AND THE READ THE CALL MADE IS LET GO (16.108 is for a body that awaits): kept beside the
     // adoption, a refusal of the value ran the body again, whose call started a load anew (16.62)
     // that refused in turn — busy for ever.
-    if (produced !== null && typeof produced === 'object') {
-        const entry = (produced as { [CALL_ENTRY]?: unknown })[CALL_ENTRY]
-        if (entry !== undefined) {
-            produced = entry
-            if (
-                reader.cursor > 0 &&
-                reader.sources[reader.cursor - 1] === cellOf(entry)
-            )
-                reader.cursor -= 1
-        }
+    const entry = entryOfAnswer(produced)
+    if (entry !== undefined) {
+        produced = entry
+        if (
+            reader.cursor > 0 &&
+            reader.sources[reader.cursor - 1] === cellOf(entry)
+        )
+            reader.cursor -= 1
     }
     // A body that read FEWER values than last time leaves a tail nothing reads, and
     // that is the only thing the truncation has to do — so the test is here and the call
@@ -3342,8 +3340,7 @@ function pullAbove(cell: Cell): void {
  * refusal as a refusal rather than storing it as what the promise settled to.
  */
 function valueOfCall(value: unknown): unknown {
-    if (value === null || typeof value !== 'object') return value
-    return (value as { [CALL_ENTRY]?: unknown })[CALL_ENTRY] ?? value
+    return entryOfAnswer(value) ?? value
 }
 
 /**

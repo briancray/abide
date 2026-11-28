@@ -1,5 +1,5 @@
 import { refuse } from '../refuse.ts'
-import { CALL_ENTRY } from './CALL_ENTRY.ts'
+import { carryEntry } from './callAnswer.ts'
 import { cellOf } from './cellShape.ts'
 import { settledOf } from './Reactive.ts'
 import { track, TRACKING } from './tracking.ts'
@@ -46,8 +46,7 @@ export function answerOfCall(
         settled.then(undefined, () => undefined)
         answer = signal === undefined ? settled : leavable(settled, signal)
     }
-    ;(answer as { [CALL_ENTRY]?: unknown })[CALL_ENTRY] = entry
-    return answer
+    return carryEntry(answer, entry)
 }
 
 /** `settled`, refused as 16.49's ended load is the moment `signal` aborts (16.120). */

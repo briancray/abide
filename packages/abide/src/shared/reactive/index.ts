@@ -17,7 +17,7 @@ import { OUTBOX_SENDING } from '../OUTBOX_SENDING.ts'
 import type { Annotated, ReadRpc } from '../rpc.ts'
 import { RPC_SERVER } from '../RPC_SERVER.ts'
 import type { Schema } from '../Schema.ts'
-import type { CALL_ENTRY } from './CALL_ENTRY.ts'
+import type { CALL_ENTRY } from './callAnswer.ts'
 import {
     isMemo,
     keyedOf,

@@ -14,7 +14,7 @@ import {
     watch,
 } from '#shared'
 import { answered } from '#shared/answerOf.ts'
-import type { CALL_ENTRY } from '#shared/reactive/CALL_ENTRY.ts'
+import type { CALL_ENTRY } from '#shared/reactive/callAnswer.ts'
 import { keyedValue } from '#shared/reactive/index.ts'
 import { reachOf, type RpcContext } from '#shared/rpc.ts'
 

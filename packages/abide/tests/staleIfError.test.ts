@@ -6,14 +6,12 @@
 import { expect, test } from 'bun:test'
 
 import { memo, reactive } from '#shared'
-import { CALL_ENTRY } from '#shared/reactive/CALL_ENTRY.ts'
+import { entryOfAnswer } from '#shared/reactive/callAnswer.ts'
 import { keyedOf } from '#shared/reactive/createMemo.ts'
 
 const entriesOf = (value: unknown): number =>
-    (keyedOf(value) as { entries: Map<string, unknown> })
-        .entries.size
-const entryOf = (answer: object): unknown =>
-    (answer as { [CALL_ENTRY]?: unknown })[CALL_ENTRY]
+    (keyedOf(value) as { entries: Map<string, unknown> }).entries.size
+const entryOf = (answer: object): unknown => entryOfAnswer(answer)
 
 // THE REVERT: build `Lifetime` with a `staleMs` of 0 whatever `staleIfError` says; the entry is
 // released at its `ttl`, `entries: 0`. And with the kept entry ended where a reach finds it, the

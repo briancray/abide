@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 
 import { rpc, store } from '#server'
 import { flushSync, isFailed, memo, reactive, refuse, watch } from '#shared'
-import type { CALL_ENTRY } from '#shared/reactive/CALL_ENTRY.ts'
+import type { CALL_ENTRY } from '#shared/reactive/callAnswer.ts'
 import { keyedOf } from '#shared/reactive/createMemo.ts'
 import type { Reactive } from '#shared/reactive/Reactive.ts'
 
