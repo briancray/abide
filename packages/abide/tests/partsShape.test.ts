@@ -49,6 +49,8 @@ import {
     reactive,
     scrollSpy,
     type Sections,
+    select,
+    type SelectParts,
     slider,
     type SliderEnd,
     type SliderParts,
@@ -144,6 +146,8 @@ test('every part is a member, a function of its item, or an action — 49.9', ()
     shaped<CommandParts>()
     shaped<ComboboxParts<string>>()
     shaped<ComboboxChip>()
+    shaped<SelectParts<string>>()
+    shaped<SelectParts<string, true>>()
     shaped<SortableTableParts<Row>>()
     shaped<SortableTableColumn>()
     shaped<SortableTableRow>()
@@ -179,6 +183,7 @@ function elementParts(): Record<string, unknown> {
     const thumbs = slider({ label: 'Amount', range: true })
     const palette = commandPalette({ commands: [COMMAND] })
     const box = combobox({ options: () => ['a'], multiple: true })
+    const choose = select({ options: ['a'] })
     const table = sortableTable({
         rows: [ROW],
         columns: [COLUMN],
@@ -259,6 +264,12 @@ function elementParts(): Record<string, unknown> {
             .find((run) => run.match !== undefined)?.match,
         'combobox.chip.chip': box.chip('a').chip,
         'combobox.chip.remove': box.chip('a').remove,
+        'select.root': choose.root,
+        'select.trigger': choose.trigger,
+        'select.popup': choose.popup,
+        'select.listbox': choose.listbox,
+        'select.option': choose.option('a'),
+        'select.input': choose.input,
         'sortableTable.table': table.table,
         'sortableTable.column.header': table.column(COLUMN).header,
         'sortableTable.column.sort': table.column(COLUMN).sort,
@@ -360,6 +371,7 @@ test('every option an app binds is optional and handed back, and every id is mad
     const thumbs = slider({ label: 'Amount', range: true, min: 10, max: 40 })
     const palette = commandPalette({ commands: [COMMAND] })
     const box = combobox({ options: () => ['a', 'b'] })
+    const choose = select({ options: ['a', 'b'] })
     const table = sortableTable({
         rows: [ROW],
         columns: [COLUMN],
@@ -378,6 +390,7 @@ test('every option an app binds is optional and handed back, and every id is mad
         'slider.value': thumbs.value,
         'commandPalette.open': palette.open,
         'combobox.value': box.value,
+        'select.value': choose.value,
         'listbox.selected': keys.selected,
         'sortableTable.sort': table.sort,
         'sortableTable.selected': table.selected,
@@ -400,6 +413,8 @@ test('every option an app binds is optional and handed back, and every id is mad
     // An id made where none was given, readable among the parts.
     expect(box.id).toMatch(/^combobox-/)
     expect(box.input.id).toBe(box.id)
+    expect(choose.id).toMatch(/^select-/)
+    expect(choose.trigger.id).toBe(choose.id)
     expect(keys.id).toMatch(/^listbox-/)
     // A string is its own key and label.
     expect(box.option('a').id).toBe(
@@ -573,6 +588,7 @@ test('a part carrying aria-current or aria-expanded carries data-current or data
     const spy = scrollSpy({ items: ['a', 'b'] })
     const shown = popover()
     const box = combobox({ options: () => ['a'] })
+    const choose = select({ options: ['a'] })
     const palette = commandPalette({ commands: [COMMAND] })
     const more = disclosure({ open: reactive(true) })
     const opener = menu()
@@ -601,6 +617,7 @@ test('a part carrying aria-current or aria-expanded carries data-current or data
         'popover.anchor': shown.anchor,
         'menu.trigger': opener.trigger,
         'combobox.input': box.input,
+        'select.trigger': choose.trigger,
         'commandPalette.input': palette.input,
         'disclosure.button open': more.button,
     }
@@ -632,6 +649,8 @@ test('a part carrying aria-current or aria-expanded carries data-current or data
         currentTarget: { value: 'a' },
     } as unknown as Event)
     check('combobox.input opened', box.input)
+    choose.open.set(true)
+    check('select.trigger opened', choose.trigger)
     expect(unpaired).toEqual([])
     // Each state read here holds in one of the two, so the check above is not vacuous.
     expect([

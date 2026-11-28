@@ -1,0 +1,35 @@
+<script>
+import { reactive, select } from '@abide/abide'
+
+import { STAGES } from './STAGES.ts'
+
+let stages = reactive<string[]>([])
+const choose = select({
+    id: 'export-stages',
+    options: STAGES,
+    multiple: true,
+    name: 'stages',
+    value: stages,
+})
+</script>
+
+<form class="fields stacked" onsubmit={(event) => event.preventDefault()}>
+    <span id="export-stages-label">Stages to export</span>
+    <div {...choose.root} class="picker">
+        <div {...choose.trigger} aria-labelledby="export-stages-label">
+            {stages.length === 0 ? 'Every stage' : stages.join(', ')}
+        </div>
+        {#for each of stages key each}
+            <input {...choose.input(each)}>
+        {/for}
+        {#if choose.open}
+            <div {...choose.popup}>
+                <ul {...choose.listbox}>
+                    {#for each of choose.items key each}
+                        <li {...choose.option(each)}>{each}</li>
+                    {/for}
+                </ul>
+            </div>
+        {/if}
+    </div>
+</form>

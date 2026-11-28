@@ -45,6 +45,8 @@ export {
     type ComboboxParts,
     combobox,
 } from './combobox.ts'
+// 51.193-51.204 — a field that picks from a list and is never typed in.
+export { type SelectOptions, type SelectParts, select } from './select.ts'
 export {
     type Command,
     type CommandPaletteOptions,

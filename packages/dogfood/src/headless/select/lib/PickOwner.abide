@@ -1,0 +1,35 @@
+<script>
+import { select } from '@abide/abide'
+
+type Contact = { id: string; name: string; company: string }
+
+const CONTACTS: Contact[] = [
+    { id: 'ada', name: 'Ada Lovelace', company: 'Analytical Co' },
+    { id: 'grace', name: 'Grace Hopper', company: 'Hopper & Co' },
+    { id: 'katherine', name: 'Katherine Johnson', company: 'Orbit Labs' },
+]
+const choose = select({
+    id: 'owner',
+    options: CONTACTS,
+    label: (contact) => contact.name,
+})
+</script>
+
+<div {...choose.root} class="picker">
+    <span id="owner-label">Owner</span>
+    <div {...choose.trigger} aria-labelledby="owner-label">
+        {choose.value?.name ?? 'Nobody yet'}
+    </div>
+    {#if choose.open}
+        <div {...choose.popup}>
+            <ul {...choose.listbox}>
+                {#for contact of choose.items key contact.id}
+                    <li {...choose.option(contact)}>
+                        {contact.name}
+                        <small class="text-muted">{contact.company}</small>
+                    </li>
+                {/for}
+            </ul>
+        </div>
+    {/if}
+</div>

@@ -721,20 +721,37 @@
    load takes and gone the rest of the time, so showing it by ADDING a node reflows everything
    under it twice per press — and the frame reports its height to the page, so the shift reaches
    past the example. The row is here whether or not there is anything to say. */
-/* A combobox's list, opened in the top layer under its input and as wide as it (51.57). */
+/* A combobox's or a select's list, opened in the top layer under its field and as wide as it
+   (51.57, 51.202); a select's trigger drawn as a field with a chevron. */
 @utility picker {
     @apply flex flex-col gap-hair;
 
-    & [data-combobox=popup] {
+    & [data-combobox=popup],
+    & [data-select=popup] {
         @apply m-0 w-(--anchor-width) rounded-md border border-rule bg-raised p-0 text-ink shadow-sm;
     }
 
-    & [data-combobox=listbox] {
+    & [data-combobox=listbox],
+    & [data-select=listbox] {
         @apply m-0 list-none p-0 min-w-0 rounded-none border-0 bg-transparent;
     }
 
-    & [data-combobox=option] {
+    & [data-combobox=option],
+    & [data-select=option] {
         @apply px-3 py-1;
+    }
+
+    & [data-select=trigger] {
+        @apply flex cursor-default items-center justify-between gap-2 rounded-md border border-rule bg-raised px-3 py-1;
+
+        &::after {
+            content: '▾';
+            @apply text-muted;
+        }
+    }
+
+    & [data-placeholder] {
+        @apply text-muted;
     }
 
     & [data-combobox=empty] {

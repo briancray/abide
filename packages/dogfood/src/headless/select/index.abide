@@ -1,0 +1,116 @@
+<script>
+import Doc from '#src/lib/Doc.abide'
+import Example from '#src/lib/Example.abide'
+import Section from '#src/lib/Section.abide'
+
+import MarkPlaceholder from './lib/MarkPlaceholder.abide'
+import markPlaceholder from './lib/MarkPlaceholder.abide' with { type: 'text' }
+import PickOwner from './lib/PickOwner.abide'
+import pickOwner from './lib/PickOwner.abide' with { type: 'text' }
+import PickStage from './lib/PickStage.abide'
+import pickStage from './lib/PickStage.abide' with { type: 'text' }
+import PickStages from './lib/PickStages.abide'
+import pickStages from './lib/PickStages.abide' with { type: 'text' }
+import SubmitStage from './lib/SubmitStage.abide'
+import submitStage from './lib/SubmitStage.abide' with { type: 'text' }
+</script>
+
+<Doc
+    seeAlso={['/headless/combobox', '/headless/listbox', '/headless/popover']}
+    tests={[
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageSelect.test.ts',
+            from: [
+                "test('ArrowDown opens the list on the first stage, and Enter picks the active one — 51.194, 51.195, 51.197, 51.203'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageSelect.test.ts',
+            from: [
+                "test('the list opens with the picked stage active, and Home and End open it at either end'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageSelect.test.ts',
+            from: ["test('typing a letter opens the list on the stage it starts'"],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageSelect.test.ts',
+            from: [
+                "test('Escape shuts the list without picking, then is left to the page'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageSelect.test.ts',
+            from: [
+                "test('a press opens the list and a second shuts it, a click picks, and focus opens nothing — 51.193, 51.197'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageSelect.test.ts',
+            from: [
+                "test('leaving the field shuts the list and keeps the pick — 51.199'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageSelect.test.ts',
+            from: [
+                "test('the trigger is marked while nothing is picked, and the picked stage is marked — 51.200'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/StageSelect.test.ts',
+            from: [
+                "test('a form holding the select submits the picked stage under its name'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/ExportStages.test.ts',
+            from: [
+                "test('picking adds a stage, picking it again takes it out, and the list stays open'",
+            ],
+        },
+        {
+            path: 'packages/dogfood/examples/crm/src/pipeline/lib/ExportStages.test.ts',
+            from: [
+                "test('a form holding the select submits each picked stage under its name'",
+            ],
+        },
+    ]}
+>
+    <Section level={3} title="Pick a stage from a list nobody types in">
+        <p>Spread <code>trigger</code> onto the element showing the pick, <code>popup</code> and
+            <code>listbox</code> onto what holds the list while <code>open</code>, and
+            <code>option</code> onto each of <code>items</code>. Focus stays on the trigger: the
+            arrows, Enter and Space open the list and pick from it, a letter moves to the stage it
+            starts, and Escape shuts it with the pick as it was.</p>
+        <Example code={pickStage}><PickStage /></Example>
+    </Section>
+
+    <Section level={3} title="Show each owner with their company">
+        <p>An option holds whatever you write, and <code>label</code> is what a letter is matched
+            against. <code>value</code> is the item picked.</p>
+        <Example code={pickOwner}><PickOwner /></Example>
+    </Section>
+
+    <Section level={3} title="Pick several stages">
+        <p><code>multiple</code> picks many: <code>value</code> is every item picked, a pick adds
+            an item or takes it out again, and the list stays open until Escape, a press on the
+            trigger, or focus leaving it.</p>
+        <Example code={pickStages}><PickStages /></Example>
+    </Section>
+
+    <Section level={3} title="Submit the stage with a form">
+        <p>Given <code>name</code>, spread <code>input</code> onto a hidden field inside the form,
+            and the pick's key is submitted under it. Where it picks many, <code>input(item)</code>
+            is a field for each item picked.</p>
+        <Example code={submitStage}><SubmitStage /></Example>
+    </Section>
+
+    <Section level={3} title="Style the field while nothing is picked">
+        <p>The trigger carries <code>data-placeholder</code> while nothing is picked and
+            <code>data-open</code> while the list is; the active option carries
+            <code>data-active</code> and each picked one <code>data-selected</code>.</p>
+        <Example code={markPlaceholder}><MarkPlaceholder /></Example>
+    </Section>
+</Doc>

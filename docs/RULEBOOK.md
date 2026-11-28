@@ -5648,9 +5648,9 @@ carry the role `status`.
 50.18 A notice's action MUST take the notice out of its `list` and then call its `run`.
 
 50.19 An anchored layer — the element carrying `tooltip.host`'s `hint` part while it shows a hint,
-an element `popover` is bound to and the element carrying `combobox`'s `popup`
-part — MUST sit on the side 50.20 takes, `offset` pixels from its anchor, lined up along it as
-`align` names.
+an element `popover` is bound to, the element carrying `combobox`'s `popup` part and the element
+carrying `select`'s `popup` part — MUST sit on the side 50.20 takes, `offset` pixels from its
+anchor, lined up along it as `align` names.
 
 50.20 An anchored layer MUST take `side` where it leaves the room the layer needs there — its height
 on `top` and `bottom`, its width on `left` and `right` — else the side opposite where that one does,
@@ -5674,16 +5674,17 @@ stack while it shows (53.14, 53.15), once it is unbound, and as a `popover` give
 of `0` closes for a leave and for a blur (50.56, 50.76).
 
 50.26 The element carrying `tooltip.host`'s `hint` part while it shows a hint, a `chart`'s `tip`,
-an element `popover` is bound to and the element carrying `combobox`'s `popup`
-part MUST open in the top layer as a popover placed against their anchor as 50.19-50.21 state, and
+an element `popover` is bound to, the element carrying `combobox`'s `popup`
+part and the element carrying `select`'s `popup` part MUST open in the top layer as a popover placed against their anchor as 50.19-50.21 state, and
 MUST be placed again while open whenever anything scrolls, the window resizes, or the anchor or the
 popover changes size — and for a change of size, before the frame that lays that size out is
 painted.
 
-50.27 The element carrying `tooltip.host`'s `hint` part while it shows a hint, a `chart`'s `tip`,
-an element `popover` is bound to and the element carrying `combobox`'s `popup`
-part MUST write the side it took as `data-side`, how far along its facing edge the anchor's middle
-falls as the `--arrow-offset` custom property, and the anchor's width as `--anchor-width`.
+50.27 The element carrying `tooltip.host`'s `hint` part while it shows a hint, a `chart`'s `tip`, an
+element `popover` is bound to, the element carrying `combobox`'s `popup` part and the element
+carrying `select`'s `popup` part MUST write the side it took as `data-side`, how far along its
+facing edge the anchor's middle falls as the `--arrow-offset` custom property, and the anchor's
+width as `--anchor-width`.
 
 50.28 A `menu` MUST focus its first menu item as it opens, or its last where ArrowUp on its trigger
 opened it, and nothing in its menu where a pointer's rest or focus opened it (50.55, 50.75).
@@ -6480,6 +6481,44 @@ item it lists or holds carries that text as its `label`, ignoring case.
 51.192 `Listbox`'s `option` MUST answer the same listener for each event of a key at every call, and
 a change of which key is active or selected MUST wake the binding of only an option whose
 `data-active` or `aria-selected` it changes.
+
+51.193 A press on `select`'s trigger MUST open its list where it is shut and shut it where it is
+open, and focus reaching the trigger MUST NOT open it.
+
+51.194 `select` MUST open its list on ArrowDown, ArrowUp, Enter and Space on its trigger while the
+list is shut, with the first item `value` holds active, or its first item where `value` holds none
+of them, and on Home with its first item active and on End with its last.
+
+51.195 `select` MUST keep and move its active item as a `listbox` over its items does while its list
+is open.
+
+51.196 A printable key on `select`'s trigger MUST make active the next item whose `label` starts
+with what was typed, as `menu` moves among its items (50.40), opening its list where it is shut.
+
+51.197 `select` MUST pick the active item on Enter and on Space, and an item whose option is
+clicked.
+
+51.198 `select` MUST shut its list on Escape where the list is open, and MUST NOT prevent the default
+of an Escape where its list is shut.
+
+51.199 `select` MUST shut its list when its trigger loses focus.
+
+51.200 `select` MUST write `data-open` on its `root` part while its list is open, `data-active` on
+the active item's option, `data-selected` on the option of each item `value` holds, and
+`data-placeholder` on its trigger while `value` holds no item.
+
+51.201 `select` given `name` MUST submit with a form its `input` part is in, as a field of that
+name, the key of `value` as text, `''` where `value` is `undefined`, and where `value` is an array,
+the key of the item each `input` part is answered for.
+
+51.202 `select`'s `popup` part MUST open the element it is spread on against its trigger as
+`popover` opens one, and a press inside it MUST NOT take focus from its trigger.
+
+51.203 A pick in a `select` whose `value` is not an array MUST set `value` to the item picked and
+shut its list.
+
+51.204 A pick in a `select` whose `value` is an array MUST add the item picked to it, or take the
+item out where it holds it, and MUST leave its list open.
 
 # 52. Formatting, markdown and charts
 

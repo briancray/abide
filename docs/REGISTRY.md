@@ -542,6 +542,14 @@ type StoredOf<Calls> = Calls extends Reactive<infer Stored, never, unknown, unkn
 | `Bindable` | `Bindable<Value> = { get(): Value; set(value: Value): unknown }` | What an option a headless component binds takes: a `{ get, set }` pair to read and write, which a `Reactive` is. | 49.8, 32.6, 31.3 |
 | `LabelRun` | `{ readonly text: string; readonly match: Record<string, unknown> \| undefined }` | A stretch of a label, and the `match` part of the element marking it where it is what was typed. | 51.106, 51.107, 49.3 |
 
+## `select`
+
+| Name | Signature | Meaning | Rules |
+| --- | --- | --- | --- |
+| `select` | `<Item>(options: SelectOptions<Item>) => SelectParts<Item>` | WAI-ARIA's select-only combobox as parts an app spreads onto a trigger, a popup and options of its own: a list picked from by the keys and the pointer, never typed in. | 51.193, 51.194, 51.195, 51.196, 51.197, 51.198, 51.199, 51.200, 51.202, 51.203, 51.204, 50.19, 50.26, 50.27, 49.7, 49.14, 49.2, 49.4, 49.5, 49.6 |
+| `SelectOptions` | `<Item, Multiple extends boolean = false>{ id?: string; options: readonly Item[] \| (() => readonly Item[]); key?(item: Item): string \| number; label?(item: Item): string; multiple?: Multiple; value?: Bindable<Picked<Item, Multiple>>; name?: string \| (() => string \| undefined) }` | What a select lists, how an item is told apart and written, whether it picks many, the pick it holds, and the name it submits under. | 51.196, 51.201, 51.204, 49.8, 49.10, 49.11, 49.16, 49.19, 49.21 |
+| `SelectParts` | `<Item, Multiple extends boolean = false>{ readonly id: string; readonly root: Record<string, unknown>; readonly trigger: Record<string, unknown>; readonly open: Reactive<boolean>; readonly popup: Record<string, unknown>; readonly listbox: Record<string, unknown>; get items(): readonly Item[]; option(item: Item): Record<string, unknown>; readonly input: Multiple extends true ? (item: Item) => Record<string, unknown> : Record<string, unknown>; readonly value: Reactive<Picked<Item, Multiple>> }` | The parts `select` hands back: its id, the field's wrapper, the trigger, whether it is open, the popup, the list, the items, an option, the hidden field or a picked item's, and the pick. | 51.200, 51.201, 51.202, 32.99, 49.3, 49.8, 49.9, 49.17, 49.18 |
+
 ## `tabs`
 
 | Name | Signature | Meaning | Rules |

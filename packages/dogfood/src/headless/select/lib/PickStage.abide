@@ -1,0 +1,24 @@
+<script>
+import { select } from '@abide/abide'
+
+const choose = select({
+    id: 'stage',
+    options: ['lead', 'qualified', 'proposal', 'won'],
+})
+</script>
+
+<div {...choose.root} class="picker">
+    <span id="stage-label">Stage</span>
+    <div {...choose.trigger} aria-labelledby="stage-label">
+        {choose.value ?? 'Pick a stage'}
+    </div>
+    {#if choose.open}
+        <div {...choose.popup}>
+            <ul {...choose.listbox}>
+                {#for stage of choose.items key stage}
+                    <li {...choose.option(stage)}>{stage}</li>
+                {/for}
+            </ul>
+        </div>
+    {/if}
+</div>

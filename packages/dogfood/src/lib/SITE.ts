@@ -466,6 +466,14 @@ const WRITTEN: readonly {
                 subgroup: 'Inputs',
             },
             {
+                route: '/headless/select',
+                title: '`select`',
+                description:
+                    'Spread a field that picks one or many from a list, never typed in, onto markup.',
+                where: 'component',
+                subgroup: 'Inputs',
+            },
+            {
                 route: '/headless/toggle',
                 title: '`toggle`',
                 description:

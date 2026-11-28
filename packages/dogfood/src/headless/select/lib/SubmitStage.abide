@@ -1,0 +1,37 @@
+<script>
+import { reactive, select } from '@abide/abide'
+
+let sent = reactive('')
+const choose = select({
+    id: 'next-stage',
+    options: ['lead', 'qualified', 'proposal', 'won'],
+    name: 'stage',
+})
+
+function submit(event: SubmitEvent) {
+    event.preventDefault()
+    const fields = new FormData(event.currentTarget as HTMLFormElement)
+    sent = `stage=${fields.get('stage')}`
+}
+</script>
+
+<form class="fields stacked" onsubmit={submit}>
+    <div {...choose.root} class="picker">
+        <span id="next-stage-label">Move to</span>
+        <div {...choose.trigger} aria-labelledby="next-stage-label">
+            {choose.value ?? 'Pick a stage'}
+        </div>
+        <input {...choose.input}>
+        {#if choose.open}
+            <div {...choose.popup}>
+                <ul {...choose.listbox}>
+                    {#for stage of choose.items key stage}
+                        <li {...choose.option(stage)}>{stage}</li>
+                    {/for}
+                </ul>
+            </div>
+        {/if}
+    </div>
+    <button>Move</button>
+    <p class="status">{sent}</p>
+</form>

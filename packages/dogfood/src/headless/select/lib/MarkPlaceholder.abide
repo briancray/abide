@@ -1,0 +1,30 @@
+<script>
+import { select } from '@abide/abide'
+
+const choose = select({
+    id: 'priority',
+    options: ['low', 'normal', 'high'],
+})
+</script>
+
+<div {...choose.root} class="picker">
+    <span id="priority-label">Priority</span>
+    <div
+        {...choose.trigger}
+        aria-labelledby="priority-label"
+        class="data-placeholder:italic data-open:border-ink"
+    >{choose.value ?? 'Unset'}</div>
+    {#if choose.open}
+        <div {...choose.popup}>
+            <ul {...choose.listbox}>
+                {#for level of choose.items key level}
+                    <li
+                        {...choose.option(level)}
+                        class="data-active:bg-ink data-active:text-paper
+                        data-selected:underline"
+                    >{level}</li>
+                {/for}
+            </ul>
+        </div>
+    {/if}
+</div>
