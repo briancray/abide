@@ -3,6 +3,11 @@
 // `content_block_start` says, its deltas extend it in place, and a tool call's input is its JSON once
 // the block stops. Between runs, what a call answered goes into the user message after the call.
 //
+// A BLOCK IS WRITTEN AS THE API STREAMED IT, every field it came with: the API binds a thinking
+// block to the turns before it, so a turn sent back with a field taken off is one it may refuse.
+// Each block follows the run's last, whatever index the stream gave it, so a run is never left with
+// a hole in it.
+//
 // ONE EVENT AT A TIME, IN PLACE: a delta extends the block it lands in and touches nothing before it,
 // so a page folding a streaming answer pays per event for that event alone, and a block keeps its
 // identity from its first delta to its last (53.32). `assistantMessage` folds a whole answer the same
@@ -16,6 +21,15 @@ import type {
 
 /** A block as it is written: any of the API's, by its fields, which its deltas fill in. */
 type Writing = { type: string; [field: string]: unknown }
+
+/** `block` as a block of its own to write into, its citations a list of its own. */
+function writtenOf(block: AssistantContent): Writing {
+    const written: Writing = { ...block }
+    // So a citation added never lands in the event's.
+    if (Array.isArray(written.citations))
+        written.citations = [...written.citations]
+    return written
+}
 
 // 44.106 — THE VALUE EACH `tool_result` EVENT DELIVERED (44.49), by the block it was folded into: the
 // block goes back to the API as the API takes it, so the value is kept beside it rather than on it,
@@ -39,6 +53,8 @@ export class MessageAccumulator {
     #run: number | undefined = undefined
     // Each tool call's input as its JSON arrives, by block index.
     #partials: string[] = []
+    // Where in the run each block index was written.
+    #places: number[] = []
 
     /** @param start how many messages come before the answer */
     constructor(start: number) {
@@ -48,28 +64,27 @@ export class MessageAccumulator {
     /** Folds `event` into `messages`, in place. 44.105. */
     add(messages: AssistantMessage[], event: AssistantEvent): void {
         switch (event.type) {
-            case 'message_start':
-                messages.push({
-                    role: 'assistant',
-                    content: [...event.message.content],
-                })
+            case 'message_start': {
+                const content: AssistantContent[] = []
+                for (const block of event.message.content)
+                    content.push(writtenOf(block) as AssistantContent)
+                messages.push({ role: 'assistant', content })
                 this.#run = messages.length - 1
                 this.#partials = []
+                this.#places = []
                 return
+            }
             case 'content_block_start': {
                 // A block is written within a run, which `message_start` opened.
                 const run = this.#blocks(messages)
                 if (run === undefined) return
-                const block: Writing = { ...event.content_block } as Writing
-                // A list of the block's own, so a citation added never lands in the event's.
-                if (Array.isArray(block.citations))
-                    block.citations = [...block.citations]
-                run[event.index] = block
                 this.#partials[event.index] = ''
+                this.#places[event.index] = run.length
+                run.push(writtenOf(event.content_block))
                 return
             }
             case 'content_block_delta': {
-                const block = this.#blocks(messages)?.[event.index]
+                const block = this.#block(messages, event.index)
                 if (block === undefined) return
                 const delta = event.delta
                 if (delta.type === 'text_delta')
@@ -88,7 +103,7 @@ export class MessageAccumulator {
                 return
             }
             case 'content_block_stop': {
-                const block = this.#blocks(messages)?.[event.index]
+                const block = this.#block(messages, event.index)
                 const partial = this.#partials[event.index] ?? ''
                 if (block === undefined || partial === '') return
                 // Cut short at `max_tokens`, an input is not JSON, and is kept as the words written.
@@ -122,8 +137,8 @@ export class MessageAccumulator {
 
     /**
      * Leaves out of the answer what the API would refuse sent back: a tool call that never answered —
-     * the turn cap reached, or the answer stopped while it ran — and a message left with nothing in
-     * it. 44.105.
+     * the turn cap reached, or the answer stopped while it ran — a thinking block no signature
+     * reached, and a message left with nothing in it. 44.105.
      */
     settle(messages: AssistantMessage[]): void {
         this.#run = undefined
@@ -144,12 +159,22 @@ export class MessageAccumulator {
                 continue
             const kept: AssistantContent[] = []
             for (const block of message.content)
-                if (block.type !== 'tool_use' || answered.has(block.id))
+                if (
+                    block.type === 'tool_use'
+                        ? answered.has(block.id)
+                        : block.type !== 'thinking' || Boolean(block.signature)
+                )
                     kept.push(block)
             if (kept.length === 0) messages.splice(at, 1)
             else if (kept.length < message.content.length)
                 message.content = kept
         }
+    }
+
+    /** The block the run being written holds for stream index `index`, where one was written. */
+    #block(messages: AssistantMessage[], index: number): Writing | undefined {
+        const place = this.#places[index]
+        return place === undefined ? undefined : this.#blocks(messages)?.[place]
     }
 
     /** The blocks of the run being written, as `messages` holds them: the API's own, filled in by deltas. */

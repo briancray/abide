@@ -1530,6 +1530,84 @@ test('Claude Code is sent a transcript image and document in their place in the 
     ])
 }, 30_000)
 
+// An answer as the API streamed it, with what its own tools wrote and a field `AssistantContent` names
+// for no block: a call's `caller`.
+const SEARCHED = [
+    { role: 'user', content: 'what is the fee now?' },
+    {
+        role: 'assistant',
+        content: [
+            {
+                type: 'server_tool_use',
+                id: 'srvtoolu_1',
+                name: 'web_search',
+                input: { query: 'Q3 fee' },
+            },
+            {
+                type: 'web_search_tool_result',
+                tool_use_id: 'srvtoolu_1',
+                content: [
+                    {
+                        type: 'web_search_result',
+                        url: 'https://bank.example/fees',
+                        title: 'Fees',
+                        encrypted_content: 'abc',
+                    },
+                ],
+            },
+            {
+                type: 'thinking',
+                thinking: '',
+                signature: 'sig',
+            },
+            {
+                type: 'tool_use',
+                id: 'toolu_1',
+                name: 'lookup',
+                input: { account: 'checking' },
+                caller: { type: 'direct' },
+            },
+        ],
+    },
+    {
+        role: 'user',
+        content: [
+            {
+                type: 'tool_result',
+                tool_use_id: 'toolu_1',
+                content: '[731]',
+            },
+            SNAPSHOT,
+        ],
+    },
+]
+
+// 44.105, 44.38 — AN ANSWER GOES BACK AS IT CAME, through a handler typing its transcript
+// `AssistantMessage[]`: the schema compiled from it takes what the API's own tools wrote and every
+// field a block the model writes came with. THE REVERT: drop the index signature from `tool_use` in
+// `AssistantContent`, and the turn is refused 422 — `messages.1.content` matching none of its shapes.
+test('a transcript holding what the API streamed passes the AssistantMessage schema — 44.105, 44.38', async () => {
+    const answer = await askWith('one', 'api', SEARCHED)
+    expect(answer.status).toBe(200)
+    await answer.text()
+}, 30_000)
+
+// 44.5 — WHAT THE API'S OWN TOOLS WROTE IS ANOTHER RUN'S, and Claude Code is handed none of it. THE
+// REVERT: hand on every block but words, calls and reasoning in `foldedContent`, and the search's two
+// blocks reach Claude Code as blocks it refuses.
+test('Claude Code is sent none of what the API’s own tools wrote — 44.5', async () => {
+    await pairBridge('four')
+    await events(await askWith('four', 'code', SEARCHED))
+    const record = (await Bun.file(RECORD).json()) as { prompt: unknown }
+    expect(record.prompt).toEqual([
+        {
+            type: 'text',
+            text: '<conversation>\n<user>\nwhat is the fee now?\n</user>\n<assistant>\n\n\n\n<tool_use name="lookup">{"account":"checking"}</tool_use>\n</assistant>\n</conversation>\n\n<tool_result>[731]</tool_result>\n',
+        },
+        SNAPSHOT,
+    ])
+}, 30_000)
+
 // 44.6, 42.12 — A TOOL IS CALLED THROUGH THE APP ANSWERING THE CONVERSATION, not whichever `App` the
 // process built last: two held in one process, the second stopped, and the first still lists and
 // calls its tools. THE REVERT: build the `McpSurface` in `bootApp` over `RPC_SERVER.raw` rather than

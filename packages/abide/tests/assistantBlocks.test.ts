@@ -6,6 +6,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 
 import { claudeApi } from '#server/claudeApi.ts'
 import type {
+    AssistantContent,
     AssistantEvent,
     AssistantMessage,
 } from '#shared/AssistantEvent.ts'
@@ -242,6 +243,94 @@ test('a call that never answered is left out of what an answer amounts to — 44
     expect(assistantMessage('assistant', unanswered)).toEqual([
         { role: 'assistant', content: [{ type: 'text', text: 'checking' }] },
     ])
+})
+
+// 44.105 — A BLOCK STREAMED IS KEPT AS IT CAME, so an answer goes back to the API as the API wrote
+// it: a call's `caller`, which `AssistantContent` names for no block, stays on it; a block whose index
+// the stream skipped to follows the run's last, leaving no hole to read as `null`; and a thinking block
+// no signature reached, which the API refuses, is left out. THE REVERT: write the block at
+// `run[event.index]` in `MessageAccumulator` and keep every thinking block in `settle`, and the run
+// holds `[text, null, tool_use, thinking]`.
+test('a block streamed is kept as it came, after the run’s last, an unsigned thinking block left out — 44.105', () => {
+    const streamed: AssistantEvent[] = [
+        {
+            type: 'message_start',
+            message: {
+                id: 'msg_1',
+                type: 'message',
+                role: 'assistant',
+                model: 'claude-opus-5-5',
+                content: [],
+                stop_reason: null,
+                stop_sequence: null,
+                usage: { input_tokens: 1, output_tokens: 1 },
+            },
+        },
+        {
+            type: 'content_block_start',
+            index: 0,
+            content_block: { type: 'text', text: '' },
+        },
+        {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'text_delta', text: 'looking' },
+        },
+        { type: 'content_block_stop', index: 0 },
+        {
+            type: 'content_block_start',
+            index: 2,
+            content_block: {
+                type: 'tool_use',
+                id: 't1',
+                name: 'lookup',
+                input: {},
+                caller: { type: 'direct' },
+            } as AssistantContent,
+        },
+        {
+            type: 'content_block_delta',
+            index: 2,
+            delta: { type: 'input_json_delta', partial_json: '{"a":1}' },
+        },
+        { type: 'content_block_stop', index: 2 },
+        {
+            type: 'content_block_start',
+            index: 3,
+            content_block: {
+                type: 'thinking',
+                thinking: '',
+            } as AssistantContent,
+        },
+        {
+            type: 'content_block_delta',
+            index: 3,
+            delta: { type: 'thinking_delta', thinking: 'hm' },
+        },
+        { type: 'content_block_stop', index: 3 },
+        { type: 'message_stop' },
+        {
+            type: 'tool_result',
+            tool_use_id: 't1',
+            content: [{ type: 'text', text: '1' }],
+            is_error: false,
+            value: 1,
+        },
+    ]
+    const [answer] = assistantMessage('assistant', streamed)
+    expect(JSON.parse(JSON.stringify(answer))).toStrictEqual({
+        role: 'assistant',
+        content: [
+            { type: 'text', text: 'looking' },
+            {
+                type: 'tool_use',
+                id: 't1',
+                name: 'lookup',
+                input: { a: 1 },
+                caller: { type: 'direct' },
+            },
+        ],
+    })
 })
 
 // 53.32 — A DELTA EXTENDS THE BLOCK IT LANDS IN, and leaves it the block it was: a page keyed by its

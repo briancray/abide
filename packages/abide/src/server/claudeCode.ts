@@ -117,12 +117,11 @@ function claudeCodeProvider(config: ClaudeCodeConfig = {}): Provider {
  * five-minute breakpoint ahead of an hour's.
  */
 function cachedAnHour(piece: AssistantContent): boolean {
-    if (
-        'cache_control' in piece &&
-        piece.cache_control !== undefined &&
-        piece.cache_control.ttl !== '1h'
-    )
-        return false
+    // A block the model writes may carry any field, `cache_control` the API's own among them.
+    const cached = (
+        piece as { cache_control?: { ttl?: string | undefined } | undefined }
+    ).cache_control
+    if (cached != null && cached.ttl !== '1h') return false
     const inner =
         piece.type === 'search_result'
             ? piece.content
@@ -136,6 +135,9 @@ function cachedAnHour(piece: AssistantContent): boolean {
     for (const block of inner) if (!cachedAnHour(block)) return false
     return true
 }
+
+// 44.5 — the blocks, other than words and calls, a prompt carries in their place.
+const HANDED_ON = new Set(['image', 'document', 'search_result'])
 
 /**
  * The transcript as the one message Claude Code is sent, as Messages API blocks: earlier turns folded
@@ -177,9 +179,9 @@ function foldedContent(
                 words += '</tool_result>'
                 continue
             }
-            // Reasoning another run wrote is that run's, and none a prompt carries.
-            if (piece.type === 'thinking' || piece.type === 'redacted_thinking')
-                continue
+            // Reasoning another run wrote, and what the API's own tools wrote into it, are that
+            // run's, and none a prompt carries.
+            if (!HANDED_ON.has(piece.type)) continue
             pieces.push({ type: 'text', text: words }, piece)
             words = ''
         }

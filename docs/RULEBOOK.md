@@ -4714,8 +4714,9 @@ that run made, the same sequence for one conversation whichever `Provider` ran i
 each one.
 
 44.5 `provider.claudeCode` MUST send a transcript to Claude Code as one message, its earlier turns
-folded above the last, each `tool_use` and `tool_result` block written out in words, and each other
-`AssistantContent` block that is not words in its place.
+folded above the last, each `tool_use` and `tool_result` block written out in words, each image,
+document and search result in its place, and every other block — a thinking block, and one the
+API's own tools wrote — left out.
 
 44.6 With `tools`, the `Toolbox` `assistant` hands a `Provider` MUST list the tools `/__abide/mcp`
 lists, and MUST call each as a request through the app answering the request.
@@ -5094,13 +5095,13 @@ run it, MUST run its conversation carrying no asker's credentials, and MUST thro
 
 44.105 `assistantMessage` given `'assistant'` and an answer's events MUST make the messages
 they amount to as the Messages API's clients accumulate its stream: a `message_start` opens an
-assistant message, a `content_block_start` puts its block at its index, a `text_delta` extends that
-block's words, a `citations_delta` adds to its `citations`, a `thinking_delta` and a
-`signature_delta` fill a thinking block, and a block's `input_json_delta` events, read as JSON at its
-`content_block_stop`, are its `input` — or the words written, where they are not JSON. A `tool_result`
-event MUST go into the user message after the run, every result of one run in one message. A
-`tool_use` no `tool_result` answers, and an assistant message left with nothing in it, MUST be left
-out.
+assistant message, a `content_block_start` puts its block, as it came, after the run's last, a
+`text_delta` extends that block's words, a `citations_delta` adds to its `citations`, a
+`thinking_delta` and a `signature_delta` fill a thinking block, and a block's `input_json_delta`
+events, read as JSON at its `content_block_stop`, are its `input` — or the words written, where they
+are not JSON. A `tool_result` event MUST go into the user message after the run, every result of one
+run in one message. A `tool_use` no `tool_result` answers, a thinking block left with no signature,
+and an assistant message left with nothing in it, MUST be left out.
 
 44.106 A call's value MUST be the `value` of the `tool_result` event its `tool_result` block was
 folded from (44.49), kept beside the block, which MUST carry nothing the Messages API does not take;

@@ -60,7 +60,12 @@ type SearchResultBlock = {
  * answer's carry; an image as base64, at a URL, or an uploaded file; a document — a PDF as base64 or
  * at a URL, text, content of its own, or an uploaded file — with its title, its context and whether
  * answers cite it; a search result whose text an answer may cite; a tool call the model made, and
- * what it reasoned, in its own turn; and what a call answered, in the user turn after it.
+ * what it reasoned, in its own turn; what a call answered, in the user turn after it; and a block
+ * the API's own tools write into the model's turn — a server tool's call and result, an MCP
+ * connector's, a compaction, a fallback — which goes back as it came.
+ *
+ * A BLOCK THE MODEL WRITES TAKES ANY FIELD THE API ADDS (a call's `caller`): the API binds a thinking
+ * block to the turns before it, so a turn sent back with a field taken off is one it may refuse.
  */
 export type AssistantContent =
     | TextBlock
@@ -73,6 +78,7 @@ export type AssistantContent =
           name: string
           input: unknown
           cache_control?: CacheControl | undefined
+          [field: string]: unknown
       }
     | {
           type: 'tool_result'
@@ -84,8 +90,29 @@ export type AssistantContent =
           is_error?: boolean | undefined
           cache_control?: CacheControl | undefined
       }
-    | { type: 'thinking'; thinking: string; signature: string }
-    | { type: 'redacted_thinking'; data: string }
+    | {
+          type: 'thinking'
+          thinking: string
+          signature: string
+          [field: string]: unknown
+      }
+    | { type: 'redacted_thinking'; data: string; [field: string]: unknown }
+    | {
+          type:
+              | 'server_tool_use'
+              | 'web_search_tool_result'
+              | 'web_fetch_tool_result'
+              | 'code_execution_tool_result'
+              | 'bash_code_execution_tool_result'
+              | 'text_editor_code_execution_tool_result'
+              | 'tool_search_tool_result'
+              | 'advisor_tool_result'
+              | 'mcp_tool_use'
+              | 'mcp_tool_result'
+              | 'compaction'
+              | 'fallback'
+          [field: string]: unknown
+      }
 
 /** One turn of a conversation, as the Messages API takes it: its words, or its blocks in order. */
 export type AssistantMessage = {
