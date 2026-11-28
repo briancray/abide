@@ -37,12 +37,11 @@ import { bodyWithin } from './answerRpc.ts'
 import { framed } from './answerValue.ts'
 import type { ProviderEvent, ToolAnswer } from './assistant.ts'
 import { callerOf } from './callerOf.ts'
-import { cookieOf } from './cookieOf.ts'
 import { fileIn } from './fileIn.ts'
 import { HOOKS, inOrder } from './hooks.ts'
 import { Inbox } from './Inbox.ts'
+import { holdWindowCredential } from './nativeWindow.ts'
 import { holderOf, signedInAs } from './principal.ts'
-import { request } from './requestScope.ts'
 import { RESUME_MILLISECONDS } from './RESUME_MILLISECONDS.ts'
 import { onSignInChanged } from './signInChanged.ts'
 
@@ -112,20 +111,15 @@ const FOLLOWERS = new Map<
     Set<(caller: string, signedIn: string) => void>
 >()
 
-/** The cookie the native app's window carries its credential in. 44.79. */
-export const NATIVE_COOKIE = 'abide-native-credential'
-
-// 44.77 — the native app's own bridge: the credential its window holds, the bridge once a turn has
-// started it, the MCP servers 44.58 last found in the user scope and in each `--mcp-config` an
-// `onPairing` named (44.78), and the arguments each of its turns runs with, until it ends.
+// 44.77 — the native app's own bridge: the bridge once a turn has started it, the MCP servers 44.58
+// last found in the user scope and in each `--mcp-config` an `onPairing` named (44.78), and the
+// arguments each of its turns runs with, until it ends.
 const LOCAL: {
-    secret: string
     bridge: Bridge | undefined
     servers: ReadonlySet<string>
     sourced: Map<string, ReadonlySet<string>>
     args: Map<string, readonly string[]>
 } = {
-    secret: '',
     bridge: undefined,
     servers: new Set(),
     sourced: new Map(),
@@ -141,24 +135,8 @@ export type Asker = { caller: string; signedIn: string; local: boolean }
  * servers are read (44.58); a page watching before then is told when they are.
  */
 export function serveLocally(secret: string): Promise<void> {
-    LOCAL.secret = secret
+    holdWindowCredential(secret)
     return refreshLocalServers()
-}
-
-/** The native app's window credential, or `undefined` outside the native app. 44.79, 44.100. */
-export function windowCredential(): string | undefined {
-    return LOCAL.secret === '' ? undefined : LOCAL.secret
-}
-
-/** Whether the request being answered is from the native app's window, by its credential. 44.79. */
-export function fromNativeWindow(): boolean {
-    return carriesWindowCredential(request())
-}
-
-/** Whether `given` carries the native app's window credential. 44.79. */
-export function carriesWindowCredential(given: Request): boolean {
-    if (LOCAL.secret === '') return false
-    return cookieOf(given, NATIVE_COOKIE) === LOCAL.secret
 }
 
 /** Whether the native app's own bridge stands for a request `local` says is from its window: Claude Code is found. */

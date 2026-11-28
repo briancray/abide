@@ -29,18 +29,13 @@ import { isSendable } from '#shared/isSendable.ts'
 import { namedLogger } from '#shared/log.ts'
 import { messageOf } from '#shared/messageOf.ts'
 import { parsedJson } from '#shared/parsedJson.ts'
-import { randomToken } from '#shared/randomToken.ts'
 import { abortSignal } from '#shared/reactive/abortSignal.ts'
 import { refuse } from '#shared/refuse.ts'
 import { wordsOf } from '#shared/wordsOf.ts'
 
-import {
-    carriesWindowCredential,
-    NATIVE_COOKIE,
-    windowCredential,
-} from './bridgeRelay.ts'
-import { CALLER_COOKIE } from './callerOf.ts'
+import { askerOf } from './askerOf.ts'
 import { mcpFailure, type McpReply, McpSurface } from './generatedSurfaces.ts'
+import { windowApp, windowAsker } from './nativeWindow.ts'
 import {
     type AnsweringApp,
     currentRequestScope,
@@ -105,51 +100,6 @@ export type AssistantOptions = {
 
 const MAX_TURNS = 10
 const ASSISTANT_LOG = namedLogger('abide:assistant')
-// 44.7 — the caller's credentials, and nothing else of their request.
-const CARRIED_HEADERS = ['cookie', 'authorization']
-
-// 44.100 — the native app's window as its latest request left it: that request as a tool call carries
-// it, and the app it reached — or, before it has made one, the app booted last.
-const WINDOW: {
-    asker: Request | undefined
-    app: AnsweringApp | undefined
-    // The caller a conversation before the window's first request is, minted once: a bridge pairs
-    // with a browser (44.13), and the window has not been handed one yet.
-    caller: string | undefined
-} = {
-    asker: undefined,
-    app: undefined,
-    caller: undefined,
-}
-
-/** Keeps `given` as the window's latest request, where it carries the window's credential. 44.100. */
-export function noteWindow(given: Request, app: AnsweringApp): void {
-    if (!carriesWindowCredential(given)) return
-    WINDOW.asker = askerOf(given)
-    WINDOW.app = app
-}
-
-/** 44.100 — the app a conversation runs through before the window has made a request of it. */
-export function noteBooted(app: AnsweringApp): void {
-    if (WINDOW.asker === undefined) WINDOW.app = app
-}
-
-/**
- * The window's latest request, or — 44.100, before it has made one — a request carrying the window's
- * credential, which the process minted and so holds before the window does, and a caller of its own.
- * `undefined` outside the native app.
- */
-function windowAsker(): Request | undefined {
-    if (WINDOW.asker !== undefined) return WINDOW.asker
-    const credential = windowCredential()
-    if (credential === undefined || WINDOW.app === undefined) return undefined
-    WINDOW.caller ??= randomToken(16, 'hex')
-    return new Request('http://localhost/', {
-        headers: {
-            cookie: `${NATIVE_COOKIE}=${credential}; ${CALLER_COOKIE}=${WINDOW.caller}`,
-        },
-    })
-}
 
 /** A conversation over `messages`, run by `provider`, as the events it produces. */
 export async function* assistant(
@@ -423,7 +373,7 @@ async function* asWindow(
     provider: Provider,
     options: AssistantOptions,
 ): AsyncGenerator<AssistantEvent> {
-    const app = WINDOW.app as AnsweringApp
+    const app = windowApp() as AnsweringApp
     // 44.57 — the asker's own signal never aborts, so the app stopping ends the conversation, or the
     // caller's signal.
     const ended =
@@ -473,16 +423,6 @@ function appSurface(): McpSurface {
             'abide: assistant was asked for tools, and this app publishes no handler to MCP. RULEBOOK 44.8.',
         )
     return app.mcp
-}
-
-/** The asking request as a tool call is made: its credentials, and nothing else of it. 44.7. */
-function askerOf(asked: Request): Request {
-    const carried: Record<string, string> = {}
-    for (const name of CARRIED_HEADERS) {
-        const value = asked.headers.get(name)
-        if (value !== null) carried[name] = value
-    }
-    return new Request(asked.url, { headers: carried })
 }
 
 /** `surface` as a `Toolbox`, every call made as `asker`. 44.6, 44.7. */

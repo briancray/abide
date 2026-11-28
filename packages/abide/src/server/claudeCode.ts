@@ -40,7 +40,6 @@ import {
 } from './assistant.ts'
 import {
     type Asker,
-    fromNativeWindow,
     pairingArgs,
     pairingNow,
     pairingStatus,
@@ -53,6 +52,7 @@ import { callerOf } from './callerOf.ts'
 import { config, ownOrigin, settingOn } from './config.ts'
 import { mcpFailure } from './generatedSurfaces.ts'
 import { followedOwn, mountedOwn } from './mountHandlers.ts'
+import { fromNativeWindow } from './nativeWindow.ts'
 import { signedInAs } from './principal.ts'
 import { request } from './requestScope.ts'
 

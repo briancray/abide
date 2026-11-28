@@ -14,11 +14,11 @@ import {
 } from '#shared/report.ts'
 import { rpc } from '#shared/rpc.ts'
 
-import { fromNativeWindow } from './bridgeRelay.ts'
 import { appIdentity, config } from './config.ts'
 import { configFields } from './configFields.ts'
 import { HOOKS, inOrder } from './hooks.ts'
 import { mountedOwn } from './mountHandlers.ts'
+import { fromNativeWindow } from './nativeWindow.ts'
 import { principalSecrets } from './principal.ts'
 import { currentRequestScope } from './requestScope.ts'
 

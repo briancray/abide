@@ -31,7 +31,6 @@ import {
     spawnedBuild,
 } from './appBuild.ts'
 import { holdsApp } from './appTree.ts'
-import { noteBooted, noteWindow } from './assistant.ts'
 import { presumeCaller } from './callerOf.ts'
 import {
     APP_PACKAGE,
@@ -60,6 +59,7 @@ import {
     muxSocketOptions,
     upgraded,
 } from './muxUpgrade.ts'
+import { noteBooted, noteWindow } from './nativeWindow.ts'
 import { exporting, startExporting, stopExporting } from './otlpExport.ts'
 import { packageDirectory } from './packageDirectory.ts'
 import { takeParked } from './parkedAnswers.ts'
