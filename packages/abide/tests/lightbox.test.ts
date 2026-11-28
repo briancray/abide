@@ -82,3 +82,24 @@ test('show lands both of its writes or neither — 49.19', () => {
     flushSync()
     expect([shut.open.get(), selected.get()]).toEqual([false, 'front'])
 })
+
+// THE REVERT: hand focus on only from a click's own event, and an arrow key stepping onto the first
+// photo disables the focused `previous` — focus falls to the page and the dialog hears no more keys.
+test('an arrow key that disables the focused button hands focus to the other, as its click does — 50.66, 49.15', () => {
+    const viewer = lightbox({ id: 'photos', items: PHOTOS, behavior: 'auto' })
+    const buttons = (['previous', 'next'] as const).map((part) => {
+        const button = document.createElement('button')
+        for (const [name, value] of Object.entries(viewer.carousel[part]))
+            if (typeof value === 'string') button.setAttribute(name, value)
+        document.body.append(button)
+        return button
+    })
+    const [previous, next] = buttons as [HTMLButtonElement, HTMLButtonElement]
+    viewer.show('side')
+    flushSync()
+    previous.focus()
+    key(viewer, 'ArrowLeft')
+    expect(viewer.carousel.current).toBe('front')
+    expect(document.activeElement).toBe(next)
+    for (const button of buttons) button.remove()
+})

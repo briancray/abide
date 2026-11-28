@@ -472,12 +472,16 @@ export function carousel<Item, Key extends ItemKey = KeyOf<Item>>(
             const key = beside(step)
             if (key === undefined) return
             scrollTo(key)
-            // 49.15 — at the end, focus goes to the button stepping the other way.
-            const other = step < 0 ? 'next' : 'previous'
-            handFocus(event?.currentTarget, beside(step) === undefined, () =>
+            // 49.15 — at the end, focus goes to the button stepping the other way. Pressed with no event
+            // (a lightbox's arrow key, 50.66) it is still this button that disables, so it is found.
+            const button = (name: string) =>
                 globalThis.document?.querySelector<HTMLElement>(
-                    `[data-carousel="${other}"][aria-controls="${CSS.escape(base)}"]`,
-                ),
+                    `[data-carousel="${name}"][aria-controls="${CSS.escape(base)}"]`,
+                )
+            handFocus(
+                event?.currentTarget ?? button(part),
+                beside(step) === undefined,
+                () => button(step < 0 ? 'next' : 'previous'),
             )
         },
     })
