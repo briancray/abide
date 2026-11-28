@@ -4,7 +4,14 @@
 // show, in `e2e/stores.spec.ts`; here IndexedDB is absent, which is 8.35's inert case.
 
 import { Database } from 'bun:sqlite'
-import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
+import {
+    afterAll,
+    afterEach,
+    beforeAll,
+    expect,
+    setSystemTime,
+    test,
+} from 'bun:test'
 
 import type { RedisClient } from 'bun'
 
@@ -116,26 +123,36 @@ test('store.web follows another document’s write through the storage event —
 // 8.26: WHAT A VALUE'S `ttl` SAYS IS KEPT BESIDE IT. A restore after the deadline is a miss, and the
 // entry is removed rather than read past on every visit.
 //
+// The clock is held still rather than slept past: the three writes and the read before the deadline
+// once shared a 20 ms window of wall time, and a loaded parallel run spent it on the writes, so the
+// store written first read as expired before the deadline.
+//
 // THE REVERT: drop the `expires` test from `storedValue` and `KeptText.read`, and `after the
 // deadline: 3, 3, 3` where `undefined, undefined, undefined` is due.
-test('the shipped stores answer a miss past the ttl a value was written with — 8.26', async () => {
+test('the shipped stores answer a miss past the ttl a value was written with — 8.26', () => {
     COOKIES.current = jarOf('')
-    const web = store.web<number>('brief')
-    const sqlite = store.sqlite<number>(new Database(':memory:'), 'brief')
-    const cookie = store.cookies<number>('brief')
-    web.set(3, { ttl: 20 })
-    sqlite.set(3, { ttl: 20 })
-    cookie.set(3, { ttl: 20 })
-    expect(`before: ${web.get()}, ${sqlite.get()}, ${cookie.get()}`).toBe(
-        'before: 3, 3, 3',
-    )
-    await Bun.sleep(40)
-    expect(
-        `after the deadline: ${web.get()}, ${sqlite.get()}, ${cookie.get()}`,
-    ).toBe('after the deadline: undefined, undefined, undefined')
-    expect(`removed: ${localStorage.getItem(`${APP}:brief`)}`).toBe(
-        'removed: null',
-    )
+    const now = Date.now()
+    setSystemTime(now)
+    try {
+        const web = store.web<number>('brief')
+        const sqlite = store.sqlite<number>(new Database(':memory:'), 'brief')
+        const cookie = store.cookies<number>('brief')
+        web.set(3, { ttl: 20 })
+        sqlite.set(3, { ttl: 20 })
+        cookie.set(3, { ttl: 20 })
+        expect(`before: ${web.get()}, ${sqlite.get()}, ${cookie.get()}`).toBe(
+            'before: 3, 3, 3',
+        )
+        setSystemTime(now + 20)
+        expect(
+            `at the deadline: ${web.get()}, ${sqlite.get()}, ${cookie.get()}`,
+        ).toBe('at the deadline: undefined, undefined, undefined')
+        expect(`removed: ${localStorage.getItem(`${APP}:brief`)}`).toBe(
+            'removed: null',
+        )
+    } finally {
+        setSystemTime()
+    }
 })
 
 // 8.27: A RESTORE SKIPS THE VALUE'S `schema` (8.5), SO A SHIPPED STORE RUNS ITS OWN. What it refuses
