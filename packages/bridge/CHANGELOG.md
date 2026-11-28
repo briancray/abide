@@ -1,5 +1,11 @@
 # @abide/bridge
 
+## 0.9.4
+
+### Patch Changes
+
+- d28b8f4: the applet waits on the handler so its Local Network grant covers the LAN connection ([`58bc388`](https://github.com/briancray/abide/commit/58bc388abba234683332a8faec7f948b97f54c91))
+
 ## 0.9.3
 
 ### Patch Changes
