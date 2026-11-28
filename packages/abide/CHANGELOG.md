@@ -1,5 +1,14 @@
 # @abide/abide
 
+## 0.147.0
+
+### Minor Changes
+
+- 808cc69: What `assistant()` streams can be sent back to it. `AssistantContent` now takes what the Messages API writes into a model's turn as it came: any field the API adds to a `tool_use`, `thinking` or `redacted_thinking` block (a call's `caller`), and the blocks its own tools write — `server_tool_use` and the server-tool results, `mcp_tool_use` / `mcp_tool_result`, `compaction` and `fallback`. Sending a turn back with a field taken off could break the API's check on thinking blocks, so nothing is stripped. A block whose stream index was skipped no longer leaves a `null` hole, a thinking block no signature reached is left out of a settled answer, and `provider.claudeCode` leaves the API's own tool blocks out of the prompt it folds.
+- 145af6d: `chat` shows what the model is thinking and the calls the API runs itself. A new `thinking(block)` part carries `data-chat="thinking"` and a `data-status` of `running` until the block is signed, then `done`; a `redacted_thinking` block is `done` from the start. `tool(call)` now takes a `server_tool_use` (web search, web fetch, code execution) and an `mcp_tool_use` as well as a `tool_use`, reading its status from the result block wherever it sits — a server tool's error, which the API sends as content naming an `error_code`, reads `failed` — and a message's `blocks` leave every such result to its call. `AssistantContent` names those calls and results by their fields. A server or MCP call nothing answered, a search stopped while it ran, is left out of the answer once it ends, as an unanswered `tool_use` already was.
+- d61b916: A `table` called is a plain read: the memo, computed or handler that calls it no longer reloads when the table changes (RULEBOOK 47.48). What a table's change refreshes is the `GET` of an `rpc` over that table, so every browser following it is sent the new rows after any commit, whichever connection made it (47.26). `table`'s `peek` is gone, since a call now does what it did. `database`'s `changed` is gone too. To refresh a value that reads a table some other way, give it a tag and refresh that tag from the table's `readable`, e.g. `targets.readable.pipeTo(new WritableStream({ write: () => refresh({ tags: ['targets'] }) }))`, or from the write's `refreshes`.
+- 74ecc51: A `table` is written with SQL's words. `set` is renamed `upsert` and `patch` is renamed `update`, so a table's writes read `insert`, `upsert`, `update` and `delete`, the way a ledger says `append`. An `rpc` over a table sends `upsert` as `PUT` and `update` as `PATCH`, and a browser's copy has the same two names (RULEBOOK 16.117, 47.30).
+
 ## 0.146.3
 
 ### Patch Changes
