@@ -109,7 +109,7 @@ export function toggleGroup<
         get 'aria-checked'() {
             return picks.has(key) ? 'true' : 'false'
         },
-        get 'data-pressed'() {
+        get 'data-checked'() {
             return picks.has(key) ? '' : undefined
         },
         get tabindex() {

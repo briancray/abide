@@ -34,7 +34,7 @@ import turnChevron from './lib/TurnChevron.abide' with { type: 'text' }
             to spread on your elements, and each state it holds is a <code>data-</code>
             attribute on the element the state is about, present while it holds. A
             <a href={url('/headless/toggle')}><code>toggle</code></a>'s button carries
-            <code>data-pressed</code>, so Tailwind's <code>data-pressed:</code> variant styles it.
+            <code>data-checked</code>, so Tailwind's <code>data-checked:</code> variant styles it.
             Press it, then open the HTML tab to see the attribute arrive.</p>
         <Example code={pressedPin}><PressedPin /></Example>
     </Section>

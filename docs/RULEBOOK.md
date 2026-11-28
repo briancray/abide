@@ -6203,15 +6203,15 @@ overlap or touch carrying it as one run.
 51.108 `toggle`'s `button` part MUST flip `pressed` on a click.
 
 51.109 `toggle`'s `button` part MUST carry `aria-pressed` naming `pressed`, or, where `role` is
-`switch`, `role="switch"` and `aria-checked` naming it, and MUST carry `data-pressed` while `pressed`
-holds.
+`switch`, `role="switch"` and `aria-checked` naming it, and MUST carry `data-checked` while
+`pressed` holds.
 
 51.110 A `toggleGroup` that is `multiple` MUST answer each key's `item` with a `toggle`'s `button`
 part whose `pressed` holds while `value` holds the key, and whose flip adds the key to `value` or
 takes it out.
 
 51.111 A `toggleGroup` that is not `multiple` MUST answer each key's `item` with `role="radio"`, and
-`aria-checked` naming whether `value` is that key, carrying `data-pressed` while it is.
+`aria-checked` naming whether `value` is that key, carrying `data-checked` while it is.
 
 51.112 A click on the `item` of a `toggleGroup` that is not `multiple` MUST set `value` to its key,
 and MUST NOT clear `value` where it is that key already — save where the group is given

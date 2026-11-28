@@ -42,7 +42,7 @@ export function toggle(options: ToggleOptions = {}): Toggle {
                         : 'false'
                     : undefined
             },
-            get 'data-pressed'() {
+            get 'data-checked'() {
                 return pressed.get() ? '' : undefined
             },
             onclick: () => pressed.set(!pressed.peek()),

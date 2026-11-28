@@ -4,6 +4,6 @@ import { toggle } from '@abide/abide'
 const pin = toggle()
 </script>
 
-<button class="data-pressed:bg-signal data-pressed:text-paper" {...pin.button}>
+<button class="data-checked:bg-signal data-checked:text-paper" {...pin.button}>
     Pin deal
 </button>

@@ -23,7 +23,7 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
     <Section level={3} title="Pin a deal with a button that stays pressed">
         <p>Spread <code>button</code> on a button. A click flips
             <code>pressed</code>, and the button says which it is with
-            <code>aria-pressed</code> and <code>data-pressed</code>.</p>
+            <code>aria-pressed</code> and <code>data-checked</code>.</p>
         <Example code={pinDeal}><PinDeal /></Example>
     </Section>
 
@@ -35,7 +35,7 @@ import pinDeal from './lib/PinDeal.abide' with { type: 'text' }
     </Section>
 
     <Section level={3} title="Fill the pin button while the deal is pinned">
-        <p>The button carries <code>data-pressed</code> while it is pressed.</p>
+        <p>The button carries <code>data-checked</code> while it is pressed.</p>
         <Example code={fillPressed}><FillPressed /></Example>
     </Section>
 </Doc>

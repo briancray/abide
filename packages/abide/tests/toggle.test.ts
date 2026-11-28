@@ -15,13 +15,13 @@ const click = (part: Record<string, unknown>): void => {
 // THE REVERT: drop the `onclick` from `toggle`'s button, and a press leaves `pressed` false.
 test('a toggle flips pressed on a click, and says so as a toggle button or a switch — 51.108, 51.109', () => {
     const pin = toggle()
-    expect([pin.button['aria-pressed'], pin.button['data-pressed']]).toEqual([
+    expect([pin.button['aria-pressed'], pin.button['data-checked']]).toEqual([
         'false',
         undefined,
     ])
     click(pin.button)
     expect(pin.pressed.get()).toBe(true)
-    expect([pin.button['aria-pressed'], pin.button['data-pressed']]).toEqual([
+    expect([pin.button['aria-pressed'], pin.button['data-checked']]).toEqual([
         'true',
         '',
     ])
@@ -75,7 +75,7 @@ test('a group picking one is a radio group, and a press on the key picked keeps 
     expect(view.value.get()).toBe('board')
     click(view.item('board'))
     expect(view.value.get()).toBe('board')
-    expect(view.item('board')['data-pressed']).toBe('')
+    expect(view.item('board')['data-checked']).toBe('')
     expect(toggleGroup({ items: ['a'], multiple: true }).group.role).toBe(
         'group',
     )
