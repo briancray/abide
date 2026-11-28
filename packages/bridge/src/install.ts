@@ -118,12 +118,12 @@ function appleScriptString(text: string): string {
     return `"${text.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
 }
 
-/** The applet's source: a link opened runs the handler with it, the applet waiting on it. */
+/** The applet's source: a link opened starts the handler with it, in the background of an applet that stays open. */
 function appletSource(bun: string, directory: string): string {
     const handler = appleScriptString(handlerIn(directory))
-    // Not backgrounded: macOS answers a LAN connection by the responsible app's Local Network grant, and refuses it once the applet has quit.
+    // Backgrounded, so the next link is taken while a bridge runs; the applet is built stay-open, since macOS answers a LAN connection by the responsible app's Local Network grant and refuses it once the applet has quit.
     return `on open location theURL
-\tdo shell script quoted form of ${appleScriptString(bun)} & " " & quoted form of ${handler} & " " & quoted form of theURL & " > /dev/null 2>&1"
+\tdo shell script quoted form of ${appleScriptString(bun)} & " " & quoted form of ${handler} & " " & quoted form of theURL & " > /dev/null 2>&1 &"
 end open location
 
 on run
@@ -206,7 +206,7 @@ async function installMac(
     const source = `${handlerDirectory(directory)}/applet.applescript`
     await Bun.write(source, appletSource(settings.bun, directory))
     await rm(app, { recursive: true, force: true })
-    await tool(['osacompile', '-o', app, source])
+    await tool(['osacompile', '-s', '-o', app, source])
     const plist = `${app}/Contents/Info.plist`
     for (const [key, type, value] of [
         ['CFBundleIdentifier', '-string', IDENTIFIER],
