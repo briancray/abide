@@ -145,15 +145,9 @@ export function toggleGroup<
         onkeydown: (event: KeyboardEvent) => {
             if (many) return
             const listed = keysOf.get()
-            const along =
-                event.key === 'ArrowDown'
-                    ? 'ArrowRight'
-                    : event.key === 'ArrowUp'
-                      ? 'ArrowLeft'
-                      : event.key
             const next =
                 listed[
-                    roving(along, 'horizontal', () => [
+                    roving(event.key, 'both', () => [
                         listed.indexOf(current.get() as Key),
                         listed.length,
                     ])

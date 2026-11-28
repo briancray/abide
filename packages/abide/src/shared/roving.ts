@@ -7,14 +7,23 @@
 // answered before `locate` runs, so a list that is a live search is not read for a keystroke that
 // leaves it alone.
 
-/** Which way `key` steps along a list of that orientation: `1` forward, `-1` back, `0` neither. */
+/**
+ * Which way `key` steps along a list of that orientation: `1` forward, `-1` back, `0` neither. A list
+ * running `'both'` ways steps on either pair of arrows, as a radio group does (51.113).
+ */
 export function stepOf(
     key: string,
-    orientation: 'vertical' | 'horizontal',
+    orientation: 'vertical' | 'horizontal' | 'both',
 ): number {
-    const vertical = orientation === 'vertical'
-    if (key === (vertical ? 'ArrowDown' : 'ArrowRight')) return 1
-    if (key === (vertical ? 'ArrowUp' : 'ArrowLeft')) return -1
+    const vertical = orientation !== 'horizontal'
+    const horizontal = orientation !== 'vertical'
+    if (
+        (vertical && key === 'ArrowDown') ||
+        (horizontal && key === 'ArrowRight')
+    )
+        return 1
+    if ((vertical && key === 'ArrowUp') || (horizontal && key === 'ArrowLeft'))
+        return -1
     return 0
 }
 
@@ -38,7 +47,7 @@ export function openingEnd(
  */
 export function roving(
     key: string,
-    orientation: 'vertical' | 'horizontal',
+    orientation: 'vertical' | 'horizontal' | 'both',
     locate: () => readonly [at: number, length: number],
     wrap = true,
 ): number {
